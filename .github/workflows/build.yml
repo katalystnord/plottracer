@@ -3,7 +3,9 @@ name: Build desktop binaries
 # Produces the PlotTracer installers on each platform's own runner — the only way
 # to get a real macOS .dmg / Windows .exe (they can't be cross-built on Linux).
 # Run it by hand from the Actions tab (workflow_dispatch), or automatically when a
-# version tag is pushed. Artifacts attach to the run; download them from there.
+# version tag is pushed. On a tag push it also PUBLISHES a GitHub Release with the
+# installers attached (the `release` job) so the website's Download links work; a
+# hand run just leaves the artifacts on the run.
 on:
   workflow_dispatch:
   push:
@@ -58,3 +60,33 @@ jobs:
             dist-ui/*.exe
           if-no-files-found: error
           retention-days: 14
+
+  # On a version-tag push, gather every platform's installer and publish a public
+  # GitHub Release with them attached — this is what the website's Download links
+  # point at. A hand (workflow_dispatch) run skips this and just leaves artifacts.
+  # A tag with a hyphen (v1.0.0-rc.3) is marked a pre-release; a clean tag (v1.0.0)
+  # is a full release and becomes "Latest".
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
