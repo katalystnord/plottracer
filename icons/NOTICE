@@ -1,0 +1,10 @@
+These SVG icon files are sourced from Ketcher, © 2021 EPAM Systems,
+licensed under the Apache License, Version 2.0 (see LICENSE in this
+directory). Original source:
+https://github.com/epam/ketcher/tree/master/packages/ketcher-react/src/assets/icons/files
+
+Files are used unmodified except where noted in ui-patches/overrides.js.
+
+Files under custom/ are original artwork by Katalyst Nord AB (not from
+Ketcher), hand-drawn to match the same 24x24 / currentColor / flat
+style for visual consistency with the rest of this icon set.

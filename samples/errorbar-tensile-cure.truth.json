@@ -1,0 +1,68 @@
+{
+  "source": {
+    "imagePath": "errorbar-tensile-cure.png",
+    "note": "Synthetic ground truth \u2014 value + absolute upper/lower cap per point (deltas are derived)."
+  },
+  "graphType": "xy",
+  "axes": {
+    "x": {
+      "label": "Cure time (min)",
+      "min": 0,
+      "max": 130
+    },
+    "y": {
+      "label": "Tensile strength (MPa)",
+      "min": 0,
+      "max": 60
+    }
+  },
+  "series": [
+    {
+      "name": "tensile strength",
+      "points": [
+        {
+          "x": 5.0,
+          "y": 8.0,
+          "yUpper": 9.5,
+          "yLower": 6.5
+        },
+        {
+          "x": 10.0,
+          "y": 18.0,
+          "yUpper": 20.2,
+          "yLower": 15.8
+        },
+        {
+          "x": 20.0,
+          "y": 31.0,
+          "yUpper": 34.0,
+          "yLower": 28.0
+        },
+        {
+          "x": 40.0,
+          "y": 42.0,
+          "yUpper": 44.6,
+          "yLower": 39.4
+        },
+        {
+          "x": 60.0,
+          "y": 47.0,
+          "yUpper": 49.1,
+          "yLower": 44.9
+        },
+        {
+          "x": 90.0,
+          "y": 49.0,
+          "yUpper": 50.8,
+          "yLower": 47.2
+        },
+        {
+          "x": 120.0,
+          "y": 50.0,
+          "yUpper": 51.6,
+          "yLower": 48.4
+        }
+      ]
+    }
+  ]
+}

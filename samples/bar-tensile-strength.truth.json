@@ -1,0 +1,45 @@
+{
+  "source": {
+    "imagePath": "bar-tensile-strength.png",
+    "note": "Synthetic ground truth \u2014 per-bar value."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Tensile strength (MPa)",
+      "min": 0,
+      "max": 450
+    }
+  },
+  "series": [
+    {
+      "name": "tensile strength",
+      "points": [
+        {
+          "category": "Flax",
+          "value": 345
+        },
+        {
+          "category": "Hemp",
+          "value": 285
+        },
+        {
+          "category": "Jute",
+          "value": 210
+        },
+        {
+          "category": "Kenaf",
+          "value": 190
+        },
+        {
+          "category": "Sisal",
+          "value": 165
+        },
+        {
+          "category": "Ramie",
+          "value": 400
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "source": {
+    "imagePath": "map-collection-sites.png",
+    "note": "Synthetic ground truth \u2014 each site's (longitude, latitude), measured off the prior exemplar and replotted. The landmass polygon is decoration."
+  },
+  "graphType": "map",
+  "axes": {
+    "x": {
+      "label": "Longitude",
+      "min": -10,
+      "max": 10,
+      "unit": "deg"
+    },
+    "y": {
+      "label": "Latitude",
+      "min": 40,
+      "max": 55,
+      "unit": "deg"
+    }
+  },
+  "series": [
+    {
+      "name": "collection sites",
+      "points": [
+        {
+          "name": "Site A",
+          "x": -3.7,
+          "y": 40.4
+        },
+        {
+          "name": "Site B",
+          "x": 2.4,
+          "y": 48.9
+        },
+        {
+          "name": "Site C",
+          "x": 4.9,
+          "y": 52.4
+        },
+        {
+          "name": "Site D",
+          "x": 7.6,
+          "y": 51.9
+        }
+      ]
+    }
+  ]
+}

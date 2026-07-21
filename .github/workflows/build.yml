@@ -1,0 +1,60 @@
+name: Build desktop binaries
+
+# Produces the PlotTracer installers on each platform's own runner — the only way
+# to get a real macOS .dmg / Windows .exe (they can't be cross-built on Linux).
+# Run it by hand from the Actions tab (workflow_dispatch), or automatically when a
+# version tag is pushed. Artifacts attach to the run; download them from there.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+# A newer run for the same ref supersedes an in-flight one.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+            dist: linux
+          - os: macos-latest
+            name: macOS
+            dist: mac
+          - os: windows-latest
+            name: Windows
+            dist: win
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The new app's build only needs ui/ + core/engine/algorithms + build/icons;
+          # it never touches the wpd-core Git LFS assets, so skip LFS for speed.
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # ui:dist:<platform> runs ui:build then electron-builder for that OS
+      # (build/electron-builder-ui.yml). mac/win are unsigned for now.
+      - name: Build ${{ matrix.name }} installer
+        run: npm run ui:dist:${{ matrix.dist }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plottracer-${{ matrix.dist }}
+          path: |
+            dist-ui/*.AppImage
+            dist-ui/*.deb
+            dist-ui/*.dmg
+            dist-ui/*.zip
+            dist-ui/*.exe
+          if-no-files-found: error
+          retention-days: 14

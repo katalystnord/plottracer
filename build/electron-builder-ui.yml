@@ -1,0 +1,97 @@
+# electron-builder config for the (only) app -- runs via `npm start`
+# (== `npm run ui:start`): ui/electron-main.cjs + ui/dist. Builds linux + mac
+# (.dmg) + win (.exe) in CI (.github/workflows/build.yml).
+#
+# Historical note: this was once one of two builder configs during the
+# strangler-fig migration; the old build/electron-builder.yml and the
+# wpd-core/ui-patches app it packaged were deleted 2026-07-19. `extraMetadata.main`
+# is now redundant with package.json's `main` (both ui/electron-main.cjs) -- kept
+# harmlessly explicit.
+appId: io.katalystnord.plottracer
+productName: plottracer
+executableName: plottracer
+copyright: >
+  PlotTracer is based on WebPlotDigitizer © Ankit Rohatgi (AGPL-3.0).
+  Packaged by Katalyst Nord AB, Stockholm.
+
+extraMetadata:
+  main: ui/electron-main.cjs
+
+icon: build/icons/512x512.png
+
+# asar off, matching the old config -- keeps ui/dist's assets and the .cjs
+# entry/preload as plain files so file:// loads and the BrowserWindow icon path
+# resolve without asar-extraction surprises.
+asar: false
+
+electronLanguages:
+  - en-US
+
+directories:
+  output: dist-ui
+  buildResources: build
+
+# Only the new app's files -- the built React bundle, the Electron entry +
+# preload/ipc/menu, and the icons. The Help > Open example samples are already
+# bundled into ui/dist by Vite, so samples/ isn't needed here.
+files:
+  - ui/dist/**/*
+  - ui/electron-main.cjs
+  - ui/electron-preload.cjs
+  - ui/electron-ipc.cjs
+  - ui/electron-menu.cjs
+  - build/icons/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/node_modules/.bin"
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Science
+  syncDesktopName: true
+  synopsis: Extract quantitative data from scientific plot images
+  description: >
+    PlotTracer is an offline desktop tool for digitising data from
+    scientific figures. Based on WebPlotDigitizer by Ankit Rohatgi,
+    distributed under AGPL-3.0.
+  artifactName: ${productName}_${version}_${arch}.${ext}
+  maintainer: David Sandquist <david@katalystnord.com>
+  vendor: Katalyst Nord AB
+
+deb:
+  packageCategory: science
+  priority: optional
+  afterInstall: build/postinst.sh
+
+# macOS (built on a macos runner in CI -- can't be produced on Linux). Unsigned:
+# no Apple Developer identity in CI, so `identity: null` skips code-signing and
+# notarization (a first-launch Gatekeeper right-click-Open is the cost; signing is
+# a later add once a cert exists). Icons are generated from build/icons/512x512.png.
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.education
+  identity: null
+  artifactName: ${productName}_${version}_${arch}.${ext}
+
+# Windows (built on a windows runner in CI). Unsigned for now (SmartScreen warning
+# on first run until a code-signing cert is added). NSIS installer that lets the
+# user pick the install directory. Icon generated from the 512px png.
+win:
+  target:
+    - nsis
+  artifactName: ${productName}_${version}_${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+# The --no-sandbox wrapper (AppImage) + chrome-sandbox perms (deb) the Linux
+# build needs -- generic, keyed off the executable name, so shared with the old
+# config unchanged.
+afterPack: build/afterPack.js
+
+publish: null

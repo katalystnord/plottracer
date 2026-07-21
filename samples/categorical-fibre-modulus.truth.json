@@ -1,0 +1,41 @@
+{
+  "source": {
+    "imagePath": "categorical-fibre-modulus.png",
+    "note": "Synthetic ground truth \u2014 per-category value; X is ordered, not numeric."
+  },
+  "graphType": "categorical",
+  "axes": {
+    "y": {
+      "label": "Young's modulus (GPa)",
+      "min": 0,
+      "max": 35
+    }
+  },
+  "series": [
+    {
+      "name": "modulus",
+      "points": [
+        {
+          "category": "Untreated",
+          "value": 18.5
+        },
+        {
+          "category": "Alkali",
+          "value": 24.2
+        },
+        {
+          "category": "Silane",
+          "value": 29.8
+        },
+        {
+          "category": "Acetyl",
+          "value": 27.1
+        },
+        {
+          "category": "Enzyme",
+          "value": 22.6
+        }
+      ]
+    }
+  ]
+}

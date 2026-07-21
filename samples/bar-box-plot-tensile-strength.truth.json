@@ -1,0 +1,61 @@
+{
+  "source": {
+    "imagePath": "bar-box-plot-tensile-strength.png",
+    "note": "Synthetic ground truth \u2014 five-number summary per box."
+  },
+  "graphType": "boxplot",
+  "axes": {
+    "y": {
+      "label": "Tensile strength (MPa)",
+      "min": 0,
+      "max": 450
+    }
+  },
+  "series": [
+    {
+      "name": "tensile strength",
+      "points": [
+        {
+          "category": "Flax",
+          "min": 250,
+          "q1": 300,
+          "median": 340,
+          "q3": 380,
+          "max": 420
+        },
+        {
+          "category": "Hemp",
+          "min": 200,
+          "q1": 250,
+          "median": 285,
+          "q3": 315,
+          "max": 360
+        },
+        {
+          "category": "Jute",
+          "min": 150,
+          "q1": 185,
+          "median": 210,
+          "q3": 235,
+          "max": 270
+        },
+        {
+          "category": "Kenaf",
+          "min": 130,
+          "q1": 165,
+          "median": 190,
+          "q3": 215,
+          "max": 250
+        },
+        {
+          "category": "Sisal",
+          "min": 110,
+          "q1": 145,
+          "median": 165,
+          "q3": 190,
+          "max": 220
+        }
+      ]
+    }
+  ]
+}

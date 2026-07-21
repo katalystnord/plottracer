@@ -1,0 +1,76 @@
+{
+  "source": {
+    "imagePath": "histogram-pore-size.png",
+    "note": "Synthetic ground truth \u2014 true bin edges + count."
+  },
+  "graphType": "histogram",
+  "axes": {
+    "x": {
+      "label": "Pore diameter (\u00b5m)",
+      "min": 0,
+      "max": 100
+    },
+    "y": {
+      "label": "Count",
+      "min": 0,
+      "max": 60
+    }
+  },
+  "series": [
+    {
+      "name": "pore size",
+      "points": [
+        {
+          "binStart": 0,
+          "binEnd": 10,
+          "value": 4
+        },
+        {
+          "binStart": 10,
+          "binEnd": 20,
+          "value": 11
+        },
+        {
+          "binStart": 20,
+          "binEnd": 30,
+          "value": 23
+        },
+        {
+          "binStart": 30,
+          "binEnd": 40,
+          "value": 38
+        },
+        {
+          "binStart": 40,
+          "binEnd": 50,
+          "value": 52
+        },
+        {
+          "binStart": 50,
+          "binEnd": 60,
+          "value": 41
+        },
+        {
+          "binStart": 60,
+          "binEnd": 70,
+          "value": 27
+        },
+        {
+          "binStart": 70,
+          "binEnd": 80,
+          "value": 15
+        },
+        {
+          "binStart": 80,
+          "binEnd": 90,
+          "value": 7
+        },
+        {
+          "binStart": 90,
+          "binEnd": 100,
+          "value": 2
+        }
+      ]
+    }
+  ]
+}

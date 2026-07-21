@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlotTracer — turn any graph back into data</title>
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, polar, ternary, map, histogram, box-plot and error-bar plots. Export to CSV, Excel, JSON, LaTeX, MATLAB and Python.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PlotTracer — turn any graph back into data">
+<meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
+<meta property="og:image" content="assets/shot-hero.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23f1f6f7'/%3E%3Cg transform='translate(11,11) scale(1.22)' stroke-linecap='round'%3E%3Ccircle cx='26' cy='27' r='17' fill='none' stroke='%23167782' stroke-width='4.2'/%3E%3Cpath d='M16 35 C 21 33 24 21 36 18.5' fill='none' stroke='%23167782' stroke-width='3.5'/%3E%3Ccircle cx='26.3' cy='25.2' r='3.9' fill='%23fff' stroke='%23167782' stroke-width='2.5'/%3E%3Cline x1='40' y1='41' x2='54' y2='55' stroke='%23167782' stroke-width='5.4'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    /* The plotting sheet — cool, teal-biased neutrals on graph-paper white. */
+    --paper: #f1f6f7;
+    --card: #ffffff;
+    --ink: #12292e;
+    --ink-soft: #4d666c;
+    --ink-faint: #7c959b;
+    --teal: #167782;
+    --teal-deep: #0f5a63;
+    --amber: #cf7a1e;
+    --grid: #d7e4e6;
+    --line: #d8e5e7;
+    --shadow: 20px 20px 60px rgba(18, 60, 68, 0.08);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0a191d;
+      --card: #10262b;
+      --ink: #e7f1f2;
+      --ink-soft: #9cb6bb;
+      --ink-faint: #6c8990;
+      --teal: #37b6c3;
+      --teal-deep: #55cad6;
+      --amber: #f0a94a;
+      --grid: rgba(120, 185, 195, 0.10);
+      --line: rgba(140, 195, 205, 0.16);
+      --shadow: 20px 20px 60px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f1f6f7; --card: #ffffff; --ink: #12292e; --ink-soft: #4d666c; --ink-faint: #7c959b;
+    --teal: #167782; --teal-deep: #0f5a63; --amber: #cf7a1e; --grid: #d7e4e6; --line: #d8e5e7;
+    --shadow: 20px 20px 60px rgba(18, 60, 68, 0.08);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0a191d; --card: #10262b; --ink: #e7f1f2; --ink-soft: #9cb6bb; --ink-faint: #6c8990;
+    --teal: #37b6c3; --teal-deep: #55cad6; --amber: #f0a94a; --grid: rgba(120,185,195,0.10); --line: rgba(140,195,205,0.16);
+    --shadow: 20px 20px 60px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--paper);
+    /* Faint engineering grid, drawn on the paper. */
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--teal-deep); }
+
+  /* ---- typographic system ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--teal-deep);
+    margin: 0 0 14px;
+    display: block;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.025em; line-height: 1.08; margin: 0; }
+  h1 { font-size: clamp(2.5rem, 6.4vw, 4.6rem); font-weight: 800; }
+  h2 { font-size: clamp(1.7rem, 3.6vw, 2.6rem); font-weight: 780; }
+  h3 { font-size: 1.12rem; font-weight: 720; letter-spacing: -0.01em; }
+  p.lede { font-size: clamp(1.05rem, 1.9vw, 1.28rem); color: var(--ink-soft); max-width: 34em; }
+  .data { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---- top bar ---- */
+  header.bar {
+    position: sticky; top: 0; z-index: 40;
+    background-color: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 62px; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 760; letter-spacing: -0.02em; font-size: 1.06rem; text-decoration: none; color: var(--ink); }
+  .brand svg { width: 30px; height: 30px; display: block; }
+  nav.top { display: flex; align-items: center; gap: 26px; }
+  nav.top a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--ink-soft); text-decoration: none; }
+  nav.top a:hover { color: var(--teal-deep); }
+  @media (max-width: 720px) { nav.top a.hideable { display: none; } }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--sans); font-size: 0.95rem; font-weight: 640;
+    padding: 12px 20px; border-radius: 9px; text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  .btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .btn-primary { background: var(--teal); color: #fff; box-shadow: 0 2px 10px rgba(22, 119, 130, 0.28); }
+  .btn-primary:hover { background: var(--teal-deep); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--teal); color: var(--teal-deep); }
+  @media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
+
+  /* ---- hero ---- */
+  section.hero { padding: clamp(48px, 8vw, 96px) 0 clamp(40px, 6vw, 72px); }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+  .hero-note { font-family: var(--mono); font-size: 0.76rem; color: var(--ink-faint); margin-top: 18px; letter-spacing: 0.01em; }
+  .hero-figure { position: relative; }
+  .hero-figure svg { width: 100%; height: auto; display: block; filter: drop-shadow(var(--shadow)); }
+
+  /* animated point reveal (respects reduced motion via the media query below) */
+  .pt { opacity: 0; transform-box: fill-box; transform-origin: center; animation: pop 0.5s ease forwards; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+  .trace { stroke-dasharray: 220; stroke-dashoffset: 220; animation: draw 1.5s ease forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .pt { opacity: 1; animation: none; }
+    .trace { stroke-dashoffset: 0; animation: none; }
+  }
+
+  /* ---- generic section ---- */
+  section { padding: clamp(52px, 8vw, 92px) 0; }
+  .sec-head { max-width: 40em; margin-bottom: clamp(32px, 5vw, 52px); }
+  .sec-head p { color: var(--ink-soft); font-size: 1.06rem; margin: 16px 0 0; }
+
+  /* ---- thesis band ---- */
+  .thesis { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .thesis .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 60px); align-items: center; }
+  @media (max-width: 820px) { .thesis .wrap { grid-template-columns: 1fr; } }
+  /* ---- how it works (Calibrate -> Trace -> Export) ---- */
+  .how { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .how .wrap { padding-top: clamp(48px, 7vw, 76px); padding-bottom: clamp(48px, 7vw, 76px); }
+  .how-head { max-width: 40em; margin-bottom: clamp(30px, 4vw, 46px); }
+  .how-head .eyebrow { margin-bottom: 12px; }
+  .how-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: 14px; } }
+  .step { display: flex; flex-direction: column; gap: 12px; }
+  .step .illus { width: 100%; height: 118px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); display: block; }
+  .step .num { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; color: var(--teal-deep); }
+  .step h3 { font-size: 1.08rem; margin-top: 2px; }
+  .step p { color: var(--ink-soft); font-size: 0.94rem; margin: 0; }
+  .il-axis { stroke: var(--ink-faint); stroke-width: 1.5; fill: none; }
+  .il-teal { stroke: var(--teal); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .il-amber { fill: var(--amber); }
+
+  /* ---- graph-type gallery ---- */
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 14px; }
+  .glyph {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 16px 13px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.14s ease, transform 0.14s ease;
+  }
+  .glyph:hover { border-color: var(--teal); transform: translateY(-2px); }
+  @media (prefers-reduced-motion: reduce) { .glyph:hover { transform: none; } }
+  .glyph svg { width: 100%; height: 74px; display: block; }
+  .glyph .label { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.03em; color: var(--ink-soft); }
+  .g-axis { stroke: var(--ink-faint); stroke-width: 1.4; fill: none; }
+  .g-teal { stroke: var(--teal); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .g-teal-f { fill: var(--teal); opacity: 0.85; }
+  .g-amber { fill: var(--amber); }
+
+  /* ---- capability cards ---- */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 820px) { .features { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 540px) { .features { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 28px 22px 26px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  }
+  .feature:hover { border-color: var(--teal); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(22, 119, 130, 0.10); }
+  @media (prefers-reduced-motion: reduce) { .feature:hover { transform: none; } }
+  .feature .ico { width: 38px; height: 38px; color: var(--teal); margin-bottom: 4px; }
+  .feature h3 { font-size: 1.04rem; }
+  .feature p { color: var(--ink-soft); font-size: 0.9rem; margin: 0; max-width: 27ch; }
+  .feature .only, .feature .rare { font-family: var(--mono); font-size: 0.56rem; letter-spacing: 0.13em; text-transform: uppercase; border-radius: 5px; padding: 2px 7px; margin-top: 2px; }
+  .feature .only { color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent); }
+  .feature .rare { color: var(--teal-deep); border: 1px solid color-mix(in srgb, var(--teal) 42%, transparent); }
+
+  /* ---- export chips ---- */
+  .export .wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(28px, 5vw, 56px); align-items: center; }
+  @media (max-width: 820px) { .export .wrap { grid-template-columns: 1fr; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font-family: var(--mono); font-size: 0.86rem; font-weight: 600; padding: 9px 15px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+  .chip:hover { border-color: var(--teal); color: var(--teal-deep); }
+
+  /* ---- download ---- */
+  .download { text-align: center; }
+  .download .wrap { max-width: 760px; }
+  .os-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 30px; }
+  .os { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px 30px; min-width: 168px; text-decoration: none; color: var(--ink); transition: border-color 0.14s ease, transform 0.14s ease; }
+  .os:hover { border-color: var(--teal); transform: translateY(-2px); }
+  @media (prefers-reduced-motion: reduce) { .os:hover { transform: none; } }
+  .os svg { width: 30px; height: 30px; color: var(--teal); margin-bottom: 6px; }
+  .os b { font-weight: 700; letter-spacing: -0.01em; }
+  .os span { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-faint); }
+  .free-note { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-soft); margin-top: 26px; letter-spacing: 0.02em; }
+
+  /* ---- footer ---- */
+  footer { border-top: 1px solid var(--line); background: var(--card); padding: 40px 0; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; align-items: flex-start; }
+  footer .col { max-width: 40em; }
+  footer p { color: var(--ink-soft); font-size: 0.86rem; margin: 6px 0 0; }
+  footer .attrib { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-faint); }
+  footer a { color: var(--teal-deep); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ---- product screenshots ---- */
+  .shot {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); background: var(--card);
+  }
+  .hero-shot { padding-top: 0; padding-bottom: clamp(52px, 8vw, 92px); }
+  .hero-shot .frame { position: relative; }
+  .hero-shot .cap {
+    font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.04em;
+    color: var(--ink-faint); text-transform: uppercase; margin: 16px 0 0; text-align: center;
+  }
+  .showcase { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .shots { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(16px, 2.6vw, 28px); }
+  @media (max-width: 760px) { .shots { grid-template-columns: 1fr; } }
+  .shot-card { display: flex; flex-direction: column; gap: 13px; }
+  .shot-card figcaption { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); letter-spacing: 0.01em; margin: 0; }
+  .shot-card figcaption b { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; }
+</style>
+</head>
+<body>
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <rect x="1" y="1" width="510" height="510" rx="113" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
+        <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
+          <path d="M5 48 C 19 46 30 31 59 15" fill="none" stroke="var(--ink-faint)" stroke-width="2.3"/>
+          <circle cx="26" cy="27" r="15" fill="var(--card)"/>
+          <path d="M16 35 C 21 33 24 21 36 18.5" fill="none" stroke="var(--teal)" stroke-width="3.5"/>
+          <circle cx="26.3" cy="25.2" r="3.9" fill="var(--card)" stroke="var(--teal)" stroke-width="2.5"/>
+          <circle cx="26" cy="27" r="17" fill="none" stroke="var(--teal)" stroke-width="4.2"/>
+          <line x1="40" y1="41" x2="54" y2="55" stroke="var(--teal)" stroke-width="5.4"/>
+        </g>
+      </svg>
+      PlotTracer
+    </a>
+    <nav class="top">
+      <a class="hideable" href="#types">Graph types</a>
+      <a class="hideable" href="#capabilities">Capabilities</a>
+      <a class="hideable" href="#export">Export</a>
+      <a href="https://github.com/katalystnord/plottracer">GitHub</a>
+      <a href="#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
+    </nav>
+  </div>
+</header>
+
+<span id="top"></span>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Open-source desktop digitizer</span>
+      <h1>Graph in.<br>Reliable data out.</h1>
+      <p class="lede" style="margin-top:22px;">
+        PlotTracer pulls precise numbers out of the figures in scientific papers —
+        stress–strain curves, rheology traces, phase diagrams — across every
+        coordinate system your sources actually use. It records what the figure
+        shows, and nothing it doesn't.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#download">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+          Download for free
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/katalystnord/plottracer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5A10.5 10.5 0 0 0 8.7 22c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.4-3.5-1.4-.5-1.2-1.2-1.5-1.2-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.3-.3-4.7-1.2-4.7-5.1 0-1.1.4-2 1-2.7-.1-.3-.5-1.3.1-2.7 0 0 .9-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.8-4.7 5.1.4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10.5 10.5 0 0 0 12 1.5Z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <p class="hero-note">macOS · Windows · Linux&nbsp;&nbsp;—&nbsp;&nbsp;free, offline, no account</p>
+    </div>
+
+    <!-- Hero figure: the brand motif, literalised. A plotted curve, a loupe over
+         it, the extracted points pinned in amber, a coordinate readout. -->
+    <div class="hero-figure">
+      <svg viewBox="0 0 520 400" role="img" aria-label="A loupe magnifying a plotted curve, with extracted data points pinned along it and a coordinate readout.">
+        <defs>
+          <clipPath id="lens"><circle cx="330" cy="150" r="86"/></clipPath>
+        </defs>
+        <rect x="0" y="0" width="520" height="400" rx="18" fill="var(--card)" stroke="var(--line)"/>
+        <!-- plot frame -->
+        <line class="g-axis" x1="60" y1="60" x2="60" y2="330"/>
+        <line class="g-axis" x1="60" y1="330" x2="470" y2="330"/>
+        <!-- faint ticks -->
+        <g stroke="var(--line)" stroke-width="1">
+          <line x1="60" y1="270" x2="470" y2="270"/><line x1="60" y1="200" x2="470" y2="200"/>
+          <line x1="60" y1="130" x2="470" y2="130"/><line x1="150" y1="60" x2="150" y2="330"/>
+          <line x1="250" y1="60" x2="250" y2="330"/><line x1="360" y1="60" x2="360" y2="330"/>
+        </g>
+        <!-- the source curve, faint -->
+        <path class="trace" d="M70 315 C 150 300 200 150 470 92" fill="none" stroke="var(--ink-faint)" stroke-width="3"/>
+        <!-- extracted points, amber -->
+        <g>
+          <circle class="pt g-amber" cx="70"  cy="315" r="6" style="animation-delay:1.0s"/>
+          <circle class="pt g-amber" cx="130" cy="288" r="6" style="animation-delay:1.15s"/>
+          <circle class="pt g-amber" cx="195" cy="222" r="6" style="animation-delay:1.3s"/>
+          <circle class="pt g-amber" cx="270" cy="160" r="6" style="animation-delay:1.45s"/>
+          <circle class="pt g-amber" cx="360" cy="118" r="6" style="animation-delay:1.6s"/>
+          <circle class="pt g-amber" cx="450" cy="96"  r="6" style="animation-delay:1.75s"/>
+        </g>
+        <!-- loupe: magnified slice of the curve -->
+        <g>
+          <circle cx="330" cy="150" r="86" fill="var(--paper)"/>
+          <g clip-path="url(#lens)">
+            <path d="M244 235 C 300 205 320 120 430 88" fill="none" stroke="var(--teal)" stroke-width="6"/>
+            <circle cx="360" cy="118" r="10" fill="var(--card)" stroke="var(--teal)" stroke-width="5"/>
+          </g>
+          <circle cx="330" cy="150" r="86" fill="none" stroke="var(--teal)" stroke-width="7"/>
+          <line x1="392" y1="212" x2="440" y2="260" stroke="var(--teal)" stroke-width="10" stroke-linecap="round"/>
+        </g>
+        <!-- coordinate readout -->
+        <g font-family="ui-monospace, monospace" font-size="15" fill="var(--ink-soft)">
+          <rect x="300" y="300" width="150" height="30" rx="7" fill="var(--card)" stroke="var(--line)"/>
+          <text x="315" y="320" fill="var(--amber)" font-weight="700">x</text>
+          <text x="330" y="320">= 7.42&#160;&#160;</text>
+          <text x="388" y="320" fill="var(--amber)" font-weight="700">y</text>
+          <text x="403" y="320">= 31.8</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HERO PRODUCT SHOT ===================== -->
+<section class="hero-shot">
+  <div class="wrap">
+    <div class="frame">
+      <img class="shot" src="assets/shot-hero.png" width="2888" height="1888"
+        alt="The PlotTracer desktop app: a cumulative-release curve being traced with the Guide-points auto-extract tool, the extracted points listed in the right panel, calibrated XY axes, a cursor zoom loupe, and the tool rail down the left.">
+    </div>
+    <p class="cap">The actual app — calibrate, trace, and export, all on one canvas.</p>
+  </div>
+</section>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section class="how">
+  <div class="wrap">
+    <div class="how-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Three steps from figure to numbers.</h2>
+    </div>
+    <div class="steps">
+
+      <div class="step">
+        <svg class="illus" viewBox="0 0 220 118" role="img" aria-label="Calibrating the axes">
+          <line class="il-axis" x1="34" y1="18" x2="34" y2="94"/>
+          <line class="il-axis" x1="34" y1="94" x2="192" y2="94"/>
+          <g fill="none" stroke="var(--teal)" stroke-width="1.8">
+            <g transform="translate(34,94)"><circle r="5.5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>
+            <g transform="translate(168,94)"><circle r="5.5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>
+            <g transform="translate(34,30)"><circle r="5.5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>
+          </g>
+          <rect x="150" y="24" width="48" height="20" rx="5" fill="var(--card)" stroke="var(--line)"/>
+          <text x="159" y="38" font-family="ui-monospace, monospace" font-size="12" fill="var(--ink-soft)">x=10</text>
+        </svg>
+        <span class="num">STEP 01</span>
+        <h3>Calibrate</h3>
+        <p>Mark the axes with a couple of clicks. PlotTracer learns the figure's
+          coordinate system — linear, log, polar, or dates.</p>
+      </div>
+
+      <div class="step">
+        <svg class="illus" viewBox="0 0 220 118" role="img" aria-label="Tracing the curve">
+          <line class="il-axis" x1="34" y1="18" x2="34" y2="94"/>
+          <line class="il-axis" x1="34" y1="94" x2="192" y2="94"/>
+          <path class="il-teal" d="M40 88 C 90 84 108 44 186 28" opacity="0.3"/>
+          <g class="il-amber"><circle cx="40" cy="88" r="4"/><circle cx="72" cy="77" r="4"/><circle cx="140" cy="38" r="4"/><circle cx="178" cy="29" r="4"/></g>
+          <g fill="none" stroke="var(--teal)" stroke-width="2">
+            <circle cx="104" cy="54" r="16" fill="var(--card)"/>
+            <line x1="116" y1="66" x2="128" y2="78" stroke-linecap="round"/>
+          </g>
+          <circle cx="104" cy="54" r="4" class="il-amber"/>
+        </svg>
+        <span class="num">STEP 02</span>
+        <h3>Trace</h3>
+        <p>Place points with the zoom loupe, or auto-extract a whole curve by colour,
+          fill, or blob detection. Fix anything in a click.</p>
+      </div>
+
+      <div class="step">
+        <svg class="illus" viewBox="0 0 220 118" role="img" aria-label="Exporting the data">
+          <rect x="42" y="24" width="120" height="70" rx="6" fill="var(--card)" stroke="var(--line)"/>
+          <line x1="42" y1="43" x2="162" y2="43" stroke="var(--line)"/>
+          <line x1="102" y1="24" x2="102" y2="94" stroke="var(--line)"/>
+          <text x="60" y="38" font-family="ui-monospace, monospace" font-size="11" fill="var(--teal-deep)">x</text>
+          <text x="120" y="38" font-family="ui-monospace, monospace" font-size="11" fill="var(--teal-deep)">y</text>
+          <g font-family="ui-monospace, monospace" font-size="11" fill="var(--ink-soft)">
+            <text x="54" y="58">1.0</text><text x="114" y="58">3.2</text>
+            <text x="54" y="73">2.0</text><text x="114" y="73">6.1</text>
+            <text x="54" y="88">3.0</text><text x="114" y="88">9.4</text>
+          </g>
+          <g stroke="var(--teal)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M182 58 v16 m-6 -6 l6 6 l6 -6"/></g>
+        </svg>
+        <span class="num">STEP 03</span>
+        <h3>Export</h3>
+        <p>Send clean numbers to CSV, Excel, JSON, LaTeX, MATLAB or Python — at the
+          figure's real precision.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SHOWCASE (real screenshots) ===================== -->
+<section class="showcase">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">See it on real figures</span>
+      <h2>Built for the graphs papers actually publish.</h2>
+      <p>Scatter and fitted trends, asymmetric error bars, true histogram bins,
+        box plots, polar plots — the same tool, on the plots you meet in practice.</p>
+    </div>
+    <div class="shots">
+      <figure class="shot-card">
+        <img class="shot" src="assets/shot-scatter-fit.png" width="2888" height="1888"
+          alt="A scatter plot in PlotTracer with a fitted trend line through the extracted points.">
+        <figcaption><b>Scatter &amp; curve fit.</b> Fit a model through the points — the fit exports as its own block, never mixed into the record.</figcaption>
+      </figure>
+      <figure class="shot-card">
+        <img class="shot" src="assets/shot-errorbars.png" width="2888" height="1888"
+          alt="A plot in PlotTracer with error bars captured on the data points.">
+        <figcaption><b>Error &amp; uncertainty.</b> Capture real error bars — asymmetric and all — without inventing symmetry or defaults.</figcaption>
+      </figure>
+      <figure class="shot-card">
+        <img class="shot" src="assets/shot-histogram.png" width="3198" height="1888"
+          alt="A histogram in PlotTracer with bin edges captured.">
+        <figcaption><b>True histogram bins.</b> Records the interval each bar spans and its height — genuine bin edges, not just centres.</figcaption>
+      </figure>
+      <figure class="shot-card">
+        <img class="shot" src="assets/shot-boxplot.png" width="3198" height="1888"
+          alt="A box-and-whisker plot in PlotTracer with quartiles captured per category.">
+        <figcaption><b>Box plots.</b> Quartiles and whiskers captured per category, named and exported side by side.</figcaption>
+      </figure>
+      <figure class="shot-card" style="grid-column: 1 / -1;">
+        <img class="shot" src="assets/shot-polar.png" width="2618" height="1888"
+          alt="A polar plot in PlotTracer with the angular coordinate system calibrated.">
+        <figcaption><b>Polar — one of seven coordinate systems.</b> XY, bar, polar, ternary, map and circular chart recorders, each calibrated the way the figure draws it.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GRAPH TYPES ===================== -->
+<section id="types">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Breadth</span>
+      <h2>Every graph your sources use.</h2>
+      <p>Seven axis systems and a growing set of extraction targets — from ordinary
+        XY curves to ternary phase diagrams, polar plots, maps, and circular chart
+        recorders. Histograms capture true bin edges; error bars capture uncertainty.
+        No other digitizer covers this range.</p>
+    </div>
+    <div class="gallery">
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><path class="g-teal" d="M16 60 C 44 56 58 22 106 14"/></svg>
+        <span class="label">XY &amp; log</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><g class="g-amber"><circle cx="30" cy="52" r="3.5"/><circle cx="48" cy="40" r="3.5"/><circle cx="52" cy="46" r="3.5"/><circle cx="70" cy="30" r="3.5"/><circle cx="84" cy="34" r="3.5"/><circle cx="96" cy="20" r="3.5"/></g></svg>
+        <span class="label">Scatter</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><rect class="g-teal-f" x="24" y="40" width="14" height="24"/><rect class="g-teal-f" x="46" y="26" width="14" height="38"/><rect class="g-teal-f" x="68" y="34" width="14" height="30"/><rect class="g-teal-f" x="90" y="18" width="14" height="46"/></svg>
+        <span class="label">Bar &amp; column</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><g class="g-teal-f"><rect x="20" y="46" width="16" height="18"/><rect x="36" y="34" width="16" height="30"/><rect x="52" y="24" width="16" height="40"/><rect x="68" y="38" width="16" height="26"/><rect x="84" y="50" width="16" height="14"/></g></svg>
+        <span class="label">Histogram</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="60" cy="38" r="26"/><circle cx="60" cy="38" r="13"/></g><path class="g-teal" d="M60 38 L 98 24"/><path class="g-teal" d="M60 38 L 44 66"/></svg>
+        <span class="label">Polar</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M60 8 L 104 66 H 16 Z"/><circle class="g-amber" cx="60" cy="40" r="4"/><circle class="g-amber" cx="74" cy="52" r="4"/></svg>
+        <span class="label">Ternary</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><rect class="g-axis" x="16" y="10" width="88" height="54" rx="4"/><path class="g-axis" d="M34 22 C 50 30 44 48 66 52 C 84 55 88 36 100 40" opacity="0.6"/><path class="g-teal" d="M52 30 l-4 8 8 0z" fill="var(--teal)"/><circle class="g-amber" cx="78" cy="46" r="4"/></svg>
+        <span class="label">Map</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><g class="g-teal" ><line x1="40" y1="16" x2="40" y2="60"/><rect x="30" y="26" width="20" height="22" fill="none"/><line x1="30" y1="38" x2="50" y2="38"/><line x1="80" y1="12" x2="80" y2="64"/><rect x="70" y="30" width="20" height="26" fill="none"/><line x1="70" y1="44" x2="90" y2="44"/></g></svg>
+        <span class="label">Box plot</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><g class="g-teal"><line x1="36" y1="26" x2="36" y2="54"/><line x1="30" y1="26" x2="42" y2="26"/><line x1="30" y1="54" x2="42" y2="54"/><line x1="76" y1="16" x2="76" y2="42"/><line x1="70" y1="16" x2="82" y2="16"/><line x1="70" y1="42" x2="82" y2="42"/></g><circle class="g-amber" cx="36" cy="40" r="4"/><circle class="g-amber" cx="76" cy="29" r="4"/></svg>
+        <span class="label">Error bars</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="60" cy="38" r="27"/></g><path class="g-teal" d="M60 38 m 0 -22 a 22 22 0 0 1 19 33" /><circle class="g-amber" cx="79" cy="49" r="4"/></svg>
+        <span class="label">Chart recorder</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CAPABILITIES ===================== -->
+<section id="capabilities">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Capabilities</span>
+      <h2>Fast on the first figure. Faster on the 200th.</h2>
+      <p>The repeated loop — calibrate, trace, correct, export — is tuned to disappear.
+        Breadth lives in layers you can reach when you need them, never in the way when you don't.</p>
+    </div>
+    <div class="features">
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M6 16c4-1 6-8 12-11"/></svg>
+        <h3>Seven axis systems</h3>
+        <p>XY, bar, polar, ternary, map, image and circular chart recorders — the widest coverage in the field.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 20v-3M12 20v-6M16 20v-9M20 20v-12"/></svg>
+        <h3>Linear, log &amp; date axes</h3>
+        <p>Log (base-10 and natural) and date/time scales, chosen per side — exactly what the figure uses.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h3l2-6 4 12 2-8h7"/><path d="M18 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></svg>
+        <h3>Auto-extract curves</h3>
+        <p>Trace a whole series in one pass: by colour, by connected fill, or by blob detection for scatter.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M8 7h8M8 17h8"/><circle cx="12" cy="12" r="2.3" fill="currentColor" stroke="none"/></svg>
+        <h3>Error &amp; uncertainty</h3>
+        <p>Capture real error bars — asymmetric and all — without inventing symmetry or defaults.</p>
+        <span class="only">Only here</span>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V4"/><path d="M3 20h18"/><rect x="6" y="12" width="3.4" height="8"/><rect x="10.3" y="8" width="3.4" height="12"/><rect x="14.6" y="14" width="3.4" height="6"/></svg>
+        <h3>True histogram bins</h3>
+        <p>Records genuine bin edges and heights — the interval a bar spans, not just its centre.</p>
+        <span class="only">Only here</span>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c4 0 5-11 9-11s5 11 9 8" stroke-dasharray="3 3"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="15" r="1.5" fill="currentColor" stroke="none"/></svg>
+        <h3>Built for the hard graphs</h3>
+        <p>Interpolation-assist traces dashed, overlapping and monochrome curves that colour tools miss — drop a few guide points, a spline fills the rest, even where a curve doubles back.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M4 21h16"/><circle cx="9" cy="11" r="1.1" fill="currentColor" stroke="none"/></svg>
+        <h3>Measure tools</h3>
+        <p>Distance, angle, area and slope — in the chart's own units or a scale you set from any length.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M5 17c4-2 7-9 15-11"/><g fill="currentColor" stroke="none"><circle cx="6.5" cy="16" r="1"/><circle cx="10" cy="12.5" r="1"/><circle cx="14" cy="9.6" r="1"/><circle cx="18" cy="7.6" r="1"/></g></svg>
+        <h3>Curve fit &amp; geometry</h3>
+        <p>Fit a model through the points — equation, coefficients, R² — plus arc length, area and curvature. Fits export as their own block, never mixed into the record.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M5 16c4-1 6-8 15-9"/><path d="M5 18.5c5 0 7-4 15-4.5" stroke-dasharray="3 3"/></svg>
+        <h3>Many series at once</h3>
+        <p>One calibration, any number of series — each named and colour-coded — captured side by side and exported together.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="13" height="16" rx="2"/><path d="M4 6v13a2 2 0 0 0 2 2h11"/><path d="M11 8h5M11 12h5"/></svg>
+        <h3>Straight from the PDF</h3>
+        <p>Open a paper's PDF or multi-page TIFF and capture several figures into one project.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v11a2 2 0 0 0 2 2h11"/><path d="M3 7h11a2 2 0 0 1 2 2v11"/></svg>
+        <h3>Built-in image editor</h3>
+        <p>Crop, rotate, flip, fine-deskew and remove grid lines — before or after you capture the figure.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><circle cx="12" cy="14" r="2.2"/><path d="M12 16.2V19"/></svg>
+        <h3>Keeps the provenance</h3>
+        <p>The project bundles the original source PDF or image and records every crop and page — any number traces straight back to its figure.</p>
+        <span class="rare">Rare in the field</span>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        <h3>Export everywhere</h3>
+        <p>CSV, TSV, JSON, Excel, LaTeX, MATLAB and Python — at the figure's real precision.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        <h3>A record you can trust</h3>
+        <p>Full undo/redo, non-destructive edits, and a project file that round-trips exactly.</p>
+        <span class="rare">Rare in the field</span>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <h3>Cross-platform &amp; offline</h3>
+        <p>macOS, Windows and Linux. No account, no cloud, and your figures never leave your machine.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== EXPORT ===================== -->
+<section id="export" class="export">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Export</span>
+      <h2>Take the numbers anywhere.</h2>
+      <p style="color:var(--ink-soft);margin-top:16px;max-width:30em;">
+        One click to a spreadsheet, a notebook, or a paper. Every value is rounded
+        to the figure's real resolution — never padded with false precision, never
+        collapsed to zero — with a full-precision switch when you want every digit.
+      </p>
+    </div>
+    <div class="chips">
+      <span class="chip">CSV</span>
+      <span class="chip">TSV</span>
+      <span class="chip">JSON</span>
+      <span class="chip">XLSX</span>
+      <span class="chip">LaTeX</span>
+      <span class="chip">MATLAB</span>
+      <span class="chip">Python</span>
+      <span class="chip">PNG</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DOWNLOAD ===================== -->
+<section id="download" class="download">
+  <div class="wrap">
+    <span class="eyebrow">Download</span>
+    <h2>Free, offline, and yours to keep.</h2>
+    <p class="lede" style="margin:16px auto 0;">
+      No account, no cloud, no upload of your figures anywhere. Install the desktop
+      app and start extracting.
+    </p>
+    <div class="os-row">
+      <a class="os" href="https://github.com/katalystnord/plottracer/releases">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.9c0-2.5 2-3.7 2.1-3.8-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.1-.8-1.6 0-3 .9-3.8 2.4-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.8zM14 5.4c.7-.8 1.1-2 1-3.1-1 0-2.1.7-2.8 1.5-.6.7-1.1 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.3z"/></svg>
+        <b>macOS</b><span class="data">.dmg · Apple Silicon</span>
+      </a>
+      <a class="os" href="https://github.com/katalystnord/plottracer/releases">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.7 10.4 4.7V11.4H3zM3 12.6h7.4v6.7L3 18.3zM11.4 4.5 21 3.2v8.2H11.4zM11.4 12.6H21V21l-9.6-1.3z"/></svg>
+        <b>Windows</b><span class="data">.exe · x64</span>
+      </a>
+      <a class="os" href="https://github.com/katalystnord/plottracer/releases">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.3 0-3.3 1.8-3.3 3.6 0 1.2.1 2.4-.6 3.7C7 11 5.6 12.6 5.6 15c0 .9.3 1.6.2 2.3-.2.8-1 1.4-1 2.2 0 .9 1 1.3 2.2 1.5 1 .2 1.7.9 2.6 1.2.6.2 1.5.3 2.4.3s1.8-.1 2.4-.3c.9-.3 1.6-1 2.6-1.2 1.2-.2 2.2-.6 2.2-1.5 0-.8-.8-1.4-1-2.2-.1-.7.2-1.4.2-2.3 0-2.4-1.4-4-2.5-5.7-.7-1.3-.6-2.5-.6-3.7C15.3 3.8 14.3 2 12 2z"/></svg>
+        <b>Linux</b><span class="data">.AppImage · .deb</span>
+      </a>
+    </div>
+    <p class="free-note">Current release: <span class="data">v1.0.0-rc.3</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer>
+  <div class="wrap">
+    <div class="col">
+      <a class="brand" href="#top" style="margin-bottom:10px;">
+        <svg viewBox="0 0 512 512" aria-hidden="true">
+          <rect x="1" y="1" width="510" height="510" rx="113" fill="var(--paper)" stroke="var(--line)" stroke-width="2"/>
+          <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
+            <path d="M5 48 C 19 46 30 31 59 15" fill="none" stroke="var(--ink-faint)" stroke-width="2.3"/>
+            <circle cx="26" cy="27" r="15" fill="var(--paper)"/>
+            <path d="M16 35 C 21 33 24 21 36 18.5" fill="none" stroke="var(--teal)" stroke-width="3.5"/>
+            <circle cx="26.3" cy="25.2" r="3.9" fill="var(--paper)" stroke="var(--teal)" stroke-width="2.5"/>
+            <circle cx="26" cy="27" r="17" fill="none" stroke="var(--teal)" stroke-width="4.2"/>
+            <line x1="40" y1="41" x2="54" y2="55" stroke="var(--teal)" stroke-width="5.4"/>
+          </g>
+        </svg>
+        PlotTracer
+      </a>
+      <p>An actively-developed, cross-platform desktop digitizer for scientific figures.
+         Built by Katalyst Nord, Stockholm.</p>
+      <p class="attrib" style="margin-top:14px;">
+        Distributed under the AGPL-3.0. PlotTracer started from the open-source
+        WebPlotDigitizer by Ankit Rohatgi; some algorithms are clean-room
+        reimplementations of Engauge Digitizer ideas. Acknowledged with thanks.
+      </p>
+    </div>
+    <div class="col" style="text-align:right;min-width:180px;">
+      <p><a href="https://github.com/katalystnord/plottracer">Source &amp; releases →</a></p>
+      <p><a href="https://github.com/katalystnord/plottracer/releases">Download →</a></p>
+      <p><a href="https://github.com/katalystnord/plottracer/blob/master/LICENSE">Licence →</a></p>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

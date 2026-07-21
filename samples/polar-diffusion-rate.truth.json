@@ -1,0 +1,123 @@
+{
+  "source": {
+    "imagePath": "polar-diffusion-rate.png",
+    "note": "Synthetic ground truth \u2014 (angle\u00b0, radius) samples."
+  },
+  "graphType": "polar",
+  "axes": {
+    "angle": {
+      "label": "Angle",
+      "min": 0,
+      "max": 360,
+      "unit": "deg"
+    },
+    "radius": {
+      "label": "Diffusion rate (\u00b5m\u00b2/s)",
+      "min": 0,
+      "max": 10
+    }
+  },
+  "series": [
+    {
+      "name": "diffusion",
+      "points": [
+        {
+          "angle": 0.0,
+          "radius": 8.976
+        },
+        {
+          "angle": 15.0,
+          "radius": 9.184
+        },
+        {
+          "angle": 30.0,
+          "radius": 8.991
+        },
+        {
+          "angle": 45.0,
+          "radius": 8.595
+        },
+        {
+          "angle": 60.0,
+          "radius": 8.205
+        },
+        {
+          "angle": 75.0,
+          "radius": 7.923
+        },
+        {
+          "angle": 90.0,
+          "radius": 7.694
+        },
+        {
+          "angle": 105.0,
+          "radius": 7.349
+        },
+        {
+          "angle": 120.0,
+          "radius": 6.729
+        },
+        {
+          "angle": 135.0,
+          "radius": 5.801
+        },
+        {
+          "angle": 150.0,
+          "radius": 4.703
+        },
+        {
+          "angle": 165.0,
+          "radius": 3.693
+        },
+        {
+          "angle": 180.0,
+          "radius": 3.024
+        },
+        {
+          "angle": 195.0,
+          "radius": 2.816
+        },
+        {
+          "angle": 210.0,
+          "radius": 3.009
+        },
+        {
+          "angle": 225.0,
+          "radius": 3.405
+        },
+        {
+          "angle": 240.0,
+          "radius": 3.795
+        },
+        {
+          "angle": 255.0,
+          "radius": 4.077
+        },
+        {
+          "angle": 270.0,
+          "radius": 4.306
+        },
+        {
+          "angle": 285.0,
+          "radius": 4.651
+        },
+        {
+          "angle": 300.0,
+          "radius": 5.271
+        },
+        {
+          "angle": 315.0,
+          "radius": 6.199
+        },
+        {
+          "angle": 330.0,
+          "radius": 7.297
+        },
+        {
+          "angle": 345.0,
+          "radius": 8.307
+        }
+      ]
+    }
+  ]
+}

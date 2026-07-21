@@ -1,0 +1,123 @@
+{
+  "source": {
+    "imagePath": "circular-temperature-recording.png",
+    "note": "Synthetic ground truth \u2014 (time h, temperature \u00b0C) samples; time maps to angle over one 24 h rotation."
+  },
+  "graphType": "ccr",
+  "axes": {
+    "time": {
+      "label": "Time",
+      "min": 0,
+      "max": 24,
+      "unit": "h"
+    },
+    "radius": {
+      "label": "Temperature (\u00b0C)",
+      "min": 0,
+      "max": 30
+    }
+  },
+  "series": [
+    {
+      "name": "temperature",
+      "points": [
+        {
+          "time": 0.0,
+          "value": 17.536
+        },
+        {
+          "time": 1.0,
+          "value": 17.333
+        },
+        {
+          "time": 2.0,
+          "value": 17.371
+        },
+        {
+          "time": 3.0,
+          "value": 17.641
+        },
+        {
+          "time": 4.0,
+          "value": 18.119
+        },
+        {
+          "time": 5.0,
+          "value": 18.769
+        },
+        {
+          "time": 6.0,
+          "value": 19.546
+        },
+        {
+          "time": 7.0,
+          "value": 20.399
+        },
+        {
+          "time": 8.0,
+          "value": 21.274
+        },
+        {
+          "time": 9.0,
+          "value": 22.12
+        },
+        {
+          "time": 10.0,
+          "value": 22.886
+        },
+        {
+          "time": 11.0,
+          "value": 23.528
+        },
+        {
+          "time": 12.0,
+          "value": 24.01
+        },
+        {
+          "time": 13.0,
+          "value": 24.306
+        },
+        {
+          "time": 14.0,
+          "value": 24.401
+        },
+        {
+          "time": 15.0,
+          "value": 24.288
+        },
+        {
+          "time": 16.0,
+          "value": 23.976
+        },
+        {
+          "time": 17.0,
+          "value": 23.482
+        },
+        {
+          "time": 18.0,
+          "value": 22.832
+        },
+        {
+          "time": 19.0,
+          "value": 22.065
+        },
+        {
+          "time": 20.0,
+          "value": 21.224
+        },
+        {
+          "time": 21.0,
+          "value": 20.359
+        },
+        {
+          "time": 22.0,
+          "value": 19.52
+        },
+        {
+          "time": 23.0,
+          "value": 18.761
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "source": {
+    "imagePath": "multipage-figures.pdf",
+    "note": "Synthetic ground truth \u2014 one figure per page (measured off the prior exemplar, replotted). Each page is its own graph type."
+  },
+  "figures": [
+    {
+      "page": 1,
+      "graphType": "xy",
+      "axes": {
+        "x": {
+          "label": "Strain (%)",
+          "min": 0,
+          "max": 25
+        },
+        "y": {
+          "label": "Stress (MPa)",
+          "min": 0,
+          "max": 60
+        }
+      },
+      "series": [
+        {
+          "name": "PLA/Flax",
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 2.0,
+              "y": 24.0
+            },
+            {
+              "x": 4.0,
+              "y": 40.0
+            },
+            {
+              "x": 5.0,
+              "y": 43.0
+            },
+            {
+              "x": 7.0,
+              "y": 44.0
+            },
+            {
+              "x": 9.0,
+              "y": 43.5
+            },
+            {
+              "x": 11.0,
+              "y": 44.0
+            },
+            {
+              "x": 15.0,
+              "y": 48.0
+            },
+            {
+              "x": 19.0,
+              "y": 54.0
+            },
+            {
+              "x": 22.5,
+              "y": 58.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "graphType": "bar",
+      "axes": {
+        "y": {
+          "label": "Tensile strength (MPa)",
+          "min": 0,
+          "max": 70
+        }
+      },
+      "series": [
+        {
+          "name": "tensile strength",
+          "points": [
+            {
+              "category": "Flax",
+              "value": 58
+            },
+            {
+              "category": "Hemp",
+              "value": 52
+            },
+            {
+              "category": "Jute",
+              "value": 46
+            },
+            {
+              "category": "Kenaf",
+              "value": 41
+            },
+            {
+              "category": "Sisal",
+              "value": 35
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "graphType": "categorical",
+      "axes": {
+        "y": {
+          "label": "Flexural modulus (GPa)",
+          "min": 0,
+          "max": 10
+        }
+      },
+      "series": [
+        {
+          "name": "flexural modulus",
+          "points": [
+            {
+              "category": "Flax",
+              "value": 8.2
+            },
+            {
+              "category": "Hemp",
+              "value": 7.5
+            },
+            {
+              "category": "Jute",
+              "value": 6.8
+            },
+            {
+              "category": "Kenaf",
+              "value": 5.9
+            },
+            {
+              "category": "Sisal",
+              "value": 5.1
+            },
+            {
+              "category": "Coir",
+              "value": 3.4
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
