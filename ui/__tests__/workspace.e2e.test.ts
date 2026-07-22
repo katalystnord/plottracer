@@ -5037,6 +5037,30 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await page.getByTestId('series-col-1').count()).toBe(1);
   });
 
+  it('keyboard Del on a datum cascades its error bar — the fourth delete door (2026-07-22 audit)', async () => {
+    // The Eraser / Select+Del / right-click doors all cascade; the Place-Point
+    // keyboard Del must too, or it orphans the caps (they re-match to the wrong
+    // datum and fabricate a whisker on export).
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 200); // datum on Series 1
+    await page.getByTestId('mode-error-bars').click();
+    await dragMarker(400, 200, 400, 160); // -> SD upper (1) + SD lower (1)
+
+    // Back on the parent series in Place Point: select the datum via its table
+    // row (a canvas click here would ADD a point), then press Del.
+    await page.getByTestId('series-select').selectOption({ index: 0 });
+    await page.getByTestId('mode-place-point').click();
+    await page.getByTestId('point-row-0').click();
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(150);
+
+    // The datum AND both caps are gone — no half-bar left behind.
+    const names = await page.locator('[data-testid="series-select"] option').allTextContents();
+    expect(names.find((l) => l.startsWith('SD upper'))).toMatch(/\(0\)/);
+    expect(names.find((l) => l.startsWith('SD lower'))).toMatch(/\(0\)/);
+  });
+
   it('refuses to hang a cap on nothing — a press off-datum pans instead', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

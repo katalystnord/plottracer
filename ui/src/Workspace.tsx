@@ -1556,11 +1556,22 @@ export function Workspace() {
     const count = session.getDataPoints().length;
     if (count === 0) return;
     const target = activePointIndex != null && activePointIndex < count ? activePointIndex : count - 1;
-    // Deleting the last point routes through removeLastPoint so Box Plot's own
-    // group-cursor walk-back is preserved; a mid-sequence delete uses the
-    // by-index path (no single "previous" cursor step for that case).
-    if (target === count - 1) session.removeLastPoint();
-    else session.removeDataPointAt(target);
+    // Error-bar series (a parent carrying error bars, or an SD cap series): route
+    // through the series-kind-aware removeDataPoints so a keyboard Del ALSO
+    // cascades the parent point's caps / removes the whole cap pair — matching
+    // the Eraser, Select+Del and right-click doors (2026-07-22 audit: this fourth
+    // door was orphaning caps). Grouped (box/histogram) and plain series keep the
+    // removeLastPoint walk-back below, which Box Plot construction relies on.
+    if (session.getErrorRelation(session.getActiveDatasetIndex()) || session.activeHasErrorSeries()) {
+      session.removeDataPoints([target]);
+    } else if (target === count - 1) {
+      // Deleting the last point routes through removeLastPoint so Box Plot's own
+      // group-cursor walk-back is preserved; a mid-sequence delete uses the
+      // by-index path (no single "previous" cursor step for that case).
+      session.removeLastPoint();
+    } else {
+      session.removeDataPointAt(target);
+    }
     // Land the selection on a still-selectable point, never a derived
     // interpolation sample (those can't be nudged or deleted, and deleting an
     // anchor refits the fill anyway -- checkpoint 120). For an ordinary series
@@ -1930,6 +1941,11 @@ export function Workspace() {
       sessionRef.current.setImageHeight(imageHeightRef.current);
       setActivePointIndex(null);
       setAxesTypeId(id);
+      // A replaced session means a new figure/calibration, so the By-colour trace
+      // region (the old calibration box, in the old pixel space) is stale — clear
+      // it here so every session-swap path is covered, not just resetDocument
+      // (2026-07-22 audit A1).
+      setColorTraceRegion(null);
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
@@ -1993,11 +2009,6 @@ export function Workspace() {
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
       swapSession(id, new CalibrationSession(AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
-      // A new figure has a new pixel space, so the By-colour trace region (the
-      // calibration box, in the OLD figure's pixels) is stale -- clear it so the
-      // next trace re-derives it for this figure (2026-07-22, David: the picker
-      // area looked "off" after switching examples).
-      setColorTraceRegion(null);
       setMode('calibrate');
       setCalibExpanded(true);
       history.reset(captureDoc(imageSrc));
@@ -2909,6 +2920,7 @@ export function Workspace() {
       newSession.setImageHeight(imageHeightRef.current);
       newSession.loadCalibrated(fig.axes, fig.datasets);
       sessionRef.current = newSession;
+      setColorTraceRegion(null); // new figure's pixel space -> old trace region is stale (audit A1)
 
       applyProvenance(fig.provenance ?? {}); // restore where this figure came from
       applyPdfState(null); // a saved project is a baked image, not a live PDF
@@ -2969,6 +2981,7 @@ export function Workspace() {
       // Per-panel UI reset (mirrors swapSession) -- these belong to whatever
       // figure was active, never carry across.
       setActivePointIndex(null);
+      setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
@@ -4350,7 +4363,7 @@ export function Workspace() {
           return 'Anchor selected — ↑ ↓ ← → nudge (Shift = coarse), Q/W step anchors, Del removes it — the curve refits. Or click to add another.';
         return 'Interpolate — click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
       }
-      if (mode === 'eraser') return 'Eraser — click a data point to remove it. Del also removes the selected point.';
+      if (mode === 'eraser') return 'Eraser — click a data point to remove it.';
       if (mode === 'pan') return 'Pan and zoom only — pick a tool from the left rail to edit.';
     }
     return 'Pick a graph type, then calibrate the axes to begin.';
@@ -5319,7 +5332,7 @@ export function Workspace() {
           <IconButton
             testId="mode-eraser"
             icon={<EraseIcon />}
-            label="Erase a point — click a point to remove it (Del also removes the selected point)"
+            label="Erase a point — click a point to remove it"
             pressed={mode === 'eraser'}
             disabled={dataPoints.length === 0}
             onClick={() => setMode('eraser')}
