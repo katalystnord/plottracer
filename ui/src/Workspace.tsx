@@ -1258,6 +1258,10 @@ export function Workspace() {
         }))
       );
       setActivePointIndex(null);
+      // A crop/rotate/flip/deskew changes the pixel space, so the By-colour trace
+      // region (in the OLD pixels, and not even axis-aligned after a rotate) is
+      // stale -- clear it so the next trace re-derives it (2026-07-22 audit C).
+      setColorTraceRegion(null);
       // captureDoc reads the just-baked src via getImageDataURL's synchronous
       // mirror (applyImageTransform set it above), so the new snapshot records the
       // EDITED image while the prior present still holds the pre-edit one.
@@ -1556,18 +1560,20 @@ export function Workspace() {
     const count = session.getDataPoints().length;
     if (count === 0) return;
     const target = activePointIndex != null && activePointIndex < count ? activePointIndex : count - 1;
-    // Error-bar series (a parent carrying error bars, or an SD cap series): route
-    // through the series-kind-aware removeDataPoints so a keyboard Del ALSO
-    // cascades the parent point's caps / removes the whole cap pair — matching
-    // the Eraser, Select+Del and right-click doors (2026-07-22 audit: this fourth
-    // door was orphaning caps). Grouped (box/histogram) and plain series keep the
-    // removeLastPoint walk-back below, which Box Plot construction relies on.
-    if (session.getErrorRelation(session.getActiveDatasetIndex()) || session.activeHasErrorSeries()) {
+    // Route through the series-kind-aware removeDataPoints for: error-bar series
+    // (cascade the parent's caps / remove the whole cap pair), AND a MID-sequence
+    // delete on a grouped box/histogram series (remove the whole box/bin) —
+    // matching the Eraser, Select+Del and right-click doors (2026-07-22 audits:
+    // this door orphaned caps AND peeled one member off a completed tuple). The
+    // LAST point still uses removeLastPoint below, whose group-cursor walk-back
+    // Box Plot construction relies on (Del peels the just-placed member).
+    if (
+      session.getErrorRelation(session.getActiveDatasetIndex()) ||
+      session.activeHasErrorSeries() ||
+      (session.hasPointGroups() && target !== count - 1)
+    ) {
       session.removeDataPoints([target]);
     } else if (target === count - 1) {
-      // Deleting the last point routes through removeLastPoint so Box Plot's own
-      // group-cursor walk-back is preserved; a mid-sequence delete uses the
-      // by-index path (no single "previous" cursor step for that case).
       session.removeLastPoint();
     } else {
       session.removeDataPointAt(target);
@@ -5729,7 +5735,7 @@ export function Workspace() {
                 setCtxMenu(null);
               }}
             >
-              Delete point
+              {hasPointGroups ? `Delete ${tupleNoun}` : 'Delete point'}
             </MenuItem>,
             ...(datasetInfos.length > 1
               ? [
