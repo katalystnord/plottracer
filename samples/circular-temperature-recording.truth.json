@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "circular-temperature-recording.png",
-    "note": "Synthetic ground truth \u2014 (time h, temperature \u00b0C) samples; time maps to angle over one 24 h rotation."
+    "note": "Synthetic ground truth \u2014 (time h, temperature C) samples; time maps to angle over one 24 h rotation. Calibrate with a time-format start (e.g. 0:00) and rotation = day, direction = clockwise, so the extracted Time reads back as a clock time rather than a raw number."
   },
   "graphType": "ccr",
   "axes": {

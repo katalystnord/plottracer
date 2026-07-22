@@ -1,21 +1,26 @@
 {
   "source": {
     "imagePath": "map-collection-sites.png",
-    "note": "Synthetic ground truth \u2014 each site's (longitude, latitude), measured off the prior exemplar and replotted. The landmass polygon is decoration."
+    "note": "Synthetic ground truth \u2014 each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."
   },
   "graphType": "map",
   "axes": {
+    "scaleBar": {
+      "length": 200,
+      "unit": "km"
+    },
+    "origin": "bottom-left",
     "x": {
-      "label": "Longitude",
-      "min": -10,
-      "max": 10,
-      "unit": "deg"
+      "label": "Easting",
+      "min": 0,
+      "max": 1000.0,
+      "unit": "km"
     },
     "y": {
-      "label": "Latitude",
-      "min": 40,
-      "max": 55,
-      "unit": "deg"
+      "label": "Northing",
+      "min": 0,
+      "max": 800.0,
+      "unit": "km"
     }
   },
   "series": [
@@ -24,23 +29,23 @@
       "points": [
         {
           "name": "Site A",
-          "x": -3.7,
-          "y": 40.4
+          "x": 180.0,
+          "y": 130.0
         },
         {
           "name": "Site B",
-          "x": 2.4,
-          "y": 48.9
+          "x": 470.0,
+          "y": 300.0
         },
         {
           "name": "Site C",
-          "x": 4.9,
-          "y": 52.4
+          "x": 700.0,
+          "y": 560.0
         },
         {
           "name": "Site D",
-          "x": 7.6,
-          "y": 51.9
+          "x": 860.0,
+          "y": 470.0
         }
       ]
     }

@@ -370,11 +370,15 @@ def gen_ccr():
     ax.plot(tc, rc, "-", color=NAVY, linewidth=1.8)
     ax.set_rmin(0)
     ax.set_rmax(30)
+    # Label the dial in HOURS, not degrees — a chart recorder's angular axis is
+    # time (one 24 h rotation), which is what the CCR calibration reads. 0 h at
+    # the top (N), clockwise. This makes the time->angle mapping self-evident.
+    ax.set_thetagrids(list(range(0, 360, 30)), labels=[f"{int(a / 360 * 24)} h" for a in range(0, 360, 30)])
     ax.set_title("24 h temperature recording (°C)", fontsize=15)
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — (time h, temperature °C) samples; time maps to angle over one 24 h rotation."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — (time h, temperature C) samples; time maps to angle over one 24 h rotation. Calibrate with a time-format start (e.g. 0:00) and rotation = day, direction = clockwise, so the extracted Time reads back as a clock time rather than a raw number."},
         "graphType": "ccr",
         "axes": {"time": {"label": "Time", "min": 0, "max": 24, "unit": "h"},
                  "radius": {"label": "Temperature (°C)", "min": 0, "max": 30}},
@@ -480,9 +484,14 @@ def gen_ternary():
     for _, a, b, c in blends:
         p = bary(a, b, c)
         ax.plot(p[0], p[1], "o", markersize=10, markerfacecolor="#3a9d5d", markeredgecolor="#1c5a32", markeredgewidth=1.2, zorder=3)
-    ax.text(T[0], T[1] + 0.03, "Chitosan (%)", ha="center", va="bottom", fontsize=12, color="#5a3a2a")
-    ax.text(L[0] - 0.02, L[1] - 0.03, "Alginate (%)", ha="center", va="top", fontsize=12, color="#5a3a2a")
-    ax.text(Rr[0] + 0.02, Rr[1] - 0.03, "Cellulose (%)", ha="center", va="top", fontsize=12, color="#5a3a2a")
+    # Corner labels carry an A/B/C calibration marker in the ORDER the app's
+    # ternary math needs the corners clicked (bottom-left -> bottom-right -> top;
+    # verified: this winding yields all-positive components summing to 100). So
+    # A=bottom-left=Alginate, B=bottom-right=Cellulose, C=top=Chitosan, and the
+    # app's a/b/c come out as Alginate/Cellulose/Chitosan.
+    ax.text(T[0], T[1] + 0.03, "C · Chitosan (%)", ha="center", va="bottom", fontsize=12, color="#5a3a2a", fontweight="bold")
+    ax.text(L[0] - 0.02, L[1] - 0.03, "A · Alginate (%)", ha="center", va="top", fontsize=12, color="#5a3a2a", fontweight="bold")
+    ax.text(Rr[0] + 0.02, Rr[1] - 0.03, "B · Cellulose (%)", ha="center", va="top", fontsize=12, color="#5a3a2a", fontweight="bold")
     ax.set_title("Ternary Blend Composition — Biopolymer Films", fontsize=15, fontweight="bold")
     ax.set_xlim(-0.12, 1.12)
     ax.set_ylim(-0.12, h + 0.12)
@@ -491,53 +500,63 @@ def gen_ternary():
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — three corner values per blend (measured off the prior exemplar, replotted). a/b/c match the app's ternary labels."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth. a/b/c follow the app's ternary calibration order A->B->C = bottom-left(Alginate) -> bottom-right(Cellulose) -> top(Chitosan)."},
         "graphType": "ternary",
-        "axes": {"a": {"label": "Chitosan (%)", "vertex": "top"},
-                 "b": {"label": "Alginate (%)", "vertex": "bottom-left"},
-                 "c": {"label": "Cellulose (%)", "vertex": "bottom-right"}},
-        "series": [{"name": "blends", "points": [{"a": a, "b": b, "c": c} for _, a, b, c in blends]}],
+        "axes": {"a": {"label": "Alginate (%)", "vertex": "bottom-left", "corner": "A"},
+                 "b": {"label": "Cellulose (%)", "vertex": "bottom-right", "corner": "B"},
+                 "c": {"label": "Chitosan (%)", "vertex": "top", "corner": "C"}},
+        # tuple order is (Chitosan a_top, Alginate b_left, Cellulose c_right); the
+        # app's a/b/c are (Alginate, Cellulose, Chitosan) = (b, c, a).
+        "series": [{"name": "blends", "points": [{"a": b, "b": c, "c": a} for _, a, b, c in blends]}],
     })
 
 
 def gen_map():
-    """Field-survey map — sample collection sites on a Longitude/Latitude plane
-    (the Map axes type: an image with a geographic coordinate calibration). The 4
-    site coordinates were MEASURED off the previous throwaway exemplar (its axes
-    rectangle spans exactly the data limits) and replotted (David, 2026-07-20). A
-    green landmass polygon is drawn as decoration; the record is the sites. Truth
-    = each site's (longitude, latitude)."""
-    name = "map-collection-sites"
-    sites = [("Site A", -3.7, 40.4), ("Site B", 2.4, 48.9), ("Site C", 4.9, 52.4), ("Site D", 7.6, 51.9)]
-    land = [(-8, 43), (-6, 48), (-5, 47), (-2, 51), (2, 52), (5, 50), (7.5, 53), (9, 48), (6, 45), (3, 44), (-3, 41)]
+    """Field-survey map with a SCALE BAR — the Map axes type is a *scale-bar*
+    model (uniform distance/pixel from a corner origin), NOT gridded x/y axes. So
+    this figure has a 200 km scale bar and no numeric axes: you place the two
+    calibration points on the bar, pick a corner as origin, and every feature
+    reads out in km from that corner.
 
-    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    The axes fill the whole figure edge-to-edge (add_axes([0,0,1,1]) + equal
+    aspect), so the image's bottom-left pixel IS the (0,0) origin and a site's
+    "km from corner" equals its plotted km position -> truth = each site's
+    (x_km, y_km). A green landmass polygon is decoration; the record is the
+    sites."""
+    name = "map-collection-sites"
+    W, H = 1000.0, 800.0  # km extent; origin (0,0) at the image's bottom-left
+    sites = [("Site A", 180, 130), ("Site B", 470, 300), ("Site C", 700, 560), ("Site D", 860, 470)]
+    land = [(70, 250), (170, 470), (280, 430), (430, 560), (560, 600), (700, 520),
+            (840, 630), (910, 430), (760, 300), (520, 250), (180, 160)]
+
+    fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
     fig.patch.set_facecolor("white")
+    ax = fig.add_axes([0, 0, 1, 1])  # fill the figure: image corner == (0,0) km
+    ax.set_xlim(0, W)
+    ax.set_ylim(0, H)
+    ax.set_aspect("equal")  # square pixels — the Map model's uniform-scale assumption
     ax.set_facecolor("#eef4fb")  # sea
-    poly = plt.Polygon(land, closed=True, facecolor="#d7e8c9", edgecolor="#8fae74", linewidth=1.4, zorder=1)
-    ax.add_patch(poly)
-    for label, lon, lat in sites:
-        ax.plot(lon, lat, "o", markersize=9, markerfacecolor="#d9463e", markeredgecolor="#7a2019", markeredgewidth=1.0, zorder=3)
-        ax.annotate(f" {label}", (lon, lat), fontsize=11, va="center", zorder=4)
-    ax.set_xlim(-10, 10)
-    ax.set_ylim(40, 55)
-    ax.set_xticks(range(-10, 11, 5))
-    ax.set_yticks(range(40, 56, 5))
-    ax.set_xticklabels([f"{v}°" for v in range(-10, 11, 5)])
-    ax.set_yticklabels([f"{v}°" for v in range(40, 56, 5)])
-    ax.set_xlabel("Longitude", fontsize=13)
-    ax.set_ylabel("Latitude", fontsize=13)
-    ax.set_title("Sample Collection Sites — Field Survey Map", fontsize=15, fontweight="bold")
-    ax.grid(True, color="#cfd9e6", linewidth=0.8, zorder=0)
-    ax.tick_params(labelsize=11)
-    fig.tight_layout()
+    ax.add_patch(plt.Polygon(land, closed=True, facecolor="#d7e8c9", edgecolor="#8fae74", linewidth=1.6, zorder=1))
+    for label, x, y in sites:
+        ax.plot(x, y, "o", markersize=11, markerfacecolor="#d9463e", markeredgecolor="#7a2019", markeredgewidth=1.2, zorder=3)
+        ax.annotate(f"  {label}", (x, y), fontsize=13, va="center", zorder=4)
+    # Scale bar: a 200 km reference with end caps + label (the calibration target).
+    sx, sy, slen = 90, 70, 200.0
+    ax.plot([sx, sx + slen], [sy, sy], color="black", linewidth=3, zorder=5)
+    for xx in (sx, sx + slen):
+        ax.plot([xx, xx], [sy - 12, sy + 12], color="black", linewidth=3, zorder=5)
+    ax.text(sx + slen / 2, sy + 20, "200 km", ha="center", va="bottom", fontsize=13, fontweight="bold", zorder=5)
+    ax.text(W / 2, H - 30, "Sample Collection Sites — Field Survey Map", ha="center", va="top", fontsize=16, fontweight="bold", zorder=5)
+    ax.set_xticks([])
+    ax.set_yticks([])
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — each site's (longitude, latitude), measured off the prior exemplar and replotted. The landmass polygon is decoration."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."},
         "graphType": "map",
-        "axes": {"x": {"label": "Longitude", "min": -10, "max": 10, "unit": "deg"},
-                 "y": {"label": "Latitude", "min": 40, "max": 55, "unit": "deg"}},
-        "series": [{"name": "collection sites", "points": [{"name": s, "x": lon, "y": lat} for s, lon, lat in sites]}],
+        "axes": {"scaleBar": {"length": 200, "unit": "km"}, "origin": "bottom-left",
+                 "x": {"label": "Easting", "min": 0, "max": W, "unit": "km"},
+                 "y": {"label": "Northing", "min": 0, "max": H, "unit": "km"}},
+        "series": [{"name": "collection sites", "points": [{"name": s, "x": float(x), "y": float(y)} for s, x, y in sites]}],
     })
 
 

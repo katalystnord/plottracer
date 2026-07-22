@@ -1,21 +1,24 @@
 {
   "source": {
     "imagePath": "ternary-blend-composition.png",
-    "note": "Synthetic ground truth \u2014 three corner values per blend (measured off the prior exemplar, replotted). a/b/c match the app's ternary labels."
+    "note": "Synthetic ground truth. a/b/c follow the app's ternary calibration order A->B->C = bottom-left(Alginate) -> bottom-right(Cellulose) -> top(Chitosan)."
   },
   "graphType": "ternary",
   "axes": {
     "a": {
-      "label": "Chitosan (%)",
-      "vertex": "top"
+      "label": "Alginate (%)",
+      "vertex": "bottom-left",
+      "corner": "A"
     },
     "b": {
-      "label": "Alginate (%)",
-      "vertex": "bottom-left"
+      "label": "Cellulose (%)",
+      "vertex": "bottom-right",
+      "corner": "B"
     },
     "c": {
-      "label": "Cellulose (%)",
-      "vertex": "bottom-right"
+      "label": "Chitosan (%)",
+      "vertex": "top",
+      "corner": "C"
     }
   },
   "series": [
@@ -23,9 +26,24 @@
       "name": "blends",
       "points": [
         {
-          "a": 70,
+          "a": 20,
+          "b": 10,
+          "c": 70
+        },
+        {
+          "a": 30,
           "b": 20,
-          "c": 10
+          "c": 50
+        },
+        {
+          "a": 10,
+          "b": 50,
+          "c": 40
+        },
+        {
+          "a": 33,
+          "b": 34,
+          "c": 33
         },
         {
           "a": 50,
@@ -33,24 +51,9 @@
           "c": 20
         },
         {
-          "a": 40,
-          "b": 10,
-          "c": 50
-        },
-        {
-          "a": 33,
-          "b": 33,
-          "c": 34
-        },
-        {
-          "a": 20,
-          "b": 50,
-          "c": 30
-        },
-        {
           "a": 15,
-          "b": 15,
-          "c": 70
+          "b": 70,
+          "c": 15
         }
       ]
     }
