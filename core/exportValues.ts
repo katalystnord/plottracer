@@ -109,15 +109,22 @@ export function valueAtPixel(
     ? raw.map((v, i) => (Number.isFinite(v) ? roundToResolution(v, res[i] ?? NaN) : v))
     : raw;
 
+  let out: ExportValue[];
   if (axes instanceof BarAxes) {
     const label = pixel.metadata?.['label'];
-    return [typeof label === 'string' && label.length > 0 ? label : `Bar${ptIndex}`, val[0] ?? null];
+    out = [typeof label === 'string' && label.length > 0 ? label : `Bar${ptIndex}`, val[0] ?? null];
   } else if (axes instanceof CircularChartRecorderAxes) {
-    return [formatIfNumber(val[0], axes.getTimeFormat()), ...val.slice(1)];
+    out = [formatIfNumber(val[0], axes.getTimeFormat()), ...val.slice(1)];
   } else if (axes instanceof XYAxes) {
-    return val.map((v, i) => (axes.isDate(i) ? formatIfNumber(v, axes.getInitialDateFormat(i)) : v));
+    out = val.map((v, i) => (axes.isDate(i) ? formatIfNumber(v, axes.getInitialDateFormat(i)) : v));
+  } else {
+    out = val;
   }
-  return val;
+  // A non-finite value (NaN/Infinity from a degenerate calibration, or an
+  // undefined geometric point) is "not measured", not a number. Emit null so
+  // every exporter agrees — CSV blanks it (`?? ''`), JSON/xlsx serialize null —
+  // instead of CSV printing the literal "NaN" while JSON writes null.
+  return out.map((v) => (typeof v === 'number' && !Number.isFinite(v) ? null : v));
 }
 
 /** Formats a serial day-number, or passes the value through untouched when

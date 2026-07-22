@@ -140,4 +140,38 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
     expect(session.getOptions()['isLogY']).toBe('true');
     expect(session.getCalibrationError()).toBeTruthy();
   });
+
+  it('catches a log axis whose endpoints change sign in a LOADED project', () => {
+    // The old guard only tested === 0. A log axis with one negative and one
+    // positive endpoint falls to the else-branch's Math.log(negative) = NaN, so
+    // every value reads back NaN while calibrate() still returned true.
+    const axes = loadedXY(
+      [
+        [100, 300, '0', '0'],
+        [400, 300, '10', '0'],
+        [100, 300, '0', '-5'],
+        [100, 0, '0', '1000'],
+      ],
+      true
+    );
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toMatch(/change sign/i);
+  });
+
+  it('catches distinct-but-collinear calibration points (parallel axes) in a LOADED project', () => {
+    // X1->X2 and Y1->Y2 both horizontal: the pixel transform is singular even
+    // though no two points share a pixel, so inv2x2 divides by zero and every
+    // value reads back NaN while calibrate() still returned true. The same-pixel
+    // guard cannot see this — only a determinant/parallel check can.
+    const axes = loadedXY([
+      [100, 300, '0', '0'],
+      [200, 300, '10', '0'],
+      [100, 300, '0', '0'],
+      [300, 300, '0', '10'],
+    ]);
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toMatch(/parallel/i);
+  });
 });

@@ -132,6 +132,19 @@ describe('valueAtPixel — CCR', () => {
   });
 });
 
+describe('valueAtPixel — non-finite sanitation', () => {
+  it('maps NaN/Infinity to null so CSV and JSON agree ("not measured")', () => {
+    // A degenerate calibration (singular pixel matrix, log through zero) or an
+    // undefined geometric point can hand pixelToData a non-finite value. It must
+    // export as null everywhere, not "NaN" in CSV while JSON serializes null.
+    const fake = { pixelToData: () => [NaN, Infinity, -Infinity, 5] } as unknown as Parameters<
+      typeof valueAtPixel
+    >[1];
+    const out = valueAtPixel(0, fake, { x: 0, y: 0 } as Parameters<typeof valueAtPixel>[2], 'full');
+    expect(out).toEqual([null, null, null, 5]);
+  });
+});
+
 describe('valueAtPixel — XY', () => {
   it('leaves a numeric XY chart entirely alone', () => {
     const ds = new Dataset(2);

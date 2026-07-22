@@ -347,6 +347,23 @@ export interface LogScaleGuard {
 }
 
 /**
+ * Two pixel-space axis directions that must not be parallel. When a graph type
+ * inverts a 2x2 pixel matrix (XY and its Histogram/Error-Bar variants), distinct
+ * but COLLINEAR calibration points make that matrix singular — inv2x2 divides by
+ * zero and every value reads back NaN, while calibrate() still returns true. The
+ * same-pixel guard (distinctPixelSteps) only catches the coincident sub-case; a
+ * determinant/parallel check is what catches the rest. Each vector is the pixel
+ * difference of the two named steps; if the two vectors are parallel (cross ~ 0)
+ * the calibration has no 2-D scale.
+ */
+export interface ParallelAxisGuard {
+  v1: readonly [string, string];
+  v2: readonly [string, string];
+  /** How the two axes are named to the user, e.g. "X and Y". */
+  label: string;
+}
+
+/**
  * Pre-calibration refusals, run before any axes class sees the values.
  *
  * This is the layer WPD keeps in `controllers/` and we never ported: `core/` is
@@ -363,12 +380,22 @@ function checkGuards(
 ): string | null {
   for (const g of config.logScaleGuards ?? []) {
     if (!optionBool(options, g.option)) continue;
+    const vals: number[] = [];
     for (const idx of g.points) {
       const pt = cal.getPoint(idx);
       const raw = g.field === 'dx' ? pt?.dx : pt?.dy;
-      if (parseFloat(String(raw ?? '')) === 0) {
-        return `A log ${g.label} scale cannot pass through zero — enter non-zero values (e.g. 1 and 100).`;
-      }
+      vals.push(parseFloat(String(raw ?? '')));
+    }
+    // A log axis maps through log10: it must not pass through zero, and both
+    // endpoints must share a sign. WPD supports an all-negative log axis (both
+    // < 0), but a zero endpoint or a sign MIX sends the else-branch to
+    // Math.log(negative) = NaN, so every value reads back NaN while calibrate()
+    // still reports success (core/axes/xy.ts:88). The old guard only caught the
+    // exactly-zero case. NaN entries (non-numeric) are left to the parser.
+    const anyZero = vals.some((v) => v === 0);
+    const mixedSign = vals.some((v) => v > 0) && vals.some((v) => v < 0);
+    if (anyZero || mixedSign) {
+      return `A log ${g.label} scale cannot pass through zero or change sign — enter non-zero values with the same sign (e.g. 1 and 100).`;
     }
   }
   // Distinct-pixel invariant. Two points of one axis on a single pixel make the
@@ -388,6 +415,28 @@ function checkGuards(
           const lb = config.steps[bi]?.label ?? group[j];
           return `${la} and ${lb} are on the same pixel — they must be different points, or the calibration has no scale.`;
         }
+      }
+    }
+  }
+  // Distinct-but-collinear invariant. Runs AFTER distinctPixelSteps so the
+  // coincident sub-case keeps its own "same pixel" message; this catches the
+  // rest — two axes pointing the same way make the 2x2 pixel transform singular
+  // (inv2x2 divides by zero -> every value NaN, calibrate() still true).
+  const pag = config.parallelAxisGuard;
+  if (pag) {
+    const dirOf = (pair: readonly [string, string]): { x: number; y: number } | null => {
+      const ia = config.steps.findIndex((st) => st.key === pair[0]);
+      const ib = config.steps.findIndex((st) => st.key === pair[1]);
+      const a = cal.getPoint(ia);
+      const b = cal.getPoint(ib);
+      return a && b ? { x: a.px - b.px, y: a.py - b.py } : null;
+    };
+    const d1 = dirOf(pag.v1);
+    const d2 = dirOf(pag.v2);
+    if (d1 && d2) {
+      const cross = d1.x * d2.y - d1.y * d2.x;
+      if (Math.abs(cross) < 1e-9) {
+        return `The ${pag.label} calibration axes are parallel — they must point in different directions, or the calibration has no scale.`;
       }
     }
   }
@@ -527,6 +576,10 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   /** Groups of steps whose pixels must all differ (checkpoint 72). Filters the
    * reuse-pixel buttons AND refuses a degenerate calibration reached by drag. */
   distinctPixelSteps?: readonly (readonly string[])[];
+  /** For 2x2-pixel-transform types (XY): the two axis directions that must not
+   * be parallel, catching distinct-but-collinear points the same-pixel guard
+   * misses. See ParallelAxisGuard. */
+  parallelAxisGuard?: ParallelAxisGuard;
   buildAxes(cal: Calibration, ctx: BuildAxesContext): BuildAxesResult<A>;
   /** Inverse of buildAxes's `options` handling — reads a loaded axes instance's
    * own state back into the option Record, so opening a project restores the
@@ -557,6 +610,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y' },
   ],
   distinctPixelSteps: [['x1', 'x2'], ['y1', 'y2']],
+  parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
   // WPD's own XY sidebar options (templates/_sidebars.html:258-297). Note the
   // rotation default: WPD's control is "Skip rotation correction" and ships
   // UNCHECKED, i.e. correction ON. We hardcoded the opposite for 68
@@ -630,6 +684,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   // rather than re-declaring keeps them from drifting apart.
   logScaleGuards: XY_AXES_CONFIG.logScaleGuards,
   distinctPixelSteps: XY_AXES_CONFIG.distinctPixelSteps,
+  parallelAxisGuard: XY_AXES_CONFIG.parallelAxisGuard,
   steps: XY_AXES_CONFIG.steps,
   options: XY_AXES_CONFIG.options,
   extractOptions: XY_AXES_CONFIG.extractOptions,
@@ -683,6 +738,7 @@ export const ERROR_BAR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   supportsCurveFit: true,
   logScaleGuards: XY_AXES_CONFIG.logScaleGuards,
   distinctPixelSteps: XY_AXES_CONFIG.distinctPixelSteps,
+  parallelAxisGuard: XY_AXES_CONFIG.parallelAxisGuard,
   steps: XY_AXES_CONFIG.steps,
   buildAxes(cal, ctx) {
     const result = XY_AXES_CONFIG.buildAxes(cal, ctx);
