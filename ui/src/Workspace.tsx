@@ -35,7 +35,6 @@ import {
   BottomBarButton,
   LeftRail,
   RailGroup,
-  RailDivider,
   CanvasRegion,
   RightSidebar,
   ResizeHandle,
@@ -47,6 +46,7 @@ import {
   PlusIcon,
   CalibrateIcon,
   DeleteIcon,
+  EraseIcon,
   SelectIcon,
   AutoTraceIcon,
   UndoIcon,
@@ -353,7 +353,7 @@ import { primaryMod } from './platform.js';
 // and its fold-out card switches between them. They stay distinct MODES so each
 // keeps its own canvas behaviour (flood on click / colour pick + Trace / guide
 // points) unchanged -- the umbrella is a presentation wrapper, not a rewrite.
-type ToolMode = 'pan' | 'calibrate' | 'place-point' | 'select' | 'segment-fill' | 'color-trace' | 'measure' | 'image-edit' | 'error-bars' | 'interpolate';
+type ToolMode = 'pan' | 'calibrate' | 'place-point' | 'select' | 'eraser' | 'segment-fill' | 'color-trace' | 'measure' | 'image-edit' | 'error-bars' | 'interpolate';
 
 /** The three modes fronted by the single Auto-extract rail tool. */
 const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-trace', 'interpolate'];
@@ -1470,7 +1470,7 @@ export function Workspace() {
     // (Place Point / Segment Fill) must drop back to Calibrate. Pan and Measure
     // work fine uncalibrated (Measure's Distance/Set-scale need no axes), so a
     // measurement undo shouldn't kick the user out of the Measure card.
-    setMode((m) => (!s.getAxes() && (m === 'place-point' || m === 'segment-fill' || m === 'color-trace' || m === 'interpolate') ? 'calibrate' : m));
+    setMode((m) => (!s.getAxes() && (m === 'place-point' || m === 'eraser' || m === 'segment-fill' || m === 'color-trace' || m === 'interpolate') ? 'calibrate' : m));
   }, []);
 
   const restoreDoc = useCallback(
@@ -1882,18 +1882,22 @@ export function Workspace() {
       }
       // Digit hotkeys mirror the rail order (v0.8, 0-based). Each guard matches
       // its button's `disabled` so a key can't do what the greyed button can't.
-      // Curve Fit (7) / Geometry (8) are fly-out panels: open them by triggering
-      // their rail button (skipped when it's disabled). Clear-all has no key.
+      // Hotkeys 0-9 run straight down the rail (2026-07-22 redesign): 0 Pan ·
+      // 1 Calibrate · 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error
+      // bars · 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9)
+      // are fly-out panels: open them by triggering their rail button (skipped
+      // when disabled). Clear-all (top bar) and the Eraser have NO key -- both
+      // destructive, kept out of the 0-9 run.
       if (e.key === '0') setMode('pan');
       else if (e.key === '1' && figureCaptured) setMode('calibrate');
-      else if (e.key === '2' && axes) setMode('select');
+      else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && session.getDatasetInfos().some((d) => d.pointCount > 0)) toggleErrorBars();
-      else if (e.key === '5' && axes && !session.hasPointGroups()) toggleAutoExtract();
-      else if (e.key === '6' && figureCaptured) toggleMeasure();
-      else if (e.key === '7') (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
-      else if (e.key === '8') (document.querySelector('[data-testid="geometry-trigger"]:not([disabled])') as HTMLElement | null)?.click();
-      else if (e.key === '9' && canvasHasImage) toggleImageEdit();
+      else if (e.key === '4' && axes && !session.hasPointGroups()) toggleAutoExtract();
+      else if (e.key === '5' && axes) setMode('select');
+      else if (e.key === '6' && session.getDatasetInfos().some((d) => d.pointCount > 0)) toggleErrorBars();
+      else if (e.key === '7' && figureCaptured) toggleMeasure();
+      else if (e.key === '8') (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
+      else if (e.key === '9') (document.querySelector('[data-testid="geometry-trigger"]:not([disabled])') as HTMLElement | null)?.click();
     }
     // Commit the nudge once, on release -- one undo step per gesture, not per event.
     function onKeyUp(e: KeyboardEvent) {
@@ -2364,6 +2368,10 @@ export function Workspace() {
         setActivePointIndex(null);
         return;
       }
+      // Eraser removes a point on a MARKER click (handleMarkerClick); a bare
+      // canvas click must not fall through to addDataPoint (same no-add guard
+      // shape as select/color-trace above).
+      if (mode === 'eraser') return;
       if (mode === 'image-edit') return; // image-edit tools are card buttons, not canvas clicks
       if (mode === 'measure') {
         handleMeasureClick(px, py);
@@ -2432,6 +2440,12 @@ export function Workspace() {
   const handleMarkerClick = useCallback((id: string, shiftKey?: boolean) => {
     if (id.startsWith('point-')) {
       const idx = Number(id.slice('point-'.length));
+      if (mode === 'eraser') {
+        // Eraser tool (David 2026-07-22): clicking a data point removes it. Reuses
+        // the same per-point delete as Del / the right-click menu; Del still works.
+        removeDataPointByIndex(idx);
+        return;
+      }
       if (mode === 'select') {
         // In the Select tool a marker click joins the marquee selection: Shift
         // toggles one in/out, a plain click makes it the sole selection.
@@ -2450,7 +2464,7 @@ export function Workspace() {
       setActiveHandleKey(id);
       setActivePointIndex(null);
     }
-  }, [mode]);
+  }, [mode, removeDataPointByIndex]);
 
   // The Select tool's marquee (David 2026-07-21): every active-series DATA point
   // whose pixel falls inside the dragged box becomes selected. Only data points --
@@ -4328,6 +4342,7 @@ export function Workspace() {
           return 'Anchor selected — ↑ ↓ ← → nudge (Shift = coarse), Q/W step anchors, Del removes it — the curve refits. Or click to add another.';
         return 'Interpolate — click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
       }
+      if (mode === 'eraser') return 'Eraser — click a data point to remove it. Del also removes the selected point.';
       if (mode === 'pan') return 'Pan and zoom only — pick a tool from the left rail to edit.';
     }
     return 'Pick a graph type, then calibrate the axes to begin.';
@@ -4373,7 +4388,7 @@ export function Workspace() {
   // it appeared "before" its sibling curve tools; now all three show together.
   const curveFitFlyout =
     config.supportsCurveFit ? (
-      <FloatingPanel placement="rail" label="Curve Fit" icon={<CurveFitIcon />} testId="curve-fit" shortcut="7" disabled={!axes}>
+      <FloatingPanel placement="rail" label="Curve Fit" icon={<CurveFitIcon />} testId="curve-fit" shortcut="8" disabled={!axes}>
         <p>
           <label>
             Degree:{' '}
@@ -4451,7 +4466,7 @@ export function Workspace() {
 
   const geometryFlyout =
     config.id === 'xy' ? (
-      <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="8" disabled={!axes}>
+      <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="9" disabled={!axes}>
         <p>
           <label>
             <input
@@ -4513,6 +4528,20 @@ export function Workspace() {
   return (
     <AppShell style={{ ['--sidebar-width' as string]: `${sidebarWidth}px` } as CSSProperties}>
       <TopBar>
+        {/* Clear all points — top-left, matching Ketcher's "new/clear document"
+            position (David 2026-07-22). Icon-only; still confirms before wiping
+            the series. The per-point Eraser lives on the rail. */}
+        <TopBarGroup>
+          <TopBarButton
+            type="button"
+            data-testid="clear-points"
+            title="Clear all points in the active series"
+            disabled={dataPoints.length === 0}
+            onClick={clearPoints}
+          >
+            <DeleteIcon />
+          </TopBarButton>
+        </TopBarGroup>
         {/* Grouped into "chrome" cards (checkpoint 44, mirroring Ketcher's
             toolbar). Open Image leads -- it's the default first action; "Open
             Project" vs "Open Image" are spelled out because the icons alone
@@ -5195,13 +5224,18 @@ export function Workspace() {
               displacing the rail. pointerEvents:none passes gaps through; the
               rail card and the Measure card each re-enable it themselves. */}
           <div ref={railRowRef} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
-          {/* Rail order + banding is David's (v0.8): setup · work-with-points ·
-              auto-extract · analysis · image-prep · destructive. Hotkeys 0-9;
-              Clear-all deliberately has NO digit (one keypress must not wipe
-              every point). Each tool is greyed until it can actually do its job
-              (the rail is a toolbox, not a catch-all). */}
+          {/* Rail redesign (David 2026-07-22, Ketcher-style separated cards):
+              each functional band is its own bordered card, spaced 6px, and the
+              hotkeys run 0-9 straight down so position = number. Cards:
+              [view + set up] · [get + refine points] · [analyze]. Clear-all moved
+              to the top bar; per-point delete is the Eraser (unnumbered: it's
+              destructive and Del already does it, so it stays out of the 0-9 run).
+              Each tool greys until it can do its job (a toolbox, not a catch-all). */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
+          {/* View & set up: Pan · Calibrate · Edit image. Image prep is available
+              BEFORE capture too (rotate a sideways scan, crop, fine-deskew) and
+              THEN capture; enabled whenever there's an image. */}
           <RailGroup data-testid="tool-rail">
-          {/* Setup */}
           <IconButton
             testId="mode-pan"
             icon={<HandIcon />}
@@ -5219,19 +5253,20 @@ export function Workspace() {
             disabled={!figureCaptured}
             onClick={() => setMode('calibrate')}
           />
-          <RailDivider />
-          {/* Work with individual points -- Select · Add · Error bars (David
-              2026-07-21). The Select tool SUBSUMES the old delete-one eraser:
-              select (click, or box-drag a range) then Del removes them all. */}
           <IconButton
-            testId="mode-select"
-            icon={<SelectIcon />}
-            label="Select points — click, or drag a box; Del removes, arrows nudge"
+            testId="mode-image-edit"
+            icon={<ImageEditIcon />}
+            label="Edit image (rotate / flip)"
             shortcut="2"
-            pressed={mode === 'select'}
-            disabled={!axes}
-            onClick={() => setMode('select')}
+            pressed={mode === 'image-edit'}
+            disabled={!canvasHasImage}
+            onClick={toggleImageEdit}
           />
+          </RailGroup>
+          {/* Get data points onto the plot, then refine them: Add + Auto-extract
+              are the two ways to GET points; Select + Eraser refine them; Error
+              bars attach uncertainty. */}
+          <RailGroup>
           <IconButton
             testId="mode-place-point"
             icon={<PlusIcon />}
@@ -5241,72 +5276,63 @@ export function Workspace() {
             disabled={!axes}
             onClick={() => setMode('place-point')}
           />
+          <IconButton
+            testId="mode-auto-extract"
+            icon={<AutoTraceIcon />}
+            label="Auto-extract (flood-fill / by colour / guide points)"
+            shortcut="4"
+            pressed={AUTO_EXTRACT_MODES.includes(mode)}
+            disabled={!axes || hasPointGroups}
+            onClick={toggleAutoExtract}
+          />
+          <IconButton
+            testId="mode-select"
+            icon={<SelectIcon />}
+            label="Select points — click, or drag a box; Del removes, arrows nudge"
+            shortcut="5"
+            pressed={mode === 'select'}
+            disabled={!axes}
+            onClick={() => setMode('select')}
+          />
           {/* Error bars are a PROPERTY of a point (ckpt 79, David) -- greyed
               until a series has data to attach to. */}
           <IconButton
             testId="mode-error-bars"
             icon={<ErrorBarsIcon />}
             label="Error bars (add to a traced series)"
-            shortcut="4"
+            shortcut="6"
             pressed={mode === 'error-bars'}
             disabled={!datasetInfos.some((d) => d.pointCount > 0)}
             onClick={toggleErrorBars}
           />
-          <RailDivider />
-          {/* Auto-extract umbrella (v0.8): one wand tool fronting the three
-              tracing mechanisms (flood-fill / by colour / guide points), chosen
-              in its fold-out card. Replaces the separate Segment Fill + Interpolate
-              rail tools and the top-bar Auto-trace-by-colour panel. */}
+          {/* Eraser (David 2026-07-22): a discoverable click-to-remove-a-point
+              tool. UNNUMBERED -- it's destructive and Del already removes the
+              selected point, so it stays out of the 0-9 run and reads apart. */}
           <IconButton
-            testId="mode-auto-extract"
-            icon={<AutoTraceIcon />}
-            label="Auto-extract (flood-fill / by colour / guide points)"
-            shortcut="5"
-            pressed={AUTO_EXTRACT_MODES.includes(mode)}
-            disabled={!axes || hasPointGroups}
-            onClick={toggleAutoExtract}
+            testId="mode-eraser"
+            icon={<EraseIcon />}
+            label="Erase a point — click a point to remove it (Del also removes the selected point)"
+            pressed={mode === 'eraser'}
+            disabled={dataPoints.length === 0}
+            onClick={() => setMode('eraser')}
           />
-          <RailDivider />
-          {/* Analysis: Measure + the Curve Fit / Geometry fly-outs (7, 8). */}
+          </RailGroup>
+          {/* Analyze (downstream / derived -- Tenet 9): Measure + the Curve Fit /
+              Geometry fly-outs (8, 9). */}
+          <RailGroup>
           <IconButton
             testId="mode-measure"
             icon={<MeasureIcon />}
             label="Measure"
-            shortcut="6"
+            shortcut="7"
             pressed={mode === 'measure'}
             disabled={!figureCaptured}
             onClick={toggleMeasure}
           />
           {curveFitFlyout}
           {geometryFlyout}
-          <RailDivider />
-          {/* Image prep -- available BEFORE capture too (David 2026-07-21): prepare
-              the raw source (rotate a sideways scan, crop to the panel, fine-deskew
-              a crooked photo) and THEN capture the clean figure. Enabled whenever
-              there's an image, not gated on capture. (Auto-straighten inside the
-              card still needs calibration handles, so it self-greys pre-capture.) */}
-          <IconButton
-            testId="mode-image-edit"
-            icon={<ImageEditIcon />}
-            label="Edit image (rotate / flip)"
-            shortcut="9"
-            pressed={mode === 'image-edit'}
-            disabled={!canvasHasImage}
-            onClick={toggleImageEdit}
-          />
-          <RailDivider />
-          {/* Destructive -- no hotkey (a single keypress must not wipe every
-              point). "Clear all points" bins the whole active series at once; the
-              per-point delete now lives in the Select tool (marquee + Del) and the
-              right-click "Delete point" menu, not a rail eraser. */}
-          <IconButton
-            testId="clear-points"
-            icon={<DeleteIcon />}
-            label="Clear all points"
-            disabled={dataPoints.length === 0}
-            onClick={clearPoints}
-          />
           </RailGroup>
+          </div>
           {/* Auto-extract umbrella card (v0.8, David) -- one wand tool fronting
               the three tracing mechanisms. The selector switches MODE (each keeps
               its own canvas behaviour) and shows that mechanism's controls, which

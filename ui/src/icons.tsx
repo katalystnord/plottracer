@@ -40,6 +40,10 @@ import handSvg from '../../icons/hand.svg?raw';
 import plusSvg from '../../icons/plus.svg?raw';
 import deleteSvg from '../../icons/delete.svg?raw';
 import clearSvg from '../../icons/clear.svg?raw';
+// Eraser (per-point delete tool, David 2026-07-22): a discoverable click-to-
+// remove-a-point mode, distinct from the top-bar "Clear all points". Reinstates
+// the retired eraser art (icons/erase.svg), normalized to 24x24.
+import eraseSvg from '../../icons/erase.svg?raw';
 import openSvg from '../../icons/open.svg?raw';
 import placePointSvg from '../../icons/custom/place-point.svg?raw';
 import segmentFillSvg from '../../icons/custom/segment-fill.svg?raw';
@@ -96,6 +100,7 @@ function Icon({ svg }: { svg: string }) {
 export const HandIcon = () => <Icon svg={handSvg} />;
 export const PlusIcon = () => <Icon svg={plusSvg} />;
 export const DeleteIcon = () => <Icon svg={deleteSvg} />;
+export const EraseIcon = () => <Icon svg={eraseSvg} />;
 export const ClearIcon = () => <Icon svg={clearSvg} />;
 export const OpenIcon = () => <Icon svg={openSvg} />;
 // The reticle glyph (icons/custom/place-point.svg) is used for the CALIBRATE

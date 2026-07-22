@@ -215,18 +215,8 @@ export const RailGroup = styled('div')({
   pointerEvents: 'auto',
 });
 
-/** Separator between the rail's tool bands. Thicker + darker than a hairline
- * (v0.8, David) so the banding reads clearly -- it's what makes the setup /
- * point-ops / auto-extract / analysis / image / destructive grouping legible. */
-export const RailDivider = styled('div')({
-  height: 2,
-  alignSelf: 'stretch',
-  margin: '4px 1px',
-  borderRadius: 1,
-  // Thicker than a hairline for legible banding, but the softer border tone
-  // (not the darker divider) so it groups without shouting (David, v0.8).
-  background: theme.color.border.regular,
-});
+/** The rail's tool bands are now SEPARATE RailGroup cards spaced by a gap
+ * (David 2026-07-22, Ketcher-style), so the old in-card RailDivider is gone. */
 
 /** The dominant central region. `position: relative` so ImageCanvas's own
  * absolutely-positioned overlays (loupe, zoom control, readouts) anchor to

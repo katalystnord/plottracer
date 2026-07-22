@@ -652,21 +652,23 @@ describe('Workspace: tool mode', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150); // lands in Place Point mode automatically
 
-    // Hotkeys are 0-based: 0 Pan · 1 Calibrate · 2 Select · 3 Place · 5 Auto-extract.
+    // Hotkeys run 0-9 down the rail (2026-07-22 redesign): 0 Pan · 1 Calibrate ·
+    // 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars · 7 Measure ·
+    // 8 Curve fit · 9 Geometry.
     await page.keyboard.press('0');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
 
     await page.keyboard.press('1');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.press('2');
-    expect(await page.getByTestId('mode-select').getAttribute('aria-pressed')).toBe('true');
-
     await page.keyboard.press('3');
     expect(await page.getByTestId('mode-place-point').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.press('5');
+    await page.keyboard.press('4');
     expect(await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed')).toBe('true');
+
+    await page.keyboard.press('5');
+    expect(await page.getByTestId('mode-select').getAttribute('aria-pressed')).toBe('true');
   });
 });
 
@@ -2249,13 +2251,29 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     expect(rowCount).toBeGreaterThan(3);
   });
 
-  it('shortcut 5 selects the Auto-extract tool once calibrated (v0.8)', async () => {
+  it('shortcut 4 selects the Auto-extract tool once calibrated (v0.8)', async () => {
     // Interpolate no longer has its own hotkey -- it's a mechanism inside the
-    // Auto-extract umbrella (hotkey 5), which opens on the last-used mechanism.
+    // Auto-extract umbrella (hotkey 4 after the 2026-07-22 rail renumber), which
+    // opens on the last-used mechanism.
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.keyboard.press('5');
+    await page.keyboard.press('4');
     expect(await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the Eraser tool removes a clicked data point (2026-07-22)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // lands in Place Point mode
+    await clickAt(250, 175);
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
+
+    // Activate the Eraser, then click the point's marker to remove it. A bare
+    // canvas click in eraser mode adds nothing; only a marker click deletes.
+    await page.getByTestId('mode-eraser').click();
+    expect(await page.getByTestId('mode-eraser').getAttribute('aria-pressed')).toBe('true');
+    await clickAt(250, 175);
+    await page.waitForTimeout(100);
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(0);
   });
 
   it('walks anchors with Q/W and deletes the selected anchor, refitting the curve', async () => {
