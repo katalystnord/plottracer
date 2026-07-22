@@ -4,6 +4,7 @@ import { Dataset } from '../dataset.js';
 import { Calibration } from '../calibration.js';
 import { XYAxes } from '../axes/xy.js';
 import { BarAxes } from '../axes/bar.js';
+import { TernaryAxes } from '../axes/ternary.js';
 
 describe('PlotData', () => {
   function buildXYProject(): PlotData {
@@ -94,6 +95,46 @@ describe('PlotData', () => {
     expect(ds2.getPointGroups()).toEqual(['Value', 'Upper', 'Lower']);
     expect(ds2.getPointGroupIndexInTuple(0, idxVal)).toBe(0);
     expect(ds2.getPointGroupIndexInTuple(0, idxUp)).toBe(1);
+  });
+
+  it('preserves ternary Normal orientation through a real JSON persistence cycle', () => {
+    // Projects are persisted via JSON.stringify (engine/projectContainer.ts), so
+    // the serialized object MUST survive a JSON round-trip, not just an in-memory
+    // hand-off. A default (Normal) ternary calibration must reload as Normal;
+    // otherwise pixelToData cyclically permutes [a,b,c] -> [c,a,b] and every
+    // extracted datum is silently reassigned to the wrong component (Tenet 1).
+    const pd = new PlotData();
+    const cal = new Calibration(3);
+    cal.addPoint(100, 500, '1', '0', '0'); // A vertex
+    cal.addPoint(500, 500, '0', '1', '0'); // B vertex
+    cal.addPoint(300, 100, '0', '0', '1'); // C vertex
+    const axes = new TernaryAxes();
+    axes.calibrate(cal, false, true); // range 0..1, Normal orientation
+    axes.name = 'Ternary';
+    pd.addAxes(axes);
+
+    const ds = new Dataset();
+    ds.name = 'Tern';
+    ds.addPixel(300, 400); // an interior pixel with a distinct a/b/c triple
+    pd.addDataset(ds);
+    pd.setAxesForDataset(ds, axes);
+
+    const before = axes.pixelToData(300, 400);
+
+    const serialized = pd.serialize();
+    // The genuine persistence path: JSON.stringify drops function-valued keys.
+    const throughJson = JSON.parse(JSON.stringify(serialized));
+
+    const pd2 = new PlotData();
+    pd2.deserialize(throughJson as unknown as Parameters<PlotData['deserialize']>[0]);
+    const ds2 = pd2.getDatasets()[0]!;
+    const axes2 = pd2.getAxesForDataset(ds2)! as TernaryAxes;
+
+    expect(axes2.isNormalOrientation()).toBe(true);
+    const after = axes2.pixelToData(300, 400);
+    expect(after[0]).toBeCloseTo(before[0]!, 10);
+    expect(after[1]).toBeCloseTo(before[1]!, 10);
+    expect(after[2]).toBeCloseTo(before[2]!, 10);
   });
 
   it('round-trips dataset metadata overrides (the live-data-table editable-cell mechanism)', () => {

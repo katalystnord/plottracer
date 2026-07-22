@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mat, taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts, cspline, csplineInterp } from '../mathFunctions.js';
 import { Color } from '../color.js';
 import { Calibration } from '../calibration.js';
@@ -86,6 +86,23 @@ describe('InputParser', () => {
     expect(p.isValid).toBe(true);
     expect(p.isDate).toBe(true);
     expect(typeof result).toBe('number');
+  });
+
+  it('parses a short-month date correctly regardless of the current date', () => {
+    // The date must not depend on when the app is run. Pin "today" to the 31st:
+    // a naive setUTCMonth(month-1) on a day-31 baseline overflows a short month
+    // (Feb 31 -> Mar), yielding the wrong day for the axis endpoint on ~10 days
+    // of every month. The parsed value must equal the intended UTC instant.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2020-01-31T12:00:00Z'));
+    try {
+      const p = new InputParser();
+      const result = p.parse('2020/02/15');
+      expect(p.isDate).toBe(true);
+      expect(result).toBe(Date.UTC(2020, 1, 15, 0, 0, 0, 0));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('parses a bracketed numeric array', () => {

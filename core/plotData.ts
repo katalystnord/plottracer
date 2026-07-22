@@ -578,10 +578,13 @@ export class PlotData {
       } else if (axes instanceof TernaryAxes) {
         axData.type = 'TernaryAxes';
         axData.isRange100 = axes.isRange100();
-        // NOTE: preserves the original's own bug — `axes.isNormalOrientation`
-        // (the function reference) is serialized here, not `axes.isNormalOrientation()`
-        // (the call). Faithful port, not a fix — see CLAUDE.md Step 1 notes.
-        axData.isNormalOrientation = axes.isNormalOrientation as unknown as boolean;
+        // Serialize the CALL, not the method reference. Upstream WPD writes the
+        // function reference here; JSON.stringify (our persistence path) drops
+        // function-valued keys, so on reload isNormalOrientation reads undefined
+        // -> Boolean(undefined) -> false, flipping a default Normal ternary to
+        // Reverse and permuting every [a,b,c] datum. Deliberate divergence from
+        // the port (Tenet 8): reliable data out (Tenet 1) over faithfulness.
+        axData.isNormalOrientation = axes.isNormalOrientation();
       } else if (axes instanceof MapAxes) {
         axData.type = 'MapAxes';
         axData.scaleLength = axes.getScaleLength();

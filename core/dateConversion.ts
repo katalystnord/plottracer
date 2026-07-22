@@ -63,6 +63,14 @@ function toJD(dateStringInput: string): number | null {
   if (msec > 1000 || msec < 0) return null;
 
   const tempDate = new Date();
+  // Seed the day-of-month to 1 before setting the month. Otherwise, when today's
+  // date-of-month exceeds the target month's length (e.g. run on the 31st,
+  // parsing a February date), setUTCMonth overflows into the next month *before*
+  // setUTCDate corrects it — yielding the wrong day, non-deterministically by run
+  // date. Divergence from the upstream port is deliberate: reliable data out
+  // (Tenet 1) trumps faithfulness here. setUTCFullYear is kept (not Date.UTC) to
+  // preserve literal 2-digit years, which Date.UTC would map to 1900-1999.
+  tempDate.setUTCDate(1);
   tempDate.setUTCFullYear(year);
   tempDate.setUTCMonth(month - 1);
   tempDate.setUTCDate(date);
