@@ -15,9 +15,13 @@ const path = require('path')
 const { registerIpcHandlers } = require('./electron-ipc.cjs')
 const { buildMenu } = require('./electron-menu.cjs')
 
-// seccomp/GPU workarounds -- needed on this Linux build/dev environment,
-// harmless elsewhere. (Carried over from the old electron/main.js, now deleted.)
-app.commandLine.appendSwitch('no-sandbox')
+// no-sandbox is a Linux AppImage/seccomp workaround (the deb postinst + afterPack
+// wrapper cover the same need). Gated to Linux so macOS and Windows keep their OS
+// renderer sandbox — a decoder/parser bug in a malicious figure then runs
+// contained. disable-gpu stays cross-platform (unchanged behaviour).
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox')
+}
 app.commandLine.appendSwitch('disable-gpu')
 
 let mainWindow = null
@@ -45,6 +49,11 @@ function createWindow() {
       preload: path.join(__dirname, 'electron-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // The renderer parses untrusted figures (images, PDFs via pdf.js). The OS
+      // renderer sandbox contains a decoder bug. Compatible here because the
+      // preload uses only contextBridge + ipcRenderer (no fs/node). Inert on
+      // Linux, where the no-sandbox switch above wins.
+      sandbox: true,
     },
   })
 
@@ -62,6 +71,15 @@ function createWindow() {
       shell.openExternal(url)
     }
     return { action: 'deny' }
+  })
+
+  // Block top-level navigation away from the local app. setWindowOpenHandler
+  // above only covers new windows; without this a compromised renderer or an
+  // in-page link could navigate the main window itself to a remote origin,
+  // which would then inherit the preload bridge. The app is a single file://
+  // document, so any non-file:// navigation is illegitimate.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault()
   })
 }
 
