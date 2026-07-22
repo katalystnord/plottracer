@@ -5621,7 +5621,7 @@ export function Workspace() {
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
           selectedMeasureVertex={activeMeasure}
-          maskOverlay={colorTraceMask?.canvas ?? null}
+          maskOverlay={eyedropper ? null : (colorTraceMask?.canvas ?? null)}
           onImageClick={handleImageClick}
           onMarkerDragEnd={handleMarkerDragEnd}
           onMarkerClick={handleMarkerClick}
