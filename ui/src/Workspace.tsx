@@ -2667,6 +2667,16 @@ export function Workspace() {
   );
 
   const clearPoints = useCallback(() => {
+    // Confirm a whole-series wipe, matching Reset/Remove-figure. Only asks when
+    // there is something to lose, and (like Reset) says it is undoable.
+    if (
+      session.getDataPoints().length > 0 &&
+      !window.confirm(
+        'Clear all points removes every point in the active series. This can be undone with Ctrl+Z. Continue?'
+      )
+    ) {
+      return;
+    }
     session.clearPoints();
     setActivePointIndex(null);
     commit();
@@ -3843,6 +3853,18 @@ export function Workspace() {
 
   const handleRemoveDataset = useCallback(
     (index: number) => {
+      // Confirm deleting a whole series, matching Reset/Remove-figure. Only asks
+      // when the series actually holds points; an empty series deletes silently.
+      const info = session.getDatasetInfos().find((i) => i.index === index);
+      if (
+        info &&
+        info.pointCount > 0 &&
+        !window.confirm(
+          `Delete series "${info.name}" and its ${info.pointCount} point${info.pointCount === 1 ? '' : 's'}? This can be undone with Ctrl+Z.`
+        )
+      ) {
+        return;
+      }
       session.removeDataset(index);
       commit();
     },

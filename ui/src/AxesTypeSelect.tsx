@@ -34,6 +34,23 @@ export interface AxesTypeSelectProps {
   onChange: (id: string) => void;
 }
 
+const LabelledRow = styled('div')({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+});
+
+// A visible caption, not just a tooltip: the target user can only use what is
+// on screen, and a bare "XY" chip never told a first-time user with a bar,
+// polar or ternary figure that a graph TYPE exists to choose before calibrating
+// (wrong type -> wrong data model out). Naming it on screen is the fix.
+const FieldLabel = styled('label')({
+  fontSize: theme.font.size.small,
+  color: theme.color.text.secondary,
+  fontFamily: theme.font.family,
+  whiteSpace: 'nowrap',
+});
+
 const StyledFormControl = styled(FormControl)({
   minWidth: 160,
 });
@@ -61,18 +78,25 @@ const StyledSelect = styled(Select)({
 
 export function AxesTypeSelect({ options, value, onChange }: AxesTypeSelectProps) {
   return (
-    <StyledFormControl size="small">
-      <StyledSelect
-        data-testid="axes-type-select"
-        value={value}
-        onChange={(e: SelectChangeEvent<unknown>) => onChange(e.target.value as string)}
-      >
-        {options.map((opt) => (
-          <MenuItem key={opt.id} value={opt.id} data-testid={`axes-option-${opt.id}`}>
-            {opt.label}
-          </MenuItem>
-        ))}
-      </StyledSelect>
-    </StyledFormControl>
+    <LabelledRow>
+      <FieldLabel id="axes-type-label" data-testid="axes-type-label">
+        Graph type
+      </FieldLabel>
+      <StyledFormControl size="small">
+        <StyledSelect
+          data-testid="axes-type-select"
+          value={value}
+          aria-labelledby="axes-type-label"
+          title="Graph type — choose XY, bar, polar, ternary, etc. before calibrating; it sets how the axes are read"
+          onChange={(e: SelectChangeEvent<unknown>) => onChange(e.target.value as string)}
+        >
+          {options.map((opt) => (
+            <MenuItem key={opt.id} value={opt.id} data-testid={`axes-option-${opt.id}`}>
+              {opt.label}
+            </MenuItem>
+          ))}
+        </StyledSelect>
+      </StyledFormControl>
+    </LabelledRow>
   );
 }

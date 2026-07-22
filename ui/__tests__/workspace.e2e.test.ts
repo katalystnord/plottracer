@@ -1585,6 +1585,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // <select> -- .inputValue() no longer applies. It displays the
     // selected MenuItem's own label text ('XY', not the config id 'xy').
     expect(await textOf('axes-type-select')).toContain('XY');
+    // The selector carries a visible "Graph type" caption so a first-time user
+    // knows the bare "XY" chip is the type to change before calibrating a
+    // non-XY figure (only what's on screen).
+    expect(await textOf('axes-type-label')).toBe('Graph type');
     await expectRow([5, 5]);
 
     fs.unlinkSync(projectPath);
@@ -5083,6 +5087,21 @@ describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', 
     // A dialog on a free action is noise the user learns to dismiss — which is
     // exactly how a real warning gets ignored later.
     expect(dialogMessages).toEqual([]);
+  });
+
+  it('confirms before "Clear all points" wipes a series, and is undoable', async () => {
+    // Audit follow-up: Clear-all-points and Delete-series wiped a whole series
+    // with no dialog while Reset/Remove-figure confirmed. Now all four confirm,
+    // gated on there being something to lose (same as Reset above).
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 175);
+    dialogMessages.length = 0;
+    await page.getByTestId('clear-points').click();
+    await page.waitForTimeout(200);
+    expect(dialogMessages.join(' ')).toMatch(/every point in the active series/i);
+    // The dialog is auto-accepted (as a user clicking Ok), so the point is gone.
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(0);
   });
 
   it('is undoable — Ctrl+Z brings the data back', async () => {
