@@ -771,11 +771,13 @@ describe('Workspace: Box Plot / Point Groups', () => {
     }
 
     const tableText = await textOf('points-table');
-    expect(tableText).toContain('0.500');
-    expect(tableText).toContain('1.500');
-    expect(tableText).toContain('2.500');
-    expect(tableText).toContain('3.500');
-    expect(tableText).toContain('4.500');
+    // The grouped table formats values with fmtValue (up to 6 sig figs, no
+    // trailing zeros) to match the histogram table and the main spreadsheet.
+    expect(tableText).toContain('0.5');
+    expect(tableText).toContain('1.5');
+    expect(tableText).toContain('2.5');
+    expect(tableText).toContain('3.5');
+    expect(tableText).toContain('4.5');
   });
 
   it('removeLastPoint clears the tuple slot and walks the cursor back', async () => {
@@ -793,8 +795,8 @@ describe('Workspace: Box Plot / Point Groups', () => {
 
     expect(await textOf('point-group-status')).toMatch(/Q1.*box 1/);
     const tableText = await textOf('points-table');
-    expect(tableText).toContain('0.500'); // Min still filled
-    expect(tableText).not.toContain('1.500'); // Q1 slot cleared back to '—'
+    expect(tableText).toContain('0.5'); // Min still filled (fmtValue formatting)
+    expect(tableText).not.toContain('1.5'); // Q1 slot cleared back to '—'
   });
 
   it('removing a point from a complete tuple makes its box-and-whisker glyph disappear again', async () => {

@@ -42,6 +42,12 @@ files:
   - ui/electron-menu.cjs
   - build/icons/**/*
   - package.json
+  # License + attribution text, shipped inside the app resources so the
+  # binary is self-contained (AGPL/GPL conveying requirement; Apache-2.0
+  # NOTICE propagation for the Ketcher-derived icons).
+  - LICENSE
+  - icons/LICENSE
+  - icons/NOTICE
   - "!**/*.map"
   - "!**/node_modules/.bin"
 

@@ -4723,7 +4723,10 @@ export function Workspace() {
                   <strong>PlotTracer</strong> <span data-testid="app-version">v{__APP_VERSION__}</span> — a
                   desktop plot digitizer based on{' '}
                   <strong>WebPlotDigitizer</strong> by Ankit Rohatgi, distributed under
-                  AGPL-3.0. Developed by Katalyst Nord AB, Stockholm.
+                  AGPL-3.0. Several algorithms are clean-room reimplementations of{' '}
+                  <strong>Engauge Digitizer</strong> ideas (GPL-2.0); the icon set derives
+                  from <strong>Ketcher</strong> by EPAM Systems (Apache-2.0). Developed by
+                  Katalyst Nord AB, Stockholm.
                 </div>
               </>
             )}
@@ -6081,7 +6084,7 @@ export function Workspace() {
                     </td>
                     {row.points.map((point, gi) => (
                       <td key={gi} style={{ paddingRight: 16 }}>
-                        {point && point.data ? point.data[0]!.toFixed(3) : '—'}
+                        {point && point.data ? fmtValue(point.data[0]!) : '—'}
                       </td>
                     ))}
                     <td>

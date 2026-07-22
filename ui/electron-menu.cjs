@@ -124,8 +124,10 @@ function buildMenu(mainWindow) {
               title: 'About PlotTracer',
               message: `PlotTracer ${app.getVersion()}`,
               detail: [
-                'Based on WebPlotDigitizer by Ankit Rohatgi',
-                'AGPL-3.0 licence',
+                'Based on WebPlotDigitizer by Ankit Rohatgi (AGPL-3.0)',
+                'Some algorithms are clean-room reimplementations of',
+                'Engauge Digitizer ideas (Mark Mitchell, Jason Nicholson; GPL-2.0).',
+                'Icon set derived from Ketcher by EPAM Systems (Apache-2.0).',
                 '',
                 'Developed by Katalyst Nord AB, Stockholm',
                 'david@katalystnord.com',
