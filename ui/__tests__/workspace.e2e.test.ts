@@ -2600,7 +2600,11 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     return Number(t.replace(/,/g, '').match(/(\d+) px/)?.[1] ?? '0');
   }
 
-  it('a drawn region restricts the trace to inside the box, and clearing it restores the full trace (B1)', async () => {
+  it('defaults the trace region to the calibration box, and clearing traces the whole image (B1)', async () => {
+    // 2026-07-22 walkthrough: a whole-image trace grabbed the title, axis lines
+    // and tick labels (same colour as the curve), so the traced curve "crept"
+    // outside the plot. The By-colour panel now opens with the region pre-set to
+    // the calibration box — visible and clearable — so the first pass stays in.
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
@@ -2608,13 +2612,21 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.getByTestId('color-trace-color').fill('#1f4e79');
     await page.getByTestId('color-trace-tolerance').fill('160');
     await page.waitForTimeout(150);
-    const full = await previewCount();
-    expect(full).toBeGreaterThan(0);
 
-    // Arm region-select, then drag a box on the canvas WELL RIGHT of the folded-out
-    // Auto-extract card (it overlays the left of the canvas, like the Measure card).
-    // The box covers only the right part of the plot, so the curve's left portion is
-    // excluded and the highlighted count must drop.
+    // Region defaulted: the clear (✕) affordance is present (not the "Restrict to
+    // a box" prompt), and the highlighted count is the in-box count.
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1);
+    const boxCount = await previewCount();
+    expect(boxCount).toBeGreaterThan(0);
+
+    // Clearing removes the restriction -> whole image, which matches at least as
+    // many pixels (the calibration box is a subset of the image).
+    await page.getByTestId('color-trace-region-clear').click();
+    await page.waitForTimeout(150);
+    const wholeCount = await previewCount();
+    expect(wholeCount).toBeGreaterThanOrEqual(boxCount);
+
+    // Drawing a smaller box restricts again, below the whole-image count.
     await page.getByTestId('color-trace-region').click();
     await refreshCanvasBox();
     await page.mouse.move(canvasBox.x + 480, canvasBox.y + 160);
@@ -2622,15 +2634,8 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.mouse.move(canvasBox.x + 620, canvasBox.y + 320, { steps: 6 });
     await page.mouse.up();
     await page.waitForTimeout(150);
-
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1); // region captured
-    const restricted = await previewCount();
-    expect(restricted).toBeLessThan(full); // the box clipped the mask
-
-    // Clearing the region restores the whole-image trace.
-    await page.getByTestId('color-trace-region-clear').click();
-    await page.waitForTimeout(150);
-    expect(await previewCount()).toBe(full);
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1);
+    expect(await previewCount()).toBeLessThan(wholeCount);
   });
 
   it('the bundled scatter example traces one point per marker end to end (checkpoint 123)', async () => {
@@ -2648,6 +2653,10 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     // Auto-trace ▸ Scattered points on the navy markers.
     await selectAutoExtract('colour');
     await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    // calibrateXYStandard's synthetic box does not bound this example's markers,
+    // so clear the default calibration-box region to detect over the whole image
+    // (the region default itself is exercised in the B1 test above).
+    await page.getByTestId('color-trace-region-clear').click();
     await page.getByTestId('color-trace-color').fill('#1f4e79');
     await page.getByTestId('color-trace-tolerance').fill('60');
     await page.getByTestId('color-trace-shape').selectOption('scatter');

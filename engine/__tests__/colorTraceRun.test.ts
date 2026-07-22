@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runColorTrace } from '../colorTraceRun.js';
+import { runColorTrace, calibrationBoxRegion } from '../colorTraceRun.js';
 
 function makeImage(width: number, height: number, bg: [number, number, number]): Uint8ClampedArray {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -57,5 +57,26 @@ describe('runColorTrace', () => {
     const result = runColorTrace(img, w, h, RED, 40, 'foreground', { x: 5, y: 0, width: 7, height: 4 });
     if ('error' in result) throw new Error(result.error);
     expect(result.points.every((p) => p.x >= 6 && p.x <= 9)).toBe(true);
+  });
+});
+
+describe('calibrationBoxRegion', () => {
+  it('returns the bounding box of the calibration point pixels (the plot rectangle)', () => {
+    // XY: X1,X2 on the x-axis (bottom), Y1,Y2 on the y-axis (left). Their bbox is
+    // the plot rectangle — the region that excludes the title, axis lines and
+    // tick labels a colour trace would otherwise grab (same colour, outside box).
+    const placed = {
+      x1: { px: 68, py: 637 },
+      x2: { px: 885, py: 637 },
+      y1: { px: 68, py: 637 },
+      y2: { px: 68, py: 39 },
+    };
+    expect(calibrationBoxRegion(placed)).toEqual({ x: 68, y: 39, width: 817, height: 598 });
+  });
+
+  it('returns null when the points enclose no area (nothing to restrict)', () => {
+    expect(calibrationBoxRegion({})).toBeNull();
+    expect(calibrationBoxRegion({ a: { px: 10, py: 10 } })).toBeNull();
+    expect(calibrationBoxRegion({ a: { px: 10, py: 10 }, b: { px: 10, py: 10 } })).toBeNull();
   });
 });

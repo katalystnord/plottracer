@@ -144,7 +144,7 @@ import { renderTable, TABLE_FORMAT_EXTENSION, type TableSection, type TableForma
 import { makeRounder, type PrecisionMode } from '../../core/exportPrecision.js';
 import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
-import { runColorTrace } from '../../engine/colorTraceRun.js';
+import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
 import {
@@ -3680,6 +3680,25 @@ export function Workspace() {
     commit();
     setGridRemovalError(null);
   }, [gridRemovalColor, gridRemovalTolerance, commit]);
+
+  // Default the By-colour trace region to the calibration box (2026-07-22
+  // walkthrough: a whole-image trace grabbed the title, axis lines and tick
+  // labels — same colour as the curve — so the traced curve "crept" outside the
+  // plot). XY only: for polar/ternary the calibration-point bbox is not the plot
+  // area, so leave those unrestricted.
+  const defaultTraceRegion = useCallback((): FilterRegion | null => {
+    if (session.getConfig().axesKind !== 'xy') return null;
+    return calibrationBoxRegion(session.getPlacedPoints());
+  }, [session]);
+
+  useEffect(() => {
+    if (mode !== 'color-trace') return;
+    // On ENTERING By-colour mode, pre-fill the region with the calibration box —
+    // only when nothing is set yet, so a user-drawn or deliberately cleared
+    // region wins. It renders as the existing, adjustable "Restrict to a box".
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setColorTraceRegion((cur) => cur ?? defaultTraceRegion());
+  }, [mode, defaultTraceRegion]);
 
   // Auto-trace the active series by colour (checkpoint 118; scatter mode 122).
   // Needs a calibrated axes (the points are only meaningful once pixels map to

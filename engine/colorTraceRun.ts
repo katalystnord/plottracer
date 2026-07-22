@@ -26,6 +26,30 @@ const MIN_MATCHED_PIXELS = 3;
 const DEFAULT_MAX_POINTS = 500;
 
 /**
+ * The bounding box of a set of calibration point pixels, as a FilterRegion. For
+ * an XY chart this is the plot rectangle (X1/X2 on the x-axis, Y1/Y2 on the
+ * y-axis), which is exactly the region that excludes the title, axis lines and
+ * tick labels a colour trace would otherwise grab — they share the curve's
+ * colour within tolerance but fall OUTSIDE the box. Returned as the default
+ * trace region so a first pass stays inside the plot; the caller keeps it
+ * visible and adjustable so data extending beyond the calibration points is one
+ * drag/clear away. Null when the points enclose no area.
+ */
+export function calibrationBoxRegion(
+  placed: Readonly<Record<string, { px: number; py: number }>>
+): FilterRegion | null {
+  const pts = Object.values(placed);
+  if (pts.length < 2) return null;
+  const xs = pts.map((p) => p.px);
+  const ys = pts.map((p) => p.py);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  const width = Math.max(...xs) - x;
+  const height = Math.max(...ys) - y;
+  return width > 0 && height > 0 ? { x, y, width, height } : null;
+}
+
+/**
  * Trace a curve by colour. `target` is the curve's colour (from the eyedropper),
  * `tolerance` a Euclidean RGB distance, `mode` foreground (near the colour) or
  * background (everything but it), `region` an optional plot-box restriction.
