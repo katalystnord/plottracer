@@ -217,6 +217,7 @@ import {
   getErrorRelation,
   setErrorRelation,
   errorSeriesFor,
+  hasErrorSeries,
   retargetErrorRelations,
   clearErrorRelationsTo,
   type ErrorRelation,
@@ -2641,8 +2642,92 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * handling lives in one place. Deduped. The caller commits once, so undo
    * captures the whole set as a single step. */
   removeDataPoints(indices: readonly number[]): void {
+    const dataset = this.activeEntry.dataset;
+
+    // Active series IS an error series (SD upper/lower): a selected cap stands for
+    // its whole error bar (David 2026-07-22). Delete the matched PAIR -- this cap
+    // plus its sibling in the other error series, both resolving to the same
+    // datum -- and leave the parent data point. Resolve datums BEFORE removing
+    // anything, because removal shifts indices.
+    const relation = this.axes ? getErrorRelation(dataset) : null;
+    if (relation) {
+      const parent = this.datasetEntries.find((e) => e.dataset.name === relation.of);
+      if (parent) {
+        const parentData = this.dataValuesOf(parent.dataset);
+        const datums = new Set<number>();
+        for (const i of indices) {
+          const cap = dataset.getPixel(i);
+          if (!cap) continue;
+          const di = matchCapToDatum(parentData, this.dataOf(cap), relation.role);
+          if (di > -1) datums.add(di);
+        }
+        for (const di of datums) this.removeErrorCapsForDatum(parent.dataset.name, parentData, di);
+        return;
+      }
+    }
+
+    // Active series is a PARENT that carries error bars: deleting a point takes
+    // its error bar with it (cascade, A -- David 2026-07-22). Drop each point's
+    // matched caps (datum indices valid against the CURRENT parent data), then
+    // remove the parent points high-index first.
+    if (this.axes && hasErrorSeries(this.getDatasets(), dataset.name)) {
+      const parentData = this.dataValuesOf(dataset);
+      const uniq = [...new Set(indices)].filter((i) => i >= 0 && i < dataset.getCount());
+      for (const di of uniq) this.removeErrorCapsForDatum(dataset.name, parentData, di);
+      for (const i of [...uniq].sort((a, b) => b - a)) this.removeDataPointAt(i);
+      return;
+    }
+
+    // Grouped series (box plot / histogram): a selected member stands for its
+    // whole tuple (a box / a bin) -- removing one member would leave a partial
+    // box. Map to unique tuples, remove each whole, high tuple-index first.
+    if (dataset.hasPointGroups()) {
+      const tuples = new Set<number>();
+      for (const i of indices) {
+        const t = dataset.getTupleIndex(i);
+        if (t > -1) tuples.add(t);
+      }
+      for (const t of [...tuples].sort((a, b) => b - a)) this.removeTuple(t);
+      return;
+    }
+
     const descending = [...new Set(indices)].sort((a, b) => b - a);
     for (const i of descending) this.removeDataPointAt(i);
+  }
+
+  /** True when another series records error bars for the ACTIVE series. */
+  activeHasErrorSeries(): boolean {
+    return hasErrorSeries(this.getDatasets(), this.activeEntry.dataset.name);
+  }
+
+  /** Data-space {x,y} for one pixel (NaN-filled when the axes cannot say). */
+  private dataOf(p: { x: number; y: number }): { x: number; y: number } {
+    const v = this.axes ? this.axes.pixelToData(p.x, p.y) : [];
+    return { x: v[0] ?? NaN, y: v[1] ?? NaN };
+  }
+
+  /** Data-space {x,y} for every pixel of a dataset, index-aligned. */
+  private dataValuesOf(dataset: Dataset): { x: number; y: number }[] {
+    return dataset.getAllPixels().map((p) => this.dataOf(p));
+  }
+
+  /** Remove every error cap (across ALL of `parentName`'s error series) that
+   * resolves to the datum at `parentDatumIndex` -- i.e. the whole error bar
+   * (upper + lower) for that one data point. Leaves the parent point itself.
+   * `parentData` is the parent's data values, passed in so a caller deleting
+   * several points matches every cap against the same pre-removal snapshot. */
+  private removeErrorCapsForDatum(
+    parentName: string,
+    parentData: { x: number; y: number }[],
+    parentDatumIndex: number
+  ): void {
+    for (const { dataset, role } of errorSeriesFor(this.getDatasets(), parentName)) {
+      const drop: number[] = [];
+      dataset.getAllPixels().forEach((cap, ci) => {
+        if (matchCapToDatum(parentData, this.dataOf(cap), role) === parentDatumIndex) drop.push(ci);
+      });
+      for (const ci of drop.sort((a, b) => b - a)) dataset.removePixelAtIndex(ci);
+    }
   }
 
   /** Delete an ENTIRE tuple -- a Box Plot box / a Histogram bin, i.e. one whole

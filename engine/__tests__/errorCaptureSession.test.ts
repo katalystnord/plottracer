@@ -249,3 +249,43 @@ describe('nearestDatumPixel — snapping the drag start', () => {
     expect(session.nearestDatumPixel(0, { x: 400, y: 400 }, 12)).toBeNull();
   });
 });
+
+describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-22)', () => {
+  // Two data points, each with an SD error bar (upper cap dragged up, lower
+  // mirrored). getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower.
+  function twoPointsWithErrorBars() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.renameDataset(0, 'Sample A');
+    session.addDataPoint(200, 200); // datum 0
+    session.addDataPoint(300, 150); // datum 1
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 170 }, baseName: 'SD' });
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 300, y: 150 }, capPixel: { x: 300, y: 120 }, baseName: 'SD' });
+    return session;
+  }
+
+  it('cascade: deleting a data point takes its error bar (both caps), leaving the other point whole', () => {
+    const session = twoPointsWithErrorBars();
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2);
+    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(2);
+    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(2);
+
+    session.setActiveDataset(0);
+    session.removeDataPoints([0]); // delete datum 0
+
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // one datum left
+    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // its upper cap gone
+    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // its lower cap gone
+    expect(session.getDatasets()[0]!.getPixel(0)).toMatchObject({ x: 300, y: 150 }); // datum 1 survived
+  });
+
+  it('pair: deleting a cap in an SD series removes the matched pair, leaving the data point', () => {
+    const session = twoPointsWithErrorBars();
+    session.setActiveDataset(1); // SD upper active
+    session.removeDataPoints([0]); // erase the first upper cap
+
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // data points untouched
+    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // that upper cap gone
+    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // its lower sibling gone too
+  });
+});

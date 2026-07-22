@@ -1580,8 +1580,11 @@ export function Workspace() {
     (index: number) => {
       const count = session.getDataPoints().length;
       if (index < 0 || index >= count) return;
-      if (index === count - 1) session.removeLastPoint();
-      else session.removeDataPointAt(index);
+      // removeDataPoints routes by series kind (2026-07-22): an error-cap pair,
+      // a parent-point cascade (take its error bar too), a box-plot/histogram
+      // tuple, or a plain single-point removal. So the Eraser and the right-click
+      // "Delete point" never orphan a cap or leave a partial box.
+      session.removeDataPoints([index]);
       const roles = session.getDataPointRoles();
       let next: number | null = null;
       for (let i = 0; i < roles.length; i++) if (roles[i] !== 'interpolated') next = i;
@@ -1990,6 +1993,11 @@ export function Workspace() {
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
       swapSession(id, new CalibrationSession(AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
+      // A new figure has a new pixel space, so the By-colour trace region (the
+      // calibration box, in the OLD figure's pixels) is stale -- clear it so the
+      // next trace re-derives it for this figure (2026-07-22, David: the picker
+      // area looked "off" after switching examples).
+      setColorTraceRegion(null);
       setMode('calibrate');
       setCalibExpanded(true);
       history.reset(captureDoc(imageSrc));
