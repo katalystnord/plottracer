@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   CalibrationSession,
   XY_AXES_CONFIG,
@@ -748,6 +748,13 @@ export function Workspace() {
   // childElementCount > 1 is the exact "a card is open" signal.
   const canvasRegionRef = useRef<HTMLDivElement>(null);
   const railRowRef = useRef<HTMLDivElement>(null);
+  // Rail fold-out anchoring (v1.1 step 1): the rail column (for the card's left
+  // offset) and the single wrapper that holds whichever card is open (measured to
+  // centre it on its button). cardPos is that wrapper's absolute position within
+  // the (position:relative) rail row.
+  const railColRef = useRef<HTMLDivElement>(null);
+  const cardWrapRef = useRef<HTMLDivElement>(null);
+  const [cardPos, setCardPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [avoidRect, setAvoidRect] = useState<AvoidRect | null>(null);
   const [version, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -760,19 +767,30 @@ export function Workspace() {
   const measureAvoid = useCallback(() => {
     const region = canvasRegionRef.current;
     const row = railRowRef.current;
-    if (!region || !row || row.childElementCount <= 1) {
+    const wrap = cardWrapRef.current;
+    // A card is open iff the (now absolutely-positioned) wrapper has real content.
+    const cardOpen = !!wrap && wrap.offsetHeight > 0;
+    if (!region || !row || !cardOpen) {
       setAvoidRect((prev) => (prev === null ? prev : null));
       return;
     }
     const rr = region.getBoundingClientRect();
-    const br = row.getBoundingClientRect();
-    const next: AvoidRect = { left: br.left - rr.left, top: br.top - rr.top, width: br.width, height: br.height };
+    // The card is absolute, so it doesn't extend the row's own rect -- avoid the
+    // UNION of the rail column and the open card so the loupe dodges both.
+    const rowR = row.getBoundingClientRect();
+    const cardR = wrap!.getBoundingClientRect();
+    const left = Math.min(rowR.left, cardR.left);
+    const top = Math.min(rowR.top, cardR.top);
+    const right = Math.max(rowR.right, cardR.right);
+    const bottom = Math.max(rowR.bottom, cardR.bottom);
+    const next: AvoidRect = { left: left - rr.left, top: top - rr.top, width: right - left, height: bottom - top };
     setAvoidRect((prev) =>
       prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height
         ? prev
         : next
     );
   }, []);
+
 
   // Live zoom scale + image-loaded state, pushed up from ImageCanvas
   // (checkpoint 42) so the top bar can own the Choose Image button and the
@@ -814,6 +832,7 @@ export function Workspace() {
     const ro = new ResizeObserver(() => measureAvoid());
     if (canvasRegionRef.current) ro.observe(canvasRegionRef.current);
     if (railRowRef.current) ro.observe(railRowRef.current);
+    if (cardWrapRef.current) ro.observe(cardWrapRef.current);
     window.addEventListener('resize', measureAvoid);
     return () => {
       ro.disconnect();
@@ -823,6 +842,7 @@ export function Workspace() {
   useEffect(() => {
     measureAvoid();
   }, [mode, version, measureAvoid]);
+
 
   // The selected/"active" data point index in the active series (checkpoint 58):
   // the one the trash button deletes, ring-highlighted on canvas and in the
@@ -841,6 +861,59 @@ export function Workspace() {
   // card in and swaps the rail icon (see the Select rail button + card below).
   const [selectSubMode, setSelectSubMode] = useState<SelectGesture>('rectangle');
   const [selectFoldoutOpen, setSelectFoldoutOpen] = useState(false);
+
+  // Position the open fold-out card: vertically CENTRED on its trigger button and
+  // clamped to the window (v1.1 step 1). Absolute within the position:relative rail
+  // row, so it never grows the row / fights LeftRail's vertical centring. Which
+  // button a card belongs to is fixed by the active mode.
+  const positionCard = useCallback(() => {
+    const row = railRowRef.current;
+    const col = railColRef.current;
+    const wrap = cardWrapRef.current;
+    if (!row || !col || !wrap) return;
+    const triggerId =
+      mode === 'select' && selectFoldoutOpen
+        ? 'mode-select'
+        : mode === 'measure'
+        ? 'mode-measure'
+        : mode === 'image-edit'
+        ? 'mode-image-edit'
+        : mode === 'error-bars'
+        ? 'mode-error-bars'
+        : AUTO_EXTRACT_MODES.includes(mode)
+        ? 'mode-auto-extract'
+        : null;
+    if (!triggerId) return; // no card open -> leave the last position (it's hidden anyway)
+    const btn = row.querySelector<HTMLElement>(`[data-testid="${triggerId}"]`);
+    const cardH = wrap.offsetHeight;
+    if (!btn || cardH === 0) return;
+    const rowRect = row.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const MARGIN = 8;
+    // Centre on the button, then clamp so the whole card stays on screen.
+    let topVp = btnRect.top + btnRect.height / 2 - cardH / 2;
+    topVp = Math.max(MARGIN, Math.min(topVp, window.innerHeight - cardH - MARGIN));
+    const next = { top: topVp - rowRect.top, left: col.offsetWidth + 8 };
+    setCardPos((prev) => (prev.top === next.top && prev.left === next.left ? prev : next));
+  }, [mode, selectFoldoutOpen]);
+
+  // Keep the open card centred on its button: re-run on a card open/close (mode /
+  // fold-out change) and whenever the card or the rail resizes (a card that grows,
+  // e.g. Measure gaining a row, must re-centre). useLayoutEffect so it lands before
+  // paint -- no first-frame flash at the top of the rail.
+  useLayoutEffect(() => {
+    positionCard();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => positionCard());
+    if (cardWrapRef.current) ro.observe(cardWrapRef.current);
+    if (railRowRef.current) ro.observe(railRowRef.current);
+    window.addEventListener('resize', positionCard);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', positionCard);
+    };
+  }, [positionCard]);
+
   // Canvas right-click quick menu (mouse model, David 2026-07-20). Target-sensitive:
   // a data point, a measurement, or empty canvas. `x`/`y` are viewport coordinates
   // for MUI's anchorPosition. Null = closed.
@@ -5382,7 +5455,7 @@ export function Workspace() {
               out to the RIGHT of the rail, anchored to the ruler button, without
               displacing the rail. pointerEvents:none passes gaps through; the
               rail card and the Measure card each re-enable it themselves. */}
-          <div ref={railRowRef} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
+          <div ref={railRowRef} style={{ position: 'relative', display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
           {/* Rail redesign (David 2026-07-22, Ketcher-style separated cards):
               each functional band is its own bordered card, spaced 6px, and the
               hotkeys run 0-9 straight down so position = number. Cards:
@@ -5390,7 +5463,7 @@ export function Workspace() {
               to the top bar; per-point delete is the Eraser (unnumbered: it's
               destructive and Del already does it, so it stays out of the 0-9 run).
               Each tool greys until it can do its job (a toolbox, not a catch-all). */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
+          <div ref={railColRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
           {/* View & set up: Pan · Calibrate · Edit image. Image prep is available
               BEFORE capture too (rotate a sideways scan, crop, fine-deskew) and
               THEN capture; enabled whenever there's an image. */}
@@ -5526,6 +5599,11 @@ export function Workspace() {
           {geometryFlyout}
           </RailGroup>
           </div>
+          {/* All fold-out cards live in ONE absolutely-positioned wrapper (v1.1
+              step 1), anchored beside the rail and vertically CENTRED on their
+              trigger button (positionCard). Absolute so a tall card never grows
+              the row and fights LeftRail's centring. Only one renders at a time. */}
+          <div ref={cardWrapRef} style={{ position: 'absolute', top: cardPos.top, left: cardPos.left, pointerEvents: 'none' }}>
           {/* Select fold-out picker (v1.1 #6, Ketcher): a COMPACT horizontal strip
               of the four sub-modes -- icon-only with a tooltip each (David: match
               Ketcher's strip, not a big labelled card). Picking one folds the strip
@@ -5843,6 +5921,7 @@ export function Workspace() {
               targetHasPoints={(datasetInfos.find((d) => d.index === errorTargetIndex)?.pointCount ?? 0) > 0}
             />
           )}
+          </div>
         </div>
         </LeftRail>
         <ImageCanvas
