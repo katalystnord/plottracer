@@ -91,6 +91,39 @@ describe('renderTable — Python', () => {
   });
 });
 
+describe('renderTable — R (data.frame)', () => {
+  it('emits a data.frame with a named numeric vector per column', () => {
+    const r = renderTable([numeric], 'r');
+    expect(r).toContain('data <- data.frame(');
+    expect(r).toContain('x = c(0, 1),');
+    expect(r).toContain('y = c(0, 2.5),');
+    expect(r).toContain('stringsAsFactors = FALSE');
+    expect(r).toContain(')');
+    // A plain header needs no check.names override.
+    expect(r).not.toContain('check.names');
+  });
+  it('quotes a string column and writes NA for a blank cell', () => {
+    const r = renderTable([{ header: ['c', 'v'], rows: [['Control', ''], ['5 mM', 62]] }], 'r');
+    expect(r).toContain('c = c("Control", "5 mM"),');
+    expect(r).toContain('v = c(NA, 62),');
+  });
+  it('back-ticks a non-syntactic header and opts into check.names = FALSE', () => {
+    const r = renderTable([{ header: ['Strain (%)', 'y'], rows: [[1, 2]] }], 'r');
+    expect(r).toContain('`Strain (%)` = c(1),');
+    expect(r).toContain('check.names = FALSE');
+  });
+  it('names a second, titled section from its title', () => {
+    const r = renderTable([numeric, { title: 'Curve fit', header: ['series'], rows: [['A']] }], 'r');
+    expect(r).toContain('# Curve fit');
+    expect(r).toContain('curve_fit <- data.frame(');
+  });
+  it('writes R literals for the non-finite doubles rather than JS Infinity', () => {
+    const r = renderTable([{ header: ['x'], rows: [[Infinity], [-Infinity], [NaN]] }], 'r');
+    expect(r).toContain('x = c(Inf, -Inf, NaN),');
+    expect(r).not.toContain('Infinity');
+  });
+});
+
 describe('escaping hardening (v0.8 audit #4)', () => {
   it('LaTeX escapes a backslash so the tabular still compiles', () => {
     const tex = renderTable([{ header: ['a\\b'], rows: [[1]] }], 'latex');
@@ -105,6 +138,10 @@ describe('escaping hardening (v0.8 audit #4)', () => {
   it('Python escapes a newline in a string cell rather than terminating the literal', () => {
     const py = renderTable([{ header: ['c', 'v'], rows: [['a\nb', 1]] }], 'python');
     expect(py).toContain("'a\\nb'");
+  });
+  it('R escapes a backslash and a newline in a string cell so the literal survives', () => {
+    const r = renderTable([{ header: ['c', 'v'], rows: [['a\\b\nc', 1]] }], 'r');
+    expect(r).toContain('"a\\\\b\\nc"');
   });
 });
 
@@ -137,6 +174,6 @@ describe('comment-header newline hardening (v0.8 follow-up)', () => {
 
 describe('TABLE_FORMAT_EXTENSION', () => {
   it('maps each format to its file extension', () => {
-    expect(TABLE_FORMAT_EXTENSION).toEqual({ csv: 'csv', tsv: 'tsv', latex: 'tex', matlab: 'm', python: 'py' });
+    expect(TABLE_FORMAT_EXTENSION).toEqual({ csv: 'csv', tsv: 'tsv', latex: 'tex', matlab: 'm', python: 'py', r: 'R' });
   });
 });

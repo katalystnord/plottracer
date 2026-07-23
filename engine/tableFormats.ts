@@ -1,6 +1,6 @@
 /**
  * Multi-format table rendering (v0.8) — the one place a table of extracted
- * values becomes CSV / TSV / LaTeX / MATLAB / Python text, so PlotDigitizer
+ * values becomes CSV / TSV / LaTeX / MATLAB / Python / R text, so PlotDigitizer
  * export parity (David) is a rendering choice, not a second copy of every
  * per-chart-type builder. engine/csvExport.ts builds the SECTIONS (what the
  * columns are); this decides the SYNTAX.
@@ -29,7 +29,7 @@ export interface TableSection {
   rows: Cell[][];
 }
 
-export type TableFormat = 'csv' | 'tsv' | 'latex' | 'matlab' | 'python';
+export type TableFormat = 'csv' | 'tsv' | 'latex' | 'matlab' | 'python' | 'r';
 
 /** File extension for each format (drives the save dialog + default filename). */
 export const TABLE_FORMAT_EXTENSION: Record<TableFormat, string> = {
@@ -38,6 +38,7 @@ export const TABLE_FORMAT_EXTENSION: Record<TableFormat, string> = {
   latex: 'tex',
   matlab: 'm',
   python: 'py',
+  r: 'R',
 };
 
 function isNumeric(c: Cell): c is number {
@@ -179,6 +180,75 @@ function sectionToPython(section: TableSection, index: number): string {
   return lines.join('\n');
 }
 
+// --- R (data.frame) --------------------------------------------------------
+
+/** R reserved words + special constants that can't be a bare column name. */
+const R_RESERVED = new Set([
+  'if', 'else', 'repeat', 'while', 'function', 'for', 'in', 'next', 'break',
+  'TRUE', 'FALSE', 'NULL', 'Inf', 'NaN', 'NA',
+  'NA_integer_', 'NA_real_', 'NA_complex_', 'NA_character_',
+]);
+
+/** Can this string be written as a bare R name, or must it be back-ticked?
+ * R names start with a letter or a dot-not-followed-by-a-digit, then take
+ * letters/digits/dot/underscore; reserved words are never bare. */
+function isValidRName(name: string): boolean {
+  return /^(?:[A-Za-z]|\.(?![0-9]))[A-Za-z0-9._]*$/.test(name) && !R_RESERVED.has(name);
+}
+
+/** A data.frame column argument name from a header cell: bare when it is a
+ * valid R name, back-ticked (with the header verbatim) otherwise, or a
+ * positional `V1`/`V2` fallback for a blank header. */
+function rColumnName(cell: Cell, index: number): string {
+  const s = String(cell);
+  if (s === '') return `V${index + 1}`;
+  // A newline in a header would break the single-line argument -- collapse it,
+  // matching the comment-safe treatment the other emitters give labels.
+  const flat = s.replace(/[\r\n]+/g, ' ');
+  if (isValidRName(flat)) return flat;
+  return '`' + flat.replace(/`/g, '\\`') + '`';
+}
+
+function rScalar(c: Cell | undefined): string {
+  if (c === undefined || c === '') return 'NA';
+  if (isNumeric(c)) {
+    // R has literals for the non-finite doubles; JS `String()` would emit
+    // `Infinity`, which is not valid R.
+    if (Number.isNaN(c)) return 'NaN';
+    if (c === Infinity) return 'Inf';
+    if (c === -Infinity) return '-Inf';
+    return String(c);
+  }
+  // Character literal: escape the backslash first, then the newlines (as \n / \r)
+  // and the quote, so an embedded newline can't terminate the string.
+  return `"${String(c)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/"/g, '\\"')}"`;
+}
+
+function sectionToR(section: TableSection, index: number): string {
+  const name = varName(section.title, index === 0 ? 'data' : `data${index + 1}`);
+  const cols = section.header.length;
+  const names = section.header.map((h, j) => rColumnName(h, j));
+  const lines: string[] = [];
+  if (section.title) lines.push(`# ${commentSafe(section.title)}`);
+  lines.push(`${name} <- data.frame(`);
+  for (let j = 0; j < cols; j++) {
+    const values = section.rows.map((r) => rScalar(r[j]));
+    lines.push(`  ${names[j]} = c(${values.join(', ')}),`);
+  }
+  // stringsAsFactors = FALSE keeps character columns as text (the pre-4.0
+  // default that portable scripts still set). check.names = FALSE is only
+  // needed when a header was back-ticked, so a non-syntactic name survives
+  // verbatim instead of being make.names()-mangled.
+  const needsCheckNames = names.some((n) => n.startsWith('`'));
+  lines.push(`  stringsAsFactors = FALSE${needsCheckNames ? ',\n  check.names = FALSE' : ''}`);
+  lines.push(')');
+  return lines.join('\n');
+}
+
 // --- Public entry ----------------------------------------------------------
 
 /** Render a document (list of sections) to the chosen text format. */
@@ -194,5 +264,7 @@ export function renderTable(sections: readonly TableSection[], format: TableForm
       return sections.map((s, i) => sectionToMatlab(s, i)).join('\n\n');
     case 'python':
       return sections.map((s, i) => sectionToPython(s, i)).join('\n\n');
+    case 'r':
+      return sections.map((s, i) => sectionToR(s, i)).join('\n\n');
   }
 }
