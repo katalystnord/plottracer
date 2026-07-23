@@ -680,7 +680,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data">v1.0.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v1.0.1</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
@@ -717,5 +717,22 @@
     </div>
   </div>
 </footer>
+<script>
+  // Keep "Current release" in step with the actual Latest GitHub release, so the
+  // version never has to be hand-edited on each tag. The baked-in text above is
+  // the fallback (shown if the fetch fails or JS is off); on success it updates
+  // to the real latest NON-prerelease tag. `releases/latest` already excludes
+  // pre-releases (rc's), which is exactly what we want to advertise.
+  (function () {
+    var el = document.getElementById('release-tag');
+    if (!el || !window.fetch) return;
+    fetch('https://api.github.com/repos/katalystnord/plottracer/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.tag_name) el.textContent = d.tag_name; })
+      .catch(function () { /* keep the baked-in fallback */ });
+  })();
+</script>
 </body>
 </html>
