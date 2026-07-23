@@ -68,7 +68,7 @@ import {
   ImageEditIcon,
   ErrorBarsIcon,
 } from './icons.js';
-import { MeasureCard, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
+import { MeasureCard, measureIcons, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
 import {
@@ -5866,13 +5866,8 @@ export function Workspace() {
               Measurements list is empty until canvas measuring is wired. */}
           {mode === 'measure' && (
             <MeasureCard
-              reference={measureReference}
-              measurements={measurementViews}
               activeTool={measureTool}
               onSelectTool={selectMeasureTool}
-              onCopy={copyMeasurement}
-              onDelete={deleteMeasurement}
-              onCopyAll={copyAllMeasurements}
               onStartSetScale={startSetScale}
               setScaleDraft={setScaleDraft}
               areaPointCount={measureTool === 'area' ? pendingMeasure.length : 0}
@@ -6599,6 +6594,61 @@ export function Workspace() {
           )}
           </SidebarSection>
         </>
+      )}
+
+      {/* Measurements OUTPUT (v1.1 step 2): the recorded measurements moved here
+          from the Measure fold-out -- a tool fold-out holds inputs only, results
+          live in the output panel (bound with the series data, copyable, exported
+          as their own block). Shown while measuring OR whenever any exist, with the
+          reference frame in effect (chart calibration vs a real-world Set-scale). */}
+      {(mode === 'measure' || measurementViews.length > 0) && (
+        <SidebarSection>
+          <SidebarHeading>Measurements</SidebarHeading>
+          <div data-testid="measurements-panel" style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: theme.font.size.small }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: theme.color.text.secondary }}>
+              <span data-testid="measure-ref">
+                {measureReference.kind === 'chart' && <>Ref: <b>chart axes</b>{measureReference.units ? ` (${measureReference.units})` : ''}</>}
+                {measureReference.kind === 'scale' && <>Scale: <b>{measureReference.perPx}</b></>}
+                {measureReference.kind === 'degrees' && <>Measured in <b>degrees</b></>}
+                {measureReference.kind === 'none' && <span style={{ color: theme.color.text.legend }}>Pixels (set a scale or calibrate)</span>}
+              </span>
+              {measurementViews.length > 0 && (
+                <button
+                  type="button"
+                  data-testid="measure-copy-all"
+                  title="Copy all as text"
+                  onClick={copyAllMeasurements}
+                  style={{ marginLeft: 'auto', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: theme.color.primary.main, textDecoration: 'underline', fontSize: theme.font.size.small }}
+                >
+                  Copy all
+                </button>
+              )}
+            </div>
+            {measurementViews.length === 0 ? (
+              <span style={{ color: theme.color.text.legend }}>No measurements yet.</span>
+            ) : (
+              measurementViews.map((m) => (
+                <div
+                  key={m.id}
+                  data-testid={`measure-row-${m.id}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: `1px solid ${theme.color.background.canvas}` }}
+                >
+                  <span style={{ display: 'inline-flex', flex: '0 0 auto', color: theme.color.icon.active }}>{measureIcons[m.tool]}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <b>{m.value}</b>
+                    {m.note && <span style={{ color: theme.color.text.legend }}> · {m.note}</span>}
+                  </span>
+                  <button type="button" title="Copy value" onClick={() => copyMeasurement(m)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: theme.color.text.legend }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="5" y="5" width="8" height="8" rx="1.5" /><path d="M3 11 V3.5 A1.5 1.5 0 0 1 4.5 2 H11" /></svg>
+                  </button>
+                  <button type="button" title="Delete" onClick={() => deleteMeasurement(m.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: theme.color.text.legend }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 4 L12 12 M12 4 L4 12" /></svg>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </SidebarSection>
       )}
       </RightSidebar>
 

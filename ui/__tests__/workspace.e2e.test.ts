@@ -3951,8 +3951,9 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
       await page.getByTestId('mode-measure').click();
       expect(await page.getByTestId('measure-card').isVisible()).toBe(true);
       expect(await page.getByTestId('measure-tool-slope').isVisible()).toBe(true);
-      // Uncalibrated → no chart reference yet.
-      expect(await page.getByTestId('measure-ref').textContent()).toMatch(/No reference/i);
+      // Uncalibrated → no chart reference yet (the ref now lives in the output
+      // panel's Measurements section, v1.1 step 2).
+      expect(await page.getByTestId('measure-ref').textContent()).toMatch(/Pixels|set a scale/i);
 
       // Pressing it again closes the card (press-again-to-close toggle).
       await page.getByTestId('mode-measure').click();
@@ -5344,8 +5345,9 @@ describe('Workspace: capability gates (checkpoint 73)', () => {
     await clickAt(350, 250);
     await clickAt(450, 200);
     await page.waitForTimeout(200);
-    // Slope needs only pixelToData, which this chart has.
-    expect(await textOf('measure-card')).toMatch(/slope/i);
+    // Slope needs only pixelToData, which this chart has -- so the Slope tool is
+    // offered (icon-only strip now, v1.1 step 2; no label text to match).
+    expect(await page.getByTestId('measure-tool-slope').isVisible()).toBe(true);
   });
 });
 
