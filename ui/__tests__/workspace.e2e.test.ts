@@ -2486,7 +2486,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     expect(summary).toContain('Enclosed area');
   });
 
-  it('reports a clear error instead of computing Geometry for fewer than 2 points', async () => {
+  it('reports a clear stale/broken state instead of computing Geometry for fewer than 2 points', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(100, 250); // just one point
@@ -2495,8 +2495,34 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await page.getByTestId('geometry-run').click();
     await page.waitForTimeout(150);
 
-    expect(await textOf('geometry-error')).toMatch(/at least 2 points/);
+    // The result now lives in the output panel; with <2 points it shows the
+    // stale/broken note there AND a callout in the bottom tips bar (v1.1).
+    expect(await textOf('geometry-stale')).toMatch(/at least 2 points/);
+    expect(await page.getByTestId('geometry-stale-callout').isVisible()).toBe(true);
     expect(await page.getByTestId('geometry-summary').count()).toBe(0);
+  });
+
+  it('geometry recomputes live as the series is edited (v1.1)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(130, 250); // data (1, 0)
+    await clickAt(220, 190); // data (4, 4) -> arc length 5
+
+    await page.getByTestId('geometry-trigger').click();
+    await page.getByTestId('geometry-run').click(); // turn geometry ON
+    await page.waitForTimeout(120);
+    expect(await textOf('geometry-summary')).toContain('Arc length = 5.00000');
+    // Dismiss the fly-out (backdrop click) so the canvas is clickable again.
+    await clickAt(600, 400);
+    await page.waitForTimeout(80);
+
+    // Add a third point -> geometry RE-DERIVES live (arc length grows), no re-run
+    // and no re-open of the fold-out.
+    await page.getByTestId('mode-place-point').click();
+    await clickAt(310, 130); // data (7, 8)
+    await page.waitForTimeout(80);
+    expect(await textOf('geometry-summary')).not.toContain('Arc length = 5.00000');
+    expect(await textOf('geometry-summary')).toContain('Arc length =');
   });
 
   it('a saved and reopened project round-trips the curve fit result', async () => {

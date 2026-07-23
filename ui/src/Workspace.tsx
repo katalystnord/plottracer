@@ -156,9 +156,8 @@ import {
   setCurveFitState as saveCurveFitState,
   sampleCurveFitLine,
 } from '../../engine/curveFitPanel.js';
-import { runGeometry } from '../../engine/geometryPanel.js';
+import { runGeometry, getGeometryState, setGeometryState } from '../../engine/geometryPanel.js';
 import { formatPolynomial, CURVE_FIT_MAX_DEGREE } from '../../algorithms/curveFit.js';
-import type { GeometryResult } from '../../algorithms/geometry.js';
 import { pointInPolygon } from '../../algorithms/geometry.js';
 import { removeGridLinesOp, hexToRGB } from '../../algorithms/gridRemoval.js';
 import type { AnyAxes } from '../../core/plotData.js';
@@ -1067,9 +1066,12 @@ export function Workspace() {
   const [curveFitXMinInput, setCurveFitXMinInput] = useState('');
   const [curveFitXMaxInput, setCurveFitXMaxInput] = useState('');
   const [curveFitError, setCurveFitError] = useState<string | null>(null);
+  // Geometry's `closed` choice is UI state; whether geometry is ON for a series
+  // (and its result) is now DERIVED from the dataset's stored GeometryState +
+  // current points (v1.1), so it recomputes-on-edit -- see geometryState/geometryRun
+  // below. `geometryTableOpen` toggles the per-point table in the output panel.
   const [geometryClosed, setGeometryClosed] = useState(false);
-  const [geometryResult, setGeometryResult] = useState<GeometryResult | null>(null);
-  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [geometryTableOpen, setGeometryTableOpen] = useState(false);
   // Default tuned to the light grey most plotting libraries (matplotlib et al.)
   // draw gridlines in (~#e6e6e6), with a forgiving tolerance, so "Remove" does
   // something visible out of the box instead of silently matching nothing (the
@@ -1595,8 +1597,6 @@ export function Workspace() {
     setProjectError(null);
     setSegmentFillError(null);
     setCurveFitError(null);
-    setGeometryError(null);
-    setGeometryResult(null);
     setGridRemovalError(null);
     setActivePointIndex(null); // the restored point set may differ -- clear the selection
     setSelectedPointIndices([]); // ...and the marquee selection: its indices refer to a point set that may no longer exist
@@ -2098,8 +2098,6 @@ export function Workspace() {
       setCurveFitXMaxInput('');
       setCurveFitError(null);
       setGeometryClosed(false);
-      setGeometryResult(null);
-      setGeometryError(null);
     },
     []
   );
@@ -2968,8 +2966,6 @@ export function Workspace() {
     setCalibExpanded(true);
     setSegmentFillError(null);
     setCurveFitError(null);
-    setGeometryResult(null);
-    setGeometryError(null);
     clearMeasurements(); // slope measurements depend on the calibration being cleared
     commit(); // NOT history.reset() -- this must stay undoable
     bump();
@@ -3134,8 +3130,6 @@ export function Workspace() {
       setMode('place-point');
       setCalibExpanded(false); // arrives calibrated -> folded, like post-calibrate (ckpt 86)
       setProjectError(null);
-      setGeometryResult(null);
-      setGeometryError(null);
       setCurveFitError(null);
 
       // Sync the Curve Fit panel to a persisted fit's own parameters. Reads
@@ -3181,8 +3175,6 @@ export function Workspace() {
       setCurveFitXMaxInput('');
       setCurveFitError(null);
       setGeometryClosed(false);
-      setGeometryResult(null);
-      setGeometryError(null);
       // Per-figure document state.
       applyProvenance(rec.provenance);
       setFigureCaptured(rec.figureCaptured);
@@ -3915,17 +3907,20 @@ export function Workspace() {
     (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
   }, []);
 
+  // Compute = turn geometry ON for the active series (store the request). The
+  // result is derived live from the current points (geometryRun below), so it
+  // updates as the series is edited. A failed compute (e.g. < 2 points) still
+  // turns it on -- the output panel + tips bar then surface the stale/broken state.
   const handleRunGeometry = useCallback(() => {
     if (!axes) return;
-    const result = runGeometry(session.getDataset(), axes as unknown as AnyAxes, geometryClosed);
-    if ('error' in result) {
-      setGeometryError(result.error);
-      setGeometryResult(null);
-      return;
-    }
-    setGeometryError(null);
-    setGeometryResult(result.geometry);
-  }, [session, axes, geometryClosed]);
+    setGeometryState(session.getDataset(), { closed: geometryClosed });
+    commit();
+  }, [session, axes, geometryClosed, commit]);
+
+  const handleClearGeometry = useCallback(() => {
+    setGeometryState(session.getDataset(), null);
+    commit();
+  }, [session, commit]);
 
   const handleRemoveGridLines = useCallback(() => {
     const imageData = imageCanvasRef.current?.getImageData();
@@ -4220,6 +4215,20 @@ export function Workspace() {
     () => (config.supportsCurveFit && axes ? getCurveFitState(session.getDataset()) : null),
     [session, version, config, axes]
   );
+  // Geometry (v1.1): whether it's ON for the active series is the stored request;
+  // the RESULT is derived live from the current points, so editing the series
+  // recomputes it (or surfaces a stale/broken error) automatically -- `version`
+  // bumps on every point change, the same dep curveFitState uses.
+  const geometryState = useMemo(
+    () => (config.id === 'xy' && axes ? getGeometryState(session.getDataset()) : null),
+    [session, version, config, axes]
+  );
+  const geometryRun = useMemo(
+    () => (geometryState && axes ? runGeometry(session.getDataset(), axes as unknown as AnyAxes, geometryState.closed) : null),
+    [session, version, config, axes, geometryState]
+  );
+  const geometryResult = geometryRun && 'geometry' in geometryRun ? geometryRun.geometry : null;
+  const geometryError = geometryRun && 'error' in geometryRun ? geometryRun.error : null;
   const datasetInfos = useMemo(() => session.getDatasetInfos(), [session, version]);
   const allDatasetsData = useMemo(() => session.getAllDatasetsData(), [session, version]);
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -4709,61 +4718,34 @@ export function Workspace() {
   const geometryFlyout =
     config.id === 'xy' ? (
       <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="9" disabled={!axes} onOpenChange={closeDockedCardsOnFlyout}>
-        <p>
-          <label>
+        {/* Single input row (v1.1 step 2): Closed curve · Compute · Clear. The
+            RESULT (arc length, area, curvature + per-point table) lives in the
+            output panel's Geometry section; it recomputes as the series is edited. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <input
               type="checkbox"
               data-testid="geometry-closed"
-              checked={geometryClosed}
-              onChange={(e) => setGeometryClosed(e.target.checked)}
-            />{' '}
+              checked={geometryState ? geometryState.closed : geometryClosed}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setGeometryClosed(v);
+                // If geometry is already on, re-derive live with the new setting.
+                if (geometryState) {
+                  setGeometryState(session.getDataset(), { closed: v });
+                  commit();
+                }
+              }}
+            />
             Closed curve
           </label>
-        </p>
-        <p>
           <button type="button" data-testid="geometry-run" onClick={handleRunGeometry}>
             Compute
           </button>
-        </p>
-        {geometryError && (
-          <p data-testid="geometry-error" style={{ color: theme.color.error }}>
-            {geometryError}
-          </p>
-        )}
-        {geometryResult && (
-          <>
-            <pre data-testid="geometry-summary" style={{ fontSize: 12 }}>
-              Arc length = {geometryResult.arcLength.toPrecision(6)}
-              {'\n'}
-              {geometryResult.areaLabel} = {geometryResult.area.toPrecision(6)}
-              {'\n'}
-              Max curvature = {geometryResult.maxCurvature.value.toPrecision(6)} at point #
-              {geometryResult.maxCurvature.index}
-            </pre>
-            <table data-testid="geometry-table" style={{ borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', paddingRight: 12 }}>#</th>
-                  <th style={{ textAlign: 'left', paddingRight: 12 }}>x</th>
-                  <th style={{ textAlign: 'left', paddingRight: 12 }}>y</th>
-                  <th style={{ textAlign: 'left', paddingRight: 12 }}>cumulative length</th>
-                  <th style={{ textAlign: 'left' }}>curvature</th>
-                </tr>
-              </thead>
-              <tbody>
-                {geometryResult.perPoint.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ paddingRight: 12 }}>{i}</td>
-                    <td style={{ paddingRight: 12 }}>{p.x.toPrecision(6)}</td>
-                    <td style={{ paddingRight: 12 }}>{p.y.toPrecision(6)}</td>
-                    <td style={{ paddingRight: 12 }}>{p.cumulativeLength.toPrecision(6)}</td>
-                    <td>{p.curvature.toPrecision(6)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
+          <button type="button" data-testid="geometry-clear" onClick={handleClearGeometry} disabled={!geometryState}>
+            Clear
+          </button>
+        </div>
       </FloatingPanel>
     ) : null;
 
@@ -6695,6 +6677,68 @@ export function Workspace() {
           </div>
         </SidebarSection>
       )}
+
+      {/* Geometry OUTPUT (v1.1 step 2 + 4): the derived stats moved here from the
+          fold-out (inputs only). Summary always; the big per-point table is
+          collapsed. Recomputes live as the series is edited; if it can't (points
+          deleted below 2) the stale/broken state shows here AND in the tips bar. */}
+      {geometryState && (
+        <SidebarSection>
+          <SidebarHeading>Geometry</SidebarHeading>
+          <div data-testid="geometry-output" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: theme.font.size.small }}>
+            <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
+            {geometryResult ? (
+              <>
+                <div data-testid="geometry-summary" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  Arc length = {geometryResult.arcLength.toPrecision(6)}
+                  <br />
+                  {geometryResult.areaLabel} = {geometryResult.area.toPrecision(6)}
+                  <br />
+                  Max curvature = {geometryResult.maxCurvature.value.toPrecision(6)} at #{geometryResult.maxCurvature.index}
+                </div>
+                <button
+                  type="button"
+                  data-testid="geometry-table-toggle"
+                  onClick={() => setGeometryTableOpen((v) => !v)}
+                  style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: theme.color.primary.main, textDecoration: 'underline', fontSize: theme.font.size.small }}
+                >
+                  {geometryTableOpen ? 'Hide per-point table' : `Per-point table (${geometryResult.perPoint.length})`}
+                </button>
+                {geometryTableOpen && (
+                  <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                    <table data-testid="geometry-table" style={{ borderCollapse: 'collapse', fontSize: theme.font.size.small, fontVariantNumeric: 'tabular-nums' }}>
+                      <thead>
+                        <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
+                          <th style={{ paddingRight: 10 }}>#</th>
+                          <th style={{ paddingRight: 10 }}>x</th>
+                          <th style={{ paddingRight: 10 }}>y</th>
+                          <th style={{ paddingRight: 10 }}>len</th>
+                          <th>κ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {geometryResult.perPoint.map((p, i) => (
+                          <tr key={i}>
+                            <td style={{ paddingRight: 10 }}>{i}</td>
+                            <td style={{ paddingRight: 10 }}>{p.x.toPrecision(5)}</td>
+                            <td style={{ paddingRight: 10 }}>{p.y.toPrecision(5)}</td>
+                            <td style={{ paddingRight: 10 }}>{p.cumulativeLength.toPrecision(5)}</td>
+                            <td>{p.curvature.toPrecision(5)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <span data-testid="geometry-stale" style={{ color: theme.color.error }}>
+                ⚠ Can’t compute — {geometryError}
+              </span>
+            )}
+          </div>
+        </SidebarSection>
+      )}
       </RightSidebar>
 
       {/* Full-width status bar (checkpoint 47/50). Left: the one constant place
@@ -6707,6 +6751,14 @@ export function Workspace() {
           <span aria-hidden style={{ opacity: 0.7 }}>💡</span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{guidanceTip}</span>
         </span>
+        {/* Recompute-on-edit stale callout (v1.1, David): geometry re-derives live,
+            but when an edit makes it impossible (points deleted below 2) the user
+            gets a clear warning here in the bottom row -- recompute or clear it. */}
+        {geometryState && geometryError && (
+          <span data-testid="geometry-stale-callout" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 12, color: theme.color.error, flex: '0 0 auto', whiteSpace: 'nowrap' }}>
+            ⚠ {activeInfo?.name ?? 'Series'} · geometry can’t recompute — {geometryError}
+          </span>
+        )}
         {/* Capture figure moved to the "Capture figure first" prompt IN the
             calibration card (v0.8, David: the card is the capture+calibrate step;
             the bottom bar was a "read here, act down there" split). Safe now
