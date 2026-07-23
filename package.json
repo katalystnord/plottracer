@@ -1,6 +1,6 @@
 {
   "name": "plottracer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline scientific plot digitizer — based on WebPlotDigitizer v5.3 (AGPL-3.0)",
   "main": "ui/electron-main.cjs",
   "desktopName": "io.katalystnord.plottracer.desktop",
