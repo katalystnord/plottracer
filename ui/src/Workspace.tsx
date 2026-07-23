@@ -5294,7 +5294,7 @@ export function Workspace() {
             shortcut="1"
             pressed={mode === 'calibrate'}
             disabled={!figureCaptured}
-            disabledReason="Capture the figure first"
+            disabledReason={canvasHasImage ? 'Capture the figure first' : 'Open an image first'}
             onClick={() => setMode('calibrate')}
           />
           <IconButton
@@ -5377,7 +5377,7 @@ export function Workspace() {
             shortcut="7"
             pressed={mode === 'measure'}
             disabled={!figureCaptured}
-            disabledReason="Capture the figure first"
+            disabledReason={canvasHasImage ? 'Capture the figure first' : 'Open an image first'}
             onClick={toggleMeasure}
           />
           {curveFitFlyout}
