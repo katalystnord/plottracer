@@ -254,3 +254,19 @@ export function nearestPixel(
 export function errorSeriesName(base: string, role: ErrorRole): string {
   return `${base.trim()} ${role}`;
 }
+
+/**
+ * The inverse of errorSeriesName: recover the user's base name from an error
+ * series, given the role it plays. "SD upper" + 'upper' -> "SD".
+ *
+ * Used to tell one error BAR from another on the same parent (an "SD" bar vs a
+ * "95% CI" bar): the base is the only thing that distinguishes them, since the
+ * model records no error *kind*. A name that does not end in the role suffix (a
+ * user who renamed the series off the convention) yields the whole name, so it
+ * simply pairs with nothing rather than mis-pairing across error-bar types.
+ */
+export function errorSeriesBase(name: string, role: ErrorRole): string {
+  const trimmed = name.trim();
+  const suffix = ` ${role}`;
+  return trimmed.endsWith(suffix) ? trimmed.slice(0, -suffix.length).trim() : trimmed;
+}

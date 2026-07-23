@@ -288,4 +288,52 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // that upper cap gone
     expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // its lower sibling gone too
   });
+
+  // A point carrying TWO error-bar TYPES: an "SD" bar and a "95% CI" bar. The
+  // model records no error kind, so the base name is the only thing separating
+  // them; deleting a cap of one type must not disturb the other (v1.0.1).
+  function onePointWithTwoErrorTypes() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.renameDataset(0, 'Sample A');
+    session.addDataPoint(200, 200); // datum 0
+    // SD bar: caps close to the point. 95% CI bar: caps further out.
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 185 }, baseName: 'SD' });
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 160 }, baseName: '95% CI' });
+    // getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower, [3] 95% CI upper, [4] 95% CI lower.
+    return session;
+  }
+
+  it('deleting an SD cap leaves a separate 95% CI bar on the same datum untouched', () => {
+    const session = onePointWithTwoErrorTypes();
+    const names = session.getDatasets().map((d) => d.name.trim());
+    const sdUpper = names.indexOf('SD upper');
+    const ciUpper = names.indexOf('95% CI upper');
+    const ciLower = names.indexOf('95% CI lower');
+    expect(sdUpper).toBeGreaterThan(0);
+    expect(ciUpper).toBeGreaterThan(0);
+
+    session.setActiveDataset(sdUpper); // delete via the SD series
+    session.removeDataPoints([0]);
+
+    // The SD pair is gone; the 95% CI bar for the same datum survives whole.
+    expect(session.getDatasets()[names.indexOf('SD upper')]!.getAllPixels()).toHaveLength(0);
+    expect(session.getDatasets()[names.indexOf('SD lower')]!.getAllPixels()).toHaveLength(0);
+    expect(session.getDatasets()[ciUpper]!.getAllPixels()).toHaveLength(1);
+    expect(session.getDatasets()[ciLower]!.getAllPixels()).toHaveLength(1);
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // data point untouched
+  });
+
+  it('cascade still takes BOTH error-bar types when the data point itself is deleted', () => {
+    const session = onePointWithTwoErrorTypes();
+    const names = session.getDatasets().map((d) => d.name.trim());
+
+    session.setActiveDataset(0); // the parent data series
+    session.removeDataPoints([0]); // delete the datum -> all its error bars go
+
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(0);
+    for (const n of ['SD upper', 'SD lower', '95% CI upper', '95% CI lower']) {
+      expect(session.getDatasets()[names.indexOf(n)]!.getAllPixels()).toHaveLength(0);
+    }
+  });
 });

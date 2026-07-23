@@ -207,6 +207,7 @@ import {
 import {
   capFreeDirection,
   constrainCap,
+  errorSeriesBase,
   errorSeriesName,
   mirrorCap,
   nearestPixel,
@@ -2654,6 +2655,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const parent = this.datasetEntries.find((e) => e.dataset.name === relation.of);
       if (parent) {
         const parentData = this.dataValuesOf(parent.dataset);
+        // The selected caps live in ONE error series (e.g. "SD upper"). Deleting
+        // a cap deletes its whole error BAR -- this series plus its opposite-role
+        // sibling of the SAME base ("SD lower") -- but must NOT touch a different
+        // error-bar TYPE on the same parent (a "95% CI" bar), which iterating
+        // every error series would (v1.0.1). Restrict to this bar's own pair.
+        const base = errorSeriesBase(dataset.name, relation.role);
+        const pair = new Set([
+          dataset.name.trim(),
+          errorSeriesName(base, oppositeRole(relation.role)),
+        ]);
         const datums = new Set<number>();
         for (const i of indices) {
           const cap = dataset.getPixel(i);
@@ -2661,7 +2672,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
           const di = matchCapToDatum(parentData, this.dataOf(cap), relation.role);
           if (di > -1) datums.add(di);
         }
-        for (const di of datums) this.removeErrorCapsForDatum(parent.dataset.name, parentData, di);
+        for (const di of datums)
+          this.removeErrorCapsForDatum(parent.dataset.name, parentData, di, pair);
         return;
       }
     }
@@ -2711,17 +2723,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return dataset.getAllPixels().map((p) => this.dataOf(p));
   }
 
-  /** Remove every error cap (across ALL of `parentName`'s error series) that
-   * resolves to the datum at `parentDatumIndex` -- i.e. the whole error bar
-   * (upper + lower) for that one data point. Leaves the parent point itself.
-   * `parentData` is the parent's data values, passed in so a caller deleting
-   * several points matches every cap against the same pre-removal snapshot. */
+  /** Remove every error cap that resolves to the datum at `parentDatumIndex`
+   * -- i.e. the whole error bar for that one data point -- and leave the parent
+   * point itself. `parentData` is the parent's data values, passed in so a
+   * caller deleting several points matches every cap against the same
+   * pre-removal snapshot.
+   *
+   * `only` scopes WHICH error series are touched, by series name (trimmed):
+   *   - omitted -> every error series of the parent. This is the CASCADE door
+   *     (deleting the data point takes ALL its error bars, every type).
+   *   - a set -> just those series. This is the CAP-delete door: the caller
+   *     passes the selected bar's own upper/lower pair, so deleting one "SD"
+   *     cap does not also wipe a separate "95% CI" bar on the same datum. */
   private removeErrorCapsForDatum(
     parentName: string,
     parentData: { x: number; y: number }[],
-    parentDatumIndex: number
+    parentDatumIndex: number,
+    only?: ReadonlySet<string>
   ): void {
     for (const { dataset, role } of errorSeriesFor(this.getDatasets(), parentName)) {
+      if (only && !only.has(dataset.name.trim())) continue;
       const drop: number[] = [];
       dataset.getAllPixels().forEach((cap, ci) => {
         if (matchCapToDatum(parentData, this.dataOf(cap), role) === parentDatumIndex) drop.push(ci);
