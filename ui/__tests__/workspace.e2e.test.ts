@@ -3980,6 +3980,28 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
       expect(await page.locator('[data-testid^="measure-row-"]').count()).toBe(0);
     });
 
+    it('a measure click snaps to a data point and never moves or deletes it (v1.1)', async () => {
+      await resetWorkspace('xy');
+      await calibrateXYStandard(); // lands in Place Point
+      await clickAt(250, 175); // a data point at (5,5)
+      const before = await page.getByTestId('point-row-0').innerText();
+
+      await page.getByTestId('mode-measure').click();
+      await page.getByTestId('measure-tool-distance').click();
+      // Click ~on the data point: in Measure mode the marker is inert, so the
+      // click PLACES a measurement vertex (snapped to the point) instead of being
+      // eaten by the marker's own select/drag (which used to move the point).
+      await clickAt(252, 177);
+      await clickAt(400, 100); // second vertex -> records the distance
+      await page.waitForTimeout(50);
+      expect(await page.locator('[data-testid^="measure-row-"]').count()).toBe(1);
+
+      // Back in Place Point, the data point is untouched: still one, same value.
+      await page.getByTestId('mode-place-point').click();
+      expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
+      expect(await page.getByTestId('point-row-0').innerText()).toBe(before);
+    });
+
     it('sets a px→unit scale and measures a distance in real units (no calibration needed)', async () => {
       await resetWorkspace('xy');
       await page.getByTestId('mode-measure').click();

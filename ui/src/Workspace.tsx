@@ -2321,6 +2321,24 @@ export function Workspace() {
   // reports a real length via the Set-scale reference (or pixels if none is set).
   const handleMeasureClick = useCallback(
     (px: number, py: number) => {
+      // Snap the measurement vertex to a nearby active-series DATA point (v1.1):
+      // "measure from one identified point" -- if the click lands within ~12
+      // screen px of a plotted point, anchor exactly on it. Threshold is in image
+      // pixels (the click's space), so divide the screen tolerance by the zoom.
+      const snapThresh = 12 / Math.max(canvasScale, 1e-4);
+      let sx = px;
+      let sy = py;
+      let bestD = snapThresh;
+      for (const p of session.getDataPoints()) {
+        const d = Math.hypot(p.px - px, p.py - py);
+        if (d < bestD) {
+          bestD = d;
+          sx = p.px;
+          sy = p.py;
+        }
+      }
+      px = sx;
+      py = sy;
       const pts = [...pendingMeasureRef.current, { x: px, y: py }];
       const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
       const nextId = () => `meas-${(measureIdRef.current += 1)}`;
@@ -2405,7 +2423,7 @@ export function Workspace() {
       setMeasureError(null);
       setPending(pts);
     },
-    [axes, config.axesKind, measureTool, settingScale, setPending, applyMeasurements, commit]
+    [axes, config.axesKind, measureTool, settingScale, setPending, applyMeasurements, commit, canvasScale, session]
   );
 
   const selectMeasureTool = useCallback(
@@ -4361,7 +4379,11 @@ export function Workspace() {
         y: point.py,
         label: isInterp ? '' : String(i + 1),
         color: activeColor,
-        draggable: mode !== 'pan' && !isInterp,
+        // Inert in Measure mode (v1.1): a measurement click must pass THROUGH a
+        // data marker to place the vertex (and snap to it), never get eaten by the
+        // marker's own select/drag -- which used to let a measure click grab and
+        // move a data point. Also inert in Pan.
+        draggable: mode !== 'pan' && mode !== 'measure' && !isInterp,
         selected,
         radius: isAnchor ? 6.5 : isInterp ? 2.5 : plainDense ? SELECTED_DOT_RADIUS : undefined,
       });

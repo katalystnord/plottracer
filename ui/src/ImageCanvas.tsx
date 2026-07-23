@@ -1573,6 +1573,18 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           listening={false}
                         />
                       )}
+                      {/* Rubber-band (v1.1): while placing a measurement, a dashed
+                          line follows the cursor from the last placed point, so the
+                          full direction/length is visible before the next click. */}
+                      {o.id === 'measure-pending' && hover && scr.length >= 1 && (
+                        <Line
+                          points={[scr[scr.length - 1]!.x, scr[scr.length - 1]!.y, hover.x, hover.y]}
+                          stroke={col}
+                          strokeWidth={1.5}
+                          dash={[5, 4]}
+                          listening={false}
+                        />
+                      )}
                       {scr.map((s, i) => {
                         // Recorded measurements' vertices are clickable in Measure
                         // mode (checkpoint 128) so the arrow keys can nudge them;
