@@ -192,7 +192,7 @@ import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotDat
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
-import { nearestNeighbourOrder } from '../algorithms/segmentFill.js';
+import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segmentFill.js';
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
 import { computeErrorBarGlyph, computeWhiskerGlyph } from './errorBarGlyph.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
@@ -2113,17 +2113,38 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addDataPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
     const entry = this.activeEntry;
-    const index = entry.dataset.addPixel(px, py);
-    if (entry.dataset.hasPointGroups()) {
+    const dataset = entry.dataset;
+    if (dataset.hasPointGroups()) {
+      // Point groups (Box Plot etc.) file each click into a tuple slot at the
+      // cursor -- APPEND, then wire that new index in; the tuple layout, not the
+      // point sequence, carries the meaning here, so insert-in-place must not run.
+      const index = dataset.addPixel(px, py);
       const { tupleIndex, groupIndex } = entry.pointGroupCursor;
       if (tupleIndex === null) {
-        const newTupleIndex = entry.dataset.addTuple(index);
+        const newTupleIndex = dataset.addTuple(index);
         entry.pointGroupCursor.tupleIndex = newTupleIndex;
         if (newTupleIndex !== null) this.autoLabelTuple(newTupleIndex);
       } else {
-        entry.dataset.addToTupleAt(tupleIndex, groupIndex, index);
+        dataset.addToTupleAt(tupleIndex, groupIndex, index);
       }
       this.nextGroupCursor();
+      return 'point-added';
+    }
+    // Insert-in-place (v1.1 #1): splice the new point into the curve edge it
+    // least disturbs instead of always appending, so re-adding a point removed
+    // from the middle of a series lands back in curve order -- moving only that
+    // one point. A normal left-to-right trace still appends (bestInsertionIndex
+    // returns the end when the new point is nearest the last). Skipped for an
+    // interpolation series, whose order is anchor-derived (same roles the NN sort
+    // refuses to reorder, canSortByNearestNeighbour) -- there we keep the append.
+    const pixels = dataset.getAllPixels();
+    const anchorDerived = pixels.some(
+      (p) => p.metadata?.['role'] === 'anchor' || p.metadata?.['role'] === 'interpolated'
+    );
+    if (anchorDerived) {
+      dataset.addPixel(px, py);
+    } else {
+      dataset.insertPixel(bestInsertionIndex(pixels, { x: px, y: py }), px, py);
     }
     return 'point-added';
   }

@@ -2487,7 +2487,12 @@ export function Workspace() {
         return;
       }
       session.addDataPoint(px, py);
-      setActivePointIndex(session.getDataPoints().length - 1); // newest becomes active
+      // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
+      // curve, so the newest is no longer the last index -- find it by its clicked
+      // pixel, the same way the interpolation-anchor branch above does.
+      const placed = session.getDataPoints();
+      const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
+      setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
       commit();
     },
     [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured]

@@ -3,6 +3,7 @@ import {
   floodFill,
   pointsFromColumnRuns,
   orderByNearestNeighbour,
+  bestInsertionIndex,
   subsample,
 } from '../segmentFill.js';
 import { removeGridLinesOp, hexToRGB } from '../gridRemoval.js';
@@ -225,6 +226,47 @@ describe('segmentFill — curves that double back (checkpoint 78)', () => {
     const ys = pointsFromColumnRuns(mask, 12, 12).map((p) => p.y);
     // The 3,4,(5),6 group is ONE run; y=10 never joins the fill at all.
     expect(ys).toEqual([4]);
+  });
+});
+
+describe('bestInsertionIndex (insert-in-place ordering, v1.1 #1)', () => {
+  const P = (x: number, y: number) => ({ x, y });
+
+  it('appends into an empty or single-point series', () => {
+    expect(bestInsertionIndex([], P(3, 3))).toBe(0);
+    expect(bestInsertionIndex([P(0, 0)], P(5, 5))).toBe(1);
+  });
+
+  it('a normal left-to-right trace keeps appending (new point nearest the last)', () => {
+    const trace = [P(0, 0), P(1, 0), P(2, 0)];
+    expect(bestInsertionIndex(trace, P(3, 0))).toBe(3); // append, as before
+  });
+
+  it('splices a point back into the gap it belongs in', () => {
+    // A point at x=1 dropped into a series missing that x slots between (0,0)
+    // and (2,0) -- index 1 -- without moving any other point.
+    const series = [P(0, 0), P(2, 0), P(4, 0)];
+    expect(bestInsertionIndex(series, P(1, 0))).toBe(1);
+    expect(bestInsertionIndex(series, P(3, 0))).toBe(2);
+  });
+
+  it('prepends a point that belongs before the first', () => {
+    expect(bestInsertionIndex([P(1, 0), P(2, 0), P(3, 0)], P(0, 0))).toBe(0);
+  });
+
+  it('resolves an exact tie toward append rather than the middle', () => {
+    // q sits exactly on the line; the last edge and an append both cost the same
+    // extra length, so append (the least surprising) wins.
+    const collinear = [P(0, 0), P(1, 0)];
+    expect(bestInsertionIndex(collinear, P(2, 0))).toBe(2);
+  });
+
+  it('follows a curve that doubles back (2D, not just monotonic x)', () => {
+    // An inverted-V: up to the apex, then back down. A new point on the
+    // descending arm must land on the descending edge, not the ascending one at
+    // the same x.
+    const arch = [P(0, 0), P(2, 4), P(4, 0)];
+    expect(bestInsertionIndex(arch, P(3, 2))).toBe(2); // between apex and the foot
   });
 });
 

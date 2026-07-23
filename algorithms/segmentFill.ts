@@ -248,6 +248,52 @@ export function nearestNeighbourOrder(points: readonly Point2D[]): number[] {
 }
 
 /**
+ * The index in `existing` at which to splice a newly placed point `q` so it
+ * disturbs the ordered polyline as little as possible -- v1.1 #1's insert-in-
+ * place ordering. Returns a value in [0, existing.length].
+ *
+ * "Cheapest insertion" over the OPEN path: an internal edge (a, b) costs
+ * dist(a,q) + dist(q,b) - dist(a,b) -- the extra path length q adds between two
+ * neighbours -- while prepending before the first point costs dist(q, p0) and
+ * appending after the last costs dist(pn-1, q). The smallest wins. Ties resolve
+ * toward APPEND (append is the initial best and only a STRICTLY smaller cost
+ * displaces it), so a normal left-to-right trace -- each new point nearest the
+ * last -- keeps landing at the end exactly as a plain append would. The new
+ * behaviour only bites when a point is dropped back into the middle of a curve
+ * it belongs in, moving just that one point (every other index is preserved by
+ * splicing at the chosen edge).
+ *
+ * Only the ORDER is decided here; the point's coordinates are never touched
+ * (tenet 9). Empty -> 0, a single existing point -> 1 (append). True distances
+ * (not squared) are required: the a->q->b minus a->b comparison is a triangle-
+ * inequality quantity that squared distances don't preserve.
+ */
+export function bestInsertionIndex(existing: readonly Point2D[], q: Point2D): number {
+  const n = existing.length;
+  if (n === 0) return 0;
+  const d = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
+  // Append is the default and the tie-winner (strict `<` below never unseats it
+  // on an equal cost).
+  let bestIndex = n;
+  let bestCost = d(existing[n - 1]!, q);
+  const prepend = d(q, existing[0]!);
+  if (prepend < bestCost) {
+    bestCost = prepend;
+    bestIndex = 0;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const a = existing[i]!;
+    const b = existing[i + 1]!;
+    const cost = d(a, q) + d(q, b) - d(a, b);
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestIndex = i + 1;
+    }
+  }
+  return bestIndex;
+}
+
+/**
  * Subsample an ordered point array to at most `maxPoints`, evenly spaced
  * rather than clustered, **keeping both endpoints**.
  *

@@ -76,12 +76,18 @@ describe('Categorical line (checkpoint 101)', () => {
 
     expect(session.getExportFields()).toEqual(['Position', 'Value']);
     const rows = session.getExportRows(0);
-    // Position = ordinal by pixel-x: px150->1, px300->2, px450->3.
-    expect(rows[0]!.values[0]).toBe(2); // px300
-    expect(rows[1]!.values[0]).toBe(1); // px150
-    expect(rows[2]!.values[0]).toBe(3); // px450
-    expect(rows[0]!.values[1]).toBeCloseTo(50, 5);
-    expect(rows[2]!.values[1]).toBeCloseTo(100, 5);
+    // rows align with the stored point order, which insert-in-place (v1.1 #1) may
+    // permute -- so key Position/Value by each point's pixel-x rather than a fixed
+    // row index. Position must still be the ordinal by pixel-x: px150->1, px300->2,
+    // px450->3, no matter what order they were placed in.
+    const pts = session.getDataPoints();
+    const posByPx = new Map(pts.map((p, i) => [Math.round(p.px), rows[i]!.values[0]]));
+    const valByPx = new Map(pts.map((p, i) => [Math.round(p.px), rows[i]!.values[1]]));
+    expect(posByPx.get(150)).toBe(1);
+    expect(posByPx.get(300)).toBe(2);
+    expect(posByPx.get(450)).toBe(3);
+    expect(valByPx.get(300)).toBeCloseTo(50, 5);
+    expect(valByPx.get(450)).toBeCloseTo(100, 5);
     // Table shows the measured Value only (Position is an export-derived column).
     expect(session.getTableValueLabels()).toEqual(['Value']);
   });
@@ -250,11 +256,52 @@ describe('CalibrationSession (XY axes)', () => {
     expect(session.addDataPoint(100, 250)).toBe('point-added');
     expect(session.addDataPoint(400, 100)).toBe('point-added');
 
-    const points = session.getDataPoints();
+    // Insert-in-place (v1.1 #1) may reorder the stored points; this test is about
+    // live pixel->data conversion, not order, so read by ascending pixel-x
+    // (px 100 -> (0,0), 250 -> (5,5), 400 -> (10,10)).
+    const points = [...session.getDataPoints()].sort((a, b) => a.px - b.px);
     expect(points).toHaveLength(3);
-    points[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([5, 5][i]!, 10));
-    points[1]!.data!.forEach((v, i) => expect(v).toBeCloseTo([0, 0][i]!, 10));
+    points[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([0, 0][i]!, 10));
+    points[1]!.data!.forEach((v, i) => expect(v).toBeCloseTo([5, 5][i]!, 10));
     points[2]!.data!.forEach((v, i) => expect(v).toBeCloseTo([10, 10][i]!, 10));
+  });
+
+  describe('insert-in-place point ordering (v1.1 #1)', () => {
+    it('splices a re-added middle point back into curve order, not at the end', () => {
+      const s = new CalibrationSession(XY_AXES_CONFIG);
+      calibrateStandardXY(s);
+      s.runCalibration();
+      // Place the two ends, then a point that belongs between them LAST: it lands
+      // in the middle rather than appending, and no other point moves.
+      s.addDataPoint(100, 250); // left
+      s.addDataPoint(400, 250); // right
+      s.addDataPoint(250, 250); // middle, added last
+      expect(s.getDataPoints().map((p) => Math.round(p.px))).toEqual([100, 250, 400]);
+    });
+
+    it('a normal left-to-right trace still just appends (unchanged behaviour)', () => {
+      const s = new CalibrationSession(XY_AXES_CONFIG);
+      calibrateStandardXY(s);
+      s.runCalibration();
+      for (const px of [100, 200, 300, 400]) s.addDataPoint(px, 250);
+      expect(s.getDataPoints().map((p) => Math.round(p.px))).toEqual([100, 200, 300, 400]);
+    });
+
+    it('leaves an interpolation series alone (its order is anchor-derived)', () => {
+      const s = new CalibrationSession(XY_AXES_CONFIG);
+      calibrateStandardXY(s);
+      s.runCalibration();
+      s.addAnchorPoint(120, 240);
+      s.addAnchorPoint(380, 130);
+      const before = s.getDataPoints().length;
+      // A plain point added onto an interpolation series appends (the guard that
+      // canSortByNearestNeighbour uses), so insert-in-place never reorders the
+      // anchor/derived sequence out from under itself.
+      s.addDataPoint(250, 300);
+      const pts = s.getDataPoints();
+      expect(pts).toHaveLength(before + 1);
+      expect(Math.round(pts[pts.length - 1]!.px)).toBe(250); // appended at the end
+    });
   });
 
   it('removes the last point and clears all points', () => {
@@ -878,10 +925,14 @@ describe('CalibrationSession (Ternary axes)', () => {
     session.addDataPoint(100, 100); // corner B itself
     session.addDataPoint(100, 200); // midpoint of A-B
 
-    const points = session.getDataPoints();
-    points[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([100, 0, 0][i]!, 10));
-    points[1]!.data!.forEach((v, i) => expect(v).toBeCloseTo([0, 100, 0][i]!, 10));
-    points[2]!.data!.forEach((v, i) => expect(v).toBeCloseTo([50, 50, 0][i]!, 10));
+    // Insert-in-place (v1.1 #1) may reorder the stored points (the midpoint,
+    // placed last, slots between the two corners); this test reads a,b,c, not
+    // order, so read by ascending pixel-y: py100 -> corner B, py200 -> midpoint,
+    // py300 -> corner A.
+    const points = [...session.getDataPoints()].sort((a, b) => a.py - b.py);
+    points[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([0, 100, 0][i]!, 10));
+    points[1]!.data!.forEach((v, i) => expect(v).toBeCloseTo([50, 50, 0][i]!, 10));
+    points[2]!.data!.forEach((v, i) => expect(v).toBeCloseTo([100, 0, 0][i]!, 10));
   });
 
   it('re-calibrates live when the B handle is dragged', () => {
@@ -1649,11 +1700,17 @@ describe('sortByNearestNeighbour — manual NN reorder (checkpoint 130)', () => 
     const session = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
     calibrateStandardXY(session);
     session.runCalibration();
-    // Added out of order along a horizontal line: 100, then 400, then the
-    // middle 250 last. NN from the leftmost threads 100 -> 250 -> 400.
-    session.addDataPoint(100, 250);
-    session.addDataPoint(400, 250);
-    session.addDataPoint(250, 250);
+    // Bulk-added out of order along a horizontal line: 100, 400, then the middle
+    // 250. A segment-fill / blob-detector batch arrives in arbitrary order and
+    // does NOT go through insert-in-place (v1.1 #1), so it's the honest way to
+    // build a scrambled series for the manual NN sort to fix (a click-placed
+    // series now self-orders on the way in). NN from the leftmost threads
+    // 100 -> 250 -> 400.
+    session.addSegmentFillPoints([
+      { x: 100, y: 250 },
+      { x: 400, y: 250 },
+      { x: 250, y: 250 },
+    ]);
     expect(session.getDataPoints().map((p) => Math.round(p.px))).toEqual([100, 400, 250]);
 
     session.sortByNearestNeighbour();

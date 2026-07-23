@@ -602,33 +602,49 @@ describe('Workspace: tool mode', () => {
     await expectRow([5, 3]);
   });
 
-  it('reorders points into a nearest-neighbour path with Sort ↝ nearest, undoable (checkpoint 130)', async () => {
+  it('adds a point back into curve order, not at the end (insert-in-place, v1.1 #1)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard(); // lands in Place Point mode
-    // Three points on one horizontal line (py=200 -> y=3.333), placed out of
-    // order: x=2, then x=8, then the middle x=5 last. None on a handle pixel.
-    await clickAt(160, 200); // x=2
-    await clickAt(340, 200); // x=8
-    await clickAt(250, 200); // x=5 (out of order)
-    // Rows follow placement order.
-    await expectRow([2, 3.333], 0);
-    await expectRow([8, 3.333], 1);
-    await expectRow([5, 3.333], 2);
-    // These three points are far apart (a sparse series), so no connecting line
-    // is drawn -- they stay dots (checkpoint 131's scatter branch).
-    expect(await textOf('series-line-runs')).toBe('0');
-
-    await page.getByTestId('sort-nn').click();
-    await page.waitForTimeout(50);
-    // Threaded left-to-right by nearest neighbour: 2, 5, 8.
+    // On one horizontal line (py=200 -> y=3.333): place the two ends, then a
+    // point that belongs BETWEEN them last.
+    await clickAt(160, 200); // x=2 (left end)
+    await clickAt(340, 200); // x=8 (right end)
+    await clickAt(250, 200); // x=5 (middle, added LAST)
+    // It slots into the middle row (curve order) rather than appending at row 3.
     await expectRow([2, 3.333], 0);
     await expectRow([5, 3.333], 1);
     await expectRow([8, 3.333], 2);
+  });
 
-    // Undo restores the original placement order.
+  it('reorders points into a nearest-neighbour path with Sort ↝ nearest, undoable (checkpoint 130)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // lands in Place Point mode
+    // Three points on one horizontal line (py=200 -> y=3.333). Placing them
+    // left-to-right, insert-in-place (v1.1 #1) keeps them in order: x=2, 5, 8.
+    await clickAt(160, 200); // x=2
+    await clickAt(250, 200); // x=5
+    await clickAt(340, 200); // x=8
+    // Now DRAG the middle point (x=5) out to x=10, past the right one. A drag
+    // moves a point without re-running insert-in-place, so the STORED order
+    // (2, 10, 8) no longer matches the geometry -- exactly what the manual sort
+    // is for (a click-placed series self-orders, so it can't be scrambled by
+    // clicking any more; a drag, a blob-detector batch or a loaded project can).
+    await dragMarker(250, 200, 400, 200); // x=5 -> x=10
+    await expectRow([2, 3.333], 0);
+    await expectRow([10, 3.333], 1);
+    await expectRow([8, 3.333], 2);
+
+    await page.getByTestId('sort-nn').click();
+    await page.waitForTimeout(50);
+    // Threaded left-to-right by nearest neighbour: 2, 8, 10.
+    await expectRow([2, 3.333], 0);
+    await expectRow([8, 3.333], 1);
+    await expectRow([10, 3.333], 2);
+
+    // Undo restores the pre-sort (dragged) order.
     await page.getByTestId('undo').click();
     await page.waitForTimeout(50);
-    await expectRow([8, 3.333], 1);
+    await expectRow([10, 3.333], 1);
   });
 
   it('numbered keyboard shortcuts (1/2/3) switch tool mode, ignored while a text input has focus', async () => {
