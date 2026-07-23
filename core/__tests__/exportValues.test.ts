@@ -156,6 +156,20 @@ describe('valueAtPixel — non-finite sanitation', () => {
     expect(row[0]).toBeNull();
     expect(row[1]).toBe(5);
   });
+
+  it('a FINITE-but-out-of-Date-range serial in a date column also exports null', () => {
+    // 1e16 ms is finite but past JS Date's ±8.64e15 range, so new Date(1e16) is
+    // Invalid and formatDateNumber renders "NaN/NaN/NaN" -- a garbage string that
+    // slips past the numeric sanitizer. Guarding on Number.isFinite alone would
+    // miss this; guarding on the Date's validity closes the contract fully.
+    const axes = xyDateAxes();
+    (axes as unknown as { pixelToData: () => number[] }).pixelToData = () => [1e16, 5];
+    const ds = new Dataset(2);
+    ds.addPixel(250, 150);
+    const row = valueAtPixel(0, axes, ds.getPixel(0), 'full');
+    expect(row[0]).toBeNull();
+    expect(row[1]).toBe(5);
+  });
 });
 
 describe('valueAtPixel — XY', () => {

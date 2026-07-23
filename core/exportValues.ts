@@ -132,13 +132,14 @@ export function valueAtPixel(
  * an epoch date for a value that was never measured. */
 function formatIfNumber(value: ExportValue | undefined, format: string | null): ExportValue {
   if (typeof value !== 'number' || format == null) return value ?? null;
-  // A non-finite serial (NaN/Infinity from a degenerate calibration or an
-  // undefined point) is "not measured", not a date. Without this guard,
-  // formatDateNumber(NaN, ...) builds a garbage string ("NaN/NaN/NaN") that
-  // slips PAST valueAtPixel's final sanitizer -- that pass nullifies non-finite
-  // NUMBERS, but the value has already become a string by then. Return null so
-  // a date column honours the same "not measured -> null" contract every other
-  // column does, and CSV/JSON/xlsx still agree.
-  if (!Number.isFinite(value)) return null;
+  // A serial that does not map to a valid calendar date is "not measured", not a
+  // date. `new Date(value)` is an Invalid Date for BOTH a non-finite serial
+  // (NaN/±Infinity, from a degenerate calibration or an undefined point) AND a
+  // finite one outside JS Date's ±8.64e15 ms range -- and formatDateNumber would
+  // render either as the garbage string "NaN/NaN/NaN", which slips PAST
+  // valueAtPixel's final sanitizer (that pass nullifies non-finite NUMBERS, but
+  // the value is a string by then). Guard on the Date itself, not the number, so
+  // the "not measured -> null" contract is fully closed and CSV/JSON/xlsx agree.
+  if (Number.isNaN(new Date(value).getTime())) return null;
   return formatDateNumber(value, format);
 }

@@ -336,4 +336,45 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
       expect(session.getDatasets()[names.indexOf(n)]!.getAllPixels()).toHaveLength(0);
     }
   });
+
+  it('a 2D cross under ONE base: deleting the vertical arm leaves the horizontal arm (they are not linked)', () => {
+    // David 2026-07-23: the vertical and horizontal whiskers of a same-named
+    // error bar are independent -- deleting one direction must not take the other.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.renameDataset(0, 'Sample A');
+    session.addDataPoint(200, 200); // datum 0
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 170 }, baseName: 'SD' }); // vertical
+    session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 230, y: 200 }, baseName: 'SD' }); // horizontal
+    const names = session.getDatasets().map((d) => d.name.trim());
+    const vUpper = names.indexOf('SD upper');
+    const hRight = names.indexOf('SD right');
+    const hLeft = names.indexOf('SD left');
+    expect(vUpper).toBeGreaterThan(0);
+    expect(hRight).toBeGreaterThan(0); // horizontal arm exists
+
+    session.setActiveDataset(vUpper); // delete via the vertical arm
+    session.removeDataPoints([0]);
+
+    expect(session.getDatasets()[names.indexOf('SD upper')]!.getAllPixels()).toHaveLength(0);
+    expect(session.getDatasets()[names.indexOf('SD lower')]!.getAllPixels()).toHaveLength(0);
+    expect(session.getDatasets()[hRight]!.getAllPixels()).toHaveLength(1); // horizontal untouched
+    expect(session.getDatasets()[hLeft]!.getAllPixels()).toHaveLength(1);
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // data point untouched
+  });
+
+  it('deleting a cap when its sibling was already removed (asymmetric bar) drops just that cap, no throw', () => {
+    const session = twoPointsWithErrorBars();
+    // getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower. Empty the lower
+    // series so datum 0 has only an upper cap -- an asymmetric, one-sided bar.
+    session.getDatasets()[2]!.removePixelAtIndex(1);
+    session.getDatasets()[2]!.removePixelAtIndex(0);
+    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(0);
+
+    session.setActiveDataset(1); // SD upper active
+    session.removeDataPoints([0]); // delete the surviving upper cap of datum 0
+
+    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // datum 1's upper cap remains
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // data points untouched
+  });
 });
