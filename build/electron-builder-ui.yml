@@ -40,6 +40,7 @@ files:
   - ui/electron-preload.cjs
   - ui/electron-ipc.cjs
   - ui/electron-menu.cjs
+  - ui/electron-close-guard.cjs
   - build/icons/**/*
   - package.json
   # License + attribution text, shipped inside the app resources so the
