@@ -2,7 +2,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-A fully offline, cross-platform desktop application for extracting quantitative data from charts and graphs. Load a figure, calibrate the axes, place or auto-trace points, export to CSV / JSON / Excel / LaTeX / MATLAB / Python — no account, no internet connection, no browser required.
+A fully offline, cross-platform desktop application for extracting quantitative data from charts and graphs. Load a figure, calibrate the axes, place or auto-trace points, export to CSV / JSON / Excel / LaTeX / MATLAB / Python / R — no account, no internet connection, no browser required.
 
 PlotTracer's calibration engine began as an extraction of [WebPlotDigitizer](https://github.com/automeris-io/WebPlotDigitizer) by Ankit Rohatgi (AGPL-3.0); the application — its interface, interaction model, and workflow — is a ground-up rebuild in TypeScript + React + Electron.
 
@@ -41,7 +41,7 @@ No account required, no data sent to any server, and no dependency on any compan
 
 **Multi-figure projects** — one project holds several figures (e.g. every page of a paper), each with its own image, calibration, graph type, and series; flip between them and extract another from the retained source.
 
-**Export** — CSV, TSV, JSON, Excel (`.xlsx`), LaTeX, MATLAB, Python, plus a WYSIWYG PNG of the digitised figure. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks.
+**Export** — CSV, TSV, JSON, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks.
 
 **Durable record** — undo/redo across everything, project save/load as a self-contained `.zip` (optionally bundling the source PDF/TIFF), and import of existing WebPlotDigitizer `.tar` projects.
 

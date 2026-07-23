@@ -1818,6 +1818,45 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(jsonPath);
   });
 
+  it('exports an R data.frame via the format menu (v1.1 #3)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175); // (5, 5)
+    const rPath = tempFilePath('R');
+    await stubSaveDialog(rPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-r').click();
+    await page.waitForTimeout(300);
+    const r = fs.readFileSync(rPath, 'utf8');
+    // A named data.frame with one vector per column; the flat XY header's names
+    // (x_px, y_px, X, Y) are all valid R names, so no check.names override.
+    expect(r).toContain('data <- data.frame(');
+    expect(r).toContain('X = c(');
+    expect(r).toContain('Y = c(');
+    expect(r).toContain('stringsAsFactors = FALSE');
+    expect(r).not.toContain('check.names');
+    fs.unlinkSync(rPath);
+  });
+
+  it('copies the extracted data to the clipboard in the chosen format (v1.1 #4)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175); // (5, 5)
+    await page.getByTestId('export-csv').click();
+    // Copy (not save): no save dialog is armed, so a leak into the file path
+    // would throw. The menu stays open and the row shows a "Copied" tick.
+    await page.getByTestId('export-copy-csv').click();
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('export-menu').isVisible()).toBe(true);
+    // The renderer wrote via navigator.clipboard; read it back through Electron's
+    // own clipboard module in the main process (the same OS clipboard).
+    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+    const lines = copied.split('\n');
+    expect(lines[0]).toBe('x_px,y_px,X,Y');
+    const cells = lines[1]!.split(',').map(Number);
+    expect(cells.slice(2)).toEqual([expect.closeTo(5, 6), expect.closeTo(5, 6)]); // the (5,5) point
+  });
+
   it('exports a flat (ungrouped) dataset to CSV with the expected header and rows', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

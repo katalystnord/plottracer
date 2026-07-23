@@ -655,6 +655,21 @@ const LOADABLE_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
 type ExportFormat = 'json' | 'xlsx' | TableFormat;
 
+// Small inline glyphs for the per-row "copy to clipboard" affordance in the
+// Export menu (v1.1 #4) -- the overlapping-cards copy mark, swapped for a tick
+// on success. Kept local (like MeasureCard's own copy glyph) rather than routed
+// through the file-backed icons.tsx set.
+const CopyGlyph = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="5" y="5" width="8" height="8" rx="1.5" /><path d="M3 11 V3.5 A1.5 1.5 0 0 1 4.5 2 H11" />
+  </svg>
+);
+const CheckGlyph = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 8.5 L6.5 12 L13 4" />
+  </svg>
+);
+
 const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; pdf?: boolean }[] = [
   { id: 'xy', name: 'XY — stress–strain curve', src: xySample, axes: 'xy' },
   { id: 'xy-multi', name: 'XY Multiseries — 4 curves', src: xyMultiSample, axes: 'xy' },
@@ -874,6 +889,9 @@ export function Workspace() {
   const [exportFullPrecision, setExportFullPrecision] = useState(false);
   // The Export format dropdown's anchor (checkpoint 61) -- null when closed.
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  // Which format was just copied to the clipboard, for a transient "Copied"
+  // tick beside its row (v1.1 #4). Cleared on a timer / when the menu reopens.
+  const [copiedFmt, setCopiedFmt] = useState<ExportFormat | null>(null);
   // The series-colour picker lives in a Popover off a single swatch button
   // (checkpoint 91), so the series row keeps its width for the NAME field
   // instead of a swatch strip + eyedropper + hex crowding it out.
@@ -3437,7 +3455,10 @@ export function Workspace() {
   }, [confirmDiscardIfDirty, importWpdFigureAt]);
 
   const exportData = useCallback(
-    async (format: ExportFormat) => {
+    // target 'clipboard' (v1.1 #4) copies the very same rendered text a file
+    // export would write, in the chosen text format, rather than opening the
+    // save dialog. Binary formats (xlsx/png) never call it.
+    async (format: ExportFormat, target: 'file' | 'clipboard' = 'file') => {
       if (!window.electronAPI) {
         setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
         return;
@@ -3448,7 +3469,9 @@ export function Workspace() {
         return;
       }
       setProjectError(null);
-      setExportAnchor(null);
+      // Copying leaves the menu open so its "Copied" tick is visible and a
+      // second format can be grabbed; a file export dismisses it as before.
+      if (target === 'file') setExportAnchor(null);
 
       // Precision: round each value to the figure's own resolution unless the user
       // asked for full precision (v1.0). The flat/JSON series paths round inside
@@ -3600,8 +3623,23 @@ export function Workspace() {
         content = renderTable(sections, format);
       }
 
+      // Clipboard (v1.1 #4): hand the same rendered text to the OS clipboard
+      // instead of a file. Not a persisted artifact, so it does NOT clear the
+      // unsaved-work guard (unlike a file export below). The tick beside the row
+      // is the confirmation; it self-clears after a moment.
+      if (target === 'clipboard') {
+        try {
+          await navigator.clipboard.writeText(content);
+          setCopiedFmt(format);
+          window.setTimeout(() => setCopiedFmt((f) => (f === format ? null : f)), 1500);
+        } catch {
+          setProjectError('Could not copy to the clipboard.');
+        }
+        return;
+      }
+
       const filterNames: Record<'json' | TableFormat, string> = {
-        json: 'JSON', csv: 'CSV', tsv: 'TSV', latex: 'LaTeX', matlab: 'MATLAB', python: 'Python',
+        json: 'JSON', csv: 'CSV', tsv: 'TSV', latex: 'LaTeX', matlab: 'MATLAB', python: 'Python', r: 'R',
       };
       await window.electronAPI.saveFile(content, `${exportBaseName()}.${ext}`, [
         { name: filterNames[format], extensions: [ext] },
@@ -4624,7 +4662,7 @@ export function Workspace() {
             type="button"
             data-testid="export-csv"
             title="Export the extracted data (CSV/TSV/JSON) or a PNG snapshot of the figure"
-            onClick={(e) => setExportAnchor(e.currentTarget)}
+            onClick={(e) => { setCopiedFmt(null); setExportAnchor(e.currentTarget); }}
             // Enabled once there is anything to export: a calibrated chart for
             // the data formats, or just a loaded image for the PNG snapshot
             // (checkpoint 93 -- which needs no calibration, so a cropped or
@@ -4657,18 +4695,36 @@ export function Workspace() {
                 Full precision
               </label>
               <div style={{ height: 1, background: theme.color.border.regular, margin: '2px 0' }} />
+              {/* Each text format saves to a file on the label; the trailing
+                  copy button (v1.1 #4) puts the SAME rendered text on the
+                  clipboard. Excel is a binary workbook, so it has no clipboard
+                  action (copyable: false). */}
               {([
-                { fmt: 'csv', label: 'CSV (.csv)' },
-                { fmt: 'tsv', label: 'TSV (.tsv)' },
-                { fmt: 'json', label: 'JSON (.json)' },
-                { fmt: 'xlsx', label: 'Excel (.xlsx)' },
-                { fmt: 'latex', label: 'LaTeX table (.tex)' },
-                { fmt: 'matlab', label: 'MATLAB (.m)' },
-                { fmt: 'python', label: 'Python (.py)' },
-              ] as const).map(({ fmt, label }) => (
-                <TopBarButton key={fmt} type="button" data-testid={`export-format-${fmt}`} onClick={() => void exportData(fmt)} style={{ justifyContent: 'flex-start' }}>
-                  {label}
-                </TopBarButton>
+                { fmt: 'csv', label: 'CSV (.csv)', copyable: true },
+                { fmt: 'tsv', label: 'TSV (.tsv)', copyable: true },
+                { fmt: 'json', label: 'JSON (.json)', copyable: true },
+                { fmt: 'xlsx', label: 'Excel (.xlsx)', copyable: false },
+                { fmt: 'latex', label: 'LaTeX table (.tex)', copyable: true },
+                { fmt: 'matlab', label: 'MATLAB (.m)', copyable: true },
+                { fmt: 'python', label: 'Python (.py)', copyable: true },
+                { fmt: 'r', label: 'R (.R)', copyable: true },
+              ] as const).map(({ fmt, label, copyable }) => (
+                <div key={fmt} style={{ display: 'flex', alignItems: 'stretch', gap: 2 }}>
+                  <TopBarButton type="button" data-testid={`export-format-${fmt}`} onClick={() => void exportData(fmt)} style={{ justifyContent: 'flex-start', flex: 1 }}>
+                    {label}
+                  </TopBarButton>
+                  {copyable && (
+                    <TopBarButton
+                      type="button"
+                      data-testid={`export-copy-${fmt}`}
+                      title={copiedFmt === fmt ? 'Copied to clipboard' : `Copy ${label.replace(/ \(.*\)$/, '')} to the clipboard`}
+                      onClick={() => void exportData(fmt, 'clipboard')}
+                      style={{ flex: '0 0 auto', padding: '0 8px', color: copiedFmt === fmt ? theme.color.primary.main : undefined }}
+                    >
+                      {copiedFmt === fmt ? <CheckGlyph /> : <CopyGlyph />}
+                    </TopBarButton>
+                  )}
+                </div>
               ))}
               {/* PNG snapshot (checkpoint 93): the image with the digitization
                   drawn on it, not the extracted data. Sits with the data formats
