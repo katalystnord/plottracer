@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, POLAR_AXES_CONFIG } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
+import { PolarAxes } from '../../core/axes/polar.js';
 import { Calibration } from '../../core/calibration.js';
 import { Dataset } from '../../core/dataset.js';
 
@@ -173,5 +174,44 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [new Dataset(2)]);
     expect(session.getCalibrationError()).toMatch(/parallel/i);
+  });
+});
+
+/** Build a PolarAxes the way the load path does. Points: origin, P1, P2. */
+function loadedPolar(points: Array<[number, number, string, string]>): PolarAxes {
+  const cal = new Calibration(2);
+  for (const [px, py, dx, dy] of points) cal.addPoint(px, py, dx, dy);
+  const axes = new PolarAxes();
+  const ok = axes.calibrate(cal, true, false, false); // degrees, anticlockwise, linear r
+  expect(ok).toBe(true); // the axes is happy with input the guard refuses
+  return axes;
+}
+
+describe('Polar equal-radius guard — P1 and P2 must be at different radii (A3)', () => {
+  it('catches P1 and P2 the same distance from the origin in a LOADED project', () => {
+    // Origin (200,200); P1 (300,200) and P2 (200,100) are BOTH 100px from the
+    // origin -> radial scale dist12 = 0 -> every r reads non-finite, while
+    // calibrate() still returned true. distinctPixelSteps can't see this (no
+    // shared pixel); only the radial-distinct check can.
+    const axes = loadedPolar([
+      [200, 200, '', ''], // origin
+      [300, 200, '5', '0'], // P1: dist 100
+      [200, 100, '10', ''], // P2: dist 100 — equidistant
+    ]);
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toMatch(/same distance from the origin/i);
+  });
+
+  it('a healthy Polar project (P1 and P2 at different radii) loads clean', () => {
+    const axes = loadedPolar([
+      [200, 200, '', ''], // origin
+      [300, 200, '5', '0'], // P1: dist 100
+      [400, 200, '10', ''], // P2: dist 200
+    ]);
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toBeNull();
+    expect(session.isCalibrated()).toBe(true);
   });
 });

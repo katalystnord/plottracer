@@ -75,6 +75,17 @@ function toJD(dateStringInput: string): number | null {
   tempDate.setUTCMonth(month - 1);
   tempDate.setUTCDate(date);
   tempDate.setUTCHours(hour, min, sec, msec);
+  // Reject an IMPOSSIBLE calendar date (e.g. 2021/02/31). The field-range checks
+  // above pass it (month 1-12, day 1-31), but setUTCDate then ROLLS it into the
+  // next month -- silently shifting the whole axis scale (2021/02/31 -> Mar 3).
+  // If the constructed date no longer matches the entered month/day, it was
+  // never a real date: return null so the value reads as invalid (the
+  // calibration guard surfaces it) instead of becoming a wrong number. Sibling
+  // of the setUTCDate(1) seeding above -- both serve Tenet 1 over upstream
+  // faithfulness.
+  if (tempDate.getUTCMonth() !== month - 1 || tempDate.getUTCDate() !== date) {
+    return null;
+  }
   const rtnValue = parseFloat(String(tempDate.getTime()));
   if (!isNaN(rtnValue)) {
     return rtnValue;

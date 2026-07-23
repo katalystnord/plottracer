@@ -366,6 +366,23 @@ export interface ParallelAxisGuard {
 }
 
 /**
+ * Two radial calibration points that must sit at DIFFERENT distances from the
+ * origin. A Polar chart derives its radial scale from
+ * dist(origin, P2) - dist(origin, P1) (core/axes/polar.ts `dist12`); when P1 and
+ * P2 are equidistant from the origin that difference is zero, so every r reads
+ * back non-finite while calibrate() still returns true -- the radial sibling of
+ * ParallelAxisGuard. distinctPixelSteps only catches coincident pixels, not
+ * equal radii, so a determinant-style check is what surfaces this.
+ */
+export interface RadialDistinctGuard {
+  origin: string;
+  p1: string;
+  p2: string;
+  /** How the radial axis is named to the user, e.g. "radial". */
+  label: string;
+}
+
+/**
  * Pre-calibration refusals, run before any axes class sees the values.
  *
  * This is the layer WPD keeps in `controllers/` and we never ported: `core/` is
@@ -440,6 +457,25 @@ function checkGuards(
       if (Math.abs(cross) < 1e-9) {
         return `The ${pag.label} calibration axes are parallel — they must point in different directions, or the calibration has no scale.`;
       }
+    }
+  }
+  // Equal-radius invariant (Polar). P1 and P2 at the same distance from the
+  // origin make the radial scale dist12 = 0 -> every r reads non-finite while
+  // calibrate() still returns true (the radial analogue of parallelAxisGuard;
+  // distinctPixelSteps only catches coincident pixels, not equal radii).
+  const rdg = config.radialDistinctGuard;
+  if (rdg) {
+    const distFrom = (originKey: string, ptKey: string): number | null => {
+      const oi = config.steps.findIndex((st) => st.key === originKey);
+      const pi = config.steps.findIndex((st) => st.key === ptKey);
+      const o = cal.getPoint(oi);
+      const p = cal.getPoint(pi);
+      return o && p ? Math.hypot(p.px - o.px, p.py - o.py) : null;
+    };
+    const d1 = distFrom(rdg.origin, rdg.p1);
+    const d2 = distFrom(rdg.origin, rdg.p2);
+    if (d1 != null && d2 != null && Math.abs(d2 - d1) < 1e-6) {
+      return `The ${rdg.label} calibration points are the same distance from the origin — they must be at different radii, or the calibration has no radial scale.`;
     }
   }
   return null;
@@ -582,6 +618,9 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * be parallel, catching distinct-but-collinear points the same-pixel guard
    * misses. See ParallelAxisGuard. */
   parallelAxisGuard?: ParallelAxisGuard;
+  /** For radial types (Polar): two points that must be at different distances
+   * from the origin, else the radial scale is zero. See RadialDistinctGuard. */
+  radialDistinctGuard?: RadialDistinctGuard;
   buildAxes(cal: Calibration, ctx: BuildAxesContext): BuildAxesResult<A>;
   /** Inverse of buildAxes's `options` handling — reads a loaded axes instance's
    * own state back into the option Record, so opening a project restores the
@@ -870,6 +909,8 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
   logScaleGuards: [{ option: 'isLogR', points: [1, 2], field: 'dx', label: 'radial' }],
   // All three must be distinct: P1 on the origin means r1 = 0 at r = 0.
   distinctPixelSteps: [['origin', 'p1', 'p2']],
+  // P1 and P2 equidistant from the origin -> zero radial scale -> non-finite r.
+  radialDistinctGuard: { origin: 'origin', p1: 'p1', p2: 'p2', label: 'radial' },
   // WPD: polar-axes-angular-units / -orientation / -scale.
   options: [
     { key: 'isDegrees', label: 'Angle', kind: 'choice', default: 'true',
