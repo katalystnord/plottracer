@@ -14,6 +14,7 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
 const path = require('path')
 const { registerIpcHandlers } = require('./electron-ipc.cjs')
 const { buildMenu } = require('./electron-menu.cjs')
+const { attachCloseGuard } = require('./electron-close-guard.cjs')
 
 // no-sandbox is a Linux AppImage/seccomp workaround (the deb postinst + afterPack
 // wrapper cover the same need). Gated to Linux so macOS and Windows keep their OS
@@ -81,6 +82,11 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('file://')) event.preventDefault()
   })
+
+  // Confirm unsaved work before the window closes / Cmd+Q -- the one destructive
+  // door that used to bypass the renderer's dirty-guard (audit B1). See
+  // electron-close-guard.cjs.
+  attachCloseGuard(ipcMain, mainWindow)
 }
 
 app.whenReady().then(() => {

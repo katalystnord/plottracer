@@ -1228,6 +1228,22 @@ export function Workspace() {
     bump();
   }, [history, captureDoc, bump]);
 
+  // The OS window-close button / Cmd+Q is the one destructive door that used to
+  // bypass the unsaved-work guard (v1.0.1 audit B1) -- it hit app.quit()
+  // directly. The main process now intercepts the close and asks us here; run
+  // the SAME confirm every other door uses and reply. notifyCloseGuardReady lets
+  // main know the handler is mounted, so it only traps a close once we're
+  // actually handling it (a still-loading/crashed renderer stays closable).
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onCloseRequest || !api.confirmClose || !api.notifyCloseGuardReady) return;
+    const unsubscribe = api.onCloseRequest(() => {
+      api.confirmClose(confirmDiscardIfDirty());
+    });
+    api.notifyCloseGuardReady();
+    return unsubscribe;
+  }, [confirmDiscardIfDirty]);
+
   // Rotate/flip the image (checkpoint 62). The pixel op runs on the native-
   // resolution buffer, and the SAME coordinate map moves every calibration
   // handle, data point and measurement overlay, so the whole document stays

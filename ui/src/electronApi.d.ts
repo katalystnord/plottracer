@@ -58,6 +58,16 @@ declare global {
       /** Registers a callback for a native menu click; returns an
        * unsubscribe function -- call it from an effect's cleanup. */
       onMenuEvent: (channel: MenuEventChannel, callback: () => void) => () => void;
+      /** Confirm-on-close guard (electron-close-guard.cjs). The main process
+       * fires this before the window closes / Cmd+Q; the renderer runs its
+       * unsaved-work confirm and replies with confirmClose. Returns an
+       * unsubscribe function. */
+      onCloseRequest: (callback: () => void) => () => void;
+      /** Reply to onCloseRequest: true = discard and close, false = stay open. */
+      confirmClose: (allow: boolean) => void;
+      /** Tell the main process the close-request handler is mounted, so it only
+       * intercepts a close once the renderer is actually handling it. */
+      notifyCloseGuardReady: () => void;
     };
   }
 }

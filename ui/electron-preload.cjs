@@ -36,4 +36,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
+
+  // Confirm-on-close guard (electron-close-guard.cjs). The main process asks the
+  // renderer to run its unsaved-work confirm before the window closes / Cmd+Q;
+  // the renderer replies via confirmClose. notifyCloseGuardReady tells main the
+  // handler is mounted, so main only intercepts once we're actually handling it.
+  onCloseRequest: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('app:close-request', listener)
+    return () => ipcRenderer.removeListener('app:close-request', listener)
+  },
+  confirmClose: (allow) => ipcRenderer.send('app:close-response', Boolean(allow)),
+  notifyCloseGuardReady: () => ipcRenderer.send('app:close-guard-ready'),
 })

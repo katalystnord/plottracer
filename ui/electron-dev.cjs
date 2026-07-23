@@ -18,6 +18,7 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron')
 const path = require('path')
 const { registerIpcHandlers } = require('./electron-ipc.cjs')
 const { buildMenu } = require('./electron-menu.cjs')
+const { attachCloseGuard } = require('./electron-close-guard.cjs')
 
 // seccomp/GPU workarounds -- needed on this Linux dev environment, harmless
 // elsewhere (same as electron-main.cjs).
@@ -67,6 +68,10 @@ function createWindow() {
   }
 
   if (!isE2E) mainWindow.webContents.openDevTools()
+
+  // Same unsaved-work close guard as production (audit B1) -- both entry points
+  // wire it so they can't drift. See electron-close-guard.cjs.
+  attachCloseGuard(ipcMain, mainWindow)
 }
 
 app.whenReady().then(createWindow)
