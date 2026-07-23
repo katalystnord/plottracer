@@ -132,5 +132,13 @@ export function valueAtPixel(
  * an epoch date for a value that was never measured. */
 function formatIfNumber(value: ExportValue | undefined, format: string | null): ExportValue {
   if (typeof value !== 'number' || format == null) return value ?? null;
+  // A non-finite serial (NaN/Infinity from a degenerate calibration or an
+  // undefined point) is "not measured", not a date. Without this guard,
+  // formatDateNumber(NaN, ...) builds a garbage string ("NaN/NaN/NaN") that
+  // slips PAST valueAtPixel's final sanitizer -- that pass nullifies non-finite
+  // NUMBERS, but the value has already become a string by then. Return null so
+  // a date column honours the same "not measured -> null" contract every other
+  // column does, and CSV/JSON/xlsx still agree.
+  if (!Number.isFinite(value)) return null;
   return formatDateNumber(value, format);
 }

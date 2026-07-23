@@ -143,6 +143,19 @@ describe('valueAtPixel — non-finite sanitation', () => {
     const out = valueAtPixel(0, fake, { x: 0, y: 0 } as Parameters<typeof valueAtPixel>[2], 'full');
     expect(out).toEqual([null, null, null, 5]);
   });
+
+  it('a non-finite value in a DATE column exports null, not a "NaN" date string', () => {
+    // The number-only sanitizer above cannot catch this: a date column formats
+    // its value FIRST, so a non-finite serial would become the string
+    // "NaN/NaN/NaN" and slip through. The guard belongs in formatIfNumber.
+    const axes = xyDateAxes();
+    (axes as unknown as { pixelToData: () => number[] }).pixelToData = () => [NaN, 5];
+    const ds = new Dataset(2);
+    ds.addPixel(250, 150);
+    const row = valueAtPixel(0, axes, ds.getPixel(0), 'full');
+    expect(row[0]).toBeNull();
+    expect(row[1]).toBe(5);
+  });
 });
 
 describe('valueAtPixel — XY', () => {
