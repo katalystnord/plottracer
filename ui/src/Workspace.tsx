@@ -3896,6 +3896,18 @@ export function Workspace() {
     commit();
   }, [session, commit]);
 
+  // Opening a rail fly-out (Curve Fit / Geometry) closes any open docked tool card
+  // so two fold-outs are never up at once (David: "autoclose cards when they lose
+  // focus"). The fly-out's own Popover already closes on an outside click; this is
+  // the other direction -- dropping the mode card (and the Select picker) the
+  // moment a fly-out takes focus.
+  const closeDockedCardsOnFlyout = useCallback((open: boolean) => {
+    if (open) {
+      setMode('pan');
+      setSelectFoldoutOpen(false);
+    }
+  }, []);
+
   const handleRunGeometry = useCallback(() => {
     if (!axes) return;
     const result = runGeometry(session.getDataset(), axes as unknown as AnyAxes, geometryClosed);
@@ -4624,10 +4636,13 @@ export function Workspace() {
   // it appeared "before" its sibling curve tools; now all three show together.
   const curveFitFlyout =
     config.supportsCurveFit ? (
-      <FloatingPanel placement="rail" label="Curve Fit" icon={<CurveFitIcon />} testId="curve-fit" shortcut="8" disabled={!axes}>
-        <p>
-          <label>
-            Degree:{' '}
+      <FloatingPanel placement="rail" label="Curve Fit" icon={<CurveFitIcon />} testId="curve-fit" shortcut="8" disabled={!axes} onOpenChange={closeDockedCardsOnFlyout}>
+        {/* Single input row (v1.1 step 2): Degree · Restrict · Fit · Clear. The
+            x-range inputs drop in below only while Restrict is on; the RESULT
+            (equation, R², RMS, n) lives in the output panel's Curve fit section. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            Degree
             <select
               data-testid="curve-fit-degree"
               value={curveFitDegree}
@@ -4640,69 +4655,53 @@ export function Workspace() {
               ))}
             </select>
           </label>
-        </p>
-        <p>
-          <label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <input
               type="checkbox"
               data-testid="curve-fit-restrict"
               checked={curveFitRestrict}
               onChange={(e) => setCurveFitRestrict(e.target.checked)}
-            />{' '}
-            Restrict to x-range
+            />
+            Restrict
           </label>
-          {curveFitRestrict && (
-            <>
-              {' '}
-              X min{' '}
-              <input
-                type="number"
-                data-testid="curve-fit-xmin"
-                value={curveFitXMinInput}
-                onChange={(e) => setCurveFitXMinInput(e.target.value)}
-                style={{ width: 70 }}
-              />{' '}
-              X max{' '}
-              <input
-                type="number"
-                data-testid="curve-fit-xmax"
-                value={curveFitXMaxInput}
-                onChange={(e) => setCurveFitXMaxInput(e.target.value)}
-                style={{ width: 70 }}
-              />
-            </>
-          )}
-        </p>
-        <p>
           <button type="button" data-testid="curve-fit-run" onClick={handleRunCurveFit}>
             Fit
-          </button>{' '}
-          <button type="button" data-testid="curve-fit-clear" onClick={handleClearCurveFit} disabled={!curveFitState}>
-            Clear Fit
           </button>
-        </p>
+          <button type="button" data-testid="curve-fit-clear" onClick={handleClearCurveFit} disabled={!curveFitState}>
+            Clear
+          </button>
+        </div>
+        {curveFitRestrict && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+            X min
+            <input
+              type="number"
+              data-testid="curve-fit-xmin"
+              value={curveFitXMinInput}
+              onChange={(e) => setCurveFitXMinInput(e.target.value)}
+              style={{ width: 70 }}
+            />
+            X max
+            <input
+              type="number"
+              data-testid="curve-fit-xmax"
+              value={curveFitXMaxInput}
+              onChange={(e) => setCurveFitXMaxInput(e.target.value)}
+              style={{ width: 70 }}
+            />
+          </div>
+        )}
         {curveFitError && (
-          <p data-testid="curve-fit-error" style={{ color: theme.color.error }}>
+          <p data-testid="curve-fit-error" style={{ color: theme.color.error, marginBottom: 0 }}>
             {curveFitError}
           </p>
-        )}
-        {curveFitState && (
-          <pre data-testid="curve-fit-results" style={{ fontSize: 12 }}>
-            {formatPolynomial(curveFitState.coefficients)}
-            {'\n'}
-            R² = {curveFitState.rSquared.toFixed(5)}
-            {'\n'}
-            RMS = {curveFitState.rms.toPrecision(5)}
-            {'\n'}
-            n = {curveFitState.n} points
-          </pre>
         )}
       </FloatingPanel>
     ) : null;
 
   const geometryFlyout =
     config.id === 'xy' ? (
-      <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="9" disabled={!axes}>
+      <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="9" disabled={!axes} onOpenChange={closeDockedCardsOnFlyout}>
         <p>
           <label>
             <input
@@ -6669,6 +6668,22 @@ export function Workspace() {
                 </div>
               ))
             )}
+          </div>
+        </SidebarSection>
+      )}
+
+      {/* Curve fit OUTPUT (v1.1 step 2): the fit result moved here from the Curve
+          Fit fold-out (inputs only). Bound to the active series; already stored on
+          the dataset + exported as its own derived block. */}
+      {curveFitState && (
+        <SidebarSection>
+          <SidebarHeading>Curve fit</SidebarHeading>
+          <div data-testid="curve-fit-output" style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: theme.font.size.small }}>
+            <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
+            <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatPolynomial(curveFitState.coefficients)}</code>
+            <span style={{ fontVariantNumeric: 'tabular-nums', color: theme.color.text.secondary }}>
+              R² = {curveFitState.rSquared.toFixed(5)} · RMS = {curveFitState.rms.toPrecision(5)} · n = {curveFitState.n}
+            </span>
           </div>
         </SidebarSection>
       )}

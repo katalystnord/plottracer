@@ -2412,15 +2412,15 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await page.getByTestId('curve-fit-run').click();
     await page.waitForTimeout(150);
 
-    const results = await textOf('curve-fit-results');
+    const results = await textOf('curve-fit-output');
     expect(results).toContain('y = 1.0000 + 2.0000·x');
     expect(results).toMatch(/R² = 1\.00000|R² = 0\.99999/); // exact fit, allow for float noise
-    expect(results).toContain('n = 4 points');
+    expect(results).toContain('n = 4');
     expect(await page.getByTestId('curve-fit-error').count()).toBe(0);
 
     await page.getByTestId('curve-fit-clear').click();
     await page.waitForTimeout(100);
-    expect(await page.getByTestId('curve-fit-results').count()).toBe(0);
+    expect(await page.getByTestId('curve-fit-output').count()).toBe(0);
   });
 
   it('restricting to an x-range excludes points outside it', async () => {
@@ -2435,7 +2435,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await page.getByTestId('curve-fit-run').click();
     await page.waitForTimeout(150);
 
-    expect(await textOf('curve-fit-results')).toContain('n = 2 points');
+    expect(await textOf('curve-fit-output')).toContain('n = 2');
   });
 
   it('computing Geometry reports arc length/area, and the closed toggle changes the area label', async () => {
@@ -2484,7 +2484,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await page.getByTestId('curve-fit-trigger').click();
     await page.getByTestId('curve-fit-run').click();
     await page.waitForTimeout(150);
-    expect(await textOf('curve-fit-results')).toContain('n = 4 points');
+    expect(await textOf('curve-fit-output')).toContain('n = 4');
     // Close the Popover before clicking a top-bar button -- while it's open,
     // MUI's Popover backdrop covers the top bar, so a Save Project click would
     // hit the backdrop (closing the panel) instead of the button.
@@ -2506,9 +2506,9 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await page.waitForTimeout(400);
 
     await page.getByTestId('curve-fit-trigger').click();
-    const results = await textOf('curve-fit-results');
+    const results = await textOf('curve-fit-output');
     expect(results).toContain('y = 1.0000 + 2.0000·x');
-    expect(results).toContain('n = 4 points');
+    expect(results).toContain('n = 4');
     // The degree/restrict controls sync to the loaded fit's own parameters.
     expect(await page.locator('[data-testid="curve-fit-degree"]').inputValue()).toBe('1');
 
