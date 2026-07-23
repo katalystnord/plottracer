@@ -2423,6 +2423,28 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     expect(await page.getByTestId('curve-fit-output').count()).toBe(0);
   });
 
+  it('clicking the fitted curve on canvas re-opens Curve Fit to edit it (v1.1)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await addLinePoints(); // a straight line through (100,235)..(190,145)
+
+    await page.getByTestId('curve-fit-trigger').click();
+    await page.getByTestId('curve-fit-run').click();
+    await page.waitForTimeout(150);
+    // Opening the fly-out drops us into Pan (autoclose). Close it by clicking its
+    // MUI Popover backdrop -- a canvas click lands on the backdrop, dismissing the
+    // fly-out (and is consumed by it, so nothing reaches the canvas).
+    await clickAt(700, 400);
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('curve-fit-panel').count()).toBe(0);
+
+    // Click ON the fitted line (midway between two points, not on a marker) ->
+    // it re-opens Curve Fit. Markers are inert in Pan, so the click reaches it.
+    await clickAt(145, 190);
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('curve-fit-panel').isVisible()).toBe(true);
+  });
+
   it('restricting to an x-range excludes points outside it', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

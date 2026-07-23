@@ -3908,6 +3908,13 @@ export function Workspace() {
     }
   }, []);
 
+  // Click the fitted curve on canvas to edit it (v1.1, David): opens the Curve Fit
+  // fold-out (same door hotkey 8 uses). Only offered in inspect modes (pan/select)
+  // so it never steals a canvas click that's placing points or measuring.
+  const openCurveFitPanel = useCallback(() => {
+    (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
+  }, []);
+
   const handleRunGeometry = useCallback(() => {
     if (!axes) return;
     const result = runGeometry(session.getDataset(), axes as unknown as AnyAxes, geometryClosed);
@@ -5949,6 +5956,7 @@ export function Workspace() {
           binGlyphs={binGlyphs}
           errorBarGlyphs={errorBarGlyphs.concat(errorWhiskers)}
           curveFitLine={curveFitOverlay}
+          onCurveFitClick={curveFitState && (mode === 'pan' || mode === 'select') ? openCurveFitPanel : undefined}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
