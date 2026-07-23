@@ -5294,6 +5294,7 @@ export function Workspace() {
             shortcut="1"
             pressed={mode === 'calibrate'}
             disabled={!figureCaptured}
+            disabledReason="Capture the figure first"
             onClick={() => setMode('calibrate')}
           />
           <IconButton
@@ -5303,6 +5304,7 @@ export function Workspace() {
             shortcut="2"
             pressed={mode === 'image-edit'}
             disabled={!canvasHasImage}
+            disabledReason="Open an image first"
             onClick={toggleImageEdit}
           />
           </RailGroup>
@@ -5317,6 +5319,7 @@ export function Workspace() {
             shortcut="3"
             pressed={mode === 'place-point'}
             disabled={!axes}
+            disabledReason="Calibrate the axes first"
             onClick={() => setMode('place-point')}
           />
           <IconButton
@@ -5326,6 +5329,7 @@ export function Workspace() {
             shortcut="4"
             pressed={AUTO_EXTRACT_MODES.includes(mode)}
             disabled={!axes || hasPointGroups}
+            disabledReason={!axes ? 'Calibrate the axes first' : 'Not available for this graph type'}
             onClick={toggleAutoExtract}
           />
           <IconButton
@@ -5335,6 +5339,7 @@ export function Workspace() {
             shortcut="5"
             pressed={mode === 'select'}
             disabled={!axes}
+            disabledReason="Calibrate the axes first"
             onClick={() => setMode('select')}
           />
           {/* Error bars are a PROPERTY of a point (ckpt 79, David) -- greyed
@@ -5346,6 +5351,7 @@ export function Workspace() {
             shortcut="6"
             pressed={mode === 'error-bars'}
             disabled={!datasetInfos.some((d) => d.pointCount > 0)}
+            disabledReason="Add data points first"
             onClick={toggleErrorBars}
           />
           {/* Eraser (David 2026-07-22): a discoverable click-to-remove-a-point
@@ -5357,6 +5363,7 @@ export function Workspace() {
             label="Erase a point — click a point to remove it"
             pressed={mode === 'eraser'}
             disabled={dataPoints.length === 0}
+            disabledReason="Add data points first"
             onClick={() => setMode('eraser')}
           />
           </RailGroup>
@@ -5370,6 +5377,7 @@ export function Workspace() {
             shortcut="7"
             pressed={mode === 'measure'}
             disabled={!figureCaptured}
+            disabledReason="Capture the figure first"
             onClick={toggleMeasure}
           />
           {curveFitFlyout}

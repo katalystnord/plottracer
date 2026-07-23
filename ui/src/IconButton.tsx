@@ -34,6 +34,12 @@ export interface IconButtonProps {
    * can still pass a zero-arg handler -- it's assignable. */
   onClick: (e: MouseEvent<HTMLButtonElement>) => void;
   testId: string;
+  /** When `disabled`, a short on-hover explanation of what unlocks the tool
+   * (e.g. "Calibrate the axes first"). Chromium suppresses `title` on a disabled
+   * <button>, so a greyed tool otherwise shows NO hint on hover (v1.0.2 audit
+   * B3); this is surfaced via the wrapping span below. Falls back to the plain
+   * label+shortcut when omitted. */
+  disabledReason?: string;
 }
 
 // `shouldForwardProp` keeps `pressed` out of the DOM -- it's not a real
@@ -63,6 +69,10 @@ const StyledButton = styled('button', {
   ':disabled': {
     cursor: 'not-allowed',
     opacity: 0.4,
+    // Let hover reach the wrapping span (see IconButton below) so its `title`
+    // tooltip and not-allowed cursor show -- a disabled <button> both swallows
+    // the hover and suppresses its own title in Chromium.
+    pointerEvents: 'none',
   },
 }));
 
@@ -76,13 +86,27 @@ const ShortcutBadge = styled('span')({
   pointerEvents: 'none',
 });
 
-export function IconButton({ icon, label, shortcut, pressed, disabled, onClick, testId }: IconButtonProps) {
-  const title = shortcut ? `${label} (${shortcut})` : label;
-  return (
+export function IconButton({
+  icon,
+  label,
+  shortcut,
+  pressed,
+  disabled,
+  disabledReason,
+  onClick,
+  testId,
+}: IconButtonProps) {
+  const enabledTitle = shortcut ? `${label} (${shortcut})` : label;
+  // When disabled, prefer the "why" hint; fall back to the plain label.
+  const title = disabled && disabledReason ? disabledReason : enabledTitle;
+  const button = (
     <StyledButton
       type="button"
       data-testid={testId}
-      title={title}
+      // A disabled <button> suppresses its own tooltip in Chromium, so when
+      // disabled the wrapping span carries the title instead -- omit it here to
+      // avoid a dead attribute. aria-label stays for assistive tech either way.
+      title={disabled ? undefined : title}
       aria-label={title}
       aria-pressed={pressed}
       disabled={disabled}
@@ -92,5 +116,16 @@ export function IconButton({ icon, label, shortcut, pressed, disabled, onClick, 
       {icon}
       {shortcut && <ShortcutBadge>{shortcut}</ShortcutBadge>}
     </StyledButton>
+  );
+  if (!disabled) return button;
+  // The button is disabled: it fires no hover and shows no title. Wrap it in a
+  // span that carries the tooltip and the not-allowed cursor; the button's
+  // pointer-events:none (:disabled above) lets the hover reach the span. The
+  // `disabled` attribute stays on the button, so isDisabled()/click guards and
+  // the greyed styling are unaffected.
+  return (
+    <span title={title} style={{ display: 'inline-flex', cursor: 'not-allowed' }}>
+      {button}
+    </span>
   );
 }
