@@ -196,9 +196,6 @@
   .feature .ico { width: 38px; height: 38px; color: var(--teal); margin-bottom: 4px; }
   .feature h3 { font-size: 1.04rem; }
   .feature p { color: var(--ink-soft); font-size: 0.9rem; margin: 0; max-width: 27ch; }
-  .feature .only, .feature .rare { font-family: var(--mono); font-size: 0.56rem; letter-spacing: 0.13em; text-transform: uppercase; border-radius: 5px; padding: 2px 7px; margin-top: 2px; }
-  .feature .only { color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent); }
-  .feature .rare { color: var(--teal-deep); border: 1px solid color-mix(in srgb, var(--teal) 42%, transparent); }
 
   /* ---- export chips ---- */
   .export .wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(28px, 5vw, 56px); align-items: center; }
@@ -563,14 +560,12 @@
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M8 7h8M8 17h8"/><circle cx="12" cy="12" r="2.3" fill="currentColor" stroke="none"/></svg>
         <h3>Error &amp; uncertainty</h3>
         <p>Capture real error bars — asymmetric and all — without inventing symmetry or defaults.</p>
-        <span class="only">Only here</span>
       </div>
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V4"/><path d="M3 20h18"/><rect x="6" y="12" width="3.4" height="8"/><rect x="10.3" y="8" width="3.4" height="12"/><rect x="14.6" y="14" width="3.4" height="6"/></svg>
         <h3>True histogram bins</h3>
         <p>Records genuine bin edges and heights — the interval a bar spans, not just its centre.</p>
-        <span class="only">Only here</span>
       </div>
 
       <div class="feature">
@@ -613,7 +608,6 @@
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><circle cx="12" cy="14" r="2.2"/><path d="M12 16.2V19"/></svg>
         <h3>Keeps the provenance</h3>
         <p>The project bundles the original source PDF or image and records every crop and page — any number traces straight back to its figure.</p>
-        <span class="rare">Rare in the field</span>
       </div>
 
       <div class="feature">
@@ -626,7 +620,6 @@
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
         <h3>A record you can trust</h3>
         <p>Full undo/redo, non-destructive edits, and a project file that round-trips exactly.</p>
-        <span class="rare">Rare in the field</span>
       </div>
 
       <div class="feature">
@@ -687,7 +680,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data">v1.0.0-rc.3</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data">v1.0.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
