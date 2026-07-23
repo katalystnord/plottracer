@@ -4282,6 +4282,25 @@ export function Workspace() {
     return sampleCurveFitLine(curveFitState).map((p) => xyAxes.dataToPixel(p.x, p.y));
   }, [curveFitState, config, axes]);
 
+  // Geometry canvas overlay (v1.1): draws the derived result ON the figure, like
+  // the fit line. Enclosed-area shaded fill (closed only) + a ring on the point of
+  // max curvature. Pixel-space; the series' own points, in order -- perPoint's
+  // index maps 1:1 to getDataPoints() (same order computeGeometry read them in).
+  const geometryOverlay = useMemo(() => {
+    if (!geometryResult || !geometryState || config.id !== 'xy') return undefined;
+    const pts = session.getDataPoints().map((p) => ({ x: p.px, y: p.py }));
+    if (pts.length < 2) return undefined;
+    // The PATH is what geometry actually measures -- the points connected in
+    // their stored ORDER. Drawing it makes arc length / curvature legible (and
+    // makes it obvious when a scatter isn't in curve order). `closed` shades the
+    // enclosed area; the ring marks the sharpest bend.
+    return {
+      path: pts,
+      closed: geometryState.closed,
+      maxCurvature: pts[geometryResult.maxCurvature.index],
+    };
+  }, [geometryResult, geometryState, config, session]);
+
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
   // the toggle is on. `version` is a dep so dragging a calibration handle (which
   // re-runs calibration) re-projects the box live. Whether these axes CAN
@@ -5939,6 +5958,7 @@ export function Workspace() {
           errorBarGlyphs={errorBarGlyphs.concat(errorWhiskers)}
           curveFitLine={curveFitOverlay}
           onCurveFitClick={curveFitState && (mode === 'pan' || mode === 'select') ? openCurveFitPanel : undefined}
+          geometryOverlay={geometryOverlay}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
@@ -6694,7 +6714,7 @@ export function Workspace() {
                   <br />
                   {geometryResult.areaLabel} = {geometryResult.area.toPrecision(6)}
                   <br />
-                  Max curvature = {geometryResult.maxCurvature.value.toPrecision(6)} at #{geometryResult.maxCurvature.index}
+                  Max curvature = {geometryResult.maxCurvature.value.toPrecision(6)} at point {geometryResult.maxCurvature.index + 1}
                 </div>
                 <button
                   type="button"
@@ -6719,7 +6739,7 @@ export function Workspace() {
                       <tbody>
                         {geometryResult.perPoint.map((p, i) => (
                           <tr key={i}>
-                            <td style={{ paddingRight: 10 }}>{i}</td>
+                            <td style={{ paddingRight: 10 }}>{i + 1}</td>
                             <td style={{ paddingRight: 10 }}>{p.x.toPrecision(5)}</td>
                             <td style={{ paddingRight: 10 }}>{p.y.toPrecision(5)}</td>
                             <td style={{ paddingRight: 10 }}>{p.cumulativeLength.toPrecision(5)}</td>

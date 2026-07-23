@@ -209,6 +209,10 @@ interface ImageCanvasProps {
    * fit / opens Curve Fit to edit it. Only wired in inspect modes where a canvas
    * click isn't already busy placing/measuring, so it never hijacks those. */
   onCurveFitClick?: () => void;
+  /** Geometry overlay (v1.1): the derived result drawn on the figure. `area` (image
+   * pixels) is the closed polygon whose enclosed area was measured -- shaded fill;
+   * `maxCurvature` (image pixels) is ringed. Both listening=false (display only). */
+  geometryOverlay?: { path?: { x: number; y: number }[]; closed?: boolean; maxCurvature?: { x: number; y: number } };
   /** Check Calibration overlay (v0.8): the 4 image-space corners of the
    * calibrated axis box, drawn as a magenta rectangle so a user can see whether
    * it aligns with the plot's real axes. Null when off / not applicable. */
@@ -379,7 +383,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1558,6 +1562,31 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     }
                   />
                 )}
+                {/* Geometry overlay (v1.1): the measured PATH (points connected in
+                    order) so arc length/curvature are legible; shaded fill when
+                    closed; a ring on the max-curvature point. Display-only. */}
+                {geometryOverlay?.path && geometryOverlay.path.length >= 2 && (
+                  <Line
+                    points={geometryOverlay.path.flatMap((p) => {
+                      const s = imageToScreen(view, p.x, p.y);
+                      return [s.x, s.y];
+                    })}
+                    closed={geometryOverlay.closed ?? false}
+                    stroke="#e8912d"
+                    strokeWidth={1.5}
+                    fill={geometryOverlay.closed ? 'rgba(232, 145, 45, 0.15)' : undefined}
+                    listening={false}
+                  />
+                )}
+                {geometryOverlay?.maxCurvature && (() => {
+                  const s = imageToScreen(view, geometryOverlay.maxCurvature.x, geometryOverlay.maxCurvature.y);
+                  return (
+                    <>
+                      <Circle x={s.x} y={s.y} radius={9} stroke="#d8412f" strokeWidth={2.5} listening={false} />
+                      <Circle x={s.x} y={s.y} radius={2} fill="#d8412f" listening={false} />
+                    </>
+                  );
+                })()}
                 {/* Check Calibration (v0.8): the calibrated axis box in magenta.
                     Closed quad; distinct from the green fit line and blue series
                     so it reads as "the calibration's own frame". */}
