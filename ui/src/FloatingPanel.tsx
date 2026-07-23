@@ -115,6 +115,9 @@ export function FloatingPanel({ label, icon, hideLabel, testId, disabled, childr
           pressed={Boolean(anchorEl)}
           disabled={disabled}
           onClick={(e) => setAnchorEl(e.currentTarget)}
+          // A rail fly-out always fronts a card, so it carries the fold-out arrow
+          // (the top-bar variant below shows a chevron instead). v1.1.
+          foldout
         />
       ) : (
         <TriggerButton

@@ -19,7 +19,7 @@ import {
 } from '../../engine/calibrationSession.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
-import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine } from './ImageCanvas.js';
+import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
 import { polylineRuns } from '../../engine/seriesLine.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Popover, Menu, MenuItem, Divider } from '@mui/material';
@@ -47,7 +47,10 @@ import {
   CalibrateIcon,
   DeleteIcon,
   EraseIcon,
-  SelectIcon,
+  SelectBoxIcon,
+  SelectLassoIcon,
+  SelectSeriesIcon,
+  SelectPointIcon,
   AutoTraceIcon,
   UndoIcon,
   RedoIcon,
@@ -156,6 +159,7 @@ import {
 import { runGeometry } from '../../engine/geometryPanel.js';
 import { formatPolynomial, CURVE_FIT_MAX_DEGREE } from '../../algorithms/curveFit.js';
 import type { GeometryResult } from '../../algorithms/geometry.js';
+import { pointInPolygon } from '../../algorithms/geometry.js';
 import { removeGridLinesOp, hexToRGB } from '../../algorithms/gridRemoval.js';
 import type { AnyAxes } from '../../core/plotData.js';
 import {
@@ -357,6 +361,24 @@ type ToolMode = 'pan' | 'calibrate' | 'place-point' | 'select' | 'eraser' | 'seg
 
 /** The three modes fronted by the single Auto-extract rail tool. */
 const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-trace', 'interpolate'];
+
+/** The Select tool's four sub-modes (v1.1 #6, mirroring Ketcher's select
+ * multi-tool). All select DATA points only (never calibration handles) and feed
+ * the same downstream (Del removes, arrows nudge, Esc clears). The rail Select
+ * button shows the active sub-mode's icon; its fold-out card is this list.
+ * 'rectangle' is the default (a click selects the point under the cursor, a drag
+ * boxes -- the 2026-07-21 unified Select), so first-use behaviour is unchanged. */
+const SELECT_MODES: readonly {
+  id: SelectGesture;
+  label: string;
+  hint: string;
+  icon: () => React.JSX.Element;
+}[] = [
+  { id: 'rectangle', label: 'Rectangle', hint: 'Click a point, or drag a box', icon: SelectBoxIcon },
+  { id: 'lasso', label: 'Lasso', hint: 'Drag a freeform loop around points', icon: SelectLassoIcon },
+  { id: 'series', label: 'Whole series', hint: 'Click any point → select the whole series', icon: SelectSeriesIcon },
+  { id: 'point', label: 'Point', hint: 'Click a single point', icon: SelectPointIcon },
+];
 
 /** The colour-match preview overlay's paint colour (checkpoint 121): a bright,
  * semi-transparent magenta that reads clearly over the black/blue/red-on-white of
@@ -813,6 +835,12 @@ export function Workspace() {
   // existing single-select paths stay untouched. Never contains calibration
   // handles -- the Select tool only ever selects data points.
   const [selectedPointIndices, setSelectedPointIndices] = useState<readonly number[]>([]);
+  // The Select tool's active sub-mode (v1.1 #6) + whether its fold-out picker card
+  // is open. Rectangle is the default so first-use behaviour matches the old
+  // unified Select (click a point OR drag a box). Picking a sub-mode folds the
+  // card in and swaps the rail icon (see the Select rail button + card below).
+  const [selectSubMode, setSelectSubMode] = useState<SelectGesture>('rectangle');
+  const [selectFoldoutOpen, setSelectFoldoutOpen] = useState(false);
   // Canvas right-click quick menu (mouse model, David 2026-07-20). Target-sensitive:
   // a data point, a measurement, or empty canvas. `x`/`y` are viewport coordinates
   // for MUI's anchorPosition. Null = closed.
@@ -1947,7 +1975,10 @@ export function Workspace() {
       else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
       else if (e.key === '4' && axes && !session.hasPointGroups()) toggleAutoExtract();
-      else if (e.key === '5' && axes) setMode('select');
+      // Hotkey 5 activates Select with the current sub-mode but does NOT open the
+      // picker (that's the rail button / its arrow); reset so a stale-open card
+      // from an earlier session can't re-appear (v1.1 #6).
+      else if (e.key === '5' && axes) { setMode('select'); setSelectFoldoutOpen(false); }
       else if (e.key === '6' && session.getDatasetInfos().some((d) => d.pointCount > 0)) toggleErrorBars();
       else if (e.key === '7' && figureCaptured) toggleMeasure();
       else if (e.key === '8') (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
@@ -2511,11 +2542,19 @@ export function Workspace() {
         return;
       }
       if (mode === 'select') {
-        // In the Select tool a marker click joins the marquee selection: Shift
-        // toggles one in/out, a plain click makes it the sole selection.
-        setSelectedPointIndices((prev) =>
-          shiftKey ? (prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]) : [idx]
-        );
+        if (selectSubMode === 'series') {
+          // Whole-series pick (v1.1 #6): clicking any point selects EVERY point of
+          // the active series for a bulk Del / nudge. Shift adds the series to the
+          // set rather than replacing it.
+          const all = session.getDataPoints().map((_, i) => i);
+          setSelectedPointIndices((prev) => (shiftKey ? Array.from(new Set([...prev, ...all])) : all));
+        } else {
+          // Rectangle / Point / Lasso: a marker click joins the selection -- Shift
+          // toggles one in/out, a plain click makes it the sole selection.
+          setSelectedPointIndices((prev) =>
+            shiftKey ? (prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]) : [idx]
+          );
+        }
         setActivePointIndex(null);
         setActiveHandleKey(null);
         return;
@@ -2528,7 +2567,7 @@ export function Workspace() {
       setActiveHandleKey(id);
       setActivePointIndex(null);
     }
-  }, [mode, removeDataPointByIndex]);
+  }, [mode, removeDataPointByIndex, selectSubMode, session]);
 
   // The Select tool's marquee (David 2026-07-21): every active-series DATA point
   // whose pixel falls inside the dragged box becomes selected. Only data points --
@@ -2543,6 +2582,22 @@ export function Workspace() {
       const inside: number[] = [];
       session.getDataPoints().forEach((p, i) => {
         if (p.px >= x0 && p.px <= x1 && p.py >= y0 && p.py <= y1) inside.push(i);
+      });
+      setSelectedPointIndices(inside);
+      setActivePointIndex(null);
+    },
+    [session]
+  );
+
+  // The Select tool's LASSO (v1.1 #6): every active-series DATA point inside the
+  // freeform loop becomes selected. Same discipline as the marquee -- data points
+  // only, calibration handles are not in getDataPoints() so the loop can't grab
+  // them. The polygon arrives in image-pixel space (algorithms/geometry).
+  const handleSelectLasso = useCallback(
+    (polygon: { x: number; y: number }[]) => {
+      const inside: number[] = [];
+      session.getDataPoints().forEach((p, i) => {
+        if (pointInPolygon({ x: p.px, y: p.py }, polygon)) inside.push(i);
       });
       setSelectedPointIndices(inside);
       setActivePointIndex(null);
@@ -5367,6 +5422,7 @@ export function Workspace() {
             disabled={!canvasHasImage}
             disabledReason="Open an image first"
             onClick={toggleImageEdit}
+            foldout
           />
           </RailGroup>
           {/* Get data points onto the plot, then refine them: Add + Auto-extract
@@ -5392,17 +5448,40 @@ export function Workspace() {
             disabled={!axes || hasPointGroups}
             disabledReason={!axes ? 'Calibrate the axes first' : 'Not available for this graph type'}
             onClick={toggleAutoExtract}
+            foldout
           />
-          <IconButton
-            testId="mode-select"
-            icon={<SelectIcon />}
-            label="Select points — click, or drag a box; Del removes, arrows nudge"
-            shortcut="5"
-            pressed={mode === 'select'}
-            disabled={!axes}
-            disabledReason="Calibrate the axes first"
-            onClick={() => setMode('select')}
-          />
+          {/* Select multi-tool (v1.1 #6, Ketcher): the rail face shows the active
+              sub-mode's icon; clicking enters Select and opens the picker (a
+              second click toggles it). Picking a mode in the card folds it in and
+              swaps this icon. */}
+          {(() => {
+            const active = SELECT_MODES.find((m) => m.id === selectSubMode) ?? SELECT_MODES[0]!;
+            const ActiveIcon = active.icon;
+            return (
+              <IconButton
+                testId="mode-select"
+                icon={<ActiveIcon />}
+                label={`Select — ${active.label}: ${active.hint}. Click for more modes; Del removes, arrows nudge.`}
+                shortcut="5"
+                pressed={mode === 'select'}
+                disabled={!axes}
+                disabledReason="Calibrate the axes first"
+                foldout
+                onClick={() => {
+                  // Ketcher's two-stage face: a first click ACTIVATES the current
+                  // sub-mode (no card, so you can box-drag straight away); clicking
+                  // the button again while already in Select opens the picker to
+                  // switch modes. The corner arrow advertises that second step.
+                  if (mode !== 'select') {
+                    setMode('select');
+                    setSelectFoldoutOpen(false);
+                  } else {
+                    setSelectFoldoutOpen((open) => !open);
+                  }
+                }}
+              />
+            );
+          })()}
           {/* Error bars are a PROPERTY of a point (ckpt 79, David) -- greyed
               until a series has data to attach to. */}
           <IconButton
@@ -5414,6 +5493,7 @@ export function Workspace() {
             disabled={!datasetInfos.some((d) => d.pointCount > 0)}
             disabledReason="Add data points first"
             onClick={toggleErrorBars}
+            foldout
           />
           {/* Eraser (David 2026-07-22): a discoverable click-to-remove-a-point
               tool. UNNUMBERED -- it's destructive and Del already removes the
@@ -5440,11 +5520,64 @@ export function Workspace() {
             disabled={!figureCaptured}
             disabledReason={canvasHasImage ? 'Capture the figure first' : 'Open an image first'}
             onClick={toggleMeasure}
+            foldout
           />
           {curveFitFlyout}
           {geometryFlyout}
           </RailGroup>
           </div>
+          {/* Select fold-out picker (v1.1 #6, Ketcher): a COMPACT horizontal strip
+              of the four sub-modes -- icon-only with a tooltip each (David: match
+              Ketcher's strip, not a big labelled card). Picking one folds the strip
+              in and swaps the rail icon. Opened by clicking the already-active
+              Select button (its corner arrow advertises this). */}
+          {mode === 'select' && selectFoldoutOpen && (
+            <div
+              data-testid="select-foldout-card"
+              style={{
+                ...glassSurface,
+                border: `1px solid ${theme.color.border.regular}`,
+                borderRadius: 8,
+                boxShadow: '0 2px 8px rgba(103, 104, 132, 0.22)',
+                padding: 4,
+                display: 'flex',
+                flexDirection: 'row',
+                gap: 4,
+                pointerEvents: 'auto',
+              }}
+            >
+              {SELECT_MODES.map(({ id, label, hint, icon: ModeIcon }) => {
+                const on = selectSubMode === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    data-testid={`select-mode-${id}`}
+                    aria-pressed={on}
+                    title={`${label} — ${hint}`}
+                    onClick={() => {
+                      setSelectSubMode(id);
+                      setSelectFoldoutOpen(false);
+                    }}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: theme.border.radius.regular,
+                      cursor: 'pointer',
+                      border: `1px solid ${on ? theme.color.primary.main : theme.color.border.regular}`,
+                      background: on ? theme.color.primary.clicked : theme.color.background.primary,
+                      color: on ? theme.color.background.primary : theme.color.icon.active,
+                    }}
+                  >
+                    <ModeIcon />
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* Auto-extract umbrella card (v0.8, David) -- one wand tool fronting
               the three tracing mechanisms. The selector switches MODE (each keeps
               its own canvas behaviour) and shows that mechanism's controls, which
@@ -5751,13 +5884,14 @@ export function Workspace() {
             setSelectingRegion(false);
           }}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
-          selectMode={mode === 'select'}
+          selectMode={mode === 'select' ? selectSubMode : null}
           onSelectRect={(r) => {
             // A tiny drag is a click, not a marquee -- handleImageClick already
             // cleared the selection for that, so ignore a zero-area box here.
             if (r.width < 3 && r.height < 3) return;
             handleSelectRect(r);
           }}
+          onSelectLasso={handleSelectLasso}
           previewRotationDeg={previewAngle}
           onStatusChange={handleCanvasStatus}
           beforeOpenImage={confirmDiscardIfDirty}

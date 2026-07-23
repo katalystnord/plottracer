@@ -1,5 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { computeGeometry } from '../geometry.js';
+import { computeGeometry, pointInPolygon } from '../geometry.js';
+
+describe('pointInPolygon (lasso select, v1.1 #6)', () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+  it('is true for a point inside and false for one outside', () => {
+    expect(pointInPolygon({ x: 5, y: 5 }, square)).toBe(true);
+    expect(pointInPolygon({ x: 15, y: 5 }, square)).toBe(false);
+    expect(pointInPolygon({ x: -1, y: 5 }, square)).toBe(false);
+  });
+  it('treats the ring as implicitly closed (first point not repeated)', () => {
+    expect(pointInPolygon({ x: 1, y: 9 }, square)).toBe(true);
+  });
+  it('handles a concave (non-convex) lasso loop', () => {
+    // An arrow/chevron notch: the concavity at x~5 excludes points in the dent.
+    const chevron = [
+      { x: 0, y: 0 },
+      { x: 5, y: 4 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ];
+    expect(pointInPolygon({ x: 5, y: 2 }, chevron)).toBe(false); // in the notch
+    expect(pointInPolygon({ x: 5, y: 7 }, chevron)).toBe(true); // in the body
+  });
+  it('a degenerate ring (< 3 vertices) contains nothing', () => {
+    expect(pointInPolygon({ x: 0, y: 0 }, [{ x: 0, y: 0 }, { x: 1, y: 1 }])).toBe(false);
+  });
+});
 
 describe('geometry', () => {
   it('computes exact arc length and area for a 2-point straight line (3-4-5 triangle)', () => {

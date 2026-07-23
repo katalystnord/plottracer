@@ -92,6 +92,16 @@ import autoTraceSvg from '../../icons/custom/auto-trace.svg?raw';
 // standard mouse-pointer arrow (David): the universal "select/edit" symbol. Clicks
 // or box-drags to select DATA points (never calibration handles) for nudge/delete.
 import selectSvg from '../../icons/custom/select.svg?raw';
+// The four Select sub-modes (v1.1 #6, Ketcher's select multi-tool). The rail
+// Select button renders whichever one is the active sub-mode. Hybrid set (David):
+// Rectangle + Lasso are Ketcher's own glyphs (icons/, Apache-2.0, attributed in
+// icons/NOTICE like the rest of the Ketcher-derived set); Whole-series and Point
+// are our clean-room originals (custom/) -- Ketcher's structure/fragment glyphs
+// are molecule-specific and don't map to a data series or a single datum.
+import selectBoxSvg from '../../icons/select-rectangle.svg?raw';
+import selectLassoSvg from '../../icons/select-lasso.svg?raw';
+import selectSeriesSvg from '../../icons/custom/select-series.svg?raw';
+import selectPointSvg from '../../icons/custom/select-point.svg?raw';
 
 function Icon({ svg }: { svg: string }) {
   return <span aria-hidden="true" style={{ display: 'inline-flex' }} dangerouslySetInnerHTML={{ __html: svg }} />;
@@ -127,3 +137,7 @@ export const InterpolateIcon = () => <Icon svg={interpolateSvg} />;
 export const CameraIcon = () => <Icon svg={cameraSvg} />;
 export const AutoTraceIcon = () => <Icon svg={autoTraceSvg} />;
 export const SelectIcon = () => <Icon svg={selectSvg} />;
+export const SelectBoxIcon = () => <Icon svg={selectBoxSvg} />;
+export const SelectLassoIcon = () => <Icon svg={selectLassoSvg} />;
+export const SelectSeriesIcon = () => <Icon svg={selectSeriesSvg} />;
+export const SelectPointIcon = () => <Icon svg={selectPointSvg} />;

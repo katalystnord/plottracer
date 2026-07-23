@@ -40,6 +40,11 @@ export interface IconButtonProps {
    * B3); this is surfaced via the wrapping span below. Falls back to the plain
    * label+shortcut when omitted. */
   disabledReason?: string;
+  /** Marks this button as one that FOLDS OUT a card / options (v1.1, Ketcher's
+   * design language): draws a small arrow in the lower-right corner as the
+   * always-visible "there's more here" affordance. Because the arrow lives where
+   * the shortcut badge used to, the badge moved to the upper-left corner. */
+  foldout?: boolean;
 }
 
 // `shouldForwardProp` keeps `pressed` out of the DOM -- it's not a real
@@ -76,14 +81,40 @@ const StyledButton = styled('button', {
   },
 }));
 
+// The digit-hotkey badge, in the UPPER-LEFT (v1.1) to clear the lower-right corner
+// for the fold-out arrow (Ketcher's rail puts its "opens options" triangle there,
+// and the two would otherwise overlap). Tucked up into the corner with an equal
+// VISIBLE inset from the top and left: top:1 vs left:2 cancels the ~1px of empty
+// leading above the digit's cap inside its text box.
 const ShortcutBadge = styled('span')({
   position: 'absolute',
-  bottom: 1,
-  right: 3,
+  top: 2,
+  left: 3,
   fontSize: 9,
   lineHeight: 1,
   opacity: 0.75,
   pointerEvents: 'none',
+});
+
+// The fold-out affordance (v1.1): a small arrow tucked into the lower-right
+// corner, marking a button whose click opens a card / options portal -- the same
+// signal Ketcher's rail uses for its multi-tools. Purely decorative (the button
+// itself carries the click); pointer-events off so it never eats the press.
+// The 24x24 icon sits centred in the 36x36 button, so its lower-right corner is
+// ~6px in from the button edge. Anchor the arrow just inside THERE (not the button
+// corner) so it reads as part of the icon. display:flex + lineHeight:0 kill the
+// inline-SVG baseline gap that otherwise pushed the glyph up and made the bottom
+// inset look larger than the right one; equal right/bottom offsets then read even.
+const FoldoutArrow = styled('span')({
+  position: 'absolute',
+  right: 3,
+  bottom: 3,
+  width: 8,
+  height: 8,
+  display: 'flex',
+  lineHeight: 0,
+  pointerEvents: 'none',
+  opacity: 0.85,
 });
 
 export function IconButton({
@@ -95,6 +126,7 @@ export function IconButton({
   disabledReason,
   onClick,
   testId,
+  foldout,
 }: IconButtonProps) {
   const enabledTitle = shortcut ? `${label} (${shortcut})` : label;
   // When disabled, prefer the "why" hint; fall back to the plain label.
@@ -115,6 +147,15 @@ export function IconButton({
     >
       {icon}
       {shortcut && <ShortcutBadge>{shortcut}</ShortcutBadge>}
+      {foldout && (
+        // A rounded right-triangle filling the corner (Ketcher's `dropdown`
+        // glyph), pointing into the button's lower-right -- "click to fold out".
+        <FoldoutArrow data-testid="foldout-arrow" aria-hidden>
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" style={{ display: 'block' }}>
+            <path d="M8 0 V8 H0 A8 8 0 0 0 8 0 Z" />
+          </svg>
+        </FoldoutArrow>
+      )}
     </StyledButton>
   );
   if (!disabled) return button;

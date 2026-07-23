@@ -162,3 +162,26 @@ export function computeGeometry(points: Point2D[], closed: boolean): GeometryRes
     maxCurvature,
   };
 }
+
+/**
+ * Is `pt` inside the polygon `polygon` (an ordered ring of vertices)? Standard
+ * even-odd ray cast: count how many polygon edges a rightward ray from `pt`
+ * crosses; an odd count means inside. Used by the Select tool's LASSO (v1.1 #6)
+ * to test each data point against the freeform loop the user drew. The ring is
+ * treated as implicitly closed (last vertex back to first), so the caller need
+ * not repeat the first point. A degenerate ring (< 3 vertices) contains nothing.
+ */
+export function pointInPolygon(pt: Point2D, polygon: readonly Point2D[]): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const a = polygon[i]!;
+    const b = polygon[j]!;
+    const straddles = a.y > pt.y !== b.y > pt.y;
+    if (straddles && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}

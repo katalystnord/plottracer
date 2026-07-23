@@ -4186,6 +4186,64 @@ describe('Workspace: Select tool (marquee range-select + bulk delete)', () => {
     await page.waitForTimeout(50);
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(4);
   });
+
+  // v1.1 #6: the Select tool became a Ketcher-style multi-tool -- a first click
+  // activates the current sub-mode, a second opens the fold-out picker, and
+  // picking a mode folds it in + makes it active. These behaviours are
+  // placement-independent (they don't depend on where the fold-out sits).
+  async function lasso(loop: [number, number][]) {
+    await page.mouse.move(canvasBox.x + loop[0]![0], canvasBox.y + loop[0]![1]);
+    await page.mouse.down();
+    for (const [x, y] of loop.slice(1)) await page.mouse.move(canvasBox.x + x, canvasBox.y + y, { steps: 3 });
+    await page.mouse.up();
+    await page.waitForTimeout(50);
+  }
+
+  it('first click activates; a second opens the fold-out; picking a mode folds in + sticks', async () => {
+    await placeFourPoints();
+    const selectBtn = page.getByTestId('mode-select');
+
+    await selectBtn.click(); // first click: activate the current sub-mode, NO card
+    expect(await selectBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('select-foldout-card').count()).toBe(0);
+
+    await selectBtn.click(); // second click (already active): open the picker
+    expect(await page.getByTestId('select-foldout-card').isVisible()).toBe(true);
+
+    await page.getByTestId('select-mode-lasso').click(); // pick -> folds in
+    expect(await page.getByTestId('select-foldout-card').count()).toBe(0);
+
+    // Reopening shows Lasso as the active (pressed) mode -> the swap stuck.
+    await selectBtn.click();
+    expect(await page.getByTestId('select-mode-lasso').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the Select rail button carries a fold-out arrow', async () => {
+    await placeFourPoints();
+    expect(await page.getByTestId('mode-select').getByTestId('foldout-arrow').count()).toBe(1);
+  });
+
+  it('lasso sub-mode selects the points inside a freeform loop', async () => {
+    await placeFourPoints();
+    await page.getByTestId('mode-select').click(); // activate
+    await page.getByTestId('mode-select').click(); // open picker
+    await page.getByTestId('select-mode-lasso').click(); // pick lasso, folds in
+    expect(await page.getByTestId('select-foldout-card').count()).toBe(0);
+
+    // A loop around the two top-left points (200,200)+(250,180) only.
+    await lasso([[170, 150], [285, 150], [285, 235], [170, 235], [170, 150]]);
+    expect(await textOf('tips-bar')).toMatch(/2 points selected/);
+  });
+
+  it('whole-series sub-mode selects every point of the series on one click', async () => {
+    await placeFourPoints();
+    await page.getByTestId('mode-select').click();
+    await page.getByTestId('mode-select').click();
+    await page.getByTestId('select-mode-series').click();
+
+    await clickAt(200, 200); // click ONE point -> the whole series
+    expect(await textOf('tips-bar')).toMatch(/4 points selected/);
+  });
 });
 
 describe('Workspace: resizable sidebar (checkpoint 60)', () => {

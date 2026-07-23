@@ -176,6 +176,11 @@ export interface MeasureOverlay {
   color?: string;
 }
 
+/** The Select tool's four sub-modes (v1.1 #6, mirroring Ketcher's select
+ * multi-tool). 'rectangle' and 'lasso' bear a background gesture; 'point' and
+ * 'series' are click-only (a marker click selects one point / the whole series). */
+export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
+
 interface ImageCanvasProps {
   /** Markers to overlay, in image-pixel space (not screen space). */
   points?: CanvasMarker[];
@@ -252,12 +257,19 @@ interface ImageCanvasProps {
   regionMode?: boolean;
   onRegionRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   regionRect?: { x: number; y: number; width: number; height: number } | null;
-  /** Select tool marquee (David 2026-07-21): when true, a background drag draws a
-   * selection rectangle reported (image-pixel space) via onSelectRect -- the same
-   * gesture as crop/region. A click on a data marker still fires onMarkerClick
-   * (single-select); this is only the empty-canvas box-drag. */
-  selectMode?: boolean;
+  /** Select tool sub-mode (v1.1 #6, Ketcher's select multi-tool), or null when the
+   * Select tool isn't active. Only the gesture-bearing sub-modes touch the canvas
+   * background here: 'rectangle' drags a marquee box (-> onSelectRect), 'lasso'
+   * traces a freeform loop (-> onSelectLasso). 'point'/'series' are click-only --
+   * a data-marker click fires onMarkerClick and the caller decides single vs whole
+   * series -- so a background press in those does nothing (no box, no pan).
+   * (The 2026-07-21 marquee was the sole boolean predecessor of this.) */
+  selectMode?: SelectGesture | null;
   onSelectRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  /** Lasso finished: the freeform loop the user drew, in image-pixel space (an
+   * open ring -- the first point is not repeated). The caller tests each data
+   * point against it (algorithms/geometry pointInPolygon). */
+  onSelectLasso?: (polygon: { x: number; y: number }[]) => void;
   /** Error-bar capture (checkpoint 79): when set, a background press near a datum
    * starts a *link* drag instead of a pan -- the gesture that records a cap.
    *
@@ -363,7 +375,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -403,6 +415,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // the live current point for drawing the selection rectangle.
   const cropDragRef = useRef<{ x: number; y: number } | null>(null);
   const [cropCurrent, setCropCurrent] = useState<{ x: number; y: number } | null>(null);
+  // Select-tool LASSO drag (v1.1 #6): the freeform path of canvas-relative screen
+  // points being traced. The ref is the synchronous accumulator; the state drives
+  // the live dashed outline. Both null when no lasso is in flight.
+  const lassoRef = useRef<{ x: number; y: number }[] | null>(null);
+  const [lassoCurrent, setLassoCurrent] = useState<{ x: number; y: number }[] | null>(null);
   /** The datum an error-bar link drag is anchored on (image-pixel space), or
    * null when no such drag is in flight (checkpoint 79). */
   const linkDragRef = useRef<{ x: number; y: number } | null>(null);
@@ -939,7 +956,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // bubbles up here too, but should drive that shape's own Konva drag
       // instead of starting a background pan.
       if (e.target !== e.target.getStage()) return;
-      if ((cropMode || regionMode || selectMode) && canvas) {
+      if (selectMode === 'lasso' && canvas) {
+        // Start tracing a freeform lasso loop (v1.1 #6) instead of a pan. Like the
+        // marquee it only ever starts on empty canvas (a marker press returned
+        // above and single-selects); endDrag reports the enclosed points.
+        const rect = canvas.getBoundingClientRect();
+        const p = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
+        lassoRef.current = [p];
+        setLassoCurrent([p]);
+        return;
+      }
+      if ((cropMode || regionMode || selectMode === 'rectangle') && canvas) {
         // Start a rectangle drag instead of a pan: a crop selection (checkpoint 63),
         // an auto-extract region (B1), or the Select tool's marquee. Same gesture;
         // endDrag routes by mode. (A press ON a marker returned above, so the
@@ -974,6 +1001,14 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         return;
       }
 
+      if (lassoRef.current && canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const next = [...lassoRef.current, { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top }];
+        lassoRef.current = next;
+        setLassoCurrent(next);
+        return;
+      }
+
       if (linkDragRef.current && canvas) {
         const rect = canvas.getBoundingClientRect();
         const img = screenToImage(view, e.evt.clientX - rect.left, e.evt.clientY - rect.top);
@@ -993,6 +1028,19 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
 
   const endDrag = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      // Finalize a lasso (v1.1 #6): hand the traced loop to the caller in image-
+      // pixel space. A too-short trace (a stray click) selects nothing.
+      if (lassoRef.current) {
+        const pts = lassoRef.current;
+        lassoRef.current = null;
+        setLassoCurrent(null);
+        const canvas = canvasRef.current;
+        if (canvas && onSelectLasso && pts.length >= 3) {
+          onSelectLasso(pts.map((p) => screenToImage(view, p.x, p.y)));
+        }
+        return;
+      }
+
       // Finalize a crop selection (checkpoint 63): report the dragged rectangle
       // in image-pixel space; the card confirms Apply/Cancel.
       if (cropDragRef.current) {
@@ -1001,7 +1049,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         const canvas = canvasRef.current;
         // Route the finished rectangle by mode: select marquee, region-restrict
         // (B1), or crop.
-        const report = selectMode ? onSelectRect : regionMode ? onRegionRect : onCropRect;
+        const report = selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
         if (canvas && report) {
           const rect = canvas.getBoundingClientRect();
           const endP = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
@@ -1061,7 +1109,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       const imagePoint = screenToImage(view, screenX, screenY);
       onImageClick(imagePoint.x, imagePoint.y);
     },
-    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, selectMode, onSelectRect]
+    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, selectMode, onSelectRect, onSelectLasso]
   );
 
   const cancelDrag = useCallback(() => {
@@ -1569,6 +1617,20 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     </Fragment>
                   );
                 })}
+                {/* Select-tool lasso (v1.1 #6): the freeform loop being traced,
+                    drawn closed + dashed like the marquee rect. Screen-space
+                    already, so no view transform. */}
+                {lassoCurrent && lassoCurrent.length > 1 && (
+                  <Line
+                    points={lassoCurrent.flatMap((p) => [p.x, p.y])}
+                    closed
+                    stroke={theme.color.primary.main}
+                    strokeWidth={1.5}
+                    dash={[6, 4]}
+                    fill="rgba(22, 119, 130, 0.12)"
+                    listening={false}
+                  />
+                )}
                 {/* Crop selection (checkpoint 63): the live drag rect, or the
                     confirmed pending rect converted from image-pixel space. */}
                 {cropDragRef.current && cropCurrent ? (
