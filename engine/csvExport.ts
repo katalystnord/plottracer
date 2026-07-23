@@ -20,6 +20,7 @@
 
 import type { TupleRow } from './calibrationSession.js';
 import type { HistogramBin } from '../algorithms/histogram.js';
+import type { GeometryResult } from '../algorithms/geometry.js';
 import { errorAbove, errorBelow, type ErrorBarPoint } from '../algorithms/errorBar.js';
 import type { ErrorRelation } from './errorRelation.js';
 import { type ExportValue } from '../core/exportValues.js';
@@ -269,6 +270,9 @@ export interface SeriesForCSV {
    * from `points` -- its own JSON key / its own CSV block -- so the derived fit
    * never contaminates the record (David; tenet 9). */
   fit?: CurveFitExport;
+  /** Geometry statistics over this series (v1.1), if computed. Same rule as the
+   * fit: a SEPARATE derived block, never mixed into the record (tenet 9). */
+  geometry?: GeometryResult;
 }
 
 /** A curve fit as it leaves the app (v0.8): the model (equation + coefficients),
@@ -376,6 +380,18 @@ export function buildSeriesJSON(
           samples: s.fit.samples.map((p) => ({ x: p.x, y: p.y })),
         };
       }
+      // Geometry -- another SEPARATE derived key (v1.1): the summary stats plus
+      // the per-point cumulative-length / curvature series, never mixed into
+      // `points`. Point index is 1-based to match the on-canvas labels.
+      if (s.geometry) {
+        entry.geometry = {
+          arcLength: s.geometry.arcLength,
+          area: s.geometry.area,
+          areaLabel: s.geometry.areaLabel,
+          maxCurvature: { value: s.geometry.maxCurvature.value, point: s.geometry.maxCurvature.index + 1 },
+          perPoint: s.geometry.perPoint.map((p, i) => ({ point: i + 1, x: p.x, y: p.y, cumulativeLength: p.cumulativeLength, curvature: p.curvature })),
+        };
+      }
       return entry;
     }),
   };
@@ -406,6 +422,37 @@ export function fittedCurveSection(fit: CurveFitExport, valueLabels: readonly st
     title: `Fitted curve — ${fit.series}`,
     header: [xl, yl],
     rows: fit.samples.map((p) => [p.x, p.y]),
+  };
+}
+
+/** One "Geometry" block summarising every series with geometry (v1.1): arc
+ * length, area (its own label -- enclosed vs under-curve), and the max-curvature
+ * value + its 1-based point. Titled + separate from the record (tenet 9). */
+export function geometrySummarySection(geometries: readonly { series: string; result: GeometryResult }[]): TableSection {
+  return {
+    title: 'Geometry',
+    header: ['series', 'arc_length', 'area', 'area_kind', 'max_curvature', 'max_curvature_point'],
+    rows: geometries.map((g) => [
+      g.series,
+      g.result.arcLength,
+      g.result.area,
+      g.result.areaLabel,
+      g.result.maxCurvature.value,
+      g.result.maxCurvature.index + 1,
+    ]),
+  };
+}
+
+/** The per-point geometry series for ONE series as its own titled block (v1.1):
+ * cumulative length + curvature at each point, in curve order, 1-based to match
+ * the on-canvas labels. `valueLabels` names the x/y columns (the axes' labels). */
+export function geometryTableSection(series: string, result: GeometryResult, valueLabels: readonly string[] = ['x', 'y']): TableSection {
+  const xl = valueLabels[0] ?? 'x';
+  const yl = valueLabels[1] ?? 'y';
+  return {
+    title: `Geometry per-point — ${series}`,
+    header: ['point', xl, yl, 'cumulative_length', 'curvature'],
+    rows: result.perPoint.map((p, i) => [i + 1, p.x, p.y, p.cumulativeLength, p.curvature]),
   };
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildFlatDataCSV, buildTupleDataCSV, buildMeasurementsCSV, buildAllSeriesCSV, buildSeriesJSON, curveFitSummarySection, fittedCurveSection, type ExportRow, type CurveFitExport } from '../csvExport.js';
+import { buildFlatDataCSV, buildTupleDataCSV, buildMeasurementsCSV, buildAllSeriesCSV, buildSeriesJSON, curveFitSummarySection, fittedCurveSection, geometrySummarySection, geometryTableSection, type ExportRow, type CurveFitExport } from '../csvExport.js';
+import type { GeometryResult } from '../../algorithms/geometry.js';
 import { renderTable } from '../tableFormats.js';
 import type { TupleRow } from '../calibrationSession.js';
 import { FULL_PRECISION_ROUNDER } from '../../core/exportPrecision.js';
@@ -244,5 +245,35 @@ describe('curve fit export (v0.8)', () => {
     // Three blocks, blank-line separated; a reader can lift just the data.
     expect(doc.split('\n\n')).toHaveLength(3);
     expect(doc.split('\n\n')[0]).toBe('x_px,y_px,X,Y\n0,0,0,1');
+  });
+
+  const geom: GeometryResult = {
+    arcLength: 5,
+    area: 6,
+    areaLabel: 'Area under curve',
+    maxCurvature: { value: 1.5, index: 1 },
+    perPoint: [
+      { x: 0, y: 0, cumulativeLength: 0, curvature: 0 },
+      { x: 3, y: 4, cumulativeLength: 5, curvature: 1.5 },
+    ],
+  };
+
+  it('the Geometry summary section lists the stats with a 1-based max-curvature point', () => {
+    const csv = renderTable([geometrySummarySection([{ series: 'S', result: geom }])], 'csv');
+    expect(csv).toBe('Geometry\nseries,arc_length,area,area_kind,max_curvature,max_curvature_point\nS,5,6,Area under curve,1.5,2');
+  });
+
+  it('the Geometry per-point section is its own titled 1-based block', () => {
+    const csv = renderTable([geometryTableSection('S', geom, ['X', 'Y'])], 'csv');
+    expect(csv).toBe('Geometry per-point — S\npoint,X,Y,cumulative_length,curvature\n1,0,0,0,0\n2,3,4,5,1.5');
+  });
+
+  it('buildSeriesJSON emits geometry as its own key (1-based), omitted when absent', () => {
+    const withGeom = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([1, 2])], geometry: geom }], ['X', 'Y']));
+    expect(withGeom.series[0].geometry.arcLength).toBe(5);
+    expect(withGeom.series[0].geometry.maxCurvature.point).toBe(2);
+    expect(withGeom.series[0].geometry.perPoint[0].point).toBe(1);
+    const without = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([1, 2])] }], ['X', 'Y']));
+    expect(without.series[0]).not.toHaveProperty('geometry');
   });
 });

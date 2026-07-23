@@ -140,6 +140,8 @@ import {
   measurementsSection,
   curveFitSummarySection,
   fittedCurveSection,
+  geometrySummarySection,
+  geometryTableSection,
   type SeriesForCSV,
   type CurveFitExport,
 } from '../../engine/csvExport.js';
@@ -3662,6 +3664,17 @@ export function Workspace() {
         };
       };
 
+      // Geometry for a series (v1.1), if it's ON and can compute -- a derived
+      // block exported separately from the record, like the fit.
+      const geometryFor = (index: number) => {
+        const ds = session.getDatasets()[index];
+        if (!ds || config.id !== 'xy' || !exportAxes) return null;
+        if (!getGeometryState(ds)) return null;
+        const gs = getGeometryState(ds)!;
+        const r = runGeometry(ds, exportAxes as unknown as AnyAxes, gs.closed);
+        return 'geometry' in r ? r.geometry : null;
+      };
+
       let content: string;
       let ext: string;
       if (format === 'json') {
@@ -3671,6 +3684,7 @@ export function Workspace() {
         const all: SeriesForCSV[] = infos.map((info) => {
           const rel = session.getErrorRelation(info.index);
           const fit = fitFor(info.index, info.name);
+          const geom = geometryFor(info.index);
           return {
             name: info.name,
             rows: seriesRows(info.index),
@@ -3678,6 +3692,7 @@ export function Workspace() {
             // (checkpoint 77) -- which is what it is. Omitted for everything else.
             ...(rel ? { relation: rel } : {}),
             ...(fit ? { fit } : {}),
+            ...(geom ? { geometry: geom } : {}),
           };
         });
         const scoped = exportScope === 'all' ? all : [all[activeIndex]!];
@@ -3712,6 +3727,7 @@ export function Workspace() {
         // worksheet (engine/xlsxExport.ts).
         const sections: TableSection[] = [];
         const fits: CurveFitExport[] = [];
+        const geometries: { series: string; result: ReturnType<typeof geometryFor> }[] = [];
         // Histogram exports bins; Box Plot its tuple table; otherwise every
         // series side by side (all) or the active one's flat rows (active).
         if (session.getConfig().id === 'errorbar') {
@@ -3729,12 +3745,16 @@ export function Workspace() {
           for (const info of session.getDatasetInfos()) {
             const f = fitFor(info.index, info.name);
             if (f) fits.push(f);
+            const g = geometryFor(info.index);
+            if (g) geometries.push({ series: info.name, result: g });
           }
         } else {
           const info = session.getDatasetInfos().find((i) => i.index === activeIndex);
           sections.push(flatDataSection(seriesRows(activeIndex), exportFields));
           const f = fitFor(activeIndex, info?.name ?? 'Series');
           if (f) fits.push(f);
+          const g = geometryFor(activeIndex);
+          if (g) geometries.push({ series: info?.name ?? 'Series', result: g });
         }
         if (measures.length > 0) sections.push(measurementsSection(measures));
         // Curve fits as their own SEPARATE blocks (David): a summary of every
@@ -3742,6 +3762,13 @@ export function Workspace() {
         if (fits.length > 0) {
           sections.push(curveFitSummarySection(fits));
           for (const f of fits) sections.push(fittedCurveSection(f, exportFields));
+        }
+        // Geometry the same way (v1.1): a summary block, then each series'
+        // per-point cumulative-length / curvature table -- both derived, separate.
+        const geoms = geometries.filter((g): g is { series: string; result: NonNullable<typeof g.result> } => g.result != null);
+        if (geoms.length > 0) {
+          sections.push(geometrySummarySection(geoms));
+          for (const g of geoms) sections.push(geometryTableSection(g.series, g.result, exportFields));
         }
         // XLSX is a binary workbook: build the bytes and save through the same
         // base64 IPC path the .zip project save uses (checkpoint 93), then done.
@@ -3793,7 +3820,7 @@ export function Workspace() {
     // `axes` is a real dependency since ckpt 82: a slope's value is derived
     // from it at export time rather than read off a frozen string, so an export
     // captured with a stale axes would write stale numbers.
-    [session, markClean, exportScope, exportFullPrecision, axes, exportBaseName]
+    [session, markClean, exportScope, exportFullPrecision, axes, exportBaseName, config]
   );
 
   // Checkpoint 93: save a PNG snapshot of the figure with the digitization
