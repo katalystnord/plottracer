@@ -2388,9 +2388,13 @@ export function Workspace() {
             })
         );
       closePdf();
-      resetDocument(ex.axesConfigId, dataURL); // fresh session (swapSession updates sessionRef)
+      resetDocument(ex.axesConfigId, dataURL); // fresh session (swapSession updates sessionRef); sets figureCaptured=false
       sessionRef.current.adoptCalibration(calibrationInputsFromAnchors(ex.truth.calibration));
       imageCanvasRef.current?.loadImageFromSrc(dataURL, ex.name);
+      // The example IS the whole figure-of-record: capture it (a no-op crop) so the
+      // player can place points -- without this, capture stays pending and every
+      // click is blocked ("Frame the whole figure... press Capture").
+      setFigureCaptured(true);
       setMode('place-point');
       setRoundStartMs(Date.now());
       setElapsedMs(0);

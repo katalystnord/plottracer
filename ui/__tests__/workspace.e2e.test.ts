@@ -5674,8 +5674,13 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
       if (r === 0) {
         // Pre-calibration proof (family-agnostic): the round is already calibrated
         // -- the player never saw a calibration step -- so the status reads
-        // "Calibrated" and points are placed straight away.
+        // "Calibrated".
         expect(await textOf('calib-status')).toMatch(/^Calibrated/);
+        // Regression guard: the figure must be CAPTURED so clicks actually place
+        // points. This silently placed nothing (capture stayed pending, every
+        // click blocked) until the round setup captured the figure -- the game
+        // was unplayable while the e2e still "passed" scoring empty extractions.
+        expect(await page.locator('[data-testid^="point-row-"]').count()).toBeGreaterThan(0);
       }
 
       await page.getByTestId('challenge-done').click();
