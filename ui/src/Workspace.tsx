@@ -1114,9 +1114,10 @@ export function Workspace() {
   const [colorTraceMinBlob, setColorTraceMinBlob] = useState(3);
   // B1 — an optional plot-box rectangle (image-pixel space) the trace is limited
   // to, so a legend swatch / axis label of the same colour outside it is ignored.
-  // `selectingRegion` arms the drag that draws it (mirrors the crop arm).
+  // Drawn by a DIRECT marquee drag on the image (v1.2): no arm-first toggle -- the
+  // drag is live whenever By-colour is active (bar the eyedropper), unifying it
+  // with the Select tool's box gesture. Cleared via the ✕ button.
   const [colorTraceRegion, setColorTraceRegion] = useState<FilterRegion | null>(null);
-  const [selectingRegion, setSelectingRegion] = useState(false);
   // Live colour-match PREVIEW (checkpoint 121): while the Auto-trace panel is
   // open, an overlay on the canvas shows exactly which pixels the current colour +
   // tolerance would capture, so the user sees a grid/axis grab BEFORE tracing --
@@ -5740,11 +5741,10 @@ export function Workspace() {
             <div
               data-testid="auto-extract-card"
               style={{
-                // While drawing the colour-trace region rectangle (armed, none
-                // drawn yet), pass pointer events through so the drag can start
-                // anywhere including under this card (v1.0 audit, same as crop).
-                pointerEvents: selectingRegion && !colorTraceRegion ? 'none' : 'auto',
-                opacity: selectingRegion && !colorTraceRegion ? 0.55 : 1,
+                // The region marquee is a direct drag on the image now (v1.2), so
+                // the card stays interactive -- the drag starts on the exposed plot
+                // area (the card sits by the rail), same as the Select strip.
+                pointerEvents: 'auto',
                 // Frosted glass: floats over the immutable figure (glassSurface).
                 ...glassSurface,
                 border: `1px solid ${theme.color.border.regular}`,
@@ -5891,29 +5891,27 @@ export function Workspace() {
                     </button>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {/* B1 — restrict the trace to a drawn rectangle. */}
+                    {/* B1 — restrict the trace to a rectangle drawn DIRECTLY on the
+                        image (v1.2). No arm-first toggle: the hint tells the user
+                        the gesture exists (so it's discoverable, not tribal), and
+                        the ✕ clears it back to the whole image. */}
                     {colorTraceRegion ? (
                       <button
                         type="button"
                         data-testid="color-trace-region-clear"
-                        onClick={() => {
-                          setColorTraceRegion(null);
-                          setSelectingRegion(false);
-                        }}
+                        onClick={() => setColorTraceRegion(null)}
                         title="Clear the region — trace the whole image again"
                       >
                         Region {Math.round(colorTraceRegion.width)}×{Math.round(colorTraceRegion.height)} px ✕
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        data-testid="color-trace-region"
-                        aria-pressed={selectingRegion}
-                        onClick={() => setSelectingRegion((v) => !v)}
+                      <span
+                        data-testid="color-trace-region-hint"
+                        style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}
                         title="Limit the trace to a box you draw (e.g. the plot area), so a same-coloured legend swatch outside it is ignored"
                       >
-                        {selectingRegion ? 'Draw a box on the image…' : 'Restrict to a box'}
-                      </button>
+                        Drag a box on the image to restrict the trace
+                      </span>
                     )}
                   </div>
                   {colorTraceMask && (
@@ -6025,15 +6023,15 @@ export function Workspace() {
           cropMode={cropMode}
           onCropRect={(r) => setCropRect(r)}
           cropRect={cropRect}
-          regionMode={mode === 'color-trace' && selectingRegion}
+          // Direct marquee (v1.2): the region drag is live whenever By-colour is
+          // active, EXCEPT while the eyedropper is armed (that click samples a
+          // colour). A bare click in this mode is already a no-op (see
+          // handleImageClick), so an always-live drag clobbers nothing.
+          regionMode={mode === 'color-trace' && eyedropper === null}
           onRegionRect={(r) => {
             // Ignore a click / tiny drag (a zero-area region would match nothing).
-            if (r.width < 3 || r.height < 3) {
-              setSelectingRegion(false);
-              return;
-            }
+            if (r.width < 3 || r.height < 3) return;
             setColorTraceRegion(r);
-            setSelectingRegion(false);
           }}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
           selectMode={mode === 'select' ? selectSubMode : null}
@@ -6182,6 +6180,8 @@ export function Workspace() {
           >
             {eyedropper === 'grid'
               ? '⌖ Click a gridline on the image to sample its colour'
+              : eyedropper === 'trace'
+              ? '⌖ Click the curve on the image to sample the colour to trace'
               : '⌖ Click the series’ curve on the image to take its colour'}
             <button
               type="button"

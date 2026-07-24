@@ -2777,8 +2777,14 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     const wholeCount = await previewCount();
     expect(wholeCount).toBeGreaterThanOrEqual(boxCount);
 
-    // Drawing a smaller box restricts again, below the whole-image count.
-    await page.getByTestId('color-trace-region').click();
+    // With no region, the panel shows the direct-drag HINT, not an arm-first
+    // toggle button (v1.2 direct marquee -- the old "Restrict to a box" toggle is
+    // retired).
+    expect(await page.getByTestId('color-trace-region-hint').isVisible()).toBe(true);
+    expect(await page.getByTestId('color-trace-region').count()).toBe(0);
+
+    // Drawing a smaller box DIRECTLY on the image (no toggle first) restricts
+    // again, below the whole-image count.
     await refreshCanvasBox();
     await page.mouse.move(canvasBox.x + 480, canvasBox.y + 160);
     await page.mouse.down();
@@ -2787,6 +2793,33 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.waitForTimeout(150);
     expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1);
     expect(await previewCount()).toBeLessThan(wholeCount);
+  });
+
+  // v1.2: the trace eyedropper still samples despite the region marquee now being
+  // always-live in By-colour -- the gate excludes the armed eyedropper, so its
+  // click is consumed as a colour sample, not swallowed by a region drag. (Also
+  // the first e2e coverage of the trace eyedropper.)
+  it('By colour: the eyedropper still samples with the region marquee always live', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+
+    // Clear the default calibration-box region, then arm the trace eyedropper.
+    await page.getByTestId('color-trace-region-clear').click();
+    await page.waitForTimeout(80);
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+    // The hint is worded for the trace target, not the series eyedropper's copy.
+    expect(await textOf('eyedropper-hint')).toMatch(/colour to trace/i);
+
+    // Click exposed canvas (clear of the left-docked card and the top hint). The
+    // click is consumed as a sample (the hint detaches) and draws NO region.
+    await refreshCanvasBox();
+    await clickAt(600, 320);
+    await page.waitForTimeout(120);
+    expect(await page.getByTestId('eyedropper-hint').count()).toBe(0);
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0);
   });
 
   it('the bundled scatter example traces one point per marker end to end (checkpoint 123)', async () => {
