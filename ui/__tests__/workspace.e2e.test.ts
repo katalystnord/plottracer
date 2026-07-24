@@ -5693,21 +5693,29 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
         if (!/Frame the whole figure/i.test(await textOf('tips-bar'))) break;
         await page.waitForTimeout(100);
       }
-      // Place a few points by eye (place-point mode, pre-calibrated).
-      await clickAt(320, 300);
+      // "Points placed" is FAMILY-AGNOSTIC via the active series' count in the
+      // dropdown ("Series 1 (N)") -- unlike a `point-row-` row, which only the
+      // XY/scatter table has (histogram/box use bin/tuple tables). The very first
+      // click of a round can race the async setup, so retry until one registers.
+      const pointCount = async () => {
+        const t = (await page.getByTestId('series-option-0').textContent()) ?? '';
+        return Number(t.match(/\((\d+)\)/)?.[1] ?? '0');
+      };
+      for (let attempt = 0; attempt < 12 && (await pointCount()) === 0; attempt++) {
+        await clickAt(320 + attempt * 8, 300);
+        await page.waitForTimeout(120);
+      }
       await clickAt(430, 280);
       await clickAt(540, 260);
 
       if (r === 0) {
-        // Pre-calibration proof (family-agnostic): the round is already calibrated
-        // -- the player never saw a calibration step -- so the status reads
-        // "Calibrated".
+        // Pre-calibration proof: the round is already calibrated (the player never
+        // saw a calibration step).
         expect(await textOf('calib-status')).toMatch(/^Calibrated/);
         // Regression guard: the figure must be CAPTURED so clicks actually place
-        // points. This silently placed nothing (capture stayed pending, every
-        // click blocked) until the round setup captured the figure -- the game
-        // was unplayable while the e2e still "passed" scoring empty extractions.
-        expect(await page.locator('[data-testid^="point-row-"]').count()).toBeGreaterThan(0);
+        // points (this silently placed nothing while capture stayed pending -- the
+        // game was unplayable while the e2e "passed" scoring empty extractions).
+        expect(await pointCount()).toBeGreaterThan(0);
       }
 
       await page.getByTestId('challenge-done').click();
