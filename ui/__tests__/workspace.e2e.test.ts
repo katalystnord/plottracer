@@ -2368,6 +2368,23 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     await page.waitForTimeout(150);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
   });
+
+  it('a guide click UNDER the auto-extract card still places a point (card is click-through)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('guide');
+    // Click inside the card's own footprint, low enough to be over its (text-only)
+    // hint rather than the selector row. Before the fix the card swallowed this;
+    // now the container is pointer-events:none so the click reaches the canvas.
+    const card = await page.getByTestId('auto-extract-card').boundingBox();
+    if (!card) throw new Error('auto-extract card has no bounding box');
+    await refreshCanvasBox();
+    const lx = card.x - canvasBox.x + card.width / 2;
+    const ly = card.y - canvasBox.y + card.height - 10;
+    await clickAt(lx, ly);
+    await page.waitForTimeout(100);
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBeGreaterThan(0);
+  });
 });
 
 describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {

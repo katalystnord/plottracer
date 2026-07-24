@@ -5972,10 +5972,13 @@ export function Workspace() {
             <div
               data-testid="auto-extract-card"
               style={{
-                // The region marquee is a direct drag on the image now (v1.2), so
-                // the card stays interactive -- the drag starts on the exposed plot
-                // area (the card sits by the rail), same as the Select strip.
-                pointerEvents: 'auto',
+                // The card floats over the figure but must NOT swallow canvas
+                // clicks meant to place points UNDER it (Guide points / Flood-fill
+                // work by clicking the curve; the region marquee drags on the
+                // image). So the container is click-THROUGH and only its actual
+                // controls (below) re-enable pointer events. Fixes "I clicked to
+                // place a point and nothing happened" in the card's footprint.
+                pointerEvents: 'none',
                 // Frosted glass: floats over the immutable figure (glassSurface).
                 ...glassSurface,
                 border: `1px solid ${theme.color.border.regular}`,
@@ -6006,6 +6009,7 @@ export function Workspace() {
                     aria-pressed={mode === m}
                     onClick={() => setAutoExtractMech(m)}
                     style={{
+                      pointerEvents: 'auto', // container is click-through; controls opt back in
                       flex: 1,
                       fontSize: theme.font.size.small,
                       padding: '4px 2px',
@@ -6022,7 +6026,7 @@ export function Workspace() {
               </div>
 
               {mode === 'segment-fill' && (
-                <div data-testid="segment-fill-controls" style={{ display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
+                <div data-testid="segment-fill-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
                   <span>Click a solid, unbroken curve to flood-fill along it.</span>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     Colour distance threshold:
@@ -6043,7 +6047,7 @@ export function Workspace() {
               )}
 
               {mode === 'color-trace' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
+                <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
                   <span>
                     Selects every pixel of a series&rsquo; colour — a dashed or marker-only line
                     extracts in one pass. Pick the colour, choose curve or scattered points, then Trace.
