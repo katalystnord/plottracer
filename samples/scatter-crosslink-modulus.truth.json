@@ -16,6 +16,32 @@
       "max": 120
     }
   },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 77.53,
+        "py": 636.72,
+        "value": 0
+      },
+      "x2": {
+        "px": 875.25,
+        "py": 636.72,
+        "value": 10.0
+      },
+      "y1": {
+        "px": 77.53,
+        "py": 636.72,
+        "value": 0
+      },
+      "y2": {
+        "px": 77.53,
+        "py": 39.33,
+        "value": 120.0
+      }
+    }
+  },
   "series": [
     {
       "name": "modulus",

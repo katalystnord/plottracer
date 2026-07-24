@@ -16,6 +16,32 @@
       "max": 50
     }
   },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 67.78,
+        "py": 636.72,
+        "value": 0
+      },
+      "x2": {
+        "px": 885.0,
+        "py": 636.72,
+        "value": 15
+      },
+      "y1": {
+        "px": 67.78,
+        "py": 636.72,
+        "value": 0
+      },
+      "y2": {
+        "px": 67.78,
+        "py": 39.33,
+        "value": 50
+      }
+    }
+  },
   "series": [
     {
       "name": "stress",

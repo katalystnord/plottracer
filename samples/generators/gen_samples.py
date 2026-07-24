@@ -43,7 +43,14 @@ NAVY = "#1f4e79"
 
 
 def _save(fig, name):
-    """Save a 900x700 RGB PNG (matching every other bundled sample)."""
+    """Save a 900x700 RGB PNG (matching every other bundled sample).
+
+    Set env SKIP_PNG=1 to re-emit only the .truth.json (e.g. to add the
+    `calibration` block) WITHOUT rewriting the committed PNG — so a truth-only
+    change can't drift the bundled images across matplotlib versions."""
+    if os.environ.get("SKIP_PNG") == "1":
+        plt.close(fig)
+        return
     png = os.path.join(SAMPLES_DIR, name + ".png")
     fig.savefig(png, facecolor="white")
     plt.close(fig)
@@ -56,6 +63,35 @@ def _save(fig, name):
 def _write_truth(name, truth):
     with open(os.path.join(SAMPLES_DIR, name + ".truth.json"), "w") as f:
         json.dump(truth, f, indent=2)
+
+
+def _xy_calibration(fig, ax, xmin, xmax, ymin, ymax):
+    """The 4 XY calibration anchors (x1/x2/y1/y2) in IMAGE/canvas pixel space —
+    origin top-left, y DOWN — which is the space PlotTracer's calibration uses.
+
+    This lets the Trace Challenge game PRE-CALIBRATE a round (the player only
+    places points, never clicks the axes). `ax.transData` maps data -> display
+    pixels (origin bottom-left, y UP) at the figure's dpi, which equals the saved
+    900x700 PNG, so we y-flip to canvas coords. x1/y1 share the (xmin,ymin) corner
+    pixel, matching the app's standard shared-origin calibration handle."""
+    fig.canvas.draw()  # finalise the layout (post tight_layout) so transData is exact
+    h = fig.get_figheight() * fig.dpi
+    w = fig.get_figwidth() * fig.dpi
+
+    def anchor(dx, dy, value):
+        sx, sy = ax.transData.transform((dx, dy))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2), "value": value}
+
+    return {
+        "imageWidth": round(w),
+        "imageHeight": round(h),
+        "anchors": {
+            "x1": anchor(xmin, ymin, xmin),
+            "x2": anchor(xmax, ymin, xmax),
+            "y1": anchor(xmin, ymin, ymin),
+            "y2": anchor(xmin, ymax, ymax),
+        },
+    }
 
 
 def gen_scatter():
@@ -90,12 +126,14 @@ def gen_scatter():
     ax.grid(True, color="#dddddd", linewidth=0.8, zorder=0)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, XMAX, 0, YMAX)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — the exact values the figure was rendered from. For a self-test / accuracy score."},
         "graphType": "xy",
         "axes": {"x": {"label": "Crosslinker concentration (mol%)", "min": 0, "max": 10},
                  "y": {"label": "Compressive modulus (kPa)", "min": 0, "max": 120}},
+        "calibration": calib,
         "series": [{"name": "modulus", "points": [{"x": round(float(a), 4), "y": round(float(b), 3)} for a, b in zip(xs, ys)]}],
     })
 
@@ -130,12 +168,14 @@ def gen_multiseries():
     ax.legend(fontsize=10)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, 110, 0, 3600)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — exact vertices of each plotted line."},
         "graphType": "xy",
         "axes": {"x": {"label": "Temperature (°C)", "min": 0, "max": 110},
                  "y": {"label": "Storage modulus (MPa)", "min": 0, "max": 3600}},
+        "calibration": calib,
         "series": series,
     })
 
@@ -245,6 +285,7 @@ def gen_stress_strain():
     ax.grid(True, color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, 15, 0, 50)
     _save(fig, name)
     # Dense truth: 61 evenly-spaced samples along the curve (enough to score a
     # trace against without storing all 400 render points).
@@ -255,6 +296,7 @@ def gen_stress_strain():
         "graphType": "xy",
         "axes": {"x": {"label": "Strain (%)", "min": 0, "max": 15},
                  "y": {"label": "Stress (MPa)", "min": 0, "max": 50}},
+        "calibration": calib,
         "series": [{"name": "stress", "points": [{"x": round(float(a), 3), "y": round(float(b), 3)} for a, b in zip(xs, ys)]}],
     })
 
@@ -433,12 +475,14 @@ def gen_dashstyles():
     ax.legend(fontsize=10, loc="lower right")
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, 12, 0, 100)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — dense sampling of each dash-coded curve (monochrome; curves differ ONLY by dash style)."},
         "graphType": "xy",
         "axes": {"x": {"label": "Time (h)", "min": 0, "max": 12},
                  "y": {"label": "Cumulative release (%)", "min": 0, "max": 100}},
+        "calibration": calib,
         "series": series,
     })
 

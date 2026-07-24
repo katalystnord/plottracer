@@ -16,6 +16,32 @@
       "max": 3600
     }
   },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 87.28,
+        "py": 636.72,
+        "value": 0
+      },
+      "x2": {
+        "px": 885.0,
+        "py": 636.72,
+        "value": 110
+      },
+      "y1": {
+        "px": 87.28,
+        "py": 636.72,
+        "value": 0
+      },
+      "y2": {
+        "px": 87.28,
+        "py": 39.33,
+        "value": 3600
+      }
+    }
+  },
   "series": [
     {
       "name": "Blend A",
