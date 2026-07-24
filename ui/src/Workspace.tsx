@@ -4665,7 +4665,7 @@ export function Workspace() {
       // By-colour traces via the Trace button, not a canvas click (v0.8 audit #2:
       // without this the tip fell through to "calibrate the axes" on an already-
       // calibrated chart, and gave no hint that a stray click does nothing).
-      if (mode === 'color-trace') return 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace. A canvas click here does nothing.';
+      if (mode === 'color-trace') return 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
       if (mode === 'interpolate') {
         if (dataPoints.length === 0)
           return 'Interpolate — click a few guide points along one curve; the curve fills in between them.';
