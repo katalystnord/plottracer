@@ -163,6 +163,7 @@ import {
 } from '../../engine/csvExport.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableSection, type TableFormat } from '../../engine/tableFormats.js';
 import { makeRounder, type PrecisionMode } from '../../core/exportPrecision.js';
+import { formatDateNumber } from '../../core/dateConversion.js';
 import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
@@ -4504,6 +4505,10 @@ export function Workspace() {
   // to config.valueLabels before calibration (no axes to ask yet).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tableValueLabels = useMemo(() => session.getTableValueLabels(), [session, version, config]);
+  // Date format per value column (or null) so a date-calibrated column shows a
+  // real date in the table, matching the export, not a raw serial (v1.2 #16).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tableDateFormats = useMemo(() => session.getTableDateFormats(), [session, version, config]);
   const spreadsheetMaxRows = useMemo(
     () => spreadsheetSeries.reduce((max, s) => Math.max(max, s.values.length), 0),
     [spreadsheetSeries]
@@ -6894,14 +6899,25 @@ export function Workspace() {
                         {spreadsheetSeries.map((s) => {
                           const data = s.values[i];
                           const editable = config.axesKind === 'xy' && s.active;
-                          return tableValueLabels.map((_label, d) => (
-                            <td
-                              key={`${s.index}-${d}`}
-                              style={{ padding: '1px 8px', borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              {data ? (editable ? renderEditableValue(i, d, data[d]!) : fmtValue(data[d]!)) : ''}
-                            </td>
-                          ));
+                          return tableValueLabels.map((_label, d) => {
+                            const dateFmt = tableDateFormats[d];
+                            return (
+                              <td
+                                key={`${s.index}-${d}`}
+                                style={{ padding: '1px 8px', borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none', fontVariantNumeric: 'tabular-nums' }}
+                              >
+                                {data
+                                  ? dateFmt != null
+                                    ? // Date-calibrated column: show the formatted date, like the
+                                      // export (not editable inline -- move the point on canvas).
+                                      formatDateNumber(data[d]!, dateFmt)
+                                    : editable
+                                    ? renderEditableValue(i, d, data[d]!)
+                                    : fmtValue(data[d]!)
+                                  : ''}
+                              </td>
+                            );
+                          });
                         })}
                       </tr>
                     );

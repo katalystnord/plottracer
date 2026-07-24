@@ -93,3 +93,39 @@ describe('getTableValueLabels — table headers match the file', () => {
     expect(s.getTableValueLabels()).toEqual([...CIRCULAR_CHART_RECORDER_AXES_CONFIG.valueLabels]);
   });
 });
+
+// v1.2 #16 -- the table must format a date-calibrated column like the export
+// does, not show a raw serial. getTableDateFormats() gives the per-column format,
+// index-aligned with getTableValueLabels().
+describe('getTableDateFormats — per-column date format for the table', () => {
+  it('exposes the date format for a date-calibrated X, null for numeric Y', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    // Slash dates for X (WPD's parser needs '/' or ':'); numeric Y.
+    const steps: Array<[number, number, string]> = [
+      [100, 300, '2024/01/01'],
+      [400, 300, '2024/01/11'],
+      [100, 300, '0'],
+      [100, 100, '10'],
+    ];
+    for (const [px, py, v] of steps) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    expect(s.runCalibration()).toBe(true);
+    const fmts = s.getTableDateFormats();
+    expect(fmts).toHaveLength(s.getTableValueLabels().length); // index-aligned with the value columns
+    expect(fmts[0]).toBeTruthy(); // X is a date -> a format string
+    expect(fmts[1]).toBeNull(); // Y is numeric -> null
+  });
+
+  it('is all-null for a plain numeric XY', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStdXY(s);
+    expect(s.getTableDateFormats()).toEqual([null, null]);
+  });
+
+  it('falls back to all-null before calibration', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    expect(s.getTableDateFormats()).toEqual([null, null]);
+  });
+});

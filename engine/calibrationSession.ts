@@ -1825,6 +1825,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return exportLabelsFor(this.axes).slice(-this.config.dataDim);
   }
 
+  /** The date format (or null) for each table VALUE column, index-aligned with
+   * getTableValueLabels() -- so the on-screen table can format a date-calibrated
+   * column the same way the export does (v1.2 #16) instead of showing a raw
+   * serial. Mirrors getTableValueLabels' slice so the indices line up. Only XY
+   * and CCR axes expose isDate/getInitialDateFormat; the rest yield all-null. */
+  getTableDateFormats(): (string | null)[] {
+    if (this.config.id === 'categorical') return [null];
+    if (!this.axes) return this.config.valueLabels.map(() => null);
+    const axes = this.axes as unknown as {
+      isDate?(i: number): boolean;
+      getInitialDateFormat?(i: number): string | null;
+    };
+    return exportLabelsFor(this.axes)
+      .map((_l, i) => (axes.isDate?.(i) ? axes.getInitialDateFormat?.(i) ?? null : null))
+      .slice(-this.config.dataDim);
+  }
+
   /** One export row per point of a dataset, values per WPD's own contract
    * (core/exportValues.ts): Bar carries its Label, CCR's time is formatted
    * rather than emitted as a julian float, and a date-calibrated XY column is
