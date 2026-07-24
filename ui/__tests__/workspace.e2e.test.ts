@@ -5618,3 +5618,59 @@ describe('series names are unique (checkpoint 75)', () => {
     fs.unlinkSync(csvPath);
   });
 });
+
+describe('Workspace: Trace Challenge (v1.2 game)', () => {
+  it('plays a full game — pre-calibrated rounds, scoring, reveal, results, high score, then resets', async () => {
+    // The app launches with no image; the challenge starts from a clean slate.
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('challenge-start').click();
+
+    // Intro modal -> confirm.
+    await page.getByTestId('challenge-intro').waitFor({ state: 'visible' });
+    await page.getByTestId('challenge-confirm').click();
+
+    // Rounds. The pool is 4 XY examples (Phase A), so this is a 4-round game.
+    await page.getByTestId('challenge-hud').waitFor({ state: 'visible' });
+    const roundText = await textOf('challenge-round'); // "Round 1/4"
+    const rounds = Number(roundText.match(/\/(\d+)/)?.[1] ?? '0');
+    expect(rounds).toBeGreaterThanOrEqual(1);
+
+    for (let r = 0; r < rounds; r++) {
+      // loadRound is async (fetch + adoptCalibration + image); wait for the fit so
+      // the round is genuinely pre-calibrated before we place points.
+      await page.waitForTimeout(300);
+      await waitForImageFitted();
+      // Place a few points by eye (place-point mode, pre-calibrated).
+      await clickAt(320, 300);
+      await clickAt(430, 280);
+      await clickAt(540, 260);
+
+      if (r === 0) {
+        // Pre-calibration proof: placing on a pre-calibrated session yields real
+        // data rows (no calibration step was ever shown to the player).
+        expect(await page.locator('[data-testid^="point-row-"]').count()).toBeGreaterThan(0);
+      }
+
+      await page.getByTestId('challenge-done').click();
+      await page.getByTestId('challenge-reveal').waitFor({ state: 'visible' });
+      expect(await textOf('challenge-round-adjusted')).toMatch(/\d/);
+      await page.getByTestId('challenge-next').click();
+      await page.waitForTimeout(80);
+    }
+
+    // Results: a total time, and (first ever run) a qualifying high score.
+    await page.getByTestId('challenge-results').waitFor({ state: 'visible' });
+    expect(await textOf('challenge-total')).toMatch(/\d/);
+    await page.getByTestId('challenge-qualify').waitFor({ state: 'visible' });
+    await page.getByTestId('challenge-name').fill('Tester');
+    await page.getByTestId('challenge-save-score').click();
+    expect(await textOf('challenge-highscores')).toContain('Tester');
+
+    // Finish -> back to the blank opening state (no image, challenge gone).
+    await page.getByTestId('challenge-finish').click();
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('challenge-hud').count()).toBe(0);
+    expect(await page.getByTestId('challenge-results').count()).toBe(0);
+    expect(await textOf('tips-bar')).toMatch(/Open an image/i);
+  });
+});

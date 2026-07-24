@@ -213,6 +213,11 @@ interface ImageCanvasProps {
    * pixels) is the closed polygon whose enclosed area was measured -- shaded fill;
    * `maxCurvature` (image pixels) is ringed. Both listening=false (display only). */
   geometryOverlay?: { path?: { x: number; y: number }[]; closed?: boolean; maxCurvature?: { x: number; y: number } };
+  /** Trace Challenge reveal (v1.2): the TRUE answer drawn over the figure at the
+   * end of a round, in image-pixel space. `curves` are dashed polylines (one per
+   * truth series); `markers` are hollow dots for a scatter's true points. Display
+   * only (listening=false). */
+  challengeReveal?: { curves: { x: number; y: number }[][]; markers: { x: number; y: number }[] } | null;
   /** Check Calibration overlay (v0.8): the 4 image-space corners of the
    * calibrated axis box, drawn as a magenta rectangle so a user can see whether
    * it aligns with the plot's real axes. Null when off / not applicable. */
@@ -340,6 +345,8 @@ export interface ImageCanvasHandle {
    * "Open Project" action can load a project file's embedded image
    * programmatically instead of through a native file-pick dialog. */
   loadImageFromSrc: (src: string, fileName?: string) => void;
+  /** Unload the image -> blank "Open an image" state (Trace Challenge reset). */
+  clearImage: () => void;
   /** The currently loaded image's original src -- null if none is loaded. */
   getImageDataURL: () => string | null;
   getImageFileName: () => string | null;
@@ -383,7 +390,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -775,10 +782,21 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // Placed here (not up by the state) so the zoom callbacks + openImage it
   // exposes are already declared -- their consts can't be named in the deps
   // array before their `const` lines (temporal dead zone).
+  // Unload the current image, returning the canvas to its blank "Open an image"
+  // state (used when the Trace Challenge finishes and resets the app). Symmetric
+  // to loadImageFromSrc: clears the src mirror, the pixel buffer and the image.
+  const clearImage = useCallback(() => {
+    imageSrcRef.current = null;
+    originalImageDataRef.current = null;
+    setImageFileName(null);
+    setImage(null);
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
       loadImageFromSrc,
+      clearImage,
       // The synchronous mirror, not the (tick-lagged) imageSrc state -- so a
       // caller reading this right after a load/transform gets the new src.
       getImageDataURL: () => imageSrcRef.current,
@@ -794,7 +812,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       getCompositePngDataURL,
       getViewImageRect,
     }),
-    [loadImageFromSrc, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, getCompositePngDataURL, getViewImageRect]
+    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, getCompositePngDataURL, getViewImageRect]
   );
 
   // Notify Workspace of scale / image-loaded changes (checkpoint 42) so the
@@ -1590,6 +1608,27 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     </>
                   );
                 })()}
+                {/* Trace Challenge reveal (v1.2): the TRUE answer over the figure --
+                    dashed green curves + hollow markers. Display only. */}
+                {challengeReveal?.curves.map((curve, ci) =>
+                  curve.length > 1 ? (
+                    <Line
+                      key={`ch-curve-${ci}`}
+                      points={curve.flatMap((p) => {
+                        const s = imageToScreen(view, p.x, p.y);
+                        return [s.x, s.y];
+                      })}
+                      stroke="#2e9e5b"
+                      strokeWidth={2}
+                      dash={[8, 5]}
+                      listening={false}
+                    />
+                  ) : null
+                )}
+                {challengeReveal?.markers.map((p, mi) => {
+                  const s = imageToScreen(view, p.x, p.y);
+                  return <Circle key={`ch-mark-${mi}`} x={s.x} y={s.y} radius={6} stroke="#2e9e5b" strokeWidth={2} listening={false} />;
+                })}
                 {/* Check Calibration (v0.8): the calibrated axis box in magenta.
                     Closed quad; distinct from the green fit line and blue series
                     so it reads as "the calibration's own frame". */}

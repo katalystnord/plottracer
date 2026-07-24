@@ -71,6 +71,17 @@ import {
 import { MeasureCard, measureIcons, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
+import { ChallengeOverlay, type ChallengePhase } from './ChallengeOverlay.js';
+import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
+import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
+import {
+  drawRounds,
+  calibrationInputsFromAnchors,
+  truthAxisRanges,
+  truthSeriesPoints,
+  type ChallengeExample,
+} from '../../engine/traceChallenge.js';
+import { scoreRound, type RoundScore } from '../../algorithms/challengeScore.js';
 import {
   applyImageEditOp,
   cropImage,
@@ -1134,6 +1145,16 @@ export function Workspace() {
   // beside it are for figures whose series ARE'NT distinguished by colour (line
   // style, markers), where eyedropping would give two series one colour.
   const [eyedropper, setEyedropper] = useState<null | 'grid' | 'series' | 'trace'>(null);
+  // --- Trace Challenge (v1.2 game). `gamePhase` null = not playing; it's
+  // orthogonal to `mode` (a round runs in place-point mode). Round setup +
+  // scoring live in the callbacks below; the UI is ./ChallengeOverlay.tsx. ---
+  const [gamePhase, setGamePhase] = useState<ChallengePhase | null>(null);
+  const [roundQueue, setRoundQueue] = useState<ChallengeExample[]>([]);
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [roundStartMs, setRoundStartMs] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [roundScores, setRoundScores] = useState<RoundScore[]>([]);
+  const [highScores, setHighScores] = useState<HighScore[]>([]);
   // Which datapoint-table value cell is mid-edit (checkpoint 39). Editing a
   // value and moving the point are two views of one thing: on commit the
   // point is repositioned via the axes' inverse transform. Kept as the raw
@@ -2065,7 +2086,7 @@ export function Workspace() {
       else if (e.key === '1' && figureCaptured) setMode('calibrate');
       else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && axes && !session.hasPointGroups()) toggleAutoExtract();
+      else if (e.key === '4' && axes && !session.hasPointGroups() && gamePhase !== 'playing') toggleAutoExtract();
       // Hotkey 5 activates Select with the current sub-mode but does NOT open the
       // picker (that's the rail button / its arrow); reset so a stale-open card
       // from an earlier session can't re-appear (v1.1 #6).
@@ -2091,7 +2112,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, gamePhase]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -2330,6 +2351,117 @@ export function Workspace() {
     },
     [resetDocument, confirmDiscardIfDirty, closePdf, openPdf, clearFiguresToSingle]
   );
+
+  // --- Trace Challenge (v1.2 game) --------------------------------------------
+  // The eligible examples, joined to their EXAMPLES entry (image src + axes id).
+  const challengePool = useMemo<ChallengeExample[]>(
+    () =>
+      CHALLENGE_IDS.flatMap((id) => {
+        const meta = CHALLENGE_META[id];
+        const ex = EXAMPLES.find((e) => e.id === id);
+        return meta && ex
+          ? [{ id, name: ex.name, family: meta.family, instruction: meta.instruction, truth: meta.truth, axesConfigId: ex.axes, imageSrc: ex.src }]
+          : [];
+      }),
+    []
+  );
+
+  // Load one round: fetch the example image, PRE-CALIBRATE from its committed
+  // anchors (the player never clicks the axes), drop into place-point, start the
+  // clock. Manual-only tracing is enforced by the rail gate + this mode.
+  const loadRound = useCallback(
+    async (ex: ChallengeExample) => {
+      const dataURL = await fetch(ex.imageSrc)
+        .then((r) => r.blob())
+        .then(
+          (blob) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob);
+            })
+        );
+      closePdf();
+      resetDocument(ex.axesConfigId, dataURL); // fresh session (swapSession updates sessionRef)
+      sessionRef.current.adoptCalibration(calibrationInputsFromAnchors(ex.truth.calibration));
+      imageCanvasRef.current?.loadImageFromSrc(dataURL, ex.name);
+      setMode('place-point');
+      setRoundStartMs(Date.now());
+      setElapsedMs(0);
+      bump();
+    },
+    [resetDocument, closePdf, bump]
+  );
+
+  const startChallenge = useCallback(() => {
+    if (!confirmDiscardIfDirty()) return;
+    const rounds = drawRounds(challengePool, 5);
+    if (rounds.length === 0) return;
+    setRoundQueue(rounds);
+    setRoundIndex(0);
+    setRoundScores([]);
+    setHighScores(readHighScores());
+    setGamePhase('intro');
+  }, [confirmDiscardIfDirty, challengePool]);
+
+  const beginRounds = useCallback(() => {
+    setRoundIndex(0);
+    setRoundScores([]);
+    setGamePhase('playing');
+    if (roundQueue[0]) void loadRound(roundQueue[0]);
+  }, [roundQueue, loadRound]);
+
+  const finishRound = useCallback(() => {
+    const ex = roundQueue[roundIndex];
+    if (!ex) return;
+    const rawSeconds = Math.max(0, (Date.now() - roundStartMs) / 1000);
+    // The player's extraction in DATA space (same values the CSV export carries),
+    // grouped per series; empty series are ignored (not spurious curves).
+    const userSeries = sessionRef.current
+      .getAllDatasetsData()
+      .map((ds) => ds.points.filter((p) => p.data).map((p) => ({ x: p.data![0]!, y: p.data![1]! })))
+      .filter((s) => s.length > 0);
+    const score = scoreRound(ex.family, userSeries, truthSeriesPoints(ex.truth), truthAxisRanges(ex.truth), rawSeconds);
+    setRoundScores((prev) => [...prev, score]);
+    setGamePhase('reveal');
+  }, [roundQueue, roundIndex, roundStartMs]);
+
+  const nextRound = useCallback(() => {
+    const next = roundIndex + 1;
+    if (next < roundQueue.length) {
+      setRoundIndex(next);
+      setGamePhase('playing');
+      if (roundQueue[next]) void loadRound(roundQueue[next]);
+    } else {
+      setGamePhase('results');
+    }
+  }, [roundIndex, roundQueue, loadRound]);
+
+  const saveHighScore = useCallback(
+    (name: string) => {
+      const total = roundScores.reduce((s, r) => s + r.adjustedSeconds, 0);
+      setHighScores(insertHighScore(name, total));
+    },
+    [roundScores]
+  );
+
+  const finishChallenge = useCallback(() => {
+    setGamePhase(null);
+    setRoundQueue([]);
+    setRoundIndex(0);
+    setRoundScores([]);
+    clearFiguresToSingle();
+    resetDocument(XY_AXES_CONFIG.id);
+    imageCanvasRef.current?.clearImage(); // back to the blank "Open an image" opening state
+  }, [clearFiguresToSingle, resetDocument]);
+
+  // Live round timer.
+  useEffect(() => {
+    if (gamePhase !== 'playing') return;
+    const id = setInterval(() => setElapsedMs(Date.now() - roundStartMs), 100);
+    return () => clearInterval(id);
+  }, [gamePhase, roundStartMs]);
 
   // Route a measure-mode canvas click. Set-scale intercepts first (arming a
   // px->unit reference); then the active tool. Slope reports Δy/Δx in the chart's
@@ -4349,6 +4481,17 @@ export function Workspace() {
     };
   }, [geometryResult, geometryState, config, session]);
 
+  // Trace Challenge reveal (v1.2): the round's TRUE answer projected to pixels for
+  // the on-figure overlay. Curves -> dashed polylines; scatter -> hollow markers.
+  const challengeReveal = useMemo(() => {
+    if (gamePhase !== 'reveal') return null;
+    const ex = roundQueue[roundIndex];
+    if (!ex || !axes) return null;
+    const xy = axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } };
+    const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(p.x, p.y)));
+    return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
+  }, [gamePhase, roundQueue, roundIndex, axes]);
+
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
   // the toggle is on. `version` is a dep so dragging a calibration handle (which
   // re-runs calibration) re-projects the box live. Whether these axes CAN
@@ -5098,6 +5241,30 @@ export function Workspace() {
                   ))}
                 </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
+                <button
+                  type="button"
+                  data-testid="challenge-start"
+                  onClick={() => {
+                    close();
+                    startChallenge();
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'center',
+                    padding: '8px 10px',
+                    borderRadius: theme.border.radius.regular,
+                    border: `1px solid ${theme.color.primary.main}`,
+                    background: theme.color.primary.clicked,
+                    color: theme.color.background.primary,
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: theme.font.size.regular,
+                  }}
+                  title="Race the clock tracing 5 pre-calibrated example figures — scored against their true values"
+                >
+                  🎯 Take The Trace Challenge
+                </button>
+                <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
                 <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}>
                   <strong>PlotTracer</strong> <span data-testid="app-version">v{__APP_VERSION__}</span> — a
                   desktop plot digitizer based on{' '}
@@ -5595,8 +5762,14 @@ export function Workspace() {
             label="Auto-extract (flood-fill / by colour / guide points)"
             shortcut="4"
             pressed={AUTO_EXTRACT_MODES.includes(mode)}
-            disabled={!axes || hasPointGroups}
-            disabledReason={!axes ? 'Calibrate the axes first' : 'Not available for this graph type'}
+            disabled={!axes || hasPointGroups || gamePhase === 'playing'}
+            disabledReason={
+              gamePhase === 'playing'
+                ? 'Manual placement only in the Trace Challenge'
+                : !axes
+                ? 'Calibrate the axes first'
+                : 'Not available for this graph type'
+            }
             onClick={toggleAutoExtract}
             foldout
           />
@@ -6004,6 +6177,7 @@ export function Workspace() {
           curveFitLine={curveFitOverlay}
           onCurveFitClick={curveFitState && (mode === 'pan' || mode === 'select') ? openCurveFitPanel : undefined}
           geometryOverlay={geometryOverlay}
+          challengeReveal={challengeReveal}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
@@ -7005,6 +7179,25 @@ export function Workspace() {
             </button>
           </div>
         </div>
+      )}
+      {gamePhase && (
+        <ChallengeOverlay
+          phase={gamePhase}
+          roundIndex={roundIndex}
+          roundCount={roundQueue.length}
+          instruction={roundQueue[roundIndex]?.instruction ?? ''}
+          elapsedMs={elapsedMs}
+          lastScore={roundScores[roundScores.length - 1] ?? null}
+          totalAdjusted={roundScores.reduce((s, r) => s + r.adjustedSeconds, 0)}
+          highScores={highScores}
+          qualifies={gamePhase === 'results' && scoreQualifies(roundScores.reduce((s, r) => s + r.adjustedSeconds, 0), highScores)}
+          onConfirmStart={beginRounds}
+          onCancel={() => setGamePhase(null)}
+          onDone={finishRound}
+          onNext={nextRound}
+          onSaveHighScore={saveHighScore}
+          onFinish={finishChallenge}
+        />
       )}
     </AppShell>
   );
