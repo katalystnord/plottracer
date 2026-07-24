@@ -84,16 +84,23 @@ export function calibrationInputsFromAnchors(cal: ChallengeCalibration): AdoptCa
   return { placed, optionValues: {}, globalValues: {} };
 }
 
-/** Value-axis span for normalising scoring error (`y` always exists). */
+/**
+ * Value-axis span for normalising scoring error (`y` always exists).
+ * `|| 1` guards a degenerate `min===max` truth so scoring can't divide by zero.
+ */
 export function truthValueRange(truth: ChallengeTruth): number {
-  return truth.axes.y.max - truth.axes.y.min;
+  return (truth.axes.y.max - truth.axes.y.min) || 1;
 }
 
-/** Axis spans for curve/scatter/histogram scoring (x present for those). */
+/**
+ * Axis spans for curve/scatter/histogram scoring (x present for those).
+ * `|| 1` guards a degenerate `min===max` axis; for bar/box (no x) `xRange` is
+ * unused by the ordered scorer, so the fallback is inert there.
+ */
 export function truthAxisRanges(truth: ChallengeTruth): AxisRanges {
   return {
-    xRange: truth.axes.x ? truth.axes.x.max - truth.axes.x.min : 0,
-    yRange: truth.axes.y.max - truth.axes.y.min,
+    xRange: (truth.axes.x ? truth.axes.x.max - truth.axes.x.min : 0) || 1,
+    yRange: (truth.axes.y.max - truth.axes.y.min) || 1,
   };
 }
 

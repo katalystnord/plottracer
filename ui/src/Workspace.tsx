@@ -2387,6 +2387,7 @@ export function Workspace() {
   // clock. Manual-only tracing is enforced by the rail gate + this mode.
   const loadRound = useCallback(
     async (ex: ChallengeExample) => {
+      setRoundStartMs(0); // clock reads 0:00 while this round loads; real start stamped at the end
       const dataURL = await fetch(ex.imageSrc)
         .then((r) => r.blob())
         .then(
@@ -7281,7 +7282,7 @@ export function Workspace() {
           highScores={highScores}
           qualifies={gamePhase === 'results' && scoreQualifies(roundScores.reduce((s, r) => s + r.adjustedSeconds, 0), highScores)}
           onConfirmStart={beginRounds}
-          onCancel={() => setGamePhase(null)}
+          onCancel={finishChallenge}
           onDone={finishRound}
           onNext={nextRound}
           onSaveHighScore={saveHighScore}

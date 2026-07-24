@@ -125,7 +125,7 @@ function Intro({ roundCount, onConfirmStart, onCancel }: ChallengeOverlayProps) 
   );
 }
 
-function Hud({ roundIndex, roundCount, instruction, roundStartMs, onDone }: ChallengeOverlayProps) {
+function Hud({ roundIndex, roundCount, instruction, roundStartMs, onDone, onCancel }: ChallengeOverlayProps) {
   // The HUD owns the ticking clock -- a local interval re-renders ONLY this
   // component, so the timer never re-renders the whole Workspace (that made
   // every canvas click feel laggy mid-round).
@@ -134,7 +134,9 @@ function Hud({ roundIndex, roundCount, instruction, roundStartMs, onDone }: Chal
     const id = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(id);
   }, []);
-  const elapsedMs = Math.max(0, now - roundStartMs);
+  // roundStartMs is 0 while the round is still loading (set async at the end of
+  // loadRound); show 0:00 until then rather than `now - 0` (a garbage timestamp).
+  const elapsedMs = roundStartMs > 0 ? Math.max(0, now - roundStartMs) : 0;
   return (
     <div
       data-testid="challenge-hud"
@@ -171,6 +173,24 @@ function Hud({ roundIndex, roundCount, instruction, roundStartMs, onDone }: Chal
       </span>
       <button type="button" style={{ ...primaryBtn, padding: '6px 14px' }} data-testid="challenge-done" onClick={onDone}>
         Done
+      </button>
+      <button
+        type="button"
+        data-testid="challenge-quit"
+        onClick={onCancel}
+        title="Quit the challenge and return to the workspace"
+        style={{
+          padding: '4px 8px',
+          borderRadius: 6,
+          border: 'none',
+          background: 'transparent',
+          color: theme.color.text.legend,
+          cursor: 'pointer',
+          fontSize: 16,
+          lineHeight: 1,
+        }}
+      >
+        ✕
       </button>
     </div>
   );
