@@ -36,11 +36,13 @@ directories:
 # bundled into ui/dist by Vite, so samples/ isn't needed here.
 files:
   - ui/dist/**/*
-  - ui/electron-main.cjs
-  - ui/electron-preload.cjs
-  - ui/electron-ipc.cjs
-  - ui/electron-menu.cjs
-  - ui/electron-close-guard.cjs
+  # Glob the Electron entry/preload/ipc/menu/close-guard .cjs files so a newly
+  # added one can't be forgotten (the old hand-maintained list was a drift trap
+  # -- a missing file only surfaces as a runtime crash in the packaged app). The
+  # DEV entry (electron-dev.cjs -- npm run ui:electron + the e2e harness) is NOT
+  # shipped; package.json `main` is electron-main.cjs.
+  - ui/electron-*.cjs
+  - "!ui/electron-dev.cjs"
   - build/icons/**/*
   - package.json
   # License + attribution text, shipped inside the app resources so the
