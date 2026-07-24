@@ -31,15 +31,24 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
     instruction: 'Trace the stress–strain curve — place points along it, left to right.',
     truth: xyTruth as unknown as ChallengeTruth,
   },
+  // The two multi-curve rounds ask for ONE curve only (David, playtest: four is a
+  // slog, one is hard enough). Scoring uses just the first series so the others
+  // aren't counted as "missed"; the figure still shows all four.
   'xy-multi': {
     family: 'curve',
-    instruction: 'Trace all four modulus curves — add a new series (＋ Add) for each curve.',
-    truth: multiTruth as unknown as ChallengeTruth,
+    instruction: 'Trace just the top curve — Blend A (the highest line).',
+    truth: {
+      ...(multiTruth as unknown as ChallengeTruth),
+      series: [(multiTruth as unknown as ChallengeTruth).series[0]!],
+    },
   },
   dashed: {
     family: 'curve',
-    instruction: 'Trace all four release curves — one series each (they differ only by dash style).',
-    truth: dashedTruth as unknown as ChallengeTruth,
+    instruction: 'Trace just Formulation A — the solid curve (the highest one).',
+    truth: {
+      ...(dashedTruth as unknown as ChallengeTruth),
+      series: [(dashedTruth as unknown as ChallengeTruth).series[0]!],
+    },
   },
   scatter: {
     family: 'scatter',
