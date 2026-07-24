@@ -2091,7 +2091,7 @@ export function Workspace() {
       else if (e.key === '1' && figureCaptured) setMode('calibrate');
       else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && axes && !session.hasPointGroups() && gamePhase !== 'playing') toggleAutoExtract();
+      else if (e.key === '4' && axes && !session.hasPointGroups()) toggleAutoExtract();
       // Hotkey 5 activates Select with the current sub-mode but does NOT open the
       // picker (that's the rail button / its arrow); reset so a stale-open card
       // from an earlier session can't re-appear (v1.1 #6).
@@ -2117,7 +2117,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, gamePhase]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -2395,6 +2395,7 @@ export function Workspace() {
       // player can place points -- without this, capture stays pending and every
       // click is blocked ("Frame the whole figure... press Capture").
       setFigureCaptured(true);
+      setCalibExpanded(false); // the player didn't calibrate -- don't clutter/occlude with the calib card
       setMode('place-point');
       setRoundStartMs(Date.now());
       setElapsedMs(0);
@@ -5824,14 +5825,8 @@ export function Workspace() {
             label="Auto-extract (flood-fill / by colour / guide points)"
             shortcut="4"
             pressed={AUTO_EXTRACT_MODES.includes(mode)}
-            disabled={!axes || hasPointGroups || gamePhase === 'playing'}
-            disabledReason={
-              gamePhase === 'playing'
-                ? 'Manual placement only in the Trace Challenge'
-                : !axes
-                ? 'Calibrate the axes first'
-                : 'Not available for this graph type'
-            }
+            disabled={!axes || hasPointGroups}
+            disabledReason={!axes ? 'Calibrate the axes first' : 'Not available for this graph type'}
             onClick={toggleAutoExtract}
             foldout
           />
