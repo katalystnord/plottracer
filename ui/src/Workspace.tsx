@@ -4259,9 +4259,14 @@ export function Workspace() {
   const handleAddDataset = useCallback(() => {
     session.addDataset();
     setGeometryClosed(false); // a fresh series has no geometry -- don't inherit the prior series' toggle
-    if (axes) setMode('place-point'); // same "ready to click" default runCalibration already sets
+    // Stay in the current TRACING tool across "+ Add" -- place-point OR an
+    // auto-extract mechanism (By-colour / Flood-fill / Guide points). Tracing a
+    // multi-curve figure means adding a series per curve; kicking back to
+    // place-point each time forced re-opening the tool for every curve (David,
+    // playtest). Only fall back to place-point from a non-tracing mode.
+    if (axes && mode !== 'place-point' && !AUTO_EXTRACT_MODES.includes(mode)) setMode('place-point');
     commit();
-  }, [session, axes, commit]);
+  }, [session, axes, commit, mode]);
 
   // Renaming keeps its in-progress text HERE rather than in the session, so the
   // session never holds a duplicate or blank name (see seriesNames.ts on why
