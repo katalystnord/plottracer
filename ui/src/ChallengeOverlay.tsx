@@ -6,7 +6,7 @@
  * result card so the true-answer overlay stays visible on the figure), and
  * `results` (fireworks + total + high-score table with name entry).
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { theme } from './theme.js';
 import { Fireworks } from './Fireworks.js';
 import type { RoundScore } from '../../algorithms/challengeScore.js';
@@ -19,7 +19,10 @@ export interface ChallengeOverlayProps {
   roundIndex: number; // 0-based
   roundCount: number;
   instruction: string;
-  elapsedMs: number;
+  /** Timestamp (ms) the current round started -- the HUD ticks its OWN clock off
+   * this so the timer never re-renders the whole Workspace (that made every click
+   * feel laggy during a round). */
+  roundStartMs: number;
   lastScore: RoundScore | null;
   totalAdjusted: number;
   highScores: HighScore[];
@@ -122,7 +125,16 @@ function Intro({ roundCount, onConfirmStart, onCancel }: ChallengeOverlayProps) 
   );
 }
 
-function Hud({ roundIndex, roundCount, instruction, elapsedMs, onDone }: ChallengeOverlayProps) {
+function Hud({ roundIndex, roundCount, instruction, roundStartMs, onDone }: ChallengeOverlayProps) {
+  // The HUD owns the ticking clock -- a local interval re-renders ONLY this
+  // component, so the timer never re-renders the whole Workspace (that made
+  // every canvas click feel laggy mid-round).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(id);
+  }, []);
+  const elapsedMs = Math.max(0, now - roundStartMs);
   return (
     <div
       data-testid="challenge-hud"

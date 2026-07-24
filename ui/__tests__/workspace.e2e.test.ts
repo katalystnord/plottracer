@@ -5686,6 +5686,13 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
       // the round is genuinely pre-calibrated before we place points.
       await page.waitForTimeout(300);
       await waitForImageFitted();
+      // Wait until the round is actually READY to place points -- i.e. the figure
+      // is CAPTURED (the pre-capture "Frame the whole figure" prompt is gone),
+      // family-agnostic -- so clicks aren't dropped by a setup race.
+      for (let t = 0; t < 25; t++) {
+        if (!/Frame the whole figure/i.test(await textOf('tips-bar'))) break;
+        await page.waitForTimeout(100);
+      }
       // Place a few points by eye (place-point mode, pre-calibrated).
       await clickAt(320, 300);
       await clickAt(430, 280);

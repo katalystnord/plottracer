@@ -1168,7 +1168,6 @@ export function Workspace() {
   const [roundQueue, setRoundQueue] = useState<ChallengeExample[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [roundStartMs, setRoundStartMs] = useState(0);
-  const [elapsedMs, setElapsedMs] = useState(0);
   const [roundScores, setRoundScores] = useState<RoundScore[]>([]);
   const [highScores, setHighScores] = useState<HighScore[]>([]);
   // Which datapoint-table value cell is mid-edit (checkpoint 39). Editing a
@@ -2409,7 +2408,6 @@ export function Workspace() {
       setCalibExpanded(false); // the player didn't calibrate -- don't clutter/occlude with the calib card
       setMode('place-point');
       setRoundStartMs(Date.now());
-      setElapsedMs(0);
       bump();
     },
     [resetDocument, closePdf, bump]
@@ -2509,12 +2507,9 @@ export function Workspace() {
     imageCanvasRef.current?.clearImage(); // back to the blank "Open an image" opening state
   }, [clearFiguresToSingle, resetDocument]);
 
-  // Live round timer.
-  useEffect(() => {
-    if (gamePhase !== 'playing') return;
-    const id = setInterval(() => setElapsedMs(Date.now() - roundStartMs), 100);
-    return () => clearInterval(id);
-  }, [gamePhase, roundStartMs]);
+  // NB: the round timer lives INSIDE the HUD (ChallengeOverlay), ticking off
+  // `roundStartMs`, so it re-renders only the HUD -- not the whole Workspace every
+  // 100ms, which made canvas clicks feel laggy mid-round.
 
   // Route a measure-mode canvas click. Set-scale intercepts first (arming a
   // px->unit reference); then the active tool. Slope reports Δy/Δx in the chart's
@@ -7264,7 +7259,7 @@ export function Workspace() {
           roundIndex={roundIndex}
           roundCount={roundQueue.length}
           instruction={roundQueue[roundIndex]?.instruction ?? ''}
-          elapsedMs={elapsedMs}
+          roundStartMs={roundStartMs}
           lastScore={roundScores[roundScores.length - 1] ?? null}
           totalAdjusted={roundScores.reduce((s, r) => s + r.adjustedSeconds, 0)}
           highScores={highScores}
