@@ -337,6 +337,10 @@ interface ImageCanvasProps {
    * the cursor readout dodge it instead of hiding behind it (David: "overlay +
    * dodge", 2026-07-20). Null when nothing worth avoiding is open. */
   avoidRect?: AvoidRect | null;
+  /** The open card's OWN rect (container-local, no rail union) -- the loupe HIDES
+   * while the cursor is over it (click-through cards leak hover to the canvas).
+   * Null when no card is open. */
+  loupeHideRect?: AvoidRect | null;
 }
 
 export interface ImageCanvasHandle {
@@ -390,7 +394,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1788,18 +1792,35 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             </Stage>
           </div>
         )}
-        {image && hover && !isDragging && container && (
-          <Loupe
-            image={image}
-            view={view}
-            cursor={hover}
-            containerWidth={container.clientWidth}
-            containerHeight={container.clientHeight}
-            getOverlayCanvas={getOverlayCanvas}
-            overlayVersion={points}
-            avoid={avoidRect}
-          />
-        )}
+        {image &&
+          hover &&
+          !isDragging &&
+          container &&
+          // Hide the loupe when the cursor is over the OPEN CARD itself. Cards are
+          // now click-THROUGH (pointer-events:none, so points can be placed under
+          // them), which leaks their hover to the canvas -- otherwise the loupe
+          // pops into the plot centre (dodging the card) while you're just using
+          // the card. Uses the card's OWN rect (not `avoidRect`, which unions in
+          // the full-height rail), so hovering the plot below the card still shows
+          // the loupe.
+          !(
+            loupeHideRect &&
+            hover.x >= loupeHideRect.left &&
+            hover.x <= loupeHideRect.left + loupeHideRect.width &&
+            hover.y >= loupeHideRect.top &&
+            hover.y <= loupeHideRect.top + loupeHideRect.height
+          ) && (
+            <Loupe
+              image={image}
+              view={view}
+              cursor={hover}
+              containerWidth={container.clientWidth}
+              containerHeight={container.clientHeight}
+              getOverlayCanvas={getOverlayCanvas}
+              overlayVersion={points}
+              avoid={avoidRect}
+            />
+          )}
         {hoverImagePoint && (() => {
           // The readout sits bottom-left by default; a tall open card is
           // anchored there too, so flip it to bottom-right when the card would

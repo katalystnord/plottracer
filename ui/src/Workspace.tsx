@@ -773,6 +773,9 @@ export function Workspace() {
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const [cardPos, setCardPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [avoidRect, setAvoidRect] = useState<AvoidRect | null>(null);
+  // The open card's OWN rect (no rail union) -- the loupe hides while the cursor
+  // is over it (click-through cards leak hover to the canvas).
+  const [cardRect, setCardRect] = useState<AvoidRect | null>(null);
   const [version, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -789,6 +792,7 @@ export function Workspace() {
     const cardOpen = !!wrap && wrap.offsetHeight > 0;
     if (!region || !row || !cardOpen) {
       setAvoidRect((prev) => (prev === null ? prev : null));
+      setCardRect((prev) => (prev === null ? prev : null));
       return;
     }
     const rr = region.getBoundingClientRect();
@@ -805,6 +809,13 @@ export function Workspace() {
       prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height
         ? prev
         : next
+    );
+    // The card's OWN rect (no rail union) -- for hiding the loupe while over it.
+    const card: AvoidRect = { left: cardR.left - rr.left, top: cardR.top - rr.top, width: cardR.width, height: cardR.height };
+    setCardRect((prev) =>
+      prev && prev.left === card.left && prev.top === card.top && prev.width === card.width && prev.height === card.height
+        ? prev
+        : card
     );
   }, []);
 
@@ -6289,6 +6300,7 @@ export function Workspace() {
           onPdfBytes={openPdf}
           crosshairCursor={mode !== 'pan' || eyedropper !== null}
           avoidRect={avoidRect}
+          loupeHideRect={cardRect}
         />
         {/* Canvas right-click quick menu (mouse model). Anchored at the click via
             anchorPosition; closes on outside-click / Escape (MUI's own onClose).

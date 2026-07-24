@@ -5282,6 +5282,23 @@ describe('Workspace: the loupe dodges an open tool card (2026-07-20)', () => {
       loupe.y + loupe.height > card.y;
     expect(overlaps).toBe(false);
   });
+
+  it('hides the loupe while the cursor is over the click-through auto-extract card (2026-07-24)', async () => {
+    // The auto-extract card is click-through (pointer-events:none, so points place
+    // under it), which leaks its hover to the canvas -- without loupeHideRect the
+    // loupe pops into the plot centre while you're just using the card.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('flood');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await refreshCanvasBox();
+    const card = await page.getByTestId('auto-extract-card').boundingBox();
+    if (!card) throw new Error('auto-extract card not visible');
+    // Hover the CENTRE of the card itself.
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2, { steps: 3 });
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('zoom-loupe').count()).toBe(0);
+  });
 });
 
 describe('Workspace: error capture (checkpoint 79)', () => {
