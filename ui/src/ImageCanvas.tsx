@@ -1037,14 +1037,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   const endDrag = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       // Finalize a lasso (v1.1 #6): hand the traced loop to the caller in image-
-      // pixel space. A too-short trace (a stray click) selects nothing.
+      // pixel space. A too-short trace (a stray click on empty canvas) hands over
+      // an EMPTY polygon so the caller clears the selection -- matching the marquee
+      // (an empty box clears) and a plain background click, instead of stranding
+      // whatever was selected before.
       if (lassoRef.current) {
         const pts = lassoRef.current;
         lassoRef.current = null;
         setLassoCurrent(null);
         const canvas = canvasRef.current;
-        if (canvas && onSelectLasso && pts.length >= 3) {
-          onSelectLasso(pts.map((p) => screenToImage(view, p.x, p.y)));
+        if (canvas && onSelectLasso) {
+          onSelectLasso(pts.length >= 3 ? pts.map((p) => screenToImage(view, p.x, p.y)) : []);
         }
         return;
       }

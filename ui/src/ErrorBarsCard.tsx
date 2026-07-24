@@ -32,6 +32,10 @@ const Card = styled('div')({
   gap: 6,
   padding: '6px 8px 8px',
   borderRadius: 8,
+  // Never overrun a short viewport -- scroll inside instead of spilling off the
+  // bottom (v1.1 fast-follow). The card's own box-shadow is unaffected.
+  maxHeight: 'calc(100vh - 16px)',
+  overflowY: 'auto',
   // Frosted glass: floats over the immutable figure (see glassSurface).
   ...glassSurface,
   border: `1px solid ${theme.color.border.regular}`,

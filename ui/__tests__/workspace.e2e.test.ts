@@ -2486,6 +2486,36 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     expect(summary).toContain('Enclosed area');
   });
 
+  // v1.1 fast-follow: the Closed-curve toggle is per-series. Switching to (or
+  // adding) a series that has no geometry must read false, not leak the previous
+  // series' committed value.
+  it('the Closed-curve toggle does not leak across a series switch', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(130, 250); // (1, 0)
+    await clickAt(220, 190); // (4, 4) -- Series 1 has 2 points
+
+    await page.getByTestId('geometry-trigger').click();
+    await page.getByTestId('geometry-closed').click(); // closed = true
+    await page.getByTestId('geometry-run').click(); // commit geometry on Series 1
+    await page.waitForTimeout(120);
+    expect(await page.getByTestId('geometry-closed').isChecked()).toBe(true);
+    await clickAt(600, 400); // dismiss the fly-out
+
+    // A brand-new series has no geometry -> the toggle must be back to false.
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(120);
+    await page.getByTestId('geometry-trigger').click();
+    expect(await page.getByTestId('geometry-closed').isChecked()).toBe(false);
+
+    // Switching back to Series 1 reloads its committed 'closed' value.
+    await clickAt(600, 400);
+    await page.getByTestId('series-select').selectOption('0');
+    await page.waitForTimeout(120);
+    await page.getByTestId('geometry-trigger').click();
+    expect(await page.getByTestId('geometry-closed').isChecked()).toBe(true);
+  });
+
   it('reports a clear stale/broken state instead of computing Geometry for fewer than 2 points', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
@@ -4314,6 +4344,54 @@ describe('Workspace: Select tool (marquee range-select + bulk delete)', () => {
 
     await clickAt(200, 200); // click ONE point -> the whole series
     expect(await textOf('tips-bar')).toMatch(/4 points selected/);
+  });
+
+  // v1.1 fast-follow: the sub-mode strip is a plain div (not a Popover), so it
+  // had no click-away -- it lingered until an explicit toggle. An outside click
+  // must now fold it in, like the fly-outs do.
+  it('an outside click dismisses the Select sub-mode strip', async () => {
+    await placeFourPoints();
+    await page.getByTestId('mode-select').click(); // activate
+    await page.getByTestId('mode-select').click(); // open the picker
+    expect(await page.getByTestId('select-foldout-card').isVisible()).toBe(true);
+
+    await clickAt(600, 400); // click empty canvas, away from the strip
+    await page.waitForTimeout(50);
+    expect(await page.getByTestId('select-foldout-card').count()).toBe(0);
+  });
+
+  // v1.1 fast-follow: a stray single click in lasso mode (a too-short trace) must
+  // CLEAR the selection -- matching the marquee's empty box -- instead of leaving
+  // the previous selection stranded.
+  it('a stray lasso click clears the current selection', async () => {
+    await placeFourPoints();
+    await page.getByTestId('mode-select').click();
+    await page.getByTestId('mode-select').click();
+    await page.getByTestId('select-mode-lasso').click(); // lasso, folds in
+
+    await lasso([[170, 150], [285, 150], [285, 235], [170, 235], [170, 150]]);
+    expect(await textOf('tips-bar')).toMatch(/2 points selected/);
+
+    await clickAt(600, 400); // a stray click on empty canvas (no drag)
+    await page.waitForTimeout(50);
+    expect(await textOf('tips-bar')).not.toMatch(/\d+ points selected/);
+  });
+
+  // v1.1 fast-follow: a tall legacy fold-out card (Measure/Image/Error-bars) must
+  // scroll inside itself rather than spill off the bottom of a short window. The
+  // cap is a maxHeight + overflowY on the card root; without it the card is
+  // free-height with visible overflow.
+  it('a fold-out card caps its height so it never spills off a short window', async () => {
+    await resetWorkspace('xy');
+    await page.getByTestId('mode-measure').click();
+    const card = page.getByTestId('measure-card');
+    expect(await card.isVisible()).toBe(true);
+    const style = await card.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { overflowY: s.overflowY, maxHeight: s.maxHeight };
+    });
+    expect(style.overflowY).toBe('auto');
+    expect(style.maxHeight).toMatch(/px$/); // resolved calc(100vh - 16px), not 'none'
   });
 });
 

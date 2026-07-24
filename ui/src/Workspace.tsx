@@ -915,6 +915,21 @@ export function Workspace() {
     };
   }, [positionCard]);
 
+  // Dismiss the Select sub-mode strip on an outside click (v1.1 fast-follow). The
+  // fly-outs autoclose via their MUI Popover, but this plain-div strip had no
+  // click-away, so it lingered until an explicit toggle. Ignore clicks inside the
+  // strip itself and on its Select trigger (whose own onClick already toggles it).
+  useEffect(() => {
+    if (mode !== 'select' || !selectFoldoutOpen) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('[data-testid="select-foldout-card"]') || t?.closest('[data-testid="mode-select"]')) return;
+      setSelectFoldoutOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [mode, selectFoldoutOpen]);
+
   // Canvas right-click quick menu (mouse model, David 2026-07-20). Target-sensitive:
   // a data point, a measurement, or empty canvas. `x`/`y` are viewport coordinates
   // for MUI's anchorPosition. Null = closed.
@@ -4068,6 +4083,7 @@ export function Workspace() {
 
   const handleAddDataset = useCallback(() => {
     session.addDataset();
+    setGeometryClosed(false); // a fresh series has no geometry -- don't inherit the prior series' toggle
     if (axes) setMode('place-point'); // same "ready to click" default runCalibration already sets
     commit();
   }, [session, axes, commit]);
@@ -4098,6 +4114,10 @@ export function Workspace() {
       setSelectedPointIndices([]); // the marquee set indexes the OLD series -- clear it, or Del would act on the new one
       setNameDraft(null); // a half-typed name belongs to the series it was typed on
       setNameNotice(null);
+      // The Closed-curve toggle is per-series: reload it from the new series'
+      // committed geometry (or false when it has none) so it can't leak the
+      // previous series' value into a series that has no geometry yet.
+      setGeometryClosed(getGeometryState(session.getDataset())?.closed ?? false);
       bump();
     },
     [session, bump]
