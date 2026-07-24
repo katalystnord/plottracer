@@ -185,6 +185,11 @@ export function Loupe({
         border: `2px solid ${theme.color.background.primary}`,
         boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
         pointerEvents: 'none',
+        // The loupe is a precision aid -- it must ride ABOVE the floating cards
+        // (calibration / auto-extract / the challenge HUD, up to z 1100), or they
+        // occlude it. Below the full-screen modal backdrops (1200), which the
+        // loupe never needs to cover.
+        zIndex: 1150,
       }}
     >
       <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ display: 'block' }} />

@@ -5187,6 +5187,9 @@ describe('Workspace: the loupe shows your own points (checkpoint 83)', () => {
     await page.mouse.move(canvasBox.x + 258, canvasBox.y + 200);
     await page.waitForTimeout(200);
     expect(await page.getByTestId('zoom-loupe').count()).toBe(1);
+    // The loupe must ride above the floating cards (calib/auto-extract/HUD) or
+    // they occlude it (David, playtest 2026-07-24).
+    expect(await page.getByTestId('zoom-loupe').evaluate((el) => Number(getComputedStyle(el).zIndex))).toBeGreaterThan(1100);
     const before = await loupeSignature();
 
     await clickAt(250, 200); // place a point right there
