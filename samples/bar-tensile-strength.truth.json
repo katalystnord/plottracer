@@ -11,6 +11,22 @@
       "max": 450
     }
   },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 77.53,
+        "py": 660.28,
+        "value": 0
+      },
+      "p2": {
+        "px": 77.53,
+        "py": 39.33,
+        "value": 450
+      }
+    }
+  },
   "series": [
     {
       "name": "tensile strength",

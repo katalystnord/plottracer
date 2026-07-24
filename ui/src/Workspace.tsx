@@ -78,10 +78,15 @@ import {
   drawRounds,
   calibrationInputsFromAnchors,
   truthAxisRanges,
+  truthValueRange,
   truthSeriesPoints,
+  truthHistogramPoints,
+  truthBarValues,
+  truthBoxValues,
+  valueToPy,
   type ChallengeExample,
 } from '../../engine/traceChallenge.js';
-import { scoreRound, type RoundScore } from '../../algorithms/challengeScore.js';
+import { scoreRound, scoreOrderedRound, type RoundScore } from '../../algorithms/challengeScore.js';
 import {
   applyImageEditOp,
   cropImage,
@@ -2416,13 +2421,45 @@ export function Workspace() {
     const ex = roundQueue[roundIndex];
     if (!ex) return;
     const rawSeconds = Math.max(0, (Date.now() - roundStartMs) / 1000);
-    // The player's extraction in DATA space (same values the CSV export carries),
-    // grouped per series; empty series are ignored (not spurious curves).
-    const userSeries = sessionRef.current
-      .getAllDatasetsData()
-      .map((ds) => ds.points.filter((p) => p.data).map((p) => ({ x: p.data![0]!, y: p.data![1]! })))
-      .filter((s) => s.length > 0);
-    const score = scoreRound(ex.family, userSeries, truthSeriesPoints(ex.truth), truthAxisRanges(ex.truth), rawSeconds);
+    const session = sessionRef.current;
+    // Read the player's extraction in DATA space (the same values the CSV export
+    // carries) per family, and score it against truth.
+    let score: RoundScore;
+    if (ex.family === 'curve' || ex.family === 'scatter') {
+      const userSeries = session
+        .getAllDatasetsData()
+        .map((ds) => ds.points.filter((p) => p.data).map((p) => ({ x: p.data![0]!, y: p.data![1]! })))
+        .filter((s) => s.length > 0); // empty series aren't spurious curves
+      score = scoreRound(ex.family, userSeries, truthSeriesPoints(ex.truth), truthAxisRanges(ex.truth), rawSeconds);
+    } else if (ex.family === 'histogram') {
+      // Each captured bin -> (bin-centre, value); scored as a scatter (has an x axis).
+      const userPts = session
+        .getHistogramBins()
+        .flatMap((b) => (b ? [{ x: (b.binStart + b.binEnd) / 2, y: b.value }] : []));
+      score = scoreRound('scatter', [userPts], [truthHistogramPoints(ex.truth)], truthAxisRanges(ex.truth), rawSeconds);
+    } else if (ex.family === 'bar') {
+      // One value per bar, ranked left-to-right (no x calibration -> order is identity).
+      const items =
+        session
+          .getAllDatasetsData()[0]
+          ?.points.filter((p) => p.data)
+          .slice()
+          .sort((a, b) => a.px - b.px)
+          .map((p) => [p.data![0]!]) ?? [];
+      score = scoreOrderedRound(items, truthBarValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
+    } else {
+      // box: complete 5-point tuples only (Min,Q1,Median,Q3,Max order), ranked by px.
+      const tuples = session
+        .getTupleRows()
+        .map((t) =>
+          t.points.some((p) => !p || !p.data)
+            ? null
+            : { px: t.points.reduce((s, p) => s + p!.px, 0) / t.points.length, vals: t.points.map((p) => p!.data![0]!) }
+        )
+        .filter((x): x is { px: number; vals: number[] } => x !== null)
+        .sort((a, b) => a.px - b.px);
+      score = scoreOrderedRound(tuples.map((t) => t.vals), truthBoxValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
+    }
     setRoundScores((prev) => [...prev, score]);
     setGamePhase('reveal');
   }, [roundQueue, roundIndex, roundStartMs]);
@@ -4486,10 +4523,31 @@ export function Workspace() {
   const challengeReveal = useMemo(() => {
     if (gamePhase !== 'reveal') return null;
     const ex = roundQueue[roundIndex];
-    if (!ex || !axes) return null;
-    const xy = axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } };
-    const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(p.x, p.y)));
-    return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
+    if (!ex) return null;
+    // Curve/scatter/histogram have an x axis -> project the truth via dataToPixel.
+    if (ex.family === 'curve' || ex.family === 'scatter' || ex.family === 'histogram') {
+      if (!axes) return null;
+      const xy = axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } };
+      if (ex.family === 'histogram') {
+        return { curves: [], markers: truthHistogramPoints(ex.truth).map((p) => xy.dataToPixel(p.x, p.y)) };
+      }
+      const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(Number(p.x), Number(p.y))));
+      return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
+    }
+    // bar/box have no x calibration -> draw the true values as horizontal lines
+    // from the value-axis anchors (bar: each value; box: each median).
+    const cal = ex.truth.calibration;
+    const x0 = cal.anchors.p1?.px ?? 0;
+    const x1 = cal.imageWidth - 20;
+    const hline = (value: number) => [
+      { x: x0, y: valueToPy(cal, value) },
+      { x: x1, y: valueToPy(cal, value) },
+    ];
+    const curves =
+      ex.family === 'bar'
+        ? truthBarValues(ex.truth).map((v) => hline(v[0]!))
+        : truthBoxValues(ex.truth).map((v) => hline(v[2]!)); // box: median line
+    return { curves, markers: [] };
   }, [gamePhase, roundQueue, roundIndex, axes]);
 
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
@@ -7092,7 +7150,7 @@ export function Workspace() {
           <span data-testid="view-state">
             scale: {canvasView.scale.toFixed(3)}, offset: ({canvasView.offsetX.toFixed(1)}, {canvasView.offsetY.toFixed(1)})
           </span>
-          <span>
+          <span data-testid="calib-status">
             {axes ? 'Calibrated' : 'Not calibrated'}
             {canvasHasImage ? '' : ' · no image loaded'}
           </span>

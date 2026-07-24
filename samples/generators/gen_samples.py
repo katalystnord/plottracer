@@ -94,6 +94,27 @@ def _xy_calibration(fig, ax, xmin, xmax, ymin, ymax):
     }
 
 
+def _value_calibration(fig, ax, vmin, vmax):
+    """The 2 value-axis calibration anchors (p1/p2) for Bar / Box-plot, which
+    calibrate ONLY the magnitude axis (no category/x calibration). Image-pixel
+    space, y-flipped — same conventions as _xy_calibration. The px is taken on the
+    left axis edge; only py carries the value mapping (vertical bars)."""
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+    w = fig.get_figwidth() * fig.dpi
+    x0 = ax.get_xlim()[0]
+
+    def anchor(value):
+        sx, sy = ax.transData.transform((x0, value))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2), "value": value}
+
+    return {
+        "imageWidth": round(w),
+        "imageHeight": round(h),
+        "anchors": {"p1": anchor(vmin), "p2": anchor(vmax)},
+    }
+
+
 def gen_scatter():
     """Compressive modulus vs. crosslinker concentration — 26 separated markers
     (rejection-sampled so none touch -> the Blob Detector finds exactly one
@@ -198,11 +219,13 @@ def gen_bar():
     ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 450)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — per-bar value."},
         "graphType": "bar",
         "axes": {"y": {"label": "Tensile strength (MPa)", "min": 0, "max": 450}},
+        "calibration": calib,
         "series": [{"name": "tensile strength", "points": [{"category": c, "value": v} for c, v in zip(cats, vals)]}],
     })
 
@@ -226,12 +249,14 @@ def gen_histogram():
     ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, 100, 0, 60)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — true bin edges + count."},
         "graphType": "histogram",
         "axes": {"x": {"label": "Pore diameter (µm)", "min": 0, "max": 100},
                  "y": {"label": "Count", "min": 0, "max": 60}},
+        "calibration": calib,
         "series": [{"name": "pore size", "points": [
             {"binStart": int(edges[i]), "binEnd": int(edges[i + 1]), "value": int(counts[i])} for i in range(len(counts))]}],
     })
@@ -360,11 +385,13 @@ def gen_boxplot():
     ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 450)
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — five-number summary per box."},
         "graphType": "boxplot",
         "axes": {"y": {"label": "Tensile strength (MPa)", "min": 0, "max": 450}},
+        "calibration": calib,
         "series": [{"name": "tensile strength", "points": [
             {"category": c, "min": lo, "q1": q1, "median": md, "q3": q3, "max": hi} for c, lo, q1, md, q3, hi in boxes]}],
     })

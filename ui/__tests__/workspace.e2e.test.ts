@@ -382,6 +382,11 @@ async function selectAutoExtract(mech: 'flood' | 'colour' | 'guide') {
   const pressed = await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed');
   if (pressed !== 'true') await page.getByTestId('mode-auto-extract').click();
   await page.getByTestId(`auto-extract-${mech}`).click();
+  // Wait until the mechanism (and thus `mode`) is actually active before returning,
+  // or a following canvas click can be routed as the PREVIOUS mode -- the arming
+  // race that intermittently flaked the interpolation/guide tests. aria-pressed is
+  // `mode === m`, so this is the deterministic "mode is armed" signal.
+  await page.locator(`[data-testid="auto-extract-${mech}"][aria-pressed="true"]`).waitFor({ state: 'visible' });
 }
 
 describe('Workspace: XY axes', () => {
@@ -1266,8 +1271,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Trace a curve with two guide points -> anchors + a derived fill between them.
     await selectAutoExtract('guide');
-    await clickAt(140, 450);
-    await clickAt(380, 130);
+    await clickAt(420, 450);
+    await clickAt(620, 130);
     await page.waitForTimeout(150);
     const beforeCount = await page.getByTestId('points-table').locator('tbody tr').count();
     expect(beforeCount).toBeGreaterThan(3); // 2 anchors + spline fill
@@ -2295,9 +2300,9 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     expect(await page.getByTestId('auto-extract-guide').getAttribute('aria-pressed')).toBe('true');
 
     // Three well-separated guide points along a curve (canvas-local coords).
-    await clickAt(140, 450);
+    await clickAt(420, 450);
     await clickAt(250, 160);
-    await clickAt(380, 130);
+    await clickAt(620, 130);
     await page.waitForTimeout(150);
 
     // 3 anchors + the spline fill between them => strictly more table rows than
@@ -2335,8 +2340,8 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('guide');
-    await clickAt(140, 450);
-    await clickAt(380, 130);
+    await clickAt(420, 450);
+    await clickAt(620, 130);
     await page.waitForTimeout(150);
     const withFill = await page.getByTestId('points-table').locator('tbody tr').count();
     expect(withFill).toBeGreaterThan(3); // 2 anchors + spline fill; newest anchor (2) active
@@ -5621,6 +5626,10 @@ describe('series names are unique (checkpoint 75)', () => {
 
 describe('Workspace: Trace Challenge (v1.2 game)', () => {
   it('plays a full game — pre-calibrated rounds, scoring, reveal, results, high score, then resets', async () => {
+    // Electron persists localStorage across launches, so clear the high-score
+    // board first -> this run's fresh total always qualifies (deterministic).
+    await page.evaluate(() => window.localStorage.removeItem('plottracer.challenge.highscores'));
+
     // The app launches with no image; the challenge starts from a clean slate.
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('challenge-start').click();
@@ -5646,9 +5655,10 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
       await clickAt(540, 260);
 
       if (r === 0) {
-        // Pre-calibration proof: placing on a pre-calibrated session yields real
-        // data rows (no calibration step was ever shown to the player).
-        expect(await page.locator('[data-testid^="point-row-"]').count()).toBeGreaterThan(0);
+        // Pre-calibration proof (family-agnostic): the round is already calibrated
+        // -- the player never saw a calibration step -- so the status reads
+        // "Calibrated" and points are placed straight away.
+        expect(await textOf('calib-status')).toMatch(/^Calibrated/);
       }
 
       await page.getByTestId('challenge-done').click();
@@ -5672,5 +5682,6 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
     expect(await page.getByTestId('challenge-hud').count()).toBe(0);
     expect(await page.getByTestId('challenge-results').count()).toBe(0);
     expect(await textOf('tips-bar')).toMatch(/Open an image/i);
-  });
+  }, 60000); // a full 5-round game (image loads + per-round waits) exceeds the 15s default
 });
+

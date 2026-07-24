@@ -232,3 +232,45 @@ export function scoreRound(
     breakdown,
   };
 }
+
+/**
+ * Score an ORDERED categorical round (bar / box-plot). Each item is a value
+ * vector — bar: `[value]`; box: `[min,q1,median,q3,max]` — and items are paired
+ * LEFT-TO-RIGHT (both sides pre-sorted by pixel position), because bar/box have
+ * no x calibration so order IS the category identity. Per matched pair the mean
+ * component error (normalised by the value-axis range) is taxed; a category with
+ * no user item is a MISS, a surplus user item an EXTRA. (Histogram is scored as a
+ * scatter over (bin-centre, value) via `scoreRound('scatter', …)` instead — it
+ * DOES have an x axis, so it matches spatially and needn't cascade on a skip.)
+ */
+export function scoreOrderedRound(
+  userItems: readonly number[][],
+  truthItems: readonly number[][],
+  valueRange: number,
+  rawSeconds: number
+): RoundScore {
+  const n = Math.min(userItems.length, truthItems.length);
+  let errSum = 0;
+  for (let i = 0; i < n; i++) {
+    const u = userItems[i]!;
+    const t = truthItems[i]!;
+    const m = Math.min(u.length, t.length);
+    let e = 0;
+    for (let k = 0; k < m; k++) e += Math.abs(u[k]! - t[k]!) / valueRange;
+    errSum += m > 0 ? e / m : 1;
+  }
+  const misses = Math.max(0, truthItems.length - userItems.length);
+  const extras = Math.max(0, userItems.length - truthItems.length);
+  const breakdown: RoundBreakdown = {
+    matchedCount: n,
+    misses,
+    extras,
+    meanErrorFrac: n > 0 ? errSum / n : 1,
+    errorSeconds: errSum * ERROR_SECONDS_PER_UNIT,
+    coverageSeconds: 0,
+    missSeconds: misses * MISS_POINT_S,
+    extraSeconds: extras * EXTRA_POINT_S,
+  };
+  const penaltySeconds = breakdown.errorSeconds + breakdown.missSeconds + breakdown.extraSeconds;
+  return { rawSeconds, penaltySeconds, adjustedSeconds: rawSeconds + penaltySeconds, breakdown };
+}

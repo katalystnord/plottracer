@@ -4,18 +4,21 @@
  * by the SAME `EXAMPLES` id used to load the figure. Kept out of `engine/` so the
  * pure round logic stays asset-free and node-testable.
  *
- * Phase A pool = the 4 XY examples (2 scoring families). Phase B will add
- * histogram/bar/box here (+ their calibration blocks + family scoring).
+ * Pool = 7 examples across 3 scoring families: XY curves + scatter (Phase A) and
+ * bar / histogram / box (Phase B).
  */
-import type { ChallengeTruth, ScoreFamily } from '../../engine/traceChallenge.js';
+import type { ChallengeTruth, ChallengeFamily } from '../../engine/traceChallenge.js';
 
 import xyTruth from '../../samples/xy-stress-strain.truth.json';
 import multiTruth from '../../samples/xy-multiseries-modulus.truth.json';
 import dashedTruth from '../../samples/xy-dashed-release.truth.json';
 import scatterTruth from '../../samples/scatter-crosslink-modulus.truth.json';
+import histogramTruth from '../../samples/histogram-pore-size.truth.json';
+import barTruth from '../../samples/bar-tensile-strength.truth.json';
+import boxTruth from '../../samples/bar-box-plot-tensile-strength.truth.json';
 
 export interface ChallengeMeta {
-  family: ScoreFamily;
+  family: ChallengeFamily;
   instruction: string;
   truth: ChallengeTruth;
 }
@@ -42,6 +45,21 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
     family: 'scatter',
     instruction: 'Place one point on each marker in the scatter.',
     truth: scatterTruth as unknown as ChallengeTruth,
+  },
+  histogram: {
+    family: 'histogram',
+    instruction: 'Trace the histogram — click the two top corners of each bar (bin start, then bin end).',
+    truth: histogramTruth as unknown as ChallengeTruth,
+  },
+  bar: {
+    family: 'bar',
+    instruction: 'Trace the bar chart — click the top of each bar, left to right.',
+    truth: barTruth as unknown as ChallengeTruth,
+  },
+  boxplot: {
+    family: 'box',
+    instruction: 'Trace each box — place Min, Q1, Median, Q3, Max per box (the tips bar shows what’s next).',
+    truth: boxTruth as unknown as ChallengeTruth,
   },
 };
 

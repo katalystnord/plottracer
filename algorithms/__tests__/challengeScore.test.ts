@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   interpY,
   scoreRound,
+  scoreOrderedRound,
   ERROR_SECONDS_PER_UNIT,
   COVERAGE_PENALTY_S,
   MISS_POINT_S,
@@ -115,5 +116,36 @@ describe('scoreRound — scatter family', () => {
     // one point 0.1 off, two dead-on -> errorSeconds ~= 0.1 * K
     expect(s.breakdown.errorSeconds).toBeCloseTo(0.1 * ERROR_SECONDS_PER_UNIT, 5);
     expect(s.breakdown.matchedCount).toBe(3);
+  });
+});
+
+describe('scoreOrderedRound — bar / box families', () => {
+  const RANGE = 450;
+
+  it('a perfect bar set adds ~0 penalty', () => {
+    const truth = [[345], [285], [210]];
+    const s = scoreOrderedRound(truth, truth, RANGE, 12);
+    expect(s.penaltySeconds).toBeCloseTo(0, 6);
+    expect(s.adjustedSeconds).toBeCloseTo(12, 6);
+  });
+
+  it('a bar value off by 10% of the range is taxed proportionally', () => {
+    const s = scoreOrderedRound([[345 + 45]], [[345]], RANGE, 0); // 45/450 = 0.1
+    expect(s.breakdown.errorSeconds).toBeCloseTo(0.1 * ERROR_SECONDS_PER_UNIT, 5);
+  });
+
+  it('a missing bar is one miss; a surplus bar is one extra', () => {
+    const truth = [[345], [285]];
+    expect(scoreOrderedRound([[345]], truth, RANGE, 0).breakdown.missSeconds).toBe(MISS_POINT_S);
+    expect(scoreOrderedRound([[345], [285], [1]], truth, RANGE, 0).breakdown.extraSeconds).toBe(EXTRA_POINT_S);
+  });
+
+  it('box five-number vectors average the component error', () => {
+    const truth = [[250, 300, 340, 380, 420]];
+    const user = [[250, 300, 340 + 45, 380, 420]]; // only the median is 45 off (0.1)
+    const s = scoreOrderedRound(user, truth, RANGE, 0);
+    // mean over 5 components = 0.1/5 = 0.02
+    expect(s.breakdown.errorSeconds).toBeCloseTo(0.02 * ERROR_SECONDS_PER_UNIT, 5);
+    expect(s.breakdown.matchedCount).toBe(1);
   });
 });
