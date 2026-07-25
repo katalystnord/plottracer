@@ -5545,6 +5545,31 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
   });
 
+  it('the tips bar guides the Error-bars tool instead of telling you to calibrate (v1.3)', async () => {
+    // ⚑ Error bars was the ONLY tool with no branch in guidanceTip, so on a
+    // CALIBRATED chart it fell through to the uncalibrated fallback: the tips bar
+    // said "Pick a graph type, then calibrate the axes to begin" while the
+    // calibration card beside it said Calibrated ✓. Caught on a screenshot.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    // The rail gates the tool on "some series has points" (Add data points
+    // first), so a datum has to exist before the mode is reachable at all.
+    await clickAt(400, 200);
+    await page.getByTestId('mode-error-bars').click();
+    let tip = (await textOf('tips-bar')) ?? '';
+    expect(tip).toContain('drag from a data point out to its error cap');
+    expect(tip).not.toContain('calibrate the axes to begin');
+
+    // The empty-ACTIVE-series case is still reachable, because the rail gate asks
+    // whether ANY series has points while the tip speaks for the active one.
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(100);
+    await page.getByTestId('mode-error-bars').click();
+    tip = (await textOf('tips-bar')) ?? '';
+    expect(tip).toContain('place the data points first');
+    expect(tip).not.toContain('calibrate the axes to begin');
+  });
+
   it('records a cap AND its mirror into two related, user-named series', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

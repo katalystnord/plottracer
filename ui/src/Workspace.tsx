@@ -4935,6 +4935,16 @@ export function Workspace() {
         return 'Interpolate — click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
       }
       if (mode === 'eraser') return 'Eraser — click a data point to remove it.';
+      // ⚑ Error bars had NO branch here, so a calibrated chart in this mode fell
+      // through to the uncalibrated fallback below and told the user to "calibrate
+      // the axes to begin" -- while the calibration card beside it said Calibrated ✓
+      // and the status bar agreed. The one tool whose whole job is a two-ended drag
+      // was also the one with no guidance for it. Caught on the screenshot bench.
+      if (mode === 'error-bars') {
+        if (dataPoints.length === 0)
+          return 'Error bars — place the data points first (tool 3), then drag from a point out to its cap.';
+        return 'Error bars — drag from a data point out to its error cap; a cap is placed on each side. Drag either cap to where the figure draws it.';
+      }
       if (mode === 'pan') return 'Pan and zoom only — pick a tool from the left rail to edit.';
     }
     return 'Pick a graph type, then calibrate the axes to begin.';
