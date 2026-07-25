@@ -4739,7 +4739,17 @@ export function Workspace() {
         // data marker to place the vertex (and snap to it), never get eaten by the
         // marker's own select/drag -- which used to let a measure click grab and
         // move a data point. Also inert in Pan.
-        draggable: mode !== 'pan' && mode !== 'measure' && !isInterp,
+        //
+        // ⚑ And inert in Error-bars, for the same reason, found the same way --
+        // by driving the app. The cap gesture BEGINS by pressing a datum ("drag
+        // from a data point out to its error cap"), and the stage handler
+        // deliberately pre-empts the landed-on-a-marker bail so that press starts
+        // the link. But Konva's built-in drag fires off the marker's OWN
+        // mousedown, so the same press did both: it recorded the cap AND hauled
+        // the datum along to wherever the drag ended -- i.e. onto the cap. Silent,
+        // and it corrupts a point the user had already placed correctly. The
+        // datum is the anchor a cap hangs off; capturing the cap must not move it.
+        draggable: mode !== 'pan' && mode !== 'measure' && mode !== 'error-bars' && !isInterp,
         selected,
         radius: isAnchor ? 6.5 : isInterp ? 2.5 : plainDense ? SELECTED_DOT_RADIUS : undefined,
       });

@@ -5585,6 +5585,34 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(names.join('|')).toMatch(/SD lower/);
   });
 
+  it('a cap drag must NOT drag the datum it hangs off (v1.3)', async () => {
+    // ⚑ Found by David driving the real app on samples/errorbar-tensile-cure.png:
+    // "The only way that I can place the error bars is by clicking on the point
+    // that they belong to and then dragging out. And that pulls the point with
+    // it." The datum silently followed the cursor and landed ON the cap -- across
+    // four attempts, every point-1 datum came to rest at the upper-cap value
+    // (truth 8.0, recorded 9.53 / 11.24 / 9.52 / 9.50) while the points placed
+    // WITHOUT dragging caps were all within 0.1. Not hand-eye: the marker stayed
+    // `draggable` in error-bars mode, so one press started both the cap link and
+    // Konva's own marker drag. Exactly the defect Measure was hardened against in
+    // v1.1; error-bars was simply never added to the inert list.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 200); // datum at x=10, y=3.333
+    const before = await rowValues(0);
+    expect(before[1]).toBeCloseTo(3.333, 2);
+    await page.getByTestId('mode-error-bars').click();
+    await dragMarker(400, 200, 400, 160); // drag out to the cap at y=6
+    const after = await rowValues(0);
+    // The datum is where it was placed -- NOT dragged up to the cap's y=6.
+    expect(after[0]).toBeCloseTo(before[0]!, 2);
+    expect(after[1]).toBeCloseTo(before[1]!, 2);
+    // ...and the gesture still did its job, so this can't be "fixed" by making
+    // the tool inert.
+    const names = await page.locator('[data-testid="series-select"] option').allTextContents();
+    expect(names.join('|')).toMatch(/SD upper/);
+  });
+
   it('the mirrored cap is a STARTING POSITION, not a symmetry claim', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
