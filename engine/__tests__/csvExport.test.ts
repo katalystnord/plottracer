@@ -277,3 +277,69 @@ describe('curve fit export (v0.8)', () => {
     expect(without.series[0]).not.toHaveProperty('geometry');
   });
 });
+
+// v1.3 — the anchor/interpolated role rides out with the data.
+//
+// The tenet-9 claim the product rests on is that a reader can tell what a human
+// put on the figure from what the app invented. That held for the PROJECT FILE
+// (roles round-trip) but NOT for exports: a spline sample left byte-identical to
+// an assigned anchor, so a CSV handed on to anyone else quietly presented derived
+// points as record. These pin the contract David chose (2026-07-25): the stored
+// words, blank where the distinction doesn't apply, column only when it's real.
+describe('interpolation role in exports (v1.3)', () => {
+  const anchored: ExportRow[] = [
+    { px: 100, py: 200, values: [1, 10], role: 'anchor' },
+    { px: 110, py: 190, values: [2, 20], role: 'interpolated' },
+    { px: 120, py: 180, values: [3, 30], role: 'anchor' },
+  ];
+
+  it('adds a role column to a flat export that carries roles', () => {
+    expect(buildFlatDataCSV(anchored, ['X', 'Y'])).toBe(
+      'x_px,y_px,X,Y,role\n100,200,1,10,anchor\n110,190,2,20,interpolated\n120,180,3,30,anchor'
+    );
+  });
+
+  it('leaves an ordinary series byte-identical — no role column at all', () => {
+    // The column's PRESENCE is the signal. A plain trace must not grow an empty
+    // column, or every existing consumer's parser shifts for nothing.
+    const plain: ExportRow[] = [{ px: 100, py: 200, values: [1, 10] }];
+    expect(buildFlatDataCSV(plain, ['X', 'Y'])).toBe('x_px,y_px,X,Y\n100,200,1,10');
+  });
+
+  it('blanks the role of an ordinary point inside a role-carrying series', () => {
+    // A hand-placed point in an interpolation series has no role -- we state the
+    // fact the record holds and invent nothing for the points it doesn't cover.
+    const mixed: ExportRow[] = [
+      { px: 100, py: 200, values: [1, 10], role: 'anchor' },
+      { px: 105, py: 195, values: [4, 40] },
+    ];
+    expect(buildFlatDataCSV(mixed, ['X', 'Y'])).toBe('x_px,y_px,X,Y,role\n100,200,1,10,anchor\n105,195,4,40,');
+  });
+
+  it('gives only the role-carrying series its own role column in a multi-series file', () => {
+    const csv = buildAllSeriesCSV(
+      [
+        { name: 'Traced', rows: [{ px: 1, py: 2, values: [1, 10] }] },
+        { name: 'Guided', rows: [{ px: 3, py: 4, values: [2, 20], role: 'interpolated' }] },
+      ],
+      ['X', 'Y']
+    );
+    expect(csv).toBe('#,Traced X,Traced Y,Guided X,Guided Y,Guided role\n1,1,10,2,20,interpolated');
+  });
+
+  it('attaches role to a JSON point only where it applies', () => {
+    const doc = JSON.parse(
+      buildSeriesJSON(
+        [
+          { name: 'Guided', rows: anchored },
+          { name: 'Traced', rows: [{ px: 9, py: 9, values: [9, 90] }] },
+        ],
+        ['X', 'Y']
+      )
+    );
+    expect(doc.series[0].points[0]).toEqual({ X: 1, Y: 10, role: 'anchor' });
+    expect(doc.series[0].points[1].role).toBe('interpolated');
+    // An ordinary series' points stay exactly as they were -- no null role key.
+    expect(doc.series[1].points[0]).toEqual({ X: 9, Y: 90 });
+  });
+});

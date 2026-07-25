@@ -18,7 +18,7 @@
  * at per-axes-type semantic names.
  */
 
-import type { TupleRow } from './calibrationSession.js';
+import type { PointRole, TupleRow } from './calibrationSession.js';
 import type { HistogramBin } from '../algorithms/histogram.js';
 import type { GeometryResult } from '../algorithms/geometry.js';
 import { errorAbove, errorBelow, type ErrorBarPoint } from '../algorithms/errorBar.js';
@@ -69,6 +69,18 @@ export interface ExportRow {
   px: number;
   py: number;
   values: ExportValue[];
+  /** For an interpolation-assist series only: whether the user ASSIGNED this
+   * point (`anchor`) or the spline DERIVED it (`interpolated`). Undefined for an
+   * ordinary placed/traced point — the distinction doesn't apply to it (v1.3). */
+  role?: PointRole;
+}
+
+/** Does any row of this series carry a role? Drives whether the `role` column
+ * exists at all: a series with no interpolation exports exactly as it did
+ * before, so the column's PRESENCE is itself the signal that some of these
+ * points were not placed by hand. */
+function hasRoles(rows: readonly ExportRow[]): boolean {
+  return rows.some((r) => r.role != null);
 }
 
 /** One row per point: pixel coordinates plus the axes' own columns.
@@ -80,11 +92,22 @@ export interface ExportRow {
  * A Bar chart's first column is now its Label, and a CCR's first column is a
  * time rather than a julian float. See core/exportValues.ts.
  *
- * A null value (not measured) exports a blank cell rather than a zero. */
+ * A null value (not measured) exports a blank cell rather than a zero.
+ *
+ * A trailing `role` column appears only when the series actually carries roles
+ * (an interpolation-assist trace), and an ordinary point inside such a series
+ * leaves it blank — we state the fact the record holds and invent nothing for
+ * the points it doesn't apply to. */
 export function flatDataSection(rows: readonly ExportRow[], fields: readonly string[]): TableSection {
+  const roles = hasRoles(rows);
   return {
-    header: ['x_px', 'y_px', ...fields],
-    rows: rows.map((r) => [r.px, r.py, ...fields.map((_f, i) => r.values[i] ?? '')]),
+    header: ['x_px', 'y_px', ...fields, ...(roles ? ['role'] : [])],
+    rows: rows.map((r) => [
+      r.px,
+      r.py,
+      ...fields.map((_f, i) => r.values[i] ?? ''),
+      ...(roles ? [r.role ?? ''] : []),
+    ]),
   };
 }
 export function buildFlatDataCSV(rows: readonly ExportRow[], fields: readonly string[], sep: Delimiter = ','): string {
@@ -327,16 +350,24 @@ function seriesColumnPrefix(s: SeriesForCSV): string {
 }
 
 export function allSeriesSection(series: readonly SeriesForCSV[], fields: readonly string[]): TableSection {
+  // Roles are decided PER SERIES: in a multi-series file one traced curve can be
+  // interpolation-assisted while the others were placed by hand, so only that
+  // one grows a role column (`<series> role`, beside its own value columns).
+  const roleCols = series.map((s) => hasRoles(s.rows));
   const header: (string | number)[] = ['#'];
-  for (const s of series) for (const label of fields) header.push(`${seriesColumnPrefix(s)} ${label}`);
+  series.forEach((s, si) => {
+    for (const label of fields) header.push(`${seriesColumnPrefix(s)} ${label}`);
+    if (roleCols[si]) header.push(`${seriesColumnPrefix(s)} role`);
+  });
   const maxRows = series.reduce((max, s) => Math.max(max, s.rows.length), 0);
   const rows: (string | number)[][] = [];
   for (let i = 0; i < maxRows; i++) {
     const row: (string | number)[] = [i + 1];
-    for (const s of series) {
-      const values = s.rows[i]?.values;
-      for (let d = 0; d < fields.length; d++) row.push(values?.[d] ?? '');
-    }
+    series.forEach((s, si) => {
+      const r = s.rows[i];
+      for (let d = 0; d < fields.length; d++) row.push(r?.values[d] ?? '');
+      if (roleCols[si]) row.push(r?.role ?? '');
+    });
     rows.push(row);
   }
   return { header, rows };
@@ -363,7 +394,14 @@ export function buildSeriesJSON(
     series: series.map((s) => {
       const entry: Record<string, unknown> = {
         name: s.name,
-        points: s.rows.map((r) => Object.fromEntries(fields.map((label, i) => [label, r.values[i] ?? null]))),
+        // `role` is attached only to a point that HAS one (an interpolation-assist
+        // series), never nulled onto ordinary points -- the same "an absent field
+        // means it doesn't apply" rule the error schema follows. A reader that
+        // wants only what a human put on the figure keeps role != "interpolated".
+        points: s.rows.map((r) => ({
+          ...Object.fromEntries(fields.map((label, i) => [label, r.values[i] ?? null])),
+          ...(r.role ? { role: r.role } : {}),
+        })),
       };
       if (s.relation) entry.relation = { role: s.relation.role, of: s.relation.of };
       // The fit is a SEPARATE key from `points` (David) -- a reader takes the

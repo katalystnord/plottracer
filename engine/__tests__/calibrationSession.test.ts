@@ -491,6 +491,62 @@ describe('Interpolation-assist stores the series in curve order (rc.2 fix)', () 
   });
 });
 
+// v1.3 — the role has to reach the EXPORT, not just the canvas. It already
+// round-tripped through the project file; a CSV/JSON handed to anyone else
+// flattened an assigned anchor and an invented spline sample into the same
+// thing (the v0.6 audit's highest-value deferred finding).
+describe('interpolation roles reach the export rows (v1.3)', () => {
+  it('tags each export row with the role its point carries', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    session.addAnchorPoint(150, 240);
+    session.addAnchorPoint(380, 120);
+    const roles = session.getDataPointRoles();
+    const rows = session.getExportRows(0);
+    expect(rows).toHaveLength(roles.length);
+    // Index-aligned with the canvas' own view of the same points.
+    expect(rows.map((r) => r.role ?? null)).toEqual(roles);
+    expect(rows[0]!.role).toBe('anchor');
+    expect(rows[1]!.role).toBe('interpolated');
+  });
+
+  it('leaves an ordinary traced point with no role at all', () => {
+    // Not `role: null` -- absent, so a plain series exports exactly as before.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    session.addDataPoint(200, 200);
+    expect(session.getExportRows(0)[0]).not.toHaveProperty('role');
+  });
+
+  it('reads the roles of a series that is NOT the active one', () => {
+    // The spreadsheet and the export render every series at once, so roles have
+    // to be readable per index -- the active-only getter can't answer for them.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    session.addAnchorPoint(150, 240);
+    session.addAnchorPoint(380, 120);
+    const guided = session.getActiveDatasetIndex();
+    const plain = session.addDataset('Traced'); // switches active away from the guided one
+    session.addDataPoint(200, 200);
+
+    expect(session.getDataPointRolesFor(plain)).toEqual([null]);
+    const guidedRoles = session.getDataPointRolesFor(guided);
+    expect(guidedRoles.length).toBeGreaterThan(3);
+    expect(guidedRoles[0]).toBe('anchor');
+    expect(guidedRoles).toContain('interpolated');
+    // ...and the same series still exports its roles while inactive.
+    expect(session.getExportRows(guided)[0]!.role).toBe('anchor');
+  });
+
+  it('yields an empty list for an out-of-range dataset index', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    expect(session.getDataPointRolesFor(99)).toEqual([]);
+  });
+});
+
 describe('CalibrationSession (Bar axes)', () => {
   it('walks through the 2 calibration steps in order, fewer than XY', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);

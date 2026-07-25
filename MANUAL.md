@@ -84,12 +84,20 @@ Measurements are a separate collection from your series data.
 
 ## 8. Export
 
-**Export** (top bar) → **CSV, TSV, JSON, Excel (XLSX), LaTeX, MATLAB, Python**, or
-a **PNG** of the annotated figure. Choose **Active** (the current series) or **All
-series**. Values are rounded to the figure's real resolution — never padded with
-false precision, never collapsed to zero — with a full-precision option when you
-want every digit. Fitted curves and measurements export as their own blocks, kept
-separate from the recorded points.
+**Export** (top bar) → **CSV, TSV, JSON, Excel (XLSX), LaTeX, MATLAB, Python, R**,
+or a **PNG** of the annotated figure. Any text format can also be copied straight
+to the clipboard. Choose **Active** (the current series) or **All series**. Values
+are rounded to the figure's real resolution — never padded with false precision,
+never collapsed to zero — with a full-precision option when you want every digit.
+Fitted curves, geometry and measurements export as their own blocks, kept separate
+from the recorded points.
+
+**Guide-point traces carry a `role` column.** If a series was traced with **Guide
+points**, its export gains a `role` telling you where each number came from:
+`anchor` for a point you placed by eye, `interpolated` for one the spline filled in
+between your anchors. Keep only the anchors if you want strictly what a human put on
+the figure. The column appears only for series that were traced this way — an
+ordinary trace exports exactly as before.
 
 **Save Project** writes a `.zip` containing everything — image(s), calibration,
 series, measurements, and the original source PDF — so the whole extraction reopens

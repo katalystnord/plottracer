@@ -3041,6 +3041,15 @@ export function Workspace() {
     setEditingCell(null);
     const point = session.getDataPoints()[cell.index];
     if (!point || !point.data || !axes || config.axesKind !== 'xy') return;
+    // The model-side rule, at the one point every edit entrance converges on: a
+    // spline-DERIVED sample is not writable, because rebuildInterpolation
+    // regenerates it from the anchors and the write would be silently undone the
+    // next time one moves. The UI above already declines to OFFER the edit (the
+    // cell renders read-only, the derived marker isn't in the hit graph), so this
+    // catches only a path that gets here another way -- which is exactly the
+    // "guards belong in the model, and the model has more than one entrance"
+    // lesson this codebase keeps relearning.
+    if (session.getDataPointRoles()[cell.index] === 'interpolated') return;
     const parsed = Number(cell.value);
     if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> revert to derived
     const nextData = [...point.data];
@@ -4497,8 +4506,13 @@ export function Workspace() {
         color: d.color,
         active: d.active,
         values: d.points.map((p) => p.data), // (number[] | null)[]
+        // Per-SERIES roles, so a spline-derived cell can be told apart from one
+        // the user put there -- every series renders at once, and "is this point
+        // derived?" differs between them (v1.3).
+        roles: session.getDataPointRolesFor(d.index),
       })),
-    [allDatasetsData, datasetInfos]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allDatasetsData, datasetInfos, session, version]
   );
   // Value-column headers from the axes itself (checkpoint 92), so the table's
   // column names match the exported file's -- was config.valueLabels, which had
@@ -6333,7 +6347,14 @@ export function Workspace() {
             >
               Set as active
             </MenuItem>,
-            ...(config.axesKind === 'xy'
+            // Belt-and-braces for a spline-derived sample. Today it can't even get
+            // here -- a derived marker is non-draggable, so ImageCanvas keeps it out
+            // of the hit graph (`listening={point.draggable}`) and the right-click
+            // falls through to the empty-canvas menu. The guard states the rule where
+            // the menu is built, so re-enabling those markers (to make them
+            // selectable, say) can't quietly restore an Edit value that no longer
+            // renders an editor. Anchors keep the action -- moving one IS the edit.
+            ...(config.axesKind === 'xy' && dataPointRoles[ctxMenu.index] !== 'interpolated'
               ? [
                   <MenuItem
                     key="edit"
@@ -6899,13 +6920,26 @@ export function Workspace() {
                         </td>
                         {spreadsheetSeries.map((s) => {
                           const data = s.values[i];
-                          const editable = config.axesKind === 'xy' && s.active;
+                          // A spline-DERIVED sample is not the user's number to type over:
+                          // the next rebuild regenerates it from the anchors, so an edit
+                          // here looked like it took and was silently wiped (v0.6 audit).
+                          // It reads muted + italic and refuses the edit, pointing at the
+                          // anchors -- which ARE editable, and which the curve follows.
+                          const derived = s.roles[i] === 'interpolated';
+                          const editable = config.axesKind === 'xy' && s.active && !derived;
                           return tableValueLabels.map((_label, d) => {
                             const dateFmt = tableDateFormats[d];
                             return (
                               <td
                                 key={`${s.index}-${d}`}
-                                style={{ padding: '1px 8px', borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none', fontVariantNumeric: 'tabular-nums' }}
+                                data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
+                                title={derived ? 'Derived by the spline from your guide points — move an anchor to change it' : undefined}
+                                style={{
+                                  padding: '1px 8px',
+                                  borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  ...(derived ? { color: theme.color.text.legend, fontStyle: 'italic' } : {}),
+                                }}
                               >
                                 {data
                                   ? dateFmt != null
@@ -6925,6 +6959,17 @@ export function Workspace() {
                   })}
                 </tbody>
               </table>
+              {/* What the italic cells MEAN, on screen rather than in a tooltip: a
+                  reader who never placed a guide point still has to be able to tell
+                  which of these numbers came off the figure and which the spline
+                  invented. Shown only when some visible series actually has derived
+                  points, so an ordinary trace's table stays uncluttered. */}
+              {spreadsheetSeries.some((s) => s.roles.some((r) => r === 'interpolated')) && (
+                <div data-testid="derived-legend" style={{ padding: '4px 8px', color: theme.color.text.legend, fontSize: 12 }}>
+                  <i>Italic</i> = derived by the spline between your guide points, not read off the
+                  figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
+                </div>
+              )}
               {/* Empty-state message lives outside <tbody> so a "no data points"
                   check can still count tbody rows (== points placed). */}
               {spreadsheetMaxRows === 0 && (

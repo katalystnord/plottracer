@@ -2311,6 +2311,102 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     expect(rowCount).toBeGreaterThan(3);
   });
 
+  it('marks derived rows in the table and refuses to edit them (v1.3)', async () => {
+    // A spline sample is regenerated from the anchors on every rebuild, so an
+    // edit typed into its row "stuck" and was then silently wiped (v0.6 audit).
+    // It now reads as derived and declines the edit; the ANCHOR rows stay
+    // editable, because moving an anchor is exactly how you change the curve.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('guide');
+    await clickAt(420, 450);
+    await clickAt(620, 130);
+    await page.waitForTimeout(150);
+
+    // Curve order: row 0 is an anchor (curve start), row 1 is derived fill.
+    expect(await page.getByTestId('derived-cell-0-1-0').count()).toBe(1);
+    expect(await page.getByTestId('derived-cell-0-0-0').count()).toBe(0);
+
+    // What italic MEANS is on screen, not only in a tooltip.
+    expect(await page.getByTestId('derived-legend').isVisible()).toBe(true);
+
+    // The derived cell offers no click-to-edit affordance at all...
+    expect(await page.getByTestId('data-value-x-1').count()).toBe(0);
+    // ...while the anchor row still opens its inline editor on click.
+    await page.getByTestId('data-value-x-0').click();
+    expect(await page.getByTestId('data-edit-x-0').count()).toBe(1);
+    await page.keyboard.press('Escape');
+  });
+
+  it('does not offer "Edit value…" on a derived point (the second door, v1.3)', async () => {
+    // The table cell is not the only entrance: right-click carries its own edit
+    // action, which left live would open an editor that no longer renders.
+    // ⚑ HONEST LABEL: this PINS behaviour, it does not prove a fix -- it passes
+    // against the unguarded build too, because a derived marker is already inert
+    // (non-draggable => `listening={false}`) so it never opens a point menu at
+    // all. The Workspace guard beside it is belt-and-braces for the day someone
+    // makes those markers listening; this test is the net that would catch it.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('guide');
+    // Two anchors on a horizontal line, so the derived fill lies BETWEEN them at a
+    // pixel we can right-click precisely (the spline through collinear anchors
+    // stays on the line -- see algorithms/interpolate.ts, it cannot cusp).
+    await clickAt(300, 300);
+    await clickAt(600, 300);
+    await page.waitForTimeout(150);
+    await refreshCanvasBox();
+
+    // Midpoint = derived fill. A derived marker is deliberately kept OUT of the
+    // canvas hit graph (ImageCanvas: `listening={point.draggable}`), so the
+    // right-click falls through to the empty-canvas menu -- there is no per-point
+    // menu on it at all, and therefore no Edit value to mis-fire.
+    await page.mouse.click(canvasBox.x + 450, canvasBox.y + 300, { button: 'right' });
+    await page.getByTestId('ctx-fit-view').waitFor({ state: 'visible' });
+    expect(await page.getByTestId('ctx-edit-value').count()).toBe(0);
+    // Close it by clicking the backdrop, NOT Escape: the menu is deliberately
+    // focus-passive (disableAutoFocus/disableEnforceFocus, so "Edit value…" can
+    // hand focus to the sidebar input), so a keypress never reaches it -- and a
+    // left-open menu's backdrop would swallow the next right-click.
+    await page.mouse.click(canvasBox.x + 700, canvasBox.y + 500);
+    await page.getByTestId('ctx-fit-view').waitFor({ state: 'detached' });
+    // MUI unmounts the menu through a close TRANSITION; its backdrop is still up
+    // for a few frames after the node detaches and would swallow the next
+    // right-click, so let it finish before opening the second menu.
+    await page.waitForTimeout(400);
+
+    // The anchor at the curve's start is a real, grabbable point: its own menu,
+    // with Edit value offered -- moving an anchor IS how you change the curve.
+    await page.mouse.click(canvasBox.x + 300, canvasBox.y + 300, { button: 'right' });
+    await page.getByTestId('ctx-delete-point').waitFor({ state: 'visible' });
+    expect(await page.getByTestId('ctx-edit-value').count()).toBe(1);
+    await page.mouse.click(canvasBox.x + 700, canvasBox.y + 500);
+    await page.getByTestId('ctx-delete-point').waitFor({ state: 'detached' });
+  });
+
+  it('exports the anchor/interpolated role alongside the data (v1.3)', async () => {
+    // The tenet-9 claim in file form: a reader who never saw the app can tell
+    // which of these numbers a human put on the figure and which the spline
+    // invented. Read back through the OS clipboard, like the v1.1 #4 test.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('guide');
+    await clickAt(420, 450);
+    await clickAt(620, 130);
+    await page.waitForTimeout(150);
+
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-copy-csv').click();
+    await page.waitForTimeout(200);
+    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+    const lines = copied.split('\n');
+    expect(lines[0]).toBe('x_px,y_px,X,Y,role');
+    expect(lines[1]!.endsWith(',anchor')).toBe(true);
+    expect(lines.filter((l) => l.endsWith(',interpolated')).length).toBeGreaterThan(0);
+    // The curve ends on the other anchor -- exactly two, matching the two clicks.
+    expect(lines.filter((l) => l.endsWith(',anchor')).length).toBe(2);
+  });
+
   it('shortcut 4 selects the Auto-extract tool once calibrated (v0.8)', async () => {
     // Interpolate no longer has its own hotkey -- it's a mechanism inside the
     // Auto-extract umbrella (hotkey 4 after the 2026-07-22 rail renumber), which

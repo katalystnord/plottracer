@@ -1144,6 +1144,22 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
   },
 };
 
+/** How a point of an interpolation-assist series came to exist.
+ *
+ * `anchor` — the user ASSIGNED it: they judged by eye where the curve runs and
+ * put a guide point there. That is a human decision about the figure, not a
+ * measurement taken off it (the whole reason interpolation-assist exists is the
+ * monochrome dashed curve no filter can follow).
+ * `interpolated` — the spline DERIVED it from the anchors either side. Nobody
+ * looked at the figure at this x at all.
+ *
+ * An ordinary placed/traced point carries no role (`null`): it isn't part of an
+ * interpolation series, so the distinction doesn't apply to it. Keeping the two
+ * stored words as the exported vocabulary is deliberate (David, 2026-07-25) —
+ * we export the fact the record holds, and leave "so is it trustworthy?" to the
+ * reader (tenets 9 + 10). */
+export type PointRole = 'anchor' | 'interpolated';
+
 export interface PlacedCalibPoint {
   px: number;
   py: number;
@@ -1851,11 +1867,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * pixelToData projection -- that feeds the canvas and the table, which want
    * numbers, not a formatted date string or a label in slot 0. The contract is
    * about what leaves the app, not what it draws with. */
-  getExportRows(datasetIndex: number, mode: PrecisionMode = 'auto'): { px: number; py: number; values: ExportValue[] }[] {
+  getExportRows(
+    datasetIndex: number,
+    mode: PrecisionMode = 'auto'
+  ): { px: number; py: number; values: ExportValue[]; role?: PointRole }[] {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry || !this.axes) return [];
     const axes = this.axes;
     const pixels = entry.dataset.getAllPixels();
+    // An interpolation-assist point rides out with its role (v1.3): an ASSIGNED
+    // anchor and a spline-DERIVED sample are not the same claim about the figure,
+    // and a file that flattens them hands the reader invented points wearing the
+    // record's clothes -- the exact thing tenet 9 exists to prevent, and the thing
+    // StarryDigitizer's 194k-curve database can no longer undo. Absent (undefined)
+    // for an ordinary point, so a series with no interpolation exports byte-for-byte
+    // as before.
+    const roleAt = (i: number): PointRole | undefined => {
+      const r = pixels[i]?.metadata?.['role'];
+      return r === 'anchor' || r === 'interpolated' ? r : undefined;
+    };
     // Categorical line (checkpoint 101): X is the point's ORDINAL position,
     // DERIVED from left-to-right pixel order at export time -- never stored, so
     // it is a view of the recorded pixels, not a fabricated coordinate (tenet 9).
@@ -1872,14 +1902,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const raw = axes.pixelToData(p.x, p.y)[0] ?? null;
         const res = mode === 'full' ? null : halfPixelResolution(axes, p.x, p.y)[0];
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
-        return { px: p.x, py: p.y, values: [rank[i]!, value] as ExportValue[] };
+        const role = roleAt(i);
+        return { px: p.x, py: p.y, values: [rank[i]!, value] as ExportValue[], ...(role ? { role } : {}) };
       });
     }
-    return pixels.map((p, i) => ({
-      px: p.x,
-      py: p.y,
-      values: valueAtPixel(i, axes, p, mode),
-    }));
+    return pixels.map((p, i) => {
+      const role = roleAt(i);
+      return {
+        px: p.x,
+        py: p.y,
+        values: valueAtPixel(i, axes, p, mode),
+        ...(role ? { role } : {}),
+      };
+    });
   }
 
   /** Switches which dataset new points/point-groups actions apply to.
@@ -2191,8 +2226,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * colour-filtering can't separate same-colour dashed lines and connectivity
    * (Segment Fill) can't follow a broken line -- see CLAUDE.md.
    *
-   * ⚑ Tenet 9, the whole point: an anchor is the RECORD (a human measured it off
-   * the figure), the samples between are DERIVED. We mark each pixel's role in its
+   * ⚑ Tenet 9, the whole point: an anchor is the RECORD (a human ASSIGNED it --
+   * judged by eye where the curve runs; not a measurement taken off the figure,
+   * which is precisely why this tool exists for dashed monochrome curves no
+   * filter can follow), the samples between are DERIVED. Both are marked, and
+   * the distinction survives into the export, so a reader can weigh them
+   * differently. We mark each pixel's role in its
    * own per-pixel metadata (core/dataset.ts) -- role:'anchor' vs role:'interpolated'
    * -- so a downstream consumer can tell measured from invented, and drop the
    * derived ones. StarryDigitizer does the opposite: it deletes the anchors and
@@ -2264,8 +2303,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * (both map dataset.getAllPixels() in order). 'anchor'/'interpolated' for
    * interpolation-assist points, null for an ordinary placed/traced point. Lets
    * the UI draw anchors big and derived samples small (checkpoint 120). */
-  getDataPointRoles(): ('anchor' | 'interpolated' | null)[] {
-    return this.activeEntry.dataset.getAllPixels().map((p) => {
+  getDataPointRoles(): (PointRole | null)[] {
+    return this.getDataPointRolesFor(this.activeDatasetIndex);
+  }
+
+  /** The role of each point of ANY dataset, index-aligned with that dataset's
+   * points (getAllDatasetsData / getExportRows for the same index).
+   *
+   * The active-series wrapper above drives the canvas; this indexed form is what
+   * the multi-series spreadsheet and the export need, because "is this point
+   * derived?" is a per-SERIES fact and both render every series at once. An
+   * out-of-range index yields an empty list, like the other indexed getters. */
+  getDataPointRolesFor(datasetIndex: number): (PointRole | null)[] {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry) return [];
+    return entry.dataset.getAllPixels().map((p) => {
       const r = p.metadata?.['role'];
       return r === 'anchor' || r === 'interpolated' ? r : null;
     });
