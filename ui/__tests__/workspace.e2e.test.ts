@@ -1978,6 +1978,51 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(csvPath);
   });
 
+  it('types a category name and prefills it into the next series (v1.3 #9)', async () => {
+    // A Bar figure's independent variable is a NAME the reader transcribes off
+    // the tick labels. There was nowhere on screen to put it: the export had a
+    // Label column that only ever said "Bar0".
+    await resetWorkspace('bar');
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+
+    await clickAt(250, 250);
+    await clickAt(400, 200);
+    await page.getByTestId('category-0-0').fill('Flax');
+    await page.getByTestId('category-0-1').fill('Hemp');
+    await page.getByTestId('points-table').click(); // blur -> commit
+
+    // A second series of the same grouped chart inherits the names row by row.
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(100);
+    await clickAt(270, 300);
+    await clickAt(420, 260);
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('category-1-0').inputValue()).toBe('Flax');
+    expect(await page.getByTestId('category-1-1').inputValue()).toBe('Hemp');
+
+    // ...and it is the point's OWN name, so retyping one row moves nothing else.
+    await page.getByTestId('category-1-1').fill('Jute');
+    await page.getByTestId('points-table').click();
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('category-1-1').inputValue()).toBe('Jute');
+
+    // The typed name replaces the Bar<i> placeholder in the file.
+    const csvPath = tempFilePath('csv');
+    await stubSaveDialog(csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await page.waitForTimeout(300);
+    const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
+    expect(lines[0]).toBe('x_px,y_px,Label,Y');
+    expect(lines[1]!.split(',')[2]).toBe('Flax');
+    fs.unlinkSync(csvPath);
+  });
+
   it('extracts multiple figures from one PDF source and flips between them (checkpoint 110)', async () => {
     await resetWorkspace('xy'); // establishes canvasBox/electronAPI wiring
     const pdfPath = tempFilePath('pdf');

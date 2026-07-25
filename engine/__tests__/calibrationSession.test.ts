@@ -547,6 +547,95 @@ describe('interpolation roles reach the export rows (v1.3)', () => {
   });
 });
 
+// v1.3 #9 -- the category NAME is the independent variable of a Bar /
+// categorical-line figure, and it is the one thing the pixels cannot carry: a
+// reader transcribes it off the tick labels. Until now there was nowhere to put
+// it (Bar's export read metadata.label but nothing could write it; the
+// categorical line exported a bare ordinal).
+describe('categorical-X labels (v1.3 #9)', () => {
+  function barSession() {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    return session;
+  }
+
+  it('names a point and reads it back per series', () => {
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    session.setPointLabel(0, 'Flax');
+    session.setPointLabel(1, 'Hemp');
+    expect(session.getPointLabels(0)).toEqual(['Flax', 'Hemp']);
+  });
+
+  it('registers the label metadata key so the name survives save/reload', () => {
+    // The record is only durable if plotData knows to serialize the key.
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    expect(session.getMetadataKeys()).not.toContain('label');
+    session.setPointLabel(0, 'Flax');
+    expect(session.getMetadataKeys()).toContain('label');
+  });
+
+  it('prefills a new series\' point from whichever series already named that row', () => {
+    // A grouped bar chart repeats one category set across series; typing it again
+    // per series is pure friction (David's call: prefill, not a shared list).
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    session.setPointLabel(0, 'Flax');
+    session.setPointLabel(1, 'Hemp');
+
+    session.addDataset('Alkali');
+    session.addDataPoint(160, 250);
+    session.addDataPoint(260, 150);
+    expect(session.getPointLabels(1)).toEqual(['Flax', 'Hemp']);
+  });
+
+  it('writes the prefilled name ONTO the point, so retyping one row moves nothing else', () => {
+    // The reason this is a prefill and not a shared positional list: a series
+    // that skips a category must be correctable without shifting its neighbours.
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    session.setPointLabel(0, 'Flax');
+    session.setPointLabel(1, 'Hemp');
+    session.addDataset('Alkali');
+    session.addDataPoint(160, 250);
+    session.addDataPoint(260, 150);
+
+    session.setPointLabel(1, 'Jute'); // series 2 has no Hemp bar
+    expect(session.getPointLabels(1)).toEqual(['Flax', 'Jute']);
+    expect(session.getPointLabels(0)).toEqual(['Flax', 'Hemp']); // series 1 untouched
+  });
+
+  it('carries a typed name into the Bar export (no Bar<i> fallback once named)', () => {
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.setPointLabel(0, 'Flax');
+    expect(session.getExportRows(0)[0]!.values[0]).toBe('Flax');
+  });
+
+  it('grows the categorical export a Category column only once something is named', () => {
+    const session = new CalibrationSession<BarAxes>(CATEGORICAL_LINE_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    // Untouched: exactly the Position/Value contract shipped since checkpoint 101.
+    expect(session.getExportFields()).toEqual(['Position', 'Value']);
+    expect(session.getExportRows(0)[0]!.values).toHaveLength(2);
+
+    session.setPointLabel(0, 'Flax');
+    expect(session.getExportFields()).toEqual(['Position', 'Value', 'Category']);
+    const rows = session.getExportRows(0);
+    expect(rows[0]!.values[2]).toBe('Flax');
+    // An unnamed point in a named figure exports BLANK -- never a made-up name.
+    expect(rows[1]!.values[2]).toBe('');
+  });
+});
+
 describe('CalibrationSession (Bar axes)', () => {
   it('walks through the 2 calibration steps in order, fewer than XY', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);

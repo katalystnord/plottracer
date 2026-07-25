@@ -66,6 +66,12 @@ trust the result.
   `Esc` clears. It never selects calibration handles.
 - Drag any point to reposition it; drag a calibration handle to re-calibrate live.
 - Edit an XY value directly in the right-panel table.
+- On a **Bar** or **Line (categorical X)** figure, the table has a **Category**
+  column: type each point's name from the figure's tick labels (Flax, Hemp, …) and
+  the exports carry it instead of a placeholder. On a grouped chart you only type
+  the set once — adding points to the next series prefills the same names row by
+  row, and each name belongs to its own point, so a series that skips a category
+  is fixed by retyping that one cell.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
 ## 6. Multiple series and figures

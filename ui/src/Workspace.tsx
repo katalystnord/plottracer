@@ -3072,6 +3072,18 @@ export function Workspace() {
     [session, bump]
   );
 
+  // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
+  // categorical-line counterpart of setTupleLabel above, and it commits the same
+  // way: a text edit is one undo step on blur, not one per keystroke.
+  const setPointLabel = useCallback(
+    (pointIndex: number, label: string) => {
+      session.setPointLabel(pointIndex, label);
+      pendingEditRef.current = true;
+      bump();
+    },
+    [session, bump]
+  );
+
   // Delete a whole tuple -- a Box Plot box / a Histogram bin -- from the tuple
   // table (checkpoint 129). The trash button removes one point at a time; this
   // drops the entire category. Unconfirmed but undoable, matching the trash and
@@ -4510,6 +4522,9 @@ export function Workspace() {
         // the user put there -- every series renders at once, and "is this point
         // derived?" differs between them (v1.3).
         roles: session.getDataPointRolesFor(d.index),
+        // Per-SERIES category names (v1.3 #9). Bar / categorical-line only; every
+        // other type reads an empty list and shows no Category column.
+        labels: session.getPointLabels(d.index),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allDatasetsData, datasetInfos, session, version]
@@ -4528,6 +4543,11 @@ export function Workspace() {
     () => spreadsheetSeries.reduce((max, s) => Math.max(max, s.values.length), 0),
     [spreadsheetSeries]
   );
+  // The Category column (v1.3 #9) belongs to the two types whose independent
+  // variable is a NAME rather than a number: Bar and Line (categorical X). Box
+  // Plot and Histogram are bar-kind too but never reach this table -- they render
+  // the tuple table above, which has carried its own name field since v0.5.
+  const showCategoryColumn = config.axesKind === 'bar' && !hasPointGroups;
 
   const curveFitOverlay = useMemo(() => {
     if (!curveFitState || config.id !== 'xy' || !axes) return undefined;
@@ -6858,7 +6878,7 @@ export function Workspace() {
                     {spreadsheetSeries.map((s) => (
                       <th
                         key={s.index}
-                        colSpan={config.dataDim}
+                        colSpan={config.dataDim + (showCategoryColumn ? 1 : 0)}
                         data-testid={`series-col-${s.index}`}
                         style={{
                           position: 'sticky',
@@ -6878,10 +6898,10 @@ export function Workspace() {
                     ))}
                   </tr>
                   <tr>
-                    {spreadsheetSeries.map((s) =>
-                      tableValueLabels.map((label, d) => (
+                    {spreadsheetSeries.map((s) => {
+                      const headCell = (key: string, label: string, first: boolean) => (
                         <th
-                          key={`${s.index}-${d}`}
+                          key={key}
                           style={{
                             position: 'sticky',
                             top: 24,
@@ -6891,13 +6911,21 @@ export function Workspace() {
                             padding: '2px 8px',
                             color: theme.color.text.legend,
                             fontWeight: 500,
-                            borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none',
+                            borderLeft: first ? `1px solid ${theme.color.border.regular}` : 'none',
                           }}
                         >
                           {label}
                         </th>
-                      ))
-                    )}
+                      );
+                      // Category leads the series' columns, matching the export's
+                      // own Label-first convention for a categorical independent.
+                      return [
+                        ...(showCategoryColumn ? [headCell(`${s.index}-cat`, 'Category', true)] : []),
+                        ...tableValueLabels.map((label, d) =>
+                          headCell(`${s.index}-${d}`, label, d === 0 && !showCategoryColumn)
+                        ),
+                      ];
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -6920,6 +6948,34 @@ export function Workspace() {
                         </td>
                         {spreadsheetSeries.map((s) => {
                           const data = s.values[i];
+                          // The category cell: a text input on the ACTIVE series
+                          // (the same "you edit the series you're working on" rule
+                          // the value cells follow), plain text elsewhere so a
+                          // grouped chart still shows every series' names.
+                          const categoryCell = showCategoryColumn ? (
+                            <td
+                              key={`${s.index}-cat`}
+                              style={{ padding: '1px 8px', borderLeft: `1px solid ${theme.color.border.regular}` }}
+                            >
+                              {i < s.values.length ? (
+                                s.active ? (
+                                  <input
+                                    data-testid={`category-${s.index}-${i}`}
+                                    value={s.labels[i] ?? ''}
+                                    placeholder="name…"
+                                    onChange={(e) => setPointLabel(i, e.target.value)}
+                                    onBlur={commitPendingEdit}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ width: 90, fontSize: 12.5 }}
+                                  />
+                                ) : (
+                                  <span data-testid={`category-${s.index}-${i}`}>{s.labels[i] ?? ''}</span>
+                                )
+                              ) : (
+                                ''
+                              )}
+                            </td>
+                          ) : null;
                           // A spline-DERIVED sample is not the user's number to type over:
                           // the next rebuild regenerates it from the anchors, so an edit
                           // here looked like it took and was silently wiped (v0.6 audit).
@@ -6927,32 +6983,35 @@ export function Workspace() {
                           // anchors -- which ARE editable, and which the curve follows.
                           const derived = s.roles[i] === 'interpolated';
                           const editable = config.axesKind === 'xy' && s.active && !derived;
-                          return tableValueLabels.map((_label, d) => {
-                            const dateFmt = tableDateFormats[d];
-                            return (
-                              <td
-                                key={`${s.index}-${d}`}
-                                data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
-                                title={derived ? 'Derived by the spline from your guide points — move an anchor to change it' : undefined}
-                                style={{
-                                  padding: '1px 8px',
-                                  borderLeft: d === 0 ? `1px solid ${theme.color.border.regular}` : 'none',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  ...(derived ? { color: theme.color.text.legend, fontStyle: 'italic' } : {}),
-                                }}
-                              >
-                                {data
-                                  ? dateFmt != null
-                                    ? // Date-calibrated column: show the formatted date, like the
-                                      // export (not editable inline -- move the point on canvas).
-                                      formatDateNumber(data[d]!, dateFmt)
-                                    : editable
-                                    ? renderEditableValue(i, d, data[d]!)
-                                    : fmtValue(data[d]!)
-                                  : ''}
-                              </td>
-                            );
-                          });
+                          return [
+                            ...(categoryCell ? [categoryCell] : []),
+                            ...tableValueLabels.map((_label, d) => {
+                              const dateFmt = tableDateFormats[d];
+                              return (
+                                <td
+                                  key={`${s.index}-${d}`}
+                                  data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
+                                  title={derived ? 'Derived by the spline from your guide points — move an anchor to change it' : undefined}
+                                  style={{
+                                    padding: '1px 8px',
+                                    borderLeft: d === 0 && !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
+                                    fontVariantNumeric: 'tabular-nums',
+                                    ...(derived ? { color: theme.color.text.legend, fontStyle: 'italic' } : {}),
+                                  }}
+                                >
+                                  {data
+                                    ? dateFmt != null
+                                      ? // Date-calibrated column: show the formatted date, like the
+                                        // export (not editable inline -- move the point on canvas).
+                                        formatDateNumber(data[d]!, dateFmt)
+                                      : editable
+                                      ? renderEditableValue(i, d, data[d]!)
+                                      : fmtValue(data[d]!)
+                                    : ''}
+                                </td>
+                              );
+                            }),
+                          ];
                         })}
                       </tr>
                     );

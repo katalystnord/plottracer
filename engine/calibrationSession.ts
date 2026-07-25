@@ -1809,7 +1809,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getExportFields(): string[] {
     // Categorical line (checkpoint 101): the X is a category, so instead of
     // BarAxes' ['Label','Y'] we emit a derived ordinal Position plus the Value.
-    if (this.config.id === 'categorical') return ['Position', 'Value'];
+    // v1.3 #9: once any point has been NAMED, the name is the independent
+    // variable a reader actually wants, so it rides out as a trailing Category
+    // column -- trailing, not first, because reordering columns would break every
+    // consumer of the files already in the wild. Absent until something is typed.
+    if (this.config.id === 'categorical')
+      return this.anyPointLabels() ? ['Position', 'Value', 'Category'] : ['Position', 'Value'];
     return this.axes ? exportLabelsFor(this.axes) : [...this.config.valueLabels];
   }
 
@@ -1891,6 +1896,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // it is a view of the recorded pixels, not a fabricated coordinate (tenet 9).
     // Value comes from the BarAxes value calibration.
     if (this.config.id === 'categorical') {
+      // Must stay index-aligned with getExportFields() -- same condition, so the
+      // Category cell exists exactly when the header does.
+      const withCategory = this.anyPointLabels();
       const rank: number[] = [];
       pixels
         .map((p, i) => ({ i, x: p.x }))
@@ -1903,7 +1911,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const res = mode === 'full' ? null : halfPixelResolution(axes, p.x, p.y)[0];
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
         const role = roleAt(i);
-        return { px: p.x, py: p.y, values: [rank[i]!, value] as ExportValue[], ...(role ? { role } : {}) };
+        const label = p.metadata?.['label'];
+        const values: ExportValue[] = [rank[i]!, value];
+        // An unnamed point in a figure that HAS names exports a BLANK cell, so a
+        // reader can see which ticks were actually transcribed. (Bar's own Label
+        // column keeps WPD's inherited `Bar<i>` fallback -- a different, older
+        // contract with tests pinning it; not changed here.)
+        if (withCategory) values.push(typeof label === 'string' ? label : '');
+        return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
       });
     }
     return pixels.map((p, i) => {
@@ -2195,8 +2210,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
     if (anchorDerived) {
       dataset.addPixel(px, py);
+      this.prefillCategoryLabel(dataset, dataset.getAllPixels().length - 1);
     } else {
-      dataset.insertPixel(bestInsertionIndex(pixels, { x: px, y: py }), px, py);
+      const index = bestInsertionIndex(pixels, { x: px, y: py });
+      dataset.insertPixel(index, px, py);
+      // Prefill by ROW index -- the position the table shows and the user reasons
+      // about -- not by the categorical export's x-sorted Position, which is a
+      // separate derivation and would surprise anyone reading the panel.
+      this.prefillCategoryLabel(dataset, index);
     }
     return 'point-added';
   }
@@ -2359,8 +2380,82 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (primaryIndex === null || primaryIndex === undefined) return;
     const existing = dataset.getPixel(primaryIndex).metadata ?? {};
     dataset.setMetadataAt(primaryIndex, { ...existing, label });
+    this.registerLabelMetadataKey(dataset);
+  }
+
+  /** Register "label" as a per-pixel metadata key so it round-trips through
+   * core/plotData.ts -- the same registration the role key does. Idempotent. */
+  private registerLabelMetadataKey(dataset: Dataset): void {
     const keys = dataset.getMetadataKeys();
     if (!keys.includes('label')) dataset.setMetadataKeys([...keys, 'label']);
+  }
+
+  /** The category name of each point of a dataset, index-aligned with its points
+   * ('' where unnamed). The independent variable of a Bar / categorical-line
+   * figure is a NAME, and until now there was nowhere to put it: Bar's export
+   * read `metadata.label` but nothing in the UI could write it (only Box Plot's
+   * per-tuple field could), and the categorical line exported a bare ordinal
+   * Position. Reading it per index -- rather than active-only -- is what lets the
+   * multi-series spreadsheet show every series' categories at once (v1.3 #9). */
+  getPointLabels(datasetIndex: number): string[] {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry) return [];
+    return entry.dataset.getAllPixels().map((p) => {
+      const label = p.metadata?.['label'];
+      return typeof label === 'string' ? label : '';
+    });
+  }
+
+  /** Names one point of the ACTIVE dataset (its category / tick label). The name
+   * is TRANSCRIBED off the figure by the reader -- it is the one thing about a
+   * categorical axis that pixels cannot carry -- so it is stored per point, with
+   * the point, and travels with it through insert/delete/reorder. */
+  setPointLabel(pointIndex: number, label: string): void {
+    const dataset = this.activeEntry.dataset;
+    if (pointIndex < 0 || pointIndex >= dataset.getAllPixels().length) return;
+    const existing = dataset.getPixel(pointIndex).metadata ?? {};
+    dataset.setMetadataAt(pointIndex, { ...existing, label });
+    this.registerLabelMetadataKey(dataset);
+  }
+
+  /** Does any series carry a category name? Decides whether the categorical
+   * export grows its Category column at all (the same "the column's presence is
+   * the signal" rule the interpolation role follows), so a figure whose
+   * categories were never typed exports exactly as it did before. */
+  private anyPointLabels(): boolean {
+    return this.datasetEntries.some((e) =>
+      e.dataset.getAllPixels().some((p) => {
+        const label = p.metadata?.['label'];
+        return typeof label === 'string' && label.length > 0;
+      })
+    );
+  }
+
+  /** Copy a category name onto a newly added point from whichever OTHER series
+   * already named that row (v1.3 #9, David's call: per-point storage + prefill).
+   *
+   * A grouped bar chart repeats one category set across series, so typing
+   * Flax/Hemp/Jute again for every series is pure friction. The name is still
+   * written ON the point -- it is a real, editable value the table shows
+   * immediately, not a live link to another series -- so a series that skips a
+   * category is corrected by retyping that one cell, and nothing else shifts.
+   * That is why this is a prefill and not a shared list: a shared list indexed by
+   * position would silently mislabel every row after a missing bar.
+   *
+   * Bar-family only (Box Plot and Histogram return before this -- they file into
+   * tuples and already have their own per-tuple name field). */
+  private prefillCategoryLabel(dataset: Dataset, index: number): void {
+    if (this.config.axesKind !== 'bar') return;
+    for (const other of this.datasetEntries) {
+      if (other.dataset === dataset) continue;
+      const label = other.dataset.getAllPixels()[index]?.metadata?.['label'];
+      if (typeof label === 'string' && label.length > 0) {
+        const existing = dataset.getPixel(index).metadata ?? {};
+        dataset.setMetadataAt(index, { ...existing, label });
+        this.registerLabelMetadataKey(dataset);
+        return;
+      }
+    }
   }
 
   /** The active dataset's registered per-pixel metadata keys (e.g. "label"
