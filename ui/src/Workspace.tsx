@@ -1318,6 +1318,10 @@ export function Workspace() {
   const preAutoExtractModeRef = useRef<ToolMode>('pan');
   const lastAutoExtractMechRef = useRef<ToolMode>('segment-fill');
   const toggleAutoExtract = useCallback(() => {
+    // The rail button greys out for bar-family types; the `4` hotkey is the other
+    // door, so the rule lives here where both converge. Auto-extract's mechanisms
+    // are curve tools and would record a bar's MIDPOINT as its value.
+    if (session.getConfig().axesKind === 'bar') return;
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
@@ -1328,7 +1332,7 @@ export function Workspace() {
       preAutoExtractModeRef.current = m;
       return lastAutoExtractMechRef.current;
     });
-  }, []);
+  }, [session]);
   const setAutoExtractMech = useCallback((mech: ToolMode) => {
     setSegmentFillError(null);
     setColorTraceInfo(null);
@@ -5876,8 +5880,25 @@ export function Workspace() {
             label="Auto-extract (flood-fill / by colour / guide points)"
             shortcut="4"
             pressed={AUTO_EXTRACT_MODES.includes(mode)}
-            disabled={!axes || hasPointGroups}
-            disabledReason={!axes ? 'Calibrate the axes first' : 'Not available for this graph type'}
+            // ⚑ Bar-family types are excluded, and this is a CORRECTNESS gate, not a
+            // missing feature. Every auto-extract mechanism here is a CURVE tool:
+            // pointsFromColumnRuns records the MIDDLE of each column run and the blob
+            // detector records a region's centroid. On a curve that is the curve. On a
+            // filled bar it is the bar's midpoint -- so a bar of true value 10 was
+            // silently recorded as 5 (verified against the algorithms, 2026-07-25).
+            // Point-group types (Box Plot / Histogram) were already excluded; plain Bar
+            // and Line (categorical X) were not, which left a reachable path to
+            // confidently wrong numbers -- the tenet-1 defect, worse than the tool
+            // simply being absent. A bar-aware capture is a model change, not a new
+            // shape on the colour trace: see the bar design pass.
+            disabled={!axes || hasPointGroups || config.axesKind === 'bar'}
+            disabledReason={
+              !axes
+                ? 'Calibrate the axes first'
+                : config.axesKind === 'bar' && !hasPointGroups
+                ? 'Auto-extract follows curves — on bars it would record the middle of each bar, not its end. Place points on the bar ends instead.'
+                : 'Not available for this graph type'
+            }
             onClick={toggleAutoExtract}
             foldout
           />

@@ -1978,6 +1978,38 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(csvPath);
   });
 
+  it('refuses auto-extract on a Bar chart, and says why (v1.3)', async () => {
+    // ⚑ Correctness gate, not a missing feature. Every auto-extract mechanism is a
+    // CURVE tool: pointsFromColumnRuns takes the MIDDLE of each column run, so a
+    // bar of true value 10 was recorded as 5, silently. Both doors are closed --
+    // the rail button and the `4` hotkey.
+    await resetWorkspace('bar');
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+
+    const tool = page.getByTestId('mode-auto-extract');
+    expect(await tool.isDisabled()).toBe(true);
+    // The greyed tool explains itself (the v1.0.2 B3 pattern) rather than leaving a
+    // dead button -- Parallel Universe David has to learn WHY on screen. A disabled
+    // <button> suppresses its own tooltip in Chromium, so IconButton puts the title
+    // on a wrapping span and keeps aria-label on the button; assert the latter.
+    expect(await tool.getAttribute('aria-label')).toContain('middle of each bar');
+
+    // The hotkey must not sneak past the greyed button.
+    await page.keyboard.press('4');
+    await page.waitForTimeout(100);
+    expect(await tool.getAttribute('aria-pressed')).toBe('false');
+
+    // ...while an XY figure still has it, so the gate is bar-specific.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+  });
+
   it('types a category name and prefills it into the next series (v1.3 #9)', async () => {
     // A Bar figure's independent variable is a NAME the reader transcribes off
     // the tick labels. There was nowhere on screen to put it: the export had a
@@ -2212,8 +2244,12 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
   });
 
-  it('Segment Fill is disabled for a Box Plot (point-group) chart, unlike Place Point', async () => {
-    // A plain Bar chart keeps Segment Fill enabled...
+  it('Segment Fill is disabled for the whole bar family, unlike Place Point', async () => {
+    // ⚑ REVERSED 2026-07-25. This test used to assert that a plain Bar chart KEEPS
+    // Segment Fill enabled -- it pinned the defect: every auto-extract mechanism is
+    // a curve tool, and on a filled bar pointsFromColumnRuns records the bar's
+    // MIDPOINT, so a bar of true value 10 came out as 5. The gate is now the whole
+    // bar family, not just the point-group types.
     await resetWorkspace('bar');
     await clickAt(300, 400);
     await confirmValue('0');
@@ -2221,11 +2257,13 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     await confirmValue('10');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(false); // still allowed
 
-    // ...but Box Plot's datasets carry point groups from the start (checkpoint
+    // Box Plot's datasets carry point groups from the start (checkpoint
     // 107 -- no toggle to flip anymore), so Segment Fill, a curve flood-fill with
-    // no group slot to file into, is disabled, while Place Point stays available.
+    // no group slot to file into, is disabled for that reason too, while Place
+    // Point stays available.
     await resetWorkspace('boxplot');
     await clickAt(300, 400);
     await confirmValue('0');
