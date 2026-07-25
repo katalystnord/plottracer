@@ -1978,6 +1978,26 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(csvPath);
   });
 
+  it('the empty-table hint agrees with the tips bar about what a click does (v1.3)', async () => {
+    // ⚑ Both lines are on screen at once. The panel used to say "click on the image
+    // to add data points" in EVERY mode, while the tips bar said "a plain click does
+    // nothing" in By-colour -- so following the panel meant clicking the curve and
+    // concluding the app was broken. Caught on a screenshot, not by a test.
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // lands in Place Point, no points yet
+
+    expect(await page.getByTestId('no-points').textContent()).toContain('click on the image');
+
+    await selectAutoExtract('colour');
+    const hint = (await page.getByTestId('no-points').textContent()) ?? '';
+    const tip = (await page.getByTestId('tips-bar').textContent()) ?? '';
+    expect(tip).toContain('a plain click does nothing');
+    expect(hint).toContain('press Trace');
+    // The contradiction itself: the panel must not invite a click the tips bar
+    // has just said is inert.
+    expect(hint).not.toContain('click on the image to add');
+  });
+
   it('refuses auto-extract on a Bar chart, and says why (v1.3)', async () => {
     // ⚑ Correctness gate, not a missing feature. Every auto-extract mechanism is a
     // CURVE tool: pointsFromColumnRuns takes the MIDDLE of each column run, so a
@@ -2412,6 +2432,25 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
 
     // What italic MEANS is on screen, not only in a tooltip.
     expect(await page.getByTestId('derived-legend').isVisible()).toBe(true);
+
+    // ⚑ ...and reachable WITHOUT scrolling. isVisible() alone does not prove this:
+    // an element scrolled out of an overflow container still reports visible, which
+    // is why the first version of this test passed while the legend sat below ~180
+    // rows inside the scrolling table (caught on a screenshot, not here). Pin the
+    // structure: the legend must not live inside the table's scroll container.
+    const insideScroller = await page.evaluate(() => {
+      const legend = document.querySelector('[data-testid="derived-legend"]');
+      const table = document.querySelector('[data-testid="points-table"]');
+      const scroller = table?.parentElement;
+      return !!(legend && scroller && scroller.contains(legend));
+    });
+    expect(insideScroller).toBe(false);
+    // A real guide-points trace is long -- prove this table IS the scrolling case,
+    // so the assertion above is testing what it claims to test.
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(30);
+    const box = await page.getByTestId('derived-legend').boundingBox();
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewportHeight);
 
     // The derived cell offers no click-to-edit affordance at all...
     expect(await page.getByTestId('data-value-x-1').count()).toBe(0);

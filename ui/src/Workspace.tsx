@@ -4940,6 +4940,27 @@ export function Workspace() {
     return 'Pick a graph type, then calibrate the axes to begin.';
   })();
 
+  // The empty data table's hint, matched to the ACTIVE TOOL.
+  //
+  // ⚑ It used to say "click on the image to add data points" unconditionally --
+  // which directly CONTRADICTED the tips bar in the auto-extract modes, where a
+  // plain canvas click is deliberately inert ("a plain click does nothing").
+  // Both lines were on screen at once telling the reader opposite things, so
+  // following the panel meant clicking the curve repeatedly and concluding the
+  // app was broken: the same "I clicked and nothing happened" failure as the
+  // card-swallowing-clicks bug, reached by a different route. Caught on David's
+  // screenshot test bench while shooting the By-colour gallery image.
+  const noPointsHint = (() => {
+    if (mode === 'color-trace')
+      return 'No points yet — pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
+    if (mode === 'segment-fill') return 'No points yet — click the curve on the image to flood-fill it.';
+    if (mode === 'interpolate') return 'No points yet — click a few guide points along one curve.';
+    if (mode === 'place-point') return 'No points yet — click on the image to add data points.';
+    // Pan / Select / Eraser / Measure / Image-edit / Error-bars: a canvas click
+    // adds nothing in any of them, so point at the tools that DO capture.
+    return 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
+  })();
+
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
   const measureReference: MeasureRef =
@@ -7039,24 +7060,29 @@ export function Workspace() {
                   })}
                 </tbody>
               </table>
-              {/* What the italic cells MEAN, on screen rather than in a tooltip: a
-                  reader who never placed a guide point still has to be able to tell
-                  which of these numbers came off the figure and which the spline
-                  invented. Shown only when some visible series actually has derived
-                  points, so an ordinary trace's table stays uncluttered. */}
-              {spreadsheetSeries.some((s) => s.roles.some((r) => r === 'interpolated')) && (
-                <div data-testid="derived-legend" style={{ padding: '4px 8px', color: theme.color.text.legend, fontSize: 12 }}>
-                  <i>Italic</i> = derived by the spline between your guide points, not read off the
-                  figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
-                </div>
-              )}
               {/* Empty-state message lives outside <tbody> so a "no data points"
                   check can still count tbody rows (== points placed). */}
               {spreadsheetMaxRows === 0 && (
                 <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
-                  No points yet — click on the image to add data points.
+                  {noPointsHint}
                 </div>
               )}
+            </div>
+          )}
+          {/* What the italic cells MEAN, on screen rather than in a tooltip: a reader
+              who never placed a guide point still has to be able to tell which of
+              these numbers came off the figure and which the spline invented.
+              ⚑ OUTSIDE the scrolling table container, deliberately. It first sat
+              inside, below the rows -- which reads fine in a test with five points
+              and is INVISIBLE in real use: a guide-points trace is ~180 rows, so the
+              explanation sat a full table-scroll below the fold while the italics it
+              explains were on screen from the first row. Caught on David's screenshot
+              test bench, not by the e2e (whose table was short enough to fit).
+              Shown only when a visible series actually has derived points. */}
+          {spreadsheetSeries.some((s) => s.roles.some((r) => r === 'interpolated')) && (
+            <div data-testid="derived-legend" style={{ padding: '4px 2px 0', color: theme.color.text.legend, fontSize: 12 }}>
+              <i>Italic</i> = derived by the spline between your guide points, not read off the
+              figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
             </div>
           )}
           </SidebarSection>
