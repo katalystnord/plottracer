@@ -1808,7 +1808,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * emit. See core/exportValues.ts. */
   getExportFields(): string[] {
     // Categorical line (checkpoint 101): the X is a category, so instead of
-    // BarAxes' ['Label','Y'] we emit a derived ordinal Position plus the Value.
+    // BarAxes' ['Category','Y'] we emit a derived ordinal Position plus the Value.
     // v1.3 #9: once any point has been NAMED, the name is the independent
     // variable a reader actually wants, so it rides out as a Category column.
     //
@@ -1835,11 +1835,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * **Takes the LAST `dataDim` of the axes' labels.** The table is multi-series
    * and shows only the value dimensions -- it drops the pixel columns and, for
-   * Bar, the leading `Label` (the category lives in metadata, not a value
-   * column). WPD's own contract always puts that Label first
-   * (`dataProviders.js` -> `['Label','Value']`), so the value dimensions are the
-   * trailing `dataDim` entries: Bar `['Label','Y']` -> `['Y']`, and every other
-   * type's labels already equal its `dataDim`, so the slice is a no-op there.
+   * Bar, the leading `Category` (the category lives in metadata, not a value
+   * column, and the table renders it as its own column via showCategoryColumn).
+   * WPD's own contract always puts that category first (`dataProviders.js` ->
+   * `['Label','Value']`, whose word we used until v1.3), so the value dimensions
+   * are the trailing `dataDim` entries: Bar `['Category','Y']` -> `['Y']`, and
+   * every other type's labels already equal its `dataDim`, so the slice is a
+   * no-op there.
    *
    * Not `core/dataProviders.ts`: that is WPD's *single-dataset* table contract
    * and our table is multi-series -- a genuine model mismatch, not a wiring the

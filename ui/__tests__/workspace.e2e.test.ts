@@ -1978,7 +1978,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(csvPath);
   });
 
-  it('a plain Bar chart exports a Label column — the categorical axis (checkpoint 76)', async () => {
+  it('a plain Bar chart exports a Category column — the categorical axis (checkpoint 76)', async () => {
     // The headline defect: a Bar CSV was bare numbers, with nothing saying
     // which bar produced each. The header comes from BarAxes.getAxesLabels()
     // and the value from the axes contract, not config.valueLabels (['value']).
@@ -1999,7 +1999,12 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('x_px,y_px,Label,Y'); // not value1/value2, and Label is present
+    // Not value1/value2, and the category column is present. ⚑ Called `Category`
+    // since v1.3 -- it was WPD's inherited `Label`, the one surface using a
+    // different word for what the table, Box Plot and the categorical export all
+    // call a Category (David's call). Breaking for name-based readers of a
+    // v1.0-v1.2 Bar export; contents and position unchanged.
+    expect(lines[0]).toBe('x_px,y_px,Category,Y');
     const cells = lines[1]!.split(',');
     expect(cells[2]).toBe('Bar0'); // the auto-label, not an empty cell
     expect(Number(cells[3])).toBeCloseTo(5, 1);
@@ -2099,7 +2104,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('x_px,y_px,Label,Y');
+    expect(lines[0]).toBe('x_px,y_px,Category,Y'); // `Label` until v1.3 -- see above
     expect(lines[1]!.split(',')[2]).toBe('Flax');
     fs.unlinkSync(csvPath);
   });

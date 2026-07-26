@@ -65,7 +65,7 @@ describe('getTableValueLabels — table headers match the file', () => {
     expect(s.getTableValueLabels()).toEqual(['a', 'b', 'c']);
   });
 
-  it('for Bar, is the last dataDim of the labels — drops the leading Label', () => {
+  it('for Bar, is the last dataDim of the labels — drops the leading Category', () => {
     const s = new CalibrationSession(BAR_AXES_CONFIG);
     for (const [px, py, v] of [[100, 300, '0'], [100, 100, '10']] as const) {
       s.handleCalibrationClick(px, py);
@@ -75,10 +75,19 @@ describe('getTableValueLabels — table headers match the file', () => {
     const table = s.getTableValueLabels();
     const file = s.getExportFields();
     // The table shows only the VALUE dimension (dataDim = 1); the file also
-    // carries the leading Label. The value column's name is the file's last.
+    // carries the leading category name. The value column's name is the file's last.
     expect(table).toHaveLength(1);
     expect(table[0]).toBe(file[file.length - 1]);
-    expect(table).not.toContain('Label');
+    // ⚑ The leading column is called `Category` -- the SAME word the right-panel
+    // table's own category column uses, and the same one Box Plot's tuple field and
+    // the categorical export use. It was WPD's inherited `Label` until v1.3, which
+    // made Bar the one surface calling this thing something else (David's call,
+    // 2026-07-26). Asserted on the FILE, because that is the surface that was wrong.
+    expect(file[0]).toBe('Category');
+    // The value labels must not include it -- the category is rendered as its own
+    // column (showCategoryColumn), not as a value dimension. `not.toContain('Label')`
+    // stood here and went vacuous the moment nothing was called Label again.
+    expect(table).not.toContain('Category');
   });
 
   it('for XY, is X/Y and identical to the file', () => {

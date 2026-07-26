@@ -85,7 +85,11 @@ describe('BarAxes', () => {
   it('reports its static metadata correctly', () => {
     const axes = new BarAxes();
     expect(axes.numCalibrationPointsRequired()).toBe(2);
-    expect(axes.getAxesLabels()).toEqual(['Label', 'Y']);
+    // `Category`, not WPD's inherited `Label` -- renamed in v1.3 so the export
+    // header matches what the table, the Box Plot tuple field and the categorical
+    // export all already called it (David's call). Breaking for name-based readers
+    // of a v1.0-v1.2 Bar export; noted in the release.
+    expect(axes.getAxesLabels()).toEqual(['Category', 'Y']);
   });
 });
 

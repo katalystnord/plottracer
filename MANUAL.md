@@ -78,7 +78,8 @@ the pixel precision.
 - Edit an XY value directly in the right-panel table.
 - On a **Bar** or **Line (categorical X)** figure, the table has a **Category**
   column: type each point's name from the figure's tick labels (Flax, Hemp, …) and
-  the exports carry it instead of a placeholder. On a grouped chart you only type
+  the exports carry it in a **Category** column instead of a placeholder. On a
+  grouped chart you only type
   the set once — a point added to the next series takes the name of the **nearest
   already-named bar**, so it lands on the right category however you click and
   whatever you skip. Each name belongs to its own point, so any cell can be

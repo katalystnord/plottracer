@@ -184,6 +184,16 @@ export class BarAxes {
   }
 
   getAxesLabels(): string[] {
-    return ['Label', 'Y'];
+    // ⚑ `Label` until v1.3 -- WPD's inherited word (`dataProviders.js` ->
+    // ['Label','Value']). Renamed to `Category` on David's call (2026-07-26): the
+    // on-screen table, the Box Plot tuple field and the categorical export all say
+    // Category, so `Label` was the one surface using a different word for the same
+    // thing -- the divergence checkpoint 92 exists to prevent.
+    //
+    // This IS a breaking header change for anything parsing a v1.0-v1.2 Bar export
+    // BY COLUMN NAME (position and contents are unchanged, so index-based readers
+    // are unaffected). Called out in the v1.3 release notes. The per-point `Bar<i>`
+    // fallback for an unnamed bar is a different contract and is untouched.
+    return ['Category', 'Y'];
   }
 }

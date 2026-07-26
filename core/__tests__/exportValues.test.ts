@@ -80,7 +80,9 @@ describe('exportLabelsFor — headers come from the axes, not a hardcoded list',
     // These are the three that DIVERGED from AxesTypeConfig.valueLabels, which
     // is what made this a defect rather than a tidy-up: valueLabels said
     // ['value'] / ['t','value'] / ['A','B','C'].
-    expect(exportLabelsFor(barAxes())).toEqual(['Label', 'Y']);
+    // v1.3: `Category`, not WPD's inherited `Label` -- one word for the category
+    // across the table, the export and the Box Plot tuple field.
+    expect(exportLabelsFor(barAxes())).toEqual(['Category', 'Y']);
     expect(exportLabelsFor(new CircularChartRecorderAxes())).toEqual(['Time', 'Magnitude']);
     expect(exportLabelsFor(new TernaryAxes())).toEqual(['a', 'b', 'c']);
     expect(exportLabelsFor(xyAxes())).toEqual(['X', 'Y']);
