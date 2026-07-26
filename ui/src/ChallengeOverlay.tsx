@@ -109,7 +109,9 @@ function Intro({ roundCount, onConfirmStart, onCancel }: ChallengeOverlayProps) 
             curve half-traced and seconds pile on. <strong>Lowest total time wins.</strong>
           </p>
           <p style={{ margin: 0, color: theme.color.text.legend }}>
-            Use whatever tools you like — auto-trace by colour, flood-fill, guide points or by hand. Ready?
+            Use whatever tools the round offers — auto-trace by colour, flood-fill, guide points or by hand. (On the bar,
+            box-plot and histogram rounds the auto-tracers are greyed out: they follow curves, so they would record the
+            middle of a bar. Those you place by hand.) Ready?
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

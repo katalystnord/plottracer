@@ -969,9 +969,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // Safe to pre-empt: linkSnap only answers for a point of the TARGET
       // series, so pressing a cap (which lives in a *different*, related series)
       // returns null and falls through to that cap's own marker drag -- which is
-      // how caps stay freely adjustable. Pressing empty canvas also falls
-      // through, to a pan, so the tool never traps the view and a cap can never
-      // be hung off nothing.
+      // how caps stay freely adjustable, once that cap series is the active one.
+      // ⚑ Workspace's `draggable` gate must stay scoped to the target series for
+      // that fall-through to have anywhere to land; a blanket mode check froze
+      // every cap (v1.3 gate). Pressing empty canvas also falls through, to a
+      // pan, so the tool never traps the view and a cap can never be hung off
+      // nothing.
       if (linkSnap && canvas) {
         const rect = canvas.getBoundingClientRect();
         const img = screenToImage(view, e.evt.clientX - rect.left, e.evt.clientY - rect.top);

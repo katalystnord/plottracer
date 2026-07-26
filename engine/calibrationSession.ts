@@ -2431,31 +2431,70 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
   }
 
-  /** Copy a category name onto a newly added point from whichever OTHER series
-   * already named that row (v1.3 #9, David's call: per-point storage + prefill).
+  /** Copy a category name onto a newly added point from the NEAREST already-named
+   * bar in another series, measured along the category axis (v1.3 #9, David's
+   * call: per-point storage + prefill).
    *
    * A grouped bar chart repeats one category set across series, so typing
    * Flax/Hemp/Jute again for every series is pure friction. The name is still
    * written ON the point -- it is a real, editable value the table shows
    * immediately, not a live link to another series -- so a series that skips a
    * category is corrected by retyping that one cell, and nothing else shifts.
-   * That is why this is a prefill and not a shared list: a shared list indexed by
-   * position would silently mislabel every row after a missing bar.
+   *
+   * ⚑ v1.3 gate: this used to match by ROW INDEX, which is CLICK ORDER, not
+   * category identity -- so the two most ordinary grouped-bar situations silently
+   * fabricated a wrong name. A series with no Hemp bar (click Flax, then Jute) got
+   * row 1 prefilled "Hemp", and that wrong name went into the Label / Category
+   * column of every export, indistinguishable from a transcription. Clicking the
+   * rightmost bar first did the same. Now the pairing is a MEASUREMENT: the donor
+   * is whichever named bar sits nearest along the CATEGORY axis (x for upright
+   * bars, y when the chart is rotated), which lands on the right category however
+   * the user clicks and whatever they skip. Side-by-side sub-bars of a group are
+   * offset from their donor but still nearest to it, so grouped charts -- the case
+   * the feature exists for -- keep working.
+   *
+   * Fails SAFE rather than guessing: if that donor's name is already carried by
+   * another point in this same series, nothing is written (a category appears at
+   * most once per series, so a second claim on one name means the pairing is
+   * ambiguous). A blank cell the user fills in is honest; a wrong name that looks
+   * typed is not (tenets 9 + 10).
    *
    * Bar-family only (Box Plot and Histogram return before this -- they file into
    * tuples and already have their own per-tuple name field). */
   private prefillCategoryLabel(dataset: Dataset, index: number): void {
     if (this.config.axesKind !== 'bar') return;
+    const target = dataset.getAllPixels()[index];
+    if (!target) return;
+    // The category axis is the one the bars are spread ALONG: x for upright bars,
+    // y once "Horizontal bars" is checked. Read it off the live axes so the two
+    // orientations share one code path.
+    const rotated = this.axes instanceof BarAxes ? this.axes.isRotated() : false;
+    const categoryOf = (p: { x: number; y: number }): number => (rotated ? p.y : p.x);
+    const here = categoryOf(target);
+
+    let bestLabel: string | null = null;
+    let bestDistance = Infinity;
     for (const other of this.datasetEntries) {
       if (other.dataset === dataset) continue;
-      const label = other.dataset.getAllPixels()[index]?.metadata?.['label'];
-      if (typeof label === 'string' && label.length > 0) {
-        const existing = dataset.getPixel(index).metadata ?? {};
-        dataset.setMetadataAt(index, { ...existing, label });
-        this.registerLabelMetadataKey(dataset);
-        return;
+      for (const pixel of other.dataset.getAllPixels()) {
+        const label = pixel.metadata?.['label'];
+        if (typeof label !== 'string' || label.length === 0) continue;
+        const distance = Math.abs(categoryOf(pixel) - here);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestLabel = label;
+        }
       }
     }
+    if (bestLabel === null) return;
+
+    // Already used in THIS series -> the pairing is ambiguous, so record nothing.
+    const taken = dataset.getAllPixels().some((p, i) => i !== index && p.metadata?.['label'] === bestLabel);
+    if (taken) return;
+
+    const existing = target.metadata ?? {};
+    dataset.setMetadataAt(index, { ...existing, label: bestLabel });
+    this.registerLabelMetadataKey(dataset);
   }
 
   /** The active dataset's registered per-pixel metadata keys (e.g. "label"
@@ -3072,9 +3111,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * drag, keyboard nudge, and value-edit alike (all route through here). */
   updateDataPointPixel(index: number, px: number, py: number): void {
     const dataset = this.activeEntry.dataset;
-    const wasAnchor = dataset.getPixel(index)?.metadata?.['role'] === 'anchor';
+    const role = dataset.getPixel(index)?.metadata?.['role'];
+    // ⚑ A derived sample is not editable, and the guard belongs HERE -- this is
+    // where every move converges (drag, keyboard nudge, value-edit). v1.3 put it
+    // in commitDataPointEdit, a UI handler, while its own comment claimed to be
+    // "the model-side rule"; the v1.3 gate then walked around it by clicking an
+    // italic table row and pressing an arrow key. Moving an interpolated point
+    // "sticks" only until the next anchor moves, which silently discards it --
+    // exactly the defect the read-only rows were added to close.
+    if (role === 'interpolated') return;
     dataset.setPixelAt(index, px, py);
-    if (wasAnchor) this.rebuildInterpolation();
+    if (role === 'anchor') this.rebuildInterpolation();
   }
 
   /** Carry every stored pixel -- calibration handles, the pending pixel, and all

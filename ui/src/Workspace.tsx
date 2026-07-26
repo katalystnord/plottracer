@@ -1669,6 +1669,14 @@ export function Workspace() {
     // work fine uncalibrated (Measure's Distance/Set-scale need no axes), so a
     // measurement undo shouldn't kick the user out of the Measure card.
     setMode((m) => (!s.getAxes() && (m === 'place-point' || m === 'eraser' || m === 'segment-fill' || m === 'color-trace' || m === 'interpolate') ? 'calibrate' : m));
+    // ⚑ An auto-extract mode must also drop when the restored config is bar-family:
+    // its mechanisms record a bar's MIDPOINT (59f94a6 closed the rail button and
+    // the `4` hotkey, but not this door). Undoing back across a graph-type change
+    // rebuilds the session under the snapshot's config while the MODE is untouched,
+    // so a bar chart could be left sitting in segment-fill with the fold-out open
+    // and the stage handler live -- confidently wrong numbers. Found by the v1.3
+    // gate. openProject/restoreFigure already reset the mode; this path did not.
+    setMode((m) => (s.getConfig().axesKind === 'bar' && AUTO_EXTRACT_MODES.includes(m) ? 'place-point' : m));
   }, []);
 
   const restoreDoc = useCallback(
@@ -4712,6 +4720,16 @@ export function Workspace() {
     const activeColorRGB = datasetInfos.find((d) => d.active)?.color;
     const activeColor = activeColorRGB ? `rgb(${activeColorRGB[0]}, ${activeColorRGB[1]}, ${activeColorRGB[2]})` : theme.color.error;
     const activeDense = runsForPoints(dataPoints).length > 0;
+    // In Error-bars mode the markers that must be inert are exactly the ones a
+    // link drag can START from -- and `errorLinkSnap` answers only for points of
+    // the TARGET series. Scoping it that way is what keeps a CAP correctable:
+    // select a cap series under Recorded and its own markers stay draggable, the
+    // contract ImageCanvas documents ("how caps stay freely adjustable"). A
+    // blanket `mode !== 'error-bars'` also froze the caps, so the only way to
+    // move a cap was to leave the tool -- and the lower cap is MIRRORED by the
+    // app, so an uncorrectable cap means exporting a symmetry the figure never
+    // showed. Caught by the v1.3 release-gate audit.
+    const isErrorLinkAnchorSeries = mode === 'error-bars' && activeDatasetIndex === errorTargetIndex;
     dataPoints.forEach((point, i) => {
       // Interpolation-assist (checkpoint 120): anchors are the RECORD, drawn big
       // and labelled; the derived samples between them are small unlabelled dots,
@@ -4749,13 +4767,14 @@ export function Workspace() {
         // the datum along to wherever the drag ended -- i.e. onto the cap. Silent,
         // and it corrupts a point the user had already placed correctly. The
         // datum is the anchor a cap hangs off; capturing the cap must not move it.
-        draggable: mode !== 'pan' && mode !== 'measure' && mode !== 'error-bars' && !isInterp,
+        // Scoped to the TARGET series only -- see isErrorLinkAnchorSeries above.
+        draggable: mode !== 'pan' && mode !== 'measure' && !isErrorLinkAnchorSeries && !isInterp,
         selected,
         radius: isAnchor ? 6.5 : isInterp ? 2.5 : plainDense ? SELECTED_DOT_RADIUS : undefined,
       });
     });
     return result;
-  }, [config, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices]);
+  }, [config, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
 
   // Connecting polylines drawn beneath the markers (checkpoint 131) -- the fix for
   // a dense auto-trace rendering as a furry band of overlapping dots. Skipped
@@ -4852,7 +4871,10 @@ export function Workspace() {
     // Before capture, the only real actions are frame (pan/zoom) + Capture. Say
     // so, and state the WYSIWYG model so the framing is deliberate (David).
     if (mode === 'image-edit' && !figureCaptured) return 'Prep the source: rotate, flip, crop or fine-deskew — then press Capture to freeze the cleaned-up figure.';
-    if (!figureCaptured) return 'Frame the whole figure in the window (pan / zoom) — rotate / crop / deskew first if needed (tool 9) — then press Capture. What you see is what you capture.';
+    // ⚑ Said "(tool 9)" until the v1.3 gate -- 9 is Geometry; Edit image is 2. The
+    // rail was renumbered in v1.0.2 and this line, the FIRST one every first-run
+    // user reads, kept pointing at the old slot.
+    if (!figureCaptured) return 'Frame the whole figure in the window (pan / zoom) — rotate / crop / deskew first if needed (tool 2) — then press Capture. What you see is what you capture.';
     if (eyedropper === 'grid') return 'Eyedropper: click a gridline on the image to sample its colour.';
     if (eyedropper === 'series') return 'Eyedropper: click the series\u2019 curve on the image to take its colour.';
     if (mode === 'image-edit') {
@@ -4923,9 +4945,22 @@ export function Workspace() {
         // keystone rule: he can only use what's on screen).
         if (activePointIndex != null)
           return `Point ${activePointIndex + 1} selected — ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
-        return hasPointGroups
-          ? `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`
-          : 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
+        if (hasPointGroups)
+          return `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
+        // ⚑ On a bar-family figure WHERE you click decides the number: the value is
+        // read off the click's position on the value axis, so "click anywhere"
+        // invited the very midpoint error 59f94a6 blocked on the automated path --
+        // by hand, one click at a time. Auto-extract is greyed out here, so Add
+        // points is the ONLY capture tool, and this is the only place the app can
+        // say where to aim. The Trace Challenge already used the right words
+        // ("click the top of each bar"); the main workflow never did. v1.3 gate.
+        // Wording stays orientation-agnostic ("end", not "top"): a rotated
+        // horizontal-bar chart grows sideways, and the option isn't plumbed here.
+        if (config.axesKind === 'bar')
+          return config.id === 'categorical'
+            ? 'Click each category’s marker in turn — where you click on the value axis IS the number recorded.'
+            : 'Click the END of each bar in turn — where you click on the value axis IS the number recorded, so aim at the bar’s end, never its middle.';
+        return 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
       }
       if (mode === 'calibrate') {
         if (activeHandleKey)
@@ -4953,7 +4988,7 @@ export function Workspace() {
       if (mode === 'error-bars') {
         if (dataPoints.length === 0)
           return 'Error bars — place the data points first (tool 3), then drag from a point out to its cap.';
-        return 'Error bars — drag from a data point out to its error cap; a cap is placed on each side. Drag either cap to where the figure draws it.';
+        return 'Error bars — drag from a data point out to its error cap; a cap is placed on each side, the lower one mirrored as a starting position. To move a cap, pick its series under Recorded, then drag the cap.';
       }
       if (mode === 'pan') return 'Pan and zoom only — pick a tool from the left rail to edit.';
     }
@@ -4975,9 +5010,19 @@ export function Workspace() {
       return 'No points yet — pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
     if (mode === 'segment-fill') return 'No points yet — click the curve on the image to flood-fill it.';
     if (mode === 'interpolate') return 'No points yet — click a few guide points along one curve.';
-    if (mode === 'place-point') return 'No points yet — click on the image to add data points.';
+    if (mode === 'place-point')
+      return config.axesKind === 'bar'
+        ? 'No points yet — click the end of each bar to record its value.'
+        : 'No points yet — click on the image to add data points.';
     // Pan / Select / Eraser / Measure / Image-edit / Error-bars: a canvas click
     // adds nothing in any of them, so point at the tools that DO capture.
+    //
+    // ⚑ Auto-extract is permanently greyed for the bar family (59f94a6), so naming
+    // it here put two panels on screen recommending what the other refuses -- a
+    // FOURTH instance of the contradiction class this hint was written to kill.
+    // Found by the v1.3 gate; reachable with zero points via Select/Pan/Measure/
+    // Error-bars/Edit-image on a calibrated bar chart.
+    if (config.axesKind === 'bar') return 'No points yet — pick Add points (3) from the tool rail and click the end of each bar.';
     return 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
   })();
 
@@ -7001,8 +7046,30 @@ export function Workspace() {
                     // A ragged multi-series table can render rows past the ACTIVE
                     // series' point count; in Select mode only a real active-series
                     // point is selectable (the marquee only ever holds those too).
-                    const selectRow = () =>
-                      mode === 'select' ? i < dataPoints.length && setSelectedPointIndices([i]) : setActivePointIndex(i);
+                    // ⚑ A DERIVED row is not selectable. Selecting it made it the
+                    // nudge/Del target, so an italic read-only row could still be
+                    // moved with an arrow key or deleted -- the v1.3 gate's way
+                    // around the read-only cells. A derived sample has no
+                    // independent existence: the next anchor move rebuilds it.
+                    const isDerivedRow = dataPointRoles[i] === 'interpolated';
+                    const selectRow = () => {
+                      // ⚑ CLEAR rather than ignore. Merely refusing the selection left
+                      // the PREVIOUS one active, so the arrow keys then nudged a point
+                      // the user was no longer looking at -- and moving an anchor
+                      // rebuilds the fill, so the derived row they clicked shifted
+                      // anyway. Same class as the v0.6 audit's lingering-selection
+                      // nudge. Caught by this test's own first run.
+                      if (isDerivedRow) {
+                        setActivePointIndex(null);
+                        setSelectedPointIndices([]);
+                        return;
+                      }
+                      if (mode === 'select') {
+                        if (i < dataPoints.length) setSelectedPointIndices([i]);
+                        return;
+                      }
+                      setActivePointIndex(i);
+                    };
                     return (
                       <tr key={i} data-testid={`point-row-${i}`} aria-selected={isActive} onClick={selectRow} style={{ cursor: 'pointer', background: rowBg }}>
                         <td style={{ position: 'sticky', left: 0, background: rowBg ?? theme.color.background.primary, textAlign: 'right', padding: '1px 8px', color: theme.color.text.legend }}>

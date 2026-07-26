@@ -22,7 +22,10 @@ fit the view with `Ctrl+0`.
 
 Pick the graph type from the dropdown in the top bar — **XY** (linear/log/date),
 **Bar**, **Polar**, **Ternary**, **Map**, **Circular chart recorder**,
-**Histogram**, **Box plot**, **Line (categorical X)**, or **Error bars**.
+**Histogram**, **Box plot**, or **Line (categorical X)**.
+
+Error bars are not a graph type — they are **rail tool 6**, captured on top of
+whichever series they belong to (§8).
 
 Open the **Calibration** card (top-center) and place the reference points it asks
 for — for XY that's two X points and two Y points. Click the point on the image,
@@ -45,7 +48,7 @@ Several ways, depending on the figure — all on the left rail:
 
 - **Add points** (`3`) — click along the curve. A zoom loupe follows the cursor
   for precision. This is the reliable default and works on anything.
-- **Auto-extract** (`5`) — the wand tool, three mechanisms:
+- **Auto-extract** (`4`) — the wand tool, three mechanisms:
   - **Flood-fill** — click one point on a solid curve; it traces the connected line.
   - **By colour** — pick the series' colour; it extracts every matching pixel in
     one pass (good for dashed or marker curves). A live preview highlights exactly
@@ -54,14 +57,21 @@ Several ways, depending on the figure — all on the left rail:
   - **Guide points** — for monochrome, dashed, or overlapping curves that colour
     can't separate: click a few guide points along one line and a spline fills the
     rest. The guide points are your record; the fill is marked as derived.
-- For **scatter**, use the **Blob detector** (under Auto-extract) — one point per marker.
+- For **scatter**, set Auto-extract ▸ By colour's shape to **Scattered points** —
+  one point per marker instead of one per pixel column.
 
 Every automatic method shows you what it captured *before* you commit, so you can
 trust the result.
 
+**Bar-family figures are traced by hand.** Auto-extract is greyed out for Bar,
+Histogram, Box plot, and Line (categorical X): its mechanisms all follow the
+*middle* of a shape, which is a curve's position but only half of a bar. Place
+points on the bar ends with **Add points** (`3`) instead — the loupe gives you
+the pixel precision.
+
 ## 5. Correct
 
-- **Select** (`2`) — click a point to select it, or drag a box to select a range.
+- **Select** (`5`) — click a point to select it, or drag a box to select a range.
   `Del` removes the selection; the arrow keys nudge selected points (Shift = coarse);
   `Esc` clears. It never selects calibration handles.
 - Drag any point to reposition it; drag a calibration handle to re-calibrate live.
@@ -69,9 +79,11 @@ trust the result.
 - On a **Bar** or **Line (categorical X)** figure, the table has a **Category**
   column: type each point's name from the figure's tick labels (Flax, Hemp, …) and
   the exports carry it instead of a placeholder. On a grouped chart you only type
-  the set once — adding points to the next series prefills the same names row by
-  row, and each name belongs to its own point, so a series that skips a category
-  is fixed by retyping that one cell.
+  the set once — a point added to the next series takes the name of the **nearest
+  already-named bar**, so it lands on the right category however you click and
+  whatever you skip. Each name belongs to its own point, so any cell can be
+  retyped without shifting its neighbours. Where the app can't tell which category
+  you meant, it leaves the cell **blank** rather than guess a name.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
 ## 6. Multiple series and figures
@@ -84,7 +96,7 @@ trust the result.
 
 ## 7. Measure (optional)
 
-The **ruler** tool (`6`) opens a Measure card: **distance, angle, area, slope** —
+The **ruler** tool (`7`) opens a Measure card: **distance, angle, area, slope** —
 in the chart's own units, or a scale you set from any known length on the image.
 Measurements are a separate collection from your series data.
 
@@ -101,7 +113,8 @@ from the recorded points.
 **Guide-point traces carry a `role` column.** If a series was traced with **Guide
 points**, its export gains a `role` telling you where each number came from:
 `anchor` for a point you placed by eye, `interpolated` for one the spline filled in
-between your anchors. Keep only the anchors if you want strictly what a human put on
+between your anchors, and **blank** for an ordinary point you clicked yourself with
+Add points. Keep only the anchors if you want strictly what a human put on
 the figure. The column appears only for series that were traced this way — an
 ordinary trace exports exactly as before.
 

@@ -228,8 +228,9 @@ export function ErrorBarsCard({
             </Hint>
           ) : (
             <Hint data-testid="error-bars-hint">
-              Drag from a data point out to its error cap. A cap is placed on each side; drag either one to where the
-              figure draws it.
+              Drag from a data point out to its error cap. A cap is placed on each side — the lower one mirrored as a
+              starting position. To move a cap to where the figure draws it, pick its series under Recorded below, then
+              drag the cap.
             </Hint>
           )}
 

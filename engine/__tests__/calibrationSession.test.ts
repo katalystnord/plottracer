@@ -610,6 +610,62 @@ describe('categorical-X labels (v1.3 #9)', () => {
     expect(session.getPointLabels(0)).toEqual(['Flax', 'Hemp']); // series 1 untouched
   });
 
+  // ⚑ The v1.3 release-gate audit proved the prefill could fabricate a WRONG name
+  // and export it as if transcribed: it matched by ROW INDEX, which is click order,
+  // not category identity. The pairing is now a measurement -- the nearest named
+  // bar along the CATEGORY axis -- so it lands on the right category however the
+  // user clicks and whatever they skip. These three pin the failure modes.
+  it('a series that SKIPS a category is not given the skipped name', () => {
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    session.addDataPoint(350, 250);
+    session.setPointLabel(0, 'Flax');
+    session.setPointLabel(1, 'Hemp');
+    session.setPointLabel(2, 'Jute');
+
+    // Series 2 has no Hemp bar: the user clicks the Flax bar, then the Jute bar.
+    session.addDataset('Alkali');
+    session.addDataPoint(160, 250);
+    session.addDataPoint(360, 180);
+    // Row-index matching gave row 1 the name "Hemp" -- against the JUTE bar.
+    expect(session.getPointLabels(1)).toEqual(['Flax', 'Jute']);
+  });
+
+  it('names follow the bar clicked, not the order it was clicked in', () => {
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 200);
+    session.setPointLabel(0, 'Flax');
+    session.setPointLabel(1, 'Hemp');
+
+    // Series 2 traced right-to-left. Row 0 is the HEMP bar.
+    session.addDataset('Alkali');
+    session.addDataPoint(260, 150);
+    session.addDataPoint(160, 250);
+    expect(session.getPointLabels(1)).toEqual(['Hemp', 'Flax']);
+  });
+
+  it('writes NOTHING rather than reuse a name when the pairing is ambiguous', () => {
+    // A category appears at most once per series, so a second claim on one name
+    // means the nearest-bar pairing cannot tell -- and a blank cell the user fills
+    // in is honest where a duplicated name that looks typed is not (tenets 9+10).
+    //
+    // ⚑ This one PINS behaviour rather than proving the fix: under the old
+    // row-index matching it also came out blank, because series 1 has no point at
+    // row 1 to donate. The two tests above are the ones that fail without the fix
+    // ('Hemp' where Jute belongs). Kept because the reuse guard is what makes
+    // nearest-bar matching safe, and nothing else pins it.
+    const session = barSession();
+    session.addDataPoint(150, 300);
+    session.setPointLabel(0, 'Flax');
+
+    session.addDataset('Alkali');
+    session.addDataPoint(155, 250);
+    session.addDataPoint(158, 240); // a second point by the same bar
+    expect(session.getPointLabels(1)).toEqual(['Flax', '']);
+  });
+
   it('carries a typed name into the Bar export (no Bar<i> fallback once named)', () => {
     const session = barSession();
     session.addDataPoint(150, 300);
@@ -1737,6 +1793,34 @@ describe('CalibrationSession interpolation-assist (checkpoint 120)', () => {
     const after = points.map((p) => [p.px, p.py]);
     expect(after).not.toEqual(before);
     expect(roles.filter((r) => r === 'interpolated').length).toBeGreaterThan(0);
+  });
+
+  it('REFUSES to move a derived sample — the guard is in the model, not a UI handler', () => {
+    // ⚑ v1.3 put this guard in commitDataPointEdit, a UI handler whose own comment
+    // called itself "the model-side rule". The v1.3 gate walked around it: click an
+    // italic (read-only) table row to select it, then press an arrow key, and the
+    // derived sample moved -- reported as `role=interpolated` at a hand-chosen
+    // position, then silently discarded by the next rebuild. That is the exact
+    // defect the read-only rows were added to close, reached by another door.
+    // updateDataPointPixel is where drag, nudge and value-edit all converge.
+    const session = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    session.addAnchorPoint(120, 240);
+    session.addAnchorPoint(380, 120);
+    const derived = session.getDataPointRoles().indexOf('interpolated');
+    expect(derived).toBeGreaterThanOrEqual(0);
+    const before = session.getDataPoints()[derived]!;
+
+    session.updateDataPointPixel(derived, before.px, before.py - 40);
+
+    const after = session.getDataPoints()[derived]!;
+    expect(after.px).toBe(before.px);
+    expect(after.py).toBe(before.py); // unmoved
+    // An ANCHOR still moves -- the guard is scoped to derived samples only.
+    const anchor = session.getDataPointRoles().indexOf('anchor');
+    session.updateDataPointPixel(anchor, 120, 60);
+    expect(session.getDataPoints()[session.getDataPointRoles().indexOf('anchor')]!.py).toBe(60);
   });
 
   it('re-interpolates when an anchor is deleted (no stale fill spanning a gone guide point)', () => {

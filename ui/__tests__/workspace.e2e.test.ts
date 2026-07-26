@@ -732,6 +732,35 @@ describe('Workspace: Bar axes', () => {
 
     await expectRow([3.75]);
   });
+
+  // ⚑ On a bar chart WHERE you click decides the number -- the value is read off
+  // the click's position on the value axis. The tips bar said "click ANYWHERE on
+  // the image to add a data point", which invited by hand exactly the midpoint
+  // error 59f94a6 blocked on the automated path. Auto-extract is greyed out here,
+  // so Add points is the only capture tool and the tips bar is the only place the
+  // app can say where to aim. Found by the v1.3 release-gate audit.
+  it('tells you to aim at the bar END, never "anywhere on the image"', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('mode-place-point').click();
+    const tip = await textOf('tips-bar');
+    expect(tip).toMatch(/END of each bar/i);
+    expect(tip).toMatch(/never its middle/i);
+    expect(tip).not.toMatch(/anywhere on the image/i);
+  });
+
+  // The empty-table hint named Auto-extract (4) -- which this release greys out
+  // permanently for the bar family. Two panels on screen, one recommending what
+  // the other refuses: a FOURTH instance of the contradiction class 9612378 was
+  // written to sweep. Reachable with zero points by picking any non-capture tool.
+  it('the empty-table hint never sends a bar chart to the greyed-out Auto-extract', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('mode-select').click(); // a tool whose canvas click captures nothing
+    const hint = await textOf('no-points');
+    expect(hint).not.toMatch(/Auto-extract/i);
+    expect(hint).toMatch(/Add points/i);
+  });
 });
 
 describe('Workspace: Box Plot / Point Groups', () => {
@@ -2458,6 +2487,45 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     await page.getByTestId('data-value-x-0').click();
     expect(await page.getByTestId('data-edit-x-0').count()).toBe(1);
     await page.keyboard.press('Escape');
+  });
+
+  it('a derived row cannot be SELECTED, so the arrow keys can never move it', async () => {
+    // ⚑ The third door, found by the v1.3 release-gate audit. The read-only cells
+    // only closed typing: clicking anywhere else on an italic row still set it as
+    // the active point, and Place-Point's arrow-nudge then MOVED the derived
+    // sample -- exported as `role=interpolated` at a hand-chosen position and
+    // silently discarded by the next rebuild. Exactly the defect the read-only
+    // rows were added to close. The guard is now in updateDataPointPixel (where
+    // drag, nudge and value-edit converge) AND the row refuses selection.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('guide');
+    await clickAt(420, 450);
+    await clickAt(620, 130);
+    await page.waitForTimeout(150);
+
+    const derivedRow = page.getByTestId('point-row-1'); // row 1 is derived fill
+    const before = await rowValues(1);
+    await derivedRow.click();
+    // Not selected...
+    expect(await derivedRow.getAttribute('aria-selected')).toBe('false');
+    // ...and no OTHER row silently inherited the keyboard either. ⚑ This half is
+    // why the assertion below is not enough on its own: the first version of this
+    // fix merely ignored the click, which left the previous selection active, so
+    // the nudge moved an ANCHOR -- and because moving an anchor rebuilds the fill,
+    // the derived row shifted by 0.0002 anyway. The click must CLEAR.
+    expect(await page.locator('[data-testid^="point-row-"][aria-selected="true"]').count()).toBe(0);
+    // ...and nudging does nothing to it.
+    await page.getByTestId('mode-place-point').click();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowUp');
+    await page.waitForTimeout(150);
+    const after = await rowValues(1);
+    expect(after[0]).toBeCloseTo(before[0]!, 4);
+    expect(after[1]).toBeCloseTo(before[1]!, 4);
+
+    // The ANCHOR row above it still selects -- the guard is scoped to derived.
+    await page.getByTestId('point-row-0').click();
+    expect(await page.getByTestId('point-row-0').getAttribute('aria-selected')).toBe('true');
   });
 
   it('does not offer "Edit value…" on a derived point (the second door, v1.3)', async () => {
@@ -5628,10 +5696,25 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await page.waitForTimeout(150);
     // The mirror put the lower cap at y=240 (reflected through the datum at 200).
     // Drag it far away; nothing may snap it back or object.
+    const capBefore = await rowValues(0);
     await dragMarker(400, 240, 400, 285);
     const after = await page.locator('[data-testid="series-select"] option').allTextContents();
     // Still exactly one cap -- the drag MOVED it, it did not add one.
     expect(after.find((l) => l.startsWith('SD lower'))).toMatch(/\(1\)/);
+    // ⚑ And it ACTUALLY moved. The count alone held whether the drag did anything
+    // or not, which is how the v1.3 gate found a blanket `mode !== 'error-bars'`
+    // draggable gate that had frozen every cap: three on-screen strings promised
+    // the drag and it silently did nothing. The lower cap is MIRRORED by the app,
+    // so a cap you cannot correct means exporting a symmetry the figure never
+    // showed -- assert the recorded value changed, not just that a row exists.
+    //
+    // The table lays every series out side by side, so row 0 reads
+    // [S1 x, S1 y, upper x, upper y, lower x, lower y] -- SD lower is created
+    // last, so its value is the LAST cell (index 1 is Series 1's y, which is the
+    // point the sibling test above pins as unmoved). Dragging down the screen
+    // lowers the value: the mirror put it at ~0.67 and 45px further down is ~-2.3.
+    const capAfter = await rowValues(0);
+    expect(capAfter[capAfter.length - 1]).toBeLessThan(capBefore[capBefore.length - 1]! - 0.2);
   });
 
   it('an error series is an ORDINARY series — it appears in the spreadsheet as one', async () => {
