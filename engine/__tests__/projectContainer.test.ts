@@ -243,3 +243,62 @@ describe('multi-figure container (checkpoint 115)', () => {
     expect('error' in result && result.error).toMatch(/Bad/);
   });
 });
+
+// The stamp has to survive the CONTAINER, not just the JSON shape -- the `.zip`
+// is the only path the app actually saves through (Workspace's saveProject calls
+// serializeProjectZip / serializeMultiFigureZip), and it rebuilds project.json
+// by spreading the file object. A key that got dropped there would be written by
+// a passing unit test and absent from every real file on disk.
+describe('project stamp through the zip container', () => {
+  const STAMP = { appVersion: '1.4.0', savedAt: '2026-07-26T22:15:00.000Z' };
+
+  it('survives a single-figure zip round trip', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+
+    const file = serializeProject(session, PNG_DATA_URL, 'fig.png', undefined, undefined, undefined, STAMP);
+    if ('error' in file) throw new Error(file.error);
+    const zip = serializeProjectZip(file);
+    if ('error' in zip) throw new Error(zip.error);
+
+    // Present in the archive's own project.json, so anyone unzipping the file
+    // can read it without the app.
+    const json = JSON.parse(strFromU8(unzipSync(zip)['project.json']!)) as Record<string, unknown>;
+    expect(json.appVersion).toBe('1.4.0');
+    expect(json.savedAt).toBe('2026-07-26T22:15:00.000Z');
+
+    const read = deserializeProjectZip(zip);
+    if ('error' in read) throw new Error(read.error);
+    expect(read.appVersion).toBe('1.4.0');
+    expect(read.savedAt).toBe('2026-07-26T22:15:00.000Z');
+  });
+
+  it('survives a multi-figure zip round trip, at the top level', () => {
+    const s1 = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(s1);
+    s1.runCalibration();
+    const s2 = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(s2);
+    s2.runCalibration();
+
+    const multi = serializeMultiFigureProject(
+      [
+        { name: 'One', session: s1, imageDataURL: PNG_DATA_URL },
+        { name: 'Two', session: s2, imageDataURL: PNG_DATA_URL },
+      ],
+      0,
+      undefined,
+      STAMP
+    );
+    if ('error' in multi) throw new Error(multi.error);
+    const zip = serializeMultiFigureZip(multi);
+    if ('error' in zip) throw new Error(zip.error);
+
+    const read = deserializeMultiFigureZip(zip);
+    if ('error' in read) throw new Error(read.error);
+    expect(read.appVersion).toBe('1.4.0');
+    expect(read.savedAt).toBe('2026-07-26T22:15:00.000Z');
+    expect(read.figures).toHaveLength(2);
+  });
+});

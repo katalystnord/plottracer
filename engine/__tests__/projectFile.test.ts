@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { serializeProject, deserializeProject } from '../projectFile.js';
+import {
+  serializeProject,
+  deserializeProject,
+  serializeMultiFigureProject,
+  deserializeMultiFigureProject,
+} from '../projectFile.js';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG, CIRCULAR_CHART_RECORDER_AXES_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
@@ -400,5 +405,106 @@ describe('deserializeProject', () => {
     if ('error' in mixed) throw new Error(mixed.error);
     expect(mixed.provenance.crops).toHaveLength(1);
     expect(mixed.provenance.crops![0]!.fromWidth).toBe(800);
+  });
+});
+
+// === The project stamp (v1.4) =============================================
+// Which build wrote a file, and when. DIAGNOSTICS, not a migration mechanism --
+// migrations branch on `plotTracerProject`. Its value is retroactive
+// identification of files a format marker cannot distinguish, so the tests that
+// matter are: it is written, it survives the round trip, its absence is
+// harmless, and garbage never becomes a version a migration would trust.
+describe('project stamp', () => {
+  const calibrated = () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    return session;
+  };
+
+  it('writes appVersion and savedAt when a stamp is supplied', () => {
+    const result = serializeProject(calibrated(), FAKE_IMAGE_DATA_URL, undefined, undefined, undefined, undefined, {
+      appVersion: '1.4.0',
+      savedAt: '2026-07-26T22:15:00.000Z',
+    });
+    if ('error' in result) throw new Error(result.error);
+    expect(result.appVersion).toBe('1.4.0');
+    expect(result.savedAt).toBe('2026-07-26T22:15:00.000Z');
+  });
+
+  it('omits both keys entirely when no stamp is supplied, so an unstamped save is unchanged', () => {
+    const result = serializeProject(calibrated(), FAKE_IMAGE_DATA_URL);
+    if ('error' in result) throw new Error(result.error);
+    // `in`, not `=== undefined`: writing the key with an undefined value would
+    // still change the JSON, which is the thing "additive" has to mean.
+    expect('appVersion' in result).toBe(false);
+    expect('savedAt' in result).toBe(false);
+  });
+
+  it('round-trips the stamp back out through deserializeProject', () => {
+    const written = serializeProject(calibrated(), FAKE_IMAGE_DATA_URL, undefined, undefined, undefined, undefined, {
+      appVersion: '1.4.0',
+      savedAt: '2026-07-26T22:15:00.000Z',
+    });
+    if ('error' in written) throw new Error(written.error);
+    const read = deserializeProject(JSON.parse(JSON.stringify(written)));
+    if ('error' in read) throw new Error(read.error);
+    expect(read.appVersion).toBe('1.4.0');
+    expect(read.savedAt).toBe('2026-07-26T22:15:00.000Z');
+  });
+
+  it('loads a file written before the stamp existed, reporting neither field', () => {
+    const written = serializeProject(calibrated(), FAKE_IMAGE_DATA_URL);
+    if ('error' in written) throw new Error(written.error);
+    const read = deserializeProject(JSON.parse(JSON.stringify(written)));
+    if ('error' in read) throw new Error(read.error);
+    expect(read.appVersion).toBeUndefined();
+    expect(read.savedAt).toBeUndefined();
+    // The rest of the file still reads exactly as before.
+    expect(read.configId).toBe('xy');
+    expect(read.datasets).toHaveLength(1);
+  });
+
+  it('drops a malformed stamp rather than reporting a version a migration would trust', () => {
+    const base = serializeProject(calibrated(), FAKE_IMAGE_DATA_URL);
+    if ('error' in base) throw new Error(base.error);
+    const plain = JSON.parse(JSON.stringify(base));
+
+    for (const junk of [{ appVersion: 42 }, { appVersion: '' }, { appVersion: null }, { appVersion: { v: '1.4.0' } }]) {
+      const read = deserializeProject({ ...plain, ...junk });
+      if ('error' in read) throw new Error(read.error);
+      expect(read.appVersion).toBeUndefined();
+    }
+    // A garbage savedAt is dropped independently -- a good version survives it.
+    const mixed = deserializeProject({ ...plain, appVersion: '1.4.0', savedAt: 7 });
+    if ('error' in mixed) throw new Error(mixed.error);
+    expect(mixed.appVersion).toBe('1.4.0');
+    expect(mixed.savedAt).toBeUndefined();
+  });
+
+  it('stamps a multi-figure project ONCE at the top level, never per figure', () => {
+    const figures = [
+      { name: 'Figure 1', session: calibrated(), imageDataURL: FAKE_IMAGE_DATA_URL },
+      { name: 'Figure 2', session: calibrated(), imageDataURL: FAKE_IMAGE_DATA_URL },
+    ];
+    const multi = serializeMultiFigureProject(figures, 0, undefined, {
+      appVersion: '1.4.0',
+      savedAt: '2026-07-26T22:15:00.000Z',
+    });
+    if ('error' in multi) throw new Error(multi.error);
+    expect(multi.appVersion).toBe('1.4.0');
+    expect(multi.savedAt).toBe('2026-07-26T22:15:00.000Z');
+    // One fact, stored once: N figures saved in one action are not N versions.
+    for (const fig of multi.figures) {
+      expect('appVersion' in fig).toBe(false);
+      expect('savedAt' in fig).toBe(false);
+    }
+
+    const read = deserializeMultiFigureProject(JSON.parse(JSON.stringify(multi)));
+    if ('error' in read) throw new Error(read.error);
+    expect(read.appVersion).toBe('1.4.0');
+    expect(read.savedAt).toBe('2026-07-26T22:15:00.000Z');
+    expect(read.figures).toHaveLength(2);
+    expect(read.figures[0]!.appVersion).toBeUndefined();
   });
 });

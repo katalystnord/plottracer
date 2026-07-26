@@ -121,10 +121,42 @@ function hasProvenance(p: Provenance): boolean {
   return sourced || (!!p.crops && p.crops.length > 0);
 }
 
+/** Which build wrote a project file, and when.
+ *
+ * ⚑ DIAGNOSTICS, NOT A MIGRATION MECHANISM. Migrations branch on
+ * `plotTracerProject` (the format marker) -- that is what it is for. NOTHING in
+ * the load path may branch on `appVersion`: scattered semver comparisons in a
+ * reader are exactly the mess the format marker exists to prevent.
+ *
+ * What it IS for is retroactive identification -- answering "which files could
+ * be affected by this?" about a defect the format marker cannot see, because the
+ * shape never changed. The standing example is the error-bar rework: once a cap
+ * records whether it was MEASURED or app-MIRRORED, every file written before it
+ * is silently ambiguous, and without a stamp there is no way to tell which files
+ * those are. A stamp cannot fix them; it can tell a future migration which ones
+ * to treat as suspect.
+ *
+ * Both fields are supplied by the CALLER rather than read in here: `ui/` owns
+ * the Vite-injected `__APP_VERSION__` (engine/ is framework-agnostic and cannot
+ * see it), and passing the timestamp in keeps this function pure and its tests
+ * deterministic. */
+export interface ProjectStamp {
+  /** The PlotTracer version that wrote the file, e.g. "1.3.0". */
+  appVersion?: string;
+  /** ISO-8601 instant the file was written. */
+  savedAt?: string;
+}
+
 export interface ProjectFile {
   /** Format marker for this container (image + plotData), versioned
    * independently of plotData's own `version` field. */
   plotTracerProject: 1;
+  /** Who wrote this file and when (see ProjectStamp). Optional and additive --
+   * absent in every file written before v1.4, which is precisely why it had to
+   * be added before more of them existed: a file already on disk can never be
+   * retro-stamped. */
+  appVersion?: string;
+  savedAt?: string;
   image: { dataURL: string; fileName?: string };
   plotData: SerializedPlotData;
   /** Measure-tool results + their px->unit scale (checkpoint 56). Optional and
@@ -158,6 +190,11 @@ export interface DeserializedProject {
   /** Where the figure came from (checkpoint 95); `{}` when the file predates it
    * or nothing was recorded. */
   provenance: Provenance;
+  /** Which build wrote the file, and when (see ProjectStamp). Undefined for any
+   * file written before v1.4, and for each figure of a multi-figure project --
+   * there the stamp is written ONCE at the top level, not per figure. */
+  appVersion?: string;
+  savedAt?: string;
   /** The bundled SOURCE document (checkpoint 104) -- e.g. the PDF the figure was
    * extracted from -- when the project archive carried one, so the evidence
    * travels with the record (§5). Undefined for a plain-image project or one
@@ -204,7 +241,8 @@ export function serializeProject<A extends CalibratedAxes>(
   imageFileName?: string,
   measures?: { measurements: SerializedMeasurement[]; scale: SerializedMeasureScale | null },
   provenance?: Provenance,
-  sourceDocument?: SourceDocument
+  sourceDocument?: SourceDocument,
+  stamp?: ProjectStamp
 ): ProjectResult<ProjectFile> {
   const axes = session.getAxes();
   if (!axes) return { error: 'Calibrate the axes before saving a project.' };
@@ -222,6 +260,10 @@ export function serializeProject<A extends CalibratedAxes>(
     image: imageFileName ? { dataURL: imageDataURL, fileName: imageFileName } : { dataURL: imageDataURL },
     plotData: plotData.serialize(),
   };
+  // Omit-when-absent, like every additive key below: a caller that passes no
+  // stamp writes a file byte-identical to a pre-v1.4 one.
+  if (stamp?.appVersion) file.appVersion = stamp.appVersion;
+  if (stamp?.savedAt) file.savedAt = stamp.savedAt;
   if (measures && measures.measurements.length > 0) file.measurements = measures.measurements;
   if (measures && measures.scale) file.measureScale = measures.scale;
   // Omit entirely when nothing was recorded, so a plain image project carries no
@@ -289,7 +331,20 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // Accept only well-formed parts; a hand-edited or pre-95 file with missing
     // or malformed provenance reads back as `{}` (or a partial), never throws.
     provenance: readProvenance(data.provenance),
+    ...readStamp(data),
   };
+}
+
+/** Validate a file's `appVersion`/`savedAt` into a ProjectStamp, dropping
+ * anything that isn't a non-empty string. Same tolerant posture as
+ * readProvenance: a hand-edited or foreign file must not break the open path
+ * over a diagnostic field, and a garbage value is worse than none -- it would
+ * make a future migration mis-identify which files it applies to. */
+function readStamp(raw: { appVersion?: unknown; savedAt?: unknown }): ProjectStamp {
+  const out: ProjectStamp = {};
+  if (typeof raw.appVersion === 'string' && raw.appVersion.length > 0) out.appVersion = raw.appVersion;
+  if (typeof raw.savedAt === 'string' && raw.savedAt.length > 0) out.savedAt = raw.savedAt;
+  return out;
 }
 
 /** Validate a file's `provenance` into a Provenance, dropping anything
@@ -350,6 +405,11 @@ export interface FigureFile {
 
 export interface MultiFigureProjectFile {
   plotTracerProject: 1;
+  /** Which build wrote the file, and when (see ProjectStamp). Written ONCE here,
+   * never per figure -- every figure in the archive was saved by the same app in
+   * the same action, so a per-figure copy would be N copies of one fact. */
+  appVersion?: string;
+  savedAt?: string;
   /** Discriminates a multi-figure project from a single one: the single format
    * has a top-level `image`/`plotData`, this has `figures`. The reader checks
    * for this array (see deserializeProjectContainer). */
@@ -369,6 +429,10 @@ export interface DeserializedFigure extends DeserializedProject {
 export interface DeserializedMultiFigureProject {
   figures: DeserializedFigure[];
   activeFigure: number;
+  /** Which build wrote the archive, and when (see ProjectStamp) -- read from the
+   * top level, so the per-figure DeserializedProjects carry none. */
+  appVersion?: string;
+  savedAt?: string;
   /** The shared source document, when the project carried one (the `.zip`
    * reader restores the bytes). */
   sourceDocument?: SourceDocument;
@@ -394,7 +458,8 @@ export function serializeMultiFigureProject(
     provenance?: Provenance;
   }>,
   activeFigure: number,
-  sourceDocument?: SourceDocument
+  sourceDocument?: SourceDocument,
+  stamp?: ProjectStamp
 ): ProjectResult<MultiFigureProjectFile> {
   if (figures.length === 0) return { error: 'No figures to save.' };
   const out: FigureFile[] = [];
@@ -409,6 +474,10 @@ export function serializeMultiFigureProject(
   }
   const clampedActive = activeFigure >= 0 && activeFigure < out.length ? activeFigure : 0;
   const result: MultiFigureProjectFile = { plotTracerProject: 1, figures: out, activeFigure: clampedActive };
+  // Top level only -- serializeProject above is deliberately called WITHOUT the
+  // stamp, so no figure carries its own copy.
+  if (stamp?.appVersion) result.appVersion = stamp.appVersion;
+  if (stamp?.savedAt) result.savedAt = stamp.savedAt;
   if (sourceDocument) result.sourceDocument = sourceDocument;
   return result;
 }
@@ -437,5 +506,5 @@ export function deserializeMultiFigureProject(raw: unknown): ProjectResult<Deser
     figures.push({ ...single, name: typeof f.name === 'string' && f.name ? f.name : `Figure ${figures.length + 1}` });
   }
   const active = typeof data.activeFigure === 'number' && data.activeFigure >= 0 && data.activeFigure < figures.length ? data.activeFigure : 0;
-  return { figures, activeFigure: active };
+  return { figures, activeFigure: active, ...readStamp(data) };
 }

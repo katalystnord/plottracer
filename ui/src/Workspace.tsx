@@ -3228,6 +3228,13 @@ export function Workspace() {
       return;
     }
 
+    // Who wrote this file, and when (engine/projectFile.ts's ProjectStamp).
+    // Built HERE because `__APP_VERSION__` is a Vite define that only exists in
+    // ui/ -- engine/ is framework-agnostic and takes it as a parameter, which
+    // also keeps its tests deterministic. Diagnostics only: nothing in the load
+    // path branches on it, that is what `plotTracerProject` is for.
+    const stamp = { appVersion: __APP_VERSION__, savedAt: new Date().toISOString() };
+
     // --- Multi-figure project (checkpoint 115): save every captured figure. ---
     // The active figure's mutable state lives in the live refs (its record's copy
     // is a stale stash); the inactive figures use their records. Its session IS
@@ -3262,7 +3269,8 @@ export function Workspace() {
         activeFigureIndex,
         sharedSource
           ? { name: sharedSource.name, mime: pagedDocumentFormat(sharedSource.bytes) === 'tiff' ? 'image/tiff' : 'application/pdf', bytes: sharedSource.bytes }
-          : undefined
+          : undefined,
+        stamp
       );
       if ('error' in multi) {
         setProjectError(multi.error);
@@ -3293,7 +3301,8 @@ export function Workspace() {
       provenanceRef.current,
       sourcePdfRef.current
         ? { name: sourcePdfRef.current.name, mime: pagedDocumentFormat(sourcePdfRef.current.bytes) === 'tiff' ? 'image/tiff' : 'application/pdf', bytes: sourcePdfRef.current.bytes }
-        : undefined
+        : undefined,
+      stamp
     );
     if ('error' in result) {
       setProjectError(result.error);

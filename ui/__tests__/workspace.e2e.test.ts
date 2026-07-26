@@ -1265,6 +1265,15 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(entries['image.png']).toBeDefined();
     expect([...entries['image.png']!.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
 
+    // The project stamp (v1.4): which build wrote this file, and when. Asserted
+    // HERE rather than only in the engine unit tests because the version comes
+    // from `__APP_VERSION__`, a Vite define that exists only in a real build --
+    // a unit test cannot prove the value ever reaches the file on disk.
+    const pkgVersion = (JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+    expect(written.appVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(written.appVersion).toBe(pkgVersion);
+    expect(Number.isNaN(Date.parse(written.savedAt))).toBe(false);
+
     fs.unlinkSync(savePath);
   });
 
