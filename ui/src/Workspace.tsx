@@ -7024,8 +7024,12 @@ export function Workspace() {
                           {label}
                         </th>
                       );
-                      // Category leads the series' columns, matching the export's
-                      // own Label-first convention for a categorical independent.
+                      // Category leads the series' columns: an independent variable
+                      // comes before the dependent one. ⚑ This claimed to match "the
+                      // export's own Label-first convention" while the CATEGORICAL
+                      // export actually appended Category last -- screen and file
+                      // disagreed on order until David caught it (2026-07-26). Both
+                      // are now Position, Category, Value.
                       return [
                         ...(showCategoryColumn ? [headCell(`${s.index}-cat`, 'Category', true)] : []),
                         ...tableValueLabels.map((label, d) =>

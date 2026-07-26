@@ -682,13 +682,26 @@ describe('categorical-X labels (v1.3 #9)', () => {
     // Untouched: exactly the Position/Value contract shipped since checkpoint 101.
     expect(session.getExportFields()).toEqual(['Position', 'Value']);
     expect(session.getExportRows(0)[0]!.values).toHaveLength(2);
+    const valuesBefore = session.getExportRows(0).map((r) => r.values[1]);
 
     session.setPointLabel(0, 'Flax');
-    expect(session.getExportFields()).toEqual(['Position', 'Value', 'Category']);
+    // ⚑ Position, Category, VALUE -- independent variables first, then the dependent
+    // one. Matches Bar's own inherited contract (Label before the value) and the
+    // on-screen table, which showed Category before Value from the start. The first
+    // cut appended Category to keep "files already in the wild" from shifting, but
+    // no such file can exist: nothing before v1.3 could name a point, and an
+    // unnamed export is still byte-identical `Position, Value` (asserted above).
+    // David caught the incoherence, 2026-07-26.
+    expect(session.getExportFields()).toEqual(['Position', 'Category', 'Value']);
     const rows = session.getExportRows(0);
-    expect(rows[0]!.values[2]).toBe('Flax');
+    expect(rows[0]!.values[1]).toBe('Flax');
     // An unnamed point in a named figure exports BLANK -- never a made-up name.
-    expect(rows[1]!.values[2]).toBe('');
+    expect(rows[1]!.values[1]).toBe('');
+    // ⚑ The measured values are UNCHANGED by the reorder -- they moved column, they
+    // did not move value. Compared against the same export before the name existed,
+    // so this cannot pass by agreeing with a hardcoded number I guessed wrong.
+    expect(rows.map((r) => r.values[2])).toEqual(valuesBefore);
+    expect(rows[0]!.values).toHaveLength(3);
   });
 });
 

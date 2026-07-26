@@ -1810,11 +1810,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // Categorical line (checkpoint 101): the X is a category, so instead of
     // BarAxes' ['Label','Y'] we emit a derived ordinal Position plus the Value.
     // v1.3 #9: once any point has been NAMED, the name is the independent
-    // variable a reader actually wants, so it rides out as a trailing Category
-    // column -- trailing, not first, because reordering columns would break every
-    // consumer of the files already in the wild. Absent until something is typed.
+    // variable a reader actually wants, so it rides out as a Category column.
+    //
+    // ⚑ Order is Position, Category, VALUE -- independent variables first, then the
+    // dependent one, which is what Bar's own inherited contract does (`Label`
+    // before the value) and what the on-screen table already showed. The first cut
+    // put Category last, reasoning that "reordering columns would break every
+    // consumer of the files already in the wild". That reason was hollow: this
+    // column cannot EXIST in a file older than v1.3, because nothing before it
+    // could name a point, and an unnamed export is still exactly `Position, Value`.
+    // There was no consumer to protect, only an incoherent order to inherit
+    // (David, 2026-07-26). Absent until something is typed.
     if (this.config.id === 'categorical')
-      return this.anyPointLabels() ? ['Position', 'Value', 'Category'] : ['Position', 'Value'];
+      return this.anyPointLabels() ? ['Position', 'Category', 'Value'] : ['Position', 'Value'];
     return this.axes ? exportLabelsFor(this.axes) : [...this.config.valueLabels];
   }
 
@@ -1912,12 +1920,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
         const role = roleAt(i);
         const label = p.metadata?.['label'];
-        const values: ExportValue[] = [rank[i]!, value];
-        // An unnamed point in a figure that HAS names exports a BLANK cell, so a
-        // reader can see which ticks were actually transcribed. (Bar's own Label
-        // column keeps WPD's inherited `Bar<i>` fallback -- a different, older
-        // contract with tests pinning it; not changed here.)
-        if (withCategory) values.push(typeof label === 'string' ? label : '');
+        // Position, Category, Value -- independent first, dependent last, matching
+        // getExportFields() and the on-screen table. An unnamed point in a figure
+        // that HAS names exports a BLANK cell, so a reader can see which ticks were
+        // actually transcribed. (Bar's own Label column keeps WPD's inherited
+        // `Bar<i>` fallback -- a different, older contract with tests pinning it;
+        // not changed here.)
+        const values: ExportValue[] = withCategory
+          ? [rank[i]!, typeof label === 'string' ? label : '', value]
+          : [rank[i]!, value];
         return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
       });
     }
