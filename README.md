@@ -29,8 +29,9 @@ No account required, no data sent to any server, and no dependency on any compan
 **Chart / axes types** — XY, Bar, Polar, Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis, and Error Bars.
 
 **Getting points off a figure**
-- Manual point placement, multiple series, drag-to-reposition, arrow-key nudge, click-to-edit values.
+- Manual point placement, multiple series, drag-to-reposition, arrow-key nudge, click-to-edit values. On a bar or categorical-X figure a **Category** column takes the names off the tick labels — typed once and reused across series.
 - **Auto-extract** (one wand tool): flood-fill (Segment Fill), auto-trace by colour (continuous curve *or* scatter markers), a blob detector, and interpolation-assist (guide points + a centripetal spline). A **live mask preview** shows exactly which pixels a trace will capture before you commit, and you can **restrict a trace to a drawn box**.
+- **Bar-family figures are traced by hand.** Every auto-extract mechanism centres on a filled shape — right for a curve, wrong for a bar, whose value is its *top edge*. Auto-extract is refused on Bar, Histogram and Box Plot rather than quietly return the midpoint.
 - Grid-line removal to clean a busy plot first.
 
 **Analysis** — curve fitting (polynomial, degree 1–9, optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
@@ -41,7 +42,7 @@ No account required, no data sent to any server, and no dependency on any compan
 
 **Multi-figure projects** — one project holds several figures (e.g. every page of a paper), each with its own image, calibration, graph type, and series; flip between them and extract another from the retained source.
 
-**Export** — CSV, TSV, JSON, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks.
+**Export** — CSV, TSV, JSON, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks. Where a series has them, exports also carry a **role** column — `anchor` for a point you judged by eye, `interpolated` for one the app filled in between — so the provenance the project file keeps survives the hand-off to someone else.
 
 **Durable record** — undo/redo across everything, project save/load as a self-contained `.zip` (optionally bundling the source PDF/TIFF), and import of existing WebPlotDigitizer `.tar` projects.
 
