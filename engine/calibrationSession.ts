@@ -649,6 +649,11 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * the hidden-mode problem CLAUDE.md flags. Undefined = plain, ungrouped
    * points (every other type today). */
   defaultPointGroups?: readonly string[];
+  /** Point group names DERIVED from the calibrated axes, for a type whose capture
+   * shape only exists once the axes are known (v1.4, Spider: one slot per spoke,
+   * named after it). Applied on both entrances — a fresh calibration and a loaded
+   * project. See CalibrationSession.applyAxesDerivedPointGroups. */
+  pointGroupsFromAxes?(axes: A): readonly string[];
   /** Per-type calibration settings exposed to the user (checkpoint 68). WPD
    * has always offered these; we hardcoded them. Undefined = no settings. */
   options?: readonly AxesOption[];
@@ -1242,6 +1247,11 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // change with no migration. The simplification lives in the workflow, not in the
   // record.
   globalFields: [{ key: 'centreValue', label: 'Value at the centre' }],
+  // One tuple is one closed shape on the chart — the domain word for it. Declared
+  // rather than inherited: the shared tuple status line falls back to Box Plot's
+  // "box", which is how Histogram's bins once announced themselves as "new box"
+  // (checkpoint 66, caught only by driving the real app).
+  tupleNoun: 'profile',
   options: [{ key: 'isLogRadial', label: 'Log axes', kind: 'checkbox', default: false }],
   steps: [
     {
@@ -1295,6 +1305,14 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
     }
     axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'spider' });
     return { axes };
+  },
+  // One capture slot per spoke, named after it — so a tuple reads
+  // "Strength, Weight, Cost" rather than "1, 2, 3", and the multi-series table's
+  // row k really IS axis k for every series. That alignment is REAL here (every
+  // series has exactly one value per axis), unlike the same side-by-side layout
+  // under error bars, where the pairing was derived at read time and never stored.
+  pointGroupsFromAxes(axes) {
+    return axes.getSpokes().map((_, i) => axes.getSpokeLabel(i));
   },
   extractOptions(axes) {
     return { isLogRadial: String(axes.isLog()) };
@@ -1565,6 +1583,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // the graph type's capture shape -- the constructor's "Series 1", each
     // addDataset, and reset alike (checkpoint 66).
     if (this.config.defaultPointGroups) dataset.setPointGroups([...this.config.defaultPointGroups]);
+    // ...and for a type whose slots are DERIVED from the axes (Spider), from the
+    // live calibration. Without this, "+ Add series" on a calibrated spider gave a
+    // series with no slots at all, so its points had no axis to be read against —
+    // the same "every series gets the graph type's capture shape" reason the
+    // static list above is applied here rather than at the one call site, just for
+    // the half of the shape that only exists once the axes do.
+    const derived = this.config.pointGroupsFromAxes && this.axes ? this.config.pointGroupsFromAxes(this.axes) : null;
+    if (derived && derived.length > 0) dataset.setPointGroups([...derived]);
     return { dataset, pointGroupCursor: { tupleIndex: null, groupIndex: 0 } };
   }
 
@@ -2065,6 +2091,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // (David, 2026-07-26). Absent until something is typed.
     if (this.config.id === 'categorical')
       return this.anyPointLabels() ? ['Position', 'Category', 'Value'] : ['Position', 'Value'];
+    // Spider (v1.4): `Axis, Name, Value`, the same independent-variables-first
+    // shape. Unconditional, unlike Categorical's Name column — a spoke's name is
+    // asked for as part of CALIBRATING the axis, so the column always exists even
+    // when a particular axis was left unnamed (it exports blank, and blank is the
+    // honest reading: that axis's name was never transcribed).
+    if (this.config.id === 'spider') return ['Axis', 'Name', 'Value'];
     return this.axes ? exportLabelsFor(this.axes) : [...this.config.valueLabels];
   }
 
@@ -2176,6 +2208,42 @@ export class CalibrationSession<A extends CalibratedAxes> {
         return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
       });
     }
+    // Spider (v1.4): `Axis, Name, Value` -- the direct analogue of the categorical
+    // branch's `Position, Category, Value`, independent variables first.
+    //
+    // ⚑ THE VALUE IS READ AGAINST THE SPOKE THE POINT WAS CAPTURED ON, taken from
+    // its point group, NOT from whichever ray it happens to sit nearest. Those
+    // agree for a click that landed on its axis and diverge exactly when the user
+    // mis-clicked -- and the nearest-ray reading would then export a number off a
+    // DIFFERENT axis's scale while the table still showed it in the slot they
+    // aimed at. A wrong number with nothing on screen wrong is the failure this
+    // codebase keeps rediscovering, so the axis identity is carried, never guessed.
+    if (this.config.id === 'spider') {
+      const spider = axes as unknown as SpiderAxes;
+      // Invert the tuple table once: pixel index -> which spoke's slot it fills.
+      const spokeOf: number[] = [];
+      entry.dataset.getAllTuples().forEach((tuple) => {
+        tuple.forEach((pixelIndex, groupIndex) => {
+          if (pixelIndex != null) spokeOf[pixelIndex] = groupIndex;
+        });
+      });
+      return pixels.map((p, i) => {
+        const spokeIndex = spokeOf[i];
+        const role = roleAt(i);
+        // A point outside every tuple has no axis to be read against. Export it as
+        // unmeasured rather than defaulting it onto spoke 0, which would put a real
+        // number in the row of an axis nobody assigned it to.
+        if (spokeIndex == null) {
+          return { px: p.x, py: p.y, values: [null, '', null] as ExportValue[], ...(role ? { role } : {}) };
+        }
+        const projection = spider.projectOnSpoke(spokeIndex, p.x, p.y);
+        const raw = projection?.value ?? null;
+        const res = mode === 'full' ? null : halfPixelResolution(axes, p.x, p.y)[0];
+        const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
+        const values: ExportValue[] = [spokeIndex + 1, spider.getSpokeLabel(spokeIndex), value];
+        return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
+      });
+    }
     return pixels.map((p, i) => {
       const role = roleAt(i);
       return {
@@ -2185,6 +2253,62 @@ export class CalibrationSession<A extends CalibratedAxes> {
         ...(role ? { role } : {}),
       };
     });
+  }
+
+  /**
+   * Points that sit closer to a DIFFERENT spoke than the one they were captured
+   * on (v1.4, Spider) — David's "warn past a threshold, and show it".
+   *
+   * ⚑ THE THRESHOLD IS NOT A MAGIC NUMBER. "Closer to another ray than to its
+   * own" is self-scaling: it tightens automatically on a twelve-spoke chart where
+   * the rays crowd together and relaxes on a three-spoke one, and it states the
+   * suspicion in the user's own terms — *you probably meant that other axis*. A
+   * fixed pixel tolerance would have to be guessed, would be wrong at some zoom
+   * or spoke count, and would be a modelling choice about figures we cannot see
+   * (tenet 10). The perpendicular distance rides along so the UI can SHOW how far
+   * off it was rather than merely asserting that it is.
+   *
+   * ⚑ It WARNS, it does not correct. Snapping the point to the nearer ray would
+   * record a value against an axis the user never chose; refusing the click would
+   * throw away a measurement they did make. The record keeps what they captured
+   * and the screen says what looks wrong — recording before interpreting.
+   */
+  getOffAxisWarnings(datasetIndex = this.activeDatasetIndex): {
+    pointIndex: number;
+    capturedOn: number;
+    capturedOnLabel: string;
+    nearest: number;
+    nearestLabel: string;
+    offRayPx: number;
+  }[] {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry || !this.axes || this.config.id !== 'spider') return [];
+    const spider = this.axes as unknown as SpiderAxes;
+
+    const spokeOf: number[] = [];
+    entry.dataset.getAllTuples().forEach((tuple) => {
+      tuple.forEach((pixelIndex, groupIndex) => {
+        if (pixelIndex != null) spokeOf[pixelIndex] = groupIndex;
+      });
+    });
+
+    const warnings: ReturnType<CalibrationSession<A>['getOffAxisWarnings']> = [];
+    entry.dataset.getAllPixels().forEach((p, i) => {
+      const capturedOn = spokeOf[i];
+      if (capturedOn == null) return;
+      const own = spider.projectOnSpoke(capturedOn, p.x, p.y);
+      const nearest = spider.nearestSpoke(p.x, p.y);
+      if (!own || !nearest || nearest.index === capturedOn) return;
+      warnings.push({
+        pointIndex: i,
+        capturedOn,
+        capturedOnLabel: spider.getSpokeLabel(capturedOn),
+        nearest: nearest.index,
+        nearestLabel: spider.getSpokeLabel(nearest.index),
+        offRayPx: own.offRayPx,
+      });
+    });
+    return warnings;
   }
 
   /** Switches which dataset new points/point-groups actions apply to.
@@ -2396,6 +2520,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
       };
     });
     this.activeDatasetIndex = 0;
+    // The second entrance again (v1.4). A loaded spider's groups come from the
+    // file's own datasets, but a project written before the names existed -- or
+    // one whose series was added without them -- would otherwise show numbered
+    // slots next to a calibration that knows every axis's name. Runs AFTER the
+    // entries are built so it can see which datasets already hold points.
+    this.applyAxesDerivedPointGroups();
   }
 
   /** Finds the first open point-group slot across a dataset's tuples (same
@@ -3123,7 +3253,43 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     this.calibrationError = null;
     this.axes = result.axes;
+    this.applyAxesDerivedPointGroups();
     return true;
+  }
+
+  /**
+   * Name every dataset's point groups after the calibrated axes (v1.4, Spider):
+   * one slot per spoke, in spoke order, so a captured tuple reads "Strength,
+   * Weight, Cost" instead of "1, 2, 3".
+   *
+   * ⚑ Why this can't be `defaultPointGroups`. That field is a static list on the
+   * config, which suits Histogram's fixed ['Bin start','Bin end']; a spider's
+   * groups do not exist until its axes have been calibrated, and their names are
+   * transcribed from the figure at that moment. So the config declares a FUNCTION
+   * of the built axes instead.
+   *
+   * ⚑ It will not restructure a dataset that already holds points. Renaming in
+   * place is safe (`Dataset.setPointGroups` only assigns names; it never touches
+   * recorded pixels), so a re-calibration that keeps the same spoke count just
+   * relabels. But when the COUNT changed, slot k of an existing tuple no longer
+   * means the axis it was recorded against, and silently renaming would make the
+   * table assert a pairing nobody measured — the exact failure the error-bar
+   * record is parked on. In that case the recorded data keeps the names it was
+   * captured under, and the mismatch stays visible rather than being papered over.
+   */
+  private applyAxesDerivedPointGroups(): void {
+    const derive = this.config.pointGroupsFromAxes;
+    if (!derive || !this.axes) return;
+    const names = [...derive(this.axes)];
+    if (names.length === 0) return;
+
+    for (const entry of this.datasetEntries) {
+      const hasPoints = entry.dataset.getCount() > 0;
+      const existing = entry.dataset.getPointGroups();
+      if (hasPoints && existing.length !== names.length) continue;
+      entry.dataset.setPointGroups(names);
+      if (!hasPoints) entry.pointGroupCursor = { tupleIndex: null, groupIndex: 0 };
+    }
   }
 
   /** The active dataset's points -- see this file's header comment. */

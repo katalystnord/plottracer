@@ -180,7 +180,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 7 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -5054,7 +5054,12 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // value-only calibration (X is a category, not a number) but plots points.
     // "Box Plot" (checkpoint 107) joins them -- also BarAxes underneath -- promoted
     // from a hidden Bar toggle to a discoverable entry (a keystone-test fix).
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line (categorical X)', 'Box Plot', 'Polar', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    // "Spider / Radar" (v1.4) sits beside Polar for the same adjacency reason: both
+    // are read outwards from a shared centre, and the difference that matters -- one
+    // radial scale with a measured angle, versus N independent axes and no angle at
+    // all -- is a question the user should be asked next to the alternative, not
+    // left to discover after calibrating the wrong one.
+    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line (categorical X)', 'Box Plot', 'Polar', 'Spider / Radar', 'Ternary', 'Map', 'Circular Chart Recorder']);
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {
@@ -6110,3 +6115,141 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
   }, 60000); // a full 5-round game (image loads + per-round waits) exceeds the 15s default
 });
 
+
+/**
+ * Spider / radar charts (v1.4).
+ *
+ * The UI half of the version. What is worth an e2e rather than a unit test is
+ * everything a stray `config.steps` read would break: a spider's calibration
+ * length lives in the SESSION, so the card, the progress line and the handle
+ * markers all have to walk the unrolled list. A unit test cannot see any of that.
+ */
+describe('spider charts', () => {
+  // Centre of the canvas-local coordinates used throughout, with rays at 110px.
+  // ⚑ Kept well clear of the LEFT of the canvas: the fold-out calibration card
+  // overlays it, so a click at a small x lands on the card and silently places
+  // nothing (the long-standing trap that moved this suite's other seeds to
+  // x > 350). At CX 520 / R 110 the leftmost ray reaches x = 410.
+  const CX = 520;
+  const CY = 320;
+  const R = 110;
+  const spoke = (i: number, n: number, radius = R): [number, number] => [
+    CX + radius * Math.sin((2 * Math.PI * i) / n),
+    CY - radius * Math.cos((2 * Math.PI * i) / n),
+  ];
+
+  /** Walk the whole calibration: centre, then one click + value + name per axis. */
+  async function calibrateSpider(names: string[], values: string[], centre = '0') {
+    const n = names.length;
+    for (let i = 3; i < n; i++) await page.getByTestId('add-repeat-step').click();
+    await clickAt(CX, CY);
+    for (let i = 0; i < n; i++) {
+      const [px, py] = spoke(i, n);
+      await clickAt(px, py);
+      await confirmValues([values[i]!, names[i]!]);
+    }
+    await page.getByTestId('global-field-centreValue').fill(centre);
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+  }
+
+  it('is offered in the graph-type dropdown, and starts at three axes', async () => {
+    await resetWorkspace('spider');
+    // ⚑ The count and the add control are visible BEFORE anything is placed. An
+    // affordance that appears only once the third axis is done would be an
+    // invisible precondition: you would have to already know it exists.
+    expect(await textOf('repeat-count')).toMatch(/3 axes/);
+    expect(await page.getByTestId('add-repeat-step').count()).toBe(1);
+    // Centre + three axes, not the config's single step.
+    expect(await textOf('calibrated-status')).toBe('0/4 set');
+    await page.getByTestId('calib-chip-spoke3').waitFor({ state: 'visible' });
+  });
+
+  it('grows and shrinks the calibration with the figure', async () => {
+    await resetWorkspace('spider');
+    await page.getByTestId('add-repeat-step').click();
+    await page.getByTestId('add-repeat-step').click();
+    expect(await textOf('repeat-count')).toMatch(/5 axes/);
+    expect(await textOf('calibrated-status')).toBe('0/6 set');
+    await page.getByTestId('calib-chip-spoke5').waitFor({ state: 'visible' });
+
+    await page.getByTestId('remove-repeat-step').click();
+    expect(await textOf('repeat-count')).toMatch(/4 axes/);
+    expect(await page.getByTestId('calib-chip-spoke5').count()).toBe(0);
+  });
+
+  it('refuses to shrink below the three a spider needs', async () => {
+    await resetWorkspace('spider');
+    expect(await page.getByTestId('remove-repeat-step').isDisabled()).toBe(true);
+  });
+
+  it('calibrates, then captures one value per named axis', async () => {
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+
+    // The capture slots are the axes' own names, which no static config could hold.
+    expect(await textOf('point-group-status')).toContain('Strength');
+
+    // Halfway out along each ray reads 50 on each axis's own scale.
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+    const table = await textOf('points-table');
+    expect(table).toContain('50');
+    expect(await textOf('point-group-status')).toMatch(/Strength/);
+  });
+
+  it('tells the user WHERE to aim, and calls a tuple by its own name', async () => {
+    // ⚑ Two v1.3-gate lessons applied up front rather than found at the gate.
+    // (1) On a spider the click's distance along the ray IS the number, exactly as
+    // a bar's click height is — the generic point-group tip ("filling Strength")
+    // never says that, which is the same silence that let the bar midpoint error
+    // through. (2) The shared tuple line falls back to Box Plot's "box" unless the
+    // config declares its own noun, which is how Histogram's bins once announced
+    // themselves as "new box".
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+
+    const tip = await textOf('tips-bar');
+    expect(tip).toContain('Strength');
+    expect(tip).toMatch(/along that ray/i);
+    expect(tip).toContain('profile');
+    expect(tip).not.toContain('box');
+  });
+
+  it('warns when a captured point sits nearer a different axis, and clears when fixed', async () => {
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+
+    // Slot 1 is Strength, but this click lands over on the Weight ray.
+    await clickAt(...spoke(1, 3, R / 2));
+    const warning = await textOf('off-axis-warning');
+    expect(warning).toContain('Strength');
+    expect(warning).toContain('Weight');
+    expect(warning).toMatch(/px off/);
+
+    // ⚑ It WARNS, it does not correct: the point is still where it was put, and
+    // dragging it onto its own axis is what clears the warning.
+    const [fromX, fromY] = spoke(1, 3, R / 2);
+    const [toX, toY] = spoke(0, 3, R / 2);
+    await dragMarker(fromX, fromY, toX, toY);
+    expect(await page.getByTestId('off-axis-warning').count()).toBe(0);
+  });
+
+  it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
+    // ⚑ The regression the whole session-owned step list exists to prevent. Four
+    // sites in Workspace.tsx used to read `config.steps`, which for a spider holds
+    // ONLY the centre — so the card would render a one-step calibration, the
+    // progress line would say "1/1", and the canvas would draw a single handle
+    // while the user placed six. A unit test cannot see any of that.
+    await resetWorkspace('spider');
+    await calibrateSpider(['A', 'B', 'C', 'D', 'E'], ['10', '20', '30', '40', '50']);
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+
+    // Every axis kept its own name and its own scale: each ray's known point is a
+    // different value, so half way out reads half of THAT axis's range.
+    expect(await textOf('point-group-status')).toContain('A');
+    for (let i = 0; i < 5; i++) await clickAt(...spoke(i, 5, R / 2));
+    const table = await textOf('points-table');
+    for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);
+  });
+});

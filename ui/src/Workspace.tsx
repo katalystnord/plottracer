@@ -11,6 +11,7 @@ import {
   TERNARY_AXES_CONFIG,
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+  SPIDER_AXES_CONFIG,
   SERIES_COLOR_PALETTE,
   calibrationCompatible,
   type AxesTypeConfig,
@@ -660,6 +661,12 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   // correctness, not polish. Datasets auto-carry the Min/Q1/Median/Q3/Max groups.
   BOX_PLOT_AXES_CONFIG,
   POLAR_AXES_CONFIG,
+  // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a
+  // shared centre, and differs in the way that matters: Polar has ONE radial scale
+  // and a continuously measured angle, while a spider has N independent 1-D axes
+  // and no angle at all. Grouping them makes that the visible question at the
+  // moment of choosing -- the same job the Histogram/Bar adjacency does above.
+  SPIDER_AXES_CONFIG,
   TERNARY_AXES_CONFIG,
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
@@ -1184,6 +1191,13 @@ export function Workspace() {
   // exists only to force recomputation after a mutation to the ref-held
   // session, which React can't see on its own.
   void version;
+
+  // ⚑ THE STEP LIST COMES FROM THE SESSION, never from `config.steps` (v1.4).
+  // For the eight fixed-shape graph types the two are identical, which is exactly
+  // what makes a stray `config.steps` read dangerous: it keeps working everywhere
+  // except on a Spider, where the config holds only the centre step and the whole
+  // calibration card would render as a one-step chart with its axes missing.
+  const repeatingStep = session.getRepeatingStepInfo();
 
   const currentStep = session.getCurrentStep();
   const pendingPixel = session.getPendingPixel();
@@ -4437,6 +4451,15 @@ export function Workspace() {
   const dataPointRoles = useMemo(() => session.getDataPointRoles(), [session, version]);
   const canSortNN = useMemo(() => session.canSortByNearestNeighbour(), [session, version]);
   const placedPoints = useMemo(() => session.getPlacedPoints(), [session, version]);
+  // ⚑ The step list the whole UI walks (v1.4). Memoized here rather than called
+  // inline because for a repeating type `getSteps()` BUILDS its array, so a fresh
+  // identity every render silently disabled the memoization of everything
+  // downstream of it (caught by the compiler lint, not by eye).
+  const steps = useMemo(() => session.getSteps(), [session, version]);
+  // Spider points sitting nearer another axis than the one they were captured on.
+  // Recomputed on the same tick, so dragging a stray point back onto its ray
+  // clears its warning as you drop it.
+  const offAxisWarnings = useMemo(() => session.getOffAxisWarnings(), [session, version]);
   const reusableSteps = useMemo(() => session.getReusableSteps(), [session, version]);
   // Memoized (not read directly off currentStep) so the .map() below over
   // it stays inside React Compiler's supported analysis -- mapping JSX
@@ -4681,7 +4704,7 @@ export function Workspace() {
 
   const markers = useMemo<CanvasMarker[]>(() => {
     const result: CanvasMarker[] = [];
-    for (const step of config.steps) {
+    for (const step of steps) {
       const point = placedPoints[step.key];
       if (point) {
         result.push({
@@ -4783,7 +4806,7 @@ export function Workspace() {
       });
     });
     return result;
-  }, [config, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
+  }, [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
 
   // Connecting polylines drawn beneath the markers (checkpoint 131) -- the fix for
   // a dense auto-trace rendering as a furry band of overlapping dots. Skipped
@@ -4936,7 +4959,7 @@ export function Workspace() {
       if (pendingPixel) {
         return `Enter the ${currentStep!.label} value${pendingValueFields.length > 1 ? 's' : ''}, then press Confirm.`;
       }
-      return `Calibration step ${session.getStepIndex() + 1}/${config.steps.length} — ${currentStep!.label}: ${currentStep!.prompt}`;
+      return `Calibration step ${session.getStepIndex() + 1}/${steps.length} — ${currentStep!.label}: ${currentStep!.prompt}`;
     }
     if (axes) {
       if (mode === 'select') {
@@ -4954,6 +4977,16 @@ export function Workspace() {
         // keystone rule: he can only use what's on screen).
         if (activePointIndex != null)
           return `Point ${activePointIndex + 1} selected — ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
+        // ⚑ Spider, for the same reason the bar branch below exists: WHERE you
+        // click decides the number. On a spider the value is how far out along
+        // THAT axis's ray the click sits, so the generic point-group line ("click
+        // to add a point, filling Strength") would leave a first-run user to infer
+        // that the ray matters at all — and a click off the ray still records,
+        // projected, with only the off-axis warning to hint at it. Naming the axis
+        // the cursor is on is also the only on-screen thing that says the order is
+        // guidance rather than a rule.
+        if (config.id === 'spider' && hasPointGroups)
+          return `Click where the shape crosses the ${currentGroupLabel} axis — how far out along that ray you click IS the number recorded${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
         if (hasPointGroups)
           return `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
         // ⚑ On a bar-family figure WHERE you click decides the number: the value is
@@ -5606,7 +5639,7 @@ export function Workspace() {
                 color: axes ? theme.color.primary.main : theme.color.text.legend,
               }}
             >
-              {axes ? 'Calibrated ✓' : `${Object.keys(placedPoints).length}/${config.steps.length} set`}
+              {axes ? 'Calibrated ✓' : `${Object.keys(placedPoints).length}/${steps.length} set`}
             </span>
             {!isCalibrating && !axes && (
               <button type="button" data-testid="run-calibration" onClick={runCalibration} style={{ marginLeft: 'auto', fontSize: 12, whiteSpace: 'nowrap' }}>
@@ -5654,7 +5687,7 @@ export function Workspace() {
               its pixel is clicked) shows an inline input. */}
           {figureCaptured && calibExpanded && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
-              {config.steps.map((step, i) => {
+              {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
                 const active = !axes && i === session.getStepIndex();
                 const editing = active && !!pendingPixel && step.valueFields.length > 0;
@@ -5704,6 +5737,49 @@ export function Workspace() {
                   </div>
                 );
               })}
+            </div>
+          )}
+          {/* Add/remove an axis (v1.4, Spider) -- the control that makes a
+              variable-length calibration usable.
+
+              ⚑ VISIBLE FROM THE START, not revealed once the last axis is placed.
+              A spider has as many axes as its author drew, and the user is the only
+              one who can say how many; an affordance that appears only after you
+              finish the third axis is an invisible precondition -- you would have to
+              already know it exists to wait for it. The count and the floor are
+              stated in words for the same reason, so nothing about the shape has to
+              be inferred from whether a button happens to be greyed. */}
+          {figureCaptured && calibExpanded && repeatingStep && !axes && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <button
+                type="button"
+                data-testid="add-repeat-step"
+                onClick={() => {
+                  if (session.addRepeat()) commit();
+                }}
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              >
+                + Add {repeatingStep.noun}
+              </button>
+              <button
+                type="button"
+                data-testid="remove-repeat-step"
+                disabled={session.getRepeatCount() <= repeatingStep.min}
+                title={
+                  session.getRepeatCount() <= repeatingStep.min
+                    ? `A spider chart needs at least ${repeatingStep.min} axes.`
+                    : `Remove the last ${repeatingStep.noun}, and anything placed for it.`
+                }
+                onClick={() => {
+                  if (session.removeRepeat()) commit();
+                }}
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              >
+                − Remove {repeatingStep.noun}
+              </button>
+              <span data-testid="repeat-count" style={{ color: theme.color.text.legend }}>
+                {session.getRepeatCount()} axes — add one for every axis the chart draws
+              </span>
             </div>
           )}
           {figureCaptured && calibExpanded && config.supportsCommonOrigin && !axes && (
@@ -7183,6 +7259,34 @@ export function Workspace() {
             <div data-testid="derived-legend" style={{ padding: '4px 2px 0', color: theme.color.text.legend, fontSize: 12 }}>
               <i>Italic</i> = derived by the spline between your guide points, not read off the
               figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
+            </div>
+          )}
+          {/* Off-axis warning (v1.4, Spider). Sits OUTSIDE the table's scroll
+              container, like the derived legend above and for the same reason it
+              was moved there: an explanation that scrolls away below the fold is
+              an explanation the user never sees.
+
+              ⚑ It warns and does NOT correct. Snapping the point to the nearer ray
+              would record a value against an axis nobody chose; refusing the click
+              would discard a real measurement. The distance is stated in pixels so
+              the user can judge it rather than take the app's word for it. */}
+          {offAxisWarnings.length > 0 && (
+            <div
+              data-testid="off-axis-warning"
+              style={{ padding: '4px 2px 0', color: theme.color.error, fontSize: 12 }}
+            >
+              {offAxisWarnings.length === 1
+                ? `1 point sits closer to another axis than the one it was captured on: `
+                : `${offAxisWarnings.length} points sit closer to another axis than the one they were captured on: `}
+              {offAxisWarnings
+                .slice(0, 3)
+                .map(
+                  (w) =>
+                    `row ${w.pointIndex + 1} is on ${w.capturedOnLabel} but ${Math.round(w.offRayPx)} px off it, nearer ${w.nearestLabel}`
+                )
+                .join('; ')}
+              {offAxisWarnings.length > 3 ? `; and ${offAxisWarnings.length - 3} more` : ''}
+              . Drag the point onto its axis, or delete and re-place it.
             </div>
           )}
           </SidebarSection>
