@@ -911,6 +911,9 @@ export function Workspace() {
   // "clear the selection" site invalidates it for free, which is what keeps a
   // second piece of selection state from drifting out of step with the first.
   const [pickedPointIndex, setPickedPointIndex] = useState<number | null>(null);
+  /** Which axis name is being typed into, or null. Click-to-edit, like a value cell
+   * -- the name is optional, so it must not sit there as a box demanding input. */
+  const [editingAxisName, setEditingAxisName] = useState<number | null>(null);
   // The Select tool's multi-selection (David 2026-07-21): a set of active-series
   // DATA-point indices, filled by a marquee box or single/Shift clicks. Kept
   // separate from activePointIndex (single-select, used by Place Point) so the
@@ -5149,6 +5152,47 @@ export function Workspace() {
     );
   };
 
+  // The axis's name in the spreadsheet: plain text at rest, an input while it is
+  // the cell being edited — the same click-to-edit affordance the value cells use.
+  //
+  // ⚑ NOT a permanent boxed field (David, 2026-07-27): "now a user thinks he HAS to
+  // add something". The name is optional — an axis whose label the figure prints
+  // illegibly is still a real axis — so an unnamed one reads as a dash, exactly
+  // like a value nobody recorded, and looks like the rest of the table until you
+  // click it.
+  const renderEditableAxisName = (axisIndex: number, rawName: string) => {
+    if (editingAxisName === axisIndex) {
+      return (
+        <input
+          data-testid={`spider-axis-name-${axisIndex}`}
+          autoFocus
+          value={rawName}
+          placeholder={`Axis ${axisIndex + 1}`}
+          onChange={(e) => setSpokeName(axisIndex, e.target.value)}
+          onBlur={() => {
+            setEditingAxisName(null);
+            commitPendingEdit();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: 150, fontSize: 12.5 }}
+        />
+      );
+    }
+    return (
+      <span
+        data-testid={`spider-axis-name-${axisIndex}`}
+        onClick={() => setEditingAxisName(axisIndex)}
+        title="Click to name this axis, as the figure prints it"
+        style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
+      >
+        {rawName === '' ? <span style={{ color: theme.color.text.legend }}>—</span> : rawName}
+      </span>
+    );
+  };
+
   // The single contextual "what do I do now?" line shown in the bottom tips bar
   // (checkpoint 50) -- the one constant place for guidance, so it no longer
   // pops in and out of the right panel.
@@ -7360,21 +7404,7 @@ export function Workspace() {
                   <tr key={axisName + String(axisIndex)}>
                     <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{axisIndex + 1}</td>
                     <td style={{ paddingRight: 16 }}>
-                      {/* ⚑ Editable, because this is the one thing on the row that
-                          was TYPED rather than measured — a mis-transcribed axis
-                          name should not mean re-walking the calibration. It writes
-                          back to the calibration, so the capture slots and the
-                          export follow. */}
-                      <input
-                        data-testid={`spider-axis-name-${axisIndex}`}
-                        value={spiderTable.axisRawNames[axisIndex] ?? ''}
-                        placeholder={`Axis ${axisIndex + 1}`}
-                        onChange={(e) => setSpokeName(axisIndex, e.target.value)}
-                        onBlur={commitPendingEdit}
-                        onClick={(e) => e.stopPropagation()}
-                        title="The axis's name, as the figure prints it"
-                        style={{ width: 150, fontSize: 12.5 }}
-                      />
+                      {renderEditableAxisName(axisIndex, spiderTable.axisRawNames[axisIndex] ?? '')}
                     </td>
                     {spiderTable.columns.map((col) => {
                       const value = col.values[axisIndex];

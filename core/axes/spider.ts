@@ -292,6 +292,22 @@ export class SpiderAxes {
   }
 
   /** The axis's printed name, or its positional fallback when it was never named. */
+  /**
+   * Rename one spoke. A name carries NO geometry — it is the one thing about a
+   * spoke that was transcribed rather than measured — so this changes a label and
+   * nothing else: no scale, no direction, no recorded value moves.
+   *
+   * ⚑ Which is why renaming must NOT go through a re-calibration. Re-deriving the
+   * axes to change a string makes a label edit depend on the calibration still
+   * succeeding, so a typo fix could in principle drop the calibration entirely.
+   */
+  setSpokeName(index: number, name: string): boolean {
+    const spoke = this.spokes[index];
+    if (!spoke) return false;
+    spoke.name = name;
+    return true;
+  }
+
   getSpokeLabel(index: number): string {
     const spoke = this.spokes[index];
     if (!spoke) return '';

@@ -3857,7 +3857,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (fieldIndex < 0) return false;
     while (point.values.length <= fieldIndex) point.values.push('');
     point.values[fieldIndex] = name;
-    if (this.axes) this.runCalibration();
+    // ⚑ RELABEL, DO NOT RE-DERIVE (David: "I do not see how changing them should
+    // re-drive anything"). A name carries no geometry, so nothing about the axes
+    // needs recomputing — and running the calibration to change a string would make
+    // a typo fix depend on that calibration still succeeding, which is a way for
+    // renaming an axis to drop the calibration. The name goes onto the live axes,
+    // and the capture slots are relabelled by the same in-place path a real
+    // re-calibration uses (which preserves recorded tuples when the count matches).
+    if (this.axes) {
+      (this.axes as unknown as SpiderAxes).setSpokeName(index, name);
+      this.applyAxesDerivedPointGroups();
+    }
     return true;
   }
 

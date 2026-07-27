@@ -6258,7 +6258,7 @@ describe('spider charts', () => {
     // ⚑ The axis names live in EDITABLE fields now (they are transcription, and a
     // typo must be fixable), so they are read back as input values rather than as
     // table text — the same way the bar Category column is read.
-    expect(await page.getByTestId('spider-axis-name-0').inputValue()).toBe('Strength');
+    expect(await textOf('spider-axis-name-0')).toBe('Strength');
     expect(await textOf('points-table')).toContain('50');
     expect(await textOf('point-group-status')).toMatch(/Strength/);
   });
@@ -6471,7 +6471,7 @@ describe('spider charts', () => {
     await waitForImageFitted();
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
     // Its six named axes came back as the capture slots.
-    expect(await page.getByTestId('spider-axis-name-5').inputValue()).toBe('Cost index');
+    expect(await textOf('spider-axis-name-5')).toBe('Cost index');
 
     // Chitosan film, the navy series.
     await selectAutoExtract('colour');
@@ -6524,11 +6524,22 @@ describe('spider charts', () => {
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
     await clickAt(...spoke(0, 3, R / 2));
 
+    // Click-to-edit: at rest the cell is text (a dash when unnamed), so it never
+    // reads as a field demanding input.
+    expect(await textOf('spider-axis-name-1')).toBe('Weight');
+    await page.getByTestId('spider-axis-name-1').click();
     await page.getByTestId('spider-axis-name-1').fill('Elongation at break (%)');
     await page.getByTestId('spider-axis-name-1').blur();
     await page.waitForTimeout(150);
 
-    expect(await page.getByTestId('spider-axis-name-1').inputValue()).toBe('Elongation at break (%)');
+    expect(await textOf('spider-axis-name-1')).toBe('Elongation at break (%)');
+    // ⚑ And an axis left unnamed reads as a DASH, like a value nobody recorded —
+    // the name is optional, and a permanent input box says the opposite.
+    await page.getByTestId('spider-axis-name-2').click();
+    await page.getByTestId('spider-axis-name-2').fill('');
+    await page.getByTestId('spider-axis-name-2').blur();
+    await page.waitForTimeout(150);
+    expect(await textOf('spider-axis-name-2')).toBe('—');
     // The capture cursor names the axis it is about to fill — from the same source.
     expect(await textOf('point-group-status')).toContain('Elongation at break (%)');
     // ...and so does the guidance. (Esc first: with a point selected the tips bar
@@ -6614,7 +6625,7 @@ describe('spider charts', () => {
     for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);
     // Every axis is a row, named.
     for (let i = 0; i < 5; i++) {
-      expect(await page.getByTestId(`spider-axis-name-${i}`).inputValue()).toBe(['A', 'B', 'C', 'D', 'E'][i]);
+      expect(await textOf(`spider-axis-name-${i}`)).toBe(['A', 'B', 'C', 'D', 'E'][i]);
     }
   });
 });
