@@ -26,7 +26,7 @@ No account required, no data sent to any server, and no dependency on any compan
 
 ## Features
 
-**Chart / axes types** — XY, Bar, Polar, **Spider / Radar** (every spoke calibrated separately, so each axis keeps its own range), Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis, and Error Bars.
+**Chart / axes types** — XY, Bar, Polar, **Spider / Radar** (every spoke calibrated separately, so each axis keeps its own range), Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis. Error bars are **not** a graph type — they are a rail tool, captured on top of whichever series they belong to.
 
 **Getting points off a figure**
 - Manual point placement, multiple series, drag-to-reposition, arrow-key nudge, click-to-edit values. On a bar or categorical-X figure a **Category** column takes the names off the tick labels — typed once and reused across series.
@@ -132,7 +132,7 @@ PlotTracer is a single Electron application built from four framework-independen
 
 ```
 plottracer/
-├── core/        ← calibration math + data model (the 7 axes classes, Dataset,
+├── core/        ← calibration math + data model (the axes classes, Dataset,
 │                  the WebPlotDigitizer project-format reader), ported to TypeScript
 ├── algorithms/  ← pure functions: segment fill, colour trace, blob detect,
 │                  interpolation, grid removal, curve fit, geometry, histogram, error bars

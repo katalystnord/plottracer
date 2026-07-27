@@ -64,10 +64,12 @@ Several ways, depending on the figure — all on the left rail:
   for precision. This is the reliable default and works on anything.
 - **Auto-extract** (`4`) — the wand tool, three mechanisms:
   - **Flood-fill** — click one point on a solid curve; it traces the connected line.
-  - **By colour** — pick the series' colour; it extracts every matching pixel in
-    one pass (good for dashed or marker curves). A live preview highlights exactly
-    which pixels it will take; **Restrict to a box** limits it to a region so a
-    same-coloured legend is ignored.
+  - **By colour** — pick the series' colour (type a hex value, or take it from the
+    figure with the pipette); it extracts every matching pixel in one pass (good for
+    dashed or marker curves). A live preview highlights exactly which pixels it will
+    take; **Restrict to a box** limits it to a region so a same-coloured legend is
+    ignored. The series then **takes that colour**, so its markers sit on the curve
+    they came from rather than in whatever colour the series happened to be given.
   - **Guide points** — for monochrome, dashed, or overlapping curves that colour
     can't separate: click a few guide points along one line and a spline fills the
     rest. The guide points are your record; the fill is marked as derived.
@@ -89,9 +91,12 @@ ray outward and records the value where the series' colour crosses it — one re
 per axis, filed into that axis's own row. Where a ray crosses the colour more than
 once (a grid ring in a similar ink, a second series, a filled polygon's far edge) it
 records **nothing** on that axis and names it in the message, because the crossing it
-should read is exactly what is in doubt. Those axes stay empty and the capture cursor
-lands on them, so what the trace refused is what you are asked for next. A reading you
-placed by hand is never overwritten.
+should read is exactly what is in doubt. The same applies where the colour runs past
+the end of an axis: there is no measured crossing, only the point where the search
+stopped, so nothing is recorded and the message says which axis and what to check
+(usually a known point calibrated on an inner ring). Those axes stay empty and the
+capture cursor lands on them, so what the trace refused is what you are asked for
+next. A reading you placed by hand is never overwritten.
 
 ## 5. Correct
 
@@ -99,7 +104,13 @@ placed by hand is never overwritten.
   `Del` removes the selection; the arrow keys nudge selected points (Shift = coarse);
   `Esc` clears. It never selects calibration handles.
 - Drag any point to reposition it; drag a calibration handle to re-calibrate live.
-- Edit an XY value directly in the right-panel table.
+- Edit a value directly in the right-panel table — **XY** and **Spider / Radar**.
+  Typing a number moves the point to match it: on a spider it slides along that
+  axis's own ray, so the marker and the number can never disagree.
+- **Erase one reading** with the eraser (rail) or right-click ▸ Delete point. On a
+  spider that removes exactly that axis's reading and leaves the rest of the
+  profile standing — the other five axes are separate measurements, not parts of
+  one shape.
 - On a **Bar** or **Line (categorical X)** figure, the table has a **Category**
   column: type each point's name from the figure's tick labels (Flax, Hemp, …) and
   the exports carry it in a **Category** column instead of a placeholder. On a
@@ -109,6 +120,18 @@ placed by hand is never overwritten.
   whatever you skip. Each name belongs to its own point, so any cell can be
   retyped without shifting its neighbours. Where the app can't tell which category
   you meant, it leaves the cell **blank** rather than guess a name.
+- On a **Spider / Radar** figure the table is one row per axis and one column per
+  series, and every cell is live:
+  - **click a value** to type it, or **click a point's cell** to select that point
+    on the canvas — including a point in another series, which the canvas
+    deliberately keeps inert so a click can never land on the wrong series;
+  - **click an empty cell** (`—`) to aim the next capture at that axis. The cell is
+    highlighted and the status line names it, so with two gaps you can fill either,
+    in any order — useful after erasing a reading, or where the colour trace
+    refused an axis;
+  - **click an axis name** to type it as the figure prints it. The name is optional
+    — an axis whose label is illegible is still a real axis, and an unnamed one
+    reads as `—` and exports positionally as `Axis 3`.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
 ## 6. Multiple series and figures
@@ -145,8 +168,11 @@ ordinary trace exports exactly as before.
 
 **Save Project** writes a `.zip` containing everything — image(s), calibration,
 series, measurements, and the original source PDF — so the whole extraction reopens
-exactly, and any number traces back to its figure. PlotTracer also opens
-WebPlotDigitizer `.tar` projects.
+exactly, and any number traces back to its figure.
+
+**Open Project** also reads other digitizers' project archives (`.tar`). There is no
+separate command for them: the format is recognised from the file's own bytes, never
+its name, so you open a project the same way whatever wrote it.
 
 ---
 
