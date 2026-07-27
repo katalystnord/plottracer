@@ -31,7 +31,7 @@ import os from 'node:os';
 // process (the same engine code the app itself runs), rather than hand-
 // typing project JSON by hand or driving a full calibration through the
 // browser just to produce a file to open.
-import { CalibrationSession, XY_AXES_CONFIG } from '../../engine/calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG } from '../../engine/calibrationSession.js';
 import { serializeProject } from '../../engine/projectFile.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
@@ -6398,43 +6398,63 @@ describe('spider charts', () => {
   });
 
   it('traces the bundled figure and recovers its published values', async () => {
-    // ⚑ The whole pipeline, against ground truth: the app's OWN sample figure, opened
+    // ⚑ The whole pipeline against ground truth: the app's OWN sample figure, opened
     // for real, calibrated on the anchors its truth file publishes, traced by the
-    // colour its generator drew one series in, and compared with the values that
-    // series states. Six axes running to 120, 60, 25, 100, 80 and 5 — so a reading
-    // taken off a neighbouring ray, or off one shared scale, cannot pass by looking
-    // plausible. Every other spider test here calibrates invented geometry over the
-    // default XY sample, which proves the app self-consistent and nothing more.
+    // colour its generator drew one series in, compared with the values that series
+    // states. Six axes running to 120, 60, 25, 100, 80 and 5 — so a reading taken off
+    // a neighbouring ray, or off one shared scale, cannot pass by looking plausible.
+    // Every other spider test here calibrates INVENTED geometry over the default XY
+    // sample: they prove the app self-consistent and nothing more.
+    //
+    // ⚑ The calibration arrives as a PROJECT rather than as seven computed clicks.
+    // Driving it through the canvas means converting image pixels to click points
+    // through a view transform that is fitted asynchronously and re-fitted by the
+    // capture step — and a transform read one frame early shifts every click, which
+    // surfaces seconds later as a value field that never appeared. That cost this
+    // test three flaky runs. The clicking path is thoroughly covered by the tests
+    // above; what is under test HERE is the trace, so the calibration is built
+    // in-process (the same engine the app runs) and opened through the real
+    // Open Project.
+    const fixture = (() => {
+      const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+      while (session.getRepeatCount() < spiderTruth.axes.length) session.addRepeat();
+      const origin = spiderTruth.calibration.anchors['origin']!;
+      session.handleCalibrationClick(origin.px, origin.py);
+      session.confirmCalibrationValues(['0']);
+      for (const axis of spiderTruth.axes) {
+        const anchor = spiderTruth.calibration.anchors[`spoke${axis.axis}`]!;
+        session.handleCalibrationClick(anchor.px, anchor.py);
+        session.confirmCalibrationValues([String(axis.max), axis.name]);
+      }
+      if (!session.runCalibration()) throw new Error('fixture calibration failed');
+      const png = path.join(REPO_ROOT, 'samples/spider-material-profile.png');
+      const result = serializeProject(
+        session,
+        `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`,
+        'spider-material-profile.png'
+      );
+      if ('error' in result) throw new Error(`fixture build failed: ${result.error}`);
+      const filePath = path.join(os.tmpdir(), `plottracer-spider-truth-${process.pid}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(result), 'utf8');
+      return filePath;
+    })();
+
     try {
       await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
-      }, path.join(REPO_ROOT, 'samples/spider-material-profile.png'));
-      await resetWorkspace('spider');
+      }, fixture);
+      await page.getByTestId('open-project').click();
     } finally {
       // Restore immediately, so a failure here cannot silently re-point every later
-      // test's Open Image at the wrong figure.
+      // test's Open dialog at this fixture.
       await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
       }, SAMPLE_IMAGE);
     }
-
-    const view = await getViewState();
-    const anchors = spiderTruth.calibration.anchors;
-    const toCanvas = (a: { px: number; py: number }): [number, number] => [
-      a.px * view.scale + view.offsetX,
-      a.py * view.scale + view.offsetY,
-    ];
-
-    for (let i = 3; i < spiderTruth.axes.length; i++) await page.getByTestId('add-repeat-step').click();
-    await clickAt(...toCanvas(anchors['origin']!));
-    await confirmValues(['0']);
-    for (const axis of spiderTruth.axes) {
-      await clickAt(...toCanvas(anchors[`spoke${axis.axis}`]!));
-      await confirmValues([String(axis.max), axis.name]);
-    }
-    await page.getByTestId('run-calibration').click();
-    await page.waitForTimeout(150);
+    await waitForImageFitted();
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    // Its six named axes came back as the capture slots.
+    expect(await textOf('points-table')).toContain('Cost index');
 
     // Chitosan film, the navy series.
     await selectAutoExtract('colour');
