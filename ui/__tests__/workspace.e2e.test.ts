@@ -6255,9 +6255,11 @@ describe('spider charts', () => {
     // ⚑ One ROW per axis, one COLUMN per series (David, 2026-07-27). The
     // point-group table this replaced showed the ACTIVE series only, so adding a
     // second series made the first one's readings vanish off the screen.
-    const table = await textOf('points-table');
-    expect(table).toContain('Strength');
-    expect(table).toContain('50');
+    // ⚑ The axis names live in EDITABLE fields now (they are transcription, and a
+    // typo must be fixable), so they are read back as input values rather than as
+    // table text — the same way the bar Category column is read.
+    expect(await page.getByTestId('spider-axis-name-0').inputValue()).toBe('Strength');
+    expect(await textOf('points-table')).toContain('50');
     expect(await textOf('point-group-status')).toMatch(/Strength/);
   });
 
@@ -6469,7 +6471,7 @@ describe('spider charts', () => {
     await waitForImageFitted();
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
     // Its six named axes came back as the capture slots.
-    expect(await textOf('points-table')).toContain('Cost index');
+    expect(await page.getByTestId('spider-axis-name-5').inputValue()).toBe('Cost index');
 
     // Chitosan film, the navy series.
     await selectAutoExtract('colour');
@@ -6511,6 +6513,31 @@ describe('spider charts', () => {
 
     await page.getByTestId('series-color-button').click();
     expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');
+  });
+
+  it('renames an axis from the spreadsheet, and the whole app follows', async () => {
+    // David: "I cannot edit the axis in the spreadsheet. THAT I want to fix." The
+    // name is the one thing on that row nobody measured, so a typo should not mean
+    // re-walking the calibration — and because it belongs to the AXIS, renaming it
+    // has to move the capture slots and the guidance with it, not just the cell.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    await clickAt(...spoke(0, 3, R / 2));
+
+    await page.getByTestId('spider-axis-name-1').fill('Elongation at break (%)');
+    await page.getByTestId('spider-axis-name-1').blur();
+    await page.waitForTimeout(150);
+
+    expect(await page.getByTestId('spider-axis-name-1').inputValue()).toBe('Elongation at break (%)');
+    // The capture cursor names the axis it is about to fill — from the same source.
+    expect(await textOf('point-group-status')).toContain('Elongation at break (%)');
+    // ...and so does the guidance. (Esc first: with a point selected the tips bar
+    // is showing the nudge line, which is a different branch entirely.)
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(120);
+    expect(await textOf('tips-bar')).toContain('Elongation at break (%)');
+    // ...and the reading already captured on axis 1 did not move.
+    expect(await textOf('spider-cell-0-0')).toMatch(/\d/);
   });
 
   it('says nothing matched instead of recording an empty profile', async () => {
@@ -6586,6 +6613,8 @@ describe('spider charts', () => {
     const table = await textOf('points-table');
     for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);
     // Every axis is a row, named.
-    for (const axis of ['A', 'B', 'C', 'D', 'E']) expect(table).toContain(axis);
+    for (let i = 0; i < 5; i++) {
+      expect(await page.getByTestId(`spider-axis-name-${i}`).inputValue()).toBe(['A', 'B', 'C', 'D', 'E'][i]);
+    }
   });
 });

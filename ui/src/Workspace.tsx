@@ -3190,6 +3190,20 @@ export function Workspace() {
     [session, bump]
   );
 
+  // Rename a spider AXIS from the spreadsheet (David, 2026-07-27). The name is the
+  // one transcribed thing on that row, and it belongs to the calibration rather
+  // than to any point -- session.setSpokeName re-derives, so the table, the capture
+  // slots, the tips line and the export all move together. Text edit, so it commits
+  // on blur as one undo step (setTupleLabel's rule), not one per keystroke.
+  const setSpokeName = useCallback(
+    (axisIndex: number, name: string) => {
+      if (!session.setSpokeName(axisIndex, name)) return;
+      pendingEditRef.current = true;
+      bump();
+    },
+    [session, bump]
+  );
+
   // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
   // categorical-line counterpart of setTupleLabel above, and it commits the same
   // way: a text edit is one undo step on blur, not one per keystroke.
@@ -7345,7 +7359,23 @@ export function Workspace() {
                 {spiderTable.axisNames.map((axisName, axisIndex) => (
                   <tr key={axisName + String(axisIndex)}>
                     <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{axisIndex + 1}</td>
-                    <td style={{ paddingRight: 16 }}>{axisName}</td>
+                    <td style={{ paddingRight: 16 }}>
+                      {/* ⚑ Editable, because this is the one thing on the row that
+                          was TYPED rather than measured — a mis-transcribed axis
+                          name should not mean re-walking the calibration. It writes
+                          back to the calibration, so the capture slots and the
+                          export follow. */}
+                      <input
+                        data-testid={`spider-axis-name-${axisIndex}`}
+                        value={spiderTable.axisRawNames[axisIndex] ?? ''}
+                        placeholder={`Axis ${axisIndex + 1}`}
+                        onChange={(e) => setSpokeName(axisIndex, e.target.value)}
+                        onBlur={commitPendingEdit}
+                        onClick={(e) => e.stopPropagation()}
+                        title="The axis's name, as the figure prints it"
+                        style={{ width: 150, fontSize: 12.5 }}
+                      />
+                    </td>
                     {spiderTable.columns.map((col) => {
                       const value = col.values[axisIndex];
                       const pointIndex = col.pointIndices[axisIndex];

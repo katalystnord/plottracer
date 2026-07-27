@@ -3247,6 +3247,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSpiderTable(): {
     axisNames: string[];
+    /** The names AS STORED — empty where the figure's own label was illegible and
+     * the user left it blank. `axisNames` carries the positional fallback for
+     * display; an editable field must show this one, or it offers "Axis 3" as if
+     * someone had typed it (the same invented-value trap the calibration card's
+     * blankValue closed). */
+    axisRawNames: string[];
     columns: {
       seriesIndex: number;
       seriesName: string;
@@ -3257,9 +3263,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
       pointIndices: (number | null)[];
     }[];
   } {
-    if (this.config.id !== 'spider' || !this.axes) return { axisNames: [], columns: [] };
+    if (this.config.id !== 'spider' || !this.axes) return { axisNames: [], axisRawNames: [], columns: [] };
     const spider = this.axes as unknown as SpiderAxes;
     const axisNames = spider.getSpokes().map((_, i) => spider.getSpokeLabel(i));
+    const axisRawNames = spider.getSpokes().map((spoke) => spoke.name);
 
     const columns: ReturnType<CalibrationSession<A>['getSpiderTable']>['columns'] = [];
     this.datasetEntries.forEach((entry, seriesIndex) => {
@@ -3287,7 +3294,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         });
       });
     });
-    return { axisNames, columns };
+    return { axisNames, axisRawNames, columns };
   }
 
   /** The active series' bins, one entry per captured tuple in capture order,
@@ -3826,6 +3833,34 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Reposition an already-placed calibration handle (drag-to-adjust). Re-runs calibration
    * immediately if it was already calibrated, so the live pixel→data readout stays correct. */
+  /**
+   * Rename one spoke, from the spreadsheet (v1.4, David: *"I cannot edit the axis
+   * in the spreadsheet. THAT I want to fix"*).
+   *
+   * ⚑ The name is the ONE thing on a spider that is transcribed rather than
+   * measured — everything else on that row was read off the pixels — so it is
+   * editable for exactly the reason a bar's category name is, and correcting a
+   * typo must not mean re-walking the calibration.
+   *
+   * ⚑ IT LIVES IN THE CALIBRATION, NOT ON THE POINTS. A spoke's name is a property
+   * of the AXIS, so this writes it to that spoke's calibration point and re-derives
+   * — which is what carries it into the axes object, the point-group names, the
+   * table and the export in one move, with no second copy to disagree. Same route a
+   * dragged handle takes.
+   */
+  setSpokeName(index: number, name: string): boolean {
+    const repeating = this.config.repeatingStep;
+    if (!repeating || this.config.id !== 'spider') return false;
+    const point = this.placed[`${repeating.step.key}${index + 1}`];
+    if (!point) return false;
+    const fieldIndex = repeating.step.valueFields.findIndex((f) => f.field === 'dz');
+    if (fieldIndex < 0) return false;
+    while (point.values.length <= fieldIndex) point.values.push('');
+    point.values[fieldIndex] = name;
+    if (this.axes) this.runCalibration();
+    return true;
+  }
+
   updateCalibPointPixel(key: string, px: number, py: number): void {
     const point = this.placed[key];
     if (!point) return;

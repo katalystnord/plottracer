@@ -453,3 +453,45 @@ describe('a spider profile is a row of independent readings', () => {
     expect(session.setPointGroupCursor(null, 3)).toBe(false);
   });
 });
+
+describe('an axis can be renamed from the spreadsheet', () => {
+  it('writes the new name into the CALIBRATION, so everything derived follows', () => {
+    // ⚑ The name is the one transcribed thing on the row — everything else was read
+    // off the pixels — so a typo must be fixable without re-walking the calibration.
+    // It belongs to the AXIS, not to any point, which is why this goes to the
+    // calibration and re-derives rather than being stored a second time.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+
+    expect(session.setSpokeName(1, 'Elongation at break (%)')).toBe(true);
+
+    expect(session.getSpiderTable().axisNames[1]).toBe('Elongation at break (%)');
+    // ...the capture slots are the same names, so the tips line and the status
+    // follow without a second source of truth.
+    expect(session.getPointGroups()[1]).toBe('Elongation at break (%)');
+    // ...and the readings are untouched: this renamed an axis, it did not move data.
+    expect(session.getDataPoints()).toHaveLength(3);
+    expect(session.getSpiderTable().columns[0]!.values.every((v) => v !== null)).toBe(true);
+  });
+
+  it('keeps a blank name BLANK rather than storing the positional fallback', () => {
+    // "Axis 2" is what the UI shows for an unnamed spoke; storing it would turn a
+    // display fallback into a transcription nobody made.
+    const session = calibratedSpider(['10', '10', '10'], ['A', '', 'C']);
+    const table = session.getSpiderTable();
+    expect(table.axisNames[1]).toBe('Axis 2'); // shown
+    expect(table.axisRawNames[1]).toBe(''); // stored
+  });
+
+  it('can clear a name back to blank', () => {
+    const session = THREE();
+    expect(session.setSpokeName(0, '')).toBe(true);
+    expect(session.getSpiderTable().axisRawNames[0]).toBe('');
+    expect(session.getSpiderTable().axisNames[0]).toBe('Axis 1'); // falls back again
+  });
+
+  it('refuses on a graph type that has no spokes', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    expect(session.setSpokeName(0, 'nope')).toBe(false);
+  });
+});
