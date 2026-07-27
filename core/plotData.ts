@@ -33,9 +33,10 @@ import { TernaryAxes } from './axes/ternary.js';
 import { MapAxes, type OriginLocation } from './axes/map.js';
 import { ImageAxes } from './axes/image.js';
 import { CircularChartRecorderAxes, type RotationDirection, type RotationTime } from './axes/circularChartRecorder.js';
+import { SpiderAxes } from './axes/spider.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from './connectedPoints.js';
 
-export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes;
+export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes | SpiderAxes;
 export type AnyMeasurement = DistanceMeasurement | AngleMeasurement | AreaMeasurement;
 
 interface DocumentMetadataGroup {
@@ -376,7 +377,11 @@ export class PlotData {
       for (const axData of data.axesColl) {
         let calibration: Calibration | null = null;
         if (axData.type !== 'ImageAxes') {
-          calibration = new Calibration(axData.type === 'TernaryAxes' ? 3 : 2);
+          // Spider joins Ternary at 3 dimensions, for a different reason: its third
+          // slot carries the axis's NAME (a string), not a third coordinate. A
+          // 2-dimension Calibration would drop `dz` on the floor and every spoke
+          // would reload unnamed -- silently, since the values still read correctly.
+          calibration = new Calibration(axData.type === 'TernaryAxes' || axData.type === 'SpiderAxes' ? 3 : 2);
           for (const cp of axData.calibrationPoints ?? []) {
             calibration.addPoint(cp.px, cp.py, cp.dx as number | string, cp.dy as number | string, cp.dz as number | string);
           }
@@ -415,6 +420,21 @@ export class PlotData {
           const originLocation = axData.originLocation != null ? axData.originLocation : 'top-left';
           const imageHeight = axData.imageHeight != null ? parseInt(String(axData.imageHeight), 10) : 0;
           axes.calibrate(calibration!, axData.scaleLength!, axData.unitString, originLocation, imageHeight);
+        } else if (axData.type === 'SpiderAxes') {
+          axes = new SpiderAxes();
+          // Labels are derived from the file, not a fixed list like every type
+          // above: the spoke count is whatever the figure had. The names come off
+          // the calibration points themselves, so a reloaded project shows the same
+          // axis names it was calibrated with.
+          calibration!.labels = ['Origin'];
+          calibration!.labelPositions = ['E'];
+          for (let spokeIdx = 1; spokeIdx < calibration!.getCount(); spokeIdx++) {
+            const dz = calibration!.getPoint(spokeIdx)!.dz;
+            calibration!.labels.push(dz == null || dz === '' ? `Axis ${spokeIdx}` : String(dz));
+            calibration!.labelPositions.push('S');
+          }
+          calibration!.maxPointCount = calibration!.getCount();
+          axes.calibrate(calibration!, Boolean(axData.isLog));
         } else if (axData.type === 'ImageAxes') {
           axes = new ImageAxes();
         } else if (axData.type === 'CircularChartRecorderAxes') {
@@ -598,6 +618,14 @@ export class PlotData {
         axData.startTime = axes.getStartTime();
         axData.rotationTime = axes.getRotationTime();
         axData.rotationDirection = axes.getRotationDirection();
+      } else if (axes instanceof SpiderAxes) {
+        axData.type = 'SpiderAxes';
+        // Everything else about a spider lives in the calibration points, one per
+        // spoke: dx the known value, dy THAT SPOKE'S centre value, dz the axis name.
+        // Nothing spider-specific is written here, and deliberately so -- a
+        // per-axes-entry `centreValue` would be a second home for a fact the points
+        // already carry, and two homes eventually disagree.
+        axData.isLog = axes.isLog();
       }
 
       if (Object.keys(axes.getMetadata()).length > 0) {

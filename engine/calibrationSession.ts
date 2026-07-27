@@ -188,6 +188,7 @@ import { PolarAxes } from '../core/axes/polar.js';
 import { TernaryAxes } from '../core/axes/ternary.js';
 import { MapAxes } from '../core/axes/map.js';
 import { CircularChartRecorderAxes, type RotationTime, type RotationDirection } from '../core/axes/circularChartRecorder.js';
+import { SpiderAxes } from '../core/axes/spider.js';
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
@@ -255,12 +256,26 @@ export interface CalibValueField {
   key: string;
   /** Short label shown next to this field's input, e.g. "X" or "θ". */
   label: string;
-  /** Which Calibration point slot this field's entered value fills. */
-  field: 'dx' | 'dy';
-  /** When true, the field may be left blank (it defaults to "0" on confirm). For
-   * a value the calibration collects but never reads — e.g. Polar P2's θ, which
-   * mirrors WebPlotDigitizer's form but is ignored by the math. */
+  /** Which Calibration point slot this field's entered value fills.
+   *
+   * `dz` is the third slot, which needs the config to declare
+   * `calibrationDimensions: 3` for the Calibration to have one at all. Spider
+   * uses it for the axis's NAME — a string rather than a coordinate, which is why
+   * it is worth saying plainly here: `dz` is a slot, not a Z axis. */
+  field: 'dx' | 'dy' | 'dz';
+  /** When true, the field may be left blank. For a value the calibration collects
+   * but never reads — e.g. Polar P2's θ, which mirrors WebPlotDigitizer's form but
+   * is ignored by the math. */
   optional?: boolean;
+  /** What a blank `optional` field is stored as. Defaults to "0", which suits a
+   * numeric slot nothing reads.
+   *
+   * ⚑ Declared rather than inferred, because "0" is a real answer in a slot that
+   * holds text: Spider's axis NAME is optional, and defaulting it to "0" produced
+   * an axis called `0` — a name that looks transcribed off the figure and never
+   * was. A blank name has to stay blank so the axes class can fall back to the
+   * positional "Axis N", which is true by construction. */
+  blankValue?: string;
 }
 
 export interface CalibStepInfo {
@@ -272,6 +287,37 @@ export interface CalibStepInfo {
   /** Value(s) collected for this step's point, in entry order. Empty for a
    * point that needs no typed value at all (e.g. Polar's origin). */
   valueFields: readonly CalibValueField[];
+}
+
+/**
+ * A calibration step group repeated once per unit the FIGURE has, not once per
+ * entry in a fixed list (v1.4, Spider).
+ *
+ * ⚑ Every axes type until now declared a FIXED `steps` array — XY 4, Bar 2, Polar
+ * 3, Ternary 3, CCR 5 — because every one of them calibrates a frame whose shape
+ * the tool already knows. A spider chart does not have a knowable shape: it has as
+ * many axes as the chart's author drew, and the user is the only one who can say
+ * how many. So the step list becomes a property of the SESSION rather than of the
+ * config, and this describes how to grow it.
+ *
+ * The repeated group is APPENDED after `steps`, which is all Spider needs (one
+ * origin click, then one click per spoke) and is deliberately not generalised
+ * further: an interleaved or prefixed repeat has no user today, and the step
+ * cursor's meaning would stop being obvious.
+ *
+ * ⚑ `min` is a floor on CALIBRATING, not on adding. The user always sees the "add
+ * another" affordance, so nothing is hidden behind an invisible precondition; what
+ * `min` prevents is *finishing* with fewer axes than the shape needs.
+ */
+export interface RepeatingStepInfo {
+  /** Template for one repeat. Its `key`/`label` gain the 1-based repeat number,
+   * so the placed-point Record stays keyed uniquely (`spoke1`, `spoke2`, ...). */
+  step: CalibStepInfo;
+  /** What one repeat is CALLED on screen ("axis"), for the add/remove controls and
+   * the progress line. Same job as `tupleNoun` does for point groups. */
+  noun: string;
+  /** How many repeats a session starts with, and the fewest it can calibrate. */
+  min: number;
 }
 
 export type BuildAxesResult<A extends CalibratedAxes> = { axes: A } | { error: string };
@@ -395,7 +441,12 @@ export interface RadialDistinctGuard {
 function checkGuards(
   config: AxesTypeConfig<CalibratedAxes>,
   cal: Calibration,
-  options: Readonly<Record<string, string>>
+  options: Readonly<Record<string, string>>,
+  /** The steps the Calibration was actually built from, in the same order. Only
+   * differs from `steps` for a type with a repeating group (v1.4), where the
+   * key -> Calibration-index mapping below has to resolve against the unrolled list
+   * or it lands on the wrong point. */
+  steps: readonly CalibStepInfo[] = config.steps
 ): string | null {
   for (const g of config.logScaleGuards ?? []) {
     if (!optionBool(options, g.option)) continue;
@@ -425,13 +476,13 @@ function checkGuards(
   for (const group of config.distinctPixelSteps ?? []) {
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
-        const ai = config.steps.findIndex((st) => st.key === group[i]);
-        const bi = config.steps.findIndex((st) => st.key === group[j]);
+        const ai = steps.findIndex((st) => st.key === group[i]);
+        const bi = steps.findIndex((st) => st.key === group[j]);
         const a = cal.getPoint(ai);
         const b = cal.getPoint(bi);
         if (a && b && a.px === b.px && a.py === b.py) {
-          const la = config.steps[ai]?.label ?? group[i];
-          const lb = config.steps[bi]?.label ?? group[j];
+          const la = steps[ai]?.label ?? group[i];
+          const lb = steps[bi]?.label ?? group[j];
           return `${la} and ${lb} are on the same pixel — they must be different points, or the calibration has no scale.`;
         }
       }
@@ -444,8 +495,8 @@ function checkGuards(
   const pag = config.parallelAxisGuard;
   if (pag) {
     const dirOf = (pair: readonly [string, string]): { x: number; y: number } | null => {
-      const ia = config.steps.findIndex((st) => st.key === pair[0]);
-      const ib = config.steps.findIndex((st) => st.key === pair[1]);
+      const ia = steps.findIndex((st) => st.key === pair[0]);
+      const ib = steps.findIndex((st) => st.key === pair[1]);
       const a = cal.getPoint(ia);
       const b = cal.getPoint(ib);
       return a && b ? { x: a.px - b.px, y: a.py - b.py } : null;
@@ -466,8 +517,8 @@ function checkGuards(
   const rdg = config.radialDistinctGuard;
   if (rdg) {
     const distFrom = (originKey: string, ptKey: string): number | null => {
-      const oi = config.steps.findIndex((st) => st.key === originKey);
-      const pi = config.steps.findIndex((st) => st.key === ptKey);
+      const oi = steps.findIndex((st) => st.key === originKey);
+      const pi = steps.findIndex((st) => st.key === ptKey);
       const o = cal.getPoint(oi);
       const p = cal.getPoint(pi);
       return o && p ? Math.hypot(p.px - o.px, p.py - o.py) : null;
@@ -553,7 +604,18 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * see GRAPH_TYPE_METADATA_KEY. */
   id: string;
   label: string;
+  /** The FIXED steps, in order. For a type with a `repeatingStep` these are only
+   * the prefix — ask the SESSION (`getSteps()`) for the list a user is actually
+   * walking, never this array. */
   steps: readonly CalibStepInfo[];
+  /** A step group repeated as many times as the figure needs (v1.4, Spider).
+   * Undefined = a fixed-shape calibration, which is every other type. */
+  repeatingStep?: RepeatingStepInfo;
+  /** How many value slots each Calibration point carries. Undefined = 2 (dx, dy),
+   * which is every type that predates Spider. Spider declares 3 because it stores
+   * the axis NAME in `dz`; a 2-slot Calibration would drop it on the floor while
+   * every number still read back correctly — a silent loss, not a visible one. */
+  calibrationDimensions?: 2 | 3;
   /** Dimensionality of the extracted data points (2 for XY/Polar, 1 for Bar). */
   dataDim: number;
   /** Human labels for each data dimension, length === dataDim -- the per-type
@@ -599,7 +661,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * tested `config.id === 'xy'` — so those charts silently lost Curve Fit, slope
    * measurement, auto-straighten and click-to-edit, and were told "Calibrate an
    * XY chart first" on a chart the user had just calibrated as XY. */
-  axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr';
+  axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider';
   /** True when fitting a polynomial through this type's points is meaningful
    * (checkpoint 73). XY and Error Bars qualify — for the latter,
    * algorithms/curveFit.ts's getFitPoints already skips non-primary groups so a
@@ -1144,6 +1206,108 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
   },
 };
 
+/**
+ * Spider / radar charts (v1.4) — the first calibration whose LENGTH the figure
+ * decides. See core/axes/spider.ts for the model and why it is not Polar.
+ *
+ * One origin click, then per spoke one click on a known point (which supplies that
+ * ray's direction AND its distance in a single measurement) plus that point's value
+ * and the axis's printed name. Nothing infers a spoke from its neighbours, so
+ * unequal angles and per-axis ranges work by construction — which is exactly what
+ * the only prior art, ChartSense (CHI 2017), assumes away.
+ *
+ * ⚑ ORDER IS GUIDANCE, NOT A RULE. The prompt asks for the next axis CLOCKWISE so
+ * the user doesn't lose their place going round, but nothing in the model depends
+ * on the order and nothing enforces it — each spoke carries its own measured
+ * direction. Enforcing it would be an invisible precondition; omitting the guidance
+ * would leave a user counting spokes in their head.
+ */
+export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
+  id: 'spider',
+  label: 'Spider / Radar',
+  axesKind: 'spider',
+  dataDim: 1,
+  // One measured number per datum. The axis it belongs to is the point GROUP, and
+  // the axis's NAME is a property of the calibration, not of each point -- it was
+  // transcribed once, when the spoke was placed.
+  valueLabels: ['Value'],
+  calibrationDimensions: 3,
+  // ⚑ ASKED ONCE, STORED PER SPOKE. Origin + one known point is a single
+  // (value, distance) pair and a scale needs two, so the centre's value has to be
+  // collected -- with 0 preselected, which is a default the user walks past and can
+  // change, not an invention. A common centre is the rule in real spider charts
+  // (asking per axis would be a question with the same answer N times), but
+  // buildAxes below fans this one answer into every spoke's own calibration point,
+  // so the FILE keeps one copy per axis and a later per-axis override is a UI
+  // change with no migration. The simplification lives in the workflow, not in the
+  // record.
+  globalFields: [{ key: 'centreValue', label: 'Value at the centre' }],
+  options: [{ key: 'isLogRadial', label: 'Log axes', kind: 'checkbox', default: false }],
+  steps: [
+    {
+      key: 'origin',
+      label: 'Centre',
+      color: '#5fb47a',
+      prompt: 'Click the centre of the spider chart, where every axis meets',
+      valueFields: [],
+    },
+  ],
+  repeatingStep: {
+    noun: 'axis',
+    // Three spokes is the fewest that draws a spider, and it is a floor on
+    // CALIBRATING rather than on adding -- the add control is visible from the
+    // start, so nothing about the shape is hidden.
+    min: 3,
+    step: {
+      key: 'spoke',
+      label: 'Axis #',
+      color: '#e0a458',
+      prompt: 'Click a point of known value on axis # (going clockwise), then name the axis',
+      valueFields: [
+        { key: 'value', label: 'Value', field: 'dx' },
+        // The one thing here that is transcribed rather than measured, and optional
+        // for exactly that reason: an axis whose name is illegible in the figure is
+        // still a real axis, and a blank name is honest where an invented one is
+        // not. core/axes/spider.ts falls back to the positional "Axis N".
+        { key: 'name', label: 'Name', field: 'dz', optional: true, blankValue: '' },
+      ],
+    },
+  },
+  buildAxes(cal, ctx) {
+    // Fan the once-asked centre value into every spoke's own point (the `dy` slot)
+    // BEFORE calibrating, so it is stored per axis rather than once. Point 0 is the
+    // origin and deliberately does NOT get a copy: one home for the fact, no way
+    // for two copies to disagree.
+    const centre = ctx.globalValues['centreValue'] ?? '';
+    for (let i = 1; i < cal.getCount(); i++) {
+      const point = cal.getPoint(i)!;
+      cal.setDataAt(i, point.dx as string, centre, point.dz as string);
+    }
+
+    const axes = new SpiderAxes();
+    const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLogRadial'));
+    if (!ok) {
+      return {
+        error: optionBool(ctx.options, 'isLogRadial')
+          ? 'Calibration failed — on log axes every value, the centre included, must be a positive number, and each axis needs a value different from the centre.'
+          : 'Calibration failed — check each axis has a numeric value different from the centre value, and that no axis point sits on the centre.',
+      };
+    }
+    axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'spider' });
+    return { axes };
+  },
+  extractOptions(axes) {
+    return { isLogRadial: String(axes.isLog()) };
+  },
+  extractGlobalValues(axes) {
+    // Read back from the FIRST spoke. Every spoke carries its own copy and the UI
+    // writes one value into all of them, so any of them answers; spoke 0 is the one
+    // that always exists.
+    const spoke = axes.getSpokes()[0];
+    return { centreValue: spoke ? String(spoke.centreValue) : '0' };
+  },
+};
+
 /** How a point of an interpolation-assist series came to exist.
  *
  * `anchor` — the user ASSIGNED it: they judged by eye where the curve runs and
@@ -1297,9 +1461,81 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * y value on a map. */
   private imageHeight = 0;
 
+  /** How many times `config.repeatingStep` is currently unrolled — the spoke count
+   * of the spider being calibrated. Meaningless (and left at 0) for every
+   * fixed-shape type. */
+  private repeatCount: number;
+
   constructor(private readonly config: AxesTypeConfig<A>) {
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.optionValues = defaultOptionValues(config as unknown as AxesTypeConfig<CalibratedAxes>);
+    this.repeatCount = config.repeatingStep?.min ?? 0;
+  }
+
+  /**
+   * The steps this session is actually walking — the config's fixed steps, plus
+   * `repeatCount` copies of its repeating group.
+   *
+   * ⚑ EVERY read of the step list must come through here rather than
+   * `config.steps`. For the eight fixed-shape types the two are identical, which is
+   * exactly what makes a stray `config.steps` read dangerous: it keeps working
+   * everywhere except on a spider, where it silently sees one step (the origin) and
+   * reports a calibration complete with no axes placed.
+   */
+  getSteps(): readonly CalibStepInfo[] {
+    const repeating = this.config.repeatingStep;
+    if (!repeating) return this.config.steps;
+
+    const steps: CalibStepInfo[] = [...this.config.steps];
+    for (let i = 1; i <= this.repeatCount; i++) {
+      steps.push({
+        ...repeating.step,
+        key: `${repeating.step.key}${i}`,
+        label: repeating.step.label.replace('#', String(i)),
+        prompt: repeating.step.prompt.replace('#', String(i)),
+        valueFields: repeating.step.valueFields.map((vf) => ({ ...vf, key: `${vf.key}${i}` })),
+      });
+    }
+    return steps;
+  }
+
+  /** How many repeats the user has asked for (0 for a fixed-shape type). */
+  getRepeatCount(): number {
+    return this.repeatCount;
+  }
+
+  getRepeatingStepInfo(): RepeatingStepInfo | undefined {
+    return this.config.repeatingStep;
+  }
+
+  /** Add one more repeat — one more spoke to place. Returns false for a type that
+   * has no repeating group, or once a calibration is already live (the handles are
+   * placed; changing the shape underneath them is a re-calibration, via reset). */
+  addRepeat(): boolean {
+    if (!this.config.repeatingStep || this.axes) return false;
+    this.repeatCount += 1;
+    return true;
+  }
+
+  /**
+   * Drop the LAST repeat, along with anything already placed for it.
+   *
+   * Refuses below `min`, and clamps the step cursor so removing the step you were
+   * standing on leaves you on a step that exists — otherwise `getCurrentStep()`
+   * returns null and the card reads "ready to calibrate" with a hole in the middle
+   * of the placed points.
+   */
+  removeRepeat(): boolean {
+    const repeating = this.config.repeatingStep;
+    if (!repeating || this.axes) return false;
+    if (this.repeatCount <= repeating.min) return false;
+
+    const removed = this.getSteps()[this.config.steps.length + this.repeatCount - 1]!;
+    delete this.placed[removed.key];
+    this.repeatCount -= 1;
+    if (this.stepIndex > this.getSteps().length) this.stepIndex = this.getSteps().length;
+    if (this.pendingPixel && this.stepIndex === this.getSteps().length) this.pendingPixel = null;
+    return true;
   }
 
   /** Current per-type calibration settings (checkpoint 68). */
@@ -1381,7 +1617,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     globalValues: Record<string, string>;
   }): boolean {
     this.placed = structuredClone(inputs.placed);
-    this.stepIndex = this.config.steps.length;
+    this.stepIndex = this.getSteps().length;
     this.globalValues = { ...inputs.globalValues };
     const validKeys = new Set((this.config.options ?? []).map((o) => o.key));
     this.optionValues = defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>);
@@ -1397,7 +1633,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   getCurrentStep(): CalibStepInfo | null {
     if (this.axes) return null;
-    return this.config.steps[this.stepIndex] ?? null;
+    return this.getSteps()[this.stepIndex] ?? null;
   }
 
   getStepIndex(): number {
@@ -1697,7 +1933,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getCalibrationPreview(): CalibrationPreview {
     return calibrationPreview(
-      this.config as unknown as { axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr'; steps: { key: string; color: string }[] },
+      {
+        axesKind: this.config.axesKind,
+        // The UNROLLED steps, not the config's. A spider's spokes exist only in
+        // the session, and passing the config's single origin step would leave the
+        // preview unable to name — or colour — any ray the user has placed.
+        steps: this.getSteps(),
+      },
       this.placed
     );
   }
@@ -2069,15 +2311,28 @@ export class CalibrationSession<A extends CalibratedAxes> {
   loadCalibrated(axes: A, datasets: Dataset[]): void {
     this.placed = {};
     const cal = (axes as unknown as { calibration: Calibration | null }).calibration;
+    // ⚑ THE SHAPE COMES FROM THE FILE, not from the config. A variable-length
+    // calibration has no shape until something says how long it is, and on this
+    // entrance the loaded axes is the only thing that knows: a 9-spoke spider
+    // reopened into a session still sitting at the default 3 would render 3
+    // handles, walk 3 steps, and re-save a project with six axes deleted. Same
+    // "the model has more than one entrance" class as the guards below, reached by
+    // a different route — there, a file skipped a refusal; here, a file's own
+    // shape is overwritten by a default.
+    if (cal && this.config.repeatingStep) {
+      this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.steps.length);
+    }
     if (cal) {
-      this.config.steps.forEach((step, i) => {
+      this.getSteps().forEach((step, i) => {
         const cp = cal.getPoint(i);
         if (!cp) return;
-        const values = step.valueFields.map((vf) => String(vf.field === 'dx' ? cp.dx : cp.dy));
+        const values = step.valueFields.map((vf) =>
+          String(vf.field === 'dx' ? cp.dx : vf.field === 'dy' ? cp.dy : (cp.dz ?? ''))
+        );
         this.placed[step.key] = { px: cp.px, py: cp.py, values };
       });
     }
-    this.stepIndex = this.config.steps.length;
+    this.stepIndex = this.getSteps().length;
     this.pendingPixel = null;
     this.globalValues = this.config.extractGlobalValues?.(axes) ?? {};
     // Options come back from the axes instance itself, so a reopened project
@@ -2112,7 +2367,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // runCalibration, which re-guards. Visible and recoverable beats silent and
     // pristine (tenet 1).
     this.calibrationError = cal
-      ? checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues)
+      ? checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, this.getSteps())
       : null;
     this.axes = axes;
     const finalDatasets = datasets.length > 0 ? datasets : [new Dataset(this.config.dataDim)];
@@ -2758,6 +3013,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.axes || this.pendingPixel) return [];
     const current = this.getCurrentStep();
     if (!current) return [];
+    // A repeating calibration has nothing to reuse, and offering it would invite a
+    // real mistake. Reuse exists for the shared-corner case — X1 and Y1 being one
+    // physical pixel — but a spider's origin is shared BY CONSTRUCTION (placed
+    // once, used by every spoke), and two spokes on one pixel is two axes pointing
+    // the same way, recorded as if the figure drew them that way.
+    if (this.config.repeatingStep) return [];
     // Never offer the *same axis's* other end: reusing X1's pixel for X2 (or
     // Y1's for Y2) puts both calibration points on one pixel, which makes the
     // transform matrix singular -- and XYAxes still returns true, so every
@@ -2766,7 +3027,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // automates). WPD has no reuse buttons at all, so checkpoint 49 made a
     // degenerate calibration *easier to reach than upstream*; this filter is
     // what keeps that convenience honest.
-    return this.config.steps.filter(
+    return this.getSteps().filter(
       (s) =>
         s.key !== current.key &&
         this.placed[s.key] &&
@@ -2792,9 +3053,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!step || !this.pendingPixel || values.length !== step.valueFields.length) return false;
     const trimmed = values.map((v) => v.trim());
     // Required fields must be filled; an OPTIONAL field (e.g. Polar P2's θ, which
-    // the calibration never reads) may be blank and defaults to "0".
+    // the calibration never reads) may be blank and falls back to its declared
+    // `blankValue` -- "0" unless the field says otherwise. See CalibValueField.
     if (step.valueFields.some((f, i) => !f.optional && trimmed[i] === '')) return false;
-    const filled = trimmed.map((v, i) => (v === '' && step.valueFields[i]!.optional ? '0' : v));
+    const filled = trimmed.map((v, i) => {
+      const field = step.valueFields[i]!;
+      return v === '' && field.optional ? (field.blankValue ?? '0') : v;
+    });
     this.placed[step.key] = { px: this.pendingPixel.px, py: this.pendingPixel.py, values: filled };
     this.pendingPixel = null;
     this.stepIndex += 1;
@@ -2804,8 +3069,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Build the Calibration + axes instance from the placed calibration points
    * and any global field values. */
   runCalibration(): boolean {
+    const steps = this.getSteps();
     const points: PlacedCalibPoint[] = [];
-    for (const step of this.config.steps) {
+    for (const step of steps) {
       const point = this.placed[step.key];
       if (!point) return false;
       points.push(point);
@@ -2818,22 +3084,29 @@ export class CalibrationSession<A extends CalibratedAxes> {
       }
     }
 
-    const cal = new Calibration(2);
-    this.config.steps.forEach((step, i) => {
+    const cal = new Calibration(this.config.calibrationDimensions ?? 2);
+    steps.forEach((step, i) => {
       const point = points[i]!;
       let dx = '0';
       let dy = '0';
+      // Empty, not '0': the third slot is a NAME for its only user, and "0" is a
+      // name a figure could plausibly have printed. An absent name must stay
+      // absent so the axes class can fall back positionally rather than
+      // displaying a value nobody transcribed.
+      let dz = '';
       step.valueFields.forEach((vf, fi) => {
-        if (vf.field === 'dx') dx = point.values[fi]!;
-        else dy = point.values[fi]!;
+        const value = point.values[fi]!;
+        if (vf.field === 'dx') dx = value;
+        else if (vf.field === 'dy') dy = value;
+        else dz = value;
       });
-      cal.addPoint(point.px, point.py, dx, dy);
+      cal.addPoint(point.px, point.py, dx, dy, dz);
     });
 
     // Refusals run BEFORE the axes class sees anything: every axes class
     // reports success on degenerate input, so a guard placed after calibrate()
     // is a guard that never fires (checkpoint 72).
-    const guardError = checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues);
+    const guardError = checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, steps);
     if (guardError) {
       this.calibrationError = guardError;
       return false;
@@ -3190,6 +3463,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.axes = null;
     this.calibrationError = null;
     this.globalValues = {};
+    // Back to the starting spoke count. Leaving a previous figure's count behind
+    // would greet the next figure with handles it never asked for.
+    this.repeatCount = this.config.repeatingStep?.min ?? 0;
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.activeDatasetIndex = 0;
     this.nextDatasetNumber = 2;

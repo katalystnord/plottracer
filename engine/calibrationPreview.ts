@@ -62,7 +62,7 @@ export interface CalibrationPreview {
   circles: PreviewCircle[];
 }
 
-type AxesKind = 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr';
+type AxesKind = 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider';
 
 /**
  * Which placed points to join, per axes kind, by step key.
@@ -94,7 +94,24 @@ const PAIRS: Record<AxesKind, readonly (readonly [string, string])[]> = {
   map: [['p1', 'p2']],
   // CCR implies circles, not lines — see CIRCLE_TRIPLES.
   ccr: [],
+  // Spider's rays cannot be a fixed list: the spoke count belongs to the figure,
+  // not to the type. Built from the placed steps instead — see spiderPairs below.
+  spider: [],
 };
+
+/**
+ * Spider's rays: the centre joined to each placed spoke, derived from the step
+ * list rather than declared.
+ *
+ * ⚑ This is the preview that matters most for spider, for the CCR reason. A ray's
+ * DIRECTION is measured from a single click, so a spoke clicked slightly off the
+ * printed axis tilts the whole scale — and every value along it moves — with
+ * nothing on screen wrong. Drawing the rays as they are placed is how the user
+ * sees that the lines they implied are the lines the figure drew.
+ */
+function spiderPairs(steps: readonly { key: string }[]): readonly (readonly [string, string])[] {
+  return steps.filter((s) => s.key !== 'origin').map((s) => ['origin', s.key] as const);
+}
 
 /**
  * Which placed points fit a circle, per axes kind.
@@ -132,7 +149,8 @@ export function calibrationPreview(
   const colorOf = (key: string): string => config.steps.find((s) => s.key === key)?.color ?? '#888888';
 
   const segments: PreviewSegment[] = [];
-  for (const [a, b] of PAIRS[config.axesKind] ?? []) {
+  const pairs = config.axesKind === 'spider' ? spiderPairs(config.steps) : (PAIRS[config.axesKind] ?? []);
+  for (const [a, b] of pairs) {
     const from = at(a);
     const to = at(b);
     // Each pair is independent: draw as soon as ITS points exist, rather than
