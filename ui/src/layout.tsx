@@ -249,6 +249,14 @@ export const RightSidebar = styled('div')({
 /** A thin grab bar on the sidebar's left edge for resizing it (checkpoint 60).
  * Sits just inside the border; widens its hit area with padding via the
  * transparent zone, and shows the accent on hover so it's discoverable. */
+/** The sidebar's drag edge.
+ *
+ * ⚑ It carries a visible GRIP (David, 2026-07-27). A 7px strip that only reveals
+ * itself on hover is a capability you have to already suspect is there before you
+ * can find it — the keystone's "he can only use what he sees" applied to a control
+ * rather than to a workflow. The grip is always drawn, faintly, and firms up under
+ * the cursor; the hit area stays the full-height strip, so the target is no harder
+ * to acquire than before. */
 export const ResizeHandle = styled('div')({
   position: 'absolute',
   left: -3,
@@ -257,7 +265,23 @@ export const ResizeHandle = styled('div')({
   width: 7,
   cursor: 'col-resize',
   zIndex: 5,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   ':hover': { background: theme.color.primary.main, opacity: 0.4 },
+  // The grip itself: a short vertical bar, centred on the edge, drawn from the
+  // border colour so it reads as part of the panel edge rather than as content.
+  '::after': {
+    content: '""',
+    width: 3,
+    height: 34,
+    borderRadius: 2,
+    background: theme.color.border.regular,
+    // Rounded ends plus a hairline of contrast, so it stays legible against both
+    // the panel and whatever the figure happens to put behind the canvas edge.
+    boxShadow: `0 0 0 1px ${theme.color.background.panel}`,
+  },
+  ':hover::after': { background: theme.color.primary.main },
 });
 
 /** A titled block within the sidebar (e.g. "Series", "Data points"). */
