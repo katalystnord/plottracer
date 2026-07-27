@@ -156,6 +156,8 @@ PlotTracer's calibration engine is a TypeScript port of **WebPlotDigitizer** by 
 > Licensed under the GNU Affero General Public License v3.0
 > <https://github.com/automeris-io/WebPlotDigitizer>
 
+The import filters are tested against **other tools' own project files, copied here unmodified** — see [`engine/__tests__/fixtures/wpd/PROVENANCE.md`](engine/__tests__/fixtures/wpd/PROVENANCE.md) for the files, their source and their licence. A fixture we authored ourselves would only prove that we agree with ourselves.
+
 Several algorithms (flood-fill curve tracing, grid-line removal, curve fitting, geometry/statistics) are **clean-room** reimplementations of ideas from **Engauge Digitizer** (Mark Mitchell, Jason Nicholson; GPL-2.0) — written from the algorithm descriptions, not translated from the C++ source.
 
 The icon set is derived from **Ketcher** by EPAM Systems (Apache-2.0).
