@@ -677,6 +677,26 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   (`59f94a6`). Bar, Histogram, Box Plot, categorical Line.
    */
   autoExtractKind?: 'curve' | 'along-axes' | 'none';
+  /**
+   * The SHAPE this type's data takes in an export file — declared, because the
+   * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
+   * `id === 'histogram'`, then a grouped test. A type's export shape is a property
+   * of the type, and the v1.4 audit's export defect was a wrong branch in exactly
+   * that chain: a spider fell into the tuple-table case, which is active-series
+   * only and reads values off the nearest ray.
+   *
+   * - `'flat'` (default) — one row per point, honouring the Active/All scope.
+   * - `'tuples'` — the tuple table: one row per box/bin, columns for its members.
+   *   For types whose tuple IS one object (see tupleMembers).
+   * - `'bins'` — histogram bins, as true edges.
+   * - `'error-bars'` — the error-bar table.
+   *
+   * ⚑ Resolve it through `session.getExportShape()`, never by reading this field
+   * directly: Box Plot is ALSO reachable as a toggle on a Bar session, so the
+   * shape depends on the series as well as the type. That method is the one place
+   * that knows.
+   */
+  exportShape?: 'flat' | 'tuples' | 'bins' | 'error-bars';
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
@@ -842,6 +862,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'histogram',
   label: 'Histogram',
   axesKind: 'xy',
+  exportShape: 'bins',
   autoExtractKind: 'none',
   dataDim: 2,
   valueLabels: ['X', 'Y'],
@@ -893,6 +914,7 @@ export const ERROR_BAR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'errorbar',
   label: 'Error Bars',
   axesKind: 'xy',
+  exportShape: 'error-bars',
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
@@ -1008,6 +1030,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'boxplot',
   label: 'Box Plot',
   axesKind: 'bar',
+  exportShape: 'tuples',
   autoExtractKind: 'none',
   dataDim: 1,
   valueLabels: ['value'],
@@ -2266,6 +2289,27 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * pixelToData projection -- that feeds the canvas and the table, which want
    * numbers, not a formatted date string or a label in slot 0. The contract is
    * about what leaves the app, not what it draws with. */
+  /**
+   * The shape this session's data takes in an export file — the one place that
+   * knows, because it depends on BOTH the graph type and the active series.
+   *
+   * ⚑ Box Plot is reachable two ways: as its own graph type, and as a toggle that
+   * gives a Bar session Min/Q1/Median/Q3/Max groups. So a static config field
+   * cannot answer alone — a bar-with-box-groups series exports as tuples while the
+   * type says nothing. That dynamic case is what the UI's old `hasPointGroups()`
+   * test was really catching, mixed in with three identity checks.
+   *
+   * ⚑ And a grouped type whose slots are INDEPENDENT (a spider) is flat: its rows
+   * are per reading, carrying the axis each was captured on, across every series.
+   * The tuple table would give one series read off the nearest ray — the v1.4
+   * audit's export defect.
+   */
+  getExportShape(): 'flat' | 'tuples' | 'bins' | 'error-bars' {
+    if (this.config.exportShape) return this.config.exportShape;
+    const grouped = this.activeEntry.dataset.hasPointGroups();
+    return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';
+  }
+
   getExportRows(
     datasetIndex: number,
     mode: PrecisionMode = 'auto'

@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runSpiderTrace, spiderBoxRegion } from '../spiderTraceRun.js';
-import { CalibrationSession, SPIDER_AXES_CONFIG } from '../calibrationSession.js';
+import {
+  CalibrationSession,
+  SPIDER_AXES_CONFIG,
+  BOX_PLOT_AXES_CONFIG,
+  BAR_AXES_CONFIG,
+  HISTOGRAM_AXES_CONFIG,
+  ERROR_BAR_AXES_CONFIG,
+  XY_AXES_CONFIG,
+} from '../calibrationSession.js';
 import { SpiderAxes as SpiderAxesClass } from '../../core/axes/spider.js';
 import { Calibration } from '../../core/calibration.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
@@ -425,5 +433,41 @@ describe('a spider export carries every series, read against its own spoke', () 
     const second = session.getExportRows(1);
     expect(second).toHaveLength(3);
     second.forEach((r) => expect(Math.round(r.values[2] as number)).toBe(25));
+  });
+});
+
+describe('a graph type declares the SHAPE its data takes in a file', () => {
+  it('answers flat for a spider, whose slots are independent readings', () => {
+    // ⚑ The v1.4 audit's export defect, now impossible to reintroduce by adding a
+    // branch to a cascade: a spider is grouped, but its export is one row per
+    // reading, carrying the axis it was captured on, across every series. The
+    // tuple table would give one series read off the nearest ray.
+    expect(THREE().getExportShape()).toBe('flat');
+  });
+
+  it('answers tuples for a Box Plot — including one reached as a Bar toggle', () => {
+    // ⚑ Why this cannot be a static config field alone. Box Plot is two doors: its
+    // own graph type, and a toggle that gives a BAR session Min/Q1/Median/Q3/Max.
+    // The second has a config that says nothing about tuples.
+    expect(new CalibrationSession(BOX_PLOT_AXES_CONFIG).getExportShape()).toBe('tuples');
+
+    const bar = new CalibrationSession(BAR_AXES_CONFIG);
+    bar.handleCalibrationClick(100, 200);
+    bar.confirmCalibrationValues(['0']);
+    bar.handleCalibrationClick(100, 100);
+    bar.confirmCalibrationValues(['10']);
+    expect(bar.runCalibration()).toBe(true);
+    expect(bar.getExportShape()).toBe('flat'); // a plain bar series
+    expect(bar.applyBoxPlotGroups()).toBe(true);
+    expect(bar.getExportShape()).toBe('tuples'); // ...the same session, toggled
+  });
+
+  it('answers bins and error-bars for the types that have their own table', () => {
+    expect(new CalibrationSession(HISTOGRAM_AXES_CONFIG).getExportShape()).toBe('bins');
+    expect(new CalibrationSession(ERROR_BAR_AXES_CONFIG).getExportShape()).toBe('error-bars');
+  });
+
+  it('answers flat for an ordinary XY series', () => {
+    expect(new CalibrationSession(XY_AXES_CONFIG).getExportShape()).toBe('flat');
   });
 });

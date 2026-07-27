@@ -4099,13 +4099,19 @@ export function Workspace() {
         const sections: TableSection[] = [];
         const fits: CurveFitExport[] = [];
         const geometries: { series: string; result: ReturnType<typeof geometryFor> }[] = [];
-        // Histogram exports bins; Box Plot its tuple table; otherwise every
-        // series side by side (all) or the active one's flat rows (active).
-        if (session.getConfig().id === 'errorbar') {
+        // ⚑ The SHAPE is the session's answer, not a cascade of identity checks
+        // here (refactor 2): this used to read `id === 'errorbar'`, then
+        // `id === 'histogram'`, then a grouped test — four questions about what a
+        // type is CALLED, in the UI, where a wrong branch sent every spider export
+        // through the tuple table. What a type's data looks like in a file is a
+        // property of the type; only the Bar-with-box-plot-groups case is dynamic,
+        // and getExportShape is the one place that knows.
+        const exportShape = session.getExportShape();
+        if (exportShape === 'error-bars') {
           sections.push(errorBarSection(session.getErrorBars(), rounder));
-        } else if (session.getConfig().id === 'histogram') {
+        } else if (exportShape === 'bins') {
           sections.push(histogramSection(session.getHistogramBins(), rounder));
-        } else if (session.hasPointGroups() && session.getConfig().tupleMembers !== 'independent') {
+        } else if (exportShape === 'tuples') {
           sections.push(tupleDataSection(session.getPointGroups(), session.getTupleRows(), rounder));
         } else if (exportScope === 'all') {
           const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
@@ -7305,7 +7311,9 @@ export function Workspace() {
               </div>
               {/* CSV export scope (checkpoint 60): active series vs all series.
                   Hidden for Box Plot (its export is always the tuple table). */}
-              {(!hasPointGroups || config.tupleMembers === 'independent') && (
+              {/* Offered exactly where the scope means something: a flat export
+                  honours it, the tuple/bin/error-bar tables do not. */}
+              {session.getExportShape() === 'flat' && (
                 <div data-testid="export-scope" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: theme.font.size.small, color: theme.color.text.legend }}>
                   Export:
                   {(['active', 'all'] as const).map((scope) => (
