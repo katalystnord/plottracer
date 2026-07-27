@@ -18,13 +18,22 @@ import path from 'node:path';
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const RUN = process.env['SPIDER_SHOT'] === '1';
 
+// ⚑ CONTAINMENT: the ozone platform must be a launch ARGUMENT, not an env hint and
+// not appendSwitch inside the entry -- both are applied after the platform is
+// chosen, so the app lands on the developer's real screen. See the long note in
+// workspace.e2e.test.ts; verified by counting the windows that appear on :99.
+const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
+  ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
+  : [];
+
+
 let app: ElectronApplication;
 let page: Page;
 
 describe.runIf(RUN)('spider screenshot harness', () => {
   beforeEach(async () => {
     app = await electron.launch({
-      args: [path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
+      args: [...OZONE_ARGS, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
       cwd: REPO_ROOT,
       timeout: 30000,
       env: { ...process.env, WPD_E2E: '1' },

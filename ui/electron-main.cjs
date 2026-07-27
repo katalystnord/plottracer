@@ -25,17 +25,6 @@ if (process.platform === 'linux') {
 }
 app.commandLine.appendSwitch('disable-gpu')
 
-// ⚑ CONTAINMENT — the platform must be a SWITCH, not a hint (2026-07-27). Runs
-// meant to be headless were binding to WAYLAND and appearing on the developer's
-// real screen while `ELECTRON_OZONE_PLATFORM_HINT=x11` was set and `DISPLAY`
-// pointed at an Xvfb: this Electron build ignores that hint, and unsetting
-// WAYLAND_DISPLAY does not hide Wayland either, because Ozone finds the socket
-// from XDG_RUNTIME_DIR under its default name. Proven with a windowless probe:
-// the hint gave `ozone/platform/wayland/...`, the switch gives X11.
-// Opt-in through the environment so packaged, macOS and Windows launches are
-// untouched -- set PLOTTRACER_OZONE_PLATFORM=x11 alongside DISPLAY=:99.
-const ozonePlatform = process.env.PLOTTRACER_OZONE_PLATFORM
-if (ozonePlatform) app.commandLine.appendSwitch('ozone-platform', ozonePlatform)
 
 let mainWindow = null
 

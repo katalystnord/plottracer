@@ -24,11 +24,20 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
+
+// ⚑ CONTAINMENT: the ozone platform must be a launch ARGUMENT, not an env hint and
+// not appendSwitch inside the entry -- both are applied after the platform is
+// chosen, so the app lands on the developer's real screen. See the long note in
+// workspace.e2e.test.ts; verified by counting the windows that appear on :99.
+const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
+  ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
+  : [];
+
 const SAMPLE_IMAGE = path.join(REPO_ROOT, 'samples/xy-stress-strain.png');
 
 async function launchProductionApp(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
-    args: [path.join(REPO_ROOT, 'ui/electron-main.cjs')],
+    args: [...OZONE_ARGS, path.join(REPO_ROOT, 'ui/electron-main.cjs')],
     cwd: REPO_ROOT,
     timeout: 30000,
   });
