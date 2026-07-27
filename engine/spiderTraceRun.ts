@@ -29,7 +29,7 @@ export interface SpiderReading {
    * record still derives it from the stored pixel, as every other capture does. */
   value: number | null;
   /** Null when a single unambiguous crossing was found. */
-  reason: 'none-found' | 'ambiguous' | null;
+  reason: 'none-found' | 'ambiguous' | 'clipped' | null;
   /** Every stretch of the colour found along the ray, so an ambiguous refusal can
    * show its evidence rather than just saying no. */
   runs: readonly SpokeRun[];

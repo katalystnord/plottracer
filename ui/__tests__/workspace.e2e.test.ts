@@ -6621,6 +6621,60 @@ describe('spider charts', () => {
     expect(await textOf('spider-cell-0-0')).toBe('—');
   });
 
+  it('exports EVERY series, each reading against its own axis', async () => {
+    // ⚑ The release audit's finding. Grouped types routed the CSV through the
+    // tuple-table section, which is ACTIVE-SERIES-ONLY and reads values off the
+    // NEAREST ray — so the screen showed three series and the file carried one,
+    // read against whichever spoke each point sat closest to rather than the axis
+    // it was captured on. The scope control was hidden for grouped types too, so
+    // there was no way to ask for the rest.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(150);
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 4));
+
+    // (The save-dialog helpers live inside the project describe block, so the two
+    // lines they wrap are inlined here.)
+    const csvPath = path.join(os.tmpdir(), `plottracer-spider-export-${process.pid}.csv`);
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await expect
+      .poll(() => (fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf8') : ''))
+      .toContain('Strength');
+    const csv = fs.readFileSync(csvPath, 'utf8');
+
+    // Every reading is labelled with the axis it was CAPTURED on...
+    expect(csv).toContain('Axis,Name,Value');
+    for (const axis of ['Strength', 'Weight', 'Cost']) expect(csv).toContain(axis);
+    // ...and this is the active series' own values (≈25), not the other one's.
+    expect(csv).toMatch(/,(24|25)\./);
+    fs.unlinkSync(csvPath);
+
+    // ⚑ And the scope control is now OFFERED here, which was the other half of the
+    // defect: the screen showed every series while the file carried one, with no
+    // way to ask for the rest. Switching to All puts both in.
+    await page.getByTestId('export-scope-all').click();
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await expect
+      .poll(() => (fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf8') : ''))
+      .toContain('Series 2');
+    const both = fs.readFileSync(csvPath, 'utf8');
+    expect(both).toContain('Series 1');
+    expect(both).toMatch(/(49|50)\./); // series 1's readings
+    expect(both).toMatch(/(24|25)\./); // series 2's
+
+    fs.unlinkSync(csvPath);
+  });
+
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
     // ⚑ The regression the whole session-owned step list exists to prevent. Four
     // sites in Workspace.tsx used to read `config.steps`, which for a spider holds

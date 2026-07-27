@@ -2737,7 +2737,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const index = dataset.addPixel(snapped.x, snapped.y);
       const { tupleIndex, groupIndex } = entry.pointGroupCursor;
       if (tupleIndex === null) {
-        const newTupleIndex = dataset.addTuple(index);
+        // ⚑ BUILD THE TUPLE EMPTY AND FILE BY SLOT where the slots are independent
+        // (N x 1D). `addTuple` always writes slot 0 — fine for a box plot, whose
+        // cursor starts at Min and walks in order, and WRONG the moment a capture
+        // can start anywhere: aiming at "Cost index" on a series with no readings
+        // yet recorded the click as Axis 1, at the value that point projects to on
+        // ray 1, while the tips bar, the status line and the live ray all said Cost
+        // index. Found by the v1.4 release audit; `addSpiderTracePoints` already
+        // documented the same trap and avoided it the same way.
+        let newTupleIndex: number | null;
+        if (this.config.tupleMembers === 'independent') {
+          newTupleIndex = dataset.getAllTuples().length;
+          dataset.addEmptyTupleAt(newTupleIndex);
+          dataset.addToTupleAt(newTupleIndex, groupIndex, index);
+        } else {
+          newTupleIndex = dataset.addTuple(index);
+        }
         entry.pointGroupCursor.tupleIndex = newTupleIndex;
         if (newTupleIndex !== null) this.autoLabelTuple(newTupleIndex);
       } else {
@@ -3913,6 +3928,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // and the capture slots are relabelled by the same in-place path a real
     // re-calibration uses (which preserves recorded tuples when the count matches).
     if (this.axes) {
+      // ⚑ THE PERSISTED COPY FIRST. Serialization reads a spoke's name from its
+      // CALIBRATION POINT (`dz`), not from the live axes — so writing only the
+      // derived copies made the rename vanish on save and reopen, and left undo
+      // restoring a state where the table and the calibration card disagreed. The
+      // comment here used to claim this was written "to that spoke's calibration
+      // point"; it was not. Caught by the v1.4 release audit, which round-tripped
+      // through a real project file — the test that passed had reloaded from the
+      // live axes and could never have seen it.
+      const calibration = (this.axes as unknown as { calibration: Calibration | null }).calibration;
+      const calibrationIndex = this.config.steps.length + index; // origin steps, then one per spoke
+      const cp = calibration?.getPoint(calibrationIndex);
+      if (calibration && cp) calibration.setDataAt(calibrationIndex, cp.dx ?? '', cp.dy ?? '', name);
       (this.axes as unknown as SpiderAxes).setSpokeName(index, name);
       this.applyAxesDerivedPointGroups();
     }
@@ -3996,6 +4023,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // inherent capture shape, not something the user switched on, so clearing
     // its points must not quietly leave a Histogram that can't record a bin.
     if (this.config.defaultPointGroups) fresh.setPointGroups([...this.config.defaultPointGroups]);
+    // ⚑ ...and the same for a type whose capture shape is DERIVED from the axes.
+    // A spider has no `defaultPointGroups` — its slots are its calibrated spokes —
+    // so clearing left the series with no slots at all. Every later capture then
+    // took the ungrouped path: unsnapped, absent from the table, and deleted
+    // wholesale by the load-time axis-less drop when the project was reopened.
+    // Same reason the Histogram case above exists (the type's inherent capture
+    // shape must survive a clear), for the half of the shape that only exists once
+    // the axes do. Found by the v1.4 release audit.
+    const derived = this.config.pointGroupsFromAxes && this.axes ? this.config.pointGroupsFromAxes(this.axes) : null;
+    if (derived && derived.length > 0) fresh.setPointGroups([...derived]);
     entry.dataset = fresh;
     entry.pointGroupCursor = { tupleIndex: null, groupIndex: 0 };
   }

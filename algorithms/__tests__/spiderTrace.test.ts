@@ -183,15 +183,45 @@ describe('traceSpiderAlongSpokes', () => {
     expect(traceSpiderAlongSpokes(far, W, H, ORIGIN, SPOKES)[0]!.reason).toBe('none-found');
   });
 
+  it('REFUSES a crossing that was cut off by the search limit', () => {
+    // ⚑ Release-audit finding. A run still open when the walk stops was pushed with
+    // its end AT the limit and reported as one clean crossing — so every clipped
+    // axis recorded exactly centre + (known − centre) × 1.15: a number produced by
+    // the search window, not by the figure, and flagged as unambiguous. It happens
+    // whenever a series exceeds the labelled maximum by more than the overshoot, or
+    // the user calibrated the known point on an inner ring. The evidence to detect
+    // it was already there — the run ends exactly at maxPx — and was unused.
+    const mask = blankMask();
+    const [ux, uy] = [SPOKES[0]!.ux, SPOKES[0]!.uy];
+    for (let t = 100; t <= 130; t += 0.25) {
+      const x = Math.round(ORIGIN.x + t * ux);
+      const y = Math.round(ORIGIN.y + t * uy);
+      mask[y * W + x] = 1; // ink running out past the 115px search limit
+    }
+    const candidate = traceSpiderAlongSpokes(mask, W, H, ORIGIN, SPOKES)[0]!;
+    expect(candidate.atPx).toBeNull();
+    expect(candidate.reason).toBe('clipped');
+  });
+
   it('stops at the edge of the image instead of reading past it', () => {
     // A spoke pointing at the border runs out of pixels before it runs out of
     // length. Sampling off the buffer must read as "no colour here", not as a hit on
     // whatever the row-major index wraps onto — which would be a crossing invented
     // out of a neighbouring row.
+    // ⚑ This assertion USED TO BE VACUOUS, and the release audit caught it: the ring
+    // was drawn about the image's centre while the ray started at x=290 heading
+    // right, so no sample could ever match, `runs` was empty, and `.every()` was
+    // true whether the bounds check existed or not. Neutering the guard it names
+    // did not fail it. Now the ink is ON the ray, just beyond the edge of the
+    // image, so the test can only pass if sampling stops at the border.
     const mask = blankMask();
-    markRing(mask, 60);
+    const originX = 290;
+    for (let x = originX; x < W; x++) for (let y = 148; y <= 152; y++) mask[y * W + x] = 1;
     const edge: SpokeRay[] = [{ ux: 1, uy: 0, lengthPx: 400 }];
-    const found = traceSpiderAlongSpokes(mask, W, H, { x: 290, y: 150 }, edge);
+    const found = traceSpiderAlongSpokes(mask, W, H, { x: originX, y: 150 }, edge);
+    // The ink runs to x=299 (the last column), i.e. 9px along the ray — never the
+    // 400px the spoke claims, and never a wrapped hit on the next row.
+    expect(found[0]!.runs.length).toBeGreaterThan(0);
     expect(found[0]!.runs.every((r) => r.toPx <= 10)).toBe(true);
   });
 });

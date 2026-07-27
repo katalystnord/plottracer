@@ -4105,7 +4105,7 @@ export function Workspace() {
           sections.push(errorBarSection(session.getErrorBars(), rounder));
         } else if (session.getConfig().id === 'histogram') {
           sections.push(histogramSection(session.getHistogramBins(), rounder));
-        } else if (session.hasPointGroups()) {
+        } else if (session.hasPointGroups() && session.getConfig().tupleMembers !== 'independent') {
           sections.push(tupleDataSection(session.getPointGroups(), session.getTupleRows(), rounder));
         } else if (exportScope === 'all') {
           const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
@@ -4439,6 +4439,14 @@ export function Workspace() {
       if (ambiguous.length)
         parts.push(`${named(ambiguous)}: the colour crosses that ray more than once, so nothing was recorded — place ${ambiguous.length === 1 ? 'it' : 'them'} yourself.`);
       if (missing.length) parts.push(`Nothing of that colour crosses ${named(missing)}.`);
+      // ⚑ Clipped is NOT "nothing found" — the colour was still there when the
+      // search stopped, so the crossing is beyond the axis's labelled range and the
+      // reading would have been the search window's own limit. Say which, and say
+      // what to check, because the usual cause is a known point calibrated on an
+      // inner ring rather than the axis's end.
+      const clipped = result.readings.filter((r) => r.reason === 'clipped');
+      if (clipped.length)
+        parts.push(`${named(clipped)}: the colour runs past the end of that axis, so nothing was recorded — check the axis's known point, or place ${clipped.length === 1 ? 'it' : 'them'} yourself.`);
       if (offered > placed)
         parts.push(`${offered - placed} ${offered - placed === 1 ? 'axis' : 'axes'} already had a point and ${offered - placed === 1 ? 'was' : 'were'} left alone.`);
       const { pct, warn } = overBroad(result.matched);
@@ -6929,7 +6937,7 @@ export function Workspace() {
                 setCtxMenu(null);
               }}
             >
-              {hasPointGroups ? `Delete ${tupleNoun}` : 'Delete point'}
+              {hasPointGroups && config.tupleMembers !== 'independent' ? `Delete ${tupleNoun}` : 'Delete point'}
             </MenuItem>,
             ...(datasetInfos.length > 1
               ? [
@@ -7297,7 +7305,7 @@ export function Workspace() {
               </div>
               {/* CSV export scope (checkpoint 60): active series vs all series.
                   Hidden for Box Plot (its export is always the tuple table). */}
-              {!hasPointGroups && (
+              {(!hasPointGroups || config.tupleMembers === 'independent') && (
                 <div data-testid="export-scope" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: theme.font.size.small, color: theme.color.text.legend }}>
                   Export:
                   {(['active', 'all'] as const).map((scope) => (

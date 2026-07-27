@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, SPIDER_AXES_CONFIG, XY_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../calibrationSession.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { Dataset } from '../../core/dataset.js';
+import { serializeProject, deserializeProject } from '../projectFile.js';
 
 /**
  * Spider CAPTURE and EXPORT (v1.4 Stage 2).
@@ -452,6 +453,26 @@ describe('a spider profile is a row of independent readings', () => {
     expect(values[0]).toBeNull();
   });
 
+  it('files a reading into the slot it was AIMED at, even on an empty series', () => {
+    // ⚑ The wrong-number defect the release audit caught. Aiming at a slot on a
+    // series that has no readings yet leaves the cursor's tupleIndex null, and the
+    // capture path then created the tuple with `addTuple`, which ALWAYS writes slot
+    // 0. So the tips bar said "Cost index", the live ray highlighted spoke 6, the
+    // marker snapped to ray 6 — and the reading was filed as Axis 1, carrying the
+    // value that point projects to on ray 1 (typically negative). The sibling path
+    // `addSpiderTracePoints` documents this exact trap and avoids it; this one
+    // walked into it.
+    const session = THREE();
+    expect(session.setPointGroupCursor(null, 2)).toBe(true);
+    session.addDataPoint(...spokePixel(2, 3, 50));
+
+    const values = session.getSpiderTable().columns[0]!.values;
+    expect(values[0]).toBeNull();
+    expect(values[1]).toBeNull();
+    expect(values[2]).not.toBeNull();
+    expect(Math.round(values[2]!)).toBe(50);
+  });
+
   it('refuses to aim at a slot that already holds a reading', () => {
     // Capturing there would overwrite the slot's pixel index and orphan the point
     // it displaced -- a reading lost with nothing on screen to say so.
@@ -475,6 +496,37 @@ describe('a spider profile is a row of independent readings', () => {
   });
 });
 
+describe('Clear all points leaves a spider able to capture again', () => {
+  it('keeps the axis slots, so the next capture is still filed against an axis', () => {
+    // ⚑ The data-loss chain the release audit caught, from two of the same day's
+    // changes meeting. `clearPoints` restores only `config.defaultPointGroups`, and
+    // a spider HAS none — its slots come from the calibrated axes. So the series
+    // came back with no slots at all: every later capture took the ungrouped path,
+    // unsnapped and invisible in the table, and the new load-time drop then deleted
+    // every one of them on reopen. Silent loss, on an ordinary path.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    session.clearPoints();
+
+    expect(session.getPointGroups()).toEqual(['Strength', 'Weight', 'Cost']);
+    session.addDataPoint(...spokePixel(0, 3, 50));
+    expect(session.getSpiderTable().columns[0]!.values[0]).not.toBeNull();
+  });
+
+  it('so the load-time drop has nothing to take from a re-captured series', () => {
+    // The drop guard's premise — "the click path cannot make an axis-less point" —
+    // is only true once the above holds. This is that premise, tested.
+    const session = THREE();
+    session.clearPoints();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+
+    const axes = session.getAxes()!;
+    const reopened = new CalibrationSession(SPIDER_AXES_CONFIG);
+    reopened.loadCalibrated(axes, session.getDatasets());
+    expect(reopened.getDataPoints()).toHaveLength(3);
+  });
+});
+
 describe('an axis can be renamed from the spreadsheet', () => {
   it('writes the new name into the CALIBRATION, so everything derived follows', () => {
     // ⚑ The name is the one transcribed thing on the row — everything else was read
@@ -493,6 +545,31 @@ describe('an axis can be renamed from the spreadsheet', () => {
     // ...and the readings are untouched: this renamed an axis, it did not move data.
     expect(session.getDataPoints()).toHaveLength(3);
     expect(session.getSpiderTable().columns[0]!.values.every((v) => v !== null)).toBe(true);
+  });
+
+  it('SURVIVES a save and reopen — the name reaches the persisted calibration', () => {
+    // ⚑ The release audit's finding, and the comment above that method asserted the
+    // opposite of what it did. The name went to the session map, the live axes and
+    // the slot names — three DERIVED copies — while SERIALIZATION reads it from the
+    // calibration point's `dz`, which nothing updated. Fix the typo, save, reopen,
+    // and the typo is back.
+    //
+    // ⚑ This must round-trip through the FILE. My first attempt at this test
+    // reloaded from the live axes object, whose spoke name had been updated, and
+    // passed while the defect was fully present.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    session.setSpokeName(1, 'Elongation at break (%)');
+
+    const saved = serializeProject(session, 'data:image/png;base64,AA==');
+    if ('error' in saved) throw new Error(saved.error);
+    const reopened = deserializeProject(JSON.parse(JSON.stringify(saved)));
+    if ('error' in reopened) throw new Error(reopened.error);
+
+    const session2 = new CalibrationSession(SPIDER_AXES_CONFIG);
+    session2.loadCalibrated(reopened.axes as unknown as SpiderAxes, reopened.datasets);
+    expect(session2.getSpiderTable().axisRawNames[1]).toBe('Elongation at break (%)');
+    expect(session2.getPointGroups()[1]).toBe('Elongation at break (%)');
   });
 
   it('keeps a blank name BLANK rather than storing the positional fallback', () => {

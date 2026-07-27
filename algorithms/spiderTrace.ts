@@ -56,8 +56,14 @@ export interface SpokeCandidate {
   /** The crossing to offer, or null when the evidence does not support one. */
   atPx: number | null;
   /** Why there is no candidate, or why the chosen one might be wrong. Null when a
-   * single unambiguous run was found. */
-  reason: 'none-found' | 'ambiguous' | null;
+   * single unambiguous run was found.
+   *
+   * ⚑ `'clipped'` means the ink was still going when the search stopped. Reporting
+   * such a run would record `centre + (known − centre) × overshoot` — a number
+   * produced by the search WINDOW rather than by the figure — and flag it as a
+   * clean crossing. It happens when a series exceeds the labelled maximum by more
+   * than the overshoot, or when the known point was calibrated on an inner ring. */
+  reason: 'none-found' | 'ambiguous' | 'clipped' | null;
 }
 
 export interface SpiderTraceOptions {
@@ -127,6 +133,8 @@ export function traceSpiderAlongSpokes(
         runStart = null;
       }
     }
+    // Still inside the ink when the walk ended: the crossing is beyond the window.
+    const clipped = runStart !== null;
     if (runStart !== null) pushRun(runs, runStart, maxPx, minRunPx);
 
     // ⚑ ONE run is a reading; anything else is a question, not an answer. Several
@@ -135,8 +143,12 @@ export function traceSpiderAlongSpokes(
     // matched. Picking one (the outermost, say) would be a guess wearing the
     // record's clothes, which is the whole reason auto-extract is refused on bars.
     // The runs ride along so the user can be shown what was found and choose.
-    if (runs.length === 1) return { index, runs, atPx: runs[0]!.atPx, reason: null };
     if (runs.length === 0) return { index, runs, atPx: null, reason: 'none-found' as const };
+    // ⚑ A run that reached the limit has no measured END, so it has no reading —
+    // its `toPx` is where we stopped looking, not where the shape stops. Offering
+    // it would be the search window's number wearing the figure's clothes.
+    if (clipped) return { index, runs, atPx: null, reason: 'clipped' as const };
+    if (runs.length === 1) return { index, runs, atPx: runs[0]!.atPx, reason: null };
     return { index, runs, atPx: null, reason: 'ambiguous' as const };
   });
 }

@@ -399,3 +399,31 @@ describe('the bundled example, traced end to end', () => {
     expect(Math.abs(result.readings[0]!.value! - 92)).toBeLessThan(2.4); // range 120
   });
 });
+
+describe('a spider export carries every series, read against its own spoke', () => {
+  it('exports each reading with the axis it was CAPTURED on', () => {
+    // ⚑ The release audit's finding. Grouped types routed to `getTupleRows`, which
+    // is ACTIVE-SERIES-ONLY and reads values through `pixelToData` — the NEAREST
+    // ray. So the screen showed three series and the file carried one, and the one
+    // it carried was read off whichever ray each point happened to sit closest to,
+    // not the axis it was recorded against. On a spider those coincide for a clean
+    // click and diverge exactly where it matters.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, R / 2)); // half way out = 50
+    session.addDataset();
+    session.setActiveDataset(1);
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, R / 4)); // a quarter = 25
+
+    // Series 0 keeps its own readings, each labelled with its own axis.
+    const first = session.getExportRows(0);
+    expect(first).toHaveLength(3);
+    expect(first.map((r) => r.values[0])).toEqual([1, 2, 3]);
+    expect(first.map((r) => r.values[1])).toEqual(['Strength', 'Weight', 'Cost']);
+    first.forEach((r) => expect(Math.round(r.values[2] as number)).toBe(50));
+
+    // ...and the SECOND series is a separate, complete set — not absent.
+    const second = session.getExportRows(1);
+    expect(second).toHaveLength(3);
+    second.forEach((r) => expect(Math.round(r.values[2] as number)).toBe(25));
+  });
+});
