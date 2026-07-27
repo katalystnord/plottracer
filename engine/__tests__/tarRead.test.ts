@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readTar, entryText } from '../tarRead.js';
+import { isTarArchive, isZipContainer } from '../projectContainer.js';
 
 /**
  * Checkpoint 74 — the tar reader that lets us open a real WPD project.
@@ -99,5 +100,50 @@ describe('tarRead — names with spaces', () => {
     const entries = readTar(new Uint8Array(fs.readFileSync(path.join(dir, 's.tar'))));
     expect(entries.map((e) => e.name).sort()).toEqual(['my paper fig3/', 'my paper fig3/wpd.json']);
     expect(entryText(entries.find((e) => e.name.endsWith('wpd.json'))!)).toBe('{"version":[4,0]}');
+  });
+});
+
+/**
+ * The container sniff that lets ONE "Open Project" read every format we support
+ * (v1.4).
+ *
+ * ⚑ A foreign digitizer's archive used to arrive through a dialog, an IPC channel,
+ * a file filter and a menu item of its own, every one of them naming a single tool.
+ * That is the first-class status tenet 5 rules out — and, as David put it, a
+ * functional link IN advertises a functional link OUT that cannot exist: a third of
+ * what we now record (spider spokes and their per-axis scales, point roles, box
+ * tuples) has nowhere to go in that format. One door, and the FILE says what it is.
+ */
+describe('isTarArchive — the container sniff behind one Open Project', () => {
+  /** A REAL tar, written by tar(1), so the magic under test is the genuine one. */
+  function realTar(): Uint8Array {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-tar-sniff-'));
+    fs.mkdirSync(path.join(dir, 'proj'));
+    fs.writeFileSync(path.join(dir, 'proj', 'info.json'), '{}');
+    execFileSync('tar', ['-cf', 'p.tar', 'proj/'], { cwd: dir });
+    return new Uint8Array(fs.readFileSync(path.join(dir, 'p.tar')));
+  }
+
+  it('recognises a tar by its ustar magic, not by any file name', () => {
+    expect(isTarArchive(realTar())).toBe(true);
+  });
+
+  it('does not mistake our own zip project for one', () => {
+    // The two live in the same dialog now, so telling them apart is load-bearing.
+    const zip = new Uint8Array(300);
+    zip.set([0x50, 0x4b, 0x03, 0x04], 0);
+    expect(isTarArchive(zip)).toBe(false);
+    expect(isZipContainer(zip)).toBe(true);
+    expect(isZipContainer(realTar())).toBe(false);
+  });
+
+  it('does not mistake a legacy JSON project for one', () => {
+    const json = new TextEncoder().encode(JSON.stringify({ plotTracerProject: 1 }).padEnd(400, ' '));
+    expect(isTarArchive(json)).toBe(false);
+  });
+
+  it('refuses anything too short to carry the magic, without throwing', () => {
+    expect(isTarArchive(new Uint8Array(0))).toBe(false);
+    expect(isTarArchive(new Uint8Array(261))).toBe(false);
   });
 });

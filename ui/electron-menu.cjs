@@ -45,11 +45,7 @@ function buildMenu(mainWindow) {
           accelerator: 'CmdOrCtrl+O',
           click: () => send('menu:open-image'),
         },
-        {
-          label: 'Open WebPlotDigitizer Project…',
-          click: () => send('menu:open-wpd-project'),
-        },
-        {
+                {
           label: 'Open Project…',
           accelerator: 'CmdOrCtrl+Shift+O',
           click: () => send('menu:open-project'),

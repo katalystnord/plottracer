@@ -140,6 +140,7 @@ import {
   deserializeMultiFigureZip,
   isMultiFigureContainer,
   isZipContainer,
+  isTarArchive,
   base64ToBytes,
   bytesToBase64,
 } from '../../engine/projectContainer.js';
@@ -3716,6 +3717,87 @@ export function Workspace() {
     []
   );
 
+
+
+  // --- Import a foreign digitizer's project archive (.tar) — checkpoint 88 ------
+  // The migration route off the old app (tenet 6: interop happens at the file
+  // level). The engine was ported at checkpoint 74 (engine/wpdImport.ts) with
+  // zero callers; this is the wiring. A `.tar` holds N figures on one image, so
+  // a single supported figure opens directly and several raise a picker.
+  const [wpdFigures, setWpdFigures] = useState<WpdFigure[] | null>(null); // non-null => picker open
+  const wpdHeldRef = useRef<{ plotData: PlotData; figures: WpdFigure[]; imageDataURL: string } | null>(null);
+
+  const importWpdFigureAt = useCallback(
+    (index: number) => {
+      const held = wpdHeldRef.current;
+      if (!held) return;
+      const imported = importWpdFigure(held.plotData, held.figures, index);
+      if ('error' in imported) {
+        setProjectError(imported.error);
+        return;
+      }
+      setWpdFigures(null); // close the picker if it was open
+      loadCalibratedFigure({
+        configId: imported.configId,
+        axes: imported.axes as CalibratedAxes,
+        datasets: imported.datasets as Dataset[],
+        imageDataURL: held.imageDataURL,
+        imageFileName: held.figures[index]?.name,
+        // WPD has no measurement concept -- nothing to carry.
+      });
+    },
+    [loadCalibratedFigure]
+  );
+
+  /** Import a foreign digitizer's `.tar` archive, once Open Project has sniffed it
+   * out of the bytes. Takes the bytes rather than owning a dialog of its own:
+   * there is ONE Open Project, and the FILE says which format it is. */
+  const importTarProject = useCallback(async (bytes: Uint8Array) => {
+    const archive = readWpdArchive(bytes);
+    if ('error' in archive) {
+      setProjectError(archive.error);
+      return;
+    }
+    const listed = listWpdFigures(archive.wpdJson);
+    if ('error' in listed) {
+      setProjectError(listed.error);
+      return;
+    }
+    if (archive.images.length === 0) {
+      setProjectError('This project bundles no image.');
+      return;
+    }
+    const img = archive.images[0]!;
+    // PDF-bundled projects wait on the PDF loader (roadmap v0.4) -- Chromium's
+    // <img> cannot decode a PDF, so surface it rather than fail blank (ckpt 65).
+    if (img.mime === 'application/pdf') {
+      setProjectError("This project's image is a PDF, which PlotTracer can't open yet.");
+      return;
+    }
+    const imageDataURL = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(new Blob([img.bytes as BlobPart], { type: img.mime }));
+    });
+
+    const { plotData, figures } = listed;
+    wpdHeldRef.current = { plotData, figures, imageDataURL };
+    const supported = figures.filter((f) => f.configId !== null);
+    if (supported.length === 0) {
+      setProjectError('No figure in this project can be opened yet.');
+      return;
+    }
+    // One openable figure -> open it. Several -> let the user choose, showing the
+    // unopenable ones disabled-with-reason rather than hiding what's there.
+    if (supported.length === 1 && figures.length === 1) {
+      importWpdFigureAt(supported[0]!.index);
+    } else {
+      setProjectError(null);
+      setWpdFigures(figures);
+    }
+  }, [importWpdFigureAt]);
+
   const openProject = useCallback(async () => {
     if (!window.electronAPI) {
       setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
@@ -3731,6 +3813,17 @@ export function Workspace() {
     // is decoded to text -- detect by CONTENT, never the filename, since users
     // rename files (engine/projectContainer.ts). Old projects keep opening.
     const bytes = base64ToBytes(opened.base64);
+    // ⚑ ONE Open Project, and the FILE says which format it is (v1.4). A `.tar` is
+    // another digitizer's archive; it used to have a dialog, an IPC channel, a file
+    // filter and a menu item of its own, all naming one tool -- the first-class
+    // status tenet 5 rules out. Sniffing it here is not a new rule either: this
+    // function already decides zip-vs-legacy-JSON from the leading bytes, "never
+    // the filename, since users rename files". The next digitizer is one more
+    // sniffer here and no UI change at all.
+    if (isTarArchive(bytes)) {
+      await importTarProject(bytes);
+      return;
+    }
     let result;
     if (isZipContainer(bytes)) {
       // Multi-figure project (checkpoint 115): load every figure into figuresRef
@@ -3807,90 +3900,6 @@ export function Workspace() {
       : null);
   }, [confirmDiscardIfDirty, loadCalibratedFigure, setSourcePdf, buildFigureRecordFromDeserialized, restoreFigure, closePdf]);
 
-  // --- Import a WebPlotDigitizer project (.tar) — checkpoint 88 -----------------
-  // The migration route off the old app (tenet 6: interop happens at the file
-  // level). The engine was ported at checkpoint 74 (engine/wpdImport.ts) with
-  // zero callers; this is the wiring. A `.tar` holds N figures on one image, so
-  // a single supported figure opens directly and several raise a picker.
-  const [wpdFigures, setWpdFigures] = useState<WpdFigure[] | null>(null); // non-null => picker open
-  const wpdHeldRef = useRef<{ plotData: PlotData; figures: WpdFigure[]; imageDataURL: string } | null>(null);
-
-  const importWpdFigureAt = useCallback(
-    (index: number) => {
-      const held = wpdHeldRef.current;
-      if (!held) return;
-      const imported = importWpdFigure(held.plotData, held.figures, index);
-      if ('error' in imported) {
-        setProjectError(imported.error);
-        return;
-      }
-      setWpdFigures(null); // close the picker if it was open
-      loadCalibratedFigure({
-        configId: imported.configId,
-        axes: imported.axes as CalibratedAxes,
-        datasets: imported.datasets as Dataset[],
-        imageDataURL: held.imageDataURL,
-        imageFileName: held.figures[index]?.name,
-        // WPD has no measurement concept -- nothing to carry.
-      });
-    },
-    [loadCalibratedFigure]
-  );
-
-  const openWpdProject = useCallback(async () => {
-    if (!window.electronAPI?.openWpdProject) {
-      setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
-      return;
-    }
-    if (!confirmDiscardIfDirty()) return;
-    const opened = await window.electronAPI.openWpdProject();
-    if (!opened) return; // dialog cancelled
-
-    const bytes = Uint8Array.from(atob(opened.base64), (c) => c.charCodeAt(0));
-    const archive = readWpdArchive(bytes);
-    if ('error' in archive) {
-      setProjectError(archive.error);
-      return;
-    }
-    const listed = listWpdFigures(archive.wpdJson);
-    if ('error' in listed) {
-      setProjectError(listed.error);
-      return;
-    }
-    if (archive.images.length === 0) {
-      setProjectError('This WebPlotDigitizer project bundles no image.');
-      return;
-    }
-    const img = archive.images[0]!;
-    // PDF-bundled projects wait on the PDF loader (roadmap v0.4) -- Chromium's
-    // <img> cannot decode a PDF, so surface it rather than fail blank (ckpt 65).
-    if (img.mime === 'application/pdf') {
-      setProjectError("This project's image is a PDF, which PlotTracer can't open yet.");
-      return;
-    }
-    const imageDataURL = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(new Blob([img.bytes as BlobPart], { type: img.mime }));
-    });
-
-    const { plotData, figures } = listed;
-    wpdHeldRef.current = { plotData, figures, imageDataURL };
-    const supported = figures.filter((f) => f.configId !== null);
-    if (supported.length === 0) {
-      setProjectError('No figure in this WebPlotDigitizer project can be opened yet.');
-      return;
-    }
-    // One openable figure -> open it. Several -> let the user choose, showing the
-    // unopenable ones disabled-with-reason rather than hiding what's there.
-    if (supported.length === 1 && figures.length === 1) {
-      importWpdFigureAt(supported[0]!.index);
-    } else {
-      setProjectError(null);
-      setWpdFigures(figures);
-    }
-  }, [confirmDiscardIfDirty, importWpdFigureAt]);
 
   const exportData = useCallback(
     // target 'clipboard' (v1.1 #4) copies the very same rendered text a file
@@ -4166,9 +4175,6 @@ export function Workspace() {
       electronAPI.onMenuEvent('menu:open-project', () => {
         void openProject();
       }),
-      electronAPI.onMenuEvent('menu:open-wpd-project', () => {
-        void openWpdProject();
-      }),
       electronAPI.onMenuEvent('menu:save-project', () => {
         void saveProject();
       }),
@@ -4181,7 +4187,7 @@ export function Workspace() {
       electronAPI.onMenuEvent('menu:redo', () => redo()),
     ];
     return () => unsubscribes.forEach((unsub) => unsub());
-  }, [openProject, openWpdProject, saveProject, exportData, undo, redo]);
+  }, [openProject, saveProject, exportData, undo, redo]);
 
   const handleRunCurveFit = useCallback(() => {
     if (!axes) return;
@@ -7690,7 +7696,7 @@ export function Workspace() {
           >
             <strong style={{ fontSize: theme.font.size.regular, fontWeight: 700 }}>Choose a figure to import</strong>
             <p style={{ fontSize: theme.font.size.small, color: theme.color.text.legend, margin: '6px 0 12px' }}>
-              This WebPlotDigitizer project holds {wpdFigures.length} calibrated figures on one image. Import one — you
+              This project holds {wpdFigures.length} calibrated figures on one image. Import one — you
               can open the project again to import another.
             </p>
             {wpdFigures.map((fig) => {

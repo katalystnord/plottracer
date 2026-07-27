@@ -34,23 +34,20 @@ const MIME = {
   tif: 'image/tiff', tiff: 'image/tiff',
 }
 
+// ONE door for every project we can read (v1.4). Our own file is a `.zip`
+// container (checkpoint 94); `.json` is the legacy single-file form from
+// checkpoints 25-93; `.tar` is another digitizer's archive. Which one it actually
+// is gets decided by CONTENT in the renderer, never by extension -- users rename
+// files (engine/projectContainer.ts's isZipContainer).
+//
+// ⚑ There used to be a SECOND dialog channel whose only difference was a filter
+// naming one foreign tool. That is the first-class status tenet 5 rules out ("no
+// allegiance at the code level -- licensing and attribution ONLY"), and the two
+// handlers were otherwise byte-identical. A format we can read is a format we can
+// read; the file says which it is. Adding the next digitizer means adding an
+// extension here and a sniffer in the renderer, and touching no UI at all.
 const PROJECT_FILTERS = [
-  // Our own project file is a `.zip` container (checkpoint 94); `.json` is the
-  // legacy single-file form from checkpoints 25-93, still opened for backward
-  // compatibility (detected by content, not by extension -- see engine/
-  // projectContainer.ts's isZipContainer).
-  { name: 'PlotTracer Project', extensions: ['zip', 'json'] },
-  { name: 'All Files', extensions: ['*'] },
-]
-
-// WebPlotDigitizer's real project format is a `.tar` bundle (info.json +
-// wpd.json + the image), NOT plain JSON -- so importing one needs a BINARY read
-// (checkpoint 88), which dialog:openProject's utf8 path could not do. This is
-// the migration route off WebPlotDigitizer (and any legacy plottracer save);
-// without it every WPD project is unopenable. `.tar` only for now; `.zip` (our own
-// container) and `.pdf` inside a tar come with the container work.
-const WPD_PROJECT_FILTERS = [
-  { name: 'WebPlotDigitizer Project', extensions: ['tar'] },
+  { name: 'Project files', extensions: ['zip', 'json', 'tar'] },
   { name: 'All Files', extensions: ['*'] },
 ]
 
@@ -73,7 +70,7 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
 
   // Checkpoint 25 (project save/load). As of checkpoint 94 a project file is a
   // binary `.zip` container (engine/projectContainer.ts), so this reads BYTES
-  // and returns base64 -- the same hop dialog:openWpdProject/openImage use --
+  // and returns base64 -- the same hop dialog:openImage uses --
   // rather than the UTF-8 text it returned through checkpoint 93. The renderer
   // decides zip-vs-legacy-JSON from the leading bytes; a legacy `.json` project
   // decodes straight back to its text there. saveFile handles the binary write
@@ -89,26 +86,10 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
     return { filePath, base64: buffer.toString('base64') }
   })
 
-  // Read a WebPlotDigitizer `.tar` as BINARY (checkpoint 88). Returns base64
-  // because IPC serializes it as a plain string either way and the renderer
-  // decodes to a Uint8Array for engine/tarRead.ts -- the same base64 hop
-  // dialog:openImage already uses for image bytes, so no new capability in the
-  // preload's shape, just a second binary reader.
-  ipcMain.handle('dialog:openWpdProject', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(getMainWindow(), {
-      properties: ['openFile'],
-      filters: WPD_PROJECT_FILTERS,
-    })
-    if (canceled || !filePaths.length) return null
-    const filePath = filePaths[0]
-    const buffer = fs.readFileSync(filePath)
-    return { filePath, base64: buffer.toString('base64') }
-  })
-
   // `encoding` is 'utf8' (the default, and every caller before checkpoint 93)
   // or 'base64'. Base64 is how binary reaches the main process over IPC, which
   // serializes the payload as a plain string either way -- the same base64 hop
-  // dialog:openImage/openWpdProject already use for reads, now running the
+  // dialog:openImage already uses for reads, now running the
   // other direction. It unblocks PNG snapshot export (checkpoint 93) and the
   // .zip project container (v0.4). When base64, decode to real bytes before
   // writing; otherwise write the text verbatim exactly as before.

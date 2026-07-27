@@ -18,7 +18,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 const MENU_EVENT_CHANNELS = new Set([
-  'menu:open-image', 'menu:open-project', 'menu:open-wpd-project',
+  'menu:open-image', 'menu:open-project',
   'menu:save-project', 'menu:save-csv',
   'menu:zoom-in', 'menu:zoom-out', 'menu:zoom-fit', 'menu:zoom-100',
   'menu:undo', 'menu:redo',
@@ -27,7 +27,6 @@ const MENU_EVENT_CHANNELS = new Set([
 contextBridge.exposeInMainWorld('electronAPI', {
   openImage: () => ipcRenderer.invoke('dialog:openImage'),
   openProject: () => ipcRenderer.invoke('dialog:openProject'),
-  openWpdProject: () => ipcRenderer.invoke('dialog:openWpdProject'),
   saveFile: (data, defaultName, filters, encoding) => ipcRenderer.invoke('dialog:saveFile', data, defaultName, filters, encoding),
 
   onMenuEvent: (channel, callback) => {

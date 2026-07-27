@@ -137,6 +137,35 @@ export function isZipContainer(bytes: Uint8Array): boolean {
 }
 
 /**
+ * Is this a `.tar` archive — the shape another digitizer's project arrives in?
+ *
+ * Reads the POSIX `ustar` magic at offset 257, which is where the format puts it,
+ * rather than trusting an extension. Same rule as isZipContainer above and for the
+ * same stated reason: users rename files, so the FILE has to say what it is.
+ *
+ * ⚑ This is what lets ONE "Open Project" read every format we support. A foreign
+ * archive used to need its own dialog, IPC channel, file filter and menu item, all
+ * naming one tool — the first-class status tenet 5 rules out ("no allegiance at the
+ * code level — licensing and attribution ONLY"). Adding the next digitizer means
+ * adding a sniffer beside this one; no UI changes at all.
+ *
+ * Deliberately narrow: it recognises the CONTAINER, not whose project is inside.
+ * Deciding that is the importer's job, and it is the importer that must say so
+ * plainly when it cannot read what it found.
+ */
+export function isTarArchive(bytes: Uint8Array): boolean {
+  if (bytes.length < 262) return false;
+  // 'ustar' — POSIX (followed by "00") and GNU (followed by " \0") both start here.
+  return (
+    bytes[257] === 0x75 &&
+    bytes[258] === 0x73 &&
+    bytes[259] === 0x74 &&
+    bytes[260] === 0x61 &&
+    bytes[261] === 0x72
+  );
+}
+
+/**
  * Builds a `.zip` project from a ProjectFile: a readable `project.json` plus the
  * image as a real file entry. Returns {error} only if the image is not a base64
  * data URL we can split out (it always is, in practice — the canvas and loader
