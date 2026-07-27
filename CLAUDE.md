@@ -97,7 +97,7 @@ npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
   Windows (.exe) on tag push (`.github/workflows/build.yml`).
 - **Commits:** small, self-contained, and verified (typecheck + lint + relevant
   tests) before committing. End commit messages with:
-  `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
+  `Co-Authored-By: Claude Opus 5.0 (1M context) <noreply@anthropic.com>`
 
 ---
 
