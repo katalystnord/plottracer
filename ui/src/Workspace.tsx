@@ -170,6 +170,8 @@ import { formatDateNumber } from '../../core/dateConversion.js';
 import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
+import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
+import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
 import {
@@ -1376,6 +1378,12 @@ export function Workspace() {
     // door, so the rule lives here where both converge. Auto-extract's mechanisms
     // are curve tools and would record a bar's MIDPOINT as its value.
     if (session.getConfig().axesKind === 'bar') return;
+    // ⚑ A spider has exactly ONE mechanism: the axis-aware colour trace. Flood-fill
+    // and Guide points are curve tools with nowhere to file their output (a spider's
+    // slots are its axes), so they are not offered -- and this is where the card is
+    // ENTERED, so without it the last-used mechanism could open a card whose button
+    // would silently do nothing.
+    if (session.getConfig().id === 'spider') lastAutoExtractMechRef.current = 'color-trace';
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
@@ -2169,7 +2177,7 @@ export function Workspace() {
       else if (e.key === '1' && figureCaptured) setMode('calibrate');
       else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && axes && !session.hasPointGroups()) toggleAutoExtract();
+      else if (e.key === '4' && axes && (!session.hasPointGroups() || session.getConfig().id === 'spider')) toggleAutoExtract();
       // Hotkey 5 activates Select with the current sub-mode but does NOT open the
       // picker (that's the rail button / its arrow); reset so a stale-open card
       // from an earlier session can't re-appear (v1.1 #6).
@@ -4316,6 +4324,13 @@ export function Workspace() {
   // plot). XY only: for polar/ternary the calibration-point bbox is not the plot
   // area, so leave those unrestricted.
   const defaultTraceRegion = useCallback((): FilterRegion | null => {
+    // A spider's box is the web itself (centre + every spoke tip, plus the overshoot
+    // the tracer looks through). Worth having for the same reason as the XY one:
+    // radar charts print the axis NAMES just outside the outermost ring, often in
+    // the same ink as the grid.
+    if (session.getConfig().id === 'spider') {
+      return spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null);
+    }
     if (session.getConfig().axesKind !== 'xy') return null;
     return calibrationBoxRegion(session.getPlacedPoints());
   }, [session]);
@@ -4339,7 +4354,7 @@ export function Workspace() {
       setColorTraceInfo('Calibrate the axes first — traced points need a coordinate system.');
       return;
     }
-    if (session.hasPointGroups()) {
+    if (session.hasPointGroups() && config.id !== 'spider') {
       setColorTraceInfo('Auto-trace adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
       return;
     }
@@ -4357,6 +4372,53 @@ export function Workspace() {
       const warn = pct > 25 ? ' — that is a lot of the image; if it grabbed the grid/axes, lower the tolerance or run Grid Removal first.' : '';
       return { pct, warn };
     };
+    // ⚑ THE SPIDER TRACE, and why it is offered where the bar one is refused. Every
+    // other mechanism here is a curve tool: it reduces the mask by column or by
+    // blob, which on a filled bar returns the MIDDLE of a shape whose value is its
+    // end -- a number that was never the datum (`59f94a6`). On a radar chart the
+    // datum IS where the series crosses an axis, and a crossing is what this
+    // measures, along rays the user calibrated. It records one value per axis, into
+    // that axis's own slot, and REFUSES the rays whose evidence is ambiguous rather
+    // than picking one -- those axes are left empty and the capture cursor lands on
+    // them, so the refusals become the worklist.
+    if (config.id === 'spider') {
+      const result = runSpiderTrace(
+        data,
+        width,
+        height,
+        session.getAxes() as unknown as SpiderAxes | null,
+        target,
+        colorTraceTolerance,
+        'foreground',
+        colorTraceRegion ?? undefined
+      );
+      if ('error' in result) {
+        setColorTraceInfo(result.error);
+        return;
+      }
+      const offered = result.readings.filter((r) => r.point != null).length;
+      const placed = session.addSpiderTracePoints(result.readings.map((r) => r.point));
+      const named = (list: typeof result.readings) =>
+        list.map((r) => r.name || `Axis ${r.index + 1}`).join(', ');
+      const ambiguous = result.readings.filter((r) => r.reason === 'ambiguous');
+      const missing = result.readings.filter((r) => r.reason === 'none-found');
+      const parts = [
+        `Read ${placed} of ${result.readings.length} ${result.readings.length === 1 ? 'axis' : 'axes'}.`,
+      ];
+      // Say what was NOT done, by name. A count alone leaves the user hunting for
+      // which rows are still empty -- and the whole design here is that a refusal is
+      // information, not a failure.
+      if (ambiguous.length)
+        parts.push(`${named(ambiguous)}: the colour crosses that ray more than once, so nothing was recorded — place ${ambiguous.length === 1 ? 'it' : 'them'} yourself.`);
+      if (missing.length) parts.push(`Nothing of that colour crosses ${named(missing)}.`);
+      if (offered > placed)
+        parts.push(`${offered - placed} ${offered - placed === 1 ? 'axis' : 'axes'} already had a point and ${offered - placed === 1 ? 'was' : 'were'} left alone.`);
+      const { pct, warn } = overBroad(result.matched);
+      parts.push(`${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
+      setColorTraceInfo(parts.join(' '));
+      if (placed > 0) commit();
+      return;
+    }
     if (colorTraceShape === 'scatter') {
       const result = runBlobDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
       if ('error' in result) {
@@ -4380,7 +4442,7 @@ export function Workspace() {
     const { pct, warn } = overBroad(result.matched);
     setColorTraceInfo(`Traced ${result.points.length} points from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
     commit();
-  }, [session, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
+  }, [session, config.id, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -5174,7 +5236,15 @@ export function Workspace() {
       // By-colour traces via the Trace button, not a canvas click (v0.8 audit #2:
       // without this the tip fell through to "calibrate the axes" on an already-
       // calibrated chart, and gave no hint that a stray click does nothing).
-      if (mode === 'color-trace') return 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+      // ⚑ On a spider it does a different job, and the tip has to say so: it reads
+      // ALONG the calibrated rays, one value per axis, and leaves an axis empty
+      // where the evidence is doubtful. Without that, "Trace" reads as the curve
+      // tool it is everywhere else, and an axis coming back empty looks like a bug
+      // rather than the refusal it is.
+      if (mode === 'color-trace')
+        return config.id === 'spider'
+          ? 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.'
+          : 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
       if (mode === 'interpolate') {
         if (dataPoints.length === 0)
           return 'Interpolate — click a few guide points along one curve; the curve fills in between them.';
@@ -6223,7 +6293,12 @@ export function Workspace() {
             // confidently wrong numbers -- the tenet-1 defect, worse than the tool
             // simply being absent. A bar-aware capture is a model change, not a new
             // shape on the colour trace: see the bar design pass.
-            disabled={!axes || hasPointGroups || config.axesKind === 'bar'}
+            // ⚑ Spider is the one point-group type auto-extract IS offered for, and
+            // the exception is a correctness one too: its slots ARE the axes the
+            // trace searches, so every reading has a home the tool measured it
+            // against. The Box Plot / Error Bar refusal stands -- a Min/Q1/Median
+            // slot is not something a colour trace can identify.
+            disabled={!axes || (hasPointGroups && config.id !== 'spider') || config.axesKind === 'bar'}
             disabledReason={
               !axes
                 ? 'Calibrate the axes first'
@@ -6404,7 +6479,13 @@ export function Workspace() {
                   { m: 'segment-fill' as ToolMode, id: 'flood', label: 'Flood-fill', hint: 'solid line' },
                   { m: 'color-trace' as ToolMode, id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
                   { m: 'interpolate' as ToolMode, id: 'guide', label: 'Guide points', hint: 'by eye' },
-                ]).map(({ m, id, label }) => (
+                ])
+                  // ⚑ A spider gets ONE mechanism. The other two are curve tools that
+                  // produce ordinary points, and a spider series has no slot for one:
+                  // they would have run and recorded nothing, which reads as a broken
+                  // button rather than as a tool that does not apply here.
+                  .filter(({ m }) => config.id !== 'spider' || m === 'color-trace')
+                  .map(({ m, id, label }) => (
                   <button
                     key={id}
                     type="button"
@@ -6452,9 +6533,20 @@ export function Workspace() {
               {mode === 'color-trace' && (
                 <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
                   <span>
-                    Selects every pixel of a series&rsquo; colour — a dashed or marker-only line
-                    extracts in one pass. Pick the colour, choose curve or scattered points, then Trace.
-                    The highlighted pixels show what the trace reads.
+                    {config.id === 'spider' ? (
+                      <>
+                        Walks each calibrated axis outward and records the value where the
+                        series&rsquo; colour crosses it — one reading per axis. A ray the colour
+                        crosses more than once is left EMPTY for you to place, and named below.
+                        The highlighted pixels show what the trace reads.
+                      </>
+                    ) : (
+                      <>
+                        Selects every pixel of a series&rsquo; colour — a dashed or marker-only line
+                        extracts in one pass. Pick the colour, choose curve or scattered points, then Trace.
+                        The highlighted pixels show what the trace reads.
+                      </>
+                    )}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>Colour:</span>
@@ -6474,7 +6566,9 @@ export function Workspace() {
                       ⌖ Pick from image
                     </button>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {/* No shape to choose on a spider: the rays decide where to read, so
+                      curve-vs-scatter has nothing to select between. */}
+                  <div style={{ display: config.id === 'spider' ? 'none' : 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>Shape:</span>
                     <select
                       data-testid="color-trace-shape"

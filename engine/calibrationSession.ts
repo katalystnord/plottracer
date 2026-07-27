@@ -2712,6 +2712,64 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return points.length;
   }
 
+  /**
+   * Record an axis-aware colour trace's readings into this series' spider slots
+   * (v1.4) — one entry per spoke, in spoke order, null where the trace declined to
+   * offer one. The grouped sibling of addSegmentFillPoints: a spider trace DOES
+   * have a natural slot for every reading, because it searched one ray per slot.
+   *
+   * ⚑ It fills the profile the capture cursor is on, and only its EMPTY slots. A
+   * trace assists; it never overwrites a reading the user placed by hand, so
+   * running it after fixing one axis by eye cannot silently undo that fix. The
+   * cursor is then recomputed to the first slot still open, exactly as loading a
+   * project does — so whatever the trace refused is what the user is next asked
+   * for, and the refusals become the worklist.
+   *
+   * ⚑ Every point goes through the same snapToSpoke as a click. The tracer's
+   * candidates are already on their rays, so this changes nothing today; it means
+   * there is no second, unguarded route into the record if that ever stops being
+   * true (the "the model has more than one entrance" rule).
+   *
+   * Returns how many readings were actually recorded.
+   */
+  addSpiderTracePoints(points: readonly ({ x: number; y: number } | null)[]): number {
+    if (!this.axes || this.config.id !== 'spider') return 0;
+    const entry = this.activeEntry;
+    const dataset = entry.dataset;
+    if (!dataset.hasPointGroups()) return 0;
+
+    let tupleIndex = entry.pointGroupCursor.tupleIndex;
+    let createdTuple = false;
+    let added = 0;
+    const slots = dataset.getPointGroups().length;
+    for (let groupIndex = 0; groupIndex < Math.min(points.length, slots); groupIndex++) {
+      const point = points[groupIndex];
+      if (!point) continue;
+      if (tupleIndex !== null && dataset.getAllTuples()[tupleIndex]?.[groupIndex] != null) continue;
+      const snapped = this.snapToSpoke(point.x, point.y, groupIndex);
+      const pixelIndex = dataset.addPixel(snapped.x, snapped.y);
+      if (tupleIndex === null) {
+        // Built empty and filled by SLOT, not via addTuple -- which puts its pixel
+        // in slot 0. A trace whose first reading is for axis 2 (because axis 0 was
+        // ambiguous) would otherwise have that reading filed against axis 0: the
+        // right number on the wrong axis, which is worse than no number at all.
+        tupleIndex = dataset.getAllTuples().length;
+        dataset.addEmptyTupleAt(tupleIndex);
+        createdTuple = true;
+      }
+      dataset.addToTupleAt(tupleIndex, groupIndex, pixelIndex);
+      added++;
+    }
+    // The category label lives on the tuple's primary-group pixel, so it can only
+    // be written once that slot exists -- same as the click path, which always
+    // fills slot 0 first.
+    if (createdTuple && tupleIndex !== null && dataset.getAllTuples()[tupleIndex]?.[0] != null) {
+      this.autoLabelTuple(tupleIndex);
+    }
+    entry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+    return added;
+  }
+
   /** Interpolation-assist (checkpoint 120, David's LIVE mode): the human drops a
    * handful of GUIDE POINTS along one curve and the tool fills the curve between
    * them (algorithms/interpolate.ts, a centripetal Catmull-Rom spline). This is

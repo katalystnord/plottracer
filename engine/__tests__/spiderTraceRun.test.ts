@@ -1,0 +1,401 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { runSpiderTrace, spiderBoxRegion } from '../spiderTraceRun.js';
+import { CalibrationSession, SPIDER_AXES_CONFIG } from '../calibrationSession.js';
+import { SpiderAxes as SpiderAxesClass } from '../../core/axes/spider.js';
+import { Calibration } from '../../core/calibration.js';
+import type { SpiderAxes } from '../../core/axes/spider.js';
+
+/**
+ * The axis-aware colour trace, orchestrated (v1.4) — and its landing in the record.
+ *
+ * ⚑ Well-founded where the bar case was not. Auto-extract is refused on bars because
+ * every mechanism it has returns the MIDDLE of a filled shape, and a bar's value is
+ * its end: the number was never the datum. On a radar chart the datum IS where the
+ * series crosses the axis, and a crossing is exactly what this measures. What still
+ * has to hold is the refusal — an ambiguous ray must reach the record as an empty
+ * slot the user is then asked for, never as the outermost run silently chosen.
+ */
+
+const W = 220;
+const H = 220;
+const CX = 110;
+const CY = 110;
+const R = 80;
+const WHITE: [number, number, number] = [255, 255, 255];
+const RED: [number, number, number] = [220, 30, 30];
+
+/** `n` spokes of `radius`px, clockwise from 12 o'clock, about (CX, CY). */
+function spokePixel(i: number, n: number, radius = R): [number, number] {
+  const angle = (2 * Math.PI * i) / n;
+  return [CX + radius * Math.sin(angle), CY - radius * Math.cos(angle)];
+}
+
+function blankImage(): Uint8ClampedArray {
+  const data = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = WHITE[0];
+    data[i + 1] = WHITE[1];
+    data[i + 2] = WHITE[2];
+    data[i + 3] = 255;
+  }
+  return data;
+}
+
+/** Draw a ring of `rgb` at `radius` — a closed radar polygon, as far as a ray
+ * walking outward can tell, crossing every spoke at the same distance. */
+function drawRing(data: Uint8ClampedArray, radius: number, rgb: [number, number, number], thickness = 4): void {
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (Math.abs(Math.hypot(x - CX, y - CY) - radius) > thickness / 2) continue;
+      const i = (y * W + x) * 4;
+      data[i] = rgb[0];
+      data[i + 1] = rgb[1];
+      data[i + 2] = rgb[2];
+      data[i + 3] = 255;
+    }
+  }
+}
+
+function calibratedSpider(names: string[], values: string[]): CalibrationSession<SpiderAxes> {
+  const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+  while (session.getRepeatCount() < names.length) session.addRepeat();
+  session.handleCalibrationClick(CX, CY);
+  session.confirmCalibrationValues(['0']);
+  for (let i = 0; i < names.length; i++) {
+    session.handleCalibrationClick(...spokePixel(i, names.length));
+    session.confirmCalibrationValues([values[i]!, names[i]!]);
+  }
+  expect(session.runCalibration()).toBe(true);
+  return session;
+}
+
+const THREE = () => calibratedSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+
+/** A drawn line has WIDTH, and the reading is its outer edge, so an expectation is
+ * "within a few percent of THAT axis's range" — never an exact number. Stated per
+ * axis on purpose: a tolerance in absolute units would be meaningless on a figure
+ * whose axes run to 5 and to 1000. */
+function expectValue(actual: number | null | undefined, expected: number, range: number, fraction = 0.05): void {
+  expect(actual == null).toBe(false);
+  expect(Math.abs(actual! - expected)).toBeLessThanOrEqual(range * fraction);
+}
+const axesOf = (session: CalibrationSession<SpiderAxes>) => session.getAxes() as unknown as SpiderAxes;
+
+describe('runSpiderTrace', () => {
+  it('reads one value per axis, on that axis own scale, named as the figure named it', () => {
+    const session = THREE();
+    const img = blankImage();
+    drawRing(img, R / 2, RED); // half way out on every 100-valued axis
+
+    const result = runSpiderTrace(img, W, H, axesOf(session), RED, 40);
+    if ('error' in result) throw new Error(result.error);
+
+    expect(result.readings.map((r) => r.name)).toEqual(['Strength', 'Weight', 'Cost']);
+    for (const reading of result.readings) {
+      expect(reading.reason).toBeNull();
+      expect(reading.point).not.toBeNull();
+      expectValue(reading.value, 50, 100);
+    }
+  });
+
+  it('carries each axis own scale, not one shared range', () => {
+    // ⚑ The assumption the only prior art (ChartSense, CHI 2017) makes and this
+    // model does not: one ring at one radius reads as a DIFFERENT number on each
+    // axis, because each ray carries its own known value.
+    const session = calibratedSpider(['A', 'B', 'C'], ['10', '100', '1000']);
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+
+    const result = runSpiderTrace(img, W, H, axesOf(session), RED, 40);
+    if ('error' in result) throw new Error(result.error);
+    [5, 50, 500].forEach((expected, i) => expectValue(result.readings[i]!.value, expected, expected * 2));
+  });
+
+  it('refuses the ray a grid ring also crosses, and says which', () => {
+    const session = THREE();
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+    // A second ring in the SAME ink, crossing only the first spoke: a partial arc.
+    for (let y = 0; y < CY; y++) {
+      for (let x = CX - 3; x <= CX + 3; x++) {
+        if (Math.abs(Math.hypot(x - CX, y - CY) - R * 0.8) > 2) continue;
+        const i = (y * W + x) * 4;
+        img[i] = RED[0];
+        img[i + 1] = RED[1];
+        img[i + 2] = RED[2];
+      }
+    }
+
+    const result = runSpiderTrace(img, W, H, axesOf(session), RED, 40);
+    if ('error' in result) throw new Error(result.error);
+    expect(result.readings[0]!.reason).toBe('ambiguous');
+    expect(result.readings[0]!.point).toBeNull();
+    expect(result.readings[0]!.value).toBeNull();
+    expect(result.readings[0]!.runs).toHaveLength(2); // the evidence rides along
+    // The other two axes are unaffected — a doubtful ray poisons only itself.
+    expect(result.readings[1]!.reason).toBeNull();
+    expect(result.readings[2]!.reason).toBeNull();
+  });
+
+  it('errors clearly when the colour matches (almost) nothing', () => {
+    const session = THREE();
+    const result = runSpiderTrace(blankImage(), W, H, axesOf(session), RED, 10);
+    expect('error' in result && result.error).toMatch(/No pixels matched/);
+  });
+
+  it('refuses to run at all before the axes are calibrated', () => {
+    // The rays ARE the search. Without them there is nothing to walk, and a generic
+    // trace here would return a curve nobody asked for.
+    const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+    const result = runSpiderTrace(img, W, H, session.getAxes() as unknown as SpiderAxes, RED, 40);
+    expect('error' in result && result.error).toMatch(/Calibrate the axes first/);
+  });
+});
+
+describe('spiderBoxRegion', () => {
+  it('boxes the web, so same-ink axis labels outside it are not searched', () => {
+    const region = spiderBoxRegion(axesOf(THREE()))!;
+    expect(region).not.toBeNull();
+    // Encloses the centre and every spoke tip, with the overshoot the tracer looks
+    // through -- and not much more. (A three-spoke chart reaches further up than
+    // sideways, so the box is not a square around the circumcircle.)
+    for (const [x, y] of [[CX, CY], ...[0, 1, 2].map((i) => spokePixel(i, 3))] as [number, number][]) {
+      expect(x).toBeGreaterThanOrEqual(region.x);
+      expect(x).toBeLessThanOrEqual(region.x + region.width);
+      expect(y).toBeGreaterThanOrEqual(region.y);
+      expect(y).toBeLessThanOrEqual(region.y + region.height);
+    }
+    expect(region.width).toBeLessThan(2 * R * 1.4);
+    expect(region.height).toBeLessThan(2 * R * 1.4);
+  });
+
+  it('is null before calibration, rather than a box around nothing', () => {
+    expect(spiderBoxRegion(new CalibrationSession(SPIDER_AXES_CONFIG).getAxes() as unknown as SpiderAxes)).toBeNull();
+  });
+});
+
+describe('addSpiderTracePoints', () => {
+  const readingsFor = (session: CalibrationSession<SpiderAxes>, img: Uint8ClampedArray) => {
+    const result = runSpiderTrace(img, W, H, axesOf(session), RED, 40);
+    if ('error' in result) throw new Error(result.error);
+    return result.readings.map((r) => r.point);
+  };
+
+  it('files each reading into ITS OWN axis slot', () => {
+    const session = calibratedSpider(['A', 'B', 'C'], ['10', '100', '1000']);
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+
+    expect(session.addSpiderTracePoints(readingsFor(session, img))).toBe(3);
+    const values = session.getSpiderTable().columns[0]!.values;
+    [5, 50, 500].forEach((expected, i) => expectValue(values[i], expected, expected * 2));
+  });
+
+  it('leaves a refused axis EMPTY, and asks for it next', () => {
+    // ⚑ The refusal has to survive all the way into the record. A skipped slot is
+    // not a gap in the data — it is the worklist: the capture cursor lands on it, so
+    // the user is asked for exactly the axis the trace could not read.
+    const session = THREE();
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+    const readings = readingsFor(session, img);
+    readings[1] = null; // as an ambiguous ray arrives
+
+    expect(session.addSpiderTracePoints(readings)).toBe(2);
+    const table = session.getSpiderTable();
+    expect(table.columns[0]!.values[1]).toBeNull();
+    expect(session.getCurrentGroupIndex()).toBe(1);
+    expect(session.getCurrentTupleIndex()).toBe(0);
+  });
+
+  it('files a reading for axis 2 against axis 2, even when it is the first one placed', () => {
+    // ⚑ The trap in the shortest implementation: the dataset primitive that CREATES
+    // a tuple puts its pixel in slot 0. A trace whose first offered reading is for
+    // axis 2 (because axis 0 was ambiguous) would then have the right number filed
+    // against the wrong axis — worse than the empty slot it should have left.
+    const session = calibratedSpider(['A', 'B', 'C'], ['10', '100', '1000']);
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+    const readings = readingsFor(session, img);
+
+    expect(session.addSpiderTracePoints([null, null, readings[2]!])).toBe(1);
+    const values = session.getSpiderTable().columns[0]!.values;
+    expect(values[0]).toBeNull();
+    expect(values[1]).toBeNull();
+    expectValue(values[2], 500, 1000);
+  });
+
+  it('never overwrites a reading the user placed by hand', () => {
+    // A trace ASSISTS. Running it after fixing one axis by eye must not silently
+    // undo that fix — so it fills the open slots and leaves the rest alone.
+    const session = THREE();
+    session.addDataPoint(...spokePixel(0, 3, R * 0.9)); // 90 on Strength, placed by hand
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+
+    expect(session.addSpiderTracePoints(readingsFor(session, img))).toBe(2);
+    const values = session.getSpiderTable().columns[0]!.values;
+    expectValue(values[0], 90, 100);
+    expectValue(values[1], 50, 100);
+    expect(session.getDataPoints()).toHaveLength(3);
+  });
+
+  it('starts a new profile once the current one is full', () => {
+    const session = THREE();
+    const img = blankImage();
+    drawRing(img, R / 2, RED);
+    session.addSpiderTracePoints(readingsFor(session, img));
+
+    const second = blankImage();
+    drawRing(second, R * 0.75, RED);
+    expect(session.addSpiderTracePoints(readingsFor(session, second))).toBe(3);
+    const columns = session.getSpiderTable().columns;
+    expect(columns).toHaveLength(2);
+    expectValue(columns[1]!.values[0], 75, 100);
+  });
+
+  it('does nothing on a graph type whose slots are not axes', () => {
+    // Same shape of gate as addSegmentFillPoints' point-groups check, and for the
+    // stronger reason: a Box Plot's Min/Q1/Median slots are not rays, so there is no
+    // sense in which a ray-walk produced them.
+    const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+    expect(session.addSpiderTracePoints([{ x: 1, y: 1 }])).toBe(0);
+  });
+});
+
+/**
+ * The bundled example's ground truth, traced end to end.
+ *
+ * ⚑ Why this is worth its length. Every other test here draws a RING, which crosses
+ * each ray head-on at a distance chosen by the test. A real radar series is a
+ * POLYGON: each edge runs between two adjacent vertices, so the ray meets the ink at
+ * a corner, and the corner is the datum. The figure this uses is the one shipped in
+ * samples/, with six axes of six DIFFERENT ranges (120, 60, 25, 100, 80, 5) — so a
+ * reading that came off a shared scale, or off the wrong spoke, cannot pass by
+ * looking plausible.
+ *
+ * The pixels are drawn here rather than decoded from the PNG (no decoder in the
+ * dependency set), but the geometry is not invented: the vertices come from the
+ * committed truth values through SpiderAxes.dataToPixel, and the trace has to walk
+ * back from ink to number without being told any of it.
+ */
+
+const truth = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../samples/spider-material-profile.truth.json', import.meta.url)), 'utf8')
+) as {
+  axes: { axis: number; name: string; centre: number; max: number }[];
+  calibration: {
+    imageWidth: number;
+    imageHeight: number;
+    anchors: Record<string, { px: number; py: number; value: number; name?: string }>;
+  };
+  series: { name: string; points: { axis: number; name: string; value: number }[] }[];
+};
+
+function axesFromTruth(): SpiderAxes {
+  const cal = new Calibration(3);
+  const origin = truth.calibration.anchors['origin']!;
+  cal.addPoint(origin.px, origin.py, '0', '0', '');
+  for (const axis of truth.axes) {
+    const anchor = truth.calibration.anchors[`spoke${axis.axis}`]!;
+    cal.addPoint(anchor.px, anchor.py, String(axis.max), String(axis.centre), axis.name);
+  }
+  const axes = new SpiderAxesClass();
+  expect(axes.calibrate(cal, false)).toBe(true);
+  return axes as unknown as SpiderAxes;
+}
+
+describe('the bundled example, traced end to end', () => {
+  const TW = truth.calibration.imageWidth;
+  const TH = truth.calibration.imageHeight;
+
+  function whiteImage(): Uint8ClampedArray {
+    const data = new Uint8ClampedArray(TW * TH * 4);
+    data.fill(255);
+    return data;
+  }
+
+  /** A 3px-wide stroke from a to b — a drawn plot line, not a mathematical one. */
+  function stroke(
+    data: Uint8ClampedArray,
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    rgb: [number, number, number]
+  ): void {
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 2);
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const cx = Math.round(a.x + (b.x - a.x) * t);
+      const cy = Math.round(a.y + (b.y - a.y) * t);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || y < 0 || x >= TW || y >= TH) continue;
+          const i = (y * TW + x) * 4;
+          data[i] = rgb[0];
+          data[i + 1] = rgb[1];
+          data[i + 2] = rgb[2];
+        }
+      }
+    }
+  }
+
+  /** Draw one series as a closed polygon through its own truth values. */
+  function drawSeries(data: Uint8ClampedArray, axes: SpiderAxes, values: number[], rgb: [number, number, number]) {
+    const vertices = values.map((v, i) => axes.dataToPixel(i, v));
+    for (let i = 0; i < vertices.length; i++) {
+      stroke(data, vertices[i]!, vertices[(i + 1) % vertices.length]!, rgb);
+    }
+  }
+
+  const COLOURS: [number, number, number][] = [
+    [200, 40, 40],
+    [40, 120, 200],
+    [30, 150, 70],
+  ];
+
+  it('recovers every published value, on six axes of six different ranges', () => {
+    const axes = axesFromTruth();
+    const img = whiteImage();
+    // All three series drawn, as the figure has them — the trace must separate them
+    // by colour, not by being the only ink on the page.
+    truth.series.forEach((series, s) => drawSeries(img, axes, series.points.map((p) => p.value), COLOURS[s]!));
+
+    truth.series.forEach((series, s) => {
+      const result = runSpiderTrace(img, TW, TH, axes, COLOURS[s]!, 60);
+      if ('error' in result) throw new Error(`${series.name}: ${result.error}`);
+      result.readings.forEach((reading, i) => {
+        const expected = series.points[i]!.value;
+        const range = truth.axes[i]!.max - truth.axes[i]!.centre;
+        expect(reading.reason, `${series.name} / ${truth.axes[i]!.name}`).toBeNull();
+        // Within 2% of that axis's OWN range. The reading is the outer edge of a
+        // drawn line, so it sits half a stroke width out — bounded and the same on
+        // every axis. A reading taken off a NEIGHBOURING axis, off a shared scale,
+        // or from the middle of the ink misses by far more than this on a figure
+        // whose ranges run from 5 to 120.
+        expect(
+          Math.abs(reading.value! - expected),
+          `${series.name} / ${truth.axes[i]!.name}: read ${reading.value}, published ${expected}`
+        ).toBeLessThan(range * 0.02);
+      });
+    });
+  });
+
+  it('reads the axis that runs to 5 as 3.4, not as a fraction of 120', () => {
+    // ⚑ The single number that catches a shared-scale reading. Cost index runs 0–5
+    // while Tensile strength runs 0–120; a trace that read every ray against one
+    // range would put Cost's 3.4 out at 82 and look entirely confident about it.
+    const axes = axesFromTruth();
+    const img = whiteImage();
+    drawSeries(img, axes, truth.series[0]!.points.map((p) => p.value), COLOURS[0]!);
+    const result = runSpiderTrace(img, TW, TH, axes, COLOURS[0]!, 60);
+    if ('error' in result) throw new Error(result.error);
+    expect(Math.abs(result.readings[5]!.value! - 3.4)).toBeLessThan(0.1); // range 5
+    expect(Math.abs(result.readings[0]!.value! - 92)).toBeLessThan(2.4); // range 120
+  });
+});

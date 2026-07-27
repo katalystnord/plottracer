@@ -83,10 +83,15 @@ Histogram, Box plot, and Line (categorical X): its mechanisms all follow the
 points on the bar ends with **Add points** (`3`) instead — the loupe gives you
 the pixel precision.
 
-**Spider charts are traced by hand too, for now.** Auto-extract is greyed out
-there because its mechanisms know nothing about the spokes; a value on a spider is
-where a shape crosses one particular axis, and the capture cursor already steps you
-round them one at a time.
+**Spider charts trace along their own axes.** Auto-extract ▸ **By colour** is the
+only mechanism offered there, and it does a different job: it walks each calibrated
+ray outward and records the value where the series' colour crosses it — one reading
+per axis, filed into that axis's own row. Where a ray crosses the colour more than
+once (a grid ring in a similar ink, a second series, a filled polygon's far edge) it
+records **nothing** on that axis and names it in the message, because the crossing it
+should read is exactly what is in doubt. Those axes stay empty and the capture cursor
+lands on them, so what the trace refused is what you are asked for next. A reading you
+placed by hand is never overwritten.
 
 ## 5. Correct
 

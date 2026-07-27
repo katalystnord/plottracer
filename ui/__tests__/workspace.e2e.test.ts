@@ -37,6 +37,17 @@ import { unzipSync, strFromU8 } from 'fflate';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
+/** The bundled spider example's published ground truth — anchors in IMAGE pixels,
+ * plus the values each series states. Read here so the spider trace can be checked
+ * against the figure the app itself ships, not against geometry a test invented. */
+const spiderTruth = JSON.parse(
+  fs.readFileSync(path.join(REPO_ROOT, 'samples/spider-material-profile.truth.json'), 'utf8')
+) as {
+  axes: { axis: number; name: string; centre: number; max: number }[];
+  calibration: { anchors: Record<string, { px: number; py: number }> };
+  series: { name: string; points: { axis: number; name: string; value: number }[] }[];
+};
+
 // Checkpoint 94: a saved project is a `.zip` container. Read its project.json
 // back for the shape assertions the JSON-blob format used to allow directly.
 function readSavedProjectJson(zipPath: string): Record<string, unknown> {
@@ -6361,6 +6372,105 @@ describe('spider charts', () => {
     expect(await textOf('calib-preview-emphasis')).toBe('2');
     // ...and series 1 is active again, so its cells now offer the edit.
     await page.getByTestId('spider-value-0-2').waitFor({ state: 'visible' });
+  });
+
+  it('offers Auto-extract, with the axis-aware mechanism as the only one', async () => {
+    // ⚑ Spider is the one point-group type auto-extract is offered for, and the
+    // exception is a correctness one: its slots ARE the axes the trace searches, so
+    // every reading has a home it was measured against. Flood-fill and Guide points
+    // stay out — they produce ordinary points, which a spider series has no slot
+    // for, so they would have run and recorded nothing. A button that does nothing
+    // reads as broken, not as inapplicable.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+
+    await selectAutoExtract('colour');
+    expect(await page.getByTestId('auto-extract-flood').count()).toBe(0);
+    expect(await page.getByTestId('auto-extract-guide').count()).toBe(0);
+    // Nothing to choose between curve and scatter: the rays decide where to read.
+    expect(await page.getByTestId('color-trace-shape').isVisible()).toBe(false);
+    expect(await textOf('auto-extract-card')).toMatch(/one reading per axis/i);
+  });
+
+  it('traces the bundled figure and recovers its published values', async () => {
+    // ⚑ The whole pipeline, against ground truth: the app's OWN sample figure, opened
+    // for real, calibrated on the anchors its truth file publishes, traced by the
+    // colour its generator drew one series in, and compared with the values that
+    // series states. Six axes running to 120, 60, 25, 100, 80 and 5 — so a reading
+    // taken off a neighbouring ray, or off one shared scale, cannot pass by looking
+    // plausible. Every other spider test here calibrates invented geometry over the
+    // default XY sample, which proves the app self-consistent and nothing more.
+    try {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, path.join(REPO_ROOT, 'samples/spider-material-profile.png'));
+      await resetWorkspace('spider');
+    } finally {
+      // Restore immediately, so a failure here cannot silently re-point every later
+      // test's Open Image at the wrong figure.
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+    }
+
+    const view = await getViewState();
+    const anchors = spiderTruth.calibration.anchors;
+    const toCanvas = (a: { px: number; py: number }): [number, number] => [
+      a.px * view.scale + view.offsetX,
+      a.py * view.scale + view.offsetY,
+    ];
+
+    for (let i = 3; i < spiderTruth.axes.length; i++) await page.getByTestId('add-repeat-step').click();
+    await clickAt(...toCanvas(anchors['origin']!));
+    await confirmValues(['0']);
+    for (const axis of spiderTruth.axes) {
+      await clickAt(...toCanvas(anchors[`spoke${axis.axis}`]!));
+      await confirmValues([String(axis.max), axis.name]);
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+
+    // Chitosan film, the navy series.
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('60');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(300);
+
+    expect(await textOf('color-trace-info')).toMatch(/Read 6 of 6 axes/);
+    const published = spiderTruth.series[0]!.points.map((p) => p.value);
+    for (let i = 0; i < published.length; i++) {
+      const read = Number(await textOf(`spider-cell-0-${i}`));
+      const range = spiderTruth.axes[i]!.max - spiderTruth.axes[i]!.centre;
+      // Within 4% of THAT axis's range. The reading is the outer edge of the ink and
+      // the figure draws a 7pt marker at each vertex, so it lands a marker's radius
+      // proud of the published value — about 1.5%, the same on every axis. A reading
+      // off a neighbouring ray or a shared scale misses by very much more.
+      expect(
+        Math.abs(read - published[i]!),
+        `${spiderTruth.axes[i]!.name}: read ${read}, published ${published[i]}`
+      ).toBeLessThan(range * 0.04);
+    }
+  });
+
+  it('says nothing matched instead of recording an empty profile', async () => {
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#010203');
+    await page.getByTestId('color-trace-tolerance').fill('2');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(250);
+
+    expect(await textOf('color-trace-info')).toMatch(/No pixels matched/);
+    // ⚑ And nothing was written: a profile of three empty slots would occupy a
+    // column in the table for ever, and the user would have to work out that it
+    // came from a trace that found nothing.
+    for (const axisIndex of [0, 1, 2]) {
+      expect(await textOf(`spider-cell-0-${axisIndex}`)).toBe('—');
+    }
   });
 
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {

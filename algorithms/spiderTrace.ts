@@ -11,6 +11,11 @@
  * proxy for it. Locking captured points to the axis is what made this expressible:
  * a value on a spider has one degree of freedom, and so does this search.
  *
+ * ⚑ THE READING IS THE BOUNDARY, NOT THE MIDDLE (see SpokeRun.atPx). A filled radar
+ * polygon is ink all the way from the hub to its vertex, so the middle of what the
+ * ray finds is half the value — the bar-midpoint defect, at a new scale. The edge is
+ * the number the figure is stating.
+ *
  * Still ASSIST, never sweep. This returns CANDIDATES with their evidence; it does
  * not record anything. Where the evidence is ambiguous it says so instead of
  * choosing — see `runs` and `reason` below.
@@ -23,7 +28,23 @@ export interface SpokeRun {
   /** Distance from the origin, in pixels, where the run starts and ends. */
   fromPx: number;
   toPx: number;
-  /** Midpoint of the run — the drawn line's centre, which is the crossing. */
+  /**
+   * The reading this run offers: its OUTER end — the boundary where the shape stops.
+   *
+   * ⚑ THIS WAS THE RUN'S MIDPOINT, AND THE MIDPOINT IS THE BAR DEFECT WEARING A NEW
+   * HAT. A radar series is very often drawn FILLED, and a ray leaving the centre is
+   * then inside the shape from the hub to the vertex: one run, whose midpoint is
+   * half the value. That is precisely the error auto-extract is refused on bars for
+   * (`59f94a6`) — the middle of a shape whose value is its edge — and it would have
+   * arrived here confident and unflagged. Caught by tracing the bundled example's
+   * own ground truth (engine/__tests__/spiderTraceRun.test.ts).
+   *
+   * The outer end is right for a filled shape, and for a STROKED outline it over-
+   * reads by half the line's width — bounded, identical on every axis, and far
+   * smaller than the midpoint's error at a sharp vertex, where the two edges hug the
+   * ray and drag the midpoint inward without limit. `fromPx`/`toPx` ride along, so a
+   * caller that knows better about a particular figure can still say so.
+   */
   atPx: number;
 }
 
@@ -124,5 +145,6 @@ function pushRun(runs: SpokeRun[], fromPx: number, toPx: number, minRunPx: numbe
   // A run is measured to the END of its last matching sample, so a single sample
   // has zero length; compare against the drawn width including that sample.
   if (toPx - fromPx < minRunPx - 1e-9) return;
-  runs.push({ fromPx, toPx, atPx: (fromPx + toPx) / 2 });
+  // The OUTER end is the reading — see SpokeRun.atPx for why it is not the middle.
+  runs.push({ fromPx, toPx, atPx: toPx });
 }
