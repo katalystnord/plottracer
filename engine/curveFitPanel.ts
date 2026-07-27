@@ -7,7 +7,7 @@
  *
  * Faithful port of the policy in ui-patches/engauge-algos.js's
  * wpd.runCurveFit (the current, still-running app's own Curve Fit popup,
- * Phase 2.6): gather fit points (already point-groups-aware via
+ * Phase 2.6): gather fit points (already slot-aware via
  * getFitPoints -- only the primary group, so Error Bar Groups datasets
  * still fit sensibly), optionally restrict to a valid x-range, require at
  * least degree+1 points, run the fit, and report the same error messages

@@ -46,9 +46,9 @@ describe('Dataset', () => {
     expect(ds.hasMetadata()).toBe(false);
   });
 
-  it('supports point-group tuples (box plot / error bar mechanics)', () => {
+  it('supports slot tuples (box plot / error bar mechanics)', () => {
     const ds = new Dataset();
-    ds.setPointGroups(['Value', 'Upper', 'Lower']);
+    ds.setSlotNames(['Value', 'Upper', 'Lower']);
     const idxVal = ds.addPixel(0, 0);
     const idxUp = ds.addPixel(0, -10);
     const idxLo = ds.addPixel(0, 10);
@@ -57,14 +57,14 @@ describe('Dataset', () => {
     ds.addToTupleAt(tupleIdx, 1, idxUp);
     ds.addToTupleAt(tupleIdx, 2, idxLo);
 
-    expect(ds.getPointGroupIndexInTuple(tupleIdx, idxVal)).toBe(0);
-    expect(ds.getPointGroupIndexInTuple(tupleIdx, idxUp)).toBe(1);
+    expect(ds.getSlotIndexInTuple(tupleIdx, idxVal)).toBe(0);
+    expect(ds.getSlotIndexInTuple(tupleIdx, idxUp)).toBe(1);
     expect(ds.getTuple(tupleIdx)).toEqual([idxVal, idxUp, idxLo]);
   });
 
   it('refreshTuplesAfterPixelRemoval decrements/nulls indexes correctly', () => {
     const ds = new Dataset();
-    ds.setPointGroups(['A', 'B']);
+    ds.setSlotNames(['A', 'B']);
     ds.addTuple(0);
     ds.addToTupleAt(0, 1, 2);
     ds.refreshTuplesAfterPixelRemoval(1); // removes index 1 -> index 2 becomes 1, index 0 unaffected

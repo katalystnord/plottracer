@@ -232,15 +232,15 @@ export class Dataset {
     return this._selections;
   }
 
-  getPointGroups(): string[] {
+  getSlotNames(): string[] {
     return this._groupNames;
   }
 
-  setPointGroups(pointGroups: string[]): void {
+  setSlotNames(pointGroups: string[]): void {
     this._groupNames = pointGroups;
   }
 
-  hasPointGroups(): boolean {
+  hasSlots(): boolean {
     return this._groupNames.length > 0;
   }
 
@@ -248,7 +248,7 @@ export class Dataset {
     return this._groupNames.length;
   }
 
-  getPointGroupIndexInTuple(tupleIndex: number, pixelIndex: number): number {
+  getSlotIndexInTuple(tupleIndex: number, pixelIndex: number): number {
     const tuple = this._tuples[tupleIndex];
     if (tuple) {
       return tuple.indexOf(pixelIndex);
@@ -263,7 +263,7 @@ export class Dataset {
     return [];
   }
 
-  removePointGroupFromTuples(groupIndex: number): void {
+  removeSlotFromTuples(groupIndex: number): void {
     if (groupIndex < this._groupNames.length) {
       this._tuples.forEach((tuple) => {
         tuple.splice(groupIndex, 1);

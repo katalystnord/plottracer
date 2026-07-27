@@ -48,15 +48,15 @@ describe('PlotData — round-trip against a real exported project', () => {
     expect(xyDs.getPixel(0).metadata).toEqual({ overrides: { y: 8.6 } });
   });
 
-  it('preserves the custom label and point-group tuples on the Bar dataset', () => {
+  it('preserves the custom label and slot tuples on the Bar dataset', () => {
     const pd = new PlotData();
     pd.deserialize(fixture);
     const barDs = pd.getDatasets()[1]!;
-    expect(barDs.getPointGroups()).toEqual(['Value', 'Upper', 'Lower']);
+    expect(barDs.getSlotNames()).toEqual(['Value', 'Upper', 'Lower']);
     expect(barDs.getPixel(0).metadata).toEqual({ label: 'Sample A' });
-    expect(barDs.getPointGroupIndexInTuple(0, 0)).toBe(0); // Value
-    expect(barDs.getPointGroupIndexInTuple(0, 1)).toBe(1); // Upper
-    expect(barDs.getPointGroupIndexInTuple(0, 2)).toBe(2); // Lower
+    expect(barDs.getSlotIndexInTuple(0, 0)).toBe(0); // Value
+    expect(barDs.getSlotIndexInTuple(0, 1)).toBe(1); // Upper
+    expect(barDs.getSlotIndexInTuple(0, 2)).toBe(2); // Lower
   });
 
   it('round-trips serialize(deserialize(fixture)) back to an equivalent structure', () => {

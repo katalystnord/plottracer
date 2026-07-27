@@ -8,7 +8,7 @@ import { serializeProject, deserializeProject } from '../projectFile.js';
  * Spider CAPTURE and EXPORT (v1.4 Stage 2).
  *
  * The one thing worth being paranoid about: a captured point's value must be read
- * against the spoke it was captured ON, taken from its point group — never against
+ * against the spoke it was captured ON, taken from its slot — never against
  * whichever ray it happens to sit nearest. The two agree for a click that landed on
  * its axis and diverge exactly when the user mis-clicked, which is the case where a
  * nearest-ray reading would export a number off a DIFFERENT axis's scale while the
@@ -39,22 +39,22 @@ function calibratedSpider(values: string[], names: string[], centre = '0'): Cali
 const THREE = () => calibratedSpider(['100', '100', '100'], ['Strength', 'Weight', 'Cost']);
 
 describe('a calibrated spider gives every series one capture slot per axis', () => {
-  it('names the point groups after the spokes', () => {
-    // ⚑ Cannot be `defaultPointGroups`: a spider's groups do not exist until its
+  it('names the slots after the spokes', () => {
+    // ⚑ Cannot be `defaultSlots`: a spider's groups do not exist until its
     // axes are calibrated, and their names are transcribed at that moment.
-    expect(THREE().getPointGroups()).toEqual(['Strength', 'Weight', 'Cost']);
+    expect(THREE().getSlotNames()).toEqual(['Strength', 'Weight', 'Cost']);
   });
 
   it('falls back positionally for an axis left unnamed', () => {
     const session = calibratedSpider(['10', '10', '10'], ['A', '', 'C']);
-    expect(session.getPointGroups()).toEqual(['A', 'Axis 2', 'C']);
+    expect(session.getSlotNames()).toEqual(['A', 'Axis 2', 'C']);
   });
 
   it('gives EVERY series the slots, not just the active one', () => {
     const session = THREE();
     session.addDataset();
     session.setActiveDataset(1);
-    expect(session.getPointGroups()).toEqual(['Strength', 'Weight', 'Cost']);
+    expect(session.getSlotNames()).toEqual(['Strength', 'Weight', 'Cost']);
   });
 
   it('renames in place when a re-calibration keeps the same axis count', () => {
@@ -62,7 +62,7 @@ describe('a calibrated spider gives every series one capture slot per axis', () 
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
     // Rename axis 2 by re-placing its calibration point with a new name.
     session.updateCalibPointPixel('spoke2', ...spokePixel(1, 3));
-    expect(session.getPointGroups()).toEqual(['Strength', 'Weight', 'Cost']);
+    expect(session.getSlotNames()).toEqual(['Strength', 'Weight', 'Cost']);
     expect(session.getDataPoints()).toHaveLength(3);
   });
 });
@@ -323,7 +323,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
 
     const dataset = new Dataset(1);
     dataset.name = 'Series 1';
-    if (groupNames.length > 0) dataset.setPointGroups([...groupNames]);
+    if (groupNames.length > 0) dataset.setSlotNames([...groupNames]);
     for (let i = 0; i < 2; i++) {
       const [px, py] = spokePixel(i, 3, 40);
       const index = dataset.addPixel(px, py);
@@ -347,7 +347,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     // nobody measured: exactly the failure the error-bar record is parked on. The
     // data keeps the names it was captured under and the mismatch stays visible.
     const session = loadMismatched(['Old A', 'Old B']);
-    expect(session.getPointGroups()).toEqual(['Old A', 'Old B']);
+    expect(session.getSlotNames()).toEqual(['Old A', 'Old B']);
     expect(session.getDataPoints()).toHaveLength(2);
   });
 
@@ -375,7 +375,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     const axes = built.getAxes()!;
     const dataset = new Dataset(1);
     dataset.name = 'Series 1';
-    dataset.setPointGroups(['Strength', 'Weight', 'Cost']);
+    dataset.setSlotNames(['Strength', 'Weight', 'Cost']);
     const filed = dataset.addPixel(...spokePixel(0, 3, 40));
     dataset.addTuple(filed); // slot 0 — a real reading
     dataset.addPixel(...spokePixel(1, 3, 40)); // in no tuple — not a datum
@@ -391,11 +391,11 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
 /**
  * N x 1D, not 1.5D (David's taxonomy, 2026-07-27).
  *
- * A spider reused the Box Plot point-group machinery — rightly, the capture
+ * A spider reused the Box Plot slot machinery — rightly, the capture
  * workflow is the same — but it is not the same KIND of thing. A box's five
  * numbers describe one distribution and only together; a spider's six describe six
  * independent measurements that happen to share an origin. Every rule keyed on
- * "has point groups" inherited the box's meaning, and this is where that shows.
+ * "has slots" inherited the box's meaning, and this is where that shows.
  */
 describe('a spider profile is a row of independent readings', () => {
   it('removes ONE reading, not the whole profile', () => {
@@ -421,7 +421,7 @@ describe('a spider profile is a row of independent readings', () => {
     const session = THREE();
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
     session.removeDataPoints([1]);
-    expect(session.getCurrentGroupIndex()).toBe(1);
+    expect(session.getCurrentSlotIndex()).toBe(1);
     expect(session.getCurrentTupleIndex()).toBe(0);
   });
 
@@ -441,10 +441,10 @@ describe('a spider profile is a row of independent readings', () => {
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
     session.removeDataPoints([0]);
     session.removeDataPoints([session.getDataPoints().length - 1]); // now axes 0 and 2 are empty
-    expect(session.getCurrentGroupIndex()).toBe(0);
+    expect(session.getCurrentSlotIndex()).toBe(0);
 
-    expect(session.setPointGroupCursor(0, 2)).toBe(true);
-    expect(session.getCurrentGroupIndex()).toBe(2);
+    expect(session.setSlotCursor(0, 2)).toBe(true);
+    expect(session.getCurrentSlotIndex()).toBe(2);
 
     // ...and a capture lands in THAT slot.
     session.addDataPoint(...spokePixel(2, 3, 25));
@@ -463,7 +463,7 @@ describe('a spider profile is a row of independent readings', () => {
     // `addSpiderTracePoints` documents this exact trap and avoids it; this one
     // walked into it.
     const session = THREE();
-    expect(session.setPointGroupCursor(null, 2)).toBe(true);
+    expect(session.setSlotCursor(null, 2)).toBe(true);
     session.addDataPoint(...spokePixel(2, 3, 50));
 
     const values = session.getSpiderTable().columns[0]!.values;
@@ -478,28 +478,28 @@ describe('a spider profile is a row of independent readings', () => {
     // it displaced -- a reading lost with nothing on screen to say so.
     const session = THREE();
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
-    expect(session.setPointGroupCursor(0, 1)).toBe(false);
+    expect(session.setSlotCursor(0, 1)).toBe(false);
   });
 
   it('refuses on a graph type whose tuple is ONE object', () => {
     // A box plot's cursor walks its members as a unit: letting it be aimed would
     // allow a box built out of order and left permanently half-made.
     //
-    // ⚑ This test first used XY, which has no point groups at all — so the FIRST
+    // ⚑ This test first used XY, which has no slots at all — so the FIRST
     // clause of the guard answered and the capability check was never reached. It
     // asserted the right thing and could not fail (caught by neutering the very
     // clause it claims to cover). Box Plot carries its groups from the start, so
     // here the first clause passes and `tupleMembers` is what does the refusing.
     const session = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
-    expect(session.hasPointGroups()).toBe(true);
-    expect(session.setPointGroupCursor(null, 3)).toBe(false);
+    expect(session.hasSlots()).toBe(true);
+    expect(session.setSlotCursor(null, 3)).toBe(false);
   });
 });
 
 describe('Clear all points leaves a spider able to capture again', () => {
   it('keeps the axis slots, so the next capture is still filed against an axis', () => {
     // ⚑ The data-loss chain the release audit caught, from two of the same day's
-    // changes meeting. `clearPoints` restores only `config.defaultPointGroups`, and
+    // changes meeting. `clearPoints` restores only `config.defaultSlots`, and
     // a spider HAS none — its slots come from the calibrated axes. So the series
     // came back with no slots at all: every later capture took the ungrouped path,
     // unsnapped and invisible in the table, and the new load-time drop then deleted
@@ -508,7 +508,7 @@ describe('Clear all points leaves a spider able to capture again', () => {
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
     session.clearPoints();
 
-    expect(session.getPointGroups()).toEqual(['Strength', 'Weight', 'Cost']);
+    expect(session.getSlotNames()).toEqual(['Strength', 'Weight', 'Cost']);
     session.addDataPoint(...spokePixel(0, 3, 50));
     expect(session.getSpiderTable().columns[0]!.values[0]).not.toBeNull();
   });
@@ -541,7 +541,7 @@ describe('an axis can be renamed from the spreadsheet', () => {
     expect(session.getSpiderTable().axisNames[1]).toBe('Elongation at break (%)');
     // ...the capture slots are the same names, so the tips line and the status
     // follow without a second source of truth.
-    expect(session.getPointGroups()[1]).toBe('Elongation at break (%)');
+    expect(session.getSlotNames()[1]).toBe('Elongation at break (%)');
     // ...and the readings are untouched: this renamed an axis, it did not move data.
     expect(session.getDataPoints()).toHaveLength(3);
     expect(session.getSpiderTable().columns[0]!.values.every((v) => v !== null)).toBe(true);
@@ -569,7 +569,7 @@ describe('an axis can be renamed from the spreadsheet', () => {
     const session2 = new CalibrationSession(SPIDER_AXES_CONFIG);
     session2.loadCalibrated(reopened.axes as unknown as SpiderAxes, reopened.datasets);
     expect(session2.getSpiderTable().axisRawNames[1]).toBe('Elongation at break (%)');
-    expect(session2.getPointGroups()[1]).toBe('Elongation at break (%)');
+    expect(session2.getSlotNames()[1]).toBe('Elongation at break (%)');
   });
 
   it('keeps a blank name BLANK rather than storing the positional fallback', () => {

@@ -289,8 +289,8 @@ describe('deserializeProject', () => {
 
     const newSession = new CalibrationSession(BAR_AXES_CONFIG);
     newSession.loadCalibrated(result.axes as BarAxes, result.datasets);
-    expect(newSession.hasPointGroups()).toBe(true);
-    expect(newSession.getPointGroups()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    expect(newSession.hasSlots()).toBe(true);
+    expect(newSession.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
     const rows = newSession.getTupleRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.label).toBe('Sample A');

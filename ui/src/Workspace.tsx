@@ -243,9 +243,9 @@ import { primaryMod } from './platform.js';
  * See calibrationSession.ts's header comment for the full shape.
  *
  * Since checkpoint 21 (Box Plot / Point Groups), a dataset can carry
- * calibrationSession.ts's point-groups cursor. Checkpoint 107 made "Box
+ * calibrationSession.ts's slot cursor. Checkpoint 107 made "Box
  * Plot" a first-class graph type whose datasets get the Min/Q1/Median/Q3/Max
- * groups from the start (BOX_PLOT_AXES_CONFIG.defaultPointGroups), and
+ * groups from the start (BOX_PLOT_AXES_CONFIG.defaultSlots), and
  * checkpoint 109 retired the old hidden "Box Plot Groups" toggle that used to
  * opt a plain Bar chart into them -- one discoverable path now, not two. Once
  * groups are active, the points table switches from a flat per-point list to
@@ -295,7 +295,7 @@ import { primaryMod } from './platform.js';
  * rendered, so Open Project can load a project's embedded image
  * programmatically and Save Project can read back whichever image is
  * currently loaded. Export CSV picks buildFlatDataCSV or buildTupleDataCSV
- * (engine/csvExport.ts) based on whether point groups are active, the same
+ * (engine/csvExport.ts) based on whether slots are active, the same
  * branch the points table below already makes.
  *
  * Since checkpoint 26 (Segment Fill auto-trace, see CLAUDE.md and
@@ -307,7 +307,7 @@ import { primaryMod } from './platform.js';
  * on it), runs the pure engine/segmentFillRun.ts orchestration with the
  * user-adjustable `segmentFillThreshold`, and bulk-adds the resulting
  * points via session.addSegmentFillPoints. Disabled (rail button + keyboard
- * shortcut) once point groups are active (Box Plot etc.) -- a continuous
+ * shortcut) once slots are active (Box Plot etc.) -- a continuous
  * curve trace has no group slot to file into, same reasoning as
  * addSegmentFillPoints itself.
  *
@@ -364,7 +364,7 @@ import { primaryMod } from './platform.js';
  * to select, × to remove (hidden for the last remaining one) -- plus an
  * "+ Add Series" button, disabled pre-calibration like Place Point/
  * Segment Fill already were. Every existing per-dataset accessor
- * (dataPoints, hasPointGroups, curveFitState, CSV export, etc.) already
+ * (dataPoints, hasSlots, curveFitState, CSV export, etc.) already
  * meant "for the active dataset" after engine/calibrationSession.ts's own
  * refactor, so none of that code needed to change here -- only markers
  * did: `dataPoints`' points (the active dataset, unchanged) render in
@@ -1838,7 +1838,7 @@ export function Workspace() {
     if (
       session.getErrorRelation(session.getActiveDatasetIndex()) ||
       session.activeHasErrorSeries() ||
-      (session.hasPointGroups() && target !== count - 1)
+      (session.hasSlots() && target !== count - 1)
     ) {
       session.removeDataPoints([target]);
     } else if (target === count - 1) {
@@ -3155,7 +3155,7 @@ export function Workspace() {
     let pixel: { x: number; y: number };
     if (config.axesKind === 'spider') {
       // ⚑ On a spider `cell.axis` is the SPOKE the point was CAPTURED against --
-      // its row in the table, i.e. its slot in the point group -- not a data
+      // its row in the table, i.e. its slot in the slot -- not a data
       // dimension. That is the same rule the table's reading and the export
       // follow, and for the same reason: the nearest ray agrees for a good click
       // and diverges exactly when the user mis-clicked, so inverting against it
@@ -4112,7 +4112,7 @@ export function Workspace() {
         } else if (exportShape === 'bins') {
           sections.push(histogramSection(session.getHistogramBins(), rounder));
         } else if (exportShape === 'tuples') {
-          sections.push(tupleDataSection(session.getPointGroups(), session.getTupleRows(), rounder));
+          sections.push(tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder));
         } else if (exportScope === 'all') {
           const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
             const rel = session.getErrorRelation(info.index);
@@ -4378,7 +4378,7 @@ export function Workspace() {
       setColorTraceInfo('Calibrate the axes first — traced points need a coordinate system.');
       return;
     }
-    if ((config.autoExtractKind ?? 'curve') === 'none' || (session.hasPointGroups() && config.autoExtractKind !== 'along-axes')) {
+    if ((config.autoExtractKind ?? 'curve') === 'none' || (session.hasSlots() && config.autoExtractKind !== 'along-axes')) {
       setColorTraceInfo('Auto-trace adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
       return;
     }
@@ -4668,8 +4668,8 @@ export function Workspace() {
   // dataPoints/placedPoints/reusableSteps above) fixed it.
   const pendingValueFields = useMemo(() => session.getCurrentStep()?.valueFields ?? [], [session, version]);
   const globalFieldValues = useMemo(() => session.getGlobalFieldValues(), [session, version]);
-  const hasPointGroups = useMemo(() => session.hasPointGroups(), [session, version]);
-  const pointGroupNames = useMemo(() => session.getPointGroups(), [session, version]);
+  const hasSlots = useMemo(() => session.hasSlots(), [session, version]);
+  const pointGroupNames = useMemo(() => session.getSlotNames(), [session, version]);
   const tupleRows = useMemo(() => session.getTupleRows(), [session, version]);
   const axesOptions = useMemo(() => session.getOptions(), [session, version]);
   const isHistogram = axesTypeId === HISTOGRAM_AXES_CONFIG.id;
@@ -4677,9 +4677,9 @@ export function Workspace() {
   // because it got here first (see AxesTypeConfig.tupleNoun).
   const tupleNoun = session.getConfig().tupleNoun ?? 'box';
   const histogramBins = useMemo(() => session.getHistogramBins(), [session, version]);
-  const currentGroupLabel = useMemo(() => session.getCurrentGroupLabel(), [session, version]);
+  const currentGroupLabel = useMemo(() => session.getCurrentSlotLabel(), [session, version]);
   const currentTupleIndex = useMemo(() => session.getCurrentTupleIndex(), [session, version]);
-  const currentGroupIndex = useMemo(() => session.getCurrentGroupIndex(), [session, version]);
+  const currentGroupIndex = useMemo(() => session.getCurrentSlotIndex(), [session, version]);
   const boxPlotGlyphs = useMemo(() => session.getBoxPlotGlyphs(), [session, version]);
   // Multi-figure (checkpoint 110). figuresRef is a ref, but every figure op ends
   // in setActiveFigureIndex, so this reads fresh on the re-render that follows.
@@ -4810,7 +4810,7 @@ export function Workspace() {
   // variable is a NAME rather than a number: Bar and Line (categorical X). Box
   // Plot and Histogram are bar-kind too but never reach this table -- they render
   // the tuple table above, which has carried its own name field since v0.5.
-  const showCategoryColumn = config.axesKind === 'bar' && !hasPointGroups;
+  const showCategoryColumn = config.axesKind === 'bar' && !hasSlots;
 
   const curveFitOverlay = useMemo(() => {
     if (!curveFitState || config.id !== 'xy' || !axes) return undefined;
@@ -5043,7 +5043,7 @@ export function Workspace() {
   // for sparse/scatter series (polylineRuns returns no runs). Inactive series
   // first so the active one's line layers on top, matching the marker order.
   const seriesLines = useMemo<SeriesLine[]>(() => {
-    if (hasPointGroups) return [];
+    if (hasSlots) return [];
     const lines: SeriesLine[] = [];
     allDatasetsData.forEach((ds) => {
       if (ds.active) return;
@@ -5056,7 +5056,7 @@ export function Workspace() {
       lines.push({ color: c ? `rgb(${c[0]}, ${c[1]}, ${c[2]})` : theme.color.error, runs: activeRuns });
     }
     return lines;
-  }, [hasPointGroups, allDatasetsData, dataPoints, datasetInfos]);
+  }, [hasSlots, allDatasetsData, dataPoints, datasetInfos]);
 
   // Drop a stale calibration-handle selection (checkpoint 127): the nudge only
   // makes sense in Calibrate mode on a handle that still exists, so clear it when
@@ -5291,15 +5291,15 @@ export function Workspace() {
           return `Point ${activePointIndex + 1} selected — ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
         // ⚑ Spider, for the same reason the bar branch below exists: WHERE you
         // click decides the number. On a spider the value is how far out along
-        // THAT axis's ray the click sits, so the generic point-group line ("click
+        // THAT axis's ray the click sits, so the generic slot line ("click
         // to add a point, filling Strength") would leave a first-run user to infer
         // that the ray matters at all — and a click off the ray still records,
         // projected, with only the off-axis warning to hint at it. Naming the axis
         // the cursor is on is also the only on-screen thing that says the order is
         // guidance rather than a rule.
-        if (config.axesKind === 'spider' && hasPointGroups)
+        if (config.axesKind === 'spider' && hasSlots)
           return `Click where the shape crosses the ${currentGroupLabel} axis — how far out along that ray you click IS the number recorded${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
-        if (hasPointGroups)
+        if (hasSlots)
           return `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
         // ⚑ On a bar-family figure WHERE you click decides the number: the value is
         // read off the click's position on the value axis, so "click anywhere"
@@ -6384,7 +6384,7 @@ export function Workspace() {
             // confidently wrong numbers -- the tenet-1 defect, worse than the tool
             // simply being absent. A bar-aware capture is a model change, not a new
             // shape on the colour trace: see the bar design pass.
-            // ⚑ Spider is the one point-group type auto-extract IS offered for, and
+            // ⚑ Spider is the one slot type auto-extract IS offered for, and
             // the exception is a correctness one too: its slots ARE the axes the
             // trace searches, so every reading has a home the tool measured it
             // against. The Box Plot / Error Bar refusal stands -- a Min/Q1/Median
@@ -6943,7 +6943,7 @@ export function Workspace() {
                 setCtxMenu(null);
               }}
             >
-              {hasPointGroups && config.tupleMembers !== 'independent' ? `Delete ${tupleNoun}` : 'Delete point'}
+              {hasSlots && config.tupleMembers !== 'independent' ? `Delete ${tupleNoun}` : 'Delete point'}
             </MenuItem>,
             ...(datasetInfos.length > 1
               ? [
@@ -7256,8 +7256,8 @@ export function Workspace() {
         <>
           {/* "Calibrated." prose removed (checkpoint 59b) -- the card's
               "Calibrated ✓" status and the bottom tips bar already say it. */}
-          {hasPointGroups && (
-            <p data-testid="point-group-status">
+          {hasSlots && (
+            <p data-testid="slot-status">
               Next point fills: {currentGroupLabel}{' '}
               {currentTupleIndex === null ? `(new ${tupleNoun})` : `(${tupleNoun} ${currentTupleIndex + 1})`}
               {/* Konva-rendered glyphs aren't DOM-inspectable -- this readout
@@ -7381,7 +7381,7 @@ export function Workspace() {
             /* Spider (v1.4): `# | Category | Series 1 | Series 2 | …` — one row per
                AXIS, one column per series.
 
-               ⚑ The point-group table this replaces showed the ACTIVE series only,
+               ⚑ The slot table this replaces showed the ACTIVE series only,
                so adding a second series made the first one's readings disappear off
                the screen. Every ungrouped type already shows all series at once, so
                that table was the outlier — caught by driving the app, not by a test.
@@ -7446,7 +7446,7 @@ export function Workspace() {
                             // wherever it refused a ray. Clicking the dash is how
                             // that refusal list becomes a worklist.
                             if (pointIndex == null) {
-                              session.setPointGroupCursor(
+                              session.setSlotCursor(
                                 col.profileIndex < session.getDataset().getAllTuples().length ? col.profileIndex : null,
                                 axisIndex
                               );
@@ -7513,7 +7513,7 @@ export function Workspace() {
                 ))}
               </tbody>
             </table>
-          ) : hasPointGroups ? (
+          ) : hasSlots ? (
             <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>

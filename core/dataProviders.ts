@@ -84,8 +84,8 @@ function getBarAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
   const hasOverrides = metaKeys.indexOf('overrides') > -1;
   if (hasOverrides) metaKeys = metaKeys.filter((k) => k !== 'overrides');
 
-  const hasPointGroups = dataSeries.hasPointGroups();
-  const pointGroupNames = dataSeries.getPointGroups();
+  const hasSlots = dataSeries.hasSlots();
+  const pointGroupNames = dataSeries.getSlotNames();
 
   for (let rowi = 0; rowi < dataSeries.getCount(); rowi++) {
     const dataPt = dataSeries.getPixel(rowi);
@@ -94,15 +94,15 @@ function getBarAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
 
     let tupleIdx = -1;
     let groupIdx = -1;
-    if (hasPointGroups) {
+    if (hasSlots) {
       tupleIdx = dataSeries.getTupleIndex(rowi);
-      groupIdx = dataSeries.getPointGroupIndexInTuple(tupleIdx, rowi);
+      groupIdx = dataSeries.getSlotIndexInTuple(tupleIdx, rowi);
     }
 
     let lab: string = `Bar${rowi}`;
     if (dataPt.metadata != null) {
       lab = dataPt.metadata['label'] as string;
-    } else if (hasPointGroups && tupleIdx > -1 && groupIdx > -1) {
+    } else if (hasSlots && tupleIdx > -1 && groupIdx > -1) {
       // Label each tuple by its primary-group point, so a Box Plot's five rows
       // all carry the category name rather than only the first.
       const primaryIdx = dataSeries.getTuple(tupleIdx)?.[0];
@@ -112,7 +112,7 @@ function getBarAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
     row.push(lab);
     row.push(transformed[0]!);
 
-    if (hasPointGroups) {
+    if (hasSlots) {
       row.push(tupleIdx);
       row.push(groupNameFor(pointGroupNames, groupIdx));
     }
@@ -128,7 +128,7 @@ function getBarAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
     rawData[rowi] = row;
   }
 
-  if (hasPointGroups) {
+  if (hasSlots) {
     fields = fields.concat('Tuple', 'Group');
     isFieldSortable.push(true, true);
   }
@@ -174,8 +174,8 @@ function getGeneralAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
     metaKeyCount -= 1;
   }
 
-  const hasPointGroups = dataSeries.hasPointGroups();
-  const pointGroupNames = dataSeries.getPointGroups();
+  const hasSlots = dataSeries.hasSlots();
+  const pointGroupNames = dataSeries.getSlotNames();
 
   for (let rowi = 0; rowi < dataSeries.getCount(); rowi++) {
     const pt = dataSeries.getPixel(rowi);
@@ -184,9 +184,9 @@ function getGeneralAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
 
     for (const v of ptData) row.push(v);
 
-    if (hasPointGroups) {
+    if (hasSlots) {
       const tuplei = dataSeries.getTupleIndex(rowi);
-      const groupi = dataSeries.getPointGroupIndexInTuple(tuplei, rowi);
+      const groupi = dataSeries.getSlotIndexInTuple(tuplei, rowi);
       row.push(tuplei);
       row.push(groupNameFor(pointGroupNames, groupi));
     }
@@ -207,7 +207,7 @@ function getGeneralAxesData(dataSeries: Dataset, axes: AnyAxes): ProvidedData {
     rawData[rowi] = row;
   }
 
-  if (hasPointGroups) {
+  if (hasSlots) {
     fields = fields.concat('Tuple', 'Group');
     isFieldSortable.push(true, true);
   }

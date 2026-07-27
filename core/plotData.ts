@@ -474,7 +474,7 @@ export class PlotData {
           ds.setMetadata(dsData.metadata);
         }
         if (dsData.groupNames !== undefined) {
-          ds.setPointGroups(dsData.groupNames);
+          ds.setSlotNames(dsData.groupNames);
         }
         if (dsData.metadataKeys != null) {
           ds.setMetadataKeys(dsData.metadataKeys);
@@ -490,7 +490,7 @@ export class PlotData {
               return obj;
             }, {});
           }
-          if (ds.hasPointGroups() && pt.tuple !== undefined && pt.group !== undefined) {
+          if (ds.hasSlots() && pt.tuple !== undefined && pt.group !== undefined) {
             ds.addEmptyTupleAt(pt.tuple);
             ds.addToTupleAt(pt.tuple, pt.group, pxIdx);
           }
@@ -661,8 +661,8 @@ export class PlotData {
         const pageEntry = documentMetadata.page?.datasets?.[ds.name];
         if (pageEntry !== undefined) dsData.page = pageEntry;
       }
-      if (ds.hasPointGroups()) {
-        dsData.groupNames = ds.getPointGroups();
+      if (ds.hasSlots()) {
+        dsData.groupNames = ds.getSlotNames();
       }
       if (Object.keys(ds.getMetadata()).length > 0) {
         dsData.metadata = ds.getMetadata();
@@ -672,9 +672,9 @@ export class PlotData {
         const px = ds.getPixel(pxIdx);
         const serializedPx: SerializedPixel = { x: px.x, y: px.y, metadata: px.metadata };
 
-        if (ds.hasPointGroups()) {
+        if (ds.hasSlots()) {
           const tupleIdx = ds.getTupleIndex(pxIdx);
-          const groupIdx = ds.getPointGroupIndexInTuple(tupleIdx, pxIdx);
+          const groupIdx = ds.getSlotIndexInTuple(tupleIdx, pxIdx);
           if (tupleIdx > -1 && groupIdx > -1) {
             serializedPx.tuple = tupleIdx;
             serializedPx.group = groupIdx;

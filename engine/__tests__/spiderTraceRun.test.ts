@@ -216,7 +216,7 @@ describe('addSpiderTracePoints', () => {
     expect(session.addSpiderTracePoints(readings)).toBe(2);
     const table = session.getSpiderTable();
     expect(table.columns[0]!.values[1]).toBeNull();
-    expect(session.getCurrentGroupIndex()).toBe(1);
+    expect(session.getCurrentSlotIndex()).toBe(1);
     expect(session.getCurrentTupleIndex()).toBe(0);
   });
 
@@ -267,7 +267,7 @@ describe('addSpiderTracePoints', () => {
   });
 
   it('does nothing on a graph type whose slots are not axes', () => {
-    // Same shape of gate as addSegmentFillPoints' point-groups check, and for the
+    // Same shape of gate as addSegmentFillPoints' slot check, and for the
     // stronger reason: a Box Plot's Min/Q1/Median slots are not rays, so there is no
     // sense in which a ray-walk produced them.
     const session = new CalibrationSession(SPIDER_AXES_CONFIG);

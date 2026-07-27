@@ -79,24 +79,24 @@
  * javascript/widgets/pointGroups.js (a module-global cursor there;
  * per-session state here) and javascript/tools/manualDetectionTools.js's
  * ManualSelectionTool.onMouseClick (the click-dispatch logic). Once
- * core/dataset.ts's `setPointGroups` has named groups (e.g. Box Plot's
+ * core/dataset.ts's `setSlotNames` has named groups (e.g. Box Plot's
  * Min/Q1/Median/Q3/Max -- see applyBoxPlotGroups), `addDataPoint` no
  * longer just appends a pixel: it also files the new pixel into a
  * "tuple" (one category/box) at the current group slot, tracked by
- * `pointGroupCursor`, then advances that cursor to the next open slot
- * (nextGroupCursor, a direct port of pointGroups.js's nextGroup -- search
+ * `slotCursor`, then advances that cursor to the next open slot
+ * (nextSlot, a direct port of pointGroups.js's nextGroup -- search
  * the current tuple past the current group, then later tuples, then fall
  * back to "start a new tuple" if nothing open is found). `removeLastPoint`
  * mirrors DeleteDataPointTool's single-point removal path (not its
  * whole-tuple-deletion popup, which real WPD gates behind a confirm
  * dialog and this checkpoint doesn't add): cleans the pixel out of
  * whichever tuple held it, drops the tuple if it's now empty, and walks
- * the cursor back with previousGroupCursor (nextGroup's mirror image).
+ * the cursor back with previousSlot (nextGroup's mirror image).
  * Checkpoint 21 was the interaction-model half of Box Plot support only.
  *
  * Checkpoint 22 adds the box-and-whisker glyph deferred from checkpoint
  * 21, a faithful port of the current app's drawBoxGlyph (commit
- * c0b6021): getBoxPlotGlyphs() recognizes a dataset whose point groups
+ * c0b6021): getBoxPlotGlyphs() recognizes a dataset whose slots
  * are exactly ['min','q1','median','q3','max'] (case-insensitive -- the
  * shape applyBoxPlotGroups creates) on a calibrated Bar-axes session,
  * and returns engine/boxPlotGlyph.ts's pure segment geometry for every
@@ -137,7 +137,7 @@
  * calculateOrientation. Global field values (CCR's Chart Start Time) are
  * restored via the new, optional AxesTypeConfig.extractGlobalValues --
  * buildAxes's inverse, defined only where there's something to extract. The
- * point-groups cursor isn't part of a serialized project at all, so it's
+ * slot cursor isn't part of a serialized project at all, so it's
  * recomputed by scanning the loaded dataset's tuples for the first open
  * slot (recomputePointGroupCursor) rather than round-tripped.
  *
@@ -157,24 +157,24 @@
  * deliberately out of scope; see this checkpoint's own CLAUDE.md notes
  * for why "one axes, many series" is the scoped interpretation). Every
  * existing method that used to read/write `this.dataset` or
- * `this.pointGroupCursor` directly now goes through a private
+ * `this.slotCursor` directly now goes through a private
  * `activeEntry` getter instead, so a manual click, a Segment Fill trace,
- * Box Plot point groups, etc. all implicitly operate on "whichever
+ * Box Plot slots, etc. all implicitly operate on "whichever
  * dataset is currently active" -- the exact same behavior as before for
  * the single-dataset case (there's always >= 1 dataset; a session that
  * never calls addDataset behaves identically to a pre-checkpoint-30
  * session), with the new dataset-management methods layered on top:
  * addDataset/removeDataset/setActiveDataset/renameDataset/
  * setDatasetColor/getDatasetInfos. `getDataset()`/`getDataPoints()`/
- * `hasPointGroups()`/etc. keep their exact pre-checkpoint-30 names and
+ * `hasSlots()`/etc. keep their exact pre-checkpoint-30 names and
  * signatures -- they now mean "for the active dataset" rather than "for
  * the dataset", which is a no-op distinction until a second dataset
  * exists. `getAllDatasetsData()` is the one genuinely new read: every
  * dataset's own points + color, for ui/'s canvas to render every series
  * at once (only the active one draggable -- see Workspace.tsx). Each
- * dataset keeps its own independent point-groups cursor (Box Plot state
+ * dataset keeps its own independent slot cursor (Box Plot state
  * is inherently per-series), computed the same way loadCalibrated always
- * has (computePointGroupCursorFor, generalized from the old no-arg
+ * has (computeSlotCursorFor, generalized from the old no-arg
  * recomputePointGroupCursor to take an explicit dataset so it can run
  * once per loaded dataset instead of only for "the" one).
  */
@@ -320,7 +320,7 @@ export interface RepeatingStepInfo {
    * so the placed-point Record stays keyed uniquely (`spoke1`, `spoke2`, ...). */
   step: CalibStepInfo;
   /** What one repeat is CALLED on screen ("axis"), for the add/remove controls and
-   * the progress line. Same job as `tupleNoun` does for point groups. */
+   * the progress line. Same job as `tupleNoun` does for slots. */
   noun: string;
   /** How many repeats a session starts with, and the fewest it can calibrate. */
   min: number;
@@ -632,7 +632,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * them. Empty for every axes type except Circular Chart Recorder so far. */
   globalFields: readonly GlobalFieldInfo[];
   /** What one tuple of this graph type is *called* in the UI ("bin", "box").
-   * Point groups arrived with Box Plot, so its vocabulary was hardcoded into
+   * Slots arrived with Box Plot, so its vocabulary was hardcoded into
    * the shared tuple status line and tip -- which meant Histogram's bins
    * announced themselves as "new box" (caught driving the real app, checkpoint
    * 66). Undefined keeps the Box Plot default, since that's still the only
@@ -653,9 +653,9 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   number on one named axis. Nothing pairs slot 2 with slot 5.
    *
    * ⚑ WHY THIS IS A CAPABILITY AND NOT A `config.axesKind === 'spider'` CHECK. Spider
-   * REUSED the Box Plot point-group machinery, which was the right call — the
+   * REUSED the Box Plot slot machinery, which was the right call — the
    * capture workflow is genuinely the same — but every rule keyed on
-   * `hasPointGroups()` came along with it, including rules that only hold for an
+   * `hasSlots()` came along with it, including rules that only hold for an
    * indivisible object. That is how the Eraser came to delete a whole six-axis
    * profile when asked to remove one reading (David, driving the app). The
    * machinery is shared; the MEANING is not, and the meaning is what these rules
@@ -700,7 +700,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
-   *   1. "Does this SERIES have slots?" -> dataset.hasPointGroups(). Structural.
+   *   1. "Does this SERIES have slots?" -> dataset.hasSlots(). Structural.
    *   2. "What do the slots MEAN?" -> tupleMembers. One object, or independent
    *      readings. Getting this from (1) is what made the Eraser delete a whole
    *      six-axis profile, and the CSV carry one series read off the wrong ray.
@@ -721,19 +721,19 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * removes: Histogram calibrates identically to XY and wants this too, and
    * asking "is it XY?" would silently answer no. */
   supportsCommonOrigin?: boolean;
-  /** Point groups every dataset under this graph type is created with, so
+  /** Slots every dataset under this graph type is created with, so
    * tuple capture is the type's *inherent* shape rather than something the
    * user must first discover and switch on. Histogram's bins are the first
    * user (['Bin start','Bin end']); Box Plot's Min/Q1/Median/Q3/Max stays an
    * opt-in button on Bar until its own promotion lands, which is precisely
    * the hidden-mode problem CLAUDE.md flags. Undefined = plain, ungrouped
    * points (every other type today). */
-  defaultPointGroups?: readonly string[];
-  /** Point group names DERIVED from the calibrated axes, for a type whose capture
+  defaultSlots?: readonly string[];
+  /** Slot names DERIVED from the calibrated axes, for a type whose capture
    * shape only exists once the axes are known (v1.4, Spider: one slot per spoke,
    * named after it). Applied on both entrances — a fresh calibration and a loaded
-   * project. See CalibrationSession.applyAxesDerivedPointGroups. */
-  pointGroupsFromAxes?(axes: A): readonly string[];
+   * project. See CalibrationSession.applyAxesDerivedSlots. */
+  slotsFromAxes?(axes: A): readonly string[];
   /** Per-type calibration settings exposed to the user (checkpoint 68). WPD
    * has always offered these; we hardcoded them. Undefined = no settings. */
   options?: readonly AxesOption[];
@@ -845,7 +845,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
  * click order the cursor walks, and the index order algorithms/histogram.ts's
  * binsFromCorners reads -- it orders each bin by x itself, so clicking the
  * right corner first still yields the same bin. */
-export const HISTOGRAM_POINT_GROUPS = ['Bin start', 'Bin end'] as const;
+export const HISTOGRAM_SLOTS = ['Bin start', 'Bin end'] as const;
 
 /**
  * Histogram -- XY axes underneath, captured as bins (checkpoint 66).
@@ -868,7 +868,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   valueLabels: ['X', 'Y'],
   globalFields: [],
   supportsCommonOrigin: true,
-  defaultPointGroups: HISTOGRAM_POINT_GROUPS,
+  defaultSlots: HISTOGRAM_SLOTS,
   tupleNoun: 'bin',
   // Same axes, same steps, same options -> same guards. Sharing the arrays
   // rather than re-declaring keeps them from drifting apart.
@@ -889,7 +889,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
 /** Group names for an error bar's three captured points. Order is the click
  * order the cursor walks and the index order algorithms/errorBar.ts reads.
  * Value first: it is the datum, and the whiskers qualify it. */
-export const ERROR_BAR_POINT_GROUPS = ['Value', 'Upper', 'Lower'] as const;
+export const ERROR_BAR_SLOTS = ['Value', 'Upper', 'Lower'] as const;
 
 /**
  * Error Bars — XY axes underneath, captured as Value/Upper/Lower tuples
@@ -921,7 +921,7 @@ export const ERROR_BAR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   supportsCommonOrigin: true,
   options: XY_AXES_CONFIG.options,
   extractOptions: XY_AXES_CONFIG.extractOptions,
-  defaultPointGroups: ERROR_BAR_POINT_GROUPS,
+  defaultSlots: ERROR_BAR_SLOTS,
   tupleNoun: 'error bar',
   // getFitPoints fits through group 0 ("Value") only — a trend line through the
   // data, ignoring the whiskers. The single most obvious thing to do with an
@@ -1012,7 +1012,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
 
 /** The five captured points of a box-and-whisker tuple, in click order (the
  * order getBoxPlotGlyphs reads, and the shape applyBoxPlotGroups creates). */
-export const BOX_PLOT_POINT_GROUPS = ['Min', 'Q1', 'Median', 'Q3', 'Max'] as const;
+export const BOX_PLOT_SLOTS = ['Min', 'Q1', 'Median', 'Q3', 'Max'] as const;
 
 // "Box Plot" as a first-class graph type (checkpoint 107). BarAxes underneath --
 // a box plot is calibrated exactly like a bar chart (two points on the VALUE
@@ -1022,9 +1022,9 @@ export const BOX_PLOT_POINT_GROUPS = ['Min', 'Q1', 'Median', 'Q3', 'Max'] as con
 // it exists is invisible to someone seeing the tool for the first time. Making it
 // a dropdown entry is *correctness*, not polish -- the same promotion Histogram
 // got at checkpoint 66, whose graph-type != axes-class generalization
-// (`defaultPointGroups`/`tupleNoun`) is exactly what makes this a config object
+// (`defaultSlots`/`tupleNoun`) is exactly what makes this a config object
 // rather than a code path. Datasets are auto-created with the Min/Q1/Median/Q3/Max
-// point groups, so tuple capture is the type's inherent shape, not something the
+// slots, so tuple capture is the type's inherent shape, not something the
 // user must first discover and switch on.
 export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'boxplot',
@@ -1035,7 +1035,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
-  defaultPointGroups: BOX_PLOT_POINT_GROUPS,
+  defaultSlots: BOX_PLOT_SLOTS,
   tupleNoun: 'box',
   // Shares Bar's calibration, options (log scale + horizontal bars) and guards --
   // reusing the arrays keeps them from drifting apart, as Histogram does with XY.
@@ -1420,7 +1420,7 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // row k really IS axis k for every series. That alignment is REAL here (every
   // series has exactly one value per axis), unlike the same side-by-side layout
   // under error bars, where the pairing was derived at read time and never stored.
-  pointGroupsFromAxes(axes) {
+  slotsFromAxes(axes) {
     return axes.getSpokes().map((_, i) => axes.getSpokeLabel(i));
   },
   extractOptions(axes) {
@@ -1458,7 +1458,7 @@ export interface PlacedCalibPoint {
  * round-trip engine/projectFile.ts already relies on, reused rather than
  * reimplemented -- and it handles the pre-calibration null-axes case, so one
  * path covers every state); everything else is session-only bookkeeping that
- * plotData doesn't model (mid-calibration progress, per-series point-group
+ * plotData doesn't model (mid-calibration progress, per-series slot
  * cursors, the active-series index, the auto-name counter), captured as plain
  * cloned data. Snapshots are only ever restored into the *same* session that
  * produced them (same AxesTypeConfig) -- History is reset when the axes type
@@ -1476,8 +1476,8 @@ export interface SessionSnapshot {
    * undo that didn't restore it would leave the data and the settings
    * disagreeing. */
   optionValues: Record<string, string>;
-  /** Per-dataset point-group cursor, indexed to match plotData's dataset order. */
-  cursors: PointGroupCursor[];
+  /** Per-dataset slot cursor, indexed to match plotData's dataset order. */
+  cursors: SlotCursor[];
   plotData: SerializedPlotData;
 }
 
@@ -1489,7 +1489,7 @@ export interface DataPointView {
 
 /** Where the next Place Point click will file its pixel: `tupleIndex: null` means
  * "starts a new tuple at group 0" (mirrors pointGroups.js's own null-as-sentinel). */
-export interface PointGroupCursor {
+export interface SlotCursor {
   tupleIndex: number | null;
   groupIndex: number;
 }
@@ -1509,12 +1509,12 @@ export interface TupleRow {
 export type CalibrationClickResult = 'awaiting-value' | 'point-placed' | 'ignored';
 export type DataPointClickResult = 'point-added' | 'ignored';
 
-/** One dataset/series plus its own independent point-groups cursor (Box Plot
+/** One dataset/series plus its own independent slot cursor (Box Plot
  * state is inherently per-series, checkpoint 30) -- see this file's header
  * comment. */
 interface DatasetEntry {
   dataset: Dataset;
-  pointGroupCursor: PointGroupCursor;
+  slotCursor: SlotCursor;
 }
 
 /** Summary view of one dataset/series for ui/'s series-list panel --
@@ -1684,20 +1684,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // Applied here rather than at the one call site, so *every* series gets
     // the graph type's capture shape -- the constructor's "Series 1", each
     // addDataset, and reset alike (checkpoint 66).
-    if (this.config.defaultPointGroups) dataset.setPointGroups([...this.config.defaultPointGroups]);
+    if (this.config.defaultSlots) dataset.setSlotNames([...this.config.defaultSlots]);
     // ...and for a type whose slots are DERIVED from the axes (Spider), from the
     // live calibration. Without this, "+ Add series" on a calibrated spider gave a
     // series with no slots at all, so its points had no axis to be read against —
     // the same "every series gets the graph type's capture shape" reason the
     // static list above is applied here rather than at the one call site, just for
     // the half of the shape that only exists once the axes do.
-    const derived = this.config.pointGroupsFromAxes && this.axes ? this.config.pointGroupsFromAxes(this.axes) : null;
-    if (derived && derived.length > 0) dataset.setPointGroups([...derived]);
-    return { dataset, pointGroupCursor: { tupleIndex: null, groupIndex: 0 } };
+    const derived = this.config.slotsFromAxes && this.axes ? this.config.slotsFromAxes(this.axes) : null;
+    if (derived && derived.length > 0) dataset.setSlotNames([...derived]);
+    return { dataset, slotCursor: { tupleIndex: null, groupIndex: 0 } };
   }
 
   /** The active dataset/series' own entry -- every method below that used to
-   * read/write a single `this.dataset`/`this.pointGroupCursor` now goes
+   * read/write a single `this.dataset`/`this.slotCursor` now goes
    * through this instead, so it implicitly operates on "whichever dataset is
    * currently active" (see this file's header comment). */
   private get activeEntry(): DatasetEntry {
@@ -2088,7 +2088,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Nothing is emphasised during the calibration walk — the active step already
    * has its own highlight on the card, and there is no capture cursor yet.
    *
-   * ⚑ What actually carries that is the point-groups check: a spider's groups are
+   * ⚑ What actually carries that is the slot check: a spider's groups are
    * derived from the calibrated axes, so they do not exist until calibration
    * succeeds. The `!this.axes` test below is defence in depth and is NOT covered by
    * a failing-first test — neutering it changes nothing today, because no state
@@ -2098,9 +2098,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private liveSpokeStepKey(): string | undefined {
     if (this.config.axesKind !== 'spider' || !this.axes) return undefined;
     const entry = this.activeEntry;
-    if (!entry.dataset.hasPointGroups()) return undefined;
-    // Step keys are `spoke1`-based, the point-group cursor is 0-based.
-    return `spoke${entry.pointGroupCursor.groupIndex + 1}`;
+    if (!entry.dataset.hasSlots()) return undefined;
+    // Step keys are `spoke1`-based, the slot cursor is 0-based.
+    return `spoke${entry.slotCursor.groupIndex + 1}`;
   }
 
   /**
@@ -2296,7 +2296,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ Box Plot is reachable two ways: as its own graph type, and as a toggle that
    * gives a Bar session Min/Q1/Median/Q3/Max groups. So a static config field
    * cannot answer alone — a bar-with-box-groups series exports as tuples while the
-   * type says nothing. That dynamic case is what the UI's old `hasPointGroups()`
+   * type says nothing. That dynamic case is what the UI's old `hasSlots()`
    * test was really catching, mixed in with three identity checks.
    *
    * ⚑ And a grouped type whose slots are INDEPENDENT (a spider) is flat: its rows
@@ -2306,7 +2306,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getExportShape(): 'flat' | 'tuples' | 'bins' | 'error-bars' {
     if (this.config.exportShape) return this.config.exportShape;
-    const grouped = this.activeEntry.dataset.hasPointGroups();
+    const grouped = this.activeEntry.dataset.hasSlots();
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';
   }
 
@@ -2366,7 +2366,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // branch's `Position, Category, Value`, independent variables first.
     //
     // ⚑ THE VALUE IS READ AGAINST THE SPOKE THE POINT WAS CAPTURED ON, taken from
-    // its point group, NOT from whichever ray it happens to sit nearest. Those
+    // its slot, NOT from whichever ray it happens to sit nearest. Those
     // agree for a click that landed on its axis and diverge exactly when the user
     // mis-clicked -- and the nearest-ray reading would then export a number off a
     // DIFFERENT axis's scale while the table still showed it in the slot they
@@ -2478,10 +2478,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   } | null {
     if (this.config.axesKind !== 'spider' || !this.axes) return null;
     const entry = this.activeEntry;
-    if (!entry.dataset.hasPointGroups()) return null;
+    if (!entry.dataset.hasSlots()) return null;
     const spider = this.axes as unknown as SpiderAxes;
 
-    const groupIndex = entry.pointGroupCursor.groupIndex;
+    const groupIndex = entry.slotCursor.groupIndex;
     const own = spider.projectOnSpoke(groupIndex, px, py);
     const nearest = spider.nearestSpoke(px, py);
     if (!own || !nearest || nearest.index === groupIndex) return null;
@@ -2492,7 +2492,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     };
   }
 
-  /** Switches which dataset new points/point-groups actions apply to.
+  /** Switches which dataset new points/slot actions apply to.
    * No-op for an out-of-range index. */
   setActiveDataset(index: number): void {
     if (index < 0 || index >= this.datasetEntries.length) return;
@@ -2626,7 +2626,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     let dropped = 0;
     for (const entry of this.datasetEntries) {
       const dataset = entry.dataset;
-      // ⚑ No `hasPointGroups()` guard. A dataset that arrived with no slots at all
+      // ⚑ No `hasSlots()` guard. A dataset that arrived with no slots at all
       // has no tuples either, so EVERY one of its points is axis-less — which is
       // exactly the case this is for, not one to skip. (It was written with that
       // guard first, and the file-with-no-groups test said so.)
@@ -2641,7 +2641,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         dataset.refreshTuplesAfterPixelRemoval(i);
         dropped += 1;
       }
-      entry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+      entry.slotCursor = this.computeSlotCursorFor(dataset);
     }
     return dropped;
   }
@@ -2731,7 +2731,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       dataset.name = settledNames[i]!;
       return {
         dataset,
-        pointGroupCursor: this.computePointGroupCursorFor(dataset),
+        slotCursor: this.computeSlotCursorFor(dataset),
       };
     });
     this.activeDatasetIndex = 0;
@@ -2740,7 +2740,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // one whose series was added without them -- would otherwise show numbered
     // slots next to a calibration that knows every axis's name. Runs AFTER the
     // entries are built so it can see which datasets already hold points.
-    this.applyAxesDerivedPointGroups();
+    this.applyAxesDerivedSlots();
     // ⚑ A POINT WITH NO AXIS IS NOT A DATUM (David, 2026-07-27): "a point that
     // belongs to no tuple carries NO meaning, and should not be allowed."
     //
@@ -2757,15 +2757,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.dropAxislessPoints();
   }
 
-  /** Finds the first open point-group slot across a dataset's tuples (same
-   * target nextGroupCursor would walk to), or "new tuple" if none -- used
+  /** Finds the first open slot slot across a dataset's tuples (same
+   * target nextSlot would walk to), or "new tuple" if none -- used
    * by loadCalibrated for every loaded dataset, since the cursor isn't part
    * of the serialized project file (see engine/projectFile.ts). Takes an
    * explicit dataset (generalized in checkpoint 30 from a no-arg version
    * that only ever recomputed "the" dataset's cursor) so it can run once per
    * loaded dataset. */
-  private computePointGroupCursorFor(dataset: Dataset): PointGroupCursor {
-    if (!dataset.hasPointGroups()) {
+  private computeSlotCursorFor(dataset: Dataset): SlotCursor {
+    if (!dataset.hasSlots()) {
       return { tupleIndex: null, groupIndex: 0 };
     }
     const tuples = dataset.getAllTuples();
@@ -2798,23 +2798,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Handle a click while in Place Point tool mode: adds a data point to the
    * active dataset. Ignored until calibrated -- there's no axes to convert
-   * the pixel through yet. When the active dataset has point groups
+   * the pixel through yet. When the active dataset has slots
    * configured (Box Plot etc.), the new pixel is also filed into a tuple at
    * that dataset's own cursor position, which then advances -- see
-   * nextGroupCursor and this file's header comment. Starting a new tuple
+   * nextSlot and this file's header comment. Starting a new tuple
    * auto-labels it (see autoLabelTuple), matching real WPD's own
    * ManualSelectionTool.onMouseClick behavior for Bar axes datasets. */
   addDataPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
     const entry = this.activeEntry;
     const dataset = entry.dataset;
-    if (dataset.hasPointGroups()) {
-      // Point groups (Box Plot etc.) file each click into a tuple slot at the
+    if (dataset.hasSlots()) {
+      // Slots (Box Plot etc.) file each click into a tuple slot at the
       // cursor -- APPEND, then wire that new index in; the tuple layout, not the
       // point sequence, carries the meaning here, so insert-in-place must not run.
-      const snapped = this.snapToSpoke(px, py, entry.pointGroupCursor.groupIndex);
+      const snapped = this.snapToSpoke(px, py, entry.slotCursor.groupIndex);
       const index = dataset.addPixel(snapped.x, snapped.y);
-      const { tupleIndex, groupIndex } = entry.pointGroupCursor;
+      const { tupleIndex, groupIndex } = entry.slotCursor;
       if (tupleIndex === null) {
         // ⚑ BUILD THE TUPLE EMPTY AND FILE BY SLOT where the slots are independent
         // (N x 1D). `addTuple` always writes slot 0 — fine for a box plot, whose
@@ -2832,12 +2832,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
         } else {
           newTupleIndex = dataset.addTuple(index);
         }
-        entry.pointGroupCursor.tupleIndex = newTupleIndex;
+        entry.slotCursor.tupleIndex = newTupleIndex;
         if (newTupleIndex !== null) this.autoLabelTuple(newTupleIndex);
       } else {
         dataset.addToTupleAt(tupleIndex, groupIndex, index);
       }
-      this.nextGroupCursor();
+      this.nextSlot();
       return 'point-added';
     }
     // Insert-in-place (v1.1 #1): splice the new point into the curve edge it
@@ -2869,16 +2869,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * CLAUDE.md and engine/segmentFillRun.ts) to the active dataset --
    * addDataPoint above handles one click at a time; a trace can add
    * hundreds in one go. Ignored until calibrated, same as addDataPoint.
-   * Deliberately not point-groups-aware, unlike addDataPoint -- a
+   * Deliberately not slot-aware, unlike addDataPoint -- a
    * continuous curve trace has no natural Min/Q1/Median/Q3/Max slot to file
    * into, and the current app's own Segment Fill tool
-   * (ui-patches/engauge-algos.js) never interacts with point groups either.
+   * (ui-patches/engauge-algos.js) never interacts with slots either.
    * Returns the number of points actually added (0 if not calibrated or the
-   * active dataset has point groups configured). */
+   * active dataset has slots configured). */
   addSegmentFillPoints(points: readonly { x: number; y: number }[]): number {
     if (!this.axes) return 0;
     const entry = this.activeEntry;
-    if (entry.dataset.hasPointGroups()) return 0;
+    if (entry.dataset.hasSlots()) return 0;
     for (const p of points) entry.dataset.addPixel(p.x, p.y);
     return points.length;
   }
@@ -2907,12 +2907,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!this.axes || this.config.axesKind !== 'spider') return 0;
     const entry = this.activeEntry;
     const dataset = entry.dataset;
-    if (!dataset.hasPointGroups()) return 0;
+    if (!dataset.hasSlots()) return 0;
 
-    let tupleIndex = entry.pointGroupCursor.tupleIndex;
+    let tupleIndex = entry.slotCursor.tupleIndex;
     let createdTuple = false;
     let added = 0;
-    const slots = dataset.getPointGroups().length;
+    const slots = dataset.getSlotNames().length;
     for (let groupIndex = 0; groupIndex < Math.min(points.length, slots); groupIndex++) {
       const point = points[groupIndex];
       if (!point) continue;
@@ -2937,7 +2937,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (createdTuple && tupleIndex !== null && dataset.getAllTuples()[tupleIndex]?.[0] != null) {
       this.autoLabelTuple(tupleIndex);
     }
-    entry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+    entry.slotCursor = this.computeSlotCursorFor(dataset);
     return added;
   }
 
@@ -2962,12 +2962,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * Adds one anchor and rebuilds the derived curve live. Ignored until calibrated
    * (like addDataPoint -- no axes to convert the pixel through yet) or if the
-   * active dataset has point groups (a continuous curve has no Min/Q1/... slot,
+   * active dataset has slots (a continuous curve has no Min/Q1/... slot,
    * same reason Segment Fill declines). */
   addAnchorPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
     const entry = this.activeEntry;
-    if (entry.dataset.hasPointGroups()) return 'ignored';
+    if (entry.dataset.hasSlots()) return 'ignored';
     entry.dataset.addPixel(px, py, { role: 'anchor' });
     this.registerRoleMetadataKey();
     this.rebuildInterpolation();
@@ -3205,41 +3205,41 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.activeEntry.dataset.getMetadataKeys();
   }
 
-  /** Whether the active dataset has named point groups configured (Box Plot etc.). */
-  hasPointGroups(): boolean {
-    return this.activeEntry.dataset.hasPointGroups();
+  /** Whether the active dataset has named slots configured (Box Plot etc.). */
+  hasSlots(): boolean {
+    return this.activeEntry.dataset.hasSlots();
   }
 
-  getPointGroups(): string[] {
-    return this.activeEntry.dataset.getPointGroups();
+  getSlotNames(): string[] {
+    return this.activeEntry.dataset.getSlotNames();
   }
 
-  /** Configure named point groups for tuple-based data entry on the active
+  /** Configure named slots for tuple-based data entry on the active
    * dataset (WPD's Point Groups feature, wpd-core's
    * javascript/widgets/pointGroups.js). Declines (returns false, no
    * mutation) if the active dataset already has groups configured --
    * safely diffing an in-use tuple structure is the current app's separate
    * "Edit Point Groups" popup, not this convenience. */
-  setPointGroups(names: string[]): boolean {
+  setSlotNames(names: string[]): boolean {
     const entry = this.activeEntry;
-    if (entry.dataset.hasPointGroups()) return false;
-    entry.dataset.setPointGroups(names);
-    entry.pointGroupCursor = { tupleIndex: null, groupIndex: 0 };
+    if (entry.dataset.hasSlots()) return false;
+    entry.dataset.setSlotNames(names);
+    entry.slotCursor = { tupleIndex: null, groupIndex: 0 };
     return true;
   }
 
   /** Quick-setup for the common Box Plot shape, mirroring the current app's
    * "Box Plot Groups" button (commit 011ef1c). */
   applyBoxPlotGroups(): boolean {
-    return this.setPointGroups([...BOX_PLOT_POINT_GROUPS]);
+    return this.setSlotNames([...BOX_PLOT_SLOTS]);
   }
 
-  getCurrentGroupIndex(): number {
-    return this.activeEntry.pointGroupCursor.groupIndex;
+  getCurrentSlotIndex(): number {
+    return this.activeEntry.slotCursor.groupIndex;
   }
 
   getCurrentTupleIndex(): number | null {
-    return this.activeEntry.pointGroupCursor.tupleIndex;
+    return this.activeEntry.slotCursor.tupleIndex;
   }
 
   /**
@@ -3262,35 +3262,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * `tupleIndex` null aims at a NEW tuple, starting at `groupIndex`.
    */
-  setPointGroupCursor(tupleIndex: number | null, groupIndex: number): boolean {
+  setSlotCursor(tupleIndex: number | null, groupIndex: number): boolean {
     const entry = this.activeEntry;
     const dataset = entry.dataset;
-    if (!dataset.hasPointGroups() || this.config.tupleMembers !== 'independent') return false;
-    if (groupIndex < 0 || groupIndex >= dataset.getPointGroups().length) return false;
+    if (!dataset.hasSlots() || this.config.tupleMembers !== 'independent') return false;
+    if (groupIndex < 0 || groupIndex >= dataset.getSlotNames().length) return false;
     if (tupleIndex !== null) {
       const tuple = dataset.getAllTuples()[tupleIndex];
       if (!tuple) return false;
       if (tuple[groupIndex] != null) return false; // occupied -- see above
     }
-    entry.pointGroupCursor = { tupleIndex, groupIndex };
+    entry.slotCursor = { tupleIndex, groupIndex };
     return true;
   }
 
   /** Label for the group the next Place Point click will fill -- mirrors
    * wpd.pointGroups.refreshControls()'s fallback naming for an unnamed group. */
-  getCurrentGroupLabel(): string {
+  getCurrentSlotLabel(): string {
     const entry = this.activeEntry;
-    const name = entry.dataset.getPointGroups()[entry.pointGroupCursor.groupIndex];
+    const name = entry.dataset.getSlotNames()[entry.slotCursor.groupIndex];
     if (name) return name;
-    return entry.pointGroupCursor.groupIndex === 0 ? 'Primary group' : `Group ${entry.pointGroupCursor.groupIndex}`;
+    return entry.slotCursor.groupIndex === 0 ? 'Primary group' : `Group ${entry.slotCursor.groupIndex}`;
   }
 
   /** Advance the active dataset's cursor to the next open group slot: the
    * current tuple past the current group, then later tuples' first open
    * slot, else "new tuple" (tupleIndex null, groupIndex 0). Direct port of
    * pointGroups.js's nextGroup(). */
-  nextGroupCursor(): void {
-    const cursor = this.activeEntry.pointGroupCursor;
+  nextSlot(): void {
+    const cursor = this.activeEntry.slotCursor;
     if (cursor.tupleIndex === null) return;
     const tuples = this.activeEntry.dataset.getAllTuples();
     let nextTupleIndex = -1;
@@ -3315,11 +3315,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** Walk the active dataset's cursor back to the previous open group slot --
-   * nextGroupCursor's mirror image, direct port of pointGroups.js's
+   * nextSlot's mirror image, direct port of pointGroups.js's
    * previousGroup(). Used for manual navigation and to keep the cursor sane
    * after removeLastPoint. */
-  previousGroupCursor(): void {
-    const cursor = this.activeEntry.pointGroupCursor;
+  previousSlot(): void {
+    const cursor = this.activeEntry.slotCursor;
     if (cursor.tupleIndex === 0 && cursor.groupIndex === 0) return;
     const tuples = this.activeEntry.dataset.getAllTuples();
     let previousTupleIndex: number | null = -1;
@@ -3371,7 +3371,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The spider table (v1.4): one ROW per axis, one COLUMN per series —
    * `# | Category | Series 1 | Series 2 | …` (David, 2026-07-27).
    *
-   * ⚑ Why this shape and not the grouped table's. The point-group table shows the
+   * ⚑ Why this shape and not the grouped table's. The slot table shows the
    * ACTIVE series only, so adding a second series made the first one's readings
    * vanish from the screen — caught by driving the app, not by any test. Every
    * ungrouped type already shows all series at once, so the grouped table was the
@@ -3381,7 +3381,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * ⚑ This alignment is REAL, not assumed. Row k is axis k for every series
    * because every series has exactly one slot per axis, by construction of the
-   * point groups. The same side-by-side layout LIED for error bars, where the
+   * slots. The same side-by-side layout LIED for error bars, where the
    * pairing was derived at read time and never stored.
    *
    * A series holding more than one profile contributes one column per profile, so
@@ -3503,7 +3503,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Box-and-whisker glyph segments (image-pixel space) for every *complete*
    * tuple of the active dataset -- empty unless calibrated, Bar axes, and
-   * that dataset's point groups are exactly Min/Q1/Median/Q3/Max
+   * that dataset's slots are exactly Min/Q1/Median/Q3/Max
    * (case-insensitive, the shape applyBoxPlotGroups creates). Deliberately
    * still active-dataset-only after checkpoint 30 -- see
    * getAllDatasetsData's own doc comment. See this file's header comment
@@ -3517,7 +3517,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // datasets, so a plain Bar or Categorical dataset (no groups) still yields [].
     if (!this.axes || this.config.axesKind !== 'bar') return [];
     const dataset = this.activeEntry.dataset;
-    const groups = dataset.getPointGroups().map((g) => g.trim().toLowerCase());
+    const groups = dataset.getSlotNames().map((g) => g.trim().toLowerCase());
     const expected = ['min', 'q1', 'median', 'q3', 'max'];
     if (groups.length !== expected.length || !groups.every((g, i) => g === expected[i])) return [];
 
@@ -3662,23 +3662,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     this.calibrationError = null;
     this.axes = result.axes;
-    this.applyAxesDerivedPointGroups();
+    this.applyAxesDerivedSlots();
     return true;
   }
 
   /**
-   * Name every dataset's point groups after the calibrated axes (v1.4, Spider):
+   * Name every dataset's slots after the calibrated axes (v1.4, Spider):
    * one slot per spoke, in spoke order, so a captured tuple reads "Strength,
    * Weight, Cost" instead of "1, 2, 3".
    *
-   * ⚑ Why this can't be `defaultPointGroups`. That field is a static list on the
+   * ⚑ Why this can't be `defaultSlots`. That field is a static list on the
    * config, which suits Histogram's fixed ['Bin start','Bin end']; a spider's
    * groups do not exist until its axes have been calibrated, and their names are
    * transcribed from the figure at that moment. So the config declares a FUNCTION
    * of the built axes instead.
    *
    * ⚑ It will not restructure a dataset that already holds points. Renaming in
-   * place is safe (`Dataset.setPointGroups` only assigns names; it never touches
+   * place is safe (`Dataset.setSlotNames` only assigns names; it never touches
    * recorded pixels), so a re-calibration that keeps the same spoke count just
    * relabels. But when the COUNT changed, slot k of an existing tuple no longer
    * means the axis it was recorded against, and silently renaming would make the
@@ -3686,18 +3686,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * record is parked on. In that case the recorded data keeps the names it was
    * captured under, and the mismatch stays visible rather than being papered over.
    */
-  private applyAxesDerivedPointGroups(): void {
-    const derive = this.config.pointGroupsFromAxes;
+  private applyAxesDerivedSlots(): void {
+    const derive = this.config.slotsFromAxes;
     if (!derive || !this.axes) return;
     const names = [...derive(this.axes)];
     if (names.length === 0) return;
 
     for (const entry of this.datasetEntries) {
       const hasPoints = entry.dataset.getCount() > 0;
-      const existing = entry.dataset.getPointGroups();
+      const existing = entry.dataset.getSlotNames();
       if (hasPoints && existing.length !== names.length) continue;
-      entry.dataset.setPointGroups(names);
-      if (!hasPoints) entry.pointGroupCursor = { tupleIndex: null, groupIndex: 0 };
+      entry.dataset.setSlotNames(names);
+      if (!hasPoints) entry.slotCursor = { tupleIndex: null, groupIndex: 0 };
     }
   }
 
@@ -3711,7 +3711,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** Removes the most recently placed data point from the active dataset.
-   * When point groups are configured, also cleans up its tuple slot
+   * When slots are configured, also cleans up its tuple slot
    * (dropping the tuple entirely if it's now empty) and walks the cursor
    * back -- mirrors DeleteDataPointTool's single-point removal path in
    * manualDetectionTools.js (not its whole-tuple-deletion popup, which this
@@ -3722,14 +3722,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (count === 0) return;
     const index = count - 1;
     const wasAnchor = dataset.getPixel(index)?.metadata?.['role'] === 'anchor';
-    if (dataset.hasPointGroups()) {
+    if (dataset.hasSlots()) {
       const tupleIndex = dataset.getTupleIndex(index);
       dataset.removePixelAtIndex(index);
       dataset.refreshTuplesAfterPixelRemoval(index);
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
       }
-      this.previousGroupCursor();
+      this.previousSlot();
     } else {
       dataset.removePixelAtIndex(index);
     }
@@ -3748,7 +3748,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const dataset = this.activeEntry.dataset;
     if (index < 0 || index >= dataset.getCount()) return;
     const wasAnchor = dataset.getPixel(index)?.metadata?.['role'] === 'anchor';
-    if (dataset.hasPointGroups()) {
+    if (dataset.hasSlots()) {
       const tupleIndex = dataset.getTupleIndex(index);
       dataset.removePixelAtIndex(index);
       dataset.refreshTuplesAfterPixelRemoval(index);
@@ -3818,7 +3818,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
     // Grouped series. What removing ONE member means depends on what the members
     // ARE to each other -- see AxesTypeConfig.tupleMembers.
-    if (dataset.hasPointGroups()) {
+    if (dataset.hasSlots()) {
       // N x 1D (spider): the slots are independent readings, so remove exactly the
       // ones asked for and leave their neighbours standing. The freed slot is not
       // a hole to be tidied away: it is the next thing to capture, which is why the
@@ -3832,7 +3832,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (this.config.tupleMembers === 'independent') {
         const uniq = [...new Set(indices)].filter((i) => i >= 0 && i < dataset.getCount());
         for (const i of uniq.sort((a, b) => b - a)) this.removeDataPointAt(i);
-        this.activeEntry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+        this.activeEntry.slotCursor = this.computeSlotCursorFor(dataset);
         return;
       }
       // 1.5D (box plot / histogram): a selected member stands for its whole tuple
@@ -3901,7 +3901,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * category goes, along with the tuple slot and its label. The trash button
    * peels points one at a time, and a mis-placed box is a whole tuple; this is
    * the missing bulk gesture for grouped types. No-op for a dataset without
-   * point groups or an out-of-range index.
+   * slots or an out-of-range index.
    *
    * Removes the tuple's pixels high-index -> low so each splice leaves the lower
    * indices (and this tuple's not-yet-removed pixels) valid, refreshing the
@@ -3910,10 +3910,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * by pixel removal (refreshTuplesAfterPixelRemoval only rewrites indices
    * inside tuples), so the passed tupleIndex still addresses it at the end. A
    * grouped dataset never holds interpolation anchors (addAnchorPoint declines
-   * point-group datasets), so no rebuildInterpolation is needed. */
+   * slot datasets), so no rebuildInterpolation is needed. */
   removeTuple(tupleIndex: number): void {
     const dataset = this.activeEntry.dataset;
-    if (!dataset.hasPointGroups()) return;
+    if (!dataset.hasSlots()) return;
     if (tupleIndex < 0 || tupleIndex >= dataset.getTupleCount()) return;
     const pixelIndices = dataset
       .getTuple(tupleIndex)
@@ -3926,14 +3926,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     dataset.removeTuple(tupleIndex);
     // Removing a tuple shifts every later tuple's position, so recompute where
     // the next Place Point click files -- the same reset the load path uses.
-    this.activeEntry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+    this.activeEntry.slotCursor = this.computeSlotCursorFor(dataset);
   }
 
   /** Whether sortByNearestNeighbour would do anything for the active series --
    *  the UI gate for its button (checkpoint 130). See that method for the rules. */
   canSortByNearestNeighbour(): boolean {
     const dataset = this.activeEntry.dataset;
-    if (dataset.hasPointGroups()) return false;
+    if (dataset.hasSlots()) return false;
     const pixels = dataset.getAllPixels();
     if (pixels.length < 3) return false;
     return !pixels.some(
@@ -3986,7 +3986,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * ⚑ IT LIVES IN THE CALIBRATION, NOT ON THE POINTS. A spoke's name is a property
    * of the AXIS, so this writes it to that spoke's calibration point and re-derives
-   * — which is what carries it into the axes object, the point-group names, the
+   * — which is what carries it into the axes object, the slot names, the
    * table and the export in one move, with no second copy to disagree. Same route a
    * dragged handle takes.
    */
@@ -4020,7 +4020,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const cp = calibration?.getPoint(calibrationIndex);
       if (calibration && cp) calibration.setDataAt(calibrationIndex, cp.dx ?? '', cp.dy ?? '', name);
       (this.axes as unknown as SpiderAxes).setSpokeName(index, name);
-      this.applyAxesDerivedPointGroups();
+      this.applyAxesDerivedSlots();
     }
     return true;
   }
@@ -4098,22 +4098,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // Only the *graph type's own* groups come back. Clearing a Box Plot still
     // drops its Min/Q1/Median/Q3/Max entirely -- those are opt-in user state
     // this deliberately resets (see this file's "reset and clearPoints drop
-    // point groups" test) -- but a Histogram's bin groups are the type's
+    // slots" test) -- but a Histogram's bin groups are the type's
     // inherent capture shape, not something the user switched on, so clearing
     // its points must not quietly leave a Histogram that can't record a bin.
-    if (this.config.defaultPointGroups) fresh.setPointGroups([...this.config.defaultPointGroups]);
+    if (this.config.defaultSlots) fresh.setSlotNames([...this.config.defaultSlots]);
     // ⚑ ...and the same for a type whose capture shape is DERIVED from the axes.
-    // A spider has no `defaultPointGroups` — its slots are its calibrated spokes —
+    // A spider has no `defaultSlots` — its slots are its calibrated spokes —
     // so clearing left the series with no slots at all. Every later capture then
     // took the ungrouped path: unsnapped, absent from the table, and deleted
     // wholesale by the load-time axis-less drop when the project was reopened.
     // Same reason the Histogram case above exists (the type's inherent capture
     // shape must survive a clear), for the half of the shape that only exists once
     // the axes do. Found by the v1.4 release audit.
-    const derived = this.config.pointGroupsFromAxes && this.axes ? this.config.pointGroupsFromAxes(this.axes) : null;
-    if (derived && derived.length > 0) fresh.setPointGroups([...derived]);
+    const derived = this.config.slotsFromAxes && this.axes ? this.config.slotsFromAxes(this.axes) : null;
+    if (derived && derived.length > 0) fresh.setSlotNames([...derived]);
     entry.dataset = fresh;
-    entry.pointGroupCursor = { tupleIndex: null, groupIndex: 0 };
+    entry.slotCursor = { tupleIndex: null, groupIndex: 0 };
   }
 
   reset(): void {
@@ -4156,7 +4156,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       activeDatasetIndex: this.activeDatasetIndex,
       nextDatasetNumber: this.nextDatasetNumber,
       globalValues: { ...this.globalValues },
-      cursors: this.datasetEntries.map((e) => ({ ...e.pointGroupCursor })),
+      cursors: this.datasetEntries.map((e) => ({ ...e.slotCursor })),
       plotData: plotData.serialize(),
     };
   }
@@ -4173,7 +4173,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.axes = (plotData.getAxesColl()[0] ?? null) as A | null;
     this.datasetEntries = datasets.map((dataset, i) => ({
       dataset,
-      pointGroupCursor: snapshot.cursors[i]
+      slotCursor: snapshot.cursors[i]
         ? { ...snapshot.cursors[i]! }
         : { tupleIndex: null, groupIndex: 0 },
     }));

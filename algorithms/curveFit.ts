@@ -107,12 +107,12 @@ export function computeFitStats(points: Point2D[], coefficients: number[]): FitS
  * they were independent curve samples.
  */
 export function getFitPoints(dataset: Dataset, axes: AnyAxes): Point2D[] {
-  const hasGroups = dataset.hasPointGroups();
+  const hasGroups = dataset.hasSlots();
   const pts: Point2D[] = [];
   for (let i = 0; i < dataset.getCount(); i++) {
     if (hasGroups) {
       const tupleIdx = dataset.getTupleIndex(i);
-      const groupIdx = dataset.getPointGroupIndexInTuple(tupleIdx, i);
+      const groupIdx = dataset.getSlotIndexInTuple(tupleIdx, i);
       if (groupIdx !== 0) continue;
     }
     const px = dataset.getPixel(i);

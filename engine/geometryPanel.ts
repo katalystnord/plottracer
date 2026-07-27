@@ -6,7 +6,7 @@
  *
  * Faithful port of the policy in ui-patches/engauge-algos.js's
  * wpd.runGeometry/wpd.showGeometryPopup (Phase 2.6, part 2): reject a
- * dataset with point groups configured (Box Plot / Error Bar Groups are
+ * dataset with slots configured (Box Plot / Error Bar Groups are
  * tuples of independent measurements, not a single traced curve -- arc
  * length/area/curvature have no sensible meaning there, same message
  * verbatim), require at least 2 points, then compute. XY axes only, same
@@ -49,10 +49,10 @@ export function setGeometryState(dataset: Dataset, state: GeometryState | null):
 }
 
 export function runGeometry(dataset: Dataset, axes: AnyAxes, closed: boolean): RunGeometryResult {
-  if (dataset.hasPointGroups()) {
+  if (dataset.hasSlots()) {
     return {
       error:
-        "Geometry statistics don't apply to datasets with point groups (Box Plot / Error Bar Groups) — those are tuples of independent measurements, not a single traced curve.",
+        "Geometry statistics don't apply to datasets with slots (Box Plot / Error Bar Groups) — those are tuples of independent measurements, not a single traced curve.",
     };
   }
 

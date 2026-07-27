@@ -816,10 +816,10 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await page.getByTestId('apply-box-plot-groups').count()).toBe(0);
 
     await calibrateBarStandard();
-    // point-group-status renders only once calibrated (inside {axes && ...}). That
+    // slot-status renders only once calibrated (inside {axes && ...}). That
     // the groups were active from the start is what makes it read "new box"
     // immediately, with no toggle click in between.
-    expect(await textOf('point-group-status')).toMatch(/Min.*new box/);
+    expect(await textOf('slot-status')).toMatch(/Min.*new box/);
     // No refreshCanvasBox: unlike the toggle path, nothing appears/disappears
     // above the canvas here -- the groups were present from the start.
     const pys = [385, 355, 325, 295, 265];
@@ -833,14 +833,14 @@ describe('Workspace: Box Plot / Point Groups', () => {
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
-    expect(await textOf('point-group-status')).toMatch(/Min.*new box/);
+    expect(await textOf('slot-status')).toMatch(/Min.*new box/);
     expect(await textOf('box-plot-glyph-count')).toBe('0'); // no complete tuple yet
 
     const pys = [385, 355, 325, 295, 265];
     const nextLabels = ['Q1', 'Median', 'Q3', 'Max', 'Min'];
     for (let i = 0; i < pys.length; i++) {
       await clickAt(300, pys[i]!);
-      const status = await textOf('point-group-status');
+      const status = await textOf('slot-status');
       expect(status).toContain(nextLabels[i]);
       expect(status).toMatch(i < pys.length - 1 ? /box 1/ : /new box/);
       // The box-and-whisker glyph (checkpoint 22) only appears once all 5
@@ -864,14 +864,14 @@ describe('Workspace: Box Plot / Point Groups', () => {
 
     await clickAt(300, 385); // Min
     await clickAt(300, 355); // Q1
-    expect(await textOf('point-group-status')).toContain('Median');
+    expect(await textOf('slot-status')).toContain('Median');
 
     // Del in Place Point mode deletes the active (newest) point; for the last
     // point it routes through removeLastPoint, preserving the group cursor walk-back.
     await page.keyboard.press('Delete');
     await page.waitForTimeout(100);
 
-    expect(await textOf('point-group-status')).toMatch(/Q1.*box 1/);
+    expect(await textOf('slot-status')).toMatch(/Q1.*box 1/);
     const tableText = await textOf('points-table');
     expect(tableText).toContain('0.5'); // Min still filled (fmtValue formatting)
     expect(tableText).not.toContain('1.5'); // Q1 slot cleared back to '—'
@@ -6262,7 +6262,7 @@ describe('spider charts', () => {
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
 
     // The capture slots are the axes' own names, which no static config could hold.
-    expect(await textOf('point-group-status')).toContain('Strength');
+    expect(await textOf('slot-status')).toContain('Strength');
 
     // Halfway out along each ray reads 50 on each axis's own scale.
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
@@ -6274,7 +6274,7 @@ describe('spider charts', () => {
     // table text — the same way the bar Category column is read.
     expect(await textOf('spider-axis-name-0')).toBe('Strength');
     expect(await textOf('points-table')).toContain('50');
-    expect(await textOf('point-group-status')).toMatch(/Strength/);
+    expect(await textOf('slot-status')).toMatch(/Strength/);
   });
 
   it('tells the user WHERE to aim, and calls a tuple by its own name', async () => {
@@ -6555,7 +6555,7 @@ describe('spider charts', () => {
     await page.waitForTimeout(150);
     expect(await textOf('spider-axis-name-2')).toBe('—');
     // The capture cursor names the axis it is about to fill — from the same source.
-    expect(await textOf('point-group-status')).toContain('Elongation at break (%)');
+    expect(await textOf('slot-status')).toContain('Elongation at break (%)');
     // ...and so does the guidance. (Esc first: with a point selected the tips bar
     // is showing the nudge line, which is a different branch entirely.)
     await page.keyboard.press('Escape');
@@ -6603,15 +6603,15 @@ describe('spider charts', () => {
     expect(await textOf('spider-cell-0-1')).toBe('—'); // the one erased
     expect(await textOf('spider-cell-0-2')).toMatch(/\d/); // untouched
     // ...and the freed slot is what the next click fills.
-    expect(await textOf('point-group-status')).toContain('Weight');
+    expect(await textOf('slot-status')).toContain('Weight');
 
     // Now erase a SECOND reading, leaving two gaps, and aim at the later one.
     await clickAt(...spoke(0, 3, R / 2));
     await page.waitForTimeout(150);
-    expect(await textOf('point-group-status')).toContain('Strength'); // the first gap
+    expect(await textOf('slot-status')).toContain('Strength'); // the first gap
     await page.getByTestId('spider-cell-0-1').click();
     await page.waitForTimeout(150);
-    expect(await textOf('point-group-status')).toContain('Weight'); // the one asked for
+    expect(await textOf('slot-status')).toContain('Weight'); // the one asked for
 
     // And a capture lands in the slot that was aimed at, not the first gap.
     await page.getByTestId('mode-place-point').click();
@@ -6687,7 +6687,7 @@ describe('spider charts', () => {
 
     // Every axis kept its own name and its own scale: each ray's known point is a
     // different value, so half way out reads half of THAT axis's range.
-    expect(await textOf('point-group-status')).toContain('A');
+    expect(await textOf('slot-status')).toContain('A');
     for (let i = 0; i < 5; i++) await clickAt(...spoke(i, 5, R / 2));
     const table = await textOf('points-table');
     for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);

@@ -68,7 +68,7 @@ describe('runGeometry', () => {
     expect(result).toEqual({ error: expect.stringContaining('at least 2 points') });
   });
 
-  it('rejects a dataset with point groups configured, with a clear error', () => {
+  it('rejects a dataset with slots configured, with a clear error', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
@@ -76,6 +76,6 @@ describe('runGeometry', () => {
     for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py);
 
     const result = runGeometry(session.getDataset(), session.getAxes()!, false);
-    expect(result).toEqual({ error: expect.stringContaining('point groups') });
+    expect(result).toEqual({ error: expect.stringContaining('slots') });
   });
 });

@@ -432,7 +432,7 @@ describe('CalibrationSession (XY axes)', () => {
       expect(session.getDataPoints()).toHaveLength(0);
     });
 
-    it('is ignored when the dataset has point groups configured, unlike addDataPoint', () => {
+    it('is ignored when the dataset has slots configured, unlike addDataPoint', () => {
       const session = new CalibrationSession(BAR_AXES_CONFIG);
       calibrateStandardBar(session);
       session.runCalibration();
@@ -748,11 +748,11 @@ describe('CalibrationSession (Bar axes)', () => {
 });
 
 describe('CalibrationSession (Point Groups / Box Plot)', () => {
-  it('addDataPoint behaves like an ungrouped dataset until point groups are configured', () => {
+  it('addDataPoint behaves like an ungrouped dataset until slots are configured', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
-    expect(session.hasPointGroups()).toBe(false);
+    expect(session.hasSlots()).toBe(false);
 
     session.addDataPoint(300, 300);
     expect(session.getDataPoints()).toHaveLength(1);
@@ -762,14 +762,14 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
   it('applyBoxPlotGroups sets Min/Q1/Median/Q3/Max and declines a second time', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     expect(session.applyBoxPlotGroups()).toBe(true);
-    expect(session.getPointGroups()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
-    expect(session.hasPointGroups()).toBe(true);
+    expect(session.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    expect(session.hasSlots()).toBe(true);
 
     // Declines once already configured -- matches the current app's own
     // "Box Plot Groups" button (011ef1c), which safely diffing an in-use
     // tuple structure is a separate feature ("Edit Point Groups"), not this one.
-    expect(session.setPointGroups(['A', 'B'])).toBe(false);
-    expect(session.getPointGroups()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    expect(session.setSlotNames(['A', 'B'])).toBe(false);
+    expect(session.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
   });
 
   it('files 5 clicks into one tuple, cycling the group cursor Min through Max, then starts a new tuple', () => {
@@ -781,13 +781,13 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     const expectedLabels = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
     for (let i = 0; i < 5; i++) {
       expect(session.getCurrentTupleIndex()).toBe(i === 0 ? null : 0);
-      expect(session.getCurrentGroupIndex()).toBe(i);
-      expect(session.getCurrentGroupLabel()).toBe(expectedLabels[i]);
+      expect(session.getCurrentSlotIndex()).toBe(i);
+      expect(session.getCurrentSlotLabel()).toBe(expectedLabels[i]);
       session.addDataPoint(300, 500 - i * 40);
     }
     // Tuple complete: cursor rolls over to a fresh tuple at the first group.
     expect(session.getCurrentTupleIndex()).toBeNull();
-    expect(session.getCurrentGroupIndex()).toBe(0);
+    expect(session.getCurrentSlotIndex()).toBe(0);
 
     const rows = session.getTupleRows();
     expect(rows).toHaveLength(1);
@@ -802,8 +802,8 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     session.applyBoxPlotGroups();
 
     session.addDataPoint(300, 500); // Min, tuple 0
-    session.nextGroupCursor(); // skip Q1
-    expect(session.getCurrentGroupLabel()).toBe('Median');
+    session.nextSlot(); // skip Q1
+    expect(session.getCurrentSlotLabel()).toBe('Median');
     session.addDataPoint(300, 300); // Median, tuple 0
 
     const rows = session.getTupleRows();
@@ -812,13 +812,13 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     expect(rows[0]!.points[2]).not.toBeNull(); // Median filled
 
     // The cursor still finds Q1 as the next open slot in the same tuple,
-    // rather than jumping ahead to Q3 -- nextGroupCursor searches forward
+    // rather than jumping ahead to Q3 -- nextSlot searches forward
     // from the current position, so it never revisits a skipped slot on
-    // its own; previousGroupCursor below is what walks back to it.
-    session.previousGroupCursor();
-    session.previousGroupCursor();
+    // its own; previousSlot below is what walks back to it.
+    session.previousSlot();
+    session.previousSlot();
     expect(session.getCurrentTupleIndex()).toBe(0);
-    expect(session.getCurrentGroupIndex()).toBe(1);
+    expect(session.getCurrentSlotIndex()).toBe(1);
   });
 
   it('removeLastPoint cleans up the tuple slot and walks the cursor back', () => {
@@ -829,12 +829,12 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
 
     session.addDataPoint(300, 500); // Min
     session.addDataPoint(300, 460); // Q1
-    expect(session.getCurrentGroupIndex()).toBe(2); // Median
+    expect(session.getCurrentSlotIndex()).toBe(2); // Median
 
     session.removeLastPoint();
     expect(session.getDataPoints()).toHaveLength(1);
     expect(session.getCurrentTupleIndex()).toBe(0);
-    expect(session.getCurrentGroupIndex()).toBe(1); // back to Q1
+    expect(session.getCurrentSlotIndex()).toBe(1); // back to Q1
     expect(session.getTupleRows()[0]!.points[1]).toBeNull();
 
     session.removeLastPoint();
@@ -842,10 +842,10 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     // The now-empty tuple is dropped entirely, not left as a blank row.
     expect(session.getTupleRows()).toHaveLength(0);
     expect(session.getCurrentTupleIndex()).toBeNull();
-    expect(session.getCurrentGroupIndex()).toBe(0);
+    expect(session.getCurrentSlotIndex()).toBe(0);
   });
 
-  it('reset and clearPoints drop point groups along with the dataset', () => {
+  it('reset and clearPoints drop slots along with the dataset', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
@@ -853,13 +853,13 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     session.addDataPoint(300, 500);
 
     session.clearPoints();
-    expect(session.hasPointGroups()).toBe(false);
+    expect(session.hasSlots()).toBe(false);
     expect(session.getCurrentTupleIndex()).toBeNull();
-    expect(session.getCurrentGroupIndex()).toBe(0);
+    expect(session.getCurrentSlotIndex()).toBe(0);
   });
 
   describe('getBoxPlotGlyphs (checkpoint 22)', () => {
-    it('is empty before point groups are configured, and while a tuple is incomplete', () => {
+    it('is empty before slots are configured, and while a tuple is incomplete', () => {
       const session = new CalibrationSession(BAR_AXES_CONFIG);
       calibrateStandardBar(session);
       session.runCalibration();
@@ -894,7 +894,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       const session = new CalibrationSession(XY_AXES_CONFIG);
       calibrateStandardXY(session);
       session.runCalibration();
-      session.setPointGroups(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+      session.setSlotNames(['Min', 'Q1', 'Median', 'Q3', 'Max']);
       for (const [x, y] of [
         [100, 100],
         [150, 100],
@@ -914,8 +914,8 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       // shape, not a mode the user must first discover and switch on. No
       // applyBoxPlotGroups() call here.
       const session = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
-      expect(session.hasPointGroups()).toBe(true);
-      expect(session.getPointGroups()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+      expect(session.hasSlots()).toBe(true);
+      expect(session.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
     });
 
     it('reads one value per point and renders a glyph for a complete tuple', () => {
@@ -1229,7 +1229,7 @@ describe('CalibrationSession (Map axes)', () => {
 
 // (T0,R0)=(200,200) t0/r0=1; (T0,R1)=(400,200) click-only; (T0,R2)=(300,100)
 // r2=10; (T1,R2)=(200,400) click-only; (T2,R2)=(400,400) click-only. Chosen
-// so both 3-point groups ({T0,R0/R1/R2} for the pen circle, {T0,R2/T1,R2/T2,R2}
+// so both 3-slots ({T0,R0/R1/R2} for the pen circle, {T0,R2/T1,R2/T2,R2}
 // for the chart circle) are non-collinear -- getCircleFrom3Pts needs that to
 // produce a real circle, not a divide-by-zero. This fixture is for exercising
 // the click-walk/global-field plumbing only, not for verifying the circle-fit
@@ -1437,23 +1437,23 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
     expect(info.color).toEqual([9, 9, 9]);
   });
 
-  it('each dataset keeps its own independent point-groups cursor', () => {
+  it('each dataset keeps its own independent slot cursor', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
 
     session.applyBoxPlotGroups();
     session.addDataPoint(300, 500); // Series 1: Min filled, cursor -> Q1
-    expect(session.getCurrentGroupLabel()).toBe('Q1');
+    expect(session.getCurrentSlotLabel()).toBe('Q1');
 
-    session.addDataset(); // Series 2, active, no point groups yet
-    expect(session.hasPointGroups()).toBe(false);
+    session.addDataset(); // Series 2, active, no slots yet
+    expect(session.hasSlots()).toBe(false);
     session.applyBoxPlotGroups();
-    expect(session.getCurrentGroupLabel()).toBe('Min'); // fresh cursor, unaffected by Series 1's
+    expect(session.getCurrentSlotLabel()).toBe('Min'); // fresh cursor, unaffected by Series 1's
 
     session.setActiveDataset(0);
-    expect(session.hasPointGroups()).toBe(true);
-    expect(session.getCurrentGroupLabel()).toBe('Q1'); // Series 1's cursor is exactly where it was left
+    expect(session.hasSlots()).toBe(true);
+    expect(session.getCurrentSlotLabel()).toBe('Q1'); // Series 1's cursor is exactly where it was left
   });
 
   it('reset() collapses back to a single fresh "Series 1" dataset', () => {
@@ -1853,7 +1853,7 @@ describe('CalibrationSession interpolation-assist (checkpoint 120)', () => {
     expect(session.getDataPoints()).toHaveLength(1);
   });
 
-  it('declines anchors on a point-group (Box Plot) dataset, like Segment Fill', () => {
+  it('declines anchors on a slot (Box Plot) dataset, like Segment Fill', () => {
     const session = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
     calibrateStandardXY(session);
     session.runCalibration();
@@ -1921,7 +1921,7 @@ describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoin
     expect(session.getDataPoints()).toHaveLength(0);
   });
 
-  it('is a no-op for an out-of-range index or a dataset without point groups', () => {
+  it('is a no-op for an out-of-range index or a dataset without slots', () => {
     const session = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
     twoBoxes(session);
     expect(() => session.removeTuple(-1)).not.toThrow();
@@ -1932,7 +1932,7 @@ describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoin
     calibrateStandardXY(xy);
     xy.runCalibration();
     xy.addDataPoint(250, 175);
-    xy.removeTuple(0); // no point groups -> declines silently
+    xy.removeTuple(0); // no slots -> declines silently
     expect(xy.getDataPoints()).toHaveLength(1);
   });
 });
@@ -1980,7 +1980,7 @@ describe('sortByNearestNeighbour — manual NN reorder (checkpoint 130)', () => 
     expect(interp.getDataPoints().length).toBeGreaterThan(2); // spline fill present
     expect(interp.canSortByNearestNeighbour()).toBe(false);
 
-    // Box Plot (point groups) -> declined regardless of count.
+    // Box Plot (slots) -> declined regardless of count.
     const box = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
     calibrateStandardBar(box);
     box.runCalibration();

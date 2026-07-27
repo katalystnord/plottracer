@@ -114,12 +114,12 @@ export function buildFlatDataCSV(rows: readonly ExportRow[], fields: readonly st
   return renderTable([flatDataSection(rows, fields)], delimitedFormat(sep));
 }
 
-/** One row per tuple/category: its label plus one column per point group,
+/** One row per tuple/category: its label plus one column per slot,
  * in group order. An unfilled slot (still-open tuple) exports as a blank
  * cell, matching the points table's own "—" placeholder in spirit. Only
  * a group's first data value is exported (dataDim is always 1 for the Bar
  * axes Box Plot uses this for -- see calibrationSession.ts's
- * getBoxPlotGlyphs, the only place point groups are offered today). */
+ * getBoxPlotGlyphs, the only place slots are offered today). */
 export function tupleDataSection(
   pointGroupNames: readonly string[],
   tupleRows: readonly TupleRow[],

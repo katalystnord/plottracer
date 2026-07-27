@@ -44,7 +44,7 @@ describe('buildFlatDataCSV', () => {
 });
 
 describe('buildTupleDataCSV', () => {
-  it('writes one row per tuple with one column per point group', () => {
+  it('writes one row per tuple with one column per slot', () => {
     const groupNames = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
     const rows: TupleRow[] = [
       {

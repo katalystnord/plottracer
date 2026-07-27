@@ -61,7 +61,7 @@ describe('PlotData', () => {
     expect(reDerived[1]).toBeCloseTo(5, 10);
   });
 
-  it('round-trips point groups (box-plot/error-bar tuples) correctly', () => {
+  it('round-trips slots (box-plot/error-bar tuples) correctly', () => {
     const pd = new PlotData();
     const cal = new Calibration(2);
     cal.addPoint(0, 500, 'ignored', '0');
@@ -73,7 +73,7 @@ describe('PlotData', () => {
 
     const ds = new Dataset();
     ds.name = 'Grouped';
-    ds.setPointGroups(['Value', 'Upper', 'Lower']);
+    ds.setSlotNames(['Value', 'Upper', 'Lower']);
     const idxVal = ds.addPixel(0, 300);
     const idxUp = ds.addPixel(0, 200);
     const idxLo = ds.addPixel(0, 400);
@@ -92,9 +92,9 @@ describe('PlotData', () => {
     const pd2 = new PlotData();
     pd2.deserialize(serialized as unknown as Parameters<PlotData['deserialize']>[0]);
     const ds2 = pd2.getDatasets()[0]!;
-    expect(ds2.getPointGroups()).toEqual(['Value', 'Upper', 'Lower']);
-    expect(ds2.getPointGroupIndexInTuple(0, idxVal)).toBe(0);
-    expect(ds2.getPointGroupIndexInTuple(0, idxUp)).toBe(1);
+    expect(ds2.getSlotNames()).toEqual(['Value', 'Upper', 'Lower']);
+    expect(ds2.getSlotIndexInTuple(0, idxVal)).toBe(0);
+    expect(ds2.getSlotIndexInTuple(0, idxUp)).toBe(1);
   });
 
   it('preserves ternary Normal orientation through a real JSON persistence cycle', () => {

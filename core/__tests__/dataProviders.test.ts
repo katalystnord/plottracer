@@ -63,7 +63,7 @@ describe('dataProviders — the column contract (checkpoint 74)', () => {
 
     it('appends Tuple + Group for a grouped (Box Plot) dataset', () => {
       const ds = new Dataset(1);
-      ds.setPointGroups(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+      ds.setSlotNames(['Min', 'Q1', 'Median', 'Q3', 'Max']);
       ds.addPixel(150, 250);
       const out = getPlotData(ds, barAxes());
       expect(out.fields).toEqual(['Label', 'Value', 'Tuple', 'Group']);

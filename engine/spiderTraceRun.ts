@@ -19,7 +19,7 @@ import { traceSpiderAlongSpokes, type SpiderTraceOptions, type SpokeRun } from '
 import type { SpiderAxes } from '../core/axes/spider.js';
 
 export interface SpiderReading {
-  /** Spoke index — the point group / table row this reading belongs to. */
+  /** Spoke index — the slot / table row this reading belongs to. */
   index: number;
   /** The axis's name, for the message. Empty when the figure's was illegible. */
   name: string;
