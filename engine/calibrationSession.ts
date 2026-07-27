@@ -1295,7 +1295,12 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
         // for exactly that reason: an axis whose name is illegible in the figure is
         // still a real axis, and a blank name is honest where an invented one is
         // not. core/axes/spider.ts falls back to the positional "Axis N".
-        { key: 'name', label: 'Name', field: 'dz', optional: true, blankValue: '' },
+        // ⚑ "(optional)" is IN THE LABEL, following Polar's "θ (optional)": the
+        // model has always accepted a blank name, but a field labelled just "Name"
+        // beside a required value reads as required, and nothing on screen said
+        // otherwise. An axis whose name is illegible in the figure is still a real
+        // axis, and a blank name is honest where an invented one is not.
+        { key: 'name', label: 'Name (optional)', field: 'dz', optional: true, blankValue: '' },
       ],
     },
   },

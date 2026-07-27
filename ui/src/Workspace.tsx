@@ -2819,7 +2819,12 @@ export function Workspace() {
         const result = session.handleCalibrationClick(px, py);
         if (result === 'awaiting-value') {
           const step = session.getCurrentStep();
-          setDataValueInputs(step ? new Array(step.valueFields.length).fill('') : []);
+          // Seed from each field's declared default (v1.4: Spider's centre value,
+          // 0). ⚑ `defaultValue` was declared on the field and read by NOTHING --
+          // the config's own comment promised a prefilled 0 that never appeared, so
+          // the value had to be typed every time. A default only exists once
+          // something fills it in.
+          setDataValueInputs(step ? step.valueFields.map((f) => f.defaultValue ?? '') : []);
           bump(); // a pending pixel, not a finalized point -- commit on confirm
         } else if (result === 'point-placed') {
           commit(); // value-less step (e.g. Polar's origin) is placed outright

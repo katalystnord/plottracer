@@ -6156,6 +6156,30 @@ describe('spider charts', () => {
     await page.waitForTimeout(150);
   }
 
+  it('prefills the centre value and lets an axis go unnamed', async () => {
+    // ⚑ Two things a user hits immediately, neither visible to a unit test.
+    // (1) `defaultValue` was declared on the centre's field and read by nothing, so
+    // the 0 the config promised never appeared and had to be typed every time.
+    // (2) The name field is optional in the model but was labelled just "Name"
+    // beside a required value, which reads as required — the same reason Polar's
+    // unused theta says "(optional)" in its own label.
+    await resetWorkspace('spider');
+    await clickAt(CX, CY);
+    expect(await page.locator('[data-testid="data-value-input"]').inputValue()).toBe('0');
+    await page.locator('[data-testid="confirm-data-value"]').click();
+
+    // Place the first axis with a VALUE but no name, and confirm it is accepted.
+    const [px, py] = spoke(0, 3);
+    await clickAt(px, py);
+    expect(await page.locator('[data-testid="data-value-input-1"]').getAttribute('placeholder')).toContain('optional');
+    await page.locator('[data-testid="data-value-input"]').click();
+    await page.keyboard.type('120');
+    await page.locator('[data-testid="confirm-data-value"]').click();
+    await page.waitForTimeout(120);
+    // It advanced to the next axis, so the blank name did not block the step.
+    expect(await textOf('calibrated-status')).toBe('2/4 set');
+  });
+
   it('is offered in the graph-type dropdown, and starts at three axes', async () => {
     await resetWorkspace('spider');
     // ⚑ The count and the add control are visible BEFORE anything is placed. An
