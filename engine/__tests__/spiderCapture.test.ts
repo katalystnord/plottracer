@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, SPIDER_AXES_CONFIG, XY_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, SPIDER_AXES_CONFIG, XY_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../calibrationSession.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { Dataset } from '../../core/dataset.js';
 
@@ -363,5 +363,93 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     const stored = session.getDataPoints()[0]!;
     expect(stored.px).toBeCloseTo(px, 6);
     expect(stored.py).toBeCloseTo(py, 6);
+  });
+});
+
+/**
+ * N x 1D, not 1.5D (David's taxonomy, 2026-07-27).
+ *
+ * A spider reused the Box Plot point-group machinery — rightly, the capture
+ * workflow is the same — but it is not the same KIND of thing. A box's five
+ * numbers describe one distribution and only together; a spider's six describe six
+ * independent measurements that happen to share an origin. Every rule keyed on
+ * "has point groups" inherited the box's meaning, and this is where that shows.
+ */
+describe('a spider profile is a row of independent readings', () => {
+  it('removes ONE reading, not the whole profile', () => {
+    // ⚑ Found by driving the app: the Eraser blanked a six-axis series. The
+    // whole-tuple rule is right for a box (half a box is nonsense) and wrong here
+    // (an empty axis is a state the app produces on purpose).
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    expect(session.getDataPoints()).toHaveLength(3);
+
+    session.removeDataPoints([1]);
+
+    expect(session.getDataPoints()).toHaveLength(2);
+    const values = session.getSpiderTable().columns[0]!.values;
+    expect(values[0]).not.toBeNull();
+    expect(values[1]).toBeNull(); // the one removed, and only that one
+    expect(values[2]).not.toBeNull();
+  });
+
+  it('offers the freed slot as the next thing to capture', () => {
+    // The gap is not a hole to tidy away, it is the worklist — the same thing the
+    // axis-aware trace leaves behind when it refuses a ray.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    session.removeDataPoints([1]);
+    expect(session.getCurrentGroupIndex()).toBe(1);
+    expect(session.getCurrentTupleIndex()).toBe(0);
+  });
+
+  it('drops the profile only when its last reading goes', () => {
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    session.removeDataPoints([0, 1, 2]);
+    expect(session.getDataPoints()).toHaveLength(0);
+    expect(session.getSpiderTable().columns[0]!.values.every((v) => v === null)).toBe(true);
+  });
+
+  it('aims the cursor at a CHOSEN empty slot, so a second gap is reachable', () => {
+    // David: "Can I make an empty slot active again, so that I can re-add a point
+    // that is missing?" With two gaps the automatic cursor only ever offers the
+    // first, so the second cannot be filled until the first is.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    session.removeDataPoints([0]);
+    session.removeDataPoints([session.getDataPoints().length - 1]); // now axes 0 and 2 are empty
+    expect(session.getCurrentGroupIndex()).toBe(0);
+
+    expect(session.setPointGroupCursor(0, 2)).toBe(true);
+    expect(session.getCurrentGroupIndex()).toBe(2);
+
+    // ...and a capture lands in THAT slot.
+    session.addDataPoint(...spokePixel(2, 3, 25));
+    const values = session.getSpiderTable().columns[0]!.values;
+    expect(values[2]).not.toBeNull();
+    expect(values[0]).toBeNull();
+  });
+
+  it('refuses to aim at a slot that already holds a reading', () => {
+    // Capturing there would overwrite the slot's pixel index and orphan the point
+    // it displaced -- a reading lost with nothing on screen to say so.
+    const session = THREE();
+    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
+    expect(session.setPointGroupCursor(0, 1)).toBe(false);
+  });
+
+  it('refuses on a graph type whose tuple is ONE object', () => {
+    // A box plot's cursor walks its members as a unit: letting it be aimed would
+    // allow a box built out of order and left permanently half-made.
+    //
+    // ⚑ This test first used XY, which has no point groups at all — so the FIRST
+    // clause of the guard answered and the capability check was never reached. It
+    // asserted the right thing and could not fail (caught by neutering the very
+    // clause it claims to cover). Box Plot carries its groups from the start, so
+    // here the first clause passes and `tupleMembers` is what does the refusing.
+    const session = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+    expect(session.hasPointGroups()).toBe(true);
+    expect(session.setPointGroupCursor(null, 3)).toBe(false);
   });
 });

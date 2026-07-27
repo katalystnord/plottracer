@@ -65,6 +65,7 @@ import {
   GeometryIcon,
   HelpIcon,
   ChevronDownIcon,
+  EyedropperIcon,
   MeasureIcon,
   ImageEditIcon,
   ErrorBarsIcon,
@@ -4632,6 +4633,7 @@ export function Workspace() {
   const histogramBins = useMemo(() => session.getHistogramBins(), [session, version]);
   const currentGroupLabel = useMemo(() => session.getCurrentGroupLabel(), [session, version]);
   const currentTupleIndex = useMemo(() => session.getCurrentTupleIndex(), [session, version]);
+  const currentGroupIndex = useMemo(() => session.getCurrentGroupIndex(), [session, version]);
   const boxPlotGlyphs = useMemo(() => session.getBoxPlotGlyphs(), [session, version]);
   // Multi-figure (checkpoint 110). figuresRef is a ref, but every figure op ends
   // in setActiveFigureIndex, so this reads fresh on the re-render that follows.
@@ -5606,8 +5608,10 @@ export function Workspace() {
                     close();
                     setEyedropper('grid');
                   }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
                 >
-                  ⌖ Pick from image
+                  <EyedropperIcon />
+                  Pick from image
                 </button>
               </div>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -6562,8 +6566,14 @@ export function Workspace() {
                       spellCheck={false}
                       style={{ width: 84 }}
                     />
-                    <button type="button" data-testid="color-trace-eyedropper" onClick={() => setEyedropper('trace')}>
-                      ⌖ Pick from image
+                    <button
+                      type="button"
+                      data-testid="color-trace-eyedropper"
+                      onClick={() => setEyedropper('trace')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <EyedropperIcon />
+                      Pick from image
                     </button>
                   </div>
                   {/* No shape to choose on a spider: the rays decide where to read, so
@@ -7328,23 +7338,55 @@ export function Workspace() {
                           // the table as the only possible route to them — and it
                           // wasn't wired, so they could not be reached at all.
                           onClick={() => {
-                            if (pointIndex == null) return;
                             if (col.seriesIndex !== activeDatasetIndex) handleSelectDataset(col.seriesIndex);
+                            // ⚑ An EMPTY cell aims the capture cursor at that slot
+                            // (David: "Can I make an empty slot active again, so
+                            // that I can re-add a point that is missing?"). The
+                            // cursor otherwise walks to the FIRST gap, which cannot
+                            // reach the second one until the first is filled — and
+                            // gaps are normal here: the axis-aware trace leaves one
+                            // wherever it refused a ray. Clicking the dash is how
+                            // that refusal list becomes a worklist.
+                            if (pointIndex == null) {
+                              session.setPointGroupCursor(
+                                col.profileIndex < session.getDataset().getAllTuples().length ? col.profileIndex : null,
+                                axisIndex
+                              );
+                              setActivePointIndex(null);
+                              bump();
+                              return;
+                            }
                             setActivePointIndex(pointIndex);
                             setPickedPointIndex(pointIndex);
                             bump();
                           }}
-                          title={pointIndex == null ? undefined : 'Click to select this point'}
+                          title={
+                            pointIndex == null
+                              ? `Click to fill ${axisName} next`
+                              : 'Click to select this point'
+                          }
                           style={{
                             textAlign: 'right',
                             paddingRight: 16,
                             paddingLeft: 10,
                             borderLeft: `1px solid ${theme.color.border.regular}`,
-                            cursor: pointIndex == null ? 'default' : 'pointer',
+                            cursor: 'pointer',
                             background:
                               pointIndex != null &&
                               pointIndex === activePointIndex &&
                               col.seriesIndex === activeDatasetIndex
+                                ? theme.color.background.canvas
+                                // ⚑ The slot the NEXT click fills is marked here too,
+                                // not only in the "Next point fills" line: this is the
+                                // table you are reading when you notice a gap, so it is
+                                // where the answer to "which one am I about to fill?"
+                                // has to be visible.
+                                : pointIndex == null &&
+                                  col.seriesIndex === activeDatasetIndex &&
+                                  axisIndex === currentGroupIndex &&
+                                  (currentTupleIndex === null
+                                    ? col.profileIndex >= session.getDataset().getAllTuples().length
+                                    : col.profileIndex === currentTupleIndex)
                                 ? theme.color.background.canvas
                                 : undefined,
                           }}

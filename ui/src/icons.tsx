@@ -48,6 +48,13 @@ import openSvg from '../../icons/open.svg?raw';
 import placePointSvg from '../../icons/custom/place-point.svg?raw';
 import segmentFillSvg from '../../icons/custom/segment-fill.svg?raw';
 import chevronDownSvg from '../../icons/custom/chevron-down.svg?raw';
+// Eyedropper (David, 2026-07-27): the "Pick from image" buttons wore a bare ⌖
+// glyph, which is the reticle Place Point already means. A pipette is the symbol
+// every image editor uses for "sample a colour from the picture", and it is a NEW
+// original rather than a reuse of custom/droplet.svg -- that one already means
+// "Display Color" in this set, and one icon for two unrelated actions is the exact
+// ambiguity the rest of this file exists to avoid.
+import eyedropperSvg from '../../icons/custom/eyedropper.svg?raw';
 import undoSvg from '../../icons/undo.svg?raw';
 import redoSvg from '../../icons/redo.svg?raw';
 import imageSvg from '../../icons/custom/image.svg?raw';
@@ -120,6 +127,7 @@ export const OpenIcon = () => <Icon svg={openSvg} />;
 export const CalibrateIcon = () => <Icon svg={placePointSvg} />;
 export const SegmentFillIcon = () => <Icon svg={segmentFillSvg} />;
 export const ChevronDownIcon = () => <Icon svg={chevronDownSvg} />;
+export const EyedropperIcon = () => <Icon svg={eyedropperSvg} />;
 export const UndoIcon = () => <Icon svg={undoSvg} />;
 export const RedoIcon = () => <Icon svg={redoSvg} />;
 export const ImageIcon = () => <Icon svg={imageSvg} />;

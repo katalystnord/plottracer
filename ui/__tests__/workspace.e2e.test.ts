@@ -6497,6 +6497,44 @@ describe('spider charts', () => {
     }
   });
 
+  it('erases ONE reading, and the freed slot can be re-aimed from the table', async () => {
+    // ⚑ Both halves found by driving the app. The Eraser blanked a whole six-axis
+    // series, because a spider inherited the Box Plot rule that a member stands for
+    // its tuple — true of a box, false of six independent readings. And once there
+    // are two gaps, the cursor only ever offers the first, so the second could not
+    // be filled at all (David: "Can I make an empty slot active again?").
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+    for (const axisIndex of [0, 1, 2]) expect(await textOf(`spider-cell-0-${axisIndex}`)).toMatch(/\d/);
+
+    // Erase the middle reading only.
+    await page.getByTestId('mode-eraser').click();
+    await clickAt(...spoke(1, 3, R / 2));
+    await page.waitForTimeout(150);
+
+    expect(await textOf('spider-cell-0-0')).toMatch(/\d/); // untouched
+    expect(await textOf('spider-cell-0-1')).toBe('—'); // the one erased
+    expect(await textOf('spider-cell-0-2')).toMatch(/\d/); // untouched
+    // ...and the freed slot is what the next click fills.
+    expect(await textOf('point-group-status')).toContain('Weight');
+
+    // Now erase a SECOND reading, leaving two gaps, and aim at the later one.
+    await clickAt(...spoke(0, 3, R / 2));
+    await page.waitForTimeout(150);
+    expect(await textOf('point-group-status')).toContain('Strength'); // the first gap
+    await page.getByTestId('spider-cell-0-1').click();
+    await page.waitForTimeout(150);
+    expect(await textOf('point-group-status')).toContain('Weight'); // the one asked for
+
+    // And a capture lands in the slot that was aimed at, not the first gap.
+    await page.getByTestId('mode-place-point').click();
+    await clickAt(...spoke(1, 3, R / 4));
+    await page.waitForTimeout(150);
+    expect(await textOf('spider-cell-0-1')).toMatch(/\d/);
+    expect(await textOf('spider-cell-0-0')).toBe('—');
+  });
+
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
     // ⚑ The regression the whole session-owned step list exists to prevent. Four
     // sites in Workspace.tsx used to read `config.steps`, which for a spider holds

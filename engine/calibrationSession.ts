@@ -638,6 +638,30 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * 66). Undefined keeps the Box Plot default, since that's still the only
    * other tuple user. */
   tupleNoun?: string;
+  /**
+   * What a tuple's members ARE to each other (David's dimensional taxonomy,
+   * 2026-07-27).
+   *
+   * - `'object'` (default) — the members describe ONE thing, and only together:
+   *   a box's Min/Q1/Median/Q3/Max is a single distribution, a histogram bin's
+   *   two corners are a single interval. Half a box is not half the data, it is
+   *   nonsense. David calls these **1.5D**: one axis carries arbitrary
+   *   categories, only the other does mathematical work.
+   * - `'independent'` — the tuple is a ROW of separate readings, one per named
+   *   slot, each meaningful on its own and each legitimately absent. A spider is
+   *   **N × 1D**: N independent 1-D scales sharing an origin, and a datum is one
+   *   number on one named axis. Nothing pairs slot 2 with slot 5.
+   *
+   * ⚑ WHY THIS IS A CAPABILITY AND NOT A `config.id === 'spider'` CHECK. Spider
+   * REUSED the Box Plot point-group machinery, which was the right call — the
+   * capture workflow is genuinely the same — but every rule keyed on
+   * `hasPointGroups()` came along with it, including rules that only hold for an
+   * indivisible object. That is how the Eraser came to delete a whole six-axis
+   * profile when asked to remove one reading (David, driving the app). The
+   * machinery is shared; the MEANING is not, and the meaning is what these rules
+   * actually depend on.
+   */
+  tupleMembers?: 'object' | 'independent';
   /** True when this type's calibration walks x1 -> x2 -> y1 -> y2, so ui/ can
    * offer "Common origin" (confirming X2 auto-reuses X1's pixel for Y1, the
    * usual axes-cross-at-one-corner case -- checkpoint 50).
@@ -1264,6 +1288,11 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // "box", which is how Histogram's bins once announced themselves as "new box"
   // (checkpoint 66, caught only by driving the real app).
   tupleNoun: 'profile',
+  // ⚑ N x 1D, not 1.5D: six independent readings sharing an origin. An empty slot
+  // is a state this app produces deliberately (the axis-aware trace leaves a
+  // doubtful ray empty), so removing one reading clears one slot -- it does not
+  // delete the profile the way removing a member of a BOX deletes the box.
+  tupleMembers: 'independent',
   options: [{ key: 'isLogRadial', label: 'Log axes', kind: 'checkbox', default: false }],
   steps: [
     {
@@ -3071,6 +3100,40 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.activeEntry.pointGroupCursor.tupleIndex;
   }
 
+  /**
+   * Aim the capture cursor at ONE named slot (v1.4, David: *"Can I make an empty
+   * slot active again, so that I can re-add a point that is missing?"*).
+   *
+   * The cursor otherwise walks to the first open slot it finds, which is right
+   * while stepping round a chart and useless once there are two gaps: the second
+   * one cannot be reached until the first is filled. This is the deliberate route
+   * to a particular gap — the table's empty cells call it.
+   *
+   * ⚑ REFUSES A SLOT THAT IS ALREADY FILLED. Capturing into it would overwrite
+   * that slot's pixel index and orphan the point it displaced — a reading lost
+   * with nothing on screen to say so. Re-taking a reading is delete-then-place,
+   * two visible steps, not one silent one.
+   *
+   * ⚑ ONLY WHERE SLOTS ARE INDEPENDENT (N x 1D). On a box plot, "fill Q3 next"
+   * would let a box be built out of order and left permanently half-made; that
+   * type's tuples are one object and its cursor walks them as one.
+   *
+   * `tupleIndex` null aims at a NEW tuple, starting at `groupIndex`.
+   */
+  setPointGroupCursor(tupleIndex: number | null, groupIndex: number): boolean {
+    const entry = this.activeEntry;
+    const dataset = entry.dataset;
+    if (!dataset.hasPointGroups() || this.config.tupleMembers !== 'independent') return false;
+    if (groupIndex < 0 || groupIndex >= dataset.getPointGroups().length) return false;
+    if (tupleIndex !== null) {
+      const tuple = dataset.getAllTuples()[tupleIndex];
+      if (!tuple) return false;
+      if (tuple[groupIndex] != null) return false; // occupied -- see above
+    }
+    entry.pointGroupCursor = { tupleIndex, groupIndex };
+    return true;
+  }
+
   /** Label for the group the next Place Point click will fill -- mirrors
    * wpd.pointGroups.refreshControls()'s fallback naming for an unnamed group. */
   getCurrentGroupLabel(): string {
@@ -3604,10 +3667,28 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return;
     }
 
-    // Grouped series (box plot / histogram): a selected member stands for its
-    // whole tuple (a box / a bin) -- removing one member would leave a partial
-    // box. Map to unique tuples, remove each whole, high tuple-index first.
+    // Grouped series. What removing ONE member means depends on what the members
+    // ARE to each other -- see AxesTypeConfig.tupleMembers.
     if (dataset.hasPointGroups()) {
+      // N x 1D (spider): the slots are independent readings, so remove exactly the
+      // ones asked for and leave their neighbours standing. The freed slot is not
+      // a hole to be tidied away: it is the next thing to capture, which is why the
+      // cursor is re-aimed at it below -- the same worklist the axis-aware trace
+      // leaves behind when it refuses a ray.
+      //
+      // ⚑ This branch exists because the whole-tuple rule below deleted a six-axis
+      // profile when the Eraser was asked for one reading (David, driving the app).
+      // The rule was right for the type it was written for and wrong for the type
+      // that inherited it.
+      if (this.config.tupleMembers === 'independent') {
+        const uniq = [...new Set(indices)].filter((i) => i >= 0 && i < dataset.getCount());
+        for (const i of uniq.sort((a, b) => b - a)) this.removeDataPointAt(i);
+        this.activeEntry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+        return;
+      }
+      // 1.5D (box plot / histogram): a selected member stands for its whole tuple
+      // -- removing one member would leave a partial box, which is not half the
+      // data but nonsense. Map to unique tuples, remove each whole, high index first.
       const tuples = new Set<number>();
       for (const i of indices) {
         const t = dataset.getTupleIndex(i);

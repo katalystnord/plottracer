@@ -808,8 +808,16 @@ def gen_spider():
         pts.append(pts[0])
         arr = np.array(pts)
         ax.plot(arr[:, 0], arr[:, 1], color=colour, lw=2.0, zorder=3, label=sname)
+        # ⚑ NO WHITE MARKER RIM (David, 2026-07-27). A white edge is a styling
+        # choice, not what radar charts normally look like: real ones draw a
+        # continuous line, or markers laid OVER it — not markers that cut it. And
+        # the rim is not merely cosmetic here. It breaks the ink exactly where the
+        # series crosses its axis, which is the one place the figure states a
+        # number: reading outward along the ray gives line, white gap, marker,
+        # i.e. one crossing that looks like two. An example should be the thing it
+        # stands for, and this one was quietly the hardest case in the set.
         ax.plot(arr[:-1, 0], arr[:-1, 1], marker, color=colour, markersize=7,
-                markeredgecolor="white", markeredgewidth=1.0, zorder=4)
+                markeredgecolor=colour, markeredgewidth=1.0, zorder=4)
 
     ax.plot(0, 0, "o", color="#444444", markersize=4, zorder=5)
     # The centre's value, stated on the figure. The app asks for it once during
