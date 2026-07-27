@@ -6308,6 +6308,61 @@ describe('spider charts', () => {
     expect(await textOf('points-table')).toMatch(/-2[45]\./);
   });
 
+  it('types a value into a cell and slides that point along its own axis', async () => {
+    // David: "I should be able to both edit the number OR move the point on the
+    // axis." Dragging already worked (updateDataPointPixel snaps to the point's own
+    // spoke); commitDataPointEdit bailed on anything but XY, so the number in the
+    // table was read-only with no sign that it was.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+
+    await page.getByTestId('spider-value-0-0').click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('75');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+
+    // ⚑ The number read back is derived from the PIXEL, through the same projection
+    // that produced the old one — so this passing means the marker actually moved
+    // out along the ray, not that the cell is holding typed text.
+    expect(await textOf('spider-cell-0-0')).toMatch(/^75/);
+    // ...and only that point moved: the other two axes still read what was clicked.
+    // (Matched loosely, like the off-axis test above: the canvas is fitted, so the
+    // original clicks landed at the nearest device pixel rather than at exact
+    // geometry. What is asserted is that they did not MOVE.)
+    expect(await textOf('spider-cell-0-1')).toMatch(/^(49|50)/);
+    expect(await textOf('spider-cell-0-2')).toMatch(/^(49|50)/);
+  });
+
+  it('lets a cell reach a point the canvas keeps inert, and the live ray follows it', async () => {
+    // ⚑ Two behaviours that shipped in fc19687 without coverage. Points of an
+    // INACTIVE series are deliberately inert on the canvas so a click can never land
+    // on the wrong series — which leaves the table as the only route to them. And
+    // the live-ray highlight has to follow the SELECTION, or it points at the axis
+    // the next capture would fill while the selected point sits on another.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(150);
+    await clickAt(...spoke(0, 3, R / 3));
+    // Series 2 is active and its cursor has rolled on to Weight, so THAT is the live
+    // ray; series 1's numbers are plain text, not editable.
+    expect(await textOf('calib-preview-emphasis')).toBe('1');
+    expect(await page.getByTestId('spider-value-0-0').count()).toBe(0);
+
+    // Clicking series 1's Cost cell reaches back into the other series.
+    await page.getByTestId('spider-cell-0-2').click();
+    await page.waitForTimeout(150);
+    // The highlight moved to the PICKED point's axis (Cost, index 2) rather than
+    // staying on the capture cursor...
+    expect(await textOf('calib-preview-emphasis')).toBe('2');
+    // ...and series 1 is active again, so its cells now offer the edit.
+    await page.getByTestId('spider-value-0-2').waitFor({ state: 'visible' });
+  });
+
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
     // ⚑ The regression the whole session-owned step list exists to prevent. Four
     // sites in Workspace.tsx used to read `config.steps`, which for a spider holds

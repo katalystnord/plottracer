@@ -894,6 +894,20 @@ export function Workspace() {
   // spreadsheet. Set to the last-placed point on placement; a canvas dot click or
   // a spreadsheet row click re-selects; null when there's no selection.
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
+  // ⚑ WHY THE SELECTION IS NOT ENOUGH ON ITS OWN. Placing a point selects it, so
+  // "a point is selected" is true almost all the time and cannot mean "the user
+  // picked this one to look at". A spider's live axis ray needs that distinction:
+  // while stepping round the chart the highlight must name the axis about to be
+  // FILLED (that is the whole drift-prevention mechanism), but once the user picks
+  // a recorded point it must name the axis that point sits ON, or it asserts
+  // something false about the selection (David, 2026-07-27).
+  //
+  // So this records which point was picked DELIBERATELY -- by a marker click, a
+  // table cell, Q/W stepping or the context menu -- and capture clears it. It is
+  // only ever honoured while it still equals activePointIndex, so every existing
+  // "clear the selection" site invalidates it for free, which is what keeps a
+  // second piece of selection state from drifting out of step with the first.
+  const [pickedPointIndex, setPickedPointIndex] = useState<number | null>(null);
   // The Select tool's multi-selection (David 2026-07-21): a set of active-series
   // DATA-point indices, filled by a marquee box or single/Shift clicks. Kept
   // separate from activePointIndex (single-select, used by Place Point) so the
@@ -2140,6 +2154,7 @@ export function Workspace() {
         const nextPos =
           cur === -1 ? (dir === 1 ? 0 : selectable.length - 1) : (cur + dir + selectable.length) % selectable.length;
         setActivePointIndex(selectable[nextPos]!);
+        setPickedPointIndex(selectable[nextPos]!);
         return;
       }
       // Digit hotkeys mirror the rail order (v0.8, 0-based). Each guard matches
@@ -2879,6 +2894,11 @@ export function Workspace() {
       const placed = session.getDataPoints();
       const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
       setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
+      // Placing a point selects it, but the user did not PICK it to look at -- they
+      // are stepping round the chart, and the guidance they need is the next slot.
+      // Cleared explicitly rather than left alone: with points deleted, the new
+      // index can coincide with a previously picked one.
+      setPickedPointIndex(null);
       commit();
     },
     [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured]
@@ -2915,6 +2935,7 @@ export function Workspace() {
         return;
       }
       setActivePointIndex(idx);
+      setPickedPointIndex(idx);
       setActiveHandleKey(null);
     } else {
       // A calibration handle (its id is the step key). Only listening/clickable in
@@ -3097,8 +3118,8 @@ export function Workspace() {
 
   // Apply an in-progress datapoint value edit (checkpoint 39): re-derive the
   // point's pixel from the edited data value via the axes' inverse transform
-  // and reposition it, so the canvas marker moves to match. XY only -- the
-  // other axes types' dataToPixel is an unimplemented stub (see core/axes/
+  // and reposition it, so the canvas marker moves to match. XY and SPIDER only --
+  // the other axes types' dataToPixel is an unimplemented stub (see core/axes/
   // bar.ts's note; the same reason Curve Fit/Geometry are XY-only), so their
   // cells stay read-only and this never runs for them.
   const commitDataPointEdit = useCallback(() => {
@@ -3106,7 +3127,7 @@ export function Workspace() {
     if (!cell) return;
     setEditingCell(null);
     const point = session.getDataPoints()[cell.index];
-    if (!point || !point.data || !axes || config.axesKind !== 'xy') return;
+    if (!point || !axes) return;
     // The model-side rule, at the one point every edit entrance converges on: a
     // spline-DERIVED sample is not writable, because rebuildInterpolation
     // regenerates it from the anchors and the write would be silently undone the
@@ -3118,12 +3139,34 @@ export function Workspace() {
     if (session.getDataPointRoles()[cell.index] === 'interpolated') return;
     const parsed = Number(cell.value);
     if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> revert to derived
-    const nextData = [...point.data];
-    nextData[cell.axis] = parsed;
-    const pixel = (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } }).dataToPixel(
-      nextData[0]!,
-      nextData[1]!
-    );
+
+    let pixel: { x: number; y: number };
+    if (config.axesKind === 'spider') {
+      // ⚑ On a spider `cell.axis` is the SPOKE the point was CAPTURED against --
+      // its row in the table, i.e. its slot in the point group -- not a data
+      // dimension. That is the same rule the table's reading and the export
+      // follow, and for the same reason: the nearest ray agrees for a good click
+      // and diverges exactly when the user mis-clicked, so inverting against it
+      // would slide the point onto a DIFFERENT axis's scale while the row it sat
+      // in still named this one. dataToPixel here is a real inverse of the
+      // projection that produced the number being edited, so the round trip is
+      // exact; a value with no pixel (a log axis asked for <= 0) answers NaN and
+      // is refused below rather than landing at the image's top-left corner.
+      pixel = (axes as unknown as { dataToPixel(index: number, value: number): { x: number; y: number } }).dataToPixel(
+        cell.axis,
+        parsed
+      );
+    } else if (config.axesKind === 'xy') {
+      if (!point.data) return;
+      const nextData = [...point.data];
+      nextData[cell.axis] = parsed;
+      pixel = (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } }).dataToPixel(
+        nextData[0]!,
+        nextData[1]!
+      );
+    } else {
+      return;
+    }
     if (!Number.isFinite(pixel.x) || !Number.isFinite(pixel.y)) return; // e.g. log axis, non-positive input
     session.updateDataPointPixel(cell.index, pixel.x, pixel.y);
     commit();
@@ -4557,18 +4600,25 @@ export function Workspace() {
   // and they never coexist (the tuple ones only exist on a project saved under
   // the retired "Error Bars" graph type).
   const errorWhiskers = useMemo(() => session.getErrorWhiskers(), [session, version]);
-  // ⚑ The live ray follows the ACTIVE POINT when one is selected, falling back to
-  // the capture cursor otherwise (David, 2026-07-27). Selecting a recorded point on
-  // another spoke used to leave the highlight where the NEXT capture would go, so
-  // it pointed at one axis while the selection sat on another.
+  // ⚑ The live ray follows a PICKED point, falling back to the capture cursor
+  // otherwise (David, 2026-07-27). Selecting a recorded point on another spoke used
+  // to leave the highlight where the NEXT capture would go, so it pointed at one
+  // axis while the selection sat on another.
+  //
+  // ⚑ "Picked", not merely "selected" — see pickedPointIndex. Keying this on
+  // activePointIndex alone silently broke the highlight's OTHER job: placing a point
+  // selects it, so the ray stopped on the axis just filled instead of moving to the
+  // next one to fill, which is the drift-prevention the ray exists for. Caught by an
+  // e2e test that already asserted the walk round the chart — a reminder that a fix
+  // can be the defect, and that the suite has to run before the commit, not after.
   const calibPreview = useMemo(
     () =>
       session.getCalibrationPreview(
-        config.id === 'spider' && activePointIndex != null
+        config.id === 'spider' && activePointIndex != null && pickedPointIndex === activePointIndex
           ? session.getSpokeIndexOfPoint(activePointIndex)
           : undefined
       ),
-    [session, version, config, activePointIndex]
+    [session, version, config, activePointIndex, pickedPointIndex]
   );
   const curveFitState = useMemo(
     () => (config.supportsCurveFit && axes ? getCurveFitState(session.getDataset()) : null),
@@ -4957,6 +5007,48 @@ export function Workspace() {
         data-testid={`data-value-${suffix}-${index}`}
         onClick={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
         title="Click to edit — moves the point on the canvas"
+        style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
+      >
+        {fmtValue(value)}
+      </span>
+    );
+  };
+
+  // One value in the spider table. The same click-to-edit affordance as the XY
+  // table, keyed by the SPOKE the point was captured on rather than by a data
+  // dimension -- committing runs it back through SpiderAxes.dataToPixel and slides
+  // the marker along that ray. This is the typed twin of dragging the marker,
+  // which locks to the axis and already worked (David: "I should be able to both
+  // edit the number OR move the point on the axis").
+  //
+  // The span sits inside the cell whose click SELECTS the point, so opening the
+  // editor selects it too -- which is what makes the live ray highlight the axis
+  // being typed into while the dot slides along it.
+  // (`seriesIndex` names the cell for the tests, matching the enclosing
+  // `spider-cell-<series>-<axis>`; the EDIT itself is keyed by point index, which is
+  // per-series, which is why only the active series renders this.)
+  const renderEditableSpiderValue = (seriesIndex: number, pointIndex: number, axisIndex: number, value: number) => {
+    if (editingCell?.index === pointIndex && editingCell.axis === axisIndex) {
+      return (
+        <input
+          data-testid={`spider-edit-${seriesIndex}-${axisIndex}`}
+          autoFocus
+          value={editingCell.value}
+          onChange={(e) => setEditingCell({ index: pointIndex, axis: axisIndex, value: e.target.value })}
+          onBlur={commitDataPointEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitDataPointEdit();
+            else if (e.key === 'Escape') setEditingCell(null);
+          }}
+          style={{ width: 64, textAlign: 'right' }}
+        />
+      );
+    }
+    return (
+      <span
+        data-testid={`spider-value-${seriesIndex}-${axisIndex}`}
+        onClick={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
+        title="Click to edit — moves the point along its own axis"
         style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
       >
         {fmtValue(value)}
@@ -6623,6 +6715,7 @@ export function Workspace() {
               data-testid="ctx-set-active"
               onClick={() => {
                 setActivePointIndex(ctxMenu.index);
+                setPickedPointIndex(ctxMenu.index);
                 setCtxMenu(null);
               }}
             >
@@ -7144,6 +7237,7 @@ export function Workspace() {
                             if (pointIndex == null) return;
                             if (col.seriesIndex !== activeDatasetIndex) handleSelectDataset(col.seriesIndex);
                             setActivePointIndex(pointIndex);
+                            setPickedPointIndex(pointIndex);
                             bump();
                           }}
                           title={pointIndex == null ? undefined : 'Click to select this point'}
@@ -7162,8 +7256,22 @@ export function Workspace() {
                           }}
                         >
                           {/* An axis this series has not reached reads as a dash, not
-                              a zero — nothing was measured there. */}
-                          {value == null ? <span style={{ color: theme.color.text.legend }}>—</span> : fmtValue(value)}
+                              a zero — nothing was measured there.
+
+                              ⚑ Typing is offered on the ACTIVE series only, the same
+                              rule the XY table follows — and it has to be, because the
+                              editor is keyed by (point index, axis) and point indices
+                              are per-series, so two columns would otherwise open an
+                              editor on the same keystroke. One click on another
+                              column makes it active (above); its cells then read as
+                              editable. */}
+                          {value == null || pointIndex == null ? (
+                            <span style={{ color: theme.color.text.legend }}>—</span>
+                          ) : col.seriesIndex === activeDatasetIndex ? (
+                            renderEditableSpiderValue(col.seriesIndex, pointIndex, axisIndex, value)
+                          ) : (
+                            fmtValue(value)
+                          )}
                         </td>
                       );
                     })}
@@ -7323,6 +7431,7 @@ export function Workspace() {
                         return;
                       }
                       setActivePointIndex(i);
+                      setPickedPointIndex(i);
                     };
                     return (
                       <tr key={i} data-testid={`point-row-${i}`} aria-selected={isActive} onClick={selectRow} style={{ cursor: 'pointer', background: rowBg }}>
