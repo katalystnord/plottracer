@@ -4366,6 +4366,16 @@ export function Workspace() {
     }
     const { data, width, height } = imageData;
     const target = hexToRGB(colorTraceColor);
+    // ⚑ THE SERIES ADOPTS THE COLOUR IT WAS TRACED FROM (David, 2026-07-27). The
+    // series colour's whole job is to say WHICH series this is, on the canvas and
+    // in the table -- and after a By-colour trace the strongest possible answer is
+    // the ink the figure itself drew it in. Without this, series are coloured in
+    // creation order, so a green-swatched "Series 3" ends up sitting on the red
+    // curve: markers that contradict the picture underneath them.
+    //
+    // Display only. Nothing about the record moves (tenet 9), it rides the same
+    // commit as the trace, and one Ctrl+Z takes it back with the points.
+    const adoptTracedColour = () => session.setDatasetColor(session.getActiveDatasetIndex(), target);
     // Warn on an over-broad match: the colour likely grabbed the grid/axes/text,
     // not just the series (the live preview overlay shows exactly what — ckpt 121).
     const overBroad = (matched: number) => {
@@ -4417,7 +4427,10 @@ export function Workspace() {
       const { pct, warn } = overBroad(result.matched);
       parts.push(`${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
       setColorTraceInfo(parts.join(' '));
-      if (placed > 0) commit();
+      if (placed > 0) {
+        adoptTracedColour();
+        commit();
+      }
       return;
     }
     if (colorTraceShape === 'scatter') {
@@ -4427,6 +4440,7 @@ export function Workspace() {
         return;
       }
       session.addSegmentFillPoints(result.points);
+      adoptTracedColour();
       const { pct, warn } = overBroad(result.matched);
       setColorTraceInfo(
         `Placed ${result.blobs} point${result.blobs === 1 ? '' : 's'} (one per marker) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
@@ -4440,6 +4454,7 @@ export function Workspace() {
       return;
     }
     session.addSegmentFillPoints(result.points);
+    adoptTracedColour();
     const { pct, warn } = overBroad(result.matched);
     setColorTraceInfo(`Traced ${result.points.length} points from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
     commit();
@@ -5245,8 +5260,8 @@ export function Workspace() {
       // rather than the refusal it is.
       if (mode === 'color-trace')
         return config.id === 'spider'
-          ? 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.'
-          : 'By colour — pick the series’ colour (or ⌖ from the image), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+          ? 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.'
+          : 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
       if (mode === 'interpolate') {
         if (dataPoints.length === 0)
           return 'Interpolate — click a few guide points along one curve; the curve fills in between them.';
@@ -6931,10 +6946,10 @@ export function Workspace() {
             }}
           >
             {eyedropper === 'grid'
-              ? '⌖ Click a gridline on the image to sample its colour'
+              ? 'Pipette armed — click a gridline on the image to sample its colour'
               : eyedropper === 'trace'
-              ? '⌖ Click the curve on the image to sample the colour to trace'
-              : '⌖ Click the series’ curve on the image to take its colour'}
+              ? 'Pipette armed — click the curve on the image to sample the colour to trace'
+              : 'Pipette armed — click the series’ curve on the image to take its colour'}
             <button
               type="button"
               data-testid="eyedropper-cancel"
@@ -7086,13 +7101,20 @@ export function Workspace() {
                       borderRadius: 4,
                       background: theme.color.background.primary,
                       color: theme.color.text.primary,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    ⌖
+                    {/* The same pipette as the two Auto-extract pickers (David,
+                        2026-07-27). It wore a ⌖ reticle, which is what Place Point
+                        means on the rail -- so the one glyph said "aim a point" in
+                        one place and "sample a colour" in another. */}
+                    <EyedropperIcon />
                   </button>
                 </div>
                 <span style={{ fontSize: theme.font.size.small, color: theme.color.text.legend, lineHeight: 1.3 }}>
-                  Swatch or hex for a distinct colour; ⌖ to take it from the figure.
+                  Swatch or hex for a distinct colour; the pipette takes it from the figure.
                 </span>
               </div>
             </Popover>

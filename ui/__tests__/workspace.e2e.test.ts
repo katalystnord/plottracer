@@ -6494,6 +6494,25 @@ describe('spider charts', () => {
     }
   });
 
+  it('gives the series the colour it was traced from', async () => {
+    // ⚑ David, seeing a green-swatched "Series 3" sitting on the RED curve: series
+    // are coloured in creation order, so after tracing three films by colour the
+    // markers contradicted the picture underneath them. The series colour's whole
+    // job is to say which series this is — and after a By-colour trace the figure's
+    // own ink is the strongest answer there is. Display only; the record is
+    // untouched, and one undo takes it back with the points.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('255');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(300);
+
+    await page.getByTestId('series-color-button').click();
+    expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');
+  });
+
   it('says nothing matched instead of recording an empty profile', async () => {
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
