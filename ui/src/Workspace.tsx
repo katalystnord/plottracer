@@ -4557,7 +4557,19 @@ export function Workspace() {
   // and they never coexist (the tuple ones only exist on a project saved under
   // the retired "Error Bars" graph type).
   const errorWhiskers = useMemo(() => session.getErrorWhiskers(), [session, version]);
-  const calibPreview = useMemo(() => session.getCalibrationPreview(), [session, version]);
+  // ⚑ The live ray follows the ACTIVE POINT when one is selected, falling back to
+  // the capture cursor otherwise (David, 2026-07-27). Selecting a recorded point on
+  // another spoke used to leave the highlight where the NEXT capture would go, so
+  // it pointed at one axis while the selection sat on another.
+  const calibPreview = useMemo(
+    () =>
+      session.getCalibrationPreview(
+        config.id === 'spider' && activePointIndex != null
+          ? session.getSpokeIndexOfPoint(activePointIndex)
+          : undefined
+      ),
+    [session, version, config, activePointIndex]
+  );
   const curveFitState = useMemo(
     () => (config.supportsCurveFit && axes ? getCurveFitState(session.getDataset()) : null),
     [session, version, config, axes]
@@ -7117,10 +7129,37 @@ export function Workspace() {
                     <td style={{ paddingRight: 16 }}>{axisName}</td>
                     {spiderTable.columns.map((col) => {
                       const value = col.values[axisIndex];
+                      const pointIndex = col.pointIndices[axisIndex];
                       return (
                         <td
                           key={`${col.seriesIndex}-${col.profileIndex}`}
-                          style={{ textAlign: 'right', paddingRight: 16, paddingLeft: 10, borderLeft: `1px solid ${theme.color.border.regular}` }}
+                          data-testid={`spider-cell-${col.seriesIndex}-${axisIndex}`}
+                          // ⚑ Clicking a cell SELECTS that point, switching the
+                          // active series if it belongs to another one. Points of an
+                          // inactive series are deliberately inert on the canvas (so
+                          // a click can never land on the wrong series), which left
+                          // the table as the only possible route to them — and it
+                          // wasn't wired, so they could not be reached at all.
+                          onClick={() => {
+                            if (pointIndex == null) return;
+                            if (col.seriesIndex !== activeDatasetIndex) handleSelectDataset(col.seriesIndex);
+                            setActivePointIndex(pointIndex);
+                            bump();
+                          }}
+                          title={pointIndex == null ? undefined : 'Click to select this point'}
+                          style={{
+                            textAlign: 'right',
+                            paddingRight: 16,
+                            paddingLeft: 10,
+                            borderLeft: `1px solid ${theme.color.border.regular}`,
+                            cursor: pointIndex == null ? 'default' : 'pointer',
+                            background:
+                              pointIndex != null &&
+                              pointIndex === activePointIndex &&
+                              col.seriesIndex === activeDatasetIndex
+                                ? theme.color.background.canvas
+                                : undefined,
+                          }}
                         >
                           {/* An axis this series has not reached reads as a dash, not
                               a zero — nothing was measured there. */}

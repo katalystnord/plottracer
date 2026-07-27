@@ -1972,7 +1972,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * is the point -- a mis-clicked handle used to produce a wrong-but-plausible
    * chart with nothing on screen wrong.
    */
-  getCalibrationPreview(): CalibrationPreview {
+  getCalibrationPreview(liveSpokeIndex?: number): CalibrationPreview {
     return calibrationPreview(
       {
         axesKind: this.config.axesKind,
@@ -1982,7 +1982,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
         steps: this.getSteps(),
       },
       this.placed,
-      this.liveSpokeStepKey()
+      // ⚑ An explicit override wins over the capture cursor (David, 2026-07-27):
+      // selecting a point must move the live-ray highlight to THAT point's axis.
+      // Without it the highlight only ever tracked where the next capture would
+      // go, so clicking a recorded point on another spoke left the wrong ray lit —
+      // the highlight would be pointing at one axis while the selection was on
+      // another, which is worse than no highlight at all.
+      liveSpokeIndex != null && liveSpokeIndex >= 0
+        ? `spoke${liveSpokeIndex + 1}`
+        : this.liveSpokeStepKey()
     );
   }
 
@@ -2320,6 +2328,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Which spoke's slot an active-dataset point fills, or -1 if it fills none.
    * The tuple table is the only thing that knows: a pixel carries no axis of its
    * own, which is exactly why the value is never read off the nearest ray. */
+  getSpokeIndexOfPoint(pointIndex: number): number {
+    return this.spokeIndexOfPoint(pointIndex);
+  }
+
   private spokeIndexOfPoint(pointIndex: number): number {
     for (const tuple of this.activeEntry.dataset.getAllTuples()) {
       const groupIndex = tuple.indexOf(pointIndex);
@@ -3114,7 +3126,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSpiderTable(): {
     axisNames: string[];
-    columns: { seriesIndex: number; seriesName: string; profileIndex: number; label: string; values: (number | null)[] }[];
+    columns: {
+      seriesIndex: number;
+      seriesName: string;
+      profileIndex: number;
+      label: string;
+      values: (number | null)[];
+      /** Which point fills each axis's slot, so clicking a cell can select it. */
+      pointIndices: (number | null)[];
+    }[];
   } {
     if (this.config.id !== 'spider' || !this.axes) return { axisNames: [], columns: [] };
     const spider = this.axes as unknown as SpiderAxes;
@@ -3127,8 +3147,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // soon as it is added rather than appearing only once it has data.
       const profiles = tuples.length > 0 ? tuples : [[]];
       profiles.forEach((tuple, profileIndex) => {
+        const pointIndices = axisNames.map((_, axisIndex) => tuple[axisIndex] ?? null);
         const values = axisNames.map((_, axisIndex) => {
-          const pixelIndex = tuple[axisIndex];
+          const pixelIndex = pointIndices[axisIndex];
           if (pixelIndex == null) return null;
           const p = entry.dataset.getPixel(pixelIndex);
           // Read against THIS axis, never the nearest ray — the same rule the
@@ -3141,6 +3162,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
           profileIndex,
           label: profiles.length > 1 ? `${entry.dataset.name} · ${profileIndex + 1}` : entry.dataset.name,
           values,
+          pointIndices,
         });
       });
     });
