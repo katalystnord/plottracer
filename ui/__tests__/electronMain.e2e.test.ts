@@ -315,7 +315,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
   }, 30000);
 });
 
-describe('ui/electron-main.cjs — WebPlotDigitizer .tar import (checkpoint 88)', () => {
+describe('ui/electron-main.cjs — a foreign digitizer\'s .tar, imported through Open Project (checkpoint 88; unified v1.4)', () => {
   // Build a real WPD .tar the way a real project is shaped: info.json + wpd.json
   // (upstream's own six-figure fixture) + a bundled image. Reading someone
   // else's format is the migration route off the old app (tenet 6); a tar we
@@ -336,13 +336,18 @@ describe('ui/electron-main.cjs — WebPlotDigitizer .tar import (checkpoint 88)'
     const { app, page } = await launchProductionApp();
     try {
       await page.getByTestId('open-image-button').waitFor({ state: 'visible', timeout: 15000 });
-      // Stub the native dialog to return our tar, then fire the menu event the
-      // "Open WebPlotDigitizer Project…" item sends -- the full production path:
-      // real dialog:openWpdProject handler -> binary read -> engine/tarRead ->
-      // engine/wpdImport -> the picker.
+      // Stub the native dialog to return our tar, then fire the ONE Open Project
+      // menu event -- the full production path: real dialog:openProject handler ->
+      // binary read -> the renderer recognises a tar FROM ITS BYTES -> engine/tarRead
+      // -> engine/wpdImport -> the picker.
+      //
+      // ⚑ This test fired `menu:open-wpd-project` until v1.4, and that channel was
+      // deleted in `6a16f23` along with the rest of that tool's first-class status.
+      // The event went nowhere, so the tar import had NO production coverage for
+      // three commits -- the suite would have said so, but it had not been run.
       await app.evaluate(({ dialog, BrowserWindow }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
-        BrowserWindow.getAllWindows()[0]!.webContents.send('menu:open-wpd-project');
+        BrowserWindow.getAllWindows()[0]!.webContents.send('menu:open-project');
       }, tarPath);
 
       // wpd4.json is six figures; the picker lists them (Image axes disabled).

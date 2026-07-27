@@ -4213,11 +4213,15 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-polar').waitFor({ state: 'visible' });
     // All bundled examples are listed (one per graph type, plus the 4-series XY,
-    // the scatter, the dash-coded release curves, and the multi-page PDF). 14
-    // since v0.8 added the monochrome dash-styles example (Interpolation-assist)
-    // -- the others: XY, XY-multi, scatter, error-bar, histogram, bar,
-    // categorical, box-plot, polar, ternary, map, CCR, multi-page PDF.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(14);
+    // the scatter, the dash-coded release curves, and the multi-page PDF). 15
+    // since v1.4 added the spider/radar example -- the others: XY, XY-multi,
+    // scatter, dash-styles, error-bar, histogram, bar, categorical, box-plot,
+    // polar, ternary, map, CCR, multi-page PDF.
+    //
+    // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
+    // without its Help entry is invisible, which is how a graph type ends up with
+    // no way in for anyone who did not build it.
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(15);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();

@@ -15,13 +15,6 @@ export interface ElectronProjectOpenResult {
   base64: string;
 }
 
-// Checkpoint 88: a WebPlotDigitizer `.tar` is binary, so it comes back base64
-// (decoded to a Uint8Array in the renderer for engine/tarRead.ts).
-export interface ElectronWpdProjectOpenResult {
-  filePath: string;
-  base64: string;
-}
-
 export interface ElectronFileFilter {
   name: string;
   extensions: string[];
@@ -34,7 +27,6 @@ export interface ElectronFileFilter {
 export type MenuEventChannel =
   | 'menu:open-image'
   | 'menu:open-project'
-  | 'menu:open-wpd-project'
   | 'menu:save-project'
   | 'menu:save-csv'
   | 'menu:zoom-in'
@@ -48,8 +40,12 @@ declare global {
   interface Window {
     electronAPI?: {
       openImage: () => Promise<ElectronImageOpenResult | null>;
+      // ⚑ ONE Open Project (v1.4, `6a16f23`): a foreign digitizer's `.tar` arrives
+      // through THIS call and is recognised from its bytes. The separate
+      // openWpdProject/`menu:open-wpd-project` pair was removed with the rest of
+      // that tool's first-class status; the declarations outlived the runtime by
+      // three commits, promising a call that no longer existed in the preload.
       openProject: () => Promise<ElectronProjectOpenResult | null>;
-      openWpdProject: () => Promise<ElectronWpdProjectOpenResult | null>;
       // `encoding: 'base64'` writes binary (the data string is base64-decoded
       // to bytes before writing) -- PNG snapshot export, checkpoint 93, and
       // the .zip container to come. Omitted/undefined writes UTF-8 text, which
