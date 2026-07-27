@@ -150,7 +150,8 @@ Measurements are a separate collection from your series data.
 
 ## 8. Export
 
-**Export** (top bar) → **CSV, TSV, JSON, Excel (XLSX), LaTeX, MATLAB, Python, R**,
+**Export** (top bar) → **CSV, TSV, JSON, OpenDocument (ODS), Excel (XLSX), LaTeX,
+MATLAB, Python, R**,
 or a **PNG** of the annotated figure. Any text format can also be copied straight
 to the clipboard. Choose **Active** (the current series) or **All series**. Values
 are rounded to the figure's real resolution — never padded with false precision,

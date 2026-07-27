@@ -705,7 +705,7 @@ const LOADABLE_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
 /** Data-export formats (v0.8): the three original plus PlotDigitizer-parity
  * additions. JSON has its own structured path; XLSX is a binary workbook
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
-type ExportFormat = 'json' | 'xlsx' | TableFormat;
+type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 
 // Small inline glyphs for the per-row "copy to clipboard" affordance in the
 // Export menu (v1.1 #4) -- the overlapping-cards copy mark, swapped for a tick
@@ -4149,6 +4149,24 @@ export function Workspace() {
         }
         // XLSX is a binary workbook: build the bytes and save through the same
         // base64 IPC path the .zip project save uses (checkpoint 93), then done.
+        // ⚑ OpenDocument first among the spreadsheet formats — it is the ISO
+        // standard (26300), several EU administrations require ODF for public
+        // documents, and it costs no dependency: an .ods is a ZIP of three XML
+        // parts and this repo already writes ZIPs with fflate for project files.
+        if (format === 'ods') {
+          const { sectionsToOds } = await import('../../engine/odsExport.js');
+          await window.electronAPI.saveFile(
+            bytesToBase64(sectionsToOds(sections)),
+            `${exportBaseName()}.ods`,
+            [
+              { name: 'OpenDocument spreadsheet', extensions: ['ods'] },
+              { name: 'All Files', extensions: ['*'] },
+            ],
+            'base64'
+          );
+          markClean();
+          return;
+        }
         if (format === 'xlsx') {
           // Lazy-load exceljs (~900 kB) only when XLSX is actually exported, so
           // it stays out of the main bundle (Vite splits it into its own chunk).
@@ -5622,6 +5640,7 @@ export function Workspace() {
                 { fmt: 'csv', label: 'CSV (.csv)', copyable: true },
                 { fmt: 'tsv', label: 'TSV (.tsv)', copyable: true },
                 { fmt: 'json', label: 'JSON (.json)', copyable: true },
+                { fmt: 'ods', label: 'OpenDocument (.ods)', copyable: false },
                 { fmt: 'xlsx', label: 'Excel (.xlsx)', copyable: false },
                 { fmt: 'latex', label: 'LaTeX table (.tex)', copyable: true },
                 { fmt: 'matlab', label: 'MATLAB (.m)', copyable: true },

@@ -43,7 +43,7 @@ No account required, no data sent to any server, and no dependency on any compan
 
 **Multi-figure projects** — one project holds several figures (e.g. every page of a paper), each with its own image, calibration, graph type, and series; flip between them and extract another from the retained source.
 
-**Export** — CSV, TSV, JSON, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks. Where a series has them, exports also carry a **role** column — `anchor` for a point you judged by eye, `interpolated` for one the app filled in between — so the provenance the project file keeps survives the hand-off to someone else.
+**Export** — CSV, TSV, JSON, **OpenDocument (`.ods`)**, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks. Where a series has them, exports also carry a **role** column — `anchor` for a point you judged by eye, `interpolated` for one the app filled in between — so the provenance the project file keeps survives the hand-off to someone else.
 
 **Durable record** — undo/redo across everything, project save/load as a self-contained `.zip` (optionally bundling the source PDF/TIFF), and import of projects from other digitizers (currently `.tar` archives; more formats are v1.5's work-in-progress importer).
 

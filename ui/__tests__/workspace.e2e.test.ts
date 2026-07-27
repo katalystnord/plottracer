@@ -6168,6 +6168,42 @@ describe('fold-out cards do not overflow sideways', () => {
   });
 });
 
+describe('OpenDocument export', () => {
+  // ⚑ ODF is the ISO standard (26300) and several EU administrations require it
+  // for public documents — the format this project's own reasoning argues for.
+  // What the e2e adds over the engine's structural tests is that the app writes
+  // a real file through the production save path, byte for byte.
+  it('writes a real .ods a spreadsheet application can sniff', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+
+    const odsPath = path.join(os.tmpdir(), `plottracer-ods-${process.pid}.ods`);
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, odsPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-ods').click();
+    await expect.poll(() => (fs.existsSync(odsPath) ? fs.statSync(odsPath).size : 0)).toBeGreaterThan(0);
+
+    const bytes = new Uint8Array(fs.readFileSync(odsPath));
+    // The rule readers enforce: mimetype first, and STORED (method 0), sniffed at
+    // a fixed offset. A deflated or misplaced mimetype is a valid ZIP that
+    // LibreOffice refuses.
+    expect(Buffer.from(bytes.subarray(30, 38)).toString()).toBe('mimetype');
+    expect(bytes[8]! | (bytes[9]! << 8)).toBe(0);
+    expect(Buffer.from(bytes.subarray(38, 84)).toString()).toBe('application/vnd.oasis.opendocument.spreadsheet');
+
+    const entries = unzipSync(bytes);
+    expect(Object.keys(entries)).toContain('content.xml');
+    const content = strFromU8(entries['content.xml']!);
+    expect(content).toContain('<table:table ');
+    expect(content).toContain('office:value-type="float"'); // the traced point, as a number
+
+    fs.unlinkSync(odsPath);
+  });
+});
+
 describe('spider charts', () => {
   // Centre of the canvas-local coordinates used throughout, with rays at 110px.
   // ⚑ Kept well clear of the LEFT of the canvas: the fold-out calibration card
