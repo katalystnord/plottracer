@@ -21,14 +21,28 @@ fit the view with `Ctrl+0`.
 ## 2. Choose the graph type and calibrate
 
 Pick the graph type from the dropdown in the top bar — **XY** (linear/log/date),
-**Bar**, **Polar**, **Ternary**, **Map**, **Circular chart recorder**,
-**Histogram**, **Box plot**, or **Line (categorical X)**.
+**Bar**, **Polar**, **Spider / Radar**, **Ternary**, **Map**, **Circular chart
+recorder**, **Histogram**, **Box plot**, or **Line (categorical X)**.
 
 Error bars are not a graph type — they are **rail tool 6**, captured on top of
 whichever series they belong to (§8).
 
 Open the **Calibration** card (top-center) and place the reference points it asks
-for — for XY that's two X points and two Y points. Click the point on the image,
+for — for XY that's two X points and two Y points.
+
+**Spider / radar charts** work differently, because the number of axes belongs to
+the figure rather than to the tool. You click the **centre** and give the value
+every axis starts from (0 unless the chart says otherwise), then for each spoke you
+click one point of known value on it and type that value and the axis's name — one
+click supplies the ray's direction *and* its scale. Use **+ Add axis** for as many
+as the chart draws; going clockwise keeps you in step, but nothing forces the order.
+Each axis keeps its **own range**, so a chart with tensile strength on one spoke and
+a cost index on the next reads correctly with no rescaling.
+
+Capturing then steps round the axes for you: the live one is drawn in magenta on
+the figure, the tips bar names it, and your click is recorded where it crosses that
+ray — points sit **on** the axis, so what you see is the number recorded. The table
+reads one row per axis and one column per series. Click the point on the image,
 then type the axis value it represents. Log and date axes are options on the card.
 When every reference is placed, press **Calibrate**. The card shows **Calibrated ✓**.
 
@@ -68,6 +82,11 @@ Histogram, Box plot, and Line (categorical X): its mechanisms all follow the
 *middle* of a shape, which is a curve's position but only half of a bar. Place
 points on the bar ends with **Add points** (`3`) instead — the loupe gives you
 the pixel precision.
+
+**Spider charts are traced by hand too, for now.** Auto-extract is greyed out
+there because its mechanisms know nothing about the spokes; a value on a spider is
+where a shape crosses one particular axis, and the capture cursor already steps you
+round them one at a time.
 
 ## 5. Correct
 

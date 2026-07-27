@@ -4747,7 +4747,17 @@ export function Workspace() {
           id: step.key,
           x: point.px,
           y: point.py,
-          label: point.values.length > 0 ? `${step.label}=${point.values.join(', ')}` : step.label,
+          // ⚑ Spider labels the handle with its VALUE alone. The generic
+          // "<step>=<values>" form rendered as "Axis 5=80, Biodegradation" — six of
+          // those sprawled across the plot, repeating axis names the FIGURE already
+          // prints and burying the one thing the handle asserts, which is where that
+          // value sits. Caught on screen; no test can see a label being cluttered.
+          label:
+            config.id === 'spider' && point.values.length > 0
+              ? String(point.values[0])
+              : point.values.length > 0
+                ? `${step.label}=${point.values.join(', ')}`
+                : step.label,
           color: step.color,
           kind: 'calibration',
           // Selected for keyboard nudge (checkpoint 127) -- highlighted so you can

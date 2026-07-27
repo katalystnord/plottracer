@@ -26,12 +26,13 @@ No account required, no data sent to any server, and no dependency on any compan
 
 ## Features
 
-**Chart / axes types** — XY, Bar, Polar, Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis, and Error Bars.
+**Chart / axes types** — XY, Bar, Polar, **Spider / Radar** (every spoke calibrated separately, so each axis keeps its own range), Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis, and Error Bars.
 
 **Getting points off a figure**
 - Manual point placement, multiple series, drag-to-reposition, arrow-key nudge, click-to-edit values. On a bar or categorical-X figure a **Category** column takes the names off the tick labels — typed once and reused across series.
 - **Auto-extract** (one wand tool): flood-fill (Segment Fill), auto-trace by colour (continuous curve *or* scatter markers), a blob detector, and interpolation-assist (guide points + a centripetal spline). A **live mask preview** shows exactly which pixels a trace will capture before you commit, and you can **restrict a trace to a drawn box**.
 - **Bar-family figures are traced by hand.** Every auto-extract mechanism centres on a filled shape — right for a curve, wrong for a bar, whose value is its *top edge*. Auto-extract is refused on Bar, Histogram and Box Plot rather than quietly return the midpoint.
+- **Spider charts are traced by hand too, for now** — auto-extract knows nothing about the spokes, and a value on a spider is where a shape crosses one particular axis. The capture cursor steps you round them instead.
 - Grid-line removal to clean a busy plot first.
 
 **Analysis** — curve fitting (polynomial, degree 1–9, optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.

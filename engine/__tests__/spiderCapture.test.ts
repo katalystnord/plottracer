@@ -273,6 +273,21 @@ describe('the live axis is drawn on the figure', () => {
     expect(emphasised()).toBe(0);
   });
 
+  it('draws the live ray in the colour-match magenta, not the step colour', () => {
+    // ⚑ Spider rays inherit the shared ORIGIN step's colour, which is green — and a
+    // green highlight over a green series is no highlight at all. The bundled
+    // example has exactly that (Cellulose is green), and on screen the emphasis was
+    // simply invisible. This magenta is the app's existing "pointing at the image"
+    // colour, chosen for not reading as a series.
+    const session = THREE();
+    const segments = session.getCalibrationPreview().segments;
+    const live = segments.find((s) => s.emphasis)!;
+    expect(live.color.toLowerCase()).toBe('#ff00c8');
+    for (const other of segments.filter((s) => !s.emphasis)) {
+      expect(other.color.toLowerCase()).not.toBe('#ff00c8');
+    }
+  });
+
   it('emphasises exactly one ray, never several', () => {
     const session = THREE();
     const segments = session.getCalibrationPreview().segments;
