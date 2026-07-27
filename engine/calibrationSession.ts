@@ -652,7 +652,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   **N × 1D**: N independent 1-D scales sharing an origin, and a datum is one
    *   number on one named axis. Nothing pairs slot 2 with slot 5.
    *
-   * ⚑ WHY THIS IS A CAPABILITY AND NOT A `config.id === 'spider'` CHECK. Spider
+   * ⚑ WHY THIS IS A CAPABILITY AND NOT A `config.axesKind === 'spider'` CHECK. Spider
    * REUSED the Box Plot point-group machinery, which was the right call — the
    * capture workflow is genuinely the same — but every rule keyed on
    * `hasPointGroups()` came along with it, including rules that only hold for an
@@ -662,6 +662,36 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * actually depend on.
    */
   tupleMembers?: 'object' | 'independent';
+  /**
+   * What auto-extract MEANS on this graph type — a declared capability, because
+   * every caller was asking `config.axesKind === 'spider'` or `axesKind === 'bar'` and
+   * getting the answer from the type's NAME rather than from what it can do.
+   *
+   * - `'curve'` (default) — the mechanisms that follow a drawn line: flood fill,
+   *   colour trace by column, blob detection. Right wherever a series IS a curve.
+   * - `'along-axes'` — the reading is where the series crosses a calibrated ray,
+   *   so the trace walks the rays instead of the columns (Spider).
+   * - `'none'` — refused, and this is a CORRECTNESS gate rather than a missing
+   *   feature: every curve mechanism returns the MIDDLE of a filled shape, and a
+   *   bar's value is its end, so the number produced was never the datum
+   *   (`59f94a6`). Bar, Histogram, Box Plot, categorical Line.
+   */
+  autoExtractKind?: 'curve' | 'along-axes' | 'none';
+
+  /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
+   * what cost this release its audit findings:
+   *   1. "Does this SERIES have slots?" -> dataset.hasPointGroups(). Structural.
+   *   2. "What do the slots MEAN?" -> tupleMembers. One object, or independent
+   *      readings. Getting this from (1) is what made the Eraser delete a whole
+   *      six-axis profile, and the CSV carry one series read off the wrong ray.
+   *   3. "Which AXES CLASS is this?" -> axesKind, NEVER id. Asked wherever the
+   *      code narrows `this.axes` to call something only that class has
+   *      (SpiderAxes.projectOnSpoke, BarAxes.calculateOrientation). `id` names the
+   *      GRAPH TYPE, and two types can share one class — Box Plot and Bar are both
+   *      axesKind 'bar', which is the case that made this rule (checkpoint 107).
+   *      An `id` check there silently excludes the second type on that class.
+   * And what a graph type CAN DO belongs in a declared capability like the one
+   * above, not inferred from any of the three. */
   /** True when this type's calibration walks x1 -> x2 -> y1 -> y2, so ui/ can
    * offer "Common origin" (confirming X2 auto-reuses X1's pixel for Y1, the
    * usual axes-cross-at-one-corner case -- checkpoint 50).
@@ -812,6 +842,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'histogram',
   label: 'Histogram',
   axesKind: 'xy',
+  autoExtractKind: 'none',
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
@@ -890,6 +921,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   label: 'Bar',
   axesKind: 'bar',
+  autoExtractKind: 'none',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
@@ -931,6 +963,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'categorical',
   label: 'Line (categorical X)',
   axesKind: 'bar',
+  autoExtractKind: 'none',
   dataDim: 1,
   valueLabels: ['Value'],
   globalFields: [],
@@ -975,6 +1008,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'boxplot',
   label: 'Box Plot',
   axesKind: 'bar',
+  autoExtractKind: 'none',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
@@ -1261,6 +1295,7 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   id: 'spider',
   label: 'Spider / Radar',
   axesKind: 'spider',
+  autoExtractKind: 'along-axes',
   dataDim: 1,
   // One measured number per datum. The axis it belongs to is the point GROUP, and
   // the axis's NAME is a property of the calibration, not of each point -- it was
@@ -2038,7 +2073,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * comment implying a guarantee the tests do not check.
    */
   private liveSpokeStepKey(): string | undefined {
-    if (this.config.id !== 'spider' || !this.axes) return undefined;
+    if (this.config.axesKind !== 'spider' || !this.axes) return undefined;
     const entry = this.activeEntry;
     if (!entry.dataset.hasPointGroups()) return undefined;
     // Step keys are `spoke1`-based, the point-group cursor is 0-based.
@@ -2171,7 +2206,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // asked for as part of CALIBRATING the axis, so the column always exists even
     // when a particular axis was left unnamed (it exports blank, and blank is the
     // honest reading: that axis's name was never transcribed).
-    if (this.config.id === 'spider') return ['Axis', 'Name', 'Value'];
+    if (this.config.axesKind === 'spider') return ['Axis', 'Name', 'Value'];
     return this.axes ? exportLabelsFor(this.axes) : [...this.config.valueLabels];
   }
 
@@ -2293,7 +2328,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // DIFFERENT axis's scale while the table still showed it in the slot they
     // aimed at. A wrong number with nothing on screen wrong is the failure this
     // codebase keeps rediscovering, so the axis identity is carried, never guessed.
-    if (this.config.id === 'spider') {
+    if (this.config.axesKind === 'spider') {
       const spider = axes as unknown as SpiderAxes;
       // Invert the tuple table once: pixel index -> which spoke's slot it fills.
       const spokeOf: number[] = [];
@@ -2370,7 +2405,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   private snapToSpoke(px: number, py: number, groupIndex: number): { x: number; y: number } {
-    if (this.config.id !== 'spider' || !this.axes) return { x: px, y: py };
+    if (this.config.axesKind !== 'spider' || !this.axes) return { x: px, y: py };
     const spider = this.axes as unknown as SpiderAxes;
     const projection = spider.projectOnSpoke(groupIndex, px, py);
     if (!projection) return { x: px, y: py };
@@ -2397,7 +2432,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     nearestLabel: string;
     offRayPx: number;
   } | null {
-    if (this.config.id !== 'spider' || !this.axes) return null;
+    if (this.config.axesKind !== 'spider' || !this.axes) return null;
     const entry = this.activeEntry;
     if (!entry.dataset.hasPointGroups()) return null;
     const spider = this.axes as unknown as SpiderAxes;
@@ -2825,7 +2860,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Returns how many readings were actually recorded.
    */
   addSpiderTracePoints(points: readonly ({ x: number; y: number } | null)[]): number {
-    if (!this.axes || this.config.id !== 'spider') return 0;
+    if (!this.axes || this.config.axesKind !== 'spider') return 0;
     const entry = this.activeEntry;
     const dataset = entry.dataset;
     if (!dataset.hasPointGroups()) return 0;
@@ -3326,7 +3361,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       pointIndices: (number | null)[];
     }[];
   } {
-    if (this.config.id !== 'spider' || !this.axes) return { axisNames: [], axisRawNames: [], columns: [] };
+    if (this.config.axesKind !== 'spider' || !this.axes) return { axisNames: [], axisRawNames: [], columns: [] };
     const spider = this.axes as unknown as SpiderAxes;
     const axisNames = spider.getSpokes().map((_, i) => spider.getSpokeLabel(i));
     const axisRawNames = spider.getSpokes().map((spoke) => spoke.name);
@@ -3913,7 +3948,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   setSpokeName(index: number, name: string): boolean {
     const repeating = this.config.repeatingStep;
-    if (!repeating || this.config.id !== 'spider') return false;
+    if (!repeating || this.config.axesKind !== 'spider') return false;
     const point = this.placed[`${repeating.step.key}${index + 1}`];
     if (!point) return false;
     const fieldIndex = repeating.step.valueFields.findIndex((f) => f.field === 'dz');

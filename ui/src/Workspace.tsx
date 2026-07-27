@@ -1381,13 +1381,13 @@ export function Workspace() {
     // The rail button greys out for bar-family types; the `4` hotkey is the other
     // door, so the rule lives here where both converge. Auto-extract's mechanisms
     // are curve tools and would record a bar's MIDPOINT as its value.
-    if (session.getConfig().axesKind === 'bar') return;
+    if ((session.getConfig().autoExtractKind ?? 'curve') === 'none') return;
     // ⚑ A spider has exactly ONE mechanism: the axis-aware colour trace. Flood-fill
     // and Guide points are curve tools with nowhere to file their output (a spider's
     // slots are its axes), so they are not offered -- and this is where the card is
     // ENTERED, so without it the last-used mechanism could open a card whose button
     // would silently do nothing.
-    if (session.getConfig().id === 'spider') lastAutoExtractMechRef.current = 'color-trace';
+    if (session.getConfig().autoExtractKind === 'along-axes') lastAutoExtractMechRef.current = 'color-trace';
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
@@ -2181,7 +2181,7 @@ export function Workspace() {
       else if (e.key === '1' && figureCaptured) setMode('calibrate');
       else if (e.key === '2' && canvasHasImage) toggleImageEdit();
       else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && axes && (!session.hasPointGroups() || session.getConfig().id === 'spider')) toggleAutoExtract();
+      else if (e.key === '4' && axes && (session.getConfig().autoExtractKind ?? 'curve') !== 'none') toggleAutoExtract();
       // Hotkey 5 activates Select with the current sub-mode but does NOT open the
       // picker (that's the rail button / its arrow); reset so a stale-open card
       // from an earlier session can't re-appear (v1.1 #6).
@@ -4346,7 +4346,7 @@ export function Workspace() {
     // the tracer looks through). Worth having for the same reason as the XY one:
     // radar charts print the axis NAMES just outside the outermost ring, often in
     // the same ink as the grid.
-    if (session.getConfig().id === 'spider') {
+    if (session.getConfig().axesKind === 'spider') {
       return spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null);
     }
     if (session.getConfig().axesKind !== 'xy') return null;
@@ -4372,7 +4372,7 @@ export function Workspace() {
       setColorTraceInfo('Calibrate the axes first — traced points need a coordinate system.');
       return;
     }
-    if (session.hasPointGroups() && config.id !== 'spider') {
+    if ((config.autoExtractKind ?? 'curve') === 'none' || (session.hasPointGroups() && config.autoExtractKind !== 'along-axes')) {
       setColorTraceInfo('Auto-trace adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
       return;
     }
@@ -4409,7 +4409,7 @@ export function Workspace() {
     // that axis's own slot, and REFUSES the rays whose evidence is ambiguous rather
     // than picking one -- those axes are left empty and the capture cursor lands on
     // them, so the refusals become the worklist.
-    if (config.id === 'spider') {
+    if (config.autoExtractKind === 'along-axes') {
       const result = runSpiderTrace(
         data,
         width,
@@ -4483,7 +4483,7 @@ export function Workspace() {
     const { pct, warn } = overBroad(result.matched);
     setColorTraceInfo(`Traced ${result.points.length} points from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
     commit();
-  }, [session, config.id, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
+  }, [session, config.autoExtractKind, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -4718,11 +4718,11 @@ export function Workspace() {
   const calibPreview = useMemo(
     () =>
       session.getCalibrationPreview(
-        config.id === 'spider' && activePointIndex != null && pickedPointIndex === activePointIndex
+        config.axesKind === 'spider' && activePointIndex != null && pickedPointIndex === activePointIndex
           ? session.getSpokeIndexOfPoint(activePointIndex)
           : undefined
       ),
-    [session, version, config, activePointIndex, pickedPointIndex]
+    [session, version, config.axesKind, activePointIndex, pickedPointIndex]
   );
   const curveFitState = useMemo(
     () => (config.supportsCurveFit && axes ? getCurveFitState(session.getDataset()) : null),
@@ -4930,7 +4930,7 @@ export function Workspace() {
           // prints and burying the one thing the handle asserts, which is where that
           // value sits. Caught on screen; no test can see a label being cluttered.
           label:
-            config.id === 'spider' && point.values.length > 0
+            config.axesKind === 'spider' && point.values.length > 0
               ? String(point.values[0])
               : point.values.length > 0
                 ? `${step.label}=${point.values.join(', ')}`
@@ -5029,7 +5029,7 @@ export function Workspace() {
       });
     });
     return result;
-  }, [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
+  }, [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
 
   // Connecting polylines drawn beneath the markers (checkpoint 131) -- the fix for
   // a dense auto-trace rendering as a furry band of overlapping dots. Skipped
@@ -5291,7 +5291,7 @@ export function Workspace() {
         // projected, with only the off-axis warning to hint at it. Naming the axis
         // the cursor is on is also the only on-screen thing that says the order is
         // guidance rather than a rule.
-        if (config.id === 'spider' && hasPointGroups)
+        if (config.axesKind === 'spider' && hasPointGroups)
           return `Click where the shape crosses the ${currentGroupLabel} axis — how far out along that ray you click IS the number recorded${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
         if (hasPointGroups)
           return `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
@@ -5325,7 +5325,7 @@ export function Workspace() {
       // tool it is everywhere else, and an axis coming back empty looks like a bug
       // rather than the refusal it is.
       if (mode === 'color-trace')
-        return config.id === 'spider'
+        return config.autoExtractKind === 'along-axes'
           ? 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.'
           : 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
       if (mode === 'interpolate') {
@@ -6383,11 +6383,11 @@ export function Workspace() {
             // trace searches, so every reading has a home the tool measured it
             // against. The Box Plot / Error Bar refusal stands -- a Min/Q1/Median
             // slot is not something a colour trace can identify.
-            disabled={!axes || (hasPointGroups && config.id !== 'spider') || config.axesKind === 'bar'}
+            disabled={!axes || (config.autoExtractKind ?? 'curve') === 'none'}
             disabledReason={
               !axes
                 ? 'Calibrate the axes first'
-                : config.axesKind === 'bar' && !hasPointGroups
+                : config.axesKind === 'bar'
                 ? 'Auto-extract follows curves — on bars it would record the middle of each bar, not its end. Place points on the bar ends instead.'
                 : 'Not available for this graph type'
             }
@@ -6569,7 +6569,7 @@ export function Workspace() {
                   // produce ordinary points, and a spider series has no slot for one:
                   // they would have run and recorded nothing, which reads as a broken
                   // button rather than as a tool that does not apply here.
-                  .filter(({ m }) => config.id !== 'spider' || m === 'color-trace')
+                  .filter(({ m }) => config.autoExtractKind !== 'along-axes' || m === 'color-trace')
                   .map(({ m, id, label }) => (
                   <button
                     key={id}
@@ -6618,7 +6618,7 @@ export function Workspace() {
               {mode === 'color-trace' && (
                 <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
                   <span>
-                    {config.id === 'spider' ? (
+                    {config.autoExtractKind === 'along-axes' ? (
                       <>
                         Walks each calibrated axis outward and records the value where the
                         series&rsquo; colour crosses it — one reading per axis. A ray the colour
@@ -6659,7 +6659,7 @@ export function Workspace() {
                   </div>
                   {/* No shape to choose on a spider: the rays decide where to read, so
                       curve-vs-scatter has nothing to select between. */}
-                  <div style={{ display: config.id === 'spider' ? 'none' : 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: config.autoExtractKind === 'along-axes' ? 'none' : 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>Shape:</span>
                     <select
                       data-testid="color-trace-shape"
@@ -7369,7 +7369,7 @@ export function Workspace() {
                 })}
               </tbody>
             </table>
-          ) : config.id === 'spider' && axes ? (
+          ) : config.axesKind === 'spider' && axes ? (
             /* Spider (v1.4): `# | Category | Series 1 | Series 2 | …` — one row per
                AXIS, one column per series.
 
