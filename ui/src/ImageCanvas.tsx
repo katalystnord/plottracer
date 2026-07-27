@@ -1380,14 +1380,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 {calibrationPreview?.segments.map((seg, i) => {
                   const a = imageToScreen(view, seg.from.x, seg.from.y);
                   const b = imageToScreen(view, seg.to.x, seg.to.y);
+                  // ⚑ One segment may be the LIVE one (v1.4, Spider: the axis the
+                  // capture cursor is filling). It draws solid, thicker and at full
+                  // strength while its siblings fade back, so "which axis am I on?"
+                  // is answered by the figure itself rather than by remembering the
+                  // order the spokes were calibrated in. The dimming is conditional
+                  // on something being emphasised at all, so every other graph
+                  // type's preview is untouched.
+                  const anyEmphasis = calibrationPreview.segments.some((s) => s.emphasis);
                   return (
                     <Line
                       key={`calib-seg-${i}`}
                       points={[a.x, a.y, b.x, b.y]}
                       stroke={seg.color}
-                      strokeWidth={1.5}
-                      dash={[6, 4]}
-                      opacity={0.75}
+                      strokeWidth={seg.emphasis ? 3 : 1.5}
+                      dash={seg.emphasis ? undefined : [6, 4]}
+                      opacity={seg.emphasis ? 1 : anyEmphasis ? 0.3 : 0.75}
                       listening={false}
                     />
                   );

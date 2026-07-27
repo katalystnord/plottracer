@@ -716,3 +716,141 @@ if __name__ == "__main__":
     gen_map()
     gen_multipage_pdf()
     print("generated all 14 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf.")
+
+
+def gen_spider():
+    """Spider / radar — material performance profile, three biopolymer films
+    (v1.4).
+
+    Hand-built like the ternary: matplotlib's polar axes assume ONE radial scale,
+    and the whole point of this figure is that each spoke carries its own.
+
+    Three deliberate properties, each chosen to exercise what the app claims:
+
+    1. **PER-AXIS RANGES.** Tensile runs 0-120 MPa beside a cost index running
+       0-5. This is the case the only prior art (ChartSense, CHI 2017) excludes by
+       assuming all axes share a scale, and it is what placing a known point on
+       every spoke buys. A figure with one shared range would not test anything.
+    2. **A COMMON CENTRE OF 0**, which is the rule in real spider charts and what
+       the app asks for once and stores per axis.
+    3. **LINE-ONLY POLYGONS, three distinct colours.** Filled overlapping radar
+       polygons BLEND into new colours where they cross, which is the hard-won
+       detail ChartSense reports breaking their hue clustering; an unfilled figure
+       avoids it entirely and keeps every vertex clickable, which is what a
+       digitizer's example should show. Vertices are marked because the vertex --
+       where the shape crosses the axis -- IS the datum the user clicks.
+
+    Truth = per series, one {axis, name, value} per spoke, matching the app's
+    `Axis, Name, Value` export.
+    """
+    name = "spider-material-profile"
+    # (axis name, max at the outer end of the spoke). Centre is 0 on every axis.
+    axes_def = [
+        ("Tensile strength (MPa)", 120),
+        ("Elongation at break (%)", 60),
+        ("Water-vapour barrier (a.u.)", 25),
+        ("Transparency (%)", 100),
+        ("Biodegradation (%/30 d)", 80),
+        ("Cost index", 5),
+    ]
+    series = [
+        ("Chitosan film", "#1f4e79", [92, 18, 21, 88, 46, 3.4], "o"),
+        ("Alginate film", "#c1553b", [58, 41, 12, 72, 71, 2.1], "s"),
+        ("Cellulose film", "#3a9d5d", [110, 9, 19, 41, 28, 4.3], "^"),
+    ]
+    n = len(axes_def)
+    centre = 0.0
+    # Equal angles: unequal spacing is supported by the model (each ray's
+    # direction is measured, never inferred from a neighbour) but is NOT what real
+    # figures look like, and an example should look like the thing it stands for.
+    # Clockwise from 12 o'clock, which is how the app asks for the spokes.
+    angles = [2.0 * np.pi * i / n for i in range(n)]
+    R = 1.0  # unit radius; every axis is drawn to the same LENGTH, not the same scale
+
+    def spoke_xy(i, value):
+        frac = (value - centre) / (axes_def[i][1] - centre)
+        return np.array([R * frac * np.sin(angles[i]), R * frac * np.cos(angles[i])])
+
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+
+    # Grid rings at 20..100% of each axis, drawn as the polygon joining equal
+    # FRACTIONS of the spokes -- which is what a real radar chart's web is.
+    for frac in (0.2, 0.4, 0.6, 0.8, 1.0):
+        ring = [np.array([R * frac * np.sin(a), R * frac * np.cos(a)]) for a in angles]
+        ring.append(ring[0])
+        pts = np.array(ring)
+        ax.plot(pts[:, 0], pts[:, 1], color="#dcdcdc", lw=0.8, zorder=1)
+
+    # The spokes themselves, plus per-axis tick labels so the ranges are READABLE
+    # off the figure -- without them the per-axis scales would be invisible and the
+    # example would not actually be digitizable.
+    for i, (label, vmax) in enumerate(axes_def):
+        end = np.array([R * np.sin(angles[i]), R * np.cos(angles[i])])
+        ax.plot([0, end[0]], [0, end[1]], color="#9a9a9a", lw=1.0, zorder=1)
+        # Tick labels are pushed PERPENDICULAR to their spoke, and carry a white
+        # backing box: placed on the ray they sat under the data polygons, which is
+        # the one thing an example figure must not do -- the numbers a user reads
+        # to calibrate have to be legible against the series they are tracing.
+        perp = np.array([np.cos(angles[i]), -np.sin(angles[i])])
+        for frac in (0.5, 1.0):
+            tick = np.array([R * frac * np.sin(angles[i]), R * frac * np.cos(angles[i])])
+            pos = tick + perp * 0.06
+            ax.text(pos[0], pos[1], f"{vmax * frac:g}",
+                    ha="center", va="center", fontsize=8, color="#666666", zorder=4,
+                    bbox=dict(facecolor="white", edgecolor="none", pad=0.8, alpha=0.85))
+        lab = end * 1.22
+        ax.text(lab[0], lab[1], label, ha="center", va="center",
+                fontsize=10.5, color="#5a3a2a", fontweight="bold", zorder=4)
+
+    for sname, colour, values, marker in series:
+        pts = [spoke_xy(i, v) for i, v in enumerate(values)]
+        pts.append(pts[0])
+        arr = np.array(pts)
+        ax.plot(arr[:, 0], arr[:, 1], color=colour, lw=2.0, zorder=3, label=sname)
+        ax.plot(arr[:-1, 0], arr[:-1, 1], marker, color=colour, markersize=7,
+                markeredgecolor="white", markeredgewidth=1.0, zorder=4)
+
+    ax.plot(0, 0, "o", color="#444444", markersize=4, zorder=5)
+    # The centre's value, stated on the figure. The app asks for it once during
+    # calibration (0 preselected), so an example that never shows it would be
+    # asking the user for a number the figure had not told them.
+    ax.text(-0.055, -0.055, "0", ha="right", va="top", fontsize=8.5, color="#444444", zorder=5)
+    ax.set_title("Material Performance Profile — Biopolymer Films", fontsize=15, fontweight="bold")
+    ax.set_xlim(-1.55, 1.55)
+    ax.set_ylim(-1.42, 1.42)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.legend(loc="lower right", fontsize=9, framealpha=0.9)
+    fig.tight_layout()
+
+    # Calibration anchors in IMAGE pixel space (origin top-left, y DOWN), same
+    # conventions as _xy_calibration: the centre, then one known point per spoke at
+    # that axis's maximum. Keys match the app's own step keys (origin, spoke1..N).
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+    w = fig.get_figwidth() * fig.dpi
+
+    def anchor(dx, dy):
+        sx, sy = ax.transData.transform((dx, dy))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2)}
+
+    anchors = {"origin": {**anchor(0.0, 0.0), "value": centre}}
+    for i, (label, vmax) in enumerate(axes_def):
+        end = spoke_xy(i, vmax)
+        anchors[f"spoke{i + 1}"] = {**anchor(end[0], end[1]), "value": vmax, "name": label}
+
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 — the per-axis-scale case the only prior art (ChartSense) excludes."},
+        "graphType": "spider",
+        "axes": [{"axis": i + 1, "name": label, "centre": centre, "max": vmax}
+                 for i, (label, vmax) in enumerate(axes_def)],
+        "calibration": {"imageWidth": round(w), "imageHeight": round(h), "anchors": anchors},
+        "series": [
+            {"name": sname,
+             "points": [{"axis": i + 1, "name": axes_def[i][0], "value": v} for i, v in enumerate(values)]}
+            for sname, _colour, values, _marker in series
+        ],
+    })

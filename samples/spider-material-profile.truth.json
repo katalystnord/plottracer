@@ -1,0 +1,199 @@
+{
+  "source": {
+    "imagePath": "spider-material-profile.png",
+    "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 \u2014 the per-axis-scale case the only prior art (ChartSense) excludes."
+  },
+  "graphType": "spider",
+  "axes": [
+    {
+      "axis": 1,
+      "name": "Tensile strength (MPa)",
+      "centre": 0.0,
+      "max": 120
+    },
+    {
+      "axis": 2,
+      "name": "Elongation at break (%)",
+      "centre": 0.0,
+      "max": 60
+    },
+    {
+      "axis": 3,
+      "name": "Water-vapour barrier (a.u.)",
+      "centre": 0.0,
+      "max": 25
+    },
+    {
+      "axis": 4,
+      "name": "Transparency (%)",
+      "centre": 0.0,
+      "max": 100
+    },
+    {
+      "axis": 5,
+      "name": "Biodegradation (%/30 d)",
+      "centre": 0.0,
+      "max": 80
+    },
+    {
+      "axis": 6,
+      "name": "Cost index",
+      "centre": 0.0,
+      "max": 5
+    }
+  ],
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "origin": {
+        "px": 450.0,
+        "py": 362.17,
+        "value": 0.0
+      },
+      "spoke1": {
+        "px": 450.0,
+        "py": 134.82,
+        "value": 120,
+        "name": "Tensile strength (MPa)"
+      },
+      "spoke2": {
+        "px": 646.89,
+        "py": 248.49,
+        "value": 60,
+        "name": "Elongation at break (%)"
+      },
+      "spoke3": {
+        "px": 646.89,
+        "py": 475.84,
+        "value": 25,
+        "name": "Water-vapour barrier (a.u.)"
+      },
+      "spoke4": {
+        "px": 450.0,
+        "py": 589.51,
+        "value": 100,
+        "name": "Transparency (%)"
+      },
+      "spoke5": {
+        "px": 253.11,
+        "py": 475.84,
+        "value": 80,
+        "name": "Biodegradation (%/30 d)"
+      },
+      "spoke6": {
+        "px": 253.11,
+        "py": 248.49,
+        "value": 5,
+        "name": "Cost index"
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "Chitosan film",
+      "points": [
+        {
+          "axis": 1,
+          "name": "Tensile strength (MPa)",
+          "value": 92
+        },
+        {
+          "axis": 2,
+          "name": "Elongation at break (%)",
+          "value": 18
+        },
+        {
+          "axis": 3,
+          "name": "Water-vapour barrier (a.u.)",
+          "value": 21
+        },
+        {
+          "axis": 4,
+          "name": "Transparency (%)",
+          "value": 88
+        },
+        {
+          "axis": 5,
+          "name": "Biodegradation (%/30 d)",
+          "value": 46
+        },
+        {
+          "axis": 6,
+          "name": "Cost index",
+          "value": 3.4
+        }
+      ]
+    },
+    {
+      "name": "Alginate film",
+      "points": [
+        {
+          "axis": 1,
+          "name": "Tensile strength (MPa)",
+          "value": 58
+        },
+        {
+          "axis": 2,
+          "name": "Elongation at break (%)",
+          "value": 41
+        },
+        {
+          "axis": 3,
+          "name": "Water-vapour barrier (a.u.)",
+          "value": 12
+        },
+        {
+          "axis": 4,
+          "name": "Transparency (%)",
+          "value": 72
+        },
+        {
+          "axis": 5,
+          "name": "Biodegradation (%/30 d)",
+          "value": 71
+        },
+        {
+          "axis": 6,
+          "name": "Cost index",
+          "value": 2.1
+        }
+      ]
+    },
+    {
+      "name": "Cellulose film",
+      "points": [
+        {
+          "axis": 1,
+          "name": "Tensile strength (MPa)",
+          "value": 110
+        },
+        {
+          "axis": 2,
+          "name": "Elongation at break (%)",
+          "value": 9
+        },
+        {
+          "axis": 3,
+          "name": "Water-vapour barrier (a.u.)",
+          "value": 19
+        },
+        {
+          "axis": 4,
+          "name": "Transparency (%)",
+          "value": 41
+        },
+        {
+          "axis": 5,
+          "name": "Biodegradation (%/30 d)",
+          "value": 28
+        },
+        {
+          "axis": 6,
+          "name": "Cost index",
+          "value": 4.3
+        }
+      ]
+    }
+  ]
+}

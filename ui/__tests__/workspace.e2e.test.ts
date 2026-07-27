@@ -6142,13 +6142,16 @@ describe('spider charts', () => {
   async function calibrateSpider(names: string[], values: string[], centre = '0') {
     const n = names.length;
     for (let i = 3; i < n; i++) await page.getByTestId('add-repeat-step').click();
+    // The centre's value is asked ON the centre click now, inline beside the chip
+    // with the same confirm button as every other value (David, 2026-07-27) --
+    // not in a global-field row that only appeared once every point was placed.
     await clickAt(CX, CY);
+    await confirmValues([centre]);
     for (let i = 0; i < n; i++) {
       const [px, py] = spoke(i, n);
       await clickAt(px, py);
       await confirmValues([values[i]!, names[i]!]);
     }
-    await page.getByTestId('global-field-centreValue').fill(centre);
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
@@ -6162,6 +6165,8 @@ describe('spider charts', () => {
     expect(await page.getByTestId('add-repeat-step').count()).toBe(1);
     // Centre + three axes, not the config's single step.
     expect(await textOf('calibrated-status')).toBe('0/4 set');
+    // And the centre's value is asked right there, inline, with 0 prefilled.
+    await page.getByTestId('calib-chip-origin').waitFor({ state: 'visible' });
     await page.getByTestId('calib-chip-spoke3').waitFor({ state: 'visible' });
   });
 
@@ -6193,7 +6198,11 @@ describe('spider charts', () => {
 
     // Halfway out along each ray reads 50 on each axis's own scale.
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
+    // ⚑ One ROW per axis, one COLUMN per series (David, 2026-07-27). The
+    // point-group table this replaced showed the ACTIVE series only, so adding a
+    // second series made the first one's readings vanish off the screen.
     const table = await textOf('points-table');
+    expect(table).toContain('Strength');
     expect(table).toContain('50');
     expect(await textOf('point-group-status')).toMatch(/Strength/);
   });
@@ -6216,23 +6225,63 @@ describe('spider charts', () => {
     expect(tip).not.toContain('box');
   });
 
-  it('warns when a captured point sits nearer a different axis, and clears when fixed', async () => {
+  it('keeps the calibrated axis rays drawn on the figure after calibrating', async () => {
+    // The overlay is what you AIM at. It is the same preview drawn during
+    // calibration, and it stays because the placed handles stay — a spoke's
+    // direction comes from a single click, so seeing the ray you implied is the
+    // only way to tell it matches the ray the figure drew.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    expect(await page.getByTestId('calib-preview-segments').textContent()).toBe('3');
+  });
+
+  it('draws the axis the cursor is filling as the live one, and follows it round', async () => {
+    // ⚑ Prevention rather than correction. Spoke order is deliberately unenforced
+    // at calibration, so the capture cursor walks the spokes in CALIBRATION order,
+    // which need not match the visual order round the chart — a user going
+    // clockwise by eye can drift out of step and click the wrong vertex, and the
+    // click would be projected onto whichever axis the cursor was actually on. At
+    // 120 degrees that turns an intended 50 into -25, on the right row, looking
+    // entirely deliberate. Showing which ray is live stops the drift happening.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    expect(await textOf('calib-preview-emphasis')).toBe('0');
+
+    await clickAt(...spoke(0, 3, R / 2));
+    expect(await textOf('calib-preview-emphasis')).toBe('1');
+    await clickAt(...spoke(1, 3, R / 2));
+    expect(await textOf('calib-preview-emphasis')).toBe('2');
+    // ...and rolls round to the first axis of the next profile.
+    await clickAt(...spoke(2, 3, R / 2));
+    expect(await textOf('calib-preview-emphasis')).toBe('0');
+  });
+
+  it('snaps a captured point onto its axis, and says so when the click was nearer another', async () => {
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
 
     // Slot 1 is Strength, but this click lands over on the Weight ray.
     await clickAt(...spoke(1, 3, R / 2));
-    const warning = await textOf('off-axis-warning');
-    expect(warning).toContain('Strength');
-    expect(warning).toContain('Weight');
-    expect(warning).toMatch(/px off/);
 
-    // ⚑ It WARNS, it does not correct: the point is still where it was put, and
-    // dragging it onto its own axis is what clears the warning.
-    const [fromX, fromY] = spoke(1, 3, R / 2);
-    const [toX, toY] = spoke(0, 3, R / 2);
-    await dragMarker(fromX, fromY, toX, toY);
-    expect(await page.getByTestId('off-axis-warning').count()).toBe(0);
+    // ⚑ The notice is raised AT CAPTURE, from the click before it is snapped —
+    // afterwards the stored point is on its ray and there is nothing left to
+    // measure. It is shown, never recorded: no other graph type stores such a
+    // thing, and once the dot visibly sits on the axis the user stops aiming
+    // perpendicular-accurately, so a stored offset would misrepresent them.
+    const notice = await textOf('off-axis-warning');
+    expect(notice).toContain('Strength');
+    expect(notice).toContain('Weight');
+    expect(notice).toMatch(/px off/);
+
+    // The value recorded is the projection onto the axis it was captured against —
+    // 50 out along a ray 120 degrees away reads -25, not the 50 the Weight ray
+    // would have given. Reading the nearest ray would have looked entirely
+    // plausible and been off a different axis's scale.
+    // Matched loosely: the canvas is fitted/zoomed, so a click lands at the
+    // nearest device pixel rather than at exact ideal geometry. What is being
+    // asserted is the SIGN and magnitude — a Weight-ray reading would be +50.
+    expect(await textOf('points-table')).toMatch(/-2[45]\./);
   });
 
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
@@ -6251,5 +6300,7 @@ describe('spider charts', () => {
     for (let i = 0; i < 5; i++) await clickAt(...spoke(i, 5, R / 2));
     const table = await textOf('points-table');
     for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);
+    // Every axis is a row, named.
+    for (const axis of ['A', 'B', 'C', 'D', 'E']) expect(table).toContain(axis);
   });
 });

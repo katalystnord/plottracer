@@ -47,6 +47,19 @@ export interface PreviewSegment {
   from: PreviewPoint;
   to: PreviewPoint;
   color: string;
+  /** Draw this one as THE one being worked on right now (v1.4, Spider): the axis
+   * the capture cursor is filling. Everything else dims.
+   *
+   * ⚑ Prevention rather than correction. A spider's spoke ORDER is deliberately
+   * not enforced at calibration -- the user places the rays in whatever order
+   * suits them -- so the capture cursor walks them in CALIBRATION order, which
+   * need not match the visual order round the chart. A user going clockwise by eye
+   * can therefore drift out of step with the cursor, click the vertex on the wrong
+   * spoke, and have it projected onto the axis the cursor was actually filling: at
+   * 120 degrees that turns an intended 50 into -25, sitting on the right row and
+   * looking entirely deliberate. Showing which ray is live is what stops the drift
+   * happening at all, rather than reporting it afterwards. */
+  emphasis?: boolean;
 }
 
 /** A circle the calibration implies — a CCR pen arc or chart circle. */
@@ -140,7 +153,9 @@ const CIRCLE_TRIPLES: Partial<Record<AxesKind, readonly (readonly [string, strin
  */
 export function calibrationPreview(
   config: { axesKind: AxesKind; steps: readonly { key: string; color: string }[] },
-  placed: Readonly<Record<string, { px: number; py: number } | undefined>>
+  placed: Readonly<Record<string, { px: number; py: number } | undefined>>,
+  /** Step key to draw as the live one — see PreviewSegment.emphasis. */
+  emphasisKey?: string
 ): CalibrationPreview {
   const at = (key: string): PreviewPoint | null => {
     const p = placed[key];
@@ -155,7 +170,7 @@ export function calibrationPreview(
     const to = at(b);
     // Each pair is independent: draw as soon as ITS points exist, rather than
     // waiting for the whole calibration (WPD's all-or-nothing).
-    if (from && to) segments.push({ from, to, color: colorOf(a) });
+    if (from && to) segments.push({ from, to, color: colorOf(a), ...(b === emphasisKey ? { emphasis: true } : {}) });
   }
 
   const circles: PreviewCircle[] = [];

@@ -267,6 +267,12 @@ export interface CalibValueField {
    * but never reads — e.g. Polar P2's θ, which mirrors WebPlotDigitizer's form but
    * is ignored by the math. */
   optional?: boolean;
+  /** Prefilled into the input when the step becomes active, so the user walks
+   * past it and can change it rather than typing it from scratch (v1.4: Spider's
+   * centre value, 0). ⚑ A default is not an invention — the distinction is whether
+   * the user is SHOWN the value and can overrule it. Contrast the mirrored error
+   * cap, which was never presented as a value anyone chose. */
+  defaultValue?: string;
   /** What a blank `optional` field is stored as. Defaults to "0", which suits a
    * numeric slot nothing reads.
    *
@@ -1246,7 +1252,13 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // so the FILE keeps one copy per axis and a later per-axis override is a UI
   // change with no migration. The simplification lives in the workflow, not in the
   // record.
-  globalFields: [{ key: 'centreValue', label: 'Value at the centre' }],
+  // ⚑ NO globalFields. The centre's value used to be one — collected in a row of
+  // its own that appears only once every point is placed. It is now asked exactly
+  // where every other value is asked: inline beside the Centre chip, with the same
+  // confirm button, at the moment the centre is clicked (David, 2026-07-27). The
+  // value still reaches the record per spoke — buildAxes fans it out below — so
+  // this is a workflow change with no consequence for the file.
+  globalFields: [],
   // One tuple is one closed shape on the chart — the domain word for it. Declared
   // rather than inherited: the shared tuple status line falls back to Box Plot's
   // "box", which is how Histogram's bins once announced themselves as "new box"
@@ -1258,8 +1270,12 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
       key: 'origin',
       label: 'Centre',
       color: '#5fb47a',
-      prompt: 'Click the centre of the spider chart, where every axis meets',
-      valueFields: [],
+      prompt: 'Click the centre of the spider chart, then enter the value every axis starts from',
+      // Origin + one known point is a single (value, distance) pair and a scale
+      // needs two, so the centre's value has to be collected. 0 is prefilled
+      // because a common centre of 0 is the rule in real spider charts; it is a
+      // default the user walks past and can change, not an invention.
+      valueFields: [{ key: 'centre', label: 'Value', field: 'dy', defaultValue: '0' }],
     },
   ],
   repeatingStep: {
@@ -1288,7 +1304,8 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
     // BEFORE calibrating, so it is stored per axis rather than once. Point 0 is the
     // origin and deliberately does NOT get a copy: one home for the fact, no way
     // for two copies to disagree.
-    const centre = ctx.globalValues['centreValue'] ?? '';
+    // The value entered on the centre click, fanned into every spoke's own point.
+    const centre = String(cal.getPoint(0)?.dy ?? '');
     for (let i = 1; i < cal.getCount(); i++) {
       const point = cal.getPoint(i)!;
       cal.setDataAt(i, point.dx as string, centre, point.dz as string);
@@ -1316,13 +1333,6 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   },
   extractOptions(axes) {
     return { isLogRadial: String(axes.isLog()) };
-  },
-  extractGlobalValues(axes) {
-    // Read back from the FIRST spoke. Every spoke carries its own copy and the UI
-    // writes one value into all of them, so any of them answers; spoke 0 is the one
-    // that always exists.
-    const spoke = axes.getSpokes()[0];
-    return { centreValue: spoke ? String(spoke.centreValue) : '0' };
   },
 };
 
@@ -1966,8 +1976,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // preview unable to name — or colour — any ray the user has placed.
         steps: this.getSteps(),
       },
-      this.placed
+      this.placed,
+      this.liveSpokeStepKey()
     );
+  }
+
+  /**
+   * The calibration step for the spoke the capture cursor is filling, so the
+   * canvas can draw that ray as the live one (v1.4, Spider).
+   *
+   * Nothing is emphasised during the calibration walk — the active step already
+   * has its own highlight on the card, and there is no capture cursor yet.
+   *
+   * ⚑ What actually carries that is the point-groups check: a spider's groups are
+   * derived from the calibrated axes, so they do not exist until calibration
+   * succeeds. The `!this.axes` test below is defence in depth and is NOT covered by
+   * a failing-first test — neutering it changes nothing today, because no state
+   * has this type's groups without its axes. Said plainly rather than left as a
+   * comment implying a guarantee the tests do not check.
+   */
+  private liveSpokeStepKey(): string | undefined {
+    if (this.config.id !== 'spider' || !this.axes) return undefined;
+    const entry = this.activeEntry;
+    if (!entry.dataset.hasPointGroups()) return undefined;
+    // Step keys are `spoke1`-based, the point-group cursor is 0-based.
+    return `spoke${entry.pointGroupCursor.groupIndex + 1}`;
   }
 
   /**
@@ -2256,59 +2289,82 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * Points that sit closer to a DIFFERENT spoke than the one they were captured
-   * on (v1.4, Spider) — David's "warn past a threshold, and show it".
+   * Move a click onto the ray of the spoke it is being captured against (v1.4).
+   * A no-op for every other graph type, and for a pixel with no spoke to sit on.
    *
-   * ⚑ THE THRESHOLD IS NOT A MAGIC NUMBER. "Closer to another ray than to its
-   * own" is self-scaling: it tightens automatically on a twelve-spoke chart where
-   * the rays crowd together and relaxes on a three-spoke one, and it states the
-   * suspicion in the user's own terms — *you probably meant that other axis*. A
-   * fixed pixel tolerance would have to be guessed, would be wrong at some zoom
-   * or spoke count, and would be a modelling choice about figures we cannot see
-   * (tenet 10). The perpendicular distance rides along so the UI can SHOW how far
-   * off it was rather than merely asserting that it is.
+   * ⚑ THE RECORD IS SNAPPED, and that is deliberate (David, 2026-07-27). A spoke
+   * is a 1-D scale: the value is the click projected onto the ray, and the
+   * perpendicular component is discarded either way. What settles it is not the
+   * arithmetic but the FEEDBACK LOOP — once the point visibly sits on the axis,
+   * the user stops aiming perpendicular-accurately, correctly, because they can
+   * see it does not matter. From that moment the perpendicular offset no longer
+   * means "this person mis-clicked"; it means "this person was told not to care."
+   * Storing it would preserve a number that LOOKS like an error signal and is not,
+   * which a downstream reader would reasonably trust. Better not to keep it.
    *
-   * ⚑ It WARNS, it does not correct. Snapping the point to the nearer ray would
-   * record a value against an axis the user never chose; refusing the click would
-   * throw away a measurement they did make. The record keeps what they captured
-   * and the screen says what looks wrong — recording before interpreting.
+   * The wrong-axis check therefore moves to CAPTURE time — see
+   * previewSpiderCapture, whose answer is shown as the click happens and never
+   * stored, matching the fact that no other graph type records such a thing.
+   *
+   * Known cost, accepted: a snapped point does not carry its original observation,
+   * so adjusting a spoke's calibration afterwards re-projects from the snapped
+   * position rather than from the raw click. The difference is second order (it
+   * scales with the perpendicular offset times the angle change), and the offset
+   * is now small by construction because the user can see the ray.
    */
-  getOffAxisWarnings(datasetIndex = this.activeDatasetIndex): {
-    pointIndex: number;
-    capturedOn: number;
+  /** Which spoke's slot an active-dataset point fills, or -1 if it fills none.
+   * The tuple table is the only thing that knows: a pixel carries no axis of its
+   * own, which is exactly why the value is never read off the nearest ray. */
+  private spokeIndexOfPoint(pointIndex: number): number {
+    for (const tuple of this.activeEntry.dataset.getAllTuples()) {
+      const groupIndex = tuple.indexOf(pointIndex);
+      if (groupIndex > -1) return groupIndex;
+    }
+    return -1;
+  }
+
+  private snapToSpoke(px: number, py: number, groupIndex: number): { x: number; y: number } {
+    if (this.config.id !== 'spider' || !this.axes) return { x: px, y: py };
+    const spider = this.axes as unknown as SpiderAxes;
+    const projection = spider.projectOnSpoke(groupIndex, px, py);
+    if (!projection) return { x: px, y: py };
+    const origin = spider.getOrigin();
+    const spoke = spider.getSpokes()[groupIndex]!;
+    return {
+      x: origin.x + projection.alongPx * spoke.ux,
+      y: origin.y + projection.alongPx * spoke.uy,
+    };
+  }
+
+  /**
+   * What a click at (px, py) would be captured as right now — the axis it would
+   * fill, and whether it sits nearer a DIFFERENT one (v1.4, Spider).
+   *
+   * ⚑ Asked BEFORE the click is recorded, because the snap is what destroys the
+   * evidence: afterwards the stored point is on its ray and there is no "off" left
+   * to measure. The caller shows this as it happens and throws it away. Returns
+   * null when there is nothing to say — a different graph type, no calibration, or
+   * a click already nearest the axis it is filling.
+   */
+  previewSpiderCapture(px: number, py: number): {
     capturedOnLabel: string;
-    nearest: number;
     nearestLabel: string;
     offRayPx: number;
-  }[] {
-    const entry = this.datasetEntries[datasetIndex];
-    if (!entry || !this.axes || this.config.id !== 'spider') return [];
+  } | null {
+    if (this.config.id !== 'spider' || !this.axes) return null;
+    const entry = this.activeEntry;
+    if (!entry.dataset.hasPointGroups()) return null;
     const spider = this.axes as unknown as SpiderAxes;
 
-    const spokeOf: number[] = [];
-    entry.dataset.getAllTuples().forEach((tuple) => {
-      tuple.forEach((pixelIndex, groupIndex) => {
-        if (pixelIndex != null) spokeOf[pixelIndex] = groupIndex;
-      });
-    });
-
-    const warnings: ReturnType<CalibrationSession<A>['getOffAxisWarnings']> = [];
-    entry.dataset.getAllPixels().forEach((p, i) => {
-      const capturedOn = spokeOf[i];
-      if (capturedOn == null) return;
-      const own = spider.projectOnSpoke(capturedOn, p.x, p.y);
-      const nearest = spider.nearestSpoke(p.x, p.y);
-      if (!own || !nearest || nearest.index === capturedOn) return;
-      warnings.push({
-        pointIndex: i,
-        capturedOn,
-        capturedOnLabel: spider.getSpokeLabel(capturedOn),
-        nearest: nearest.index,
-        nearestLabel: spider.getSpokeLabel(nearest.index),
-        offRayPx: own.offRayPx,
-      });
-    });
-    return warnings;
+    const groupIndex = entry.pointGroupCursor.groupIndex;
+    const own = spider.projectOnSpoke(groupIndex, px, py);
+    const nearest = spider.nearestSpoke(px, py);
+    if (!own || !nearest || nearest.index === groupIndex) return null;
+    return {
+      capturedOnLabel: spider.getSpokeLabel(groupIndex),
+      nearestLabel: spider.getSpokeLabel(nearest.index),
+      offRayPx: own.offRayPx,
+    };
   }
 
   /** Switches which dataset new points/point-groups actions apply to.
@@ -2583,7 +2639,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // Point groups (Box Plot etc.) file each click into a tuple slot at the
       // cursor -- APPEND, then wire that new index in; the tuple layout, not the
       // point sequence, carries the meaning here, so insert-in-place must not run.
-      const index = dataset.addPixel(px, py);
+      const snapped = this.snapToSpoke(px, py, entry.pointGroupCursor.groupIndex);
+      const index = dataset.addPixel(snapped.x, snapped.y);
       const { tupleIndex, groupIndex } = entry.pointGroupCursor;
       if (tupleIndex === null) {
         const newTupleIndex = dataset.addTuple(index);
@@ -3028,6 +3085,61 @@ export class CalibrationSession<A extends CalibratedAxes> {
         return { px: p.x, py: p.y, data: this.axes ? this.axes.pixelToData(p.x, p.y) : null };
       }),
     }));
+  }
+
+  /**
+   * The spider table (v1.4): one ROW per axis, one COLUMN per series —
+   * `# | Category | Series 1 | Series 2 | …` (David, 2026-07-27).
+   *
+   * ⚑ Why this shape and not the grouped table's. The point-group table shows the
+   * ACTIVE series only, so adding a second series made the first one's readings
+   * vanish from the screen — caught by driving the app, not by any test. Every
+   * ungrouped type already shows all series at once, so the grouped table was the
+   * outlier. Rows-as-axes is also the layout a radar chart's own data is published
+   * in, and it stays compact as series are added instead of growing sideways by
+   * one block of axis columns each time.
+   *
+   * ⚑ This alignment is REAL, not assumed. Row k is axis k for every series
+   * because every series has exactly one slot per axis, by construction of the
+   * point groups. The same side-by-side layout LIED for error bars, where the
+   * pairing was derived at read time and never stored.
+   *
+   * A series holding more than one profile contributes one column per profile, so
+   * nothing is hidden; the common single-profile case just reads as the series name.
+   */
+  getSpiderTable(): {
+    axisNames: string[];
+    columns: { seriesIndex: number; seriesName: string; profileIndex: number; label: string; values: (number | null)[] }[];
+  } {
+    if (this.config.id !== 'spider' || !this.axes) return { axisNames: [], columns: [] };
+    const spider = this.axes as unknown as SpiderAxes;
+    const axisNames = spider.getSpokes().map((_, i) => spider.getSpokeLabel(i));
+
+    const columns: ReturnType<CalibrationSession<A>['getSpiderTable']>['columns'] = [];
+    this.datasetEntries.forEach((entry, seriesIndex) => {
+      const tuples = entry.dataset.getAllTuples();
+      // A series with nothing captured still gets a column, so it is visible as
+      // soon as it is added rather than appearing only once it has data.
+      const profiles = tuples.length > 0 ? tuples : [[]];
+      profiles.forEach((tuple, profileIndex) => {
+        const values = axisNames.map((_, axisIndex) => {
+          const pixelIndex = tuple[axisIndex];
+          if (pixelIndex == null) return null;
+          const p = entry.dataset.getPixel(pixelIndex);
+          // Read against THIS axis, never the nearest ray — the same rule the
+          // export follows, for the same reason.
+          return spider.projectOnSpoke(axisIndex, p.x, p.y)?.value ?? null;
+        });
+        columns.push({
+          seriesIndex,
+          seriesName: entry.dataset.name,
+          profileIndex,
+          label: profiles.length > 1 ? `${entry.dataset.name} · ${profileIndex + 1}` : entry.dataset.name,
+          values,
+        });
+      });
+    });
+    return { axisNames, columns };
   }
 
   /** The active series' bins, one entry per captured tuple in capture order,
@@ -3572,7 +3684,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "sticks" only until the next anchor moves, which silently discards it --
     // exactly the defect the read-only rows were added to close.
     if (role === 'interpolated') return;
-    dataset.setPixelAt(index, px, py);
+    // A spider point stays ON its axis however it is moved — drag, arrow nudge or
+    // value edit all land here. Without this a drag would lift the point off the
+    // ray it belongs to, and the marker would once again sit somewhere that does
+    // not correspond to its own exported value. The spoke comes from the point's
+    // own tuple slot, so a drag can never move it onto a different axis: changing
+    // which axis a reading belongs to is a delete-and-re-place, not a nudge.
+    const snapped = this.snapToSpoke(px, py, this.spokeIndexOfPoint(index));
+    dataset.setPixelAt(index, snapped.x, snapped.y);
     if (role === 'anchor') this.rebuildInterpolation();
   }
 

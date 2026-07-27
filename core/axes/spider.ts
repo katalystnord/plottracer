@@ -183,12 +183,37 @@ export class SpiderAxes {
     };
   }
 
-  /** The spoke this pixel lies closest to, by perpendicular distance from the ray. */
+  /**
+   * The spoke this pixel lies closest to.
+   *
+   * ⚑ Measured to the RAY, not to the infinite line through the origin. A spoke
+   * runs one way only, so anything behind the centre is measured from the centre
+   * instead of being treated as lying on the spoke's backward extension.
+   *
+   * That distinction is not academic: on any chart with an EVEN number of equally
+   * spaced axes, every spoke has an exact opposite, and the two are collinear. By
+   * perpendicular distance alone, a point far out on one of them is zero from
+   * both, and the tie broke on floating-point noise. Driving the six-axis sample
+   * produced the giveaway on screen — "0 px off the Cost index axis and nearer
+   * Water-vapour barrier", a sentence that cannot be true (David, 2026-07-27).
+   * Every fixture in the unit tests had three spokes, which has no opposite pairs,
+   * so nothing caught it.
+   */
   nearestSpoke(px: number, py: number): SpokeProjection | null {
     let best: SpokeProjection | null = null;
+    let bestDistance = Infinity;
     for (let i = 0; i < this.spokes.length; i++) {
       const projection = this.projectOnSpoke(i, px, py)!;
-      if (best == null || projection.offRayPx < best.offRayPx) best = projection;
+      // Distance to the ray: the perpendicular offset once past the origin,
+      // otherwise the straight-line distance back to the origin itself.
+      const distance =
+        projection.alongPx >= 0
+          ? projection.offRayPx
+          : Math.hypot(projection.alongPx, projection.offRayPx);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = projection;
+      }
     }
     return best;
   }

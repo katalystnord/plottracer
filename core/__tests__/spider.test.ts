@@ -227,6 +227,60 @@ describe('SpiderAxes.nearestSpoke and pixelToData', () => {
   });
 });
 
+describe('nearestSpoke on an EVEN axis count — the collinear-opposites trap', () => {
+  /** Six equally spaced spokes, so axis i and axis i+3 are exactly opposite. */
+  function sixSpokes(): SpiderAxes {
+    const spokes: Array<[number, number, string, string, string]> = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (2 * Math.PI * i) / 6;
+      spokes.push([100 + 100 * Math.sin(angle), 100 - 100 * Math.cos(angle), '100', '0', `A${i}`]);
+    }
+    const { ok, axes } = calibrateSpider(spokes);
+    expect(ok).toBe(true);
+    return axes;
+  }
+
+  it('⚑ picks the ray a point is ON, not its exact opposite', () => {
+    // Found by driving the six-axis sample: the app said a click was "0 px off the
+    // Cost index axis and nearer Water-vapour barrier" — impossible, and produced
+    // by measuring to the infinite LINE, on which an opposite spoke is identical.
+    // Every unit fixture had three spokes, which has no opposite pairs.
+    const axes = sixSpokes();
+    for (let i = 0; i < 6; i++) {
+      const angle = (2 * Math.PI * i) / 6;
+      const px = 100 + 60 * Math.sin(angle);
+      const py = 100 - 60 * Math.cos(angle);
+      expect(axes.nearestSpoke(px, py)!.index).toBe(i);
+    }
+  });
+
+  it('reports zero off-ray distance for the spoke it picks', () => {
+    // The self-contradiction the screenshot showed: a nonzero "nearer" verdict
+    // alongside a zero distance. If the pick is right, the distance agrees with it.
+    const axes = sixSpokes();
+    const angle = (2 * Math.PI * 5) / 6;
+    const nearest = axes.nearestSpoke(100 + 60 * Math.sin(angle), 100 - 60 * Math.cos(angle))!;
+    expect(nearest.index).toBe(5);
+    expect(nearest.offRayPx).toBeCloseTo(0, 9);
+  });
+
+  it('treats a point BEHIND the centre as belonging to the ray it faces', () => {
+    // A spoke runs one way. Something behind the origin is not "on" it at a
+    // negative distance; the spoke pointing at it is the nearer one.
+    const axes = sixSpokes();
+    // Straight down from the centre = the opposite of axis 0, which is axis 3.
+    expect(axes.nearestSpoke(100, 160)!.index).toBe(3);
+    expect(axes.nearestSpoke(100, 160)!.alongPx).toBeGreaterThan(0);
+  });
+
+  it('falls back to the centre distance when every ray points away', () => {
+    // At the origin itself nothing is "nearer" by perpendicular offset — all are
+    // zero — so the answer must at least be a real spoke rather than undefined.
+    const axes = sixSpokes();
+    expect(axes.nearestSpoke(100, 100)).not.toBeNull();
+  });
+});
+
 describe('SpiderAxes.dataToPixel', () => {
   it('is a REAL inverse, not BarAxes-style {0,0} stub', () => {
     // Bar ships WPD's unimplemented dataToPixel, and export precision has to degrade

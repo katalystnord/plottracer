@@ -32,13 +32,13 @@ function walkSpider(
   const n = values.length;
   while (session.getRepeatCount() < n) expect(session.addRepeat()).toBe(true);
 
-  expect(session.handleCalibrationClick(100, 100)).toBe('point-placed');
+  expect(session.handleCalibrationClick(100, 100)).toBe('awaiting-value');
+  expect(session.confirmCalibrationValues([centre])).toBe(true);
   for (let i = 0; i < n; i++) {
     const [px, py] = spokePixel(i, n);
     expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
     expect(session.confirmCalibrationValues([values[i]!, names[i]!])).toBe(true);
   }
-  session.setGlobalFieldValue('centreValue', centre);
   return session.runCalibration();
 }
 
@@ -72,6 +72,7 @@ describe('the step list is variable, and comes from the session', () => {
     const session = newSpider();
     session.addRepeat();
     session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
     for (let i = 0; i < 4; i++) {
       const [px, py] = spokePixel(i, 4);
       session.handleCalibrationClick(px, py);
@@ -100,6 +101,7 @@ describe('the step list is variable, and comes from the session', () => {
     const session = newSpider();
     session.addRepeat();
     session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
     for (let i = 0; i < 4; i++) {
       const [px, py] = spokePixel(i, 4);
       session.handleCalibrationClick(px, py);
@@ -146,10 +148,10 @@ describe('calibrating a spider through the click path', () => {
   it('refuses to calibrate while any axis is still unplaced', () => {
     const session = newSpider();
     session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
     const [px, py] = spokePixel(0, 3);
     session.handleCalibrationClick(px, py);
     session.confirmCalibrationValues(['10', 'A']);
-    session.setGlobalFieldValue('centreValue', '0');
     expect(session.runCalibration()).toBe(false);
     expect(session.getAxes()).toBeNull();
   });
@@ -173,8 +175,11 @@ describe('calibrating a spider through the click path', () => {
     // And in the CALIBRATION itself, which is what gets written to the file.
     const cal = session.getAxes()!.calibration!;
     for (let i = 1; i < cal.getCount(); i++) expect(cal.getPoint(i)!.dy).toBe('20');
-    // The centre point deliberately carries no copy — one home for the fact.
-    expect(cal.getPoint(0)!.dy).toBe('0');
+    // The centre point carries the value AS ENTERED — it is asked for on the centre
+    // click now, like every other value (David, 2026-07-27). The per-spoke copies
+    // above are what a reader uses, and are what a future per-axis override would
+    // change; this one records what the user typed.
+    expect(cal.getPoint(0)!.dy).toBe('20');
   });
 
   it('refuses a centre equal to an axis value, with an error that says why', () => {
@@ -199,6 +204,7 @@ describe('calibrating a spider through the click path', () => {
   it('offers no pixel-reuse buttons — a spider has nothing to reuse', () => {
     const session = newSpider();
     session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
     const [px, py] = spokePixel(0, 3);
     session.handleCalibrationClick(px, py);
     session.confirmCalibrationValues(['10', 'A']);
@@ -213,6 +219,7 @@ describe('calibrating a spider through the click path', () => {
     // printed axis moves every value along it with nothing on screen wrong.
     const session = newSpider();
     session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
     expect(session.getCalibrationPreview().segments).toHaveLength(0);
 
     for (let i = 0; i < 3; i++) {
@@ -269,10 +276,12 @@ describe('the OTHER entrance — loading an already-calibrated spider', () => {
     expect(Object.keys(session.getPlacedPoints())).toEqual(['origin', 'spoke1']);
   });
 
-  it('reads the centre value back off the loaded axes', () => {
+  it('reads the centre value back off every loaded axis', () => {
+    // Stored per spoke, so a reopened project restores it without a global field to
+    // extract it into — the workflow asks once, the file keeps one copy per axis.
     const session = newSpider();
     session.loadCalibrated(loadedSpider(4), [new Dataset(1)]);
-    expect(session.getGlobalFieldValues()['centreValue']).toBe('2');
+    expect(session.getAxes()!.getSpokes().map((s) => s.centreValue)).toEqual([2, 2, 2, 2]);
   });
 
   it('reads the log option back off the loaded axes', () => {

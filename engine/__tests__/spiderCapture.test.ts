@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, SPIDER_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, SPIDER_AXES_CONFIG, XY_AXES_CONFIG } from '../calibrationSession.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { Dataset } from '../../core/dataset.js';
 
@@ -25,12 +25,12 @@ function calibratedSpider(values: string[], names: string[], centre = '0'): Cali
   const n = values.length;
   while (session.getRepeatCount() < n) session.addRepeat();
   session.handleCalibrationClick(100, 100);
+  session.confirmCalibrationValues([centre]);
   for (let i = 0; i < n; i++) {
     const [px, py] = spokePixel(i, n);
     session.handleCalibrationClick(px, py);
     session.confirmCalibrationValues([values[i]!, names[i]!]);
   }
-  session.setGlobalFieldValue('centreValue', centre);
   expect(session.runCalibration()).toBe(true);
   return session;
 }
@@ -113,65 +113,189 @@ describe('a captured point is read against ITS OWN axis', () => {
   });
 });
 
-describe('the off-axis warning', () => {
-  it('fires for a point nearer a different axis than its own', () => {
+describe('the wrong-axis notice — asked at capture time, never stored', () => {
+  it('fires for a click nearer a different axis than the slot it fills', () => {
     const session = THREE();
-    session.addDataPoint(...spokePixel(1, 3, 50)); // slot 0, but on ray 1
-    const [warning] = session.getOffAxisWarnings();
-    expect(warning).toBeDefined();
-    expect(warning!.capturedOnLabel).toBe('Strength');
-    expect(warning!.nearestLabel).toBe('Weight');
-    expect(warning!.offRayPx).toBeGreaterThan(0);
+    const [px, py] = spokePixel(1, 3, 50); // on ray 1, while slot 0 is next
+    const notice = session.previewSpiderCapture(px, py);
+    expect(notice).not.toBeNull();
+    expect(notice!.capturedOnLabel).toBe('Strength');
+    expect(notice!.nearestLabel).toBe('Weight');
+    expect(notice!.offRayPx).toBeGreaterThan(0);
   });
 
-  it('stays silent for points placed on their own axis', () => {
+  it('says nothing for a click on the axis it is filling', () => {
     const session = THREE();
-    for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
-    expect(session.getOffAxisWarnings()).toEqual([]);
+    expect(session.previewSpiderCapture(...spokePixel(0, 3, 50))).toBeNull();
   });
 
-  it('tolerates a click that is off its ray but still closest to it', () => {
-    // ⚑ The threshold is "nearer another ray", not a fixed pixel tolerance — so an
-    // ordinary imprecise click on the right axis is NOT nagged about.
+  it('tolerates a click off its ray but still closest to it', () => {
+    // ⚑ The threshold is "nearer another ray", not a fixed pixel tolerance, so an
+    // ordinary imprecise click on the right axis is not nagged about.
     const session = THREE();
     const [px, py] = spokePixel(0, 3, 50);
-    session.addDataPoint(px + 8, py);
-    expect(session.getOffAxisWarnings()).toEqual([]);
+    expect(session.previewSpiderCapture(px + 8, py)).toBeNull();
   });
 
   it('tightens automatically as the spokes crowd together', () => {
-    // The same 8px sideways slip that is fine on a 3-spoke chart is a different
-    // proposition on a 24-spoke one. Nothing is configured for this; it falls out
-    // of comparing against the other rays.
+    // The same 8px slip that is fine on a 3-spoke chart is a different proposition
+    // on a 24-spoke one. Nothing is configured for this; it falls out of comparing
+    // against the other rays.
     const many = calibratedSpider(Array(24).fill('100'), Array.from({ length: 24 }, (_, i) => `A${i}`));
     const [px, py] = spokePixel(0, 24, 50);
-    many.addDataPoint(px + 8, py);
-    expect(many.getOffAxisWarnings()).toHaveLength(1);
+    expect(many.previewSpiderCapture(px + 8, py)).not.toBeNull();
   });
 
-  it('warns without correcting — the recorded pixel is untouched', () => {
-    // Snapping would record a value against an axis nobody chose; refusing would
-    // discard a real measurement.
+  it('⚑ must be asked BEFORE the click is recorded — the snap erases its evidence', () => {
+    // Not a quirk of the API: the point is snapped onto its axis, so afterwards
+    // the stored pixel IS on the ray and there is nothing left to measure. This is
+    // the whole reason the check is a capture-time question rather than a property
+    // of the record.
     const session = THREE();
     const [px, py] = spokePixel(1, 3, 50);
-    session.addDataPoint(px, py);
-    expect(session.getOffAxisWarnings()).toHaveLength(1);
-    const point = session.getDataPoints()[0]!;
-    expect(point.px).toBeCloseTo(px, 10);
-    expect(point.py).toBeCloseTo(py, 10);
-  });
+    // Before: the click is well off the Strength ray it is about to fill
+    // (50px out along a ray 120 degrees away => 50*sin(120) = 43.3px off).
+    const before = session.previewSpiderCapture(px, py);
+    expect(before!.offRayPx).toBeCloseTo(43.3, 1);
 
-  it('clears when the point is dragged back onto its own axis', () => {
-    const session = THREE();
-    session.addDataPoint(...spokePixel(1, 3, 50));
-    expect(session.getOffAxisWarnings()).toHaveLength(1);
-    session.updateDataPointPixel(0, ...spokePixel(0, 3, 50));
-    expect(session.getOffAxisWarnings()).toEqual([]);
+    session.addDataPoint(px, py);
+    // After: the stored point sits exactly on the ray it was captured against, so
+    // the offset the notice reads is gone from the record entirely.
+    const stored = session.getDataPoints()[0]!;
+    const onOwnSpoke = session.getAxes()!.projectOnSpoke(0, stored.px, stored.py)!;
+    expect(onOwnSpoke.offRayPx).toBeCloseTo(0, 6);
   });
 
   it('says nothing on a graph type that has no spokes', () => {
+    expect(new CalibrationSession(SPIDER_AXES_CONFIG).previewSpiderCapture(10, 10)).toBeNull();
+  });
+});
+
+describe('a captured point is SNAPPED onto its axis', () => {
+  it('lands exactly on the ray, even from a click well off it', () => {
+    // ⚑ David's call, 2026-07-27. The value was always the projection; what the
+    // snap adds is that the dot the user sees IS the number recorded. And once
+    // they can see the point sitting on the axis they stop aiming
+    // perpendicular-accurately — so a stored perpendicular offset would no longer
+    // mean "mis-click", it would mean "the app told me not to care", which is a
+    // worse thing to keep than nothing.
+    const session = THREE();
+    const [px, py] = spokePixel(0, 3, 50);
+    session.addDataPoint(px + 30, py);
+    const stored = session.getDataPoints()[0]!;
+    expect(stored.px).toBeCloseTo(px, 6);
+    expect(stored.py).toBeCloseTo(py, 6);
+  });
+
+  it('records the same value the projection always gave', () => {
+    // The snap must not move the NUMBER, only the pixel. If these disagreed, the
+    // snap would be changing measurements rather than tidying their positions.
+    const session = THREE();
+    const [px, py] = spokePixel(0, 3, 50);
+    session.addDataPoint(px + 30, py);
+    expect(session.getExportRows(0)[0]!.values[2]).toBeCloseTo(50, 6);
+  });
+
+  it('keeps a point on its axis when it is DRAGGED or nudged', () => {
+    // Every move converges on updateDataPointPixel — drag, arrow nudge, value
+    // edit. Without the snap there, a drag would lift the point back off its ray.
+    const session = THREE();
+    session.addDataPoint(...spokePixel(0, 3, 50));
+    const [px, py] = spokePixel(0, 3, 80);
+    session.updateDataPointPixel(0, px + 25, py);
+    const stored = session.getDataPoints()[0]!;
+    expect(stored.px).toBeCloseTo(px, 6);
+    expect(stored.py).toBeCloseTo(py, 6);
+  });
+
+  it('a drag can never move a reading onto a DIFFERENT axis', () => {
+    // The spoke comes from the point's own tuple slot, not from where the drag
+    // ended. Changing which axis a reading belongs to is a delete-and-re-place, a
+    // deliberate act, not something a slipped drag can do silently.
+    const session = THREE();
+    session.addDataPoint(...spokePixel(0, 3, 50));
+    session.updateDataPointPixel(0, ...spokePixel(1, 3, 50));
+    expect(session.getExportRows(0)[0]!.values[1]).toBe('Strength');
+    // Projected onto ITS OWN ray, a point over on ray 1 reads 50*cos(120°).
+    expect(session.getExportRows(0)[0]!.values[2]).toBeCloseTo(-25, 6);
+    // ⚑ And the stored PIXEL is on its own ray too, not on the one it was dragged
+    // over. Reading the value from the group makes the number right either way,
+    // so only the position distinguishes "snapped to its own axis" from "snapped
+    // to whichever ray the drag ended nearest".
+    const stored = session.getDataPoints()[0]!;
+    expect(session.getAxes()!.projectOnSpoke(0, stored.px, stored.py)!.offRayPx).toBeCloseTo(0, 6);
+  });
+
+  it('leaves points of every other graph type exactly where they were clicked', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.handleCalibrationClick(100, 300);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(300, 300);
+    session.confirmCalibrationValues(['10']);
+    session.handleCalibrationClick(100, 300);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['10']);
+    expect(session.runCalibration()).toBe(true);
+
+    session.addDataPoint(173, 241);
+    const stored = session.getDataPoints()[0]!;
+    expect(stored.px).toBe(173);
+    expect(stored.py).toBe(241);
+
+    // And a DRAG on a non-spider chart is untouched too. This is the path that
+    // runs for every graph type, so a snap not gated on the type would quietly
+    // pull XY points around — the grouped capture path above would never show it.
+    session.updateDataPointPixel(0, 210, 190);
+    const moved = session.getDataPoints()[0]!;
+    expect(moved.px).toBe(210);
+    expect(moved.py).toBe(190);
+  });
+});
+
+describe('the live axis is drawn on the figure', () => {
+  it('emphasises the ray the capture cursor is filling, and follows it round', () => {
+    // ⚑ PREVENTION, not correction. Spoke order is deliberately unenforced at
+    // calibration, so the cursor walks the spokes in CALIBRATION order, which need
+    // not match the visual order round the chart — a user going clockwise by eye
+    // can drift out of step and click the wrong vertex. Showing which ray is live
+    // is what stops that happening, rather than reporting it afterwards.
+    const session = THREE();
+    const emphasised = () => session.getCalibrationPreview().segments.findIndex((s) => s.emphasis);
+    expect(emphasised()).toBe(0);
+
+    session.addDataPoint(...spokePixel(0, 3, 50));
+    expect(emphasised()).toBe(1);
+    session.addDataPoint(...spokePixel(1, 3, 50));
+    expect(emphasised()).toBe(2);
+    // ...and rolls round to the first axis of the next profile.
+    session.addDataPoint(...spokePixel(2, 3, 50));
+    expect(emphasised()).toBe(0);
+  });
+
+  it('emphasises exactly one ray, never several', () => {
+    const session = THREE();
+    const segments = session.getCalibrationPreview().segments;
+    expect(segments.filter((s) => s.emphasis)).toHaveLength(1);
+    expect(segments).toHaveLength(3);
+  });
+
+  it('emphasises nothing DURING calibration — the card already marks the step', () => {
     const session = new CalibrationSession(SPIDER_AXES_CONFIG);
-    expect(session.getOffAxisWarnings()).toEqual([]);
+    session.handleCalibrationClick(100, 100);
+    const [px, py] = spokePixel(0, 3);
+    session.handleCalibrationClick(px, py);
+    session.confirmCalibrationValues(['100', 'A']);
+    expect(session.getCalibrationPreview().segments.some((s) => s.emphasis)).toBe(false);
+  });
+
+  it('leaves every other graph type\'s preview unemphasised', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.handleCalibrationClick(100, 300);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(300, 300);
+    session.confirmCalibrationValues(['10']);
+    expect(session.getCalibrationPreview().segments.some((s) => s.emphasis)).toBe(false);
   });
 });
 
@@ -215,7 +339,14 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     for (const row of rows) expect(row.values).toEqual([null, '', null]);
   });
 
-  it('still says nothing off-axis about points with no axis to be off', () => {
-    expect(loadMismatched([]).getOffAxisWarnings()).toEqual([]);
+  it('leaves a point with no axis exactly where the file put it', () => {
+    // Nothing says which axis it was read against, so there is no ray to snap it
+    // to — and putting it on axis 1 would show it as a measurement against an axis
+    // nobody assigned it to.
+    const session = loadMismatched([]);
+    const [px, py] = spokePixel(0, 3, 40);
+    const stored = session.getDataPoints()[0]!;
+    expect(stored.px).toBeCloseTo(px, 6);
+    expect(stored.py).toBeCloseTo(py, 6);
   });
 });

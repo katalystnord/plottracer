@@ -108,6 +108,7 @@ import barSample from '../../samples/bar-tensile-strength.png';
 import categoricalSample from '../../samples/categorical-fibre-modulus.png';
 import barBoxSample from '../../samples/bar-box-plot-tensile-strength.png';
 import polarSample from '../../samples/polar-diffusion-rate.png';
+import spiderSample from '../../samples/spider-material-profile.png';
 import ternarySample from '../../samples/ternary-blend-composition.png';
 import mapSample from '../../samples/map-collection-sites.png';
 import ccrSample from '../../samples/circular-temperature-recording.png';
@@ -750,6 +751,13 @@ const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; 
   // hidden toggle -- so the example demonstrates the discoverable path.
   { id: 'boxplot', name: 'Box plot — tensile strength', src: barBoxSample, axes: 'boxplot' },
   { id: 'polar', name: 'Polar — diffusion rate', src: polarSample, axes: 'polar' },
+  // Spider (v1.4). Three series in distinct colours and, deliberately, SIX AXES
+  // WITH SIX DIFFERENT RANGES (tensile 0-120 MPa beside a cost index 0-5) sharing
+  // a centre of 0 -- the per-axis-scale case the only prior art excludes by
+  // assuming one shared scale, and the thing placing a known point on every spoke
+  // exists to buy. Line-only polygons: filled radar shapes blend into new colours
+  // where they overlap, and every vertex has to stay clickable.
+  { id: 'spider', name: 'Spider / Radar — material performance profile', src: spiderSample, axes: 'spider' },
   { id: 'ternary', name: 'Ternary — blend composition', src: ternarySample, axes: 'ternary' },
   { id: 'map', name: 'Map — collection sites', src: mapSample, axes: 'map' },
   { id: 'ccr', name: 'Circular chart — temperature', src: ccrSample, axes: 'ccr' },
@@ -1184,6 +1192,23 @@ export function Workspace() {
   // in-progress string so typing doesn't move the point on every keystroke --
   // it applies once, on blur/Enter.
   const [editingCell, setEditingCell] = useState<{ index: number; axis: number; value: string } | null>(null);
+  // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
+  // state, never part of the record. Every capture click overwrites it (with null
+  // when the click was fine), and the effect below clears it whenever the tool or
+  // the active series changes, so it can never outlive the click it describes.
+  // ⚑ That clearing was CLAIMED by this comment before it was written: driving the
+  // app left the notice standing after a series switch, describing a click made in
+  // a different context entirely. A comment is not an implementation.
+  const [captureNotice, setCaptureNotice] = useState<{
+    capturedOnLabel: string;
+    nearestLabel: string;
+    offRayPx: number;
+    /** The tool and series it was raised under. Rendering is gated on these still
+     * matching, which is how the notice expires WITHOUT an effect that clears it —
+     * a self-expiring value rather than state to be swept up after. */
+    mode: ToolMode;
+    seriesIndex: number;
+  } | null>(null);
 
   const session = sessionRef.current;
   const config = session.getConfig();
@@ -2832,10 +2857,19 @@ export function Workspace() {
         commit();
         return;
       }
+      // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
+      // the axis the cursor is filling, which is what makes the dot land on the ray
+      // -- and which erases the offset this check reads. Afterwards there is
+      // nothing left to notice, so it has to happen here. Null for every other
+      // graph type, and for a click already nearest the axis it is filling.
+      const notice = session.previewSpiderCapture(px, py);
+      setCaptureNotice(notice ? { ...notice, mode, seriesIndex: session.getActiveDatasetIndex() } : null);
       session.addDataPoint(px, py);
       // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
       // curve, so the newest is no longer the last index -- find it by its clicked
-      // pixel, the same way the interpolation-anchor branch above does.
+      // pixel, the same way the interpolation-anchor branch above does. A snapped
+      // spider point is NOT at the clicked pixel, and falls through to the
+      // last-index fallback, which is correct: the grouped path always appends.
       const placed = session.getDataPoints();
       const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
       setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
@@ -4456,10 +4490,12 @@ export function Workspace() {
   // identity every render silently disabled the memoization of everything
   // downstream of it (caught by the compiler lint, not by eye).
   const steps = useMemo(() => session.getSteps(), [session, version]);
+  // The spider table: one ROW per axis, one COLUMN per series (David, 2026-07-27).
+  const spiderTable = useMemo(() => session.getSpiderTable(), [session, version]);
   // Spider points sitting nearer another axis than the one they were captured on.
   // Recomputed on the same tick, so dragging a stray point back onto its ray
   // clears its warning as you drop it.
-  const offAxisWarnings = useMemo(() => session.getOffAxisWarnings(), [session, version]);
+
   const reusableSteps = useMemo(() => session.getReusableSteps(), [session, version]);
   // Memoized (not read directly off currentStep) so the .map() below over
   // it stays inside React Compiler's supported analysis -- mapping JSX
@@ -6906,6 +6942,15 @@ export function Workspace() {
               <span data-testid="box-plot-glyph-count" style={{ display: 'none' }}>
                 {boxPlotGlyphs.length}
               </span>
+              {/* Same reason, for the calibrated axis rays a spider is aimed at:
+                  Konva draws them, so nothing else can assert they are on screen. */}
+              <span data-testid="calib-preview-segments" style={{ display: 'none' }}>
+                {calibPreview.segments.length}
+              </span>
+              {/* Which ray is drawn as the live one — the axis the cursor fills. */}
+              <span data-testid="calib-preview-emphasis" style={{ display: 'none' }}>
+                {calibPreview.segments.findIndex((s) => s.emphasis)}
+              </span>
             </p>
           )}
           <SidebarSection>
@@ -7004,6 +7049,66 @@ export function Workspace() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          ) : config.id === 'spider' && axes ? (
+            /* Spider (v1.4): `# | Category | Series 1 | Series 2 | …` — one row per
+               AXIS, one column per series.
+
+               ⚑ The point-group table this replaces showed the ACTIVE series only,
+               so adding a second series made the first one's readings disappear off
+               the screen. Every ungrouped type already shows all series at once, so
+               that table was the outlier — caught by driving the app, not by a test.
+               Rows-as-axes is also how radar data is normally published, and it
+               stays compact as series are added rather than growing sideways by a
+               whole block of axis columns each time.
+
+               The alignment is REAL: row k is axis k for every series, because each
+               series has exactly one slot per axis by construction. The same layout
+               LIED for error bars, where the pairing was never stored. */
+            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
+                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
+                  {spiderTable.columns.map((col) => (
+                    <th
+                      key={`${col.seriesIndex}-${col.profileIndex}`}
+                      data-testid={`spider-col-${col.seriesIndex}-${col.profileIndex}`}
+                      style={{
+                        textAlign: 'right',
+                        paddingRight: 16,
+                        borderLeft: `1px solid ${theme.color.border.regular}`,
+                        paddingLeft: 10,
+                        fontWeight: 600,
+                        color: col.seriesIndex === activeDatasetIndex ? theme.color.primary.main : theme.color.text.primary,
+                      }}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {spiderTable.axisNames.map((axisName, axisIndex) => (
+                  <tr key={axisName + String(axisIndex)}>
+                    <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{axisIndex + 1}</td>
+                    <td style={{ paddingRight: 16 }}>{axisName}</td>
+                    {spiderTable.columns.map((col) => {
+                      const value = col.values[axisIndex];
+                      return (
+                        <td
+                          key={`${col.seriesIndex}-${col.profileIndex}`}
+                          style={{ textAlign: 'right', paddingRight: 16, paddingLeft: 10, borderLeft: `1px solid ${theme.color.border.regular}` }}
+                        >
+                          {/* An axis this series has not reached reads as a dash, not
+                              a zero — nothing was measured there. */}
+                          {value == null ? <span style={{ color: theme.color.text.legend }}>—</span> : fmtValue(value)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           ) : hasPointGroups ? (
@@ -7261,32 +7366,28 @@ export function Workspace() {
               figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
             </div>
           )}
-          {/* Off-axis warning (v1.4, Spider). Sits OUTSIDE the table's scroll
-              container, like the derived legend above and for the same reason it
-              was moved there: an explanation that scrolls away below the fold is
-              an explanation the user never sees.
+          {/* Wrong-axis notice (v1.4, Spider) — shown as the click happens, and
+              deliberately NOT stored.
 
-              ⚑ It warns and does NOT correct. Snapping the point to the nearer ray
-              would record a value against an axis nobody chose; refusing the click
-              would discard a real measurement. The distance is stated in pixels so
-              the user can judge it rather than take the app's word for it. */}
-          {offAxisWarnings.length > 0 && (
+              ⚑ It has to be captured at click time because the point is SNAPPED
+              onto its axis: afterwards the stored pixel is on its ray and there is
+              no "off" left to measure. That snap is the right trade — once the dot
+              visibly sits on the axis the user stops aiming perpendicular-accurately,
+              correctly, so a stored perpendicular offset would look like an error
+              signal while actually recording that the app told them not to care.
+              No other graph type records such a thing either.
+
+              Sits outside the table's scroll container, like the derived legend
+              above: an explanation that scrolls out of view is one nobody reads. */}
+          {captureNotice && captureNotice.mode === mode && captureNotice.seriesIndex === activeDatasetIndex && (
             <div
               data-testid="off-axis-warning"
               style={{ padding: '4px 2px 0', color: theme.color.error, fontSize: 12 }}
             >
-              {offAxisWarnings.length === 1
-                ? `1 point sits closer to another axis than the one it was captured on: `
-                : `${offAxisWarnings.length} points sit closer to another axis than the one they were captured on: `}
-              {offAxisWarnings
-                .slice(0, 3)
-                .map(
-                  (w) =>
-                    `row ${w.pointIndex + 1} is on ${w.capturedOnLabel} but ${Math.round(w.offRayPx)} px off it, nearer ${w.nearestLabel}`
-                )
-                .join('; ')}
-              {offAxisWarnings.length > 3 ? `; and ${offAxisWarnings.length - 3} more` : ''}
-              . Drag the point onto its axis, or delete and re-place it.
+              That click was {Math.round(captureNotice.offRayPx)} px off the{' '}
+              {captureNotice.capturedOnLabel} axis and nearer {captureNotice.nearestLabel} — it was
+              recorded on {captureNotice.capturedOnLabel}, the axis the cursor was filling. Undo if
+              you meant {captureNotice.nearestLabel}.
             </div>
           )}
           </SidebarSection>

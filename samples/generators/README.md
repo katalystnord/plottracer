@@ -46,7 +46,8 @@ Deterministic: same numpy seed + matplotlib version → identical PNG + truth.
 
 ## Coverage
 
-- **`gen_samples.py`** — **all 14 examples** (ground truth complete, 2026-07-20).
+- **`gen_samples.py`** — **all 15 examples** (14 complete 2026-07-20; **spider added
+  v1.4, 2026-07-27**).
   scatter, xy-multiseries, bar, histogram, categorical, xy-stress-strain (the e2e
   `SAMPLE_IMAGE` — kept a navy curve so the colour-trace + segment-fill tests still
   pass), errorbar, boxplot, polar, ccr, dash-styles, **ternary**, **map**, and the
@@ -54,7 +55,22 @@ Deterministic: same numpy seed + matplotlib version → identical PNG + truth.
   `{category,value}` (bar/categorical), `{binStart,binEnd,value}` (histogram),
   `{x,y,yUpper,yLower}` (errorbar), `{category,min,q1,median,q3,max}` (boxplot),
   `{angle,radius}` (polar), `{time,value}` (ccr), `{a,b,c}` (ternary), `{name,x,y}`
-  (map sites), and a `figures[]` array (the multi-page PDF).
+  (map sites), `{axis,name,value}` (**spider**), and a `figures[]` array (the
+  multi-page PDF).
+- **`spider-material-profile`** (v1.4) is hand-built like the ternary — matplotlib's
+  polar axes assume ONE radial scale, and the point of the figure is that each spoke
+  carries its own. Three deliberate properties: **six axes with six different
+  ranges** (tensile 0-120 MPa beside a cost index 0-5) sharing a **centre of 0**,
+  and **line-only** polygons in three colours. The per-axis ranges are the case the
+  field's only prior art (ChartSense, CHI 2017) excludes by assuming a shared scale;
+  filling the polygons would blend their colours where they overlap, which is the
+  hard-won detail that same paper reports breaking its hue clustering, and would
+  hide the vertices a user has to click. Its truth adds a `calibration` block keyed
+  by the app's OWN step keys (`origin`, `spoke1..N`), and
+  `core/__tests__/spiderSampleTruth.test.ts` reads the committed file back: it
+  checks the winding and, above all, that the anchors are not Y-FLIPPED — a flip
+  leaves every number correct and every anchor inside the image while calibrating a
+  MIRRORED chart, and nothing else in the suite reads this file.
 - **Method for the last three** (ternary/map/pdf): their source values were lost
   with the original throwaway scripts, so they were **measured off the current
   exemplar images and replotted from those measurements** (David, 2026-07-20). The
