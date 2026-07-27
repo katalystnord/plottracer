@@ -2534,6 +2534,39 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * defined only where there's something to extract. Falls back to one
    * fresh dataset if given none, matching the invariant every other path
    * through this class maintains (a session always has >= 1 dataset). */
+  /**
+   * Drop points that belong to no tuple, on a type whose tuples ARE the axes.
+   *
+   * Returns how many were dropped, so a caller can say so. Only applies where the
+   * slot carries the datum's identity (`tupleMembers: 'independent'`): on a box
+   * plot a stray point is an incomplete box, which is a different question with a
+   * different answer.
+   */
+  private dropAxislessPoints(): number {
+    if (this.config.tupleMembers !== 'independent') return 0;
+    let dropped = 0;
+    for (const entry of this.datasetEntries) {
+      const dataset = entry.dataset;
+      // ⚑ No `hasPointGroups()` guard. A dataset that arrived with no slots at all
+      // has no tuples either, so EVERY one of its points is axis-less — which is
+      // exactly the case this is for, not one to skip. (It was written with that
+      // guard first, and the file-with-no-groups test said so.)
+      const owned = new Set<number>();
+      for (const tuple of dataset.getAllTuples()) {
+        for (const pixelIndex of tuple) if (pixelIndex != null) owned.add(pixelIndex);
+      }
+      // Highest index first, so the earlier indices stay valid as later ones go.
+      for (let i = dataset.getCount() - 1; i >= 0; i--) {
+        if (owned.has(i)) continue;
+        dataset.removePixelAtIndex(i);
+        dataset.refreshTuplesAfterPixelRemoval(i);
+        dropped += 1;
+      }
+      entry.pointGroupCursor = this.computePointGroupCursorFor(dataset);
+    }
+    return dropped;
+  }
+
   loadCalibrated(axes: A, datasets: Dataset[]): void {
     this.placed = {};
     const cal = (axes as unknown as { calibration: Calibration | null }).calibration;
@@ -2560,6 +2593,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     this.stepIndex = this.getSteps().length;
     this.pendingPixel = null;
+
     this.globalValues = this.config.extractGlobalValues?.(axes) ?? {};
     // Options come back from the axes instance itself, so a reopened project
     // keeps the settings it was calibrated with (its log scales, orientation,
@@ -2628,6 +2662,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // slots next to a calibration that knows every axis's name. Runs AFTER the
     // entries are built so it can see which datasets already hold points.
     this.applyAxesDerivedPointGroups();
+    // ⚑ A POINT WITH NO AXIS IS NOT A DATUM (David, 2026-07-27): "a point that
+    // belongs to no tuple carries NO meaning, and should not be allowed."
+    //
+    // On an N x 1D chart the datum is the PAIR — the vector and the position along
+    // it — so a pixel outside every tuple stands for no number and belongs in no
+    // row. It is a mark on an image, not data. The click path cannot make one
+    // (every capture files into a slot), so the file is the door, which is the same
+    // second entrance the guards above exist for.
+    //
+    // ⚑ AFTER the slots are named, not before: a loaded dataset gets its point
+    // groups from the axes here, so running this any earlier asks "is it in a
+    // tuple?" of a dataset that has not been given its tuples yet, and the answer
+    // is a meaningless no. (It was written above first, and both tests said so.)
+    this.dropAxislessPoints();
   }
 
   /** Finds the first open point-group slot across a dataset's tuples (same

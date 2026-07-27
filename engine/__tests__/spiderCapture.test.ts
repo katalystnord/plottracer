@@ -325,7 +325,13 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     if (groupNames.length > 0) dataset.setPointGroups([...groupNames]);
     for (let i = 0; i < 2; i++) {
       const [px, py] = spokePixel(i, 3, 40);
-      dataset.addPixel(px, py);
+      const index = dataset.addPixel(px, py);
+      // ⚑ FILED INTO A TUPLE, like a real project's points. This fixture used to
+      // leave them loose, which made it quietly test two things at once — and once
+      // an axis-less point became something the load path DROPS, the mismatch test
+      // was asserting the survival of points that are no longer data at all. The
+      // count mismatch is what this fixture is for; the points must be sound.
+      if (groupNames.length > 0) dataset.addTuple(index);
     }
 
     const session = new CalibrationSession(SPIDER_AXES_CONFIG);
@@ -344,25 +350,40 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     expect(session.getDataPoints()).toHaveLength(2);
   });
 
-  it('exports a point that belongs to no axis as UNMEASURED, not as axis 1', () => {
-    // A dataset carrying pixels but no tuples (an older or hand-edited file) has
-    // nothing saying which axis each point was read against. Defaulting them onto
-    // spoke 0 would put real-looking numbers in a row nobody assigned them to.
+  it('DROPS a point that belongs to no axis, rather than keeping it as nulls', () => {
+    // ⚑ David, 2026-07-27: "a point that belongs to no tuple carries NO meaning,
+    // and should not be allowed." On an N x 1D chart the datum is the PAIR — the
+    // vector and the position along it — so a pixel with no axis stands for no
+    // number and belongs in no row. It is a mark on an image, not data.
+    //
+    // This REPLACES the older behaviour, which exported such points as
+    // [null, '', null]. That was honest as far as it went, and right while the
+    // alternative on the table was defaulting them onto spoke 0 — but it kept a
+    // meaningless thing alive through save, reload and every reader downstream.
+    // The click path cannot create one (every capture files into a slot), so the
+    // file is the only door and the guard belongs on it.
     const session = loadMismatched([]);
-    const rows = session.getExportRows(0);
-    expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row.values).toEqual([null, '', null]);
+    expect(session.getDataPoints()).toHaveLength(0);
+    expect(session.getExportRows(0)).toHaveLength(0);
   });
 
-  it('leaves a point with no axis exactly where the file put it', () => {
-    // Nothing says which axis it was read against, so there is no ray to snap it
-    // to — and putting it on axis 1 would show it as a measurement against an axis
-    // nobody assigned it to.
-    const session = loadMismatched([]);
-    const [px, py] = spokePixel(0, 3, 40);
-    const stored = session.getDataPoints()[0]!;
-    expect(stored.px).toBeCloseTo(px, 6);
-    expect(stored.py).toBeCloseTo(py, 6);
+  it('drops ONLY the axis-less ones, and leaves a properly filed point alone', () => {
+    // The guard must not become a blunt "grouped dataset from a file, discard" — a
+    // real project's points are all in slots, and every one of them must survive.
+    const built = calibratedSpider(['100', '100', '100'], ['Strength', 'Weight', 'Cost']);
+    const axes = built.getAxes()!;
+    const dataset = new Dataset(1);
+    dataset.name = 'Series 1';
+    dataset.setPointGroups(['Strength', 'Weight', 'Cost']);
+    const filed = dataset.addPixel(...spokePixel(0, 3, 40));
+    dataset.addTuple(filed); // slot 0 — a real reading
+    dataset.addPixel(...spokePixel(1, 3, 40)); // in no tuple — not a datum
+
+    const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+    session.loadCalibrated(axes, [dataset]);
+
+    expect(session.getDataPoints()).toHaveLength(1);
+    expect(session.getSpiderTable().columns[0]!.values[0]).not.toBeNull();
   });
 });
 

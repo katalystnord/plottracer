@@ -6154,6 +6154,20 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
  * length lives in the SESSION, so the card, the progress line and the handle
  * markers all have to walk the unrolled list. A unit test cannot see any of that.
  */
+describe('fold-out cards do not overflow sideways', () => {
+  // ⚑ A horizontal scrollbar inside a card is never a design choice, and it is
+  // easy to reintroduce: `overflowY: 'auto'` makes CSS compute overflow-x to
+  // `auto` as well, so one button label a few pixels too wide grows a bar across
+  // the whole card. Measured rather than eyeballed.
+  it('the Image card fits its own content', async () => {
+    await resetWorkspace('spider');
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-card').waitFor({ state: 'visible' });
+    const overflow = await page.getByTestId('image-edit-card').evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
+
 describe('spider charts', () => {
   // Centre of the canvas-local coordinates used throughout, with rays at 110px.
   // ⚑ Kept well clear of the LEFT of the canvas: the fold-out calibration card
