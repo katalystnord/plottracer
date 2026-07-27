@@ -59,7 +59,15 @@ jobs:
             dist-ui/*.zip
             dist-ui/*.exe
           if-no-files-found: error
-          retention-days: 14
+          # ⚑ 1 day, not 14. These artifacts exist only to ferry the installers
+          # from the three matrix jobs to the release job, which runs minutes later
+          # in the same workflow. ARTIFACTS count against the account's storage
+          # quota; RELEASE ASSETS on a public repo do not — so keeping ~500 MB of
+          # them alive for a fortnight after they have already been attached to the
+          # release was paying storage for a copy nobody reads. A hand-run
+          # (workflow_dispatch) build publishes no release, so its artifacts are the
+          # only output — one day is still enough to download them.
+          retention-days: 1
 
   # On a version-tag push, gather every platform's installer and publish a public
   # GitHub Release with them attached — this is what the website's Download links
