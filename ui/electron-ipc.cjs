@@ -46,8 +46,14 @@ const MIME = {
 // handlers were otherwise byte-identical. A format we can read is a format we can
 // read; the file says which it is. Adding the next digitizer means adding an
 // extension here and a sniffer in the renderer, and touching no UI at all.
+//
+// ⚑ These extensions must stay in step with engine/importRegistry.ts, which is
+// the real list (`importDialogExtensions()`); this file is the main process and
+// cannot import the renderer's TypeScript. The filter is a CONVENIENCE ONLY --
+// nothing decides a file's format from its name, so a renamed project still
+// opens through "All Files".
 const PROJECT_FILTERS = [
-  { name: 'Project files', extensions: ['zip', 'json', 'tar'] },
+  { name: 'Project files', extensions: ['zip', 'json', 'tar', 'dig'] },
   { name: 'All Files', extensions: ['*'] },
 ]
 

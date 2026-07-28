@@ -141,11 +141,11 @@ import {
   deserializeMultiFigureZip,
   isMultiFigureContainer,
   isZipContainer,
-  isTarArchive,
   base64ToBytes,
   bytesToBase64,
 } from '../../engine/projectContainer.js';
 import { readWpdArchive, listWpdFigures, importWpdFigure, type WpdFigure } from '../../engine/wpdImport.js';
+import { identifyProject, unsupportedFileMessage } from '../../engine/importRegistry.js';
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
 import {
@@ -1140,6 +1140,11 @@ export function Workspace() {
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
   const [projectError, setProjectError] = useState<string | null>(null);
+  /** What an import could not carry across, in plain words. NOT an error — the
+   * figure opened — so it gets its own surface rather than borrowing the red
+   * one. A foreign project that quietly loses half its content is the failure
+   * this codebase has killed more than once, so these are shown, not logged. */
+  const [projectNotice, setProjectNotice] = useState<string | null>(null);
   const [segmentFillThreshold, setSegmentFillThreshold] = useState(40);
   const [segmentFillError, setSegmentFillError] = useState<string | null>(null);
   const [curveFitDegree, setCurveFitDegree] = useState(1);
@@ -3882,14 +3887,42 @@ export function Workspace() {
     // is decoded to text -- detect by CONTENT, never the filename, since users
     // rename files (engine/projectContainer.ts). Old projects keep opening.
     const bytes = base64ToBytes(opened.base64);
-    // ⚑ ONE Open Project, and the FILE says which format it is (v1.4). A `.tar` is
-    // another digitizer's archive; it used to have a dialog, an IPC channel, a file
-    // filter and a menu item of its own, all naming one tool -- the first-class
-    // status tenet 5 rules out. Sniffing it here is not a new rule either: this
-    // function already decides zip-vs-legacy-JSON from the leading bytes, "never
-    // the filename, since users rename files". The next digitizer is one more
-    // sniffer here and no UI change at all.
-    if (isTarArchive(bytes)) {
+    setProjectNotice(null);
+    // ⚑ ONE Open Project, and the FILE says which format it is. Every format we
+    // read enters through this one door -- no tool gets a menu item, a dialog or
+    // a file filter of its own (tenet 5), and adding the next digitizer is a new
+    // entry in engine/importRegistry.ts and NO change here. The registry also
+    // sniffs INSIDE containers, which it must: a StarryDigitizer project is a zip
+    // holding project.json and image.png, exactly like ours.
+    const format = identifyProject(bytes);
+    if (!format) {
+      // Never a generic failure: say what this app CAN open.
+      setProjectError(unsupportedFileMessage());
+      return;
+    }
+    if (format.open) {
+      // A format that reads straight through to one calibrated figure.
+      const imported = format.open(bytes);
+      if ('error' in imported) {
+        setProjectError(imported.error);
+        return;
+      }
+      setProjectError(null);
+      setProjectNotice(imported.notes.length > 0 ? imported.notes.join(' ') : null);
+      loadCalibratedFigure({
+        configId: imported.configId,
+        axes: imported.axes as CalibratedAxes,
+        datasets: imported.datasets as Dataset[],
+        imageDataURL: imported.imageDataURL ?? '',
+        // These formats carry no measurement concept -- nothing to bring across.
+      });
+      return;
+    }
+    // The two formats that need a flow of their own: an archive that can hold
+    // several figures on one image (the user chooses), and our own projects
+    // (which restore far more than a single figure -- measurements, provenance,
+    // a bundled source document, multiple figures).
+    if (format.id === 'wpd') {
       await importTarProject(bytes);
       return;
     }
@@ -7059,6 +7092,12 @@ export function Workspace() {
       {projectError && (
         <p data-testid="project-error" style={{ color: theme.color.error }}>
           {projectError}
+        </p>
+      )}
+
+      {projectNotice && (
+        <p data-testid="project-notice" style={{ color: theme.color.text.secondary }}>
+          {projectNotice}
         </p>
       )}
 

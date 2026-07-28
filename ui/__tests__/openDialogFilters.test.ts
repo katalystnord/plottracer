@@ -79,3 +79,38 @@ describe('Open dialog filters (checkpoint 65 invariant)', () => {
     expect(mime![1]).toMatch(/tiff: 'image\/tiff'/);
   });
 });
+
+/**
+ * The same invariant, one door along: the Open PROJECT dialog must not offer a
+ * format no importer claims, and must not omit one that works.
+ *
+ * The extension list is duplicated by necessity — engine/importRegistry.ts is
+ * the real list, and ui/electron-ipc.cjs is the main process, which cannot
+ * import the renderer's TypeScript. A duplicated constant with no test is
+ * exactly how the pdf regression above shipped, so the agreement is asserted by
+ * reading both sides.
+ */
+describe('Open PROJECT dialog filters', () => {
+  /** The extensions the native Open Project dialog offers (main process). */
+  function projectDialogExtensions(): string[] {
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'ui/electron-ipc.cjs'), 'utf8');
+    const block = src.match(/const PROJECT_FILTERS = \[([\s\S]*?)\n\]/);
+    if (!block) throw new Error('PROJECT_FILTERS not found in ui/electron-ipc.cjs');
+    // First entry only; the second is the deliberate "All Files" escape hatch,
+    // which is what lets a renamed project still be opened.
+    const first = block[1]!.match(/extensions: \[([^\]]*)\]/);
+    if (!first) throw new Error('no extensions array in PROJECT_FILTERS');
+    return first[1]!.split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean);
+  }
+
+  it('offers exactly the extensions the import registry knows', async () => {
+    const { importDialogExtensions } = await import('../../engine/importRegistry.js');
+    expect(projectDialogExtensions().sort()).toEqual(importDialogExtensions().sort());
+  });
+
+  it('keeps the All Files escape hatch, because the FILE decides, not its name', () => {
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'ui/electron-ipc.cjs'), 'utf8');
+    const block = src.match(/const PROJECT_FILTERS = \[([\s\S]*?)\n\]/);
+    expect(block![1]).toMatch(/All Files/);
+  });
+});
