@@ -5,3 +5,7 @@ out/
 
 # Python bytecode cache (samples/generators dev tool)
 __pycache__/
+
+# Mutation-testing output (Stryker): HTML report + per-mutant sandboxes
+reports/
+.stryker-tmp/

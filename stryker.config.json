@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing (v1.5.2 tooling). Stryker mutates the source, re-runs the suite per mutant, and reports which mutations the tests FAIL TO NOTICE — the one question a green suite cannot answer. Scoped to the pure, record-critical modules: they hold the calibration and export maths, and their unit tests are fast enough to run thousands of times. ui/ is deliberately absent — it is only reachable through the Electron e2e suite, which is far too slow to mutate.",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "reporters": ["html", "clear-text", "progress"],
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "core/**/*.ts",
+    "algorithms/**/*.ts",
+    "!**/__tests__/**",
+    "!**/*.d.ts"
+  ],
+  "timeoutMS": 20000,
+  "concurrency": 4,
+  "disableTypeChecks": true
+}
