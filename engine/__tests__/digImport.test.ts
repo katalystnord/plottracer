@@ -35,6 +35,9 @@ interface DigOpts {
   version?: string;
   flat?: boolean;
   errorReport?: boolean;
+  thetaUnits?: string;
+  /** How many sibling <CoordSystem> elements the document holds. */
+  systems?: number;
 }
 
 /** Build a `.dig` document from the format's structure. */
@@ -54,6 +57,8 @@ function makeDig(o: DigOpts = {}): Uint8Array {
     version = '11.0',
     flat = false,
     errorReport = false,
+    thetaUnits = 'Degrees (DDD.DDDDD)',
+    systems = 1,
   } = o;
 
   const axisXml = axisPoints
@@ -74,12 +79,17 @@ function makeDig(o: DigOpts = {}): Uint8Array {
   const image = withImage ? `<Image Width="640" Height="480"><![CDATA[${imagePayload()}]]></Image>` : '';
   const coords =
     `<Coords Type="0" TypeString="${type}" ScaleXThetaString="${scaleX}" ScaleYRadiusString="${scaleY}" ` +
-    `UnitsThetaString="Degrees (DDD.DDDDD)"/>`;
+    `UnitsThetaString="${thetaUnits}"/>`;
   const body =
     coords + `<Curve CurveName="Axes"><CurvePoints>${axisXml}</CurvePoints></Curve>` +
     `<CurvesGraphs>${curvesXml}</CurvesGraphs>`;
   // `flat` reproduces the Engauge 6.3 shape, where there is no CoordSystem wrapper.
-  const inner = flat ? body : `<CoordSystem>${body}</CoordSystem>`;
+  // Real files hold repeated <CoordSystem> SIBLINGS under <Document> -- there is
+  // no <CoordSystems> wrapper in the format (verified against all 47 .dig files
+  // in Engauge's own test corpus, five of which carry five systems each).
+  const inner = flat
+    ? body
+    : Array.from({ length: systems }, () => `<CoordSystem>${body}</CoordSystem>`).join('');
   const doc = `<Document VersionNumber="${version}">${image}${inner}</Document>`;
   const root = errorReport ? `<ErrorReport><Application VersionNumber="${version}"/>${doc}</ErrorReport>` : doc;
   return enc(`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n${root}`);
@@ -318,5 +328,98 @@ describe('importEngaugeFigure — polar', () => {
     if ('error' in parsed) throw new Error(parsed.error);
     const r = importEngaugeFigure(parsed);
     expect('error' in r && r.error).toMatch(/centre point/i);
+  });
+});
+
+describe('a document holding several coordinate systems (v1.5 gate blocker)', () => {
+  // ⚑ The disclosure was keyed on a `<CoordSystems>` WRAPPER ELEMENT that does not
+  // exist in the format -- it appears in Engauge's C++ only as a typedef, and in
+  // none of the 47 real .dig files. So `extraCoordSystems` was permanently 0 and a
+  // multi-system document was reduced to its first, silently. Measured on the real
+  // corpus: version7.1_1.dig holds [68,43,35,30,17] points across five systems and
+  // imported 65 of them with `notes: []`.
+  it('counts the sibling systems it did not open', () => {
+    const parsed = readEngaugeProject(makeDig({ systems: 3 }));
+    if ('error' in parsed) throw new Error(parsed.error);
+    expect(parsed.extraCoordSystems).toBe(2);
+  });
+
+  it('SAYS SO on import rather than dropping the rest quietly', () => {
+    const parsed = readEngaugeProject(makeDig({ systems: 3 }));
+    if ('error' in parsed) throw new Error(parsed.error);
+    const imported = importEngaugeFigure(parsed);
+    if ('error' in imported) throw new Error(imported.error);
+    expect(imported.notes.join(' ')).toMatch(/3 coordinate systems/);
+    expect(imported.notes.join(' ')).toMatch(/not imported/);
+  });
+
+  it('says nothing at all about an ordinary single-system document', () => {
+    const parsed = readEngaugeProject(makeDig());
+    if ('error' in parsed) throw new Error(parsed.error);
+    expect(parsed.extraCoordSystems).toBe(0);
+    const imported = importEngaugeFigure(parsed);
+    if ('error' in imported) throw new Error(imported.error);
+    expect(imported.notes.join(' ')).not.toMatch(/coordinate system/);
+  });
+});
+
+describe('polar theta units (v1.5 gate blocker)', () => {
+  // ⚑ The unit test was `.startsWith('Degrees')`, so the four Degrees variants and
+  // Radians were right and GRADIANS and TURNS silently took the radians branch: a
+  // point whose true theta is 0/360 exported as 49.21 (gradians) or 5.62 (turns).
+  // Engauge writes exactly one of Degrees…/Gradians/Radians/Turns, verbatim.
+  const polar = (thetaUnits: string, theta: number) =>
+    makeDig({
+      type: 'Polar',
+      thetaUnits,
+      // Centre, then TWO points at a known radius -- what a polar calibration
+      // needs -- with theta in the file's own units.
+      axisPoints: [
+        { sx: 100, sy: 100, gx: 0, gy: 0 },
+        { sx: 200, sy: 100, gx: theta, gy: 10 },
+        { sx: 100, sy: 200, gx: theta * 2, gy: 10 },
+      ],
+      curves: [{ name: 'Curve1', pts: [[200, 100] as [number, number]] }],
+    });
+
+  // 45° is 50 gradians is 0.125 turns is π/4 radians -- the same angle four ways,
+  // so all four must place the calibration point identically.
+  const cases: [string, number][] = [
+    ['Degrees (DDD.DDDDD)', 45],
+    ['Gradians', 50],
+    ['Turns', 0.125],
+    ['Radians', Math.PI / 4],
+  ];
+
+  it('reads the same angle whichever way the file spells its unit', () => {
+    // Degrees and radians keep the file's OWN unit (our polar axes read both);
+    // gradians and turns have no native form, so they arrive as degrees. What
+    // must hold either way is the ANGLE, not the number -- so compare in degrees.
+    for (const [units, theta] of cases) {
+      const parsed = readEngaugeProject(polar(units, theta));
+      if ('error' in parsed) throw new Error(parsed.error);
+      const x = parsed.axisPoints[1]!.graph.x;
+      const degrees = parsed.thetaInDegrees ? x : (x * 180) / Math.PI;
+      expect(degrees, `${units} should be 45 degrees`).toBeCloseTo(45, 6);
+    }
+  });
+
+  it('says so when it had to change the unit, and stays quiet when it did not', () => {
+    const converted = importEngaugeFigure(
+      (() => { const p = readEngaugeProject(polar('Gradians', 50)); if ('error' in p) throw new Error(p.error); return p; })()
+    );
+    if ('error' in converted) throw new Error(converted.error);
+    expect(converted.notes.join(' ')).toMatch(/gradians/i);
+
+    const native = importEngaugeFigure(
+      (() => { const p = readEngaugeProject(polar('Degrees (DDD.DDDDD)', 45)); if ('error' in p) throw new Error(p.error); return p; })()
+    );
+    if ('error' in native) throw new Error(native.error);
+    expect(native.notes.join(' ')).not.toMatch(/degrees/i);
+  });
+
+  it('refuses a theta unit it does not know, naming it, rather than guessing', () => {
+    const parsed = readEngaugeProject(polar('Furlongs', 45));
+    expect('error' in parsed && parsed.error).toMatch(/Furlongs/);
   });
 });

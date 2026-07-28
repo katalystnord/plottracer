@@ -98,6 +98,9 @@ export interface DigProject {
   isLogY: boolean;
   /** Polar only: whether theta was typed in degrees rather than radians. */
   thetaInDegrees: boolean;
+  /** Set when a theta unit we cannot represent (gradians, turns) was converted
+   * to degrees, so the import can say so rather than changing units in silence. */
+  thetaNote?: string;
   imageDataURL: string | null;
   imageSize: { width: number; height: number } | null;
   axisPoints: DigAxisPoint[];
@@ -298,20 +301,23 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
   }
 
   // --- the coordinate system ----------------------------------------------
-  // Three shapes across the format's life, all still in the wild:
-  //   • <Document><CoordSystem>…            — the common one
-  //   • <Document><CoordSystems><CoordSystem>… — several systems in one document
-  //   • <Document><Coords/>…                — Engauge 6.3, flat, no wrapper
-  // The last one is why the final fallback is the Document itself.
-  const systems = (root['CoordSystems'] as Record<string, unknown> | undefined)?.['CoordSystem'];
-  const coordSystem =
-    (asArray(root['CoordSystem'] as unknown)[0] as Record<string, unknown> | undefined) ??
-    (asArray(systems as unknown)[0] as Record<string, unknown> | undefined) ??
-    (root['Coords'] ? root : undefined);
+  // Two shapes across the format's life, both still in the wild:
+  //   • <Document><CoordSystem>…  — one or MORE, as repeated siblings
+  //   • <Document><Coords/>…      — Engauge 6.3, flat, no wrapper
+  // The second is why the fallback is the Document itself.
+  //
+  // ⚑ There is NO <CoordSystems> wrapper element. This code used to look for one
+  // and count the extra systems inside it, so the count was permanently 0 and a
+  // multi-system document was silently reduced to its first -- measured on
+  // Engauge's own corpus, version7.1_1.dig holds [68,43,35,30,17] points across
+  // five systems and imported only the 68. Verified against all 47 .dig files
+  // there (and Engauge writes CoordSystem, singular, as repeated siblings).
+  const systems = asArray(root['CoordSystem'] as unknown) as Record<string, unknown>[];
+  const coordSystem = systems[0] ?? (root['Coords'] ? root : undefined);
   if (!coordSystem) return { error: 'This Engauge project has no coordinate system to read.' };
   // A document holding several coordinate systems is several figures; we open
   // the first and SAY SO rather than dropping the rest silently.
-  const extraSystems = Math.max(0, asArray(systems as unknown).length - 1);
+  const extraSystems = Math.max(0, systems.length - 1);
 
   const coords = coordSystem['Coords'];
   const typeString = attr(coords, 'TypeString') ?? 'Cartesian';
@@ -320,7 +326,31 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
   }
   const isLogX = (attr(coords, 'ScaleXThetaString') ?? 'Linear') === 'Log';
   const isLogY = (attr(coords, 'ScaleYRadiusString') ?? 'Linear') === 'Log';
-  const thetaInDegrees = (attr(coords, 'UnitsThetaString') ?? 'Degrees').startsWith('Degrees');
+  // Engauge writes exactly one of "Degrees (…)" (four variants), "Gradians",
+  // "Radians" or "Turns", verbatim and never localised.
+  //
+  // ⚑ This used to be `.startsWith('Degrees')`, so GRADIANS and TURNS fell into
+  // the radians branch: a point whose true theta is 0/360 exported as 49.21 or
+  // 5.62 -- a wrong angle in a wrong unit, with nothing said. Degrees and radians
+  // are kept in the file's OWN unit because our polar axes read both natively;
+  // gradians and turns have no native form here, so they are converted to degrees
+  // and the import says that it did so.
+  const thetaUnits = attr(coords, 'UnitsThetaString') ?? 'Degrees (DDD.DDDDD)';
+  let thetaInDegrees = true;
+  let thetaToDegrees = 1;
+  let thetaNote: string | undefined;
+  if (typeString === 'Polar') {
+    if (thetaUnits.startsWith('Degrees')) thetaInDegrees = true;
+    else if (thetaUnits === 'Radians') thetaInDegrees = false;
+    else if (thetaUnits === 'Gradians' || thetaUnits === 'Turns') {
+      thetaToDegrees = thetaUnits === 'Gradians' ? 0.9 : 360;
+      thetaNote = `This project's angles were recorded in ${thetaUnits.toLowerCase()}; they were read as the same angles in degrees.`;
+    } else {
+      return {
+        error: `This Engauge project records angles in ${thetaUnits}, which PlotTracer cannot read yet.`,
+      };
+    }
+  }
 
   // --- the axis (calibration) points ---------------------------------------
   // The axes live in a Curve named "Axes" beside the data curves.
@@ -340,7 +370,9 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
       if (sx === null || sy === null || gx === null || gy === null) continue;
       axisPoints.push({
         screen: { x: sx, y: sy },
-        graph: { x: gx, y: gy },
+        // For a polar document X IS theta, so an unrepresentable unit is
+        // converted here -- the one place the file's numbers become ours.
+        graph: { x: gx * thetaToDegrees, y: gy },
         isXOnly: (attr(p, 'IsXOnly') ?? 'False') === 'True',
       });
     }
@@ -362,6 +394,7 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
     isLogX,
     isLogY,
     thetaInDegrees,
+    thetaNote,
     imageDataURL,
     imageSize,
     axisPoints,
@@ -608,6 +641,7 @@ export function importEngaugeFigure(project: DigProject): DigResult<ImportedDigF
       `This project held ${project.extraCoordSystems + 1} coordinate systems; the first was opened and the rest were not imported.`
     );
   }
+  if (project.thetaNote) notes.push(project.thetaNote);
   if (!project.imageDataURL) {
     notes.push("This project's image could not be read, so the figure opens without it.");
   }
