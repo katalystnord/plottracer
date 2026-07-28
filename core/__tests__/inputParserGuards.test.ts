@@ -98,3 +98,53 @@ describe('InputParser refuses input it used to silently truncate', () => {
     expect(ip2.parse('[a, b]')).toBeNull();
   });
 });
+
+/**
+ * ⚑ A NUMBER IS NEVER A DATE (2026-07-28) — the effect at the axes level.
+ *
+ * dateConversion.parse applied its "must contain / or :" guard only to STRINGS,
+ * so a numeric calibration value went to toJD and was read as an HOUR OF TODAY:
+ * `parse(0)` returned midnight-today (~1.78e12) while `parse('0')` returned 0.
+ * Only 0..23 were affected, because toJD rejects hour > 23 — which is why 100
+ * behaved and 10 did not.
+ *
+ * The two axes types react differently, and BOTH are wrong:
+ *   • BarAxes guards with `|| ip.isDate` and so REFUSED to calibrate;
+ *   • XYAxes has no such guard and would have taken the timestamp as the value.
+ *
+ * ⚑ Scope, stated honestly: this is NOT demonstrated on any upstream file we
+ * hold — wpd4.json's BarAxes stores `dy` as the string '-2', and only its unused
+ * `dx` is an integer. It bit the .dig and StarryDigitizer importers (fixed there
+ * by passing text) and it bites any file, hand-edited or third-party-written,
+ * that stores a plain number. The guard belongs in the model regardless: the
+ * model has more than one entrance, and passing text at each caller is a rule
+ * every future caller would have to remember.
+ */
+describe('numeric calibration values are numbers, not times', () => {
+  const parse = (s: unknown) => {
+    const ip = new InputParser();
+    const v = ip.parse(s);
+    return { v, isValid: ip.isValid, isDate: ip.isDate };
+  };
+
+  it('parses a bare number as that number, not as a timestamp', () => {
+    for (const n of [0, 1, 10, 23]) {
+      const r = parse(n);
+      expect(r.isValid).toBe(true);
+      expect(r.isDate).toBe(false);
+      expect(r.v).toBe(n);
+    }
+  });
+
+  it('agrees with the string form, which was always correct', () => {
+    for (const n of [0, 1, 10, 23]) {
+      expect(parse(n).v).toBe(parse(String(n)).v);
+    }
+  });
+
+  it('still reads a real date, so nothing legitimate was traded away', () => {
+    const r = parse('2021/07/02');
+    expect(r.isValid).toBe(true);
+    expect(r.isDate).toBe(true);
+  });
+});

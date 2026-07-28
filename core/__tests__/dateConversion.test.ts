@@ -19,6 +19,46 @@ describe('parse — valid dates round-trip', () => {
   });
 });
 
+/**
+ * ⚑ A NUMBER IS NEVER A DATE (2026-07-28).
+ *
+ * The "must contain / or :" guard was applied only when the input was a STRING,
+ * so a number went straight to toJD — which stringifies it, finds no date part,
+ * and reads the value as an HOUR OF TODAY. `parse(0)` returned a timestamp for
+ * midnight today while `parse('0')` correctly returned null, and only values
+ * 0..23 were affected because toJD rejects hour > 23. That is why 100 behaved
+ * and 10 did not.
+ *
+ * It reached real data: WPD's BarAxes stores its calibration values as INTEGERS
+ * (engine/__tests__/fixtures/wpd/wpd4.json) and core/plotData.ts passes them
+ * straight through, and the .dig/StarryDigitizer importers hit it too until they
+ * were made to pass text. A number carries no separator and so can never look
+ * like a date; the guard simply has to apply whatever the type.
+ */
+describe('parse — a bare number is a number, not an hour of today', () => {
+  it('returns null for every whole number, including the 0..23 hour range', () => {
+    for (const n of [0, 1, 5, 10, 12, 23, 24, 100, -5]) {
+      expect(parse(n)).toBeNull();
+    }
+  });
+
+  it('treats a number and its string form identically', () => {
+    for (const n of [0, 1, 10, 23]) {
+      expect(parse(n)).toBe(parse(String(n)));
+    }
+  });
+
+  it('returns null for a non-integer too', () => {
+    expect(parse(0.5)).toBeNull();
+    expect(parse(1.25)).toBeNull();
+  });
+
+  it('still parses genuine dates and times, which always carry a separator', () => {
+    expect(parse('2021/07/02')).not.toBeNull();
+    expect(parse('10:30')).not.toBeNull();
+  });
+});
+
 describe('parse — an IMPOSSIBLE calendar date is rejected, not silently rolled over (A2)', () => {
   // The field-range checks (month 1-12, day 1-31) pass 2021/02/31, but
   // setUTCDate then rolls it into March. Without the validity check the parser

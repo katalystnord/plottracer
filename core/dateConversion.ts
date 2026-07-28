@@ -97,12 +97,29 @@ export function parse(input: unknown): number | null {
   if (input == null) {
     return null;
   }
-  if (typeof input === 'string') {
-    if (input.indexOf('/') < 0 && input.indexOf(':') < 0) {
-      return null;
-    }
+  // ⚑ THE "LOOKS LIKE A DATE" GUARD APPLIES WHATEVER THE TYPE (2026-07-28).
+  //
+  // Upstream ran this check only for a `string`, so a NUMBER skipped it and went
+  // straight to toJD -- which stringifies its argument, finds no date part, and
+  // reads the value as an HOUR OF TODAY. `parse(0)` therefore returned a
+  // timestamp for midnight today while `parse('0')` correctly returned null, and
+  // only 0..23 were affected because toJD rejects hour > 23. Ordinary axis
+  // values 0, 1 and 10 silently became ~1.78e12.
+  //
+  // It was reachable from real data, not just in theory: WPD's BarAxes stores
+  // calibration values as INTEGERS and core/plotData.ts hands them straight to
+  // Calibration, where core/axes/bar.ts's `|| ip.isDate` guard then REFUSED to
+  // calibrate a perfectly good figure. The `.dig` and StarryDigitizer importers
+  // hit the same edge until they were made to pass text.
+  //
+  // Fixing it HERE rather than at each caller is deliberate -- guards belong in
+  // the model, and the model has more than one entrance. A date always carries a
+  // `/` or a `:`; a number never can, so nothing legitimate is lost.
+  const text = String(input);
+  if (text.indexOf('/') < 0 && text.indexOf(':') < 0) {
+    return null;
   }
-  return toJD(String(input));
+  return toJD(text);
 }
 
 function formatDate(dateObject: Date, formatString: string): string {
