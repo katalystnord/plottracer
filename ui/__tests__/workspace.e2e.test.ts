@@ -1923,6 +1923,24 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(rPath);
   });
 
+  it('says what an export will NOT carry, before a format is chosen', async () => {
+    // The disclosure has to be SEEN to do anything, and a unit test cannot prove
+    // the popover renders it -- the engine's claims are checked in
+    // engine/__tests__/exportCapability.test.ts, this checks they reach the eye.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+    await page.getByTestId('export-csv').click(); // open the Export menu
+    const note = await page.getByTestId('export-omission-note').textContent();
+    expect(note).toMatch(/figure image/i);
+    expect(note).toMatch(/axis calibration/i);
+    // A warning with no door out is just noise, so it names what DOES keep them.
+    expect(note).toMatch(/save a project/i);
+    // And it must NOT claim to lose what it actually carries: point roles,
+    // measurements and fits all ride into every export.
+    expect(note).not.toMatch(/role/i);
+  });
+
   it('copies the extracted data to the clipboard in the chosen format (v1.1 #4)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

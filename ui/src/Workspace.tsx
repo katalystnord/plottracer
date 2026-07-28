@@ -146,6 +146,7 @@ import {
 } from '../../engine/projectContainer.js';
 import { readWpdArchive, listWpdFigures, importWpdFigure, type WpdFigure } from '../../engine/wpdImport.js';
 import { identifyProject, unsupportedFileMessage } from '../../engine/importRegistry.js';
+import { exportOmissionNote, formatLimitationNote } from '../../engine/exportCapability.js';
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
 import {
@@ -4793,6 +4794,28 @@ export function Workspace() {
     () => (config.id === 'xy' && axes ? getGeometryState(session.getDataset()) : null),
     [session, version, config, axes]
   );
+
+  /**
+   * What the export would contain, for the disclosure in the Export menu.
+   *
+   * ⚑ ERRS TOWARD SILENCE ON PURPOSE. Each signal below DEFINITELY produces
+   * what it claims -- several series means a series-name column, a measurement
+   * means a tool name, a fit means an equation string -- so the note can never
+   * assert a limitation the file does not actually have. It may occasionally
+   * stay quiet when it could have spoken (a single categorical series carries
+   * text this does not detect), and that is the right way round: a false
+   * warning is the defect this whole disclosure exists to avoid.
+   */
+  const exportContent = useMemo(() => {
+    const seriesCount = session.getDatasetInfos().length;
+    const extraBlocks =
+      (measurements.length > 0 ? 1 : 0) + (curveFitState ? 1 : 0) + (geometryState ? 1 : 0);
+    return {
+      sectionCount: 1 + extraBlocks,
+      hasTextCells: seriesCount > 1 || measurements.length > 0 || curveFitState != null,
+      hasSourceDocument: sourcePdfBundled,
+    };
+  }, [session, version, measurements, curveFitState, geometryState, sourcePdfBundled]);
   const geometryRun = useMemo(
     () => (geometryState && axes ? runGeometry(session.getDataset(), axes as unknown as AnyAxes, geometryState.closed) : null),
     [session, version, config, axes, geometryState]
@@ -5669,6 +5692,25 @@ export function Workspace() {
                   copy button (v1.1 #4) puts the SAME rendered text on the
                   clipboard. Excel is a binary workbook, so it has no clipboard
                   action (copyable: false). */}
+              {/* ⚑ What an export does NOT carry, said BEFORE the user picks a
+                  format rather than discovered afterwards (David, 2026-07-28).
+                  Every claim is verified against the writers in
+                  engine/exportCapability.ts -- announcing a loss that does not
+                  happen would be the same defect as hiding one that does, which
+                  is why roles, categories, measurements and fits are NOT listed:
+                  they are carried. It ends by naming what does keep them, so the
+                  warning has a door out. */}
+              <p
+                data-testid="export-omission-note"
+                style={{
+                  margin: '2px 6px 6px',
+                  color: theme.color.text.secondary,
+                  fontSize: theme.font.size.small,
+                  maxWidth: 260,
+                }}
+              >
+                {exportOmissionNote(exportContent)}
+              </p>
               {([
                 { fmt: 'csv', label: 'CSV (.csv)', copyable: true },
                 { fmt: 'tsv', label: 'TSV (.tsv)', copyable: true },
@@ -5681,7 +5723,17 @@ export function Workspace() {
                 { fmt: 'r', label: 'R (.R)', copyable: true },
               ] as const).map(({ fmt, label, copyable }) => (
                 <div key={fmt} style={{ display: 'flex', alignItems: 'stretch', gap: 2 }}>
-                  <TopBarButton type="button" data-testid={`export-format-${fmt}`} onClick={() => void exportData(fmt)} style={{ justifyContent: 'flex-start', flex: 1 }}>
+                  <TopBarButton
+                    type="button"
+                    data-testid={`export-format-${fmt}`}
+                    // What THIS format does to THIS project, when there is
+                    // anything true to say -- empty otherwise, because padding
+                    // every format with a generic caveat teaches the user to
+                    // ignore the line.
+                    title={formatLimitationNote(fmt, exportContent) || undefined}
+                    onClick={() => void exportData(fmt)}
+                    style={{ justifyContent: 'flex-start', flex: 1 }}
+                  >
                     {label}
                   </TopBarButton>
                   {copyable && (
