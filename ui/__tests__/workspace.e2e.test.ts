@@ -2837,6 +2837,69 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     expect(await page.getByTestId('curve-fit-output').count()).toBe(0);
   });
 
+  // The save-dialog helpers live in the project/CSV describe block above, out of
+  // scope here -- this file's convention is a local pair per block.
+  function fitTempFilePath(extension: string): string {
+    return path.join(os.tmpdir(), `plottracer-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`);
+  }
+
+  async function stubFitSaveDialog(targetPath: string) {
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, targetPath);
+  }
+
+  // ⚑ v1.5 release-gate blocker: the screen refused to call an unsettled fit an
+  // answer, but the EXPORT carried equation, coefficients, R², RMS and 101
+  // sampled curve points with nothing saying the solver never settled -- so a
+  // settled fit and an abandoned one were byte-identical to whoever received the
+  // file. Only an e2e can catch this: the omission was in Workspace's fitFor,
+  // which no unit test of the export builders can reach.
+  it('an unsettled fit says so in the exported file, not just on screen (v1.5)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    // A V -- (0,9) (1,1) (2,1) (3,9). No Gaussian fits it, so LM runs out of
+    // iterations: converged=false with R² ≈ 0, unarguably not a result.
+    for (const [px, py] of [
+      [100, 115],
+      [130, 235],
+      [160, 235],
+      [190, 115],
+    ] as const) {
+      await clickAt(px, py);
+    }
+
+    await page.getByTestId('curve-fit-trigger').click();
+    await page.getByTestId('curve-fit-model').selectOption('gaussian');
+    await page.getByTestId('curve-fit-run').click();
+    await page.waitForTimeout(250);
+    // The screen half already worked -- assert it so a regression here is
+    // distinguishable from a regression in the export half below.
+    expect(await page.getByTestId('curve-fit-not-converged').count()).toBe(1);
+
+    // Dismiss the fly-out before exporting: its Popover backdrop covers the top
+    // bar, so an Export click would land on the backdrop and merely close it.
+    await clickAt(700, 400);
+    await page.waitForTimeout(100);
+
+    const csvPath = fitTempFilePath('csv');
+    await stubFitSaveDialog(csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await expect
+      .poll(() => (fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf8') : ''))
+      .toContain('Curve fit');
+    const csv = fs.readFileSync(csvPath, 'utf8');
+
+    // The summary row a reader takes the numbers from carries the verdict...
+    const summary = csv.split('\n')[csv.split('\n').findIndex((l) => l.startsWith('series,')) + 1]!;
+    expect(summary).toMatch(/,no$/);
+    // ...and so does the sampled-curve block, which can be lifted out alone.
+    expect(csv).toContain('Fitted curve — Series 1 (did not settle)');
+
+    fs.unlinkSync(csvPath);
+  });
+
   it('clicking the fitted curve on canvas re-opens Curve Fit to edit it (v1.1)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

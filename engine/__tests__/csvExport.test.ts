@@ -225,12 +225,51 @@ describe('curve fit export (v0.8)', () => {
 
   it('the summary section lists the model + goodness-of-fit', () => {
     const csv = renderTable([curveFitSummarySection([fit])], 'csv');
-    expect(csv).toBe('Curve fit\nseries,equation,coefficients,R2,RMS,n,degree\nSeries 1,y = 2x + 1,1 2,0.997,0.4,8,1');
+    // `settled` joined the header in v1.5; this fixture is a polynomial, which
+    // has nothing to converge, hence n/a.
+    expect(csv).toBe('Curve fit\nseries,equation,coefficients,R2,RMS,n,degree,settled\nSeries 1,y = 2x + 1,1 2,0.997,0.4,8,1,n/a');
   });
 
   it('the fitted-curve section is its own titled block of sampled points', () => {
     const csv = renderTable([fittedCurveSection(fit, ['X', 'Y'])], 'csv');
     expect(csv).toBe('Fitted curve — Series 1\nX,Y\n0,1\n1,3');
+  });
+
+  // ⚑ v1.5: a fit that did NOT settle must not leave the app looking like one
+  // that did. Levenberg-Marquardt always returns something, and the screen
+  // already refuses to call an unsettled fit an answer -- but the FILE is where
+  // that claim outlives the screen, and the person a project is handed off to
+  // has nothing but the file to go on (tenet 9).
+  const unsettled: CurveFitExport = { ...fit, converged: false };
+
+  it('says in the summary row whether the solver settled', () => {
+    const csv = renderTable([curveFitSummarySection([{ ...fit, converged: true }])], 'csv');
+    expect(csv.split('\n')[1]).toContain('settled');
+    expect(csv.split('\n')[2]).toMatch(/,yes$/);
+  });
+
+  it('marks a fit that did NOT settle, in the very row a reader takes the numbers from', () => {
+    const csv = renderTable([curveFitSummarySection([unsettled])], 'csv');
+    expect(csv.split('\n')[2]).toMatch(/,no$/);
+  });
+
+  it('says n/a for a polynomial, which is solved directly and has nothing to converge', () => {
+    const csv = renderTable([curveFitSummarySection([fit])], 'csv');
+    expect(csv.split('\n')[2]).toMatch(/,n\/a$/);
+  });
+
+  it('marks the sampled-curve block too, because that block can be taken on its own', () => {
+    const csv = renderTable([fittedCurveSection(unsettled, ['X', 'Y'])], 'csv');
+    expect(csv.split('\n')[0]).toBe('Fitted curve — Series 1 (did not settle)');
+  });
+
+  it('carries the flag into JSON, and omits it where it would mean nothing', () => {
+    const bad = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([0, 1])], fit: unsettled }], ['X', 'Y']));
+    expect(bad.series[0].fit.converged).toBe(false);
+    // A polynomial has nothing to converge, so the key is ABSENT rather than a
+    // `true` that would assert something the solver never tested.
+    const poly = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([0, 1])], fit }], ['X', 'Y']));
+    expect(poly.series[0].fit).not.toHaveProperty('converged');
   });
 
   it('data, measurements and fit render as SEPARATED blocks in one document', () => {

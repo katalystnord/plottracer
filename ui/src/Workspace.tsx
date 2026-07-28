@@ -4073,6 +4073,10 @@ export function Workspace() {
           rSquared: fit.rSquared,
           rms: fit.rms,
           n: fit.n,
+          // ⚑ The warning the card shows in red has to ride into the file too.
+          // Undefined for a polynomial, and stays undefined -- the export writes
+          // "n/a" for that rather than claiming it settled.
+          converged: fit.converged,
           samples: sampleCurveFitLine(fit, 100).map((p) => ({ x: p.x, y: p.y })),
         };
       };

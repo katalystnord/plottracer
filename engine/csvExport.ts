@@ -310,6 +310,16 @@ export interface CurveFitExport {
   rms: number;
   n: number;
   samples: readonly { x: number; y: number }[];
+  /**
+   * Did the solver settle? Absent for a polynomial, which is solved directly and
+   * has nothing to converge.
+   *
+   * ⚑ Carried into the FILE, not just the screen (v1.5). Levenberg-Marquardt
+   * always returns something, so an abandoned fit and a settled one look alike
+   * once they are numbers on a page -- and the file is the half that outlives
+   * the session and gets handed to someone who never saw the warning.
+   */
+  converged?: boolean;
 }
 
 /**
@@ -415,6 +425,10 @@ export function buildSeriesJSON(
           rSquared: s.fit.rSquared,
           rms: s.fit.rms,
           n: s.fit.n,
+          // Absent for a polynomial rather than `true` -- an absent field means
+          // "does not apply" throughout this schema, and a `true` here would
+          // assert something the solver never tested.
+          ...(s.fit.converged === undefined ? {} : { converged: s.fit.converged }),
           samples: s.fit.samples.map((p) => ({ x: p.x, y: p.y })),
         };
       }
@@ -445,8 +459,22 @@ export function buildSeriesJSON(
 export function curveFitSummarySection(fits: readonly CurveFitExport[]): TableSection {
   return {
     title: 'Curve fit',
-    header: ['series', 'equation', 'coefficients', 'R2', 'RMS', 'n', 'degree'],
-    rows: fits.map((f) => [f.series, f.equation, f.coefficients.join(' '), f.rSquared, f.rms, f.n, f.degree]),
+    // `settled` is APPENDED: every curve-fit export written since v0.8 carries
+    // this header, so a name-based reader keeps working and an index-based one
+    // finds every column it knew about where it left it.
+    header: ['series', 'equation', 'coefficients', 'R2', 'RMS', 'n', 'degree', 'settled'],
+    rows: fits.map((f) => [
+      f.series,
+      f.equation,
+      f.coefficients.join(' '),
+      f.rSquared,
+      f.rms,
+      f.n,
+      f.degree,
+      // Three states, spelled out rather than left blank: a blank cell would be
+      // read as "no" by anyone scanning the column.
+      f.converged === undefined ? 'n/a' : f.converged ? 'yes' : 'no',
+    ]),
   };
 }
 
@@ -457,7 +485,10 @@ export function fittedCurveSection(fit: CurveFitExport, valueLabels: readonly st
   const xl = valueLabels[0] ?? 'x';
   const yl = valueLabels[1] ?? 'y';
   return {
-    title: `Fitted curve — ${fit.series}`,
+    // The caveat rides in the TITLE because this block is designed to be taken
+    // on its own -- these 101 points ARE the unsettled curve, and lifted out of
+    // the document they would otherwise carry no trace of it.
+    title: `Fitted curve — ${fit.series}${fit.converged === false ? ' (did not settle)' : ''}`,
     header: [xl, yl],
     rows: fit.samples.map((p) => [p.x, p.y]),
   };
