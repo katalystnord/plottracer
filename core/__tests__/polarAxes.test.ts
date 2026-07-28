@@ -1,0 +1,126 @@
+import { describe, expect, it } from 'vitest';
+import { PolarAxes } from '../axes/polar.js';
+import { Calibration } from '../calibration.js';
+
+/**
+ * Polar calibration.
+ *
+ * ⚑ WHY THIS FILE EXISTS. `core/axes/polar.ts` scored 34.69% — the lowest of any
+ * real axes class — and unlike XY and Map there is nothing upstream to port:
+ * WebPlotDigitizer has NO polar test, and neither does Engauge (verified against
+ * the live remote, not a stale clone). This maths has never been checked by
+ * anyone, here or upstream. So these cases are derived from the coordinate
+ * system itself rather than from a lineage.
+ *
+ * `calibrate` takes three independent flags — degrees, clockwise, log radial —
+ * so eight behavioural combinations run through one `pixelToData`. Flag
+ * combinations are where mutants hide, and each case below pins one axis of that
+ * space rather than re-checking the happy path.
+ *
+ * The geometry throughout: centre at (100,100); calibration point 1 due EAST at
+ * (200,100) declared r=10, θ=0; point 2 further east at (300,100) declared r=20.
+ * So 100px = 10 radial units, and screen-east is θ=0. Every number below is
+ * derivable from that.
+ */
+
+function polar({ degrees = true, clockwise = false, logR = false } = {}): PolarAxes {
+  const calib = new Calibration(2);
+  calib.addPoint(100, 100, '0', '0');
+  calib.addPoint(200, 100, logR ? '10' : '10', '0');
+  calib.addPoint(300, 100, logR ? '100' : '20', '0');
+  const axes = new PolarAxes();
+  expect(axes.calibrate(calib, degrees, clockwise, logR), 'calibration should succeed').toBe(true);
+  return axes;
+}
+
+describe('PolarAxes — the calibration reproduces itself', () => {
+  it('reads calibration point 1 back as the values it was given', () => {
+    // The most basic obligation of any calibration, and nothing asserted it.
+    const [r, theta] = polar().pixelToData(200, 100);
+    expect(r).toBeCloseTo(10, 10);
+    expect(theta).toBeCloseTo(0, 10);
+  });
+
+  it('reads calibration point 2 back at its declared radius', () => {
+    const [r] = polar().pixelToData(300, 100);
+    expect(r).toBeCloseTo(20, 10);
+  });
+});
+
+describe('PolarAxes — angle, in degrees, anticlockwise', () => {
+  const axes = polar();
+
+  // Screen y grows downwards, so "north" is a SMALLER y. Getting that sign
+  // wrong flips the whole chart top to bottom, and only a cardinal-direction
+  // check catches it.
+  it.each([
+    ['east', 200, 100, 0],
+    ['north', 100, 0, 90],
+    ['west', 0, 100, 180],
+    ['south', 100, 200, 270],
+  ])('places %s at %s°', (_dir, px, py, expected) => {
+    const [r, theta] = axes.pixelToData(px as number, py as number);
+    expect(theta).toBeCloseTo(expected as number, 9);
+    // All four are equidistant from the centre, so the radius must not move.
+    expect(r).toBeCloseTo(10, 9);
+  });
+
+  it('never reports a negative angle — the range is [0, 360)', () => {
+    // The implementation adds 2π to a negative result. A mutant that drops that
+    // wrap makes south read -90 instead of 270, which every downstream export
+    // would carry as a plausible-looking number.
+    for (const [px, py] of [
+      [100, 200],
+      [50, 150],
+      [200, 101],
+      [99, 101],
+    ] as const) {
+      const [, theta] = axes.pixelToData(px, py);
+      expect(theta).toBeGreaterThanOrEqual(0);
+      expect(theta).toBeLessThan(360);
+    }
+  });
+});
+
+describe('PolarAxes — the three flags', () => {
+  it('mirrors the angle when the chart runs clockwise', () => {
+    // North is 90° going anticlockwise from east, and 270° going clockwise.
+    expect(polar({ clockwise: false }).pixelToData(100, 0)[1]).toBeCloseTo(90, 9);
+    expect(polar({ clockwise: true }).pixelToData(100, 0)[1]).toBeCloseTo(270, 9);
+  });
+
+  it('reports the SAME angle in radians when degrees is off', () => {
+    // ⚑ The unit question, pinned as an invariant rather than a constant: the
+    // two readings must describe one angle. This is the bug class that reached
+    // a release today — the .dig reader treated gradians and turns as radians,
+    // exporting 49.21 for an angle whose true value was 0.
+    const deg = polar({ degrees: true }).pixelToData(100, 0)[1]!;
+    const rad = polar({ degrees: false }).pixelToData(100, 0)[1]!;
+    expect(rad).toBeCloseTo(Math.PI / 2, 12);
+    expect((rad * 180) / Math.PI).toBeCloseTo(deg, 9);
+  });
+
+  it('spaces a log radial axis GEOMETRICALLY, not arithmetically', () => {
+    // r=10 at 100px, r=100 at 200px. Halfway between them in DISTANCE is 150px,
+    // which on a log scale is 10^1.5 = 31.6228 — the geometric mean, not the
+    // arithmetic 55. A mutant that skips the log conversion returns 55 and is
+    // invisible to any test that only checks the calibration points.
+    const [r] = polar({ logR: true }).pixelToData(250, 100);
+    expect(r).toBeCloseTo(31.6227766, 6);
+    expect(r).not.toBeCloseTo(55, 0);
+  });
+
+  it('still reproduces its calibration points on a log radial axis', () => {
+    const axes = polar({ logR: true });
+    expect(axes.pixelToData(200, 100)[0]).toBeCloseTo(10, 8);
+    expect(axes.pixelToData(300, 100)[0]).toBeCloseTo(100, 8);
+  });
+});
+
+describe('PolarAxes — what it does NOT provide', () => {
+  it('ships the unimplemented dataToPixel stub', () => {
+    // Asserted so that implementing it later must be a deliberate act. Same
+    // rule as Map and Bar.
+    expect(polar().dataToPixel(10, 90)).toEqual({ x: 0, y: 0 });
+  });
+});
