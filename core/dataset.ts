@@ -100,7 +100,14 @@ export class Dataset {
   }
 
   removePixelAtIndex(index: number): void {
-    if (index < this._dataPoints.length) {
+    // ⚑ BOTH bounds. The upper test alone let a NEGATIVE index through (-1 < 0
+    // is true), and the next line dereferences `_dataPoints[-1]` — so
+    // `removeLastPixel()` on an empty dataset threw a TypeError rather than
+    // doing nothing. No caller can reach it today because
+    // `CalibrationSession.removeLastPoint` checks the count first, but that is
+    // the guard living in the session rather than in the model, and the model
+    // has more than one entrance. Fixed where it belongs.
+    if (index >= 0 && index < this._dataPoints.length) {
       if (this._dataPoints[index]!.metadata != null) {
         this._pixelMetadataCount--;
       }
