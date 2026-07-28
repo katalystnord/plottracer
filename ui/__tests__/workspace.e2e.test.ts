@@ -6348,6 +6348,54 @@ describe('spider charts', () => {
   ];
 
   /** Walk the whole calibration: centre, then one click + value + name per axis. */
+  /** Open the spider example's REAL calibration as a project.
+   *
+   * ⚑ Built in-process rather than driven through seven canvas clicks: the
+   * view transform is fitted asynchronously and re-fitted by capture, so a
+   * transform read one frame early shifts every click and surfaces seconds
+   * later as a value field that never appeared. That cost the trace test three
+   * flaky runs. The clicking path is covered thoroughly elsewhere.
+   */
+  async function openSpiderTruthProject() {
+  const fixture = (() => {
+    const session = new CalibrationSession(SPIDER_AXES_CONFIG);
+    while (session.getRepeatCount() < spiderTruth.axes.length) session.addRepeat();
+    const origin = spiderTruth.calibration.anchors['origin']!;
+    session.handleCalibrationClick(origin.px, origin.py);
+    session.confirmCalibrationValues(['0']);
+    for (const axis of spiderTruth.axes) {
+      const anchor = spiderTruth.calibration.anchors[`spoke${axis.axis}`]!;
+      session.handleCalibrationClick(anchor.px, anchor.py);
+      session.confirmCalibrationValues([String(axis.max), axis.name]);
+    }
+    if (!session.runCalibration()) throw new Error('fixture calibration failed');
+    const png = path.join(REPO_ROOT, 'samples/spider-material-profile.png');
+    const result = serializeProject(
+      session,
+      `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`,
+      'spider-material-profile.png'
+    );
+    if ('error' in result) throw new Error(`fixture build failed: ${result.error}`);
+    const filePath = path.join(os.tmpdir(), `plottracer-spider-truth-${process.pid}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(result), 'utf8');
+    return filePath;
+  })();
+
+  try {
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, fixture);
+    await page.getByTestId('open-project').click();
+  } finally {
+    // Restore immediately, so a failure here cannot silently re-point every later
+    // test's Open dialog at this fixture.
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, SAMPLE_IMAGE);
+  }
+  await waitForImageFitted();
+  }
+
   async function calibrateSpider(names: string[], values: string[], centre = '0') {
     const n = names.length;
     for (let i = 3; i < n; i++) await page.getByTestId('add-repeat-step').click();
@@ -6611,43 +6659,7 @@ describe('spider charts', () => {
     // above; what is under test HERE is the trace, so the calibration is built
     // in-process (the same engine the app runs) and opened through the real
     // Open Project.
-    const fixture = (() => {
-      const session = new CalibrationSession(SPIDER_AXES_CONFIG);
-      while (session.getRepeatCount() < spiderTruth.axes.length) session.addRepeat();
-      const origin = spiderTruth.calibration.anchors['origin']!;
-      session.handleCalibrationClick(origin.px, origin.py);
-      session.confirmCalibrationValues(['0']);
-      for (const axis of spiderTruth.axes) {
-        const anchor = spiderTruth.calibration.anchors[`spoke${axis.axis}`]!;
-        session.handleCalibrationClick(anchor.px, anchor.py);
-        session.confirmCalibrationValues([String(axis.max), axis.name]);
-      }
-      if (!session.runCalibration()) throw new Error('fixture calibration failed');
-      const png = path.join(REPO_ROOT, 'samples/spider-material-profile.png');
-      const result = serializeProject(
-        session,
-        `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`,
-        'spider-material-profile.png'
-      );
-      if ('error' in result) throw new Error(`fixture build failed: ${result.error}`);
-      const filePath = path.join(os.tmpdir(), `plottracer-spider-truth-${process.pid}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(result), 'utf8');
-      return filePath;
-    })();
-
-    try {
-      await app.evaluate(({ dialog }, p) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
-      }, fixture);
-      await page.getByTestId('open-project').click();
-    } finally {
-      // Restore immediately, so a failure here cannot silently re-point every later
-      // test's Open dialog at this fixture.
-      await app.evaluate(({ dialog }, p) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
-      }, SAMPLE_IMAGE);
-    }
-    await waitForImageFitted();
+    await openSpiderTruthProject();
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
     // Its six named axes came back as the capture slots.
     expect(await textOf('spider-axis-name-5')).toBe('Cost index');
@@ -6682,13 +6694,22 @@ describe('spider charts', () => {
     // job is to say which series this is — and after a By-colour trace the figure's
     // own ink is the strongest answer there is. Display only; the record is
     // untouched, and one undo takes it back with the points.
-    await resetWorkspace('spider');
-    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+    // ⚑ The REAL spider figure, not invented geometry over the XY sample. This
+    // test used to calibrate a made-up spider on samples/xy-stress-strain.png and
+    // trace #1f4e79 out of it with tolerance 255 -- an image that does not contain
+    // that ink at all, so the trace answered "No pixels matched that colour", no
+    // points were added, and the colour could not be adopted. It passed only by
+    // luck of timing. A colour-adoption test needs a figure with the colour in it.
+    await openSpiderTruthProject();
     await selectAutoExtract('colour');
     await page.getByTestId('color-trace-color').fill('#1f4e79');
-    await page.getByTestId('color-trace-tolerance').fill('255');
+    await page.getByTestId('color-trace-tolerance').fill('60');
     await page.getByTestId('color-trace-run').click();
     await page.waitForTimeout(300);
+    // ⚑ Assert the PREMISE before the conclusion. The figure's ink is adopted only
+    // if the trace actually read something, so without this the test reports a
+    // confusing colour mismatch when the real failure was an empty trace.
+    expect(await textOf('color-trace-info')).toMatch(/Read [1-9]/);
 
     await page.getByTestId('series-color-button').click();
     expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');

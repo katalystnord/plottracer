@@ -242,12 +242,14 @@ describe('ui/electron-main.cjs (production entry point)', () => {
           dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
         }, badProjectPath);
         await sendMenuEvent(app, 'menu:open-project');
-        // Checkpoint 94: a project is now a .zip container OR legacy JSON, so the
-        // invalid-file message widened. Assert the stable prefix -- the point is
-        // that the menu event reached the open handler and it reported an error.
+        // v1.5: the import registry replaced the generic refusal with one that
+        // NAMES the formats that do work, so this assertion went stale and was
+        // still pinning the old wording. The point of the test is unchanged --
+        // the menu event reached the open handler and it reported an error -- so
+        // assert the part that carries that meaning rather than a fixed prefix.
         await expect
           .poll(async () => (await page.getByTestId('project-error').textContent({ timeout: 1000 }).catch(() => null)) ?? '', { timeout: 10000 })
-          .toContain('Could not open project');
+          .toMatch(/doesn't recognise this file|Could not open project/);
       } finally {
         fs.unlinkSync(badProjectPath);
       }
