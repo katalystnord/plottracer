@@ -2899,6 +2899,30 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
   // settled fit and an abandoned one were byte-identical to whoever received the
   // file. Only an e2e can catch this: the omission was in Workspace's fitFor,
   // which no unit test of the export builders can reach.
+  // ⚑ R² = 1 - SSres/SStot. On a FLAT series SStot is exactly zero -- every point
+  // is the mean -- so R² divides by zero and has no value. The code returned 1,
+  // which read on screen as a PERFECT fit for a model that explained nothing, and
+  // sat beside the red "did not settle". Only an e2e can prove what the card shows.
+  it('shows no R² for a flat series, and says why (v1.5.1)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    // Four points at the SAME height: y is constant, so there is no variation.
+    for (const px of [100, 130, 160, 190]) await clickAt(px, 175);
+
+    await page.getByTestId('curve-fit-trigger').click();
+    await page.getByTestId('curve-fit-run').click();
+    await page.waitForTimeout(250);
+
+    const results = await textOf('curve-fit-output');
+    // The fabricated perfect score is gone...
+    expect(results).not.toContain('R² = 1.00000');
+    expect(results).toMatch(/R² = —/);
+    // ...and the card says why, rather than leaving a dash to be puzzled over.
+    expect(await textOf('curve-fit-no-r2')).toMatch(/every value in this series is the same/);
+    // RMS is still reported: it needs no reference variance.
+    expect(results).toMatch(/RMS = /);
+  });
+
   it('an unsettled fit says so in the exported file, not just on screen (v1.5)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

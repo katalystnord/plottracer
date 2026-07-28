@@ -364,7 +364,7 @@ export function modelFitStats(
   model: FitModel,
   params: readonly number[],
   points: readonly Point2D[]
-): { rSquared: number; rms: number } {
+): { rSquared?: number; rms: number } {
   const meanY = points.reduce((s, p) => s + p.y, 0) / points.length;
   let ssRes = 0;
   let ssTot = 0;
@@ -374,14 +374,21 @@ export function modelFitStats(
     ssTot += (p.y - meanY) * (p.y - meanY);
   }
   return {
-    rSquared: ssTot > 0 ? 1 - ssRes / ssTot : 1,
+    // ⚑ ABSENT when there is no variation to explain, never 1. With every y
+    // identical, SStot is exactly 0 (each point IS the mean) and R² divides by
+    // zero -- it has no value, and the 1 that used to be returned was a written-in
+    // default, not arithmetic. Reporting it made a flat series look like a perfect
+    // fit beside a red "did not settle". RMS below is honest here and needs no
+    // reference variance, which is why it is the number to read (see this
+    // function's own note on R² being a courtesy for a nonlinear model).
+    ...(ssTot > 0 ? { rSquared: 1 - ssRes / ssTot } : {}),
     rms: Math.sqrt(ssRes / points.length),
   };
 }
 
 export interface FitModelOutcome {
   params: number[];
-  rSquared: number;
+  rSquared?: number;
   rms: number;
   converged: boolean;
   iterations: number;

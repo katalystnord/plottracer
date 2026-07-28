@@ -220,7 +220,9 @@ export interface CurveFitExport {
   degree: number;
   equation: string;
   coefficients: number[];
-  rSquared: number;
+  /** Absent for a flat series: R² is undefined with no variation to explain,
+   * and a blank cell says that where a 1 would have claimed a perfect fit. */
+  rSquared?: number;
   rms: number;
   n: number;
   samples: readonly { x: number; y: number }[];
@@ -333,7 +335,9 @@ export function buildSeriesJSON(
           ...(s.fit.model && s.fit.model !== 'polynomial' ? {} : { degree: s.fit.degree }),
           equation: s.fit.equation,
           coefficients: s.fit.coefficients,
-          rSquared: s.fit.rSquared,
+          // Omitted rather than nulled when undefined: an absent field means
+          // "does not apply" throughout this schema.
+          ...(s.fit.rSquared === undefined ? {} : { rSquared: s.fit.rSquared }),
           rms: s.fit.rms,
           n: s.fit.n,
           // Absent for a polynomial rather than `true` -- an absent field means
@@ -381,7 +385,9 @@ export function curveFitSummarySection(fits: readonly CurveFitExport[]): TableSe
       f.series,
       f.equation,
       f.coefficients.join(' '),
-      f.rSquared,
+      // A blank cell, never a fabricated number -- the same rule the rest of this
+      // module follows for a value that was not measured.
+      f.rSquared ?? '',
       f.rms,
       f.n,
       // ⚑ Degree belongs to the polynomial alone. The UI merely UNMOUNTS the

@@ -50,7 +50,9 @@ export interface CurveFitState {
   /** The fitted parameters — polynomial coefficients, or the model's own
    * parameters in the order it names them. */
   coefficients: number[];
-  rSquared: number;
+  /** Absent for a flat series — R² is undefined when every y is the same. RMS
+   * is the number to read there. */
+  rSquared?: number;
   rms: number;
   n: number;
   fitXMin: number;

@@ -238,6 +238,28 @@ describe('curve fit export (v0.8)', () => {
     expect(row[header.indexOf('degree')]).toBe('3');
   });
 
+  // ⚑ A flat series has no variation for R² to measure against, so the fit
+  // carries none. A blank cell says that; the 1 it used to carry claimed a
+  // perfect fit for a model that explained nothing.
+  it('leaves the R2 cell BLANK when the series had no variation', () => {
+    const { rSquared: _drop, ...noR2 } = fit;
+    const csv = renderTable([curveFitSummarySection([noR2 as CurveFitExport])], 'csv');
+    const header = csv.split('\n')[1]!.split(',');
+    const row = csv.split('\n')[2]!.split(',');
+    expect(row[header.indexOf('R2')]).toBe('');
+    // RMS is still there: it needs no reference variance and is the honest number.
+    expect(row[header.indexOf('RMS')]).toBe('0.4');
+  });
+
+  it('omits rSquared from JSON rather than nulling it', () => {
+    const { rSquared: _drop, ...noR2 } = fit;
+    const doc = JSON.parse(
+      buildSeriesJSON([{ name: 'S', rows: [row([0, 1])], fit: noR2 as CurveFitExport }], ['X', 'Y'])
+    );
+    expect(doc.series[0].fit).not.toHaveProperty('rSquared');
+    expect(doc.series[0].fit.rms).toBe(0.4);
+  });
+
   it('carries the flag into JSON, and omits it where it would mean nothing', () => {
     const bad = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([0, 1])], fit: unsettled }], ['X', 'Y']));
     expect(bad.series[0].fit.converged).toBe(false);

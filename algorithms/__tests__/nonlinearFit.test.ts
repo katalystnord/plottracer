@@ -236,3 +236,56 @@ describe('the written equation carries the fitted numbers', () => {
     expect(findFitModel('logarithmic')!.formatEquation([1.5, -2.75])).toMatch(/− 2\.75·ln\(x\)/);
   });
 });
+
+describe('R² on a series with no spread (v1.5.1)', () => {
+  // ⚑ R² = 1 - SSres/SStot, and SStot is the spread of the data about its own
+  // mean. When every y is identical SStot is EXACTLY zero -- every point IS the
+  // mean -- so the ratio divides by zero and R² has no value at all.
+  //
+  // The code returned 1 there. That is not a rounding error: the residual never
+  // entered the calculation, the `ssTot > 0` branch short-circuited first, so the
+  // 1 would have been identical had the fit been off by a mile. It read on screen
+  // as a PERFECT fit, beside a red "did not settle" -- and that contradiction is
+  // what made the convergence flag look like it was crying wolf.
+  //
+  // Absent is the honest answer, matching this codebase's rule everywhere else:
+  // a value that was not measured is blank, never a fabricated number.
+  const flat = [1, 2, 3, 4].map((x) => ({ x, y: 5 }));
+
+  it('reports NO R² when there is no variation to explain', () => {
+    const m = findFitModel('gaussian')!;
+    const fit = fitModel(m, flat);
+    if ('error' in fit) throw new Error(fit.error);
+    expect(fit.rSquared).toBeUndefined();
+  });
+
+  it('still reports RMS, which needs no reference variance and is honest here', () => {
+    const m = findFitModel('gaussian')!;
+    const fit = fitModel(m, flat);
+    if ('error' in fit) throw new Error(fit.error);
+    expect(Number.isFinite(fit.rms)).toBe(true);
+    expect(fit.rms).toBeLessThan(0.01); // it really did land on the constant
+  });
+
+  it('still reports a real R² when the data DOES vary', () => {
+    const m = findFitModel('gaussian')!;
+    const sloped = [0, 1, 2, 3, 4].map((x) => ({ x, y: 10 * Math.exp(-((x - 2) ** 2) / 2) }));
+    const fit = fitModel(m, sloped);
+    if ('error' in fit) throw new Error(fit.error);
+    expect(fit.rSquared).toBeGreaterThan(0.99);
+  });
+
+  it('a NEGATIVE R² on a genuinely bad nonlinear fit is correct, not a bug', () => {
+    // Guards the fix from over-reaching: only the zero-variance case is absent.
+    const v = [
+      { x: 0, y: 9 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+      { x: 3, y: 9 },
+    ];
+    const fit = fitModel(findFitModel('gaussian')!, v);
+    if ('error' in fit) throw new Error(fit.error);
+    expect(fit.rSquared).toBeDefined();
+    expect(fit.rSquared!).toBeLessThanOrEqual(0.01);
+  });
+});

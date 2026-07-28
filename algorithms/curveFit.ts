@@ -81,7 +81,8 @@ export function evaluatePolynomial(coefficients: number[], x: number): number {
 }
 
 export interface FitStats {
-  rSquared: number;
+  /** Absent for a flat series: R² is undefined with no variation to explain. */
+  rSquared?: number;
   rms: number;
 }
 
@@ -95,7 +96,10 @@ export function computeFitStats(points: Point2D[], coefficients: number[]): FitS
     ssTot += (p.y - meanY) * (p.y - meanY);
   });
   return {
-    rSquared: ssTot > 0 ? 1 - ssRes / ssTot : 1,
+    // Absent when the series is flat -- see algorithms/nonlinearFit.ts, which
+    // copied this fallback. R² divides by zero when SStot is 0; a written-in 1
+    // claims a perfect fit for a model that explained nothing.
+    ...(ssTot > 0 ? { rSquared: 1 - ssRes / ssTot } : {}),
     rms: Math.sqrt(ssRes / points.length),
   };
 }

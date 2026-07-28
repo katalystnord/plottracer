@@ -8007,8 +8007,19 @@ export function Workspace() {
             <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
             <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatCurveFitEquation(curveFitState)}</code>
             <span style={{ fontVariantNumeric: 'tabular-nums', color: theme.color.text.secondary }}>
-              R² = {curveFitState.rSquared.toFixed(5)} · RMS = {curveFitState.rms.toPrecision(5)} · n = {curveFitState.n}
+              R² = {curveFitState.rSquared === undefined ? '—' : curveFitState.rSquared.toFixed(5)} · RMS = {curveFitState.rms.toPrecision(5)} · n = {curveFitState.n}
             </span>
+            {/* ⚑ R² is undefined when the series is flat: it is the fraction of the
+                data's variation that the model accounts for, and a flat series has
+                none. This used to read 1.00000 -- a written-in default where the
+                formula divides by zero -- so a flat baseline looked like a PERFECT
+                fit, sometimes beside the red "did not settle" below. Say why it is
+                blank rather than leaving a dash to be puzzled over. */}
+            {curveFitState.rSquared === undefined && (
+              <span data-testid="curve-fit-no-r2" style={{ color: theme.color.text.secondary }}>
+                R² needs variation to measure against, and every value in this series is the same — so it has none here. Read the RMS instead: it is in the data's own units.
+              </span>
+            )}
             {/* ⚑ A nonlinear solver can run out of iterations and still leave a
                 drawn curve behind, and a drawn curve is read as an answer. When
                 it did not settle, SAY so beside the numbers rather than let the

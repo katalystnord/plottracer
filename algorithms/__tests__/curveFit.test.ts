@@ -40,3 +40,20 @@ describe('curveFit', () => {
     expect(formatted).toContain('x^2');
   });
 });
+
+describe('R² on a series with no spread (v1.5.1)', () => {
+  // The same `ssTot > 0 ? … : 1` fallback the nonlinear module copied from here.
+  // A horizontal baseline is ordinary in a real figure, not a contrived input.
+  it('reports NO R² for a flat series, but still reports RMS', () => {
+    const flat = [1, 2, 3, 4].map((x) => ({ x, y: 5 }));
+    const stats = computeFitStats(flat, fitPolynomial(flat, 1));
+    expect(stats.rSquared).toBeUndefined();
+    expect(Number.isFinite(stats.rms)).toBe(true);
+  });
+
+  it('still reports a real R² when the data varies', () => {
+    const sloped = [1, 2, 3, 4].map((x) => ({ x, y: 2 * x + 1 }));
+    const stats = computeFitStats(sloped, fitPolynomial(sloped, 1));
+    expect(stats.rSquared).toBeGreaterThan(0.99);
+  });
+});
