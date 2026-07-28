@@ -451,7 +451,7 @@ function checkGuards(
    * differs from `steps` for a type with a repeating group (v1.4), where the
    * key -> Calibration-index mapping below has to resolve against the unrolled list
    * or it lands on the wrong point. */
-  steps: readonly CalibStepInfo[] = config.steps
+  steps: readonly CalibStepInfo[] = config.fixedSteps
 ): string | null {
   for (const g of config.logScaleGuards ?? []) {
     if (!optionBool(options, g.option)) continue;
@@ -578,8 +578,8 @@ export function calibrationCompatible(
   b: AxesTypeConfig<CalibratedAxes>
 ): boolean {
   if (a.axesKind !== b.axesKind) return false;
-  if (a.steps.length !== b.steps.length) return false;
-  return a.steps.every((step, i) => step.key === b.steps[i]!.key);
+  if (a.fixedSteps.length !== b.fixedSteps.length) return false;
+  return a.fixedSteps.every((step, i) => step.key === b.fixedSteps[i]!.key);
 }
 
 /** Axes-metadata key recording which *graph type* built an axes instance.
@@ -612,7 +612,13 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   /** The FIXED steps, in order. For a type with a `repeatingStep` these are only
    * the prefix — ask the SESSION (`getSteps()`) for the list a user is actually
    * walking, never this array. */
-  steps: readonly CalibStepInfo[];
+  /** ⚑ The FIXED steps only. Never read this directly — a session's real step
+   * list is `session.getSteps()`, which unrolls the repeating group. Named
+   * `fixedSteps` rather than `steps` precisely so a stray read cannot compile:
+   * for the eight fixed-shape types the two are identical, which is what made the
+   * mistake invisible, and on a spider it silently sees one step (the origin) and
+   * reports a calibration complete with no axes placed. */
+  fixedSteps: readonly CalibStepInfo[];
   /** A step group repeated as many times as the figure needs (v1.4, Spider).
    * Undefined = a fixed-shape calibration, which is every other type. */
   repeatingStep?: RepeatingStepInfo;
@@ -806,7 +812,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
     { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
   ],
-  steps: [
+  fixedSteps: [
     { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
     { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
@@ -873,7 +879,7 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   logScaleGuards: XY_AXES_CONFIG.logScaleGuards,
   distinctPixelSteps: XY_AXES_CONFIG.distinctPixelSteps,
   parallelAxisGuard: XY_AXES_CONFIG.parallelAxisGuard,
-  steps: XY_AXES_CONFIG.steps,
+  fixedSteps: XY_AXES_CONFIG.fixedSteps,
   options: XY_AXES_CONFIG.options,
   extractOptions: XY_AXES_CONFIG.extractOptions,
   buildAxes(cal, ctx) {
@@ -899,7 +905,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
     { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
   ],
-  steps: [
+  fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click the pixel position of a known bar value (e.g. 0)', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
     { key: 'p2', label: 'P2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different bar value', valueFields: [{ key: 'p2', label: 'value', field: 'dy' }] },
   ],
@@ -937,7 +943,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
   distinctPixelSteps: [['v1', 'v2']],
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
-  steps: [
+  fixedSteps: [
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
     { key: 'v2', label: 'V2', color: '#5fb4e0', prompt: 'Click a second, different known value on the Y axis', valueFields: [{ key: 'v2', label: 'value', field: 'dy' }] },
   ],
@@ -986,7 +992,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // reusing the arrays keeps them from drifting apart, as Histogram does with XY.
   logScaleGuards: BAR_AXES_CONFIG.logScaleGuards,
   distinctPixelSteps: BAR_AXES_CONFIG.distinctPixelSteps,
-  steps: BAR_AXES_CONFIG.steps,
+  fixedSteps: BAR_AXES_CONFIG.fixedSteps,
   options: BAR_AXES_CONFIG.options,
   extractOptions: BAR_AXES_CONFIG.extractOptions,
   buildAxes(cal, ctx) {
@@ -1018,7 +1024,7 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       choices: [{ value: 'false', label: 'Anticlockwise' }, { value: 'true', label: 'Clockwise' }] },
     { key: 'isLogR', label: 'Log radial', kind: 'checkbox', default: false },
   ],
-  steps: [
+  fixedSteps: [
     { key: 'origin', label: 'Origin', color: '#5fb47a', prompt: 'Click the pixel position of the polar origin (r=0)', valueFields: [] },
     {
       key: 'p1',
@@ -1080,7 +1086,7 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
   dataDim: 3,
   valueLabels: ['A', 'B', 'C'],
   globalFields: [],
-  steps: [
+  fixedSteps: [
     { key: 'a', label: 'A', color: '#e0a458', prompt: 'Click corner A of the ternary diagram', valueFields: [] },
     { key: 'b', label: 'B', color: '#5fb4e0', prompt: 'Click corner B of the ternary diagram', valueFields: [] },
     // Collected to match WPD's own 3-corner-click UI, but never read by
@@ -1123,7 +1129,7 @@ export const MAP_AXES_CONFIG: AxesTypeConfig<MapAxes> = {
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
-  steps: [
+  fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click one end of a reference line of known real-world length', valueFields: [] },
     {
       key: 'p2',
@@ -1177,7 +1183,7 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
     { key: 'rotationDirection', label: 'Direction', kind: 'choice', default: 'anticlockwise',
       choices: [{ value: 'anticlockwise', label: 'Anticlockwise' }, { value: 'clockwise', label: 'Clockwise' }] },
   ],
-  steps: [
+  fixedSteps: [
     {
       key: 't0r0',
       label: '(T0,R0)',
@@ -1297,7 +1303,7 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // delete the profile the way removing a member of a BOX deletes the box.
   tupleMembers: 'independent',
   options: [{ key: 'isLogRadial', label: 'Log axes', kind: 'checkbox', default: false }],
-  steps: [
+  fixedSteps: [
     {
       key: 'origin',
       label: 'Centre',
@@ -1549,9 +1555,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSteps(): readonly CalibStepInfo[] {
     const repeating = this.config.repeatingStep;
-    if (!repeating) return this.config.steps;
+    if (!repeating) return this.config.fixedSteps;
 
-    const steps: CalibStepInfo[] = [...this.config.steps];
+    const steps: CalibStepInfo[] = [...this.config.fixedSteps];
     for (let i = 1; i <= this.repeatCount; i++) {
       steps.push({
         ...repeating.step,
@@ -1595,7 +1601,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!repeating || this.axes) return false;
     if (this.repeatCount <= repeating.min) return false;
 
-    const removed = this.getSteps()[this.config.steps.length + this.repeatCount - 1]!;
+    const removed = this.getSteps()[this.config.fixedSteps.length + this.repeatCount - 1]!;
     delete this.placed[removed.key];
     this.repeatCount -= 1;
     if (this.stepIndex > this.getSteps().length) this.stepIndex = this.getSteps().length;
@@ -2603,7 +2609,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // a different route — there, a file skipped a refusal; here, a file's own
     // shape is overwritten by a default.
     if (cal && this.config.repeatingStep) {
-      this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.steps.length);
+      this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.fixedSteps.length);
     }
     if (cal) {
       this.getSteps().forEach((step, i) => {
@@ -3932,7 +3938,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // through a real project file — the test that passed had reloaded from the
       // live axes and could never have seen it.
       const calibration = (this.axes as unknown as { calibration: Calibration | null }).calibration;
-      const calibrationIndex = this.config.steps.length + index; // origin steps, then one per spoke
+      const calibrationIndex = this.config.fixedSteps.length + index; // origin steps, then one per spoke
       const cp = calibration?.getPoint(calibrationIndex);
       if (calibration && cp) calibration.setDataAt(calibrationIndex, cp.dx ?? '', cp.dy ?? '', name);
       (this.axes as unknown as SpiderAxes).setSpokeName(index, name);

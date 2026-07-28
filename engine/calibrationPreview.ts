@@ -158,7 +158,12 @@ const CIRCLE_TRIPLES: Partial<Record<AxesKind, readonly (readonly [string, strin
  * reason a calibration fails.
  */
 export function calibrationPreview(
-  config: { axesKind: AxesKind; steps: readonly { key: string; color: string }[] },
+  // ⚑ NOT the config: `steps` here must be the session's UNROLLED list
+  // (`session.getSteps()`), because a spider's spokes exist only in the session.
+  // Named `shape` rather than `config` so the call site cannot read as though
+  // handing over the type's own fixed steps — which for a spider is just the
+  // origin, and would leave the preview unable to name or colour any ray.
+  shape: { axesKind: AxesKind; steps: readonly { key: string; color: string }[] },
   placed: Readonly<Record<string, { px: number; py: number } | undefined>>,
   /** Step key to draw as the live one — see PreviewSegment.emphasis. */
   emphasisKey?: string
@@ -167,10 +172,10 @@ export function calibrationPreview(
     const p = placed[key];
     return p ? { x: p.px, y: p.py } : null;
   };
-  const colorOf = (key: string): string => config.steps.find((s) => s.key === key)?.color ?? '#888888';
+  const colorOf = (key: string): string => shape.steps.find((s) => s.key === key)?.color ?? '#888888';
 
   const segments: PreviewSegment[] = [];
-  const pairs = config.axesKind === 'spider' ? spiderPairs(config.steps) : (PAIRS[config.axesKind] ?? []);
+  const pairs = shape.axesKind === 'spider' ? spiderPairs(shape.steps) : (PAIRS[shape.axesKind] ?? []);
   for (const [a, b] of pairs) {
     const from = at(a);
     const to = at(b);
@@ -194,7 +199,7 @@ export function calibrationPreview(
   }
 
   const circles: PreviewCircle[] = [];
-  for (const [a, b, c] of CIRCLE_TRIPLES[config.axesKind] ?? []) {
+  for (const [a, b, c] of CIRCLE_TRIPLES[shape.axesKind] ?? []) {
     const p1 = at(a);
     const p2 = at(b);
     const p3 = at(c);

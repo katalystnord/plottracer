@@ -127,7 +127,7 @@ describe('the step list is variable, and comes from the session', () => {
   it('leaves every fixed-shape type exactly as it was', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     expect(session.getRepeatCount()).toBe(0);
-    expect(session.getSteps()).toBe(XY_AXES_CONFIG.steps);
+    expect(session.getSteps()).toBe(XY_AXES_CONFIG.fixedSteps);
     expect(session.addRepeat()).toBe(false);
     expect(session.removeRepeat()).toBe(false);
   });
