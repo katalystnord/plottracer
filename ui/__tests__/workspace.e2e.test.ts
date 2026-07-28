@@ -1260,6 +1260,50 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     }, targetPath);
   }
 
+  // ⚑ v1.5: the import NOTICE had no coverage that it ever reaches the eye, and it
+  // was cleared only at the top of openProject -- so "this project held N
+  // coordinate systems" outlived the figure it described, and read as though the
+  // CURRENT figure had lost content. Both halves asserted here: it appears, and it
+  // goes when the figure it describes does.
+  it('shows what an import did NOT bring, and drops the notice with that figure (v1.5)', async () => {
+    // A .dig holding two coordinate systems: Engauge writes them as repeated
+    // SIBLINGS under <Document> (there is no <CoordSystems> wrapper).
+    const system =
+      '<Coords Type="0" TypeString="Cartesian" ScaleXThetaString="Linear" ScaleYRadiusString="Linear" UnitsThetaString="Degrees (DDD.DDDDD)"/>' +
+      '<Curve CurveName="Axes"><CurvePoints>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="500"/><PositionGraph X="0" Y="0"/></Point>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="600" Y="500"/><PositionGraph X="10" Y="0"/></Point>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="100"/><PositionGraph X="0" Y="1"/></Point>' +
+      '</CurvePoints></Curve>' +
+      '<CurvesGraphs><Curve CurveName="Curve1"><CurvePoints>' +
+      '<Point><PositionScreen X="350" Y="300"/></Point>' +
+      '</CurvePoints></Curve></CurvesGraphs>';
+    const dig =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n' +
+      `<Document VersionNumber="11.0"><CoordSystem>${system}</CoordSystem><CoordSystem>${system}</CoordSystem></Document>`;
+    const digPath = path.join(os.tmpdir(), `plottracer-e2e-${Date.now()}.dig`);
+    fs.writeFileSync(digPath, dig, 'utf8');
+
+    try {
+      await stubOpenProjectDialog(digPath);
+      await page.getByTestId('open-project').click();
+      await expect
+        .poll(async () => (await page.getByTestId('project-notice').textContent().catch(() => null)) ?? '')
+        .toMatch(/2 coordinate systems/);
+      expect(await textOf('project-notice')).toMatch(/not imported/);
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+      fs.unlinkSync(digPath);
+    }
+
+    // A fresh image is a different figure, so the note about the old one must go.
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    expect(await page.getByTestId('project-notice').count()).toBe(0);
+  });
+
   async function stubOpenProjectDialog(targetPath: string) {
     await app.evaluate(({ dialog }, p) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });

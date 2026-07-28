@@ -199,7 +199,12 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
   const axes = new XYAxes();
   // considerGraphTilt is their name for correcting a rotated figure; ours is the
   // inverse flag, so it is negated rather than passed through.
-  const noRotationCorrection = active.considerGraphTilt === false;
+  //
+  // ⚑ ABSENT means no correction, because StarryDigitizer's own model defaults it
+  // to false (axisSet.ts declares `considerGraphTilt = false`). This read `=== false`,
+  // so a missing key produced `false` here and silently turned correction ON --
+  // the opposite of what their file means. Only an explicit `true` asks for it.
+  const noRotationCorrection = active.considerGraphTilt !== true;
   if (!axes.calibrate(calib, active.xIsLogScale === true, active.yIsLogScale === true, noRotationCorrection)) {
     return {
       error:

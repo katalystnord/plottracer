@@ -2206,6 +2206,10 @@ export function Workspace() {
       // it here so every session-swap path is covered, not just resetDocument
       // (2026-07-22 audit A1).
       setColorTraceRegion(null);
+      // ⚑ The import notice describes the project that was OPENED. A new session
+      // means that figure is gone, and a true sentence about the wrong subject is
+      // worse than none -- it read as though the CURRENT figure had lost content.
+      setProjectNotice(null);
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
@@ -3516,6 +3520,7 @@ export function Workspace() {
       // figure was active, never carry across.
       setActivePointIndex(null);
       setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
+      setProjectNotice(null); // ...and so is a notice about the figure we just left
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
@@ -4038,6 +4043,7 @@ export function Workspace() {
         if (!fit) return null;
         return {
           series: name,
+          model: fit.model ?? 'polynomial',
           degree: fit.degree,
           equation: formatCurveFitEquation(fit),
           coefficients: fit.coefficients,
@@ -5763,7 +5769,25 @@ export function Workspace() {
               {/* PNG snapshot (checkpoint 93): the image with the digitization
                   drawn on it, not the extracted data. Sits with the data formats
                   because "Export" is where the user looks to save any output
-                  artifact, but its own handler (needs only an image, not axes). */}
+                  artifact, but its own handler (needs only an image, not axes).
+
+                  ⚑ SEPARATED from them deliberately (v1.5 audit): the note above
+                  says "these formats ... do not carry the figure image", and this
+                  button carries exactly that and nothing else. With no boundary
+                  it read as one more data format the note covered, so the two
+                  contradicted each other on one screen. The rule gets a visible
+                  edge, and the heading says which side this is. */}
+              <div
+                style={{
+                  borderTop: `1px solid ${theme.color.border}`,
+                  margin: '6px 0 2px',
+                  paddingTop: 6,
+                  fontSize: 11,
+                  color: theme.color.text.secondary,
+                }}
+              >
+                The figure itself, not the numbers
+              </div>
               <TopBarButton type="button" data-testid="export-format-png" onClick={() => void saveImage()} style={{ justifyContent: 'flex-start' }}>
                 PNG image (.png)
               </TopBarButton>

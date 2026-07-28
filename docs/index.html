@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlotTracer — turn any graph back into data</title>
-<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, polar, spider/radar, ternary, map, histogram, box-plot and error-bar plots. Export to CSV, Excel, JSON, LaTeX, MATLAB and Python.">
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, polar, spider/radar, ternary, map, histogram, box-plot and error-bar plots. Export to CSV, Excel, OpenDocument, JSON, LaTeX, MATLAB, Python and R.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer — turn any graph back into data">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
@@ -587,7 +587,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M5 17c4-2 7-9 15-11"/><g fill="currentColor" stroke="none"><circle cx="6.5" cy="16" r="1"/><circle cx="10" cy="12.5" r="1"/><circle cx="14" cy="9.6" r="1"/><circle cx="18" cy="7.6" r="1"/></g></svg>
         <h3>Curve fit &amp; geometry</h3>
-        <p>Fit a model through the points — equation, coefficients, R² — plus arc length, area and curvature. Fits export as their own block, never mixed into the record.</p>
+        <p>Polynomial, exponential, power, logarithmic, Gaussian or logistic — equation, coefficients, R² — plus arc length, area and curvature. A fit that did not settle says so, on screen and in the file. Fits export as their own block, never mixed into the record.</p>
       </div>
 
       <div class="feature">
@@ -615,9 +615,15 @@
       </div>
 
       <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7l2 2h7v12H4z"/><path d="M12 15V9"/><path d="M9.5 11.5 12 9l2.5 2.5"/></svg>
+        <h3>Opens other digitizers' projects</h3>
+        <p>One Open Project command reads WebPlotDigitizer, Engauge Digitizer and StarryDigitizer files — recognised by what is inside them, not by their extension. Anything it cannot read faithfully it refuses, and says why.</p>
+      </div>
+
+      <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
         <h3>Export everywhere</h3>
-        <p>CSV, TSV, JSON, Excel, LaTeX, MATLAB, Python and R — or straight to the clipboard, at the figure's real precision.</p>
+        <p>CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R — or straight to the clipboard, at the figure's real precision. Every format says up front what it cannot carry.</p>
       </div>
 
       <div class="feature">
@@ -686,7 +692,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v1.3.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v1.5.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
@@ -713,7 +719,9 @@
       <p class="attrib" style="margin-top:14px;">
         Distributed under the AGPL-3.0. PlotTracer started from the open-source
         WebPlotDigitizer by Ankit Rohatgi; some algorithms are clean-room
-        reimplementations of Engauge Digitizer ideas. Acknowledged with thanks.
+        reimplementations of Engauge Digitizer ideas. It also reads
+        StarryDigitizer projects (MATO Tomoya, MIT) — the format only.
+        Acknowledged with thanks.
       </p>
     </div>
     <div class="col" style="text-align:right;min-width:180px;">

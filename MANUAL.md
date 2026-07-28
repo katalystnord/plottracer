@@ -25,7 +25,7 @@ Pick the graph type from the dropdown in the top bar — **XY** (linear/log/date
 recorder**, **Histogram**, **Box plot**, or **Line (categorical X)**.
 
 Error bars are not a graph type — they are **rail tool 6**, captured on top of
-whichever series they belong to (§8).
+whichever series they belong to (§9).
 
 Open the **Calibration** card (top-center) and place the reference points it asks
 for — for XY that's two X points and two Y points.
@@ -148,7 +148,38 @@ The **ruler** tool (`7`) opens a Measure card: **distance, angle, area, slope** 
 in the chart's own units, or a scale you set from any known length on the image.
 Measurements are a separate collection from your series data.
 
-## 8. Export
+## 8. Analyse (optional)
+
+Open **Curve fit** from the tool rail to fit a model through a traced series.
+
+| Model | Form |
+| --- | --- |
+| Polynomial | `y = a₀ + a₁x + a₂x² + …` (choose the degree) |
+| Exponential | `y = a·e^(b·x)` |
+| Power | `y = a·x^b` |
+| Logarithmic | `y = a + b·ln(x)` |
+| Gaussian | `y = a·e^(−(x−b)²/2c²)` |
+| Logistic | `y = a / (1 + e^(−b(x−c)))` |
+
+The card reports the equation, its coefficients, R² and RMS, and draws the fitted
+curve over the figure. **Degree** applies to the polynomial alone and disappears
+for the others.
+
+Some models cannot take some data — a logarithmic fit needs every x and y above
+zero — and PlotTracer says which requirement is unmet rather than returning a
+number it cannot stand behind. Use **Restrict** to fit over a chosen x range.
+
+**A fit that did not settle says so.** The nonlinear models are solved
+iteratively, and a solver that runs out of iterations still returns *something*.
+When that happens the card says the curve is where the solver stopped rather than
+a result, and the exported `Curve fit` block carries `settled = no` in its own
+column, so the caveat survives the hand-off to whoever opens the file. A
+polynomial is solved directly and has nothing to converge, so it reads `n/a`.
+
+The fit is always a **separate block** from the record — the traced points are
+never overwritten by the model drawn through them.
+
+## 9. Export
 
 **Export** (top bar) → **CSV, TSV, JSON, OpenDocument (ODS), Excel (XLSX), LaTeX,
 MATLAB, Python, R**,
@@ -158,6 +189,12 @@ are rounded to the figure's real resolution — never padded with false precisio
 never collapsed to zero — with a full-precision option when you want every digit.
 Fitted curves, geometry and measurements export as their own blocks, kept separate
 from the recorded points.
+
+**The format menu says what each format will not carry, before you pick one.** No
+data format carries the figure image, the axis calibration or the source document
+— save a project to keep those — and individual formats name their own limits
+(MATLAB becomes a cell array once any cell holds text; the flat text formats put
+every block in one stream).
 
 **Guide-point traces carry a `role` column.** If a series was traced with **Guide
 points**, its export gains a `role` telling you where each number came from:

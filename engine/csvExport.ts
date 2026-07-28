@@ -212,6 +212,11 @@ export interface SeriesForCSV {
  * a consumer can plot it without re-evaluating the polynomial. */
 export interface CurveFitExport {
   series: string;
+  /** Which shape produced the equation — polynomial, exponential, power,
+   * logarithmic, gaussian, logistic. Absent on a fit stored before nonlinear
+   * models existed, which means polynomial. A plain string rather than the
+   * panel's union, to keep this module free of a dependency on it. */
+  model?: string;
   degree: number;
   equation: string;
   coefficients: number[];
@@ -324,7 +329,8 @@ export function buildSeriesJSON(
       // fitted curve; the equation/coefficients are the model it came from.
       if (s.fit) {
         entry.fit = {
-          degree: s.fit.degree,
+          model: s.fit.model ?? 'polynomial',
+          ...(s.fit.model && s.fit.model !== 'polynomial' ? {} : { degree: s.fit.degree }),
           equation: s.fit.equation,
           coefficients: s.fit.coefficients,
           rSquared: s.fit.rSquared,
@@ -367,7 +373,10 @@ export function curveFitSummarySection(fits: readonly CurveFitExport[]): TableSe
     // `settled` is APPENDED: every curve-fit export written since v0.8 carries
     // this header, so a name-based reader keeps working and an index-based one
     // finds every column it knew about where it left it.
-    header: ['series', 'equation', 'coefficients', 'R2', 'RMS', 'n', 'degree', 'settled'],
+    // `model` and `settled` are both APPENDED, after the seven columns every
+    // curve-fit export has carried since v0.8, so a reader finds the old ones
+    // where it left them.
+    header: ['series', 'equation', 'coefficients', 'R2', 'RMS', 'n', 'degree', 'model', 'settled'],
     rows: fits.map((f) => [
       f.series,
       f.equation,
@@ -375,7 +384,12 @@ export function curveFitSummarySection(fits: readonly CurveFitExport[]): TableSe
       f.rSquared,
       f.rms,
       f.n,
-      f.degree,
+      // ⚑ Degree belongs to the polynomial alone. The UI merely UNMOUNTS the
+      // Degree control for the other models, so the stored number is whatever the
+      // spinner last held -- exporting it beside a Gaussian states a fact about a
+      // control, not about the fit.
+      f.model && f.model !== 'polynomial' ? '' : f.degree,
+      f.model ?? 'polynomial',
       // Three states, spelled out rather than left blank: a blank cell would be
       // read as "no" by anyone scanning the column.
       f.converged === undefined ? 'n/a' : f.converged ? 'yes' : 'no',

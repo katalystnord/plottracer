@@ -162,6 +162,12 @@ Where the licence allows redistribution, those files are committed here unmodifi
 
 Several algorithms (flood-fill curve tracing, grid-line removal, curve fitting, geometry/statistics) are **clean-room** reimplementations of ideas from **Engauge Digitizer** (Mark Mitchell, Jason Nicholson; GPL-2.0) — written from the algorithm descriptions, not translated from the C++ source.
 
+PlotTracer also reads **StarryDigitizer** projects (MATO Tomoya; MIT). Its licence permits literal reuse with attribution, but none is taken: only the file FORMAT is read, and the reader is our own code.
+
+> StarryDigitizer — Copyright (c) 2021 MATO Tomoya
+> Licensed under the MIT License
+> <https://github.com/asaru28/StarryDigitizer>
+
 The icon set is derived from **Ketcher** by EPAM Systems (Apache-2.0).
 
 ---

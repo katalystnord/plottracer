@@ -174,7 +174,7 @@ describe('curve fit export (v0.8)', () => {
     const csv = renderTable([curveFitSummarySection([fit])], 'csv');
     // `settled` joined the header in v1.5; this fixture is a polynomial, which
     // has nothing to converge, hence n/a.
-    expect(csv).toBe('Curve fit\nseries,equation,coefficients,R2,RMS,n,degree,settled\nSeries 1,y = 2x + 1,1 2,0.997,0.4,8,1,n/a');
+    expect(csv).toBe('Curve fit\nseries,equation,coefficients,R2,RMS,n,degree,model,settled\nSeries 1,y = 2x + 1,1 2,0.997,0.4,8,1,polynomial,n/a');
   });
 
   it('the fitted-curve section is its own titled block of sampled points', () => {
@@ -208,6 +208,34 @@ describe('curve fit export (v0.8)', () => {
   it('marks the sampled-curve block too, because that block can be taken on its own', () => {
     const csv = renderTable([fittedCurveSection(unsettled, ['X', 'Y'])], 'csv');
     expect(csv.split('\n')[0]).toBe('Fitted curve — Series 1 (did not settle)');
+  });
+
+  // ⚑ v1.5 audit: `degree` rode into every export including the five nonlinear
+  // models, which have no degree -- and because the UI merely UNMOUNTS the Degree
+  // control when the model changes, the number exported was the leftover
+  // polynomial spinner value. Meanwhile the one thing that identifies the fit --
+  // WHICH model produced the equation -- had no column at all, recoverable only
+  // by parsing the equation string.
+  it('names the model that produced the equation', () => {
+    const csv = renderTable([curveFitSummarySection([{ ...fit, model: 'gaussian' }])], 'csv');
+    expect(csv.split('\n')[1]).toContain('model');
+    expect(csv.split('\n')[2]).toContain('gaussian');
+  });
+
+  it('leaves degree BLANK for a model that has no degree, never a stale number', () => {
+    // The exact defect: a degree-7 polynomial, then switch to Gaussian and refit.
+    const csv = renderTable([curveFitSummarySection([{ ...fit, model: 'gaussian', degree: 7 }])], 'csv');
+    // The degree FIELD, not the row: R2 = 0.997 also contains a 7.
+    const header = csv.split('\n')[1]!.split(',');
+    const row = csv.split('\n')[2]!.split(',');
+    expect(row[header.indexOf('degree')]).toBe('');
+  });
+
+  it('still reports the degree for a polynomial, where it is the model', () => {
+    const csv = renderTable([curveFitSummarySection([{ ...fit, model: 'polynomial', degree: 3 }])], 'csv');
+    const header = csv.split('\n')[1]!.split(',');
+    const row = csv.split('\n')[2]!.split(',');
+    expect(row[header.indexOf('degree')]).toBe('3');
   });
 
   it('carries the flag into JSON, and omits it where it would mean nothing', () => {

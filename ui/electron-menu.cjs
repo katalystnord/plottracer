@@ -123,6 +123,7 @@ function buildMenu(mainWindow) {
                 'Based on WebPlotDigitizer by Ankit Rohatgi (AGPL-3.0)',
                 'Some algorithms are clean-room reimplementations of',
                 'Engauge Digitizer ideas (Mark Mitchell, Jason Nicholson; GPL-2.0).',
+                'Reads StarryDigitizer projects (MATO Tomoya; MIT) — format only.',
                 'Icon set derived from Ketcher by EPAM Systems (Apache-2.0).',
                 '',
                 'Developed by Katalyst Nord AB, Stockholm',

@@ -239,3 +239,49 @@ describe('importStarryProject', () => {
     expect(y).toBeCloseTo(10, 6);
   });
 });
+
+describe('StarryDigitizer: an absent considerGraphTilt (v1.5 gate)', () => {
+  // ⚑ `considerGraphTilt` was read as `=== false`, so an ABSENT key meant "apply
+  // rotation correction" -- the opposite of StarryDigitizer's own default, which
+  // is `considerGraphTilt = false` (their src/domain/models/axisSet/axisSet.ts:20,
+  // MIT, read for the FORMAT only). Absent must therefore mean NO correction.
+  //
+  // Every other Starry fixture here is axis-aligned, where the flag provably
+  // cannot change a single value -- which is why inverting it left them all green.
+  // These use a TILTED calibration, where it does.
+  const tilted = (over: Record<string, unknown>) => ({
+    id: 1,
+    name: 'Tilted',
+    // The y axis leans: y2 is offset in x as well, so the two axes are not
+    // perpendicular and the correction has something to do.
+    x1: { name: 'x1', value: 0, coord: { xPx: 100, yPx: 500 } },
+    x2: { name: 'x2', value: 10, coord: { xPx: 600, yPx: 480 } },
+    y1: { name: 'y1', value: 0, coord: { xPx: 100, yPx: 500 } },
+    y2: { name: 'y2', value: 1, coord: { xPx: 140, yPx: 100 } },
+    xIsLogScale: false,
+    yIsLogScale: false,
+    ...over,
+  });
+
+  const readAt = (axisSet: Record<string, unknown>) => {
+    const r = importStarryProject(makeStarry({ axisSets: [axisSet] }));
+    if ('error' in r) throw new Error(r.error);
+    const px = r.datasets[0]!.getPixel(0);
+    return (r.axes as { pixelToData(x: number, y: number): number[] }).pixelToData(px.x, px.y);
+  };
+
+  it('reads an absent flag exactly as an explicit false, which is their default', () => {
+    const absent = readAt(tilted({}));
+    const explicitFalse = readAt(tilted({ considerGraphTilt: false }));
+    expect(absent[0]).toBeCloseTo(explicitFalse[0]!, 9);
+    expect(absent[1]).toBeCloseTo(explicitFalse[1]!, 9);
+  });
+
+  it('and NOT as an explicit true — on a tilted figure the two really differ', () => {
+    // Guards the test above from passing vacuously: if correction made no
+    // difference here, the first assertion would prove nothing.
+    const absent = readAt(tilted({}));
+    const explicitTrue = readAt(tilted({ considerGraphTilt: true }));
+    expect(Math.abs(absent[1]! - explicitTrue[1]!)).toBeGreaterThan(1e-6);
+  });
+});
