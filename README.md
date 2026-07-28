@@ -35,7 +35,7 @@ No account required, no data sent to any server, and no dependency on any compan
 - **Spider charts trace along their own axes.** A value on a spider is where the series crosses one particular spoke, so auto-extract walks each calibrated ray and records the crossing — one reading per axis, in that axis's own row. A ray the colour crosses more than once records *nothing* and says which axis it gave up on, so the refusals become the worklist rather than a plausible wrong number.
 - Grid-line removal to clean a busy plot first.
 
-**Analysis** — curve fitting (polynomial, degree 1–9, optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
+**Analysis** — curve fitting (polynomial degree 1–9, plus exponential, power-law, logarithmic, Gaussian and logistic models solved by Levenberg–Marquardt; optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
 
 **Measurements** — distance, angle, area, slope, and a px→real-unit "Set scale" reference, kept as a separate collection from the series data.
 
@@ -45,7 +45,7 @@ No account required, no data sent to any server, and no dependency on any compan
 
 **Export** — CSV, TSV, JSON, **OpenDocument (`.ods`)**, Excel (`.xlsx`), LaTeX, MATLAB, Python, R (`data.frame`), plus a WYSIWYG PNG of the digitised figure. Any text format can be saved to a file or copied straight to the clipboard. Exported numbers report at a sensible precision (never finer than the pixel grid), and fitted curves export as their own labelled blocks. Where a series has them, exports also carry a **role** column — `anchor` for a point you judged by eye, `interpolated` for one the app filled in between — so the provenance the project file keeps survives the hand-off to someone else.
 
-**Durable record** — undo/redo across everything, project save/load as a self-contained `.zip` (optionally bundling the source PDF/TIFF), and import of projects from other digitizers (currently `.tar` archives; more formats are v1.5's work-in-progress importer).
+**Durable record** — undo/redo across everything, project save/load as a self-contained `.zip` (optionally bundling the source PDF/TIFF), and **one-way import of projects written by other digitizers** — the format is recognised from the file's own bytes, never its name, and more formats are added as entries in one registry. Import only: PlotTracer does not write other tools' formats, and could not carry a third of what it records into them.
 
 **Fully offline** — no account, no telemetry, no cloud calls.
 
@@ -156,7 +156,9 @@ PlotTracer's calibration engine is a TypeScript port of **WebPlotDigitizer** by 
 > Licensed under the GNU Affero General Public License v3.0
 > <https://github.com/automeris-io/WebPlotDigitizer>
 
-The import filters are tested against **other tools' own project files, copied here unmodified** — see [`engine/__tests__/fixtures/wpd/PROVENANCE.md`](engine/__tests__/fixtures/wpd/PROVENANCE.md) for the files, their source and their licence. A fixture we authored ourselves would only prove that we agree with ourselves.
+The import filters are verified against **other tools' own project files** — a fixture we authored ourselves would only prove that we agree with ourselves.
+
+Where the licence allows redistribution, those files are committed here unmodified; see [`engine/__tests__/fixtures/wpd/PROVENANCE.md`](engine/__tests__/fixtures/wpd/PROVENANCE.md) for their source and terms. Where it does not, they are not: Engauge Digitizer's test corpus is GPL-2.0, which is incompatible with this project's AGPL-3.0, so none of it lives in this tree. Its reader was instead verified against all 44 of those files **locally**, and the fixtures committed for it are ones we wrote from the format itself.
 
 Several algorithms (flood-fill curve tracing, grid-line removal, curve fitting, geometry/statistics) are **clean-room** reimplementations of ideas from **Engauge Digitizer** (Mark Mitchell, Jason Nicholson; GPL-2.0) — written from the algorithm descriptions, not translated from the C++ source.
 

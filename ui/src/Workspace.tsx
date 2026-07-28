@@ -181,9 +181,12 @@ import {
   getCurveFitState,
   setCurveFitState as saveCurveFitState,
   sampleCurveFitLine,
+  formatCurveFitEquation,
+  type CurveFitModelId,
 } from '../../engine/curveFitPanel.js';
 import { runGeometry, getGeometryState, setGeometryState } from '../../engine/geometryPanel.js';
-import { formatPolynomial, CURVE_FIT_MAX_DEGREE } from '../../algorithms/curveFit.js';
+import { CURVE_FIT_MAX_DEGREE } from '../../algorithms/curveFit.js';
+import { FIT_MODELS } from '../../algorithms/nonlinearFit.js';
 import { pointInPolygon } from '../../algorithms/geometry.js';
 import { removeGridLinesOp, hexToRGB } from '../../algorithms/gridRemoval.js';
 import type { AnyAxes } from '../../core/plotData.js';
@@ -1149,6 +1152,7 @@ export function Workspace() {
   const [segmentFillThreshold, setSegmentFillThreshold] = useState(40);
   const [segmentFillError, setSegmentFillError] = useState<string | null>(null);
   const [curveFitDegree, setCurveFitDegree] = useState(1);
+  const [curveFitModel, setCurveFitModel] = useState<CurveFitModelId>('polynomial');
   const [curveFitRestrict, setCurveFitRestrict] = useState(false);
   const [curveFitXMinInput, setCurveFitXMinInput] = useState('');
   const [curveFitXMaxInput, setCurveFitXMaxInput] = useState('');
@@ -1733,6 +1737,7 @@ export function Workspace() {
     setSelectedPointIndices([]); // ...and the marquee selection: its indices refer to a point set that may no longer exist
     const cf = getCurveFitState(s.getDataset());
     setCurveFitDegree(cf ? cf.degree : 1);
+    setCurveFitModel(cf?.model ?? 'polynomial');
     setCurveFitRestrict(cf ? cf.restrict : false);
     setCurveFitXMinInput(cf && cf.xMin != null ? String(cf.xMin) : '');
     setCurveFitXMaxInput(cf && cf.xMax != null ? String(cf.xMax) : '');
@@ -2233,6 +2238,7 @@ export function Workspace() {
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
+      setCurveFitModel('polynomial');
       setCurveFitRestrict(false);
       setCurveFitXMinInput('');
       setCurveFitXMaxInput('');
@@ -3507,6 +3513,7 @@ export function Workspace() {
       // datasets[0]: loadCalibrated always makes the first loaded dataset active.
       const loadedCurveFit = getCurveFitState(fig.datasets[0]!);
       setCurveFitDegree(loadedCurveFit?.degree ?? 1);
+      setCurveFitModel(loadedCurveFit?.model ?? 'polynomial');
       setCurveFitRestrict(loadedCurveFit?.restrict ?? false);
       setCurveFitXMinInput(loadedCurveFit && loadedCurveFit.xMin != null ? String(loadedCurveFit.xMin) : '');
       setCurveFitXMaxInput(loadedCurveFit && loadedCurveFit.xMax != null ? String(loadedCurveFit.xMax) : '');
@@ -3541,6 +3548,7 @@ export function Workspace() {
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
+      setCurveFitModel('polynomial');
       setCurveFitRestrict(false);
       setCurveFitXMinInput('');
       setCurveFitXMaxInput('');
@@ -4060,7 +4068,7 @@ export function Workspace() {
         return {
           series: name,
           degree: fit.degree,
-          equation: formatPolynomial(fit.coefficients),
+          equation: formatCurveFitEquation(fit),
           coefficients: fit.coefficients,
           rSquared: fit.rSquared,
           rms: fit.rms,
@@ -4321,6 +4329,7 @@ export function Workspace() {
     const xMin = curveFitXMinInput.trim() === '' ? undefined : Number(curveFitXMinInput);
     const xMax = curveFitXMaxInput.trim() === '' ? undefined : Number(curveFitXMaxInput);
     const result = runCurveFit(session.getDataset(), axes as unknown as AnyAxes, {
+      model: curveFitModel,
       degree: curveFitDegree,
       restrict: curveFitRestrict,
       xMin,
@@ -4333,7 +4342,7 @@ export function Workspace() {
     setCurveFitError(null);
     saveCurveFitState(session.getDataset(), result.curveFit);
     commit();
-  }, [session, axes, curveFitDegree, curveFitRestrict, curveFitXMinInput, curveFitXMaxInput, commit]);
+  }, [session, axes, curveFitModel, curveFitDegree, curveFitRestrict, curveFitXMinInput, curveFitXMaxInput, commit]);
 
   const handleClearCurveFit = useCallback(() => {
     saveCurveFitState(session.getDataset(), null);
@@ -5507,20 +5516,47 @@ export function Workspace() {
             x-range inputs drop in below only while Restrict is on; the RESULT
             (equation, R², RMS, n) lives in the output panel's Curve fit section. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* The SHAPE comes first, because it decides whether Degree means
+              anything. Each option carries its own form (y = a·e^(b·x)) so the
+              list can be READ rather than recognised — but the closed control is
+              width-capped, because a <select> sizes itself to its widest option
+              and an un-capped one made this fold-out wide enough to cover the
+              figure it sits over. The chosen form is repeated below the row, so
+              nothing is hidden by that cap. */}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            Degree
+            Model
             <select
-              data-testid="curve-fit-degree"
-              value={curveFitDegree}
-              onChange={(e) => setCurveFitDegree(Number(e.target.value))}
+              data-testid="curve-fit-model"
+              value={curveFitModel}
+              onChange={(e) => setCurveFitModel(e.target.value as CurveFitModelId)}
+              style={{ maxWidth: 120 }}
             >
-              {Array.from({ length: CURVE_FIT_MAX_DEGREE }, (_, i) => i + 1).map((d) => (
-                <option key={d} value={d}>
-                  {d}
+              <option value="polynomial">Polynomial</option>
+              {FIT_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label} — {m.form}
                 </option>
               ))}
             </select>
           </label>
+          {/* Degree belongs to the polynomial alone. Showing it greyed for the
+              others would imply it still applies to them. */}
+          {curveFitModel === 'polynomial' && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Degree
+              <select
+                data-testid="curve-fit-degree"
+                value={curveFitDegree}
+                onChange={(e) => setCurveFitDegree(Number(e.target.value))}
+              >
+                {Array.from({ length: CURVE_FIT_MAX_DEGREE }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <input
               type="checkbox"
@@ -5537,6 +5573,17 @@ export function Workspace() {
             Clear
           </button>
         </div>
+        {/* The chosen model's form, spelled out. The select above is width-capped
+            so the card cannot cover the figure, and this is what makes that cap
+            cost nothing: the form is on screen either way. */}
+        {curveFitModel !== 'polynomial' && (
+          <div
+            data-testid="curve-fit-model-form"
+            style={{ marginTop: 4, fontSize: theme.font.size.small, color: theme.color.text.secondary }}
+          >
+            {FIT_MODELS.find((m) => m.id === curveFitModel)?.form}
+          </div>
+        )}
         {curveFitRestrict && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
             X min
@@ -7970,10 +8017,20 @@ export function Workspace() {
           <SidebarHeading>Curve fit</SidebarHeading>
           <div data-testid="curve-fit-output" style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: theme.font.size.small }}>
             <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
-            <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatPolynomial(curveFitState.coefficients)}</code>
+            <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatCurveFitEquation(curveFitState)}</code>
             <span style={{ fontVariantNumeric: 'tabular-nums', color: theme.color.text.secondary }}>
               R² = {curveFitState.rSquared.toFixed(5)} · RMS = {curveFitState.rms.toPrecision(5)} · n = {curveFitState.n}
             </span>
+            {/* ⚑ A nonlinear solver can run out of iterations and still leave a
+                drawn curve behind, and a drawn curve is read as an answer. When
+                it did not settle, SAY so beside the numbers rather than let the
+                line speak for itself. Absent for a polynomial, which is solved
+                directly and has nothing to converge. */}
+            {curveFitState.converged === false && (
+              <span data-testid="curve-fit-not-converged" style={{ color: theme.color.error }}>
+                This fit did not settle — the curve is where the solver stopped, not a result. Try another model or a restricted x-range.
+              </span>
+            )}
           </div>
         </SidebarSection>
       )}

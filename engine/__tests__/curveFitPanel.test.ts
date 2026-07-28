@@ -131,3 +131,111 @@ describe('sampleCurveFitLine', () => {
     expect(pts[1]!.y).toBeCloseTo(3, 10);
   });
 });
+
+/**
+ * Nonlinear models (v1.5). The solver itself is proved in
+ * algorithms/__tests__/nonlinearFit.test.ts by recovering known parameters from
+ * analytic data; these cover the PLUMBING — that a model reaches the fit, comes
+ * back on the stored state, survives save/load, and that fits written before
+ * models existed still read as polynomials.
+ */
+describe('curve fit models', () => {
+  it('defaults to a polynomial when no model is asked for, exactly as before', () => {
+    const session = buildCalibratedSessionWithLine();
+    const r = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });
+    if ('error' in r) throw new Error(r.error);
+    expect(r.curveFit.model).toBe('polynomial');
+    // y = 2x + 1 -> [1, 2]
+    expect(r.curveFit.coefficients[0]).toBeCloseTo(1, 6);
+    expect(r.curveFit.coefficients[1]).toBeCloseTo(2, 6);
+    // Nothing to converge when it is solved directly.
+    expect(r.curveFit.converged).toBeUndefined();
+  });
+
+  it('fits a named model and records which one, plus whether it settled', () => {
+    const session = buildCalibratedSessionWithLine();
+    const r = runCurveFit(session.getDataset(), session.getAxes()!, {
+      model: 'exponential',
+      degree: 1,
+      restrict: false,
+    });
+    if ('error' in r) throw new Error(r.error);
+    expect(r.curveFit.model).toBe('exponential');
+    expect(r.curveFit.converged).toBe(true);
+    expect(r.curveFit.coefficients).toHaveLength(2);
+  });
+
+  it('passes the model’s own refusal through rather than rewording it', () => {
+    const session = buildCalibratedSessionWithLine();
+    // The line passes through y = 1..7, all positive, so use a model whose
+    // requirement the data genuinely fails: x reaches 0, so ln(x) cannot.
+    const r = runCurveFit(session.getDataset(), session.getAxes()!, {
+      model: 'logarithmic',
+      degree: 1,
+      restrict: false,
+    });
+    expect('error' in r && r.error).toMatch(/greater than zero/i);
+  });
+
+  it('⚑ a fit stored WITHOUT a model still reads as a polynomial', () => {
+    // Projects saved before nonlinear fitting existed carry no `model` key, and
+    // those files really do exist -- unlike some past compatibility questions,
+    // this one is about an artifact that can actually be on disk.
+    const session = buildCalibratedSessionWithLine();
+    const legacy = {
+      degree: 1,
+      restrict: false,
+      xMin: null,
+      xMax: null,
+      coefficients: [1, 2],
+      rSquared: 1,
+      rms: 0,
+      n: 4,
+      fitXMin: 0,
+      fitXMax: 3,
+    } as CurveFitState;
+    setCurveFitState(session.getDataset(), legacy);
+    const back = getCurveFitState(session.getDataset())!;
+    expect(back.model).toBeUndefined();
+    // Sampled as a polynomial: y = 2x + 1.
+    const line = sampleCurveFitLine(back, 3);
+    expect(line[0]!.y).toBeCloseTo(1, 6);
+    expect(line[3]!.y).toBeCloseTo(7, 6);
+  });
+
+  it('samples a nonlinear fit through its own model, not as a polynomial', () => {
+    const fit = {
+      model: 'exponential',
+      degree: 1,
+      restrict: false,
+      xMin: null,
+      xMax: null,
+      coefficients: [2, 0.5], // y = 2·e^(0.5x)
+      rSquared: 1,
+      rms: 0,
+      n: 4,
+      fitXMin: 0,
+      fitXMax: 2,
+      converged: true,
+    } as CurveFitState;
+    const line = sampleCurveFitLine(fit, 2);
+    expect(line[0]!.y).toBeCloseTo(2, 6); // x=0
+    expect(line[2]!.y).toBeCloseTo(2 * Math.exp(1), 6); // x=2
+    // A polynomial reading of [2, 0.5] would give 2 + 0.5x = 3 at x=2.
+    expect(line[2]!.y).not.toBeCloseTo(3, 3);
+  });
+
+  it('a model round-trips through the dataset metadata that save/load uses', () => {
+    const session = buildCalibratedSessionWithLine();
+    const r = runCurveFit(session.getDataset(), session.getAxes()!, {
+      model: 'exponential',
+      degree: 1,
+      restrict: false,
+    });
+    if ('error' in r) throw new Error(r.error);
+    setCurveFitState(session.getDataset(), r.curveFit);
+    const back = getCurveFitState(session.getDataset())!;
+    expect(back.model).toBe('exponential');
+    expect(back.converged).toBe(true);
+  });
+});

@@ -2789,6 +2789,54 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     expect(await page.getByTestId('curve-fit-output').count()).toBe(0);
   });
 
+  it('offers nonlinear models, and Degree only where degree means something (v1.5)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await addLinePoints();
+    await page.getByTestId('curve-fit-trigger').click();
+
+    // Polynomial is the default and keeps its Degree control.
+    expect(await page.getByTestId('curve-fit-model').inputValue()).toBe('polynomial');
+    expect(await page.getByTestId('curve-fit-degree').count()).toBe(1);
+
+    // Each model names its own form in the option, so the choice is readable
+    // without prior knowledge -- not a bare word to recognise.
+    const options = await page.getByTestId('curve-fit-model').locator('option').allTextContents();
+    expect(options.join(' ')).toMatch(/Exponential.*y = a·e\^\(b·x\)/);
+    expect(options.join(' ')).toMatch(/Gaussian|Logistic/);
+
+    // Choosing a shape retires Degree, which belongs to the polynomial alone.
+    await page.getByTestId('curve-fit-model').selectOption('exponential');
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('curve-fit-degree').count()).toBe(0);
+    // The select is width-capped so the card cannot cover the figure, so the
+    // chosen form must still be spelled out on the card itself.
+    expect(await textOf('curve-fit-model-form')).toContain('y = a·e^(b·x)');
+
+    await page.getByTestId('curve-fit-run').click();
+    await page.waitForTimeout(200);
+    const results = await textOf('curve-fit-output');
+    // The straight line y = 2x+1 is not an exponential, so this is a real fit
+    // with real residuals -- what matters is that it ran and reported itself.
+    expect(results).toMatch(/y = .*e\^/);
+    expect(results).toContain('n = 4');
+    expect(await page.getByTestId('curve-fit-error').count()).toBe(0);
+  });
+
+  it('refuses a model the data cannot support, naming what it needs (v1.5)', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await addLinePoints(); // x runs from 0, so ln(x) cannot be taken
+    await page.getByTestId('curve-fit-trigger').click();
+    await page.getByTestId('curve-fit-model').selectOption('logarithmic');
+    await page.getByTestId('curve-fit-run').click();
+    await page.waitForTimeout(200);
+    // A refusal that names the requirement, not a generic failure.
+    const err = await textOf('curve-fit-error');
+    expect(err).toMatch(/greater than zero/i);
+    expect(await page.getByTestId('curve-fit-output').count()).toBe(0);
+  });
+
   it('clicking the fitted curve on canvas re-opens Curve Fit to edit it (v1.1)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

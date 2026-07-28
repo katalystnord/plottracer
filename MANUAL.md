@@ -171,9 +171,17 @@ ordinary trace exports exactly as before.
 series, measurements, and the original source PDF — so the whole extraction reopens
 exactly, and any number traces back to its figure.
 
-**Open Project** also reads other digitizers' project archives (`.tar`). There is no
-separate command for them: the format is recognised from the file's own bytes, never
-its name, so you open a project the same way whatever wrote it.
+**Open Project** also reads projects written by other digitizers — currently
+WebPlotDigitizer `.tar` archives, Engauge Digitizer `.dig` files, and StarryDigitizer
+`.zip` projects. There is no separate command for any of them: the format is
+recognised from the file's own bytes, never its name, so you open a project the same
+way whatever wrote it, and a file no filter recognises is refused with the list of
+the ones that do work.
+
+This is a **one-way** road. PlotTracer reads those formats but does not write them —
+a third of what it records (spider spokes and their per-axis scales, point roles,
+box-plot tuples, measurement blocks) has nowhere to go in any of them, so offering
+an export back would promise a round trip it could not honour.
 
 ---
 

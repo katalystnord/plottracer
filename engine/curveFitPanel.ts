@@ -29,22 +29,44 @@
 
 import type { Dataset } from '../core/dataset.js';
 import type { AnyAxes } from '../core/plotData.js';
-import { fitPolynomial, computeFitStats, getFitPoints, evaluatePolynomial, type Point2D } from '../algorithms/curveFit.js';
+import { fitPolynomial, computeFitStats, getFitPoints, evaluatePolynomial, formatPolynomial, type Point2D } from '../algorithms/curveFit.js';
+import { findFitModel, fitModel, type FitModelId } from '../algorithms/nonlinearFit.js';
+
+/** Which shape was fitted. `'polynomial'` is the original and stays the
+ * DEFAULT — an absent `model` on a stored fit means polynomial, so every
+ * project saved before nonlinear fitting existed keeps reading correctly.
+ * Unlike some past compatibility questions, those files genuinely do exist. */
+export type CurveFitModelId = 'polynomial' | FitModelId;
 
 export interface CurveFitState {
+  /** Absent on fits saved before nonlinear models existed = polynomial. */
+  model?: CurveFitModelId;
+  /** Only meaningful for a polynomial; kept for every fit so the stored shape
+   * does not change between models. */
   degree: number;
   restrict: boolean;
   xMin: number | null;
   xMax: number | null;
+  /** The fitted parameters — polynomial coefficients, or the model's own
+   * parameters in the order it names them. */
   coefficients: number[];
   rSquared: number;
   rms: number;
   n: number;
   fitXMin: number;
   fitXMax: number;
+  /**
+   * Did the solver settle? Absent for a polynomial, which is solved directly and
+   * has nothing to converge. ⚑ Recorded because a nonlinear fit that ran out of
+   * iterations must never be presented as a result — a drawn curve is read as an
+   * answer whether or not it earned it.
+   */
+  converged?: boolean;
 }
 
 export interface RunCurveFitOptions {
+  /** Defaults to a polynomial, which is what every existing caller means. */
+  model?: CurveFitModelId;
   degree: number;
   restrict: boolean;
   xMin?: number;
@@ -64,7 +86,9 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
     points = points.filter((p) => p.x >= xMin && p.x <= xMax);
   }
 
-  if (points.length < options.degree + 1) {
+  const modelId: CurveFitModelId = options.model ?? 'polynomial';
+
+  if (modelId === 'polynomial' && points.length < options.degree + 1) {
     return {
       error: `Not enough points for a degree ${options.degree} fit — need at least ${options.degree + 1}, have ${points.length}.`,
     };
@@ -73,6 +97,35 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
   const xs = points.map((p) => p.x);
   const fitXMin = Math.min(...xs);
   const fitXMax = Math.max(...xs);
+  const common = {
+    restrict: options.restrict,
+    xMin: options.restrict ? options.xMin! : null,
+    xMax: options.restrict ? options.xMax! : null,
+    n: points.length,
+    fitXMin,
+    fitXMax,
+  };
+
+  // A named shape (exponential, power, logarithmic, Gaussian, logistic), solved
+  // by Levenberg-Marquardt. Its own refusals already name what the model needs,
+  // so they are passed through rather than reworded here.
+  if (modelId !== 'polynomial') {
+    const model = findFitModel(modelId);
+    if (!model) return { error: `Unknown curve fit model: ${modelId}.` };
+    const outcome = fitModel(model, points);
+    if ('error' in outcome) return outcome;
+    return {
+      curveFit: {
+        ...common,
+        model: modelId,
+        degree: options.degree,
+        coefficients: outcome.params,
+        rSquared: outcome.rSquared,
+        rms: outcome.rms,
+        converged: outcome.converged,
+      },
+    };
+  }
 
   let coefficients: number[];
   try {
@@ -84,18 +137,32 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
 
   return {
     curveFit: {
+      ...common,
+      model: 'polynomial',
       degree: options.degree,
-      restrict: options.restrict,
-      xMin: options.restrict ? options.xMin! : null,
-      xMax: options.restrict ? options.xMax! : null,
       coefficients,
       rSquared: stats.rSquared,
       rms: stats.rms,
-      n: points.length,
-      fitXMin,
-      fitXMax,
     },
   };
+}
+
+/** Evaluate whatever shape this fit is, at one x. The ONE place that knows a
+ * fit might not be a polynomial, so no caller has to branch on the model. */
+export function evaluateCurveFit(curveFit: CurveFitState, x: number): number {
+  const id = curveFit.model ?? 'polynomial';
+  if (id === 'polynomial') return evaluatePolynomial(curveFit.coefficients, x);
+  const model = findFitModel(id);
+  return model ? model.evaluate(curveFit.coefficients, x) : NaN;
+}
+
+/** The fitted equation, written out. Same reasoning as evaluateCurveFit: the
+ * UI and the exporters ask for it rather than knowing how each model reads. */
+export function formatCurveFitEquation(curveFit: CurveFitState): string {
+  const id = curveFit.model ?? 'polynomial';
+  if (id === 'polynomial') return formatPolynomial(curveFit.coefficients);
+  const model = findFitModel(id);
+  return model ? model.formatEquation(curveFit.coefficients) : '';
 }
 
 const CURVE_FIT_METADATA_KEY = 'curveFit';
@@ -122,7 +189,7 @@ export function sampleCurveFitLine(curveFit: CurveFitState, samples = 100): Poin
   const pts: Point2D[] = [];
   for (let i = 0; i <= samples; i++) {
     const x = curveFit.fitXMin + (span * i) / samples;
-    pts.push({ x, y: evaluatePolynomial(curveFit.coefficients, x) });
+    pts.push({ x, y: evaluateCurveFit(curveFit, x) });
   }
   return pts;
 }
