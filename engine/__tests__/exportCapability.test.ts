@@ -4,7 +4,6 @@ import {
   formatLimitations,
   formatLimitationNote,
   exportOmissionNote,
-  keepsSectionsApart,
   type ExportContent,
   type ExportTarget,
 } from '../exportCapability.js';
@@ -69,9 +68,7 @@ describe('formatLimitations', () => {
     const many = { ...plain, sectionCount: 3 };
     for (const t of ['xlsx', 'ods', 'json'] as ExportTarget[]) {
       expect(formatLimitations(t, many)).toEqual([]);
-      expect(keepsSectionsApart(t)).toBe(true);
     }
-    expect(keepsSectionsApart('csv')).toBe(false);
   });
 
   it('says nothing about a single block, because there is nothing to separate', () => {

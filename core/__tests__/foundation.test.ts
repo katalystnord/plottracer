@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mat, taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts, cspline, csplineInterp } from '../mathFunctions.js';
+import { mat, taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts } from '../mathFunctions.js';
 import { Color } from '../color.js';
 import { Calibration } from '../calibration.js';
 import { InputParser } from '../inputParser.js';
@@ -30,17 +30,6 @@ describe('mathFunctions', () => {
   it('getCircleFrom3Pts finds the circumscribed circle of a right triangle', () => {
     const c = getCircleFrom3Pts([[0, 0], [4, 0], [0, 3]]);
     expect(c.radius).toBeCloseTo(2.5, 6);
-  });
-
-  it('cspline returns null for fewer than 3 points', () => {
-    expect(cspline([0, 1], [0, 1])).toBeNull();
-  });
-
-  it('cspline_interp reproduces knot values exactly', () => {
-    const cs = cspline([0, 1, 2, 3], [0, 1, 4, 9]);
-    expect(cs).not.toBeNull();
-    expect(csplineInterp(cs!, 1)).toBeCloseTo(1, 6);
-    expect(csplineInterp(cs!, 2)).toBeCloseTo(4, 6);
   });
 });
 

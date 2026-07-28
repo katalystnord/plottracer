@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFlatDataCSV, buildTupleDataCSV, buildMeasurementsCSV, buildAllSeriesCSV, buildSeriesJSON, curveFitSummarySection, fittedCurveSection, geometrySummarySection, geometryTableSection, type ExportRow, type CurveFitExport } from '../csvExport.js';
+import { buildFlatDataCSV, buildTupleDataCSV, buildSeriesJSON, curveFitSummarySection, fittedCurveSection, geometrySummarySection, geometryTableSection, type ExportRow, type CurveFitExport } from '../csvExport.js';
 import type { GeometryResult } from '../../algorithms/geometry.js';
 import { renderTable } from '../tableFormats.js';
 import type { TupleRow } from '../calibrationSession.js';
@@ -72,59 +72,6 @@ describe('buildTupleDataCSV', () => {
     const groupNames = ['Min'];
     const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Sample, batch 2', points: [{ px: 0, py: 0, data: [1] }] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min\n"Sample, batch 2",1');
-  });
-});
-
-describe('buildMeasurementsCSV', () => {
-  // Checkpoint 82: `value` is a NUMBER and the unit has its own column. These
-  // assertions used to read `value: '90°'` -- a glyph inside a value, rounded to
-  // 4 sig figs, with no un-rounded copy anywhere. They were pinning the defect.
-  it('writes tool/value/unit, with value as a raw number', () => {
-    const csv = buildMeasurementsCSV([
-      { tool: 'slope', value: 12.4, unit: '' },
-      { tool: 'angle', value: 90, unit: '°' },
-    ]);
-    expect(csv).toBe('tool,value,unit\nslope,12.4,\nangle,90,°');
-  });
-
-  it('exports FULL precision, not the card\'s 4 significant figures', () => {
-    const csv = buildMeasurementsCSV([{ tool: 'distance', value: 1.23456789, unit: 'mm' }]);
-    expect(csv).toContain('1.23456789');
-  });
-});
-
-describe('buildAllSeriesCSV', () => {
-  const row = (values: ExportRow['values']): ExportRow => ({ px: 0, py: 0, values });
-
-  it('lays every series side by side with named value columns and ragged rows', () => {
-    const csv = buildAllSeriesCSV(
-      [
-        { name: 'Control', rows: [row([5, 5]), row([6, 7])] },
-        { name: 'Treated', rows: [row([10, 20])] },
-      ],
-      ['X', 'Y']
-    );
-    expect(csv).toBe('#,Control X,Control Y,Treated X,Treated Y\n1,5,5,10,20\n2,6,7,,');
-  });
-
-  it('quotes series names that contain commas', () => {
-    const csv = buildAllSeriesCSV([{ name: 'Sample, A', rows: [row([1])] }], ['Y']);
-    expect(csv.split('\n')[0]).toBe('#,"Sample, A Y"');
-  });
-
-  it('puts an error series\' role in its column names — CSV is flat, so the name carries the relation', () => {
-    // "Disambiguated by name alone, no mode flag" (CLAUDE.md, from Vega-Lite),
-    // which is also why the model needs no errorKind field: the user named the
-    // series "SD", and the caption's meaning arrives with it.
-    const csv = buildAllSeriesCSV(
-      [
-        { name: 'Sample A', rows: [row([2, 12])] },
-        { name: 'SD', rows: [row([2, 15])], relation: { role: 'upper', of: 'Sample A' } },
-        { name: 'SD', rows: [row([2, 9])], relation: { role: 'lower', of: 'Sample A' } },
-      ],
-      ['X', 'Y']
-    );
-    expect(csv.split('\n')[0]).toBe('#,Sample A X,Sample A Y,SD upper X,SD upper Y,SD lower X,SD lower Y');
   });
 });
 
@@ -353,17 +300,6 @@ describe('interpolation role in exports (v1.3)', () => {
       { px: 105, py: 195, values: [4, 40] },
     ];
     expect(buildFlatDataCSV(mixed, ['X', 'Y'])).toBe('x_px,y_px,X,Y,role\n100,200,1,10,anchor\n105,195,4,40,');
-  });
-
-  it('gives only the role-carrying series its own role column in a multi-series file', () => {
-    const csv = buildAllSeriesCSV(
-      [
-        { name: 'Traced', rows: [{ px: 1, py: 2, values: [1, 10] }] },
-        { name: 'Guided', rows: [{ px: 3, py: 4, values: [2, 20], role: 'interpolated' }] },
-      ],
-      ['X', 'Y']
-    );
-    expect(csv).toBe('#,Traced X,Traced Y,Guided X,Guided Y,Guided role\n1,1,10,2,20,interpolated');
   });
 
   it('attaches role to a JSON point only where it applies', () => {

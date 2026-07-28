@@ -3,7 +3,6 @@ import {
   CalibrationSession,
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
-  ERROR_BAR_AXES_CONFIG,
   BAR_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
@@ -152,12 +151,10 @@ import type { Dataset } from '../../core/dataset.js';
 import {
   buildSeriesJSON,
   buildHistogramJSON,
-  buildErrorBarJSON,
   flatDataSection,
   allSeriesSection,
   tupleDataSection,
   histogramSection,
-  errorBarSection,
   measurementsSection,
   curveFitSummarySection,
   fittedCurveSection,
@@ -650,14 +647,11 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   // histogram a histogram. Offering the right entry by name is what stops that
   // choice being a trap.
   HISTOGRAM_AXES_CONFIG,
-  // ERROR_BAR_AXES_CONFIG is deliberately ABSENT (checkpoint 79). Checkpoint 70
-  // restored it here as an interim, and retiring it is the point of the error
-  // model: error bars are now rail tool 7, so you trace a curve and THEN add
-  // error to it. As a graph type the choice came *before* you started -- trace
-  // an XY curve, then want error, and you started over -- which is the first of
-  // the four problems docs/error-bars-design.md lists against the tuple model.
-  // The config itself still exists (calibrationSession.ts) so a project saved
-  // under the old type keeps opening; it is just no longer offered.
+  // Error bars are rail tool 7, not a graph type (checkpoint 79): you trace a
+  // curve and THEN add error to it. As a graph type the choice came *before* you
+  // started -- trace an XY curve, then want error, and you started over -- the
+  // first of the four problems docs/error-bars-design.md lists against the tuple
+  // model. The retired config was deleted outright in v1.5; see that commit.
   BAR_AXES_CONFIG,
   // Categorical-X line/scatter (checkpoint 101): BarAxes underneath (value-only
   // calibration = "X is not numeric"), captured as points. Sits by Bar because
@@ -679,27 +673,6 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   TERNARY_AXES_CONFIG,
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
-];
-
-/**
- * What the graph-type dropdown offers, plus the types we no longer offer but
- * must still be able to OPEN (checkpoint 79).
- *
- * Retiring a graph type is not the same as refusing its files. `errorbar` is no
- * longer a choice — error bars are rail tool 7 now — but a project saved under
- * it must keep opening, so the load path resolves against this list rather than
- * the dropdown's. The retired config still builds a real XYAxes, which is all
- * such a project ever was.
- *
- * (Our own 0.2.0 files are the only ones affected: this type never existed
- * upstream, and CLAUDE.md's 2026-07-16 scoping decision explicitly allows our
- * own format to move. Keeping the reader anyway is cheap and it is what the
- * "read theirs faithfully" tenet would ask of us if the shoe were on the other
- * foot.)
- */
-const LOADABLE_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
-  ...AXES_TYPE_CONFIGS,
-  ERROR_BAR_AXES_CONFIG,
 ];
 
 /** Bundled sample figures, one per graph type (checkpoint 46) -- Katalyst
@@ -1762,11 +1735,9 @@ export function Workspace() {
       // taken under a different config, so rebuild the session with that config
       // BEFORE restoring into it -- restoreState populates data and axes but not
       // the config, and pouring an XY snapshot into a Histogram session would
-      // mis-type it. LOADABLE (not the dropdown list) so a snapshot under a
-      // retired type -- e.g. an old 'errorbar' project -- still restores.
       if (sessionRef.current.getConfig().id !== snapshot.axesTypeId) {
         const cfg =
-          LOADABLE_AXES_TYPE_CONFIGS.find((c) => c.id === snapshot.axesTypeId) ?? XY_AXES_CONFIG;
+          AXES_TYPE_CONFIGS.find((c) => c.id === snapshot.axesTypeId) ?? XY_AXES_CONFIG;
         sessionRef.current = new CalibrationSession(cfg);
         sessionRef.current.setImageHeight(imageHeightRef.current);
         setAxesTypeId(snapshot.axesTypeId);
@@ -3474,7 +3445,7 @@ export function Workspace() {
       measureScale?: MeasureScaleState | null;
       provenance?: Provenance;
     }): boolean => {
-      const nextConfig = LOADABLE_AXES_TYPE_CONFIGS.find((c) => c.id === fig.configId);
+      const nextConfig = AXES_TYPE_CONFIGS.find((c) => c.id === fig.configId);
       if (!nextConfig) {
         setProjectError(`Unsupported axes type: ${fig.configId}`);
         return false;
@@ -3776,7 +3747,7 @@ export function Workspace() {
    * multi-figure counterpart of loadCalibratedFigure's session install. */
   const buildFigureRecordFromDeserialized = useCallback(
     (f: DeserializedFigure, sharedSource: { bytes: Uint8Array; name?: string } | null): FigureRecord => {
-      const config = LOADABLE_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
+      const config = AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
       s.loadCalibrated(f.axes as CalibratedAxes, f.datasets);
@@ -4115,20 +4086,12 @@ export function Workspace() {
         const scoped = exportScope === 'all' ? all : [all[activeIndex]!];
         // A histogram's measurement is its bins, not the corner clicks that
         // produced them (see engine/csvExport.ts's buildHistogramJSON).
-        // Only the ACTIVE series' bars are exported. The Active/All-series
+        // Only the ACTIVE series' bins are exported. The Active/All-series
         // toggle is hidden for grouped types (see its own gate below), so
-        // nothing on screen claims otherwise — but a two-series Error Bars
-        // project silently writes one. Tracked as a known limitation rather
-        // than papered over: fixing it properly means getErrorBars(datasetIndex)
-        // and the same for histogram bins.
-        content = session.getConfig().id === 'errorbar'
-          ? buildErrorBarJSON(
-              session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1',
-              session.getErrorBars(),
-              rounder,
-              measures
-            )
-          : session.getConfig().id === 'histogram'
+        // nothing on screen claims otherwise. Tracked as a known limitation
+        // rather than papered over: fixing it properly means
+        // getHistogramBins(datasetIndex).
+        content = session.getConfig().id === 'histogram'
           ? buildHistogramJSON(
               session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1',
               session.getHistogramBins(),
@@ -4146,16 +4109,14 @@ export function Workspace() {
         const fits: CurveFitExport[] = [];
         const geometries: { series: string; result: ReturnType<typeof geometryFor> }[] = [];
         // ⚑ The SHAPE is the session's answer, not a cascade of identity checks
-        // here (refactor 2): this used to read `id === 'errorbar'`, then
-        // `id === 'histogram'`, then a grouped test — four questions about what a
+        // here (refactor 2): this used to read `id === 'histogram'`, then a
+        // grouped test — a cascade of questions about what a
         // type is CALLED, in the UI, where a wrong branch sent every spider export
         // through the tuple table. What a type's data looks like in a file is a
         // property of the type; only the Bar-with-box-plot-groups case is dynamic,
         // and getExportShape is the one place that knows.
         const exportShape = session.getExportShape();
-        if (exportShape === 'error-bars') {
-          sections.push(errorBarSection(session.getErrorBars(), rounder));
-        } else if (exportShape === 'bins') {
+        if (exportShape === 'bins') {
           sections.push(histogramSection(session.getHistogramBins(), rounder));
         } else if (exportShape === 'tuples') {
           sections.push(tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder));
@@ -4769,7 +4730,6 @@ export function Workspace() {
     padding: '6px 8px',
   };
   const binGlyphs = useMemo(() => session.getHistogramBinGlyphs(), [session, version]);
-  const errorBarGlyphs = useMemo(() => session.getErrorBarGlyphs(), [session, version]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -6984,7 +6944,7 @@ export function Workspace() {
           calibrationPreview={calibPreview}
           boxPlotGlyphs={boxPlotGlyphs}
           binGlyphs={binGlyphs}
-          errorBarGlyphs={errorBarGlyphs.concat(errorWhiskers)}
+          errorBarGlyphs={errorWhiskers}
           curveFitLine={curveFitOverlay}
           onCurveFitClick={curveFitState && (mode === 'pan' || mode === 'select') ? openCurveFitPanel : undefined}
           geometryOverlay={geometryOverlay}

@@ -74,25 +74,3 @@ export function computeWhiskerGlyph(datum: Point2D, cap: Point2D): GlyphSegment[
     },
   ];
 }
-
-export function computeErrorBarGlyph(upper: Point2D, lower: Point2D): GlyphSegment[] {
-  const dx = lower.x - upper.x;
-  const dy = lower.y - upper.y;
-  const length = Math.sqrt(dx * dx + dy * dy);
-  // A degenerate bar (both whiskers on one pixel) has no direction to take a
-  // normal from. The original divides by `|| 1`, which yields the ZERO vector,
-  // not a horizontal one -- so all three segments collapse and the bar renders
-  // as nothing at all. Falling back to a horizontal normal draws a small cross
-  // instead: the honest rendering of "both ends captured in the same place",
-  // and visible enough to notice and fix. (Adversarial review of checkpoint 70
-  // caught the original prose claiming this behaviour while the code lacked it.)
-  const nx = length > 1e-9 ? -dy / length : 1;
-  const ny = length > 1e-9 ? dx / length : 0;
-
-  const cap = (centre: Point2D): GlyphSegment => ({
-    from: { x: centre.x - nx * CAP_HALF, y: centre.y - ny * CAP_HALF },
-    to: { x: centre.x + nx * CAP_HALF, y: centre.y + ny * CAP_HALF },
-  });
-
-  return [{ from: { ...upper }, to: { ...lower } }, cap(upper), cap(lower)];
-}

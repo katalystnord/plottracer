@@ -21,7 +21,6 @@
 import type { PointRole, TupleRow } from './calibrationSession.js';
 import type { HistogramBin } from '../algorithms/histogram.js';
 import type { GeometryResult } from '../algorithms/geometry.js';
-import { errorAbove, errorBelow, type ErrorBarPoint } from '../algorithms/errorBar.js';
 import type { ErrorRelation } from './errorRelation.js';
 import { type ExportValue } from '../core/exportValues.js';
 import type { ValueRounder } from '../core/exportPrecision.js';
@@ -47,21 +46,6 @@ export type Delimiter = ',' | '\t';
  * so existing CSV/TSV output is unchanged. */
 function delimitedFormat(sep: Delimiter): 'csv' | 'tsv' {
   return sep === '\t' ? 'tsv' : 'csv';
-}
-
-/** Quotes a field only if it needs it (contains the delimiter, a quote, or a
- * newline), doubling any embedded quotes -- the standard minimal CSV escaping
- * rule (RFC 4180), applied to whichever delimiter is in use. */
-function escapeField(value: string | number, delimiter: Delimiter): string {
-  const s = String(value);
-  if (s.includes(delimiter) || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
-function toDelimited(rows: (string | number)[][], delimiter: Delimiter = ','): string {
-  return rows.map((row) => row.map((f) => escapeField(f, delimiter)).join(delimiter)).join('\n');
 }
 
 /** One export row: its pixel, plus the contract's values (checkpoint 76). */
@@ -174,75 +158,6 @@ export function buildHistogramCSV(bins: readonly (HistogramBin | null)[], rounde
   return renderTable([histogramSection(bins, rounder)], delimitedFormat(sep));
 }
 
-/** One row per error bar (checkpoint 70): the datum plus its whiskers.
- *
- * Emits BOTH the absolute whisker positions and the derived +/- deltas. The
- * absolutes are the measurement and match the schema the old app's structured
- * export has always written, so anything
- * already ingested lines up; the deltas are what a reader actually wants to
- * see next to a value, and deriving them here means no consumer has to guess
- * our sign convention. A bar with no whiskers captured yet still exports its
- * centre -- unlike a half-captured histogram bin, a lone datum IS meaningful
- * (it is just a point with unknown error), so dropping it would lose data. */
-export function errorBarSection(bars: readonly (ErrorBarPoint | null)[], rounder: ValueRounder): TableSection {
-  // Error-bar axes is XY: x is dim 0, every y-family value (y, whiskers, deltas)
-  // is dim 1. Each whisker/delta is rounded at its OWN y so a log axis keeps small
-  // whiskers; the deltas use the datum's y-resolution.
-  return {
-    header: ['x', 'y', 'y upper', 'y lower', 'error +', 'error -'],
-    rows: bars
-      .filter((b): b is ErrorBarPoint => b !== null)
-      .map((b) => [
-        rounder.at([b.x, b.y ?? 0], 0),
-        ropt(rounder, b.y, [b.x, b.y ?? 0], 1),
-        ropt(rounder, b.yUpper, [b.x, b.yUpper ?? 0], 1),
-        ropt(rounder, b.yLower, [b.x, b.yLower ?? 0], 1),
-        ropt(rounder, errorAbove(b), [b.x, b.y ?? 0], 1),
-        ropt(rounder, errorBelow(b), [b.x, b.y ?? 0], 1),
-      ]),
-  };
-}
-export function buildErrorBarCSV(bars: readonly (ErrorBarPoint | null)[], rounder: ValueRounder, sep: Delimiter = ','): string {
-  return renderTable([errorBarSection(bars, rounder)], delimitedFormat(sep));
-}
-
-/** Structured JSON for an error-bar series (checkpoint 70).
- *
- * Deliberately mirrors the OLD app's shipped export shape:
- * `{x, y, yUpper, yLower}`, absolute positions, and
- * each optional field omitted rather than nulled when it wasn't captured --
- * "not measured" must not read downstream as a value. This is the schema
- * that had to settle before anything ingests it; it settled in 2026-07-06,
- * and this restores it rather than
- * inventing a second one. */
-export function buildErrorBarJSON(
-  name: string,
-  bars: readonly (ErrorBarPoint | null)[],
-  rounder: ValueRounder,
-  measurements: readonly MeasurementCsvRow[] = []
-): string {
-  const doc: Record<string, unknown> = {
-    series: [
-      {
-        name,
-        errorBars: bars
-          .filter((b): b is ErrorBarPoint => b !== null)
-          .map((b) => {
-            const entry: Record<string, number> = { x: rounder.at([b.x, b.y ?? 0], 0) };
-            if (b.y !== undefined) entry['y'] = rounder.at([b.x, b.y], 1);
-            if (b.yUpper !== undefined) entry['yUpper'] = rounder.at([b.x, b.yUpper], 1);
-            if (b.yLower !== undefined) entry['yLower'] = rounder.at([b.x, b.yLower], 1);
-            return entry;
-          }),
-      },
-    ],
-  };
-  if (measurements.length > 0) {
-    doc['measurements'] = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
-  }
-  return JSON.stringify(doc, null, 2);
-}
-
 /** The Measure tool's recorded results (distance/angle/area/slope) -- a
  * separate collection from the series data, so exported as their own labelled
  * block appended after the data (see docs/competitor-data-panel-study.md §5).
@@ -274,12 +189,6 @@ export interface MeasurementCsvRow {
 export function measurementsSection(rows: readonly MeasurementCsvRow[]): TableSection {
   return { title: 'Measurements', header: ['tool', 'value', 'unit'], rows: rows.map((r) => [r.tool, r.value, r.unit]) };
 }
-export function buildMeasurementsCSV(rows: readonly MeasurementCsvRow[], sep: Delimiter = ','): string {
-  const header = ['tool', 'value', 'unit'];
-  const data = rows.map((r) => [r.tool, r.value, r.unit]);
-  return toDelimited([header, ...data], sep);
-}
-
 /** All series side by side, mirroring the on-screen spreadsheet (checkpoint 60):
  * a `#` column then, per series, one column per value dimension headed
  * "<name> <label>" (e.g. "Series 1 X"). Rows are ragged -- blank cells where a
@@ -382,10 +291,6 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
   }
   return { header, rows };
 }
-export function buildAllSeriesCSV(series: readonly SeriesForCSV[], fields: readonly string[], sep: Delimiter = ','): string {
-  return renderTable([allSeriesSection(series, fields)], delimitedFormat(sep));
-}
-
 /** Structured JSON export (checkpoint 61): every series as { name, points },
  * each point an object keyed by the value-dim labels (e.g. {X, Y}). Pixel-free,
  * like the spreadsheet; measurements ride along as their own array when present.

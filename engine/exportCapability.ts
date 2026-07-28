@@ -53,7 +53,6 @@ const FLAT_TEXT: ReadonlySet<ExportTarget> = new Set<ExportTarget>([
 ]);
 
 /** The formats that give each section a place of its own. */
-const SECTIONED: ReadonlySet<ExportTarget> = new Set<ExportTarget>(['xlsx', 'ods', 'json']);
 
 /**
  * What NO data export carries, in any format.
@@ -124,8 +123,3 @@ export function formatLimitationNote(target: ExportTarget, content: ExportConten
   return `Note: ${notes.join('; ')}.`;
 }
 
-/** Does this format keep each block in a place of its own? Exposed so the UI
- * can say the positive thing too, rather than only the losses. */
-export function keepsSectionsApart(target: ExportTarget): boolean {
-  return SECTIONED.has(target);
-}

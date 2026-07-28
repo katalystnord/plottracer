@@ -54,42 +54,6 @@ function lerp(a: Point2D, b: Point2D, wa: number, wb: number): Point2D {
   return { x: a.x * wa + b.x * wb, y: a.y * wa + b.y * wb };
 }
 
-/**
- * Interpolate a smooth curve through `anchors` (>= 2), sampled at roughly
- * `spacing` pixels apart. Returns the DERIVED samples INCLUDING the anchors at
- * their exact positions (so the caller can mark anchors vs interpolated by
- * identity). Fewer than 2 anchors -> the anchors unchanged.
- */
-export function interpolateCurve(anchors: readonly Point2D[], spacing = 4): Point2D[] {
-  if (anchors.length < 2) return anchors.map((p) => ({ ...p }));
-  const points: Point2D[] = [];
-  for (let i = 0; i < anchors.length - 1; i++) {
-    const p1 = anchors[i]!;
-    const p2 = anchors[i + 1]!;
-    const p0 = i > 0 ? anchors[i - 1]! : p1; // duplicate the endpoint as the phantom neighbour
-    const p3 = i + 2 < anchors.length ? anchors[i + 2]! : p2;
-    // Samples proportional to the chord, so density is ~uniform along the curve.
-    // Clamped to a finite cap: a non-finite anchor coordinate would make `dist`
-    // Infinity → `samples` Infinity → an unbounded loop / OOM. Anchor coords come
-    // from finite canvas clicks in normal use, so this is purely defensive.
-    const raw = Math.round(dist(p1, p2) / spacing);
-    const samples = Number.isFinite(raw) ? Math.max(1, Math.min(raw, 100000)) : 1;
-    points.push(...segment(p0, p1, p2, p3, samples));
-  }
-  points.push({ ...anchors[anchors.length - 1]! }); // the final anchor (segments are half-open)
-  return points;
-}
-
-/** Which of `interpolateCurve`'s output points are the original anchors (by exact
- * position), so the caller can tag role:'anchor' vs role:'interpolated'. NOTE: only
- * the FINAL anchor is bit-identical in the output (it's appended verbatim); the
- * interior segment-start anchors are the sampler evaluated at the knot, which is
- * numerically ~the anchor but not always bit-equal. Prefer `interpolateCurveOrdered`
- * when you need every anchor identified reliably. */
-export function isAnchor(point: Point2D, anchors: readonly Point2D[]): boolean {
-  return anchors.some((a) => a.x === point.x && a.y === point.y);
-}
-
 /** A sample from `interpolateCurveOrdered`: a point plus whether it IS an anchor. */
 export interface OrderedSample {
   x: number;
@@ -104,8 +68,7 @@ export interface OrderedSample {
  * at that knot), so we emit the EXACT anchor coordinate there and mark it; the final
  * anchor is appended likewise. This lets a caller rebuild a whole series in curve
  * order -- anchors interleaved with the fill -- without losing an interior anchor's
- * identity (or drifting its position) to the float wobble the exact-match `isAnchor`
- * suffers. Fewer than 2 anchors -> the anchors unchanged, each marked an anchor.
+ * identity (or drifting its position) to float wobble. Fewer than 2 anchors -> the anchors unchanged, each marked an anchor.
  */
 export function interpolateCurveOrdered(anchors: readonly Point2D[], spacing = 4): OrderedSample[] {
   if (anchors.length < 2) return anchors.map((p) => ({ x: p.x, y: p.y, anchor: true }));

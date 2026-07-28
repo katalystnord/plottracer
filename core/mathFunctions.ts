@@ -25,22 +25,8 @@ export function sqDist2d(x1: number, y1: number, x2: number, y2: number): number
   return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
 }
 
-export function sqDist3d(
-  x1: number, y1: number, z1: number,
-  x2: number, y2: number, z2: number
-): number {
-  return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
-}
-
 export function dist2d(x1: number, y1: number, x2: number, y2: number): number {
   return Math.sqrt(sqDist2d(x1, y1, x2, y2));
-}
-
-export function dist3d(
-  x1: number, y1: number, z1: number,
-  x2: number, y2: number, z2: number
-): number {
-  return Math.sqrt(sqDist3d(x1, y1, z1, x2, y2, z2));
 }
 
 /** A 2x2 matrix is represented as a flat 4-tuple [a, b, c, d] === [[a,b],[c,d]]. */
@@ -78,57 +64,6 @@ export interface CubicSpline {
   y: number[];
   len: number;
   d: number[];
-}
-
-/** Natural-ish cubic spline coefficient solve — matches wpd.cspline exactly (returns null for len < 3). */
-export function cspline(x: number[], y: number[]): CubicSpline | null {
-  const len = x.length;
-  const d: number[] = [];
-  const l: number[] = [];
-  const b: number[] = [];
-
-  if (len < 3) {
-    return null;
-  }
-
-  b[0] = 2.0;
-  l[0] = 3.0 * (y[1]! - y[0]!);
-  for (let i = 1; i < len - 1; ++i) {
-    b[i] = 4.0 - 1.0 / b[i - 1]!;
-    l[i] = 3.0 * (y[i + 1]! - y[i - 1]!) - l[i - 1]! / b[i - 1]!;
-  }
-
-  b[len - 1] = 2.0 - 1.0 / b[len - 2]!;
-  l[len - 1] = 3.0 * (y[len - 1]! - y[len - 2]!) - l[len - 2]! / b[len - 1]!;
-
-  let i = len - 1;
-  d[i] = l[i]! / b[i]!;
-  while (i > 0) {
-    --i;
-    d[i] = (l[i]! - d[i + 1]!) / b[i]!;
-  }
-
-  return { x, y, len, d };
-}
-
-/** Evaluate a cspline() result at x — matches wpd.cspline_interp exactly (null outside domain). */
-export function csplineInterp(cs: CubicSpline, x: number): number | null {
-  let i = 0;
-  if (x >= cs.x[cs.len - 1]! || x < cs.x[0]!) {
-    return null;
-  }
-
-  while (x > cs.x[i]!) {
-    i++;
-  }
-  i = i > 0 ? i - 1 : 0;
-
-  const t = (x - cs.x[i]!) / (cs.x[i + 1]! - cs.x[i]!);
-  const a = cs.y[i]!;
-  const b = cs.d[i]!;
-  const c = 3.0 * (cs.y[i + 1]! - cs.y[i]!) - 2.0 * cs.d[i]! - cs.d[i + 1]!;
-  const dd = 2.0 * (cs.y[i]! - cs.y[i + 1]!) + cs.d[i]! + cs.d[i + 1]!;
-  return a + b * t + c * t * t + dd * t * t * t;
 }
 
 export interface Circle {

@@ -39,14 +39,12 @@
 import handSvg from '../../icons/hand.svg?raw';
 import plusSvg from '../../icons/plus.svg?raw';
 import deleteSvg from '../../icons/delete.svg?raw';
-import clearSvg from '../../icons/clear.svg?raw';
 // Eraser (per-point delete tool, David 2026-07-22): a discoverable click-to-
 // remove-a-point mode, distinct from the top-bar "Clear all points". Reinstates
 // the retired eraser art (icons/erase.svg), normalized to 24x24.
 import eraseSvg from '../../icons/erase.svg?raw';
 import openSvg from '../../icons/open.svg?raw';
 import placePointSvg from '../../icons/custom/place-point.svg?raw';
-import segmentFillSvg from '../../icons/custom/segment-fill.svg?raw';
 import chevronDownSvg from '../../icons/custom/chevron-down.svg?raw';
 // Eyedropper (David, 2026-07-27): the "Pick from image" buttons wore a bare ⌖
 // glyph, which is the reticle Place Point already means. A pipette is the symbol
@@ -60,7 +58,6 @@ import redoSvg from '../../icons/redo.svg?raw';
 import imageSvg from '../../icons/custom/image.svg?raw';
 import saveSvg from '../../icons/custom/save.svg?raw';
 import exportSvg from '../../icons/custom/export.svg?raw';
-import boxPlotSvg from '../../icons/custom/box-plot.svg?raw';
 import gridRemovalSvg from '../../icons/custom/grid-removal.svg?raw';
 import curveFitSvg from '../../icons/custom/curve-fit.svg?raw';
 import geometrySvg from '../../icons/custom/geometry.svg?raw';
@@ -81,7 +78,6 @@ import errorBarsSvg from '../../icons/custom/error-bars.svg?raw';
 // dash-differentiated curves, so a dashed line both disambiguates it from Curve
 // Fit and states its purpose (the user drops the anchors; the dashed segment is
 // the inferred fill between them). Same 24x24 / currentColor / flat style.
-import interpolateSvg from '../../icons/custom/interpolate.svg?raw';
 // "Camera" (v0.8) is another new original, icons/custom/camera.svg -- the
 // "Capture figure" action's glyph. Replaces the 📸 emoji, which read poorly at
 // button scale (David) and clashed with the set's clean line style. Same
@@ -98,7 +94,6 @@ import autoTraceSvg from '../../icons/custom/auto-trace.svg?raw';
 // "Select" (data-point selector, subsumes delete) -- icons/custom/select.svg, a
 // standard mouse-pointer arrow (David): the universal "select/edit" symbol. Clicks
 // or box-drags to select DATA points (never calibration handles) for nudge/delete.
-import selectSvg from '../../icons/custom/select.svg?raw';
 // The four Select sub-modes (v1.1 #6, Ketcher's select multi-tool). The rail
 // Select button renders whichever one is the active sub-mode. Hybrid set (David):
 // Rectangle + Lasso are Ketcher's own glyphs (icons/, Apache-2.0, attributed in
@@ -118,14 +113,12 @@ export const HandIcon = () => <Icon svg={handSvg} />;
 export const PlusIcon = () => <Icon svg={plusSvg} />;
 export const DeleteIcon = () => <Icon svg={deleteSvg} />;
 export const EraseIcon = () => <Icon svg={eraseSvg} />;
-export const ClearIcon = () => <Icon svg={clearSvg} />;
 export const OpenIcon = () => <Icon svg={openSvg} />;
 // The reticle glyph (icons/custom/place-point.svg) is used for the CALIBRATE
 // tool: it deliberately mirrors the on-canvas calibration markers, while Place
 // Point uses the plus (swapped 2026-07-13 -- a reticle on Place Point read as a
 // calibration point).
 export const CalibrateIcon = () => <Icon svg={placePointSvg} />;
-export const SegmentFillIcon = () => <Icon svg={segmentFillSvg} />;
 export const ChevronDownIcon = () => <Icon svg={chevronDownSvg} />;
 export const EyedropperIcon = () => <Icon svg={eyedropperSvg} />;
 export const UndoIcon = () => <Icon svg={undoSvg} />;
@@ -133,7 +126,6 @@ export const RedoIcon = () => <Icon svg={redoSvg} />;
 export const ImageIcon = () => <Icon svg={imageSvg} />;
 export const SaveIcon = () => <Icon svg={saveSvg} />;
 export const ExportIcon = () => <Icon svg={exportSvg} />;
-export const BoxPlotIcon = () => <Icon svg={boxPlotSvg} />;
 export const GridRemovalIcon = () => <Icon svg={gridRemovalSvg} />;
 export const CurveFitIcon = () => <Icon svg={curveFitSvg} />;
 export const GeometryIcon = () => <Icon svg={geometrySvg} />;
@@ -141,10 +133,8 @@ export const HelpIcon = () => <Icon svg={helpSvg} />;
 export const MeasureIcon = () => <Icon svg={measureSvg} />;
 export const ImageEditIcon = () => <Icon svg={imageEditSvg} />;
 export const ErrorBarsIcon = () => <Icon svg={errorBarsSvg} />;
-export const InterpolateIcon = () => <Icon svg={interpolateSvg} />;
 export const CameraIcon = () => <Icon svg={cameraSvg} />;
 export const AutoTraceIcon = () => <Icon svg={autoTraceSvg} />;
-export const SelectIcon = () => <Icon svg={selectSvg} />;
 export const SelectBoxIcon = () => <Icon svg={selectBoxSvg} />;
 export const SelectLassoIcon = () => <Icon svg={selectLassoSvg} />;
 export const SelectSeriesIcon = () => <Icon svg={selectSeriesSvg} />;

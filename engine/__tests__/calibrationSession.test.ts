@@ -5,6 +5,8 @@ import {
   BAR_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
+  HISTOGRAM_AXES_CONFIG,
+  SPIDER_AXES_CONFIG,
   GRAPH_TYPE_METADATA_KEY,
   POLAR_AXES_CONFIG,
   TERNARY_AXES_CONFIG,
@@ -2044,5 +2046,39 @@ describe('sortByNearestNeighbour — manual NN reorder (checkpoint 130)', () => 
     expect(
       pixels.map((p) => (p.metadata as { overrides?: { y?: number } } | null)?.overrides?.y)
     ).toEqual([111, 222, 333]);
+  });
+});
+
+describe('what a graph type declares it CAN DO (v1.5)', () => {
+  // ⚑ v1.5 regression, caught by the release-gate audit. Auto-extract used to be
+  // refused by INFERENCE -- the rail button read `hasPointGroups && id !== 'spider'`
+  // -- and the v1.5 refactor replaced that with a declared `autoExtractKind`.
+  // Every slot-filling type was given `'none'` except the retired ERROR_BAR config,
+  // which fell through to the `'curve'` default and got its Auto-extract button
+  // back. That config has since been deleted outright, so the instance is gone --
+  // but the RULE is what stops the next slot type repeating it, so it is asserted
+  // here rather than left to the next refactor to rediscover.
+  const ALL_CONFIGS = [
+    XY_AXES_CONFIG,
+    HISTOGRAM_AXES_CONFIG,
+    BAR_AXES_CONFIG,
+    CATEGORICAL_LINE_CONFIG,
+    BOX_PLOT_AXES_CONFIG,
+    POLAR_AXES_CONFIG,
+    SPIDER_AXES_CONFIG,
+    TERNARY_AXES_CONFIG,
+    MAP_AXES_CONFIG,
+    CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+  ];
+
+  it('no slot-filling graph type falls through to curve auto-extract', () => {
+    const offenders = ALL_CONFIGS.filter(
+      (c) => (c.defaultSlots?.length ?? 0) > 0 && (c.autoExtractKind ?? 'curve') === 'curve'
+    ).map((c) => c.id);
+    expect(offenders).toEqual([]);
+  });
+
+  it('spider is the deliberate exception: its slots ARE traced, along the spokes', () => {
+    expect(SPIDER_AXES_CONFIG.autoExtractKind).toBe('along-axes');
   });
 });

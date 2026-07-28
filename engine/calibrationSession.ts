@@ -195,10 +195,9 @@ import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
 import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segmentFill.js';
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
-import { computeErrorBarGlyph, computeWhiskerGlyph } from './errorBarGlyph.js';
+import { computeWhiskerGlyph } from './errorBarGlyph.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
 import {
-  errorBarsFromCorners,
   matchCapToDatum,
   resolveErrorBars,
   type ErrorBarPoint,
@@ -689,14 +688,13 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * - `'tuples'` — the tuple table: one row per box/bin, columns for its members.
    *   For types whose tuple IS one object (see tupleMembers).
    * - `'bins'` — histogram bins, as true edges.
-   * - `'error-bars'` — the error-bar table.
    *
    * ⚑ Resolve it through `session.getExportShape()`, never by reading this field
    * directly: Box Plot is ALSO reachable as a toggle on a Bar session, so the
    * shape depends on the series as well as the type. That method is the one place
    * that knows.
    */
-  exportShape?: 'flat' | 'tuples' | 'bins' | 'error-bars';
+  exportShape?: 'flat' | 'tuples' | 'bins';
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
@@ -882,59 +880,6 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     const result = XY_AXES_CONFIG.buildAxes(cal, ctx);
     if ('error' in result) return result;
     result.axes.setMetadata({ ...result.axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'histogram' });
-    return result;
-  },
-};
-
-/** Group names for an error bar's three captured points. Order is the click
- * order the cursor walks and the index order algorithms/errorBar.ts reads.
- * Value first: it is the datum, and the whiskers qualify it. */
-export const ERROR_BAR_SLOTS = ['Value', 'Upper', 'Lower'] as const;
-
-/**
- * Error Bars — XY axes underneath, captured as Value/Upper/Lower tuples
- * (checkpoint 70).
- *
- * **A restore, not a new feature.** The old `npm start` app has shipped this
- * since 2026-07-06 — an "Error Bars" entry in its axes-type dialog
- * (`ui-patches/overrides.js:663`), a one-click Value/Upper/Lower quick-setup
- * (`:762`), a direction-aware glyph (`:884`) and a structured export emitting
- * `errorBars:[{x,y,yUpper,yLower}]` (`ui-patches/api-bridge.js:169`). The
- * rebuild began 2026-07-08 and never carried any of it across, because it
- * never got a checkpoint number — while its sibling Box Plot, added a day
- * earlier by the same mechanism, did (checkpoints 21-23). Found only by the
- * third-pass parity audit, 2026-07-15. See CLAUDE.md, and
- * kn-development-principles/PAIRING-PRINCIPLES.md §A1.
- *
- * Structurally identical to HISTOGRAM_AXES_CONFIG: an XY-based graph type whose
- * capture shape is a tuple. That checkpoint 66 generalization is what makes
- * this mostly declaration — exactly the payoff it predicted.
- */
-export const ERROR_BAR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
-  id: 'errorbar',
-  label: 'Error Bars',
-  axesKind: 'xy',
-  exportShape: 'error-bars',
-  dataDim: 2,
-  valueLabels: ['X', 'Y'],
-  globalFields: [],
-  supportsCommonOrigin: true,
-  options: XY_AXES_CONFIG.options,
-  extractOptions: XY_AXES_CONFIG.extractOptions,
-  defaultSlots: ERROR_BAR_SLOTS,
-  tupleNoun: 'error bar',
-  // getFitPoints fits through group 0 ("Value") only — a trend line through the
-  // data, ignoring the whiskers. The single most obvious thing to do with an
-  // error-bar series, implemented at ckpt 27 and unreachable until now.
-  supportsCurveFit: true,
-  logScaleGuards: XY_AXES_CONFIG.logScaleGuards,
-  distinctPixelSteps: XY_AXES_CONFIG.distinctPixelSteps,
-  parallelAxisGuard: XY_AXES_CONFIG.parallelAxisGuard,
-  steps: XY_AXES_CONFIG.steps,
-  buildAxes(cal, ctx) {
-    const result = XY_AXES_CONFIG.buildAxes(cal, ctx);
-    if ('error' in result) return result;
-    result.axes.setMetadata({ ...result.axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'errorbar' });
     return result;
   },
 };
@@ -2304,7 +2249,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The tuple table would give one series read off the nearest ray — the v1.4
    * audit's export defect.
    */
-  getExportShape(): 'flat' | 'tuples' | 'bins' | 'error-bars' {
+  getExportShape(): 'flat' | 'tuples' | 'bins' {
     if (this.config.exportShape) return this.config.exportShape;
     const grouped = this.activeEntry.dataset.hasSlots();
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';
@@ -3468,35 +3413,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const [a, b] = row.points;
       if (!a || !b) continue;
       glyphs.push(computeBinGlyph({ x: a.px, y: a.py }, { x: b.px, y: b.py }));
-    }
-    return glyphs;
-  }
-
-  /** The active series' error bars, one entry per captured tuple in capture
-   * order, `null` where nothing is placed yet. A thin adapter over the pure
-   * geometry (leg (c)); returns [] for any other graph type or before
-   * calibration, mirroring getHistogramBins/getBoxPlotGlyphs. */
-  getErrorBars(): (ErrorBarPoint | null)[] {
-    if (this.config.id !== 'errorbar' || !this.axes) return [];
-    return errorBarsFromCorners(
-      this.getTupleRows().map((row) =>
-        row.points.map((p) => (p?.data ? { x: p.data[0]!, y: p.data[1]! } : null))
-      )
-    );
-  }
-
-  /** Error-bar glyph segments (image-pixel space) for every tuple with BOTH
-   * whiskers placed. The Value point needs no glyph -- it renders as an
-   * ordinary data dot -- so a bar with only a centre draws nothing, same rule
-   * getBoxPlotGlyphs uses for an incomplete tuple. */
-  getErrorBarGlyphs(): GlyphSegment[][] {
-    if (this.config.id !== 'errorbar') return [];
-    const glyphs: GlyphSegment[][] = [];
-    for (const row of this.getTupleRows()) {
-      const upper = row.points[1];
-      const lower = row.points[2];
-      if (!upper || !lower) continue;
-      glyphs.push(computeErrorBarGlyph({ x: upper.px, y: upper.py }, { x: lower.px, y: lower.py }));
     }
     return glyphs;
   }

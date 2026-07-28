@@ -8,7 +8,6 @@ import {
   BOX_PLOT_AXES_CONFIG,
   BAR_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
-  ERROR_BAR_AXES_CONFIG,
   XY_AXES_CONFIG,
 } from '../calibrationSession.js';
 import { SpiderAxes as SpiderAxesClass } from '../../core/axes/spider.js';
@@ -462,9 +461,8 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     expect(bar.getExportShape()).toBe('tuples'); // ...the same session, toggled
   });
 
-  it('answers bins and error-bars for the types that have their own table', () => {
+  it('answers bins for the type that has its own table', () => {
     expect(new CalibrationSession(HISTOGRAM_AXES_CONFIG).getExportShape()).toBe('bins');
-    expect(new CalibrationSession(ERROR_BAR_AXES_CONFIG).getExportShape()).toBe('error-bars');
   });
 
   it('answers flat for an ordinary XY series', () => {

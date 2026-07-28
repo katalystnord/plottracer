@@ -1,86 +1,73 @@
 import { describe, it, expect } from 'vitest';
-import { interpolateCurve, isAnchor } from '../interpolate.js';
+import { interpolateCurveOrdered } from '../interpolate.js';
 import type { Point2D } from '../segmentFill.js';
 
-describe('interpolateCurve (centripetal Catmull-Rom)', () => {
-  it('passes through every anchor exactly (the record is preserved)', () => {
-    const anchors: Point2D[] = [
-      { x: 0, y: 0 },
-      { x: 10, y: 5 },
-      { x: 20, y: 3 },
-      { x: 30, y: 8 },
-    ];
-    const curve = interpolateCurve(anchors, 4);
-    // Each anchor appears in the output at its exact position.
+// ⚑ This file used to test `interpolateCurve` and `isAnchor` -- both superseded by
+// interpolateCurveOrdered and, by v1.5, called by nothing but these tests. The
+// LIVE function (engine/calibrationSession.ts:2955) had no coverage at all, so the
+// suite was green over the retired pair and silent about the one in use. Inverted
+// here, keeping the assertions that still say something true about the record.
+describe('interpolateCurveOrdered (centripetal Catmull-Rom)', () => {
+  const anchors: Point2D[] = [
+    { x: 0, y: 0 },
+    { x: 10, y: 10 },
+    { x: 20, y: 0 },
+    { x: 30, y: 10 },
+  ];
+
+  it('emits every anchor EXACTLY, tagged as an anchor', () => {
+    // The whole reason this replaced the exact-match isAnchor: an interior anchor
+    // used to be the sampler evaluated at the knot, ~equal but not bit-equal, so
+    // it could lose its identity to float wobble. Here it is emitted verbatim.
+    const out = interpolateCurveOrdered(anchors);
     for (const a of anchors) {
-      expect(curve.some((p) => p.x === a.x && p.y === a.y)).toBe(true);
-      expect(isAnchor(a, anchors)).toBe(true);
+      const hit = out.find((s) => s.x === a.x && s.y === a.y);
+      expect(hit, `anchor ${a.x},${a.y} must appear exactly`).toBeDefined();
+      expect(hit!.anchor).toBe(true);
     }
-    // And it is denser than the anchors (it filled the curve in).
-    expect(curve.length).toBeGreaterThan(anchors.length);
+    expect(out.filter((s) => s.anchor)).toHaveLength(anchors.length);
   });
 
-  it('does not overshoot on a straight line — interpolated points stay collinear', () => {
-    // Colinear anchors, unevenly spaced (the case that makes a naive spline bow).
-    const anchors: Point2D[] = [
-      { x: 0, y: 0 },
-      { x: 2, y: 4 },
-      { x: 20, y: 40 }, // y = 2x throughout
-      { x: 25, y: 50 },
-    ];
-    const curve = interpolateCurve(anchors, 2);
-    // Every sample lies on y = 2x (centripetal cannot cusp/overshoot on a line).
-    for (const p of curve) expect(p.y).toBeCloseTo(2 * p.x, 6);
+  it('returns the samples in CURVE ORDER, anchors interleaved with the fill', () => {
+    const out = interpolateCurveOrdered(anchors);
+    // The anchors appear in the order they were given, not bunched at one end --
+    // the defect that made a Guide-points series export out of order.
+    expect(out.filter((s) => s.anchor).map((s) => s.x)).toEqual([0, 10, 20, 30]);
+    expect(out.length).toBeGreaterThan(anchors.length); // fill really is present
   });
 
-  it('stays within the anchors bounding box (no wild excursions on uneven spacing)', () => {
-    const anchors: Point2D[] = [
-      { x: 0, y: 0 },
-      { x: 1, y: 10 }, // a sharp near-vertical jump right after the start
-      { x: 40, y: 12 },
-      { x: 80, y: 11 },
-    ];
-    const curve = interpolateCurve(anchors, 3);
-    const minX = Math.min(...anchors.map((a) => a.x));
-    const maxX = Math.max(...anchors.map((a) => a.x));
-    const minY = Math.min(...anchors.map((a) => a.y));
-    const maxY = Math.max(...anchors.map((a) => a.y));
-    // A small tolerance for the smooth curve's overshoot; centripetal keeps it tiny.
-    const pad = 2;
-    for (const p of curve) {
-      expect(p.x).toBeGreaterThanOrEqual(minX - pad);
-      expect(p.x).toBeLessThanOrEqual(maxX + pad);
-      expect(p.y).toBeGreaterThanOrEqual(minY - pad);
-      expect(p.y).toBeLessThanOrEqual(maxY + pad);
-    }
+  it('marks derived samples as NOT anchors, so a role column can tell them apart', () => {
+    // Tenet 9: a point the user assigned and one the spline invented are not the
+    // same claim about the figure.
+    expect(interpolateCurveOrdered(anchors).some((s) => !s.anchor)).toBe(true);
   });
 
   it('returns the anchors unchanged when there are fewer than 2', () => {
-    expect(interpolateCurve([], 4)).toEqual([]);
-    expect(interpolateCurve([{ x: 3, y: 7 }], 4)).toEqual([{ x: 3, y: 7 }]);
+    expect(interpolateCurveOrdered([])).toEqual([]);
+    expect(interpolateCurveOrdered([{ x: 3, y: 4 }])).toEqual([{ x: 3, y: 4, anchor: true }]);
   });
 
-  it('handles duplicate/coincident anchors without NaN (degenerate spacing)', () => {
-    const anchors: Point2D[] = [
+  it('handles coincident anchors without producing NaN', () => {
+    const out = interpolateCurveOrdered([
       { x: 5, y: 5 },
-      { x: 5, y: 5 }, // coincident -> a zero-length chord
-      { x: 10, y: 8 },
-    ];
-    const curve = interpolateCurve(anchors, 2);
-    for (const p of curve) {
-      expect(Number.isFinite(p.x)).toBe(true);
-      expect(Number.isFinite(p.y)).toBe(true);
+      { x: 5, y: 5 },
+      { x: 9, y: 9 },
+    ]);
+    for (const s of out) {
+      expect(Number.isFinite(s.x)).toBe(true);
+      expect(Number.isFinite(s.y)).toBe(true);
     }
   });
 
-  it('does not hang or blow up on a non-finite anchor coordinate (defensive, v0.6 gate)', () => {
-    // A corrupt/edge anchor with Infinity would make the per-segment sample count
-    // Infinity and loop forever without the clamp. Must return promptly, bounded.
-    const out = interpolateCurve([
+  it('does not hang or blow up on a non-finite anchor coordinate (v0.6 gate)', () => {
+    const out = interpolateCurveOrdered([
       { x: 0, y: 0 },
-      { x: Infinity, y: 5 },
-      { x: 30, y: 10 },
+      { x: Number.POSITIVE_INFINITY, y: 10 },
+      { x: 20, y: 0 },
     ]);
-    expect(out.length).toBeLessThan(300000); // bounded, not an OOM
+    // The sample count falls back to 1 rather than Infinity; what matters is that
+    // it terminates and stays bounded.
+    expect(out.length).toBeLessThan(100000);
+    expect(out.length).toBeGreaterThan(0);
   });
 });
