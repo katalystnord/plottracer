@@ -5383,7 +5383,7 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // radial scale with a measured angle, versus N independent axes and no angle at
     // all -- is a question the user should be asked next to the alternative, not
     // left to discover after calibrating the wrong one.
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line (categorical X)', 'Box Plot', 'Polar', 'Spider / Radar', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line (categorical X)', 'Box Plot', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {

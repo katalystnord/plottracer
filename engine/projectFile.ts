@@ -229,6 +229,7 @@ const AXES_TYPE_STRING_TO_CONFIG_ID: Record<string, string> = {
   MapAxes: 'map',
   CircularChartRecorderAxes: 'ccr',
   SpiderAxes: 'spider',
+  PieAxes: 'pie',
 };
 
 /** Builds a project file from a calibrated session. Fails (returns

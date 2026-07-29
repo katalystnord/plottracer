@@ -453,10 +453,15 @@ export class PlotData {
           // of any point -- so they ride in the axes metadata, which is the only
           // per-axes home the format has for a value with no pixel attached.
           const meta = (axData.metadata ?? {}) as Record<string, unknown>;
+          // ⚑ THE TILT MUST TRAVEL. Without it a saved 3D pie reopens as a CIRCLE,
+          // and every value in the file changes silently -- the readings still sum to
+          // the total, so nothing looks wrong. Read from axData rather than the
+          // instance because setMetadata runs further down, after this call.
           axes.calibrate(
             calibration!,
             parseFloat(String(meta['pieTotal'] ?? '100')),
-            parseFloat(String(meta['pieSweep'] ?? '360'))
+            parseFloat(String(meta['pieSweep'] ?? '360')),
+            String(meta['pieTilted'] ?? 'false') === 'true'
           );
         } else if (axData.type === 'ImageAxes') {
           axes = new ImageAxes();

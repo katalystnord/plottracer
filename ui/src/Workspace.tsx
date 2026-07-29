@@ -11,6 +11,7 @@ import {
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
   SPIDER_AXES_CONFIG,
+  PIE_AXES_CONFIG,
   SERIES_COLOR_PALETTE,
   calibrationCompatible,
   type AxesTypeConfig,
@@ -665,6 +666,12 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   // and no angle at all. Grouping them makes that the visible question at the
   // moment of choosing -- the same job the Histogram/Bar adjacency does above.
   SPIDER_AXES_CONFIG,
+  // Pie / donut (v1.6). Completes the radial group, and belongs here rather than
+  // beside Bar even though its RECORD is bar-shaped -- a category plus one
+  // magnitude. Someone arriving with a pie is looking for a circle, not thinking
+  // about what the record turns out to be; the dropdown answers "what does my
+  // figure look like?", which is why Histogram sits by Bar and Spider by Polar.
+  PIE_AXES_CONFIG,
   TERNARY_AXES_CONFIG,
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
