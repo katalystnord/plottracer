@@ -448,10 +448,18 @@ function checkGuards(
   cal: Calibration,
   options: Readonly<Record<string, string>>,
   /** The steps the Calibration was actually built from, in the same order. Only
-   * differs from `steps` for a type with a repeating group (v1.4), where the
-   * key -> Calibration-index mapping below has to resolve against the unrolled list
-   * or it lands on the wrong point. */
-  steps: readonly CalibStepInfo[] = config.fixedSteps
+   * differs from `config.fixedSteps` for a type with a repeating group (v1.4),
+   * where the key -> Calibration-index mapping below has to resolve against the
+   * unrolled list or it lands on the wrong point.
+   *
+   * ⚑ REQUIRED, and deliberately so: this used to default to `config.fixedSteps`,
+   * which is the one shape of stray `config.steps` read that getSteps()'s own
+   * comment warns about. It reads as harmless — the two lists ARE identical for
+   * all eight fixed-shape types — so an omitted argument would test clean
+   * everywhere and, on a spider, silently guard the origin alone while every
+   * spoke went unchecked. A default that is right eight times out of nine is a
+   * trap, not a convenience; both callers already pass `this.getSteps()`. */
+  steps: readonly CalibStepInfo[]
 ): string | null {
   for (const g of config.logScaleGuards ?? []) {
     if (!optionBool(options, g.option)) continue;
