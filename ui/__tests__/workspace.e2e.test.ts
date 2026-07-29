@@ -3840,6 +3840,33 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await expect.poll(() => page.getByTestId('keytip-mode-calibrate').count(), { timeout: 5000 }).toBe(0);
   });
 
+  it('completes the OFFICE sequence on the rail — Alt, then the badged key', async () => {
+    // ⚑ David's point, and it is why the ONLYOFFICE/Office form was worth adopting: an
+    // Office user's fingers press Alt and THEN the key they see. Here that lands on a
+    // working path -- not because Alt arms anything (it doesn't, deliberately: see
+    // useKeyTips.ts on why we took Office's form and not its mechanism) but because the
+    // badged digit is a REAL shortcut that fires with or without Alt held.
+    //
+    // Pinned because it is otherwise an accident of the tool-shortcut handler bailing
+    // on primaryMod (Ctrl/Cmd) while letting Alt through. An `altKey` guard added there
+    // for some unrelated reason would silently cost us the muscle-memory inroad, and
+    // nothing would notice.
+    await resetWorkspace('xy');
+    // ⚑ Move OFF calibrate first. A fresh workspace already starts there, so asserting
+    // "calibrate is active" after Alt+1 passed whether or not the key did anything --
+    // the first version of this test was vacuous, and only survived long enough to be
+    // caught because the mutation that should have killed it didn't.
+    await page.keyboard.press('0');
+    expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
+
+    await page.keyboard.down('Alt');
+    expect(await textOf('keytip-mode-calibrate')).toBe('1');
+    await page.keyboard.press('1');
+    await page.keyboard.up('Alt');
+    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('drops the badges when the window loses focus mid-hold', async () => {
     // ⚑ Alt+Tab sends the keyup to the OTHER window, so without a blur handler the
     // badges stay up for as long as the app is left alone -- the first thing anyone
