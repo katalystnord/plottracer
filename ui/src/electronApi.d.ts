@@ -20,22 +20,6 @@ export interface ElectronFileFilter {
   extensions: string[];
 }
 
-// Checkpoint 32 (native menu bar, see CLAUDE.md and ui/electron-menu.cjs).
-// Kept in sync by hand with the allowlist in ui/electron-preload.cjs --
-// that Set is the real runtime enforcement, this union is only a
-// compile-time guard against typo'd channel names at call sites.
-export type MenuEventChannel =
-  | 'menu:open-image'
-  | 'menu:open-project'
-  | 'menu:save-project'
-  | 'menu:save-csv'
-  | 'menu:zoom-in'
-  | 'menu:zoom-out'
-  | 'menu:zoom-fit'
-  | 'menu:zoom-100'
-  | 'menu:undo'
-  | 'menu:redo';
-
 declare global {
   interface Window {
     electronAPI?: {
@@ -51,9 +35,6 @@ declare global {
       // the .zip container to come. Omitted/undefined writes UTF-8 text, which
       // is what every project/CSV caller has always done.
       saveFile: (data: string, defaultName?: string, filters?: ElectronFileFilter[], encoding?: 'utf8' | 'base64') => Promise<string | null>;
-      /** Registers a callback for a native menu click; returns an
-       * unsubscribe function -- call it from an effect's cleanup. */
-      onMenuEvent: (channel: MenuEventChannel, callback: () => void) => () => void;
       /** Confirm-on-close guard (electron-close-guard.cjs). The main process
        * fires this before the window closes / Cmd+Q; the renderer runs its
        * unsaved-work confirm and replies with confirmClose. Returns an

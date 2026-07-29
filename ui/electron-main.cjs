@@ -38,14 +38,14 @@ function createWindow() {
     minHeight: 600,
     title: 'PlotTracer',
     icon: path.join(__dirname, '..', 'build', 'icons', '512x512.png'),
-    // The in-app top bar (checkpoint 39) now carries File (Save/Open/Export),
-    // Edit (undo/redo), View (zoom) and the analysis panels, so the native
-    // menu bar duplicated all of it. Hidden (not removed) at checkpoint 41:
-    // autoHideMenuBar keeps the row out of the layout while the menu itself
-    // stays built -- so its keyboard accelerators (Ctrl+O/S, zoom, etc.) and,
-    // importantly, Help > About (the AGPL/WebPlotDigitizer attribution
-    // CLAUDE.md requires) remain reachable with Alt. Removing it outright
-    // would have dropped both.
+    // The in-app top bar (checkpoint 39) carries File (Save/Open/Export), Edit
+    // (undo/redo), View (zoom) and the analysis panels, so the native menu bar
+    // duplicated all of it. Hidden at checkpoint 41, and REMOVED in v1.6 so that
+    // Alt -- which `autoHideMenuBar` spent on revealing that hidden row -- is
+    // free for the key-tips. Kept here because it also suppresses the momentary
+    // menu row on a macOS-less platform if a menu is ever built again; harmless
+    // where there is no menu at all. What the removal cost, and where each
+    // accelerator went, is in ui/electron-menu.cjs's header.
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'electron-preload.cjs'),
@@ -59,12 +59,9 @@ function createWindow() {
     },
   })
 
-  // Native menu bar (checkpoint 32, see CLAUDE.md and
-  // ui/electron-menu.cjs) -- closes the known gap flagged in checkpoint
-  // 29's notes. Wired through ui/electron-preload.cjs's onMenuEvent and
-  // consumed in ui/src/ImageCanvas.tsx and ui/src/Workspace.tsx. Hidden by
-  // autoHideMenuBar above (checkpoint 41) but still built and functional.
-  buildMenu(mainWindow)
+  // No menu on Windows/Linux; a roles-only App+Edit menu on macOS, without which
+  // Cmd+C/V/X stop working inside text fields. See ui/electron-menu.cjs.
+  buildMenu()
 
   mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'))
 

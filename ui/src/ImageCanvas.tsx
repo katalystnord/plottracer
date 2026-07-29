@@ -878,27 +878,13 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     return () => observer.disconnect();
   }, [image]);
 
-  // Checkpoint 32 (native menu bar, see CLAUDE.md and
-  // ui/electron-menu.cjs): File > Open Image… and every View > Zoom*
-  // action land here, since this component already owns the view state,
-  // the container ref, and openImage. onMenuEvent's unsubscribe return
-  // value matters here specifically: without it, React StrictMode's
-  // double-invoked effects would register each listener twice in
-  // development.
-  useEffect(() => {
-    if (!window.electronAPI) return;
-    const electronAPI = window.electronAPI;
-    const unsubscribes = [
-      electronAPI.onMenuEvent('menu:open-image', () => {
-        void openImage();
-      }),
-      electronAPI.onMenuEvent('menu:zoom-in', zoomIn),
-      electronAPI.onMenuEvent('menu:zoom-out', zoomOut),
-      electronAPI.onMenuEvent('menu:zoom-fit', zoomFit),
-      electronAPI.onMenuEvent('menu:zoom-100', zoom100),
-    ];
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [openImage, zoomIn, zoomOut, zoomFit, zoom100]);
+  // ⚑ Open Image and the four zoom actions used to arrive here as `menu:*` IPC
+  // events from the native menu. The menu went in v1.6 (so Alt could carry the
+  // key-tips), and with it the only sender those channels ever had -- the
+  // listeners would have sat here forever, registered and unreachable. The
+  // accelerators are now bound in Workspace.tsx and reach these same callbacks
+  // through this component's imperative handle (zoomIn/zoomOut/zoomFit/zoom100/
+  // openImage are all on it already, exposed for the top bar's zoom control).
 
   useEffect(() => {
     const canvas = canvasRef.current;

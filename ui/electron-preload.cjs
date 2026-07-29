@@ -17,24 +17,10 @@
 
 const { contextBridge, ipcRenderer } = require('electron')
 
-const MENU_EVENT_CHANNELS = new Set([
-  'menu:open-image', 'menu:open-project',
-  'menu:save-project', 'menu:save-csv',
-  'menu:zoom-in', 'menu:zoom-out', 'menu:zoom-fit', 'menu:zoom-100',
-  'menu:undo', 'menu:redo',
-])
-
 contextBridge.exposeInMainWorld('electronAPI', {
   openImage: () => ipcRenderer.invoke('dialog:openImage'),
   openProject: () => ipcRenderer.invoke('dialog:openProject'),
   saveFile: (data, defaultName, filters, encoding) => ipcRenderer.invoke('dialog:saveFile', data, defaultName, filters, encoding),
-
-  onMenuEvent: (channel, callback) => {
-    if (!MENU_EVENT_CHANNELS.has(channel)) return () => {}
-    const listener = () => callback()
-    ipcRenderer.on(channel, listener)
-    return () => ipcRenderer.removeListener(channel, listener)
-  },
 
   // Confirm-on-close guard (electron-close-guard.cjs). The main process asks the
   // renderer to run its unsaved-work confirm before the window closes / Cmd+Q;

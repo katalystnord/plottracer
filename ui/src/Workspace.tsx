@@ -4149,33 +4149,74 @@ export function Workspace() {
     );
   }, []);
 
-  // Checkpoint 32 (native menu bar, see CLAUDE.md and
-  // ui/electron-menu.cjs): File > Open Project…/Save Project/Save Data As
-  // CSV… reach the exact same handlers their top-bar buttons already do --
-  // menu:open-image and the View > Zoom* actions are wired in
-  // ImageCanvas.tsx instead, since that component owns the view state and
-  // openImage. Same unsubscribe-on-cleanup reasoning as ImageCanvas.tsx's
-  // own menu effect.
+  /**
+   * Application accelerators, renderer-side (v1.6).
+   *
+   * ⚑ These were the native menu's `accelerator` fields until the menu was
+   * removed so Alt could carry the key-tips. Rebinding them is not optional
+   * housekeeping: `Menu.setApplicationMenu` is what registered them, so removing
+   * the menu without this is a regression disguised as a feature -- Ctrl+O,
+   * Ctrl+S and, less obviously, all four ZOOM keys simply stop responding.
+   *
+   * ⚑ The zoom keys are the ones worth calling out. They were NEVER bound in the
+   * renderer: the tool-shortcut handler above deliberately bails on any
+   * primary-modified key it does not own, and its comment explains why -- a
+   * second copy would double-fire against the menu, and a modified digit falling
+   * through to the bare-digit chain meant `Ctrl+1` selecting Calibrate and
+   * `Ctrl+3` DELETING A POINT (the v1.0 audit's find). Both hazards are handled
+   * here by construction: the menu that would have double-fired is gone, and
+   * every branch below preventDefaults and stops. That bail remains as the
+   * second line of defence.
+   *
+   * Bound in its own listener rather than in that handler for two reasons. It
+   * must fire REGARDLESS OF FOCUS -- a menu accelerator never cared whether you
+   * were typing, so Ctrl+S saved while you were naming a series, and folding it
+   * into a handler that bails inside text fields would quietly narrow it. And
+   * openProject/saveProject/exportData are declared after that effect, so they
+   * cannot enter its dependency array without a TDZ error during render.
+   *
+   * Ctrl+W is deliberately NOT rebound (David's call): the titlebar close, Alt+F4
+   * and Cmd+Q all still run the unsaved-work guard, and a fresh IPC channel to
+   * duplicate the window manager was not worth its own key badge.
+   */
   useEffect(() => {
-    if (!window.electronAPI) return;
-    const electronAPI = window.electronAPI;
-    const unsubscribes = [
-      electronAPI.onMenuEvent('menu:open-project', () => {
-        void openProject();
-      }),
-      electronAPI.onMenuEvent('menu:save-project', () => {
-        void saveProject();
-      }),
-      electronAPI.onMenuEvent('menu:save-csv', () => {
-        void exportData('csv');
-      }),
-      // Edit menu (checkpoint 38) -- the menu that checkpoint 32 deliberately
-      // left out until undo/redo existed (see ui/electron-menu.cjs).
-      electronAPI.onMenuEvent('menu:undo', () => undo()),
-      electronAPI.onMenuEvent('menu:redo', () => redo()),
-    ];
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [openProject, saveProject, exportData, undo, redo]);
+    function onAccelerator(e: KeyboardEvent) {
+      // Alt-modified combos are left alone -- Alt belongs to the key-tips now.
+      if (!primaryMod(e) || e.altKey) return;
+      const canvas = imageCanvasRef.current;
+      let handled = true;
+      switch (e.key.toLowerCase()) {
+        case 'o':
+          if (e.shiftKey) void openProject();
+          else canvas?.openImage();
+          break;
+        case 's':
+          if (e.shiftKey) void exportData('csv');
+          else void saveProject();
+          break;
+        // Electron's `CmdOrCtrl+Equal` is the '=' key; '+' is the same key held
+        // with Shift, which is what a user reaching for "zoom in" actually presses.
+        case '=':
+        case '+':
+          canvas?.zoomIn();
+          break;
+        case '-':
+          canvas?.zoomOut();
+          break;
+        case '0':
+          canvas?.zoomFit();
+          break;
+        case '1':
+          canvas?.zoom100();
+          break;
+        default:
+          handled = false;
+      }
+      if (handled) e.preventDefault();
+    }
+    window.addEventListener('keydown', onAccelerator);
+    return () => window.removeEventListener('keydown', onAccelerator);
+  }, [openProject, saveProject, exportData]);
 
   const handleRunCurveFit = useCallback(() => {
     if (!axes) return;

@@ -1,176 +1,77 @@
-// Native menu bar for ui/'s two Electron entry points (checkpoint 32, see
-// CLAUDE.md's "engine/ui rebuild -- staged checkpoints") -- both
-// electron-main.cjs (production) and electron-dev.cjs (dev preview) call
-// buildMenu(mainWindow) so the real menu is what's previewed during
-// development too, not a separate dev-only stand-in.
+// Application menu for ui/'s two Electron entry points (electron-main.cjs and
+// electron-dev.cjs both call buildMenu(mainWindow)).
 //
-// Structure and IPC channel names were originally ported from the old
-// electron/menu.js (the retired wpd-core/ui-patches app, deleted 2026-07-19) --
-// the File/clicks-send-a-channel pattern and channel names (menu:open-image,
-// menu:save-project, etc.) carried over. That reference is gone now; this is the
-// only menu.
+// ⚑ THE NATIVE MENU IS GONE (v1.6, David's call), and what remains is a macOS
+// compatibility shim. The reason is Alt: Electron's `autoHideMenuBar` made Alt
+// reveal the hidden menu bar, so Alt-reveals-key-tips could not be built while
+// the menu existed. The menu had to go for the key-tips to happen.
 //
-// The Edit menu (Undo/Redo) landed in checkpoint 38, when ui/ finally got
-// a real undo/redo system (engine/history.ts + calibrationSession.ts's
-// captureState/restoreState) -- checkpoint 32 deliberately left it out
-// until then rather than ship permanently-disabled items. Its Undo/Redo
-// send menu:undo/menu:redo, wired through Workspace.tsx's onMenuEvent
-// listener to the exact same undo()/redo() the Ctrl+Z/Ctrl+Shift+Z
-// shortcuts and the on-screen toolbar buttons call.
+// ⚑ The justification for keeping it had become circular. It was kept so Help ▸
+// About stayed "reachable with Alt" -- but the app carries its own Help panel
+// with the full AGPL / WebPlotDigitizer / Engauge / StarryDigitizer / Ketcher
+// attribution CLAUDE.md requires (ui/src/Workspace.tsx), on a control that is
+// visible on screen. A badge on a visible control beats a hidden bar nobody
+// knows to summon -- which is the keystone's own test, since a hidden menu bar
+// is exactly the "shortcut-only path" it fails things for.
 //
-// Deliberate design note: no "Toggle Dark Mode" under View. The app is
-// light-only by design (David: no dark mode, ever -- see ui/src/theme.ts's
-// header); there is no dark variant to switch to.
+// ⚑ WHAT THIS COST, and where it went: `Menu.setApplicationMenu` is what
+// registered the accelerators, so removing the menu unregisters them. Open /
+// Save / Export AND all four zoom keys are now bound in the renderer
+// (ui/src/Workspace.tsx's accelerator effect -- read its note before changing
+// either side). Undo/redo were already renderer-side. Ctrl+W is deliberately
+// dropped; the titlebar close, Alt+F4 and Cmd+Q all still run the unsaved-work
+// guard in electron-close-guard.cjs.
 //
-// Zoom In/Out/Fit to Window/Actual Size are real menu items here, backed by
-// engine/canvasView.ts's zoomByFactor (added specifically because menu clicks
-// have no mouse position to
-// recenter on the way wheel-zoom does) and fitToContainer, wired through
-// ui/src/ImageCanvas.tsx's onMenuEvent listener.
+// ⚑ WHY macOS STILL GETS A MENU. A null application menu on macOS takes the
+// Edit menu's Cut/Copy/Paste/Select All ROLES with it, and those roles are what
+// make Cmd+C/V/X work inside a text field -- the platform has no other binding
+// for them. So a Mac user would lose clipboard editing in every rename and value
+// box. The App menu likewise carries the Quit/Hide/Services conventions macOS
+// users expect. Roles only: no click handlers, no accelerators of our own, and
+// nothing that duplicates an in-app control. Windows and Linux get no menu at
+// all, which is the whole point.
 'use strict'
 
-const { Menu, shell, dialog, app } = require('electron')
+const { Menu, app } = require('electron')
 
-function buildMenu(mainWindow) {
-  const send = (channel) => {
-    if (mainWindow?.webContents) mainWindow.webContents.send(channel)
+function buildMenu() {
+  if (process.platform !== 'darwin') {
+    // No menu bar, so Alt is free for the key-tips.
+    Menu.setApplicationMenu(null)
+    return
   }
 
-  const template = [
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'Open Image…',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => send('menu:open-image'),
-        },
-                {
-          label: 'Open Project…',
-          accelerator: 'CmdOrCtrl+Shift+O',
-          click: () => send('menu:open-project'),
-        },
-        { type: 'separator' },
-        {
-          label: 'Save Project',
-          accelerator: 'CmdOrCtrl+S',
-          click: () => send('menu:save-project'),
-        },
-        {
-          label: 'Save Data As CSV…',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          click: () => send('menu:save-csv'),
-        },
-        { type: 'separator' },
-        {
-          label: 'Close',
-          accelerator: 'CmdOrCtrl+W',
-          click: () => mainWindow?.close(),
-        },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        {
-          label: 'Undo',
-          accelerator: 'CmdOrCtrl+Z',
-          click: () => send('menu:undo'),
-        },
-        {
-          label: 'Redo',
-          accelerator: 'CmdOrCtrl+Shift+Z',
-          click: () => send('menu:redo'),
-        },
-      ],
-    },
-    {
-      label: 'View',
-      submenu: [
-        {
-          label: 'Zoom In',
-          accelerator: 'CmdOrCtrl+Equal',
-          click: () => send('menu:zoom-in'),
-        },
-        {
-          label: 'Zoom Out',
-          accelerator: 'CmdOrCtrl+-',
-          click: () => send('menu:zoom-out'),
-        },
-        {
-          label: 'Fit to Window',
-          accelerator: 'CmdOrCtrl+0',
-          click: () => send('menu:zoom-fit'),
-        },
-        {
-          label: 'Actual Size',
-          accelerator: 'CmdOrCtrl+1',
-          click: () => send('menu:zoom-100'),
-        },
-      ],
-    },
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'About PlotTracer',
-          click: () => {
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'About PlotTracer',
-              message: `PlotTracer ${app.getVersion()}`,
-              detail: [
-                'Based on WebPlotDigitizer by Ankit Rohatgi (AGPL-3.0)',
-                'Some algorithms are clean-room reimplementations of',
-                'Engauge Digitizer ideas (Mark Mitchell, Jason Nicholson; GPL-2.0).',
-                'Reads StarryDigitizer projects (MATO Tomoya; MIT) — format only.',
-                'Icon set derived from Ketcher by EPAM Systems (Apache-2.0).',
-                '',
-                'Developed by Katalyst Nord AB, Stockholm',
-                'david@katalystnord.com',
-              ].join('\n'),
-              buttons: ['OK'],
-            })
-          },
-        },
-        { type: 'separator' },
-        {
-          label: 'Report Issue',
-          click: () =>
-            shell.openExternal(
-              'https://github.com/katalystnord/plottracer/issues'
-            ),
-        },
-        {
-          label: 'Documentation',
-          click: () =>
-            shell.openExternal(
-              'https://github.com/katalystnord/plottracer'
-            ),
-        },
-      ],
-    },
-  ]
-
-  // Standard macOS application menu boilerplate.
-  if (process.platform === 'darwin') {
-    template.unshift({
-      label: app.getName(),
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    })
-  }
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: app.getName(),
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      {
+        // Roles only -- this menu exists so the clipboard shortcuts keep working
+        // in text fields, NOT to offer actions. App-level undo/redo are the
+        // renderer's (they roll back a digitization, not typing), so they are
+        // deliberately absent: `role: 'undo'` here would shadow them.
+        label: 'Edit',
+        submenu: [
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+    ])
+  )
 }
 
 module.exports = { buildMenu }

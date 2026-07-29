@@ -43,9 +43,8 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'PlotTracer — engine/ui dev preview',
-    // Match electron-main.cjs: hide the now-redundant native menu row
-    // (checkpoint 41) while keeping the menu built for its accelerators and
-    // Help > About. See electron-main.cjs for the full rationale.
+    // Match electron-main.cjs, which removed the native menu in v1.6 to free
+    // Alt for the key-tips. See ui/electron-menu.cjs for what that cost.
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'electron-preload.cjs'),
@@ -53,13 +52,12 @@ function createWindow() {
     },
   })
 
-  // Checkpoint 32: the same real menu electron-main.cjs now uses, rather
-  // than Electron's own default menu (which this file previously left in
-  // place implicitly) -- the dev preview should show the actual menu
-  // bar, not a stand-in. Losing the default menu's "Toggle DevTools" item
-  // is not a real loss here: openDevTools() below already opens them
-  // automatically on every launch.
-  buildMenu(mainWindow)
+  // The same call electron-main.cjs makes, so the dev preview matches the real
+  // app: nothing on Windows/Linux, roles-only on macOS. This also replaces
+  // Electron's own DEFAULT menu, which this file would otherwise inherit
+  // implicitly -- and that default binds Ctrl/Cmd+Q, W, R and the zoom keys,
+  // which would shadow the renderer's accelerators in dev only.
+  buildMenu()
 
   const useBuilt = process.argv.includes('--built')
   if (useBuilt) {

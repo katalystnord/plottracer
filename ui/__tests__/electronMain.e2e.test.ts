@@ -46,19 +46,17 @@ async function launchProductionApp(): Promise<{ app: ElectronApplication; page: 
   // before React has mounted and run its effects -- the two tests that
   // predate checkpoint 32 never noticed because their first action is
   // always clicking a testid button, which Playwright's own actionability
-  // wait makes safe by accident. Checkpoint 32's menu tests send an IPC
-  // event as their very first action instead, with nothing to wait on --
-  // sent before ui/src/Workspace.tsx's/ImageCanvas.tsx's onMenuEvent
-  // effects have registered their listeners, the event is simply lost
-  // (ipcRenderer.on has no queue for a message sent before it's called).
-  // Waiting for a real testid to become visible here, once, fixes it for
-  // every caller instead of each test needing its own ad hoc wait.
+  // wait makes safe by accident. The accelerator tests press a KEY as their very
+  // first action instead, with nothing to wait on -- pressed before
+  // ui/src/Workspace.tsx's effects have registered the keydown listener, it is
+  // simply lost. Waiting for a real testid to become visible here, once, fixes it
+  // for every caller instead of each test needing its own ad hoc wait.
   await page.getByTestId('open-image-button').waitFor({ state: 'visible', timeout: 15000 });
   return { app, page };
 }
 
 describe('ui/electron-main.cjs (production entry point)', () => {
-  it('loads the built dist with the production title, no devtools, and no native menu', async () => {
+  it('loads the built dist with the production title, no devtools, and the right menu for the platform', async () => {
     const { app, page } = await launchProductionApp();
     try {
       expect(await page.title()).toBe('PlotTracer');
@@ -66,10 +64,24 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       const devToolsOpen = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.isDevToolsOpened());
       expect(devToolsOpen).toBe(false);
 
-      // Checkpoint 32: a real native menu bar now exists (previously
-      // explicitly null, see this test's own history before checkpoint 32).
-      const hasMenu = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() !== null);
-      expect(hasMenu).toBe(true);
+      // ⚑ v1.6: the native menu is GONE on Windows/Linux so that Alt is free for
+      // the key-tips, and reduced to a roles-only App+Edit menu on macOS, without
+      // which Cmd+C/V/X stop working inside text fields. Asserted per platform
+      // rather than as a flat "no menu", because "no menu on macOS" would be the
+      // regression, not the goal.
+      const menuLabels = await app.evaluate(({ Menu }) =>
+        Menu.getApplicationMenu()?.items.map((i) => i.label) ?? null
+      );
+      if (process.platform === 'darwin') {
+        expect(menuLabels).not.toBeNull();
+        expect(menuLabels).toContain('Edit');
+        // Roles only: nothing that duplicates an in-app control.
+        expect(menuLabels).not.toContain('File');
+        expect(menuLabels).not.toContain('View');
+        expect(menuLabels).not.toContain('Help');
+      } else {
+        expect(menuLabels).toBeNull();
+      }
 
       // A real signal that ui/dist's built assets loaded correctly through
       // this entry point's own file:// path resolution, not just that some
@@ -131,16 +143,14 @@ describe('ui/electron-main.cjs (production entry point)', () => {
     }
   }, 30000);
 
-  // Checkpoint 32 (native menu bar, see CLAUDE.md and
-  // ui/electron-menu.cjs). These simulate a menu click the way
-  // electron-menu.cjs's own click handlers do -- webContents.send(channel)
-  // -- rather than trying to drive Electron's native menu through
-  // Playwright, which isn't reliably supported cross-platform. That's a
-  // deliberate scope boundary: what needs coverage is the renderer-side
-  // wiring (preload's onMenuEvent -> ImageCanvas.tsx/Workspace.tsx's
-  // effects -> the same handlers the top-bar buttons already call), not
-  // the menu template's own labels/accelerators, which have no runtime
-  // logic to regress.
+  // ⚑ THE ACCELERATORS, now that the native menu is gone (v1.6). These used to
+  // simulate a menu click by sending the channel electron-menu.cjs's own click
+  // handler sent, because driving a native menu through Playwright is not
+  // reliably supported cross-platform. With the bindings moved into the renderer
+  // there is no such gap: pressing the key IS the production path, so these press
+  // the key. That also closes the failure mode this very file was bitten by (see
+  // the .tar test below) -- a channel-driven test goes on passing after the thing
+  // that sends the channel is deleted, because nothing connects the two.
   // A fixed wait-then-read-once after each send proved flaky under a
   // full-suite run's resource contention from several sequential Electron
   // launches (same class of fragility already documented in CLAUDE.md for
@@ -149,10 +159,17 @@ describe('ui/electron-main.cjs (production entry point)', () => {
   // state (vitest's own expect.poll, not @playwright/test's assertions --
   // this file still isn't on that dependency) instead of guessing a
   // sleep duration long enough for any load level.
-  async function sendMenuEvent(app: ElectronApplication, channel: string) {
-    await app.evaluate(({ BrowserWindow }, ch) => {
-      BrowserWindow.getAllWindows()[0]!.webContents.send(ch);
-    }, channel);
+  /**
+   * Press one of the application accelerators.
+   *
+   * ⚑ These tests used to drive `menu:*` IPC channels, which was the only path
+   * that existed while the native menu owned the accelerators. The menu is gone
+   * (v1.6) and the bindings live in the renderer, so pressing the KEY is now both
+   * the real user path and the only one -- a channel-driven test would have gone
+   * on passing against wiring nothing could reach.
+   */
+  async function pressAccelerator(page: Page, combo: string) {
+    await page.keyboard.press(combo);
   }
 
   function readScale(viewStateText: string): number {
@@ -165,7 +182,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
     return readScale((await page.getByTestId('view-state').textContent())!);
   }
 
-  it('native View > Zoom* menu actions change the canvas view state via ImageCanvas.tsx\'s onMenuEvent wiring', async () => {
+  it('the zoom accelerators change the canvas view state (Ctrl +/-/0/1)', async () => {
     const { app, page } = await launchProductionApp();
     try {
       // Captured before opening anything -- the literal pre-load default
@@ -179,39 +196,39 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       await app.evaluate(({ dialog }, samplePath) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
       }, SAMPLE_IMAGE);
-      await sendMenuEvent(app, 'menu:open-image');
+      await pressAccelerator(page, 'Control+o');
       await expect
         .poll(async () => (await page.getByTestId('view-state').textContent()) ?? '', { timeout: 10000 })
         .not.toBe(initialViewState);
       const fittedScale = await pollScale(page);
 
-      await sendMenuEvent(app, 'menu:zoom-in');
+      await pressAccelerator(page, 'Control+=');
       await expect.poll(() => pollScale(page), { timeout: 10000 }).toBeGreaterThan(fittedScale);
 
-      await sendMenuEvent(app, 'menu:zoom-out');
-      await sendMenuEvent(app, 'menu:zoom-out');
+      await pressAccelerator(page, 'Control+-');
+      await pressAccelerator(page, 'Control+-');
       await expect.poll(() => pollScale(page), { timeout: 10000 }).toBeLessThan(fittedScale);
 
       // "Actual Size" -- checkpoint 32's zoomByFactor(view, cx, cy,
       // 1/view.scale) case, exercised here through the real menu/IPC path
       // rather than only as a unit test.
-      await sendMenuEvent(app, 'menu:zoom-100');
+      await pressAccelerator(page, 'Control+1');
       await expect.poll(() => pollScale(page), { timeout: 10000 }).toBeCloseTo(1, 2);
 
-      await sendMenuEvent(app, 'menu:zoom-fit');
+      await pressAccelerator(page, 'Control+0');
       await expect.poll(() => pollScale(page), { timeout: 10000 }).toBeCloseTo(fittedScale, 2);
     } finally {
       await app.close();
     }
   }, 30000);
 
-  it('native File > Save Project menu action reaches Workspace.tsx\'s saveProject handler', async () => {
+  it('Ctrl+S reaches Workspace.tsx\'s saveProject handler', async () => {
     const { app, page } = await launchProductionApp();
     try {
       // No image loaded -- saveProject()'s own first-line guard produces a
       // deterministic, observable error, confirming the menu event reached
       // the handler at all (an unwired listener would show nothing).
-      await sendMenuEvent(app, 'menu:save-project');
+      await pressAccelerator(page, 'Control+s');
       await expect
         .poll(async () => (await page.getByTestId('project-error').textContent({ timeout: 1000 }).catch(() => null)) ?? '', { timeout: 10000 })
         .toContain('Load an image before saving a project.');
@@ -220,13 +237,13 @@ describe('ui/electron-main.cjs (production entry point)', () => {
     }
   }, 30000);
 
-  it('native File > Open Project…/Save Data As CSV… menu actions reach the same handlers as their buttons', async () => {
+  it('Ctrl+Shift+O / Ctrl+Shift+S reach the same handlers as their top-bar buttons', async () => {
     const { app, page } = await launchProductionApp();
     try {
       // Save Data As CSV… -- deterministic without any file I/O: no axes
       // calibrated yet, so exportCSV()'s own early-exit error confirms the
       // menu event reached it.
-      await sendMenuEvent(app, 'menu:save-csv');
+      await pressAccelerator(page, 'Control+Shift+S');
       await expect
         .poll(async () => (await page.getByTestId('project-error').textContent({ timeout: 1000 }).catch(() => null)) ?? '', { timeout: 10000 })
         .toContain('Calibrate the axes before exporting data.');
@@ -241,7 +258,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
         await app.evaluate(({ dialog }, p) => {
           dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
         }, badProjectPath);
-        await sendMenuEvent(app, 'menu:open-project');
+        await pressAccelerator(page, 'Control+Shift+O');
         // v1.5: the import registry replaced the generic refusal with one that
         // NAMES the formats that do work, so this assertion went stale and was
         // still pinning the old wording. The point of the test is unchanged --
@@ -258,27 +275,16 @@ describe('ui/electron-main.cjs (production entry point)', () => {
     }
   }, 30000);
 
-  it('exposes an Edit menu whose Undo/Redo actually reach undo()/redo() (checkpoint 38)', async () => {
+  it('Ctrl+Z / Ctrl+Shift+Z actually reach undo()/redo() (checkpoint 38)', async () => {
     const { app, page } = await launchProductionApp();
     try {
-      // Structural half: the Edit submenu electron-menu.cjs built.
-      const editMenu = await app.evaluate(({ Menu }) => {
-        const top = Menu.getApplicationMenu()?.items.find((i) => i.label === 'Edit');
-        if (!top?.submenu) return null;
-        return top.submenu.items.map((i) => ({ label: i.label, accelerator: i.accelerator }));
-      });
-      expect(editMenu).toEqual([
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z' },
-        { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z' },
-      ]);
-
-      // Behavioral half, deliberately not just the template: the menu:undo/
-      // menu:redo channels must also be in the preload's own onMenuEvent
-      // allowlist (ui/electron-preload.cjs's MENU_EVENT_CHANNELS) -- a
-      // template-only check silently passed while those two channels were
-      // missing there, so the listeners never registered and the menu did
-      // nothing. Drive a real point through undo/redo via the menu IPC path
-      // to prove the whole chain, allowlist included.
+      // ⚑ The structural half of this test asserted the Edit submenu's template
+      // (Undo/Redo + their accelerators). That menu no longer exists, and the
+      // template was never the part that mattered: it once passed while the two
+      // channels were missing from the preload's allowlist, so the listeners
+      // never registered and the menu did nothing. Only the behavioural half
+      // could catch that, and only the behavioural half survives -- driving a
+      // real point through undo and redo with the keys a user actually presses.
       await app.evaluate(({ dialog }, samplePath) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
       }, SAMPLE_IMAGE);
@@ -313,12 +319,12 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       };
       expect(await rowNums()).toBe('5,5');
 
-      await sendMenuEvent(app, 'menu:undo');
+      await pressAccelerator(page, 'Control+z');
       await expect
         .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 10000 })
         .toBe(0);
 
-      await sendMenuEvent(app, 'menu:redo');
+      await pressAccelerator(page, 'Control+Shift+Z');
       await expect.poll(rowNums, { timeout: 10000 }).toBe('5,5');
     } finally {
       await app.close();
@@ -356,10 +362,10 @@ describe('ui/electron-main.cjs — a foreign digitizer\'s .tar, imported through
       // deleted in `6a16f23` along with the rest of that tool's first-class status.
       // The event went nowhere, so the tar import had NO production coverage for
       // three commits -- the suite would have said so, but it had not been run.
-      await app.evaluate(({ dialog, BrowserWindow }, p) => {
+      await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
-        BrowserWindow.getAllWindows()[0]!.webContents.send('menu:open-project');
       }, tarPath);
+      await page.keyboard.press('Control+Shift+O');
 
       // wpd4.json is six figures; the picker lists them (Image axes disabled).
       await page.getByTestId('wpd-picker').waitFor({ state: 'visible', timeout: 15000 });
