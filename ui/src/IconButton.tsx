@@ -163,7 +163,7 @@ export function IconButton({
       {/* While key-tips are up the chip REPLACES the plain badge rather than joining
           it -- otherwise a rail tool would show its own digit twice, in two styles. */}
       {shortcut && !tipShowing && <ShortcutBadge>{shortcut}</ShortcutBadge>}
-      {tipShowing && <KeyTip data-testid={`keytip-${testId}`}>{tipText}</KeyTip>}
+      {tipShowing && <KeyTip side="left" data-testid={`keytip-${testId}`}>{tipText}</KeyTip>}
       {foldout && (
         // A rounded right-triangle filling the corner (Ketcher's `dropdown`
         // glyph), pointing into the button's lower-right -- "click to fold out".

@@ -184,10 +184,16 @@ export const TopBarButton = styled('button')({
  * lightness. Top-RIGHT so it cannot collide with IconButton's own permanent
  * upper-left digit badge, which the rail buttons already carry.
  */
-export const KeyTip = styled('span')({
+export const KeyTip = styled('span', {
+  shouldForwardProp: (prop) => prop !== 'side',
+})<{ side?: 'left' | 'right' }>(({ side }) => ({
   position: 'absolute',
   top: -5,
-  right: -4,
+  // ⚑ LEFT on the rail (David): its tools already carry their digit in the upper-left,
+  // so putting the chip anywhere else reads as a second, different badge rather than
+  // as the number you can already see lighting up. The top bar keeps the right, where
+  // the label occupies the left.
+  ...(side === 'left' ? { left: -4 } : { right: -4 }),
   padding: '1px 3px',
   fontSize: 9,
   lineHeight: 1.1,
@@ -200,7 +206,7 @@ export const KeyTip = styled('span')({
   whiteSpace: 'nowrap',
   pointerEvents: 'none',
   zIndex: 3,
-});
+}));
 
 /** Left icon rail, flush against the canvas -- an intrinsic-width vertical
  * column of tool/action buttons grouped into cards, mirroring Ketcher's own

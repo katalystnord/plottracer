@@ -25,6 +25,13 @@ import { IS_MAC } from './platform.js';
  * new bindings, no conflict analysis and no mode. If the two-step is ever wanted, it
  * layers on top of this rather than replacing it.
  *
+ * ⚑ THE BADGES LATCH (David, seeing it run). Releasing Alt does NOT take them down --
+ * they stay until you do something else: press any other key (including the one you
+ * just read, or Esc), or reach for the mouse. Holding a modifier down while hunting
+ * for a key you have not learnt yet is precisely the position someone consulting the
+ * badges is in, so requiring the hold defeats the purpose. Office latches for the same
+ * reason.
+ *
  * Deliberately does NOT `preventDefault`. With the menu gone Alt does nothing on
  * Windows/Linux, and on macOS Option is a live text-entry modifier (it types special
  * characters) — swallowing it would break typing in every value and rename field to
@@ -39,10 +46,11 @@ export function useKeyTips(): boolean {
       // layout is Ctrl+Alt, and it types real characters) is somebody entering text,
       // not asking what the shortcuts are.
       if (e.key === 'Alt' && !e.ctrlKey && !e.metaKey && !e.shiftKey) setShowing(true);
-      else if (showing) setShowing(false);
-    }
-    function onKeyUp(e: KeyboardEvent) {
-      if (e.key === 'Alt') setShowing(false);
+      // ⚑ ...and ANY other key takes them down again. That is the "something else"
+      // half of the latch below: pressing the key you just read dismisses the badges
+      // as it fires, and Esc dismisses them having done nothing, which is exactly how
+      // Office behaves.
+      else if (e.key !== 'Alt') setShowing(false);
     }
     // ⚑ Alt+Tab away and the keyup lands in the OTHER window, so without these the
     // badges stay on screen for as long as the app is left alone — the first thing
@@ -51,16 +59,18 @@ export function useKeyTips(): boolean {
       setShowing(false);
     }
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', clear);
+    // A click is "something else" too -- having reached for the mouse, the user is no
+    // longer asking what the keyboard can do.
+    window.addEventListener('pointerdown', clear);
     document.addEventListener('visibilitychange', clear);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clear);
+      window.removeEventListener('pointerdown', clear);
       document.removeEventListener('visibilitychange', clear);
     };
-  }, [showing]);
+  }, []);
 
   return showing;
 }
@@ -74,7 +84,12 @@ export function useKeyTips(): boolean {
  * `⌘⇧O` faster than `Cmd+Shift+O`); everywhere else gets words.
  */
 export function keyTipLabel(key: string, shift = false): string {
-  return IS_MAC ? `⌘${shift ? '⇧' : ''}${key}` : `Ctrl+${shift ? 'Shift+' : ''}${key}`;
+  // ⚑ `⇧` rather than the word: "Ctrl+Shift+Z" is ~55px at this size and overflowed a
+  // 36px icon button, so the undo and redo chips overlapped into an unreadable
+  // "Ct·Ctrl+Shift+Z" (seen on David's screen, invisible to every test -- the badges
+  // were all present and correct, just illegible). The glyph is standard on both
+  // platforms and takes the chip back inside the button.
+  return IS_MAC ? `⌘${shift ? '⇧' : ''}${key}` : `Ctrl+${shift ? '⇧' : ''}${key}`;
 }
 
 /**

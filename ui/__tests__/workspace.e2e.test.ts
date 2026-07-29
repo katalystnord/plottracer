@@ -3819,7 +3819,15 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     // The real accelerator, not an Office-style letter to press next.
     expect(await textOf('keytip-undo')).toMatch(/Ctrl|⌘/);
 
+    // ⚑ LATCHED (David, seeing it run): releasing Alt does NOT take them down. Holding
+    // a modifier while hunting for a key you have not learnt yet is exactly the
+    // position someone reading the badges is in, so requiring the hold defeats it.
     await page.keyboard.up('Alt');
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('keytip-undo').count()).toBe(1);
+
+    // ...until you do something else. Esc dismisses them having done nothing.
+    await page.keyboard.press('Escape');
     await expect.poll(() => page.getByTestId('keytip-undo').count(), { timeout: 5000 }).toBe(0);
   });
 
@@ -3831,12 +3839,14 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await resetWorkspace('xy');
     expect(await page.getByTestId('keytip-mode-calibrate').count()).toBe(0);
 
-    await page.keyboard.down('Alt');
+    await page.keyboard.press('Alt');
     await page.getByTestId('keytip-mode-calibrate').waitFor({ state: 'visible', timeout: 5000 });
-    // The rail's own digit, promoted into the same badge the top bar shows.
+    // The rail's own digit, promoted into the same badge the top bar shows -- and on
+    // the SAME SIDE as the digit already there, so it reads as that number lighting up
+    // rather than as a second, different badge (David).
     expect(await textOf('keytip-mode-calibrate')).toBe('1');
 
-    await page.keyboard.up('Alt');
+    await page.keyboard.press('Escape');
     await expect.poll(() => page.getByTestId('keytip-mode-calibrate').count(), { timeout: 5000 }).toBe(0);
   });
 
@@ -3859,10 +3869,11 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await page.keyboard.press('0');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.down('Alt');
+    // Tap Alt and LET GO -- the badges stay, which is what makes this a sequence
+    // rather than a chord, and is how an Office user's fingers already work.
+    await page.keyboard.press('Alt');
     expect(await textOf('keytip-mode-calibrate')).toBe('1');
     await page.keyboard.press('1');
-    await page.keyboard.up('Alt');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('false');
   });
@@ -3872,11 +3883,10 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     // badges stay up for as long as the app is left alone -- the first thing anyone
     // does after pressing Alt.
     await resetWorkspace('xy');
-    await page.keyboard.down('Alt');
+    await page.keyboard.press('Alt');
     await page.getByTestId('keytip-undo').waitFor({ state: 'visible', timeout: 5000 });
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
     await expect.poll(() => page.getByTestId('keytip-undo').count(), { timeout: 5000 }).toBe(0);
-    await page.keyboard.up('Alt');
   });
 });
 
