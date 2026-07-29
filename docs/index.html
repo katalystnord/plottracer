@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlotTracer — turn any graph back into data</title>
-<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, polar, spider/radar, ternary, map, histogram, box-plot and error-bar plots. Export to CSV, Excel, OpenDocument, JSON, LaTeX, MATLAB, Python and R.">
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, polar, spider/radar, ternary, map, histogram, box-plot and error-bar plots. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer — turn any graph back into data">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
@@ -22,6 +22,8 @@
     --ink-soft: #4d666c;
     --ink-faint: #7c959b;
     --teal: #167782;
+    /* the foreground that rides ON a teal fill -- see .btn-primary */
+    --on-teal: #ffffff;
     --teal-deep: #0f5a63;
     --amber: #cf7a1e;
     --grid: #d7e4e6;
@@ -38,6 +40,9 @@
       --ink-soft: #9cb6bb;
       --ink-faint: #6c8990;
       --teal: #37b6c3;
+      /* ⛑ dark teal is PALE: #fff on it is 2.43:1 (1.94:1 hovered) and FAILS WCAG.
+         Dark ink on the same fill is 7.39:1. */
+      --on-teal: #0a191d;
       --teal-deep: #55cad6;
       --amber: #f0a94a;
       --grid: rgba(120, 185, 195, 0.10);
@@ -47,12 +52,12 @@
   }
   :root[data-theme="light"] {
     --paper: #f1f6f7; --card: #ffffff; --ink: #12292e; --ink-soft: #4d666c; --ink-faint: #7c959b;
-    --teal: #167782; --teal-deep: #0f5a63; --amber: #cf7a1e; --grid: #d7e4e6; --line: #d8e5e7;
+    --on-teal: #ffffff; --teal: #167782; --teal-deep: #0f5a63; --amber: #cf7a1e; --grid: #d7e4e6; --line: #d8e5e7;
     --shadow: 20px 20px 60px rgba(18, 60, 68, 0.08);
   }
   :root[data-theme="dark"] {
     --paper: #0a191d; --card: #10262b; --ink: #e7f1f2; --ink-soft: #9cb6bb; --ink-faint: #6c8990;
-    --teal: #37b6c3; --teal-deep: #55cad6; --amber: #f0a94a; --grid: rgba(120,185,195,0.10); --line: rgba(140,195,205,0.16);
+    --on-teal: #0a191d; --teal: #37b6c3; --teal-deep: #55cad6; --amber: #f0a94a; --grid: rgba(120,185,195,0.10); --line: rgba(140,195,205,0.16);
     --shadow: 20px 20px 60px rgba(0,0,0,0.35);
   }
 
@@ -116,8 +121,16 @@
     border: 1px solid transparent; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
   }
   .btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-  .btn-primary { background: var(--teal); color: #fff; box-shadow: 0 2px 10px rgba(22, 119, 130, 0.28); }
+  .btn-primary { background: var(--teal); color: var(--on-teal); box-shadow: 0 2px 10px rgba(22, 119, 130, 0.28); }
   .btn-primary:hover { background: var(--teal-deep); transform: translateY(-1px); }
+  /* ⚑ A button sitting INSIDE the bar lost its colour to the nav's own link rule:
+     `nav.top a` is specificity (0,1,2) and beats `.btn-primary` (0,1,0), so the
+     header's Download drew the nav's dark ink on its teal fill and the label was
+     unreadable -- while the identical button in the hero, outside nav.top, kept
+     its white. The bar may own its typography; a button's COLOURS are the
+     button's own. Hover is listed too, or it would fall back to teal-on-teal. */
+  nav.top a.btn-primary,
+  nav.top a.btn-primary:hover { color: var(--on-teal); }
   .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
   .btn-ghost:hover { border-color: var(--teal); color: var(--teal-deep); }
   @media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
@@ -426,8 +439,8 @@
         </svg>
         <span class="num">STEP 03</span>
         <h3>Export</h3>
-        <p>Send clean numbers to CSV, Excel, JSON, LaTeX, MATLAB, Python or R — at the
-          figure's real precision.</p>
+        <p>Send clean numbers to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB,
+          Python or R — or straight to the clipboard, at the figure's real precision.</p>
       </div>
 
     </div>
