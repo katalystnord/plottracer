@@ -153,13 +153,52 @@ export class Dataset {
     this._tuples = [];
   }
 
-  /** Replace the pixel list with a reordered copy (checkpoint 130's nearest-
-   *  neighbour sort). Series-level metadata, metadata keys and group names are
-   *  untouched -- only the point SEQUENCE changes. The caller guarantees
-   *  `reordered` is a permutation of the current pixels. */
-  setAllPixels(reordered: PixelPoint[]): void {
-    this._dataPoints = reordered.map((p) => ({ x: p.x, y: p.y, metadata: p.metadata }));
-    this._pixelMetadataCount = this._dataPoints.reduce((n, p) => (p.metadata != null ? n + 1 : n), 0);
+  /**
+   * Reorder the pixels, `order` being the new sequence written as OLD indexes
+   * (checkpoint 130's nearest-neighbour sort). Series-level metadata, metadata
+   * keys and group names are untouched -- only the point SEQUENCE changes, and
+   * each pixel travels whole, carrying its own per-pixel metadata.
+   *
+   * ⚑ TUPLES HOLD PIXEL INDEXES, so they are remapped through the same
+   * permutation. The previous shape of this method took the reordered pixels and
+   * left `_tuples` alone, which silently re-pointed every pairing: a slotted
+   * series whose tuple 0 meant (10,20) meant (40,30) after a reverse, with no
+   * error and nothing on screen to see. On a Box Plot, an error bar or a spider
+   * the PAIR *is* the datum, so that is not a reordering, it is a different
+   * record. The session refuses to sort a slotted series
+   * (`canSortByNearestNeighbour`) and no caller can reach it today -- which is
+   * exactly the problem, since that guard lives in the session and the model has
+   * more than one entrance. Same finding, and the same fix, as
+   * `removePixelAtIndex`'s missing lower bound; v2.0's interval record makes
+   * tuple-shaped data the norm rather than the exception.
+   *
+   * Takes the ORDER rather than the pixels so the permutation is a fact this
+   * method can check instead of a promise the caller makes in a comment.
+   * Returns false, changing nothing, for anything that is not a permutation of
+   * 0..count-1.
+   */
+  reorderPixels(order: readonly number[]): boolean {
+    const n = this._dataPoints.length;
+    if (order.length !== n) return false;
+    const oldToNew = new Array<number>(n).fill(-1);
+    for (let newIndex = 0; newIndex < n; newIndex++) {
+      const oldIndex = order[newIndex]!;
+      if (!Number.isInteger(oldIndex) || oldIndex < 0 || oldIndex >= n || oldToNew[oldIndex] !== -1) {
+        return false; // out of range, or the same pixel twice -- not a permutation
+      }
+      oldToNew[oldIndex] = newIndex;
+    }
+    this._dataPoints = order.map((oldIndex) => this._dataPoints[oldIndex]!);
+    this._tuples = this._tuples.map((tuple) =>
+      tuple.map((pixelIndex) => {
+        if (pixelIndex == null) return null;
+        const moved = oldToNew[pixelIndex];
+        // A tuple slot pointing outside the pixel list was already dangling; it
+        // does not survive the move as a number that now means something else.
+        return moved === undefined || moved < 0 ? null : moved;
+      })
+    );
+    return true;
   }
 
   getCount(): number {

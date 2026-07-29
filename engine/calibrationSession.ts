@@ -3901,13 +3901,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *  reasoning missed, because that reasoning only held for the click path and
    *  the load path is a second entrance (the guards-belong-in-the-model lesson,
    *  ckpts 69/72/77/80). Series-level metadata (name, colour, error relation)
-   *  rides on the Dataset itself and setAllPixels leaves it untouched. */
+   *  rides on the Dataset itself and reorderPixels leaves it untouched, as do
+   *  the tuples -- which it remaps rather than stranding (see its own note). */
   sortByNearestNeighbour(): void {
     if (!this.canSortByNearestNeighbour()) return;
     const dataset = this.activeEntry.dataset;
     const pixels = dataset.getAllPixels();
-    const order = nearestNeighbourOrder(pixels.map((p) => ({ x: p.x, y: p.y })));
-    dataset.setAllPixels(order.map((i) => pixels[i]!));
+    dataset.reorderPixels(nearestNeighbourOrder(pixels.map((p) => ({ x: p.x, y: p.y }))));
   }
 
   /** Reposition an already-placed calibration handle (drag-to-adjust). Re-runs calibration
