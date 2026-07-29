@@ -105,3 +105,21 @@ export function keyTipLabel(key: string, shift = false): string {
  * without a single call site remembering to opt in.
  */
 export const KeyTipsContext = createContext(false);
+
+/**
+ * The key-tip for REDO, which is the one action with two equally real bindings.
+ *
+ * ⚑ `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` have ALL been bound since checkpoint 38 --
+ * nothing here changes what works. The question is only which one a badge should
+ * name, and the answer is per-platform, because the conventions genuinely differ:
+ * Windows and Office trained everyone on `Ctrl+Y`, while macOS (and Adobe, and most
+ * cross-platform apps) use `Cmd+Shift+Z` and reserve `Cmd+Y` for other things.
+ * Badging the wrong one is worse than badging neither -- it teaches a keystroke the
+ * user's other applications will not answer to (David spotted it immediately).
+ *
+ * Happy side effect: `Ctrl+Y` is far narrower than `Ctrl+⇧Z`, which is what overflowed
+ * the 36px button in the first place.
+ */
+export function redoKeyTip(): string {
+  return IS_MAC ? keyTipLabel('Z', true) : keyTipLabel('Y');
+}

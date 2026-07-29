@@ -187,7 +187,7 @@ import {
   measurementPixelValue,
 } from '../../core/measurementValues.js';
 import { theme, glassSurface } from './theme.js';
-import { useKeyTips, keyTipLabel, KeyTipsContext } from './useKeyTips.js';
+import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
 
 /**
@@ -5814,8 +5814,8 @@ export function Workspace() {
           <IconButton
             testId="redo"
             icon={<RedoIcon />}
-            keyTip={keyTips ? keyTipLabel('Z', true) : undefined}
-            label="Redo (Ctrl+Shift+Z)"
+            keyTip={keyTips ? redoKeyTip() : undefined}
+            label="Redo (Ctrl+Y or Ctrl+Shift+Z)"
             disabled={!history.canRedo()}
             onClick={redo}
           />

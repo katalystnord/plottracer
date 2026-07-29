@@ -4,6 +4,7 @@ import { Button, Popover, Slider } from '@mui/material';
 import { scaleToSlider, sliderToScale } from '../../engine/canvasView.js';
 import { theme } from './theme.js';
 import { ChevronDownIcon } from './icons.js';
+import { keyTipLabel } from './useKeyTips.js';
 
 /**
  * On-canvas zoom control (checkpoint 34, see CLAUDE.md and
@@ -59,6 +60,8 @@ export interface ZoomControlsProps {
 }
 
 const ZoomButton = styled(Button)({
+  // Anchors the Alt key-tip chip without shifting the bar when it appears.
+  position: 'relative',
   display: 'flex',
   alignItems: 'center',
   gap: 4,
@@ -167,6 +170,18 @@ export function ZoomControls({
       >
         <span>{Math.round(scale * 100)}%</span>
         <ChevronDownIcon />
+        {/* ⚑ NO KEY-TIP CHIP HERE, deliberately, and this is the one place in the app
+            where that is the right answer.
+            Every other chip means "press this and this button's action happens". The
+            zoom control OPENS A MENU; Ctrl+0 fits the view. Badging it would read as
+            "Ctrl+0 opens this", which is false -- the same trap as badging a real key
+            that carries the wrong promise, and this app has been bitten repeatedly by
+            strings promising interactions the app does not have.
+            There is no discoverability cost: the fold-out below prints all four zoom
+            keys permanently, which is a layer the user can find -- what the keystone
+            actually asks for. Four accelerators cannot honestly live on one collapsed
+            button, so they live one level in, where each sits beside the action it
+            performs. */}
       </ZoomButton>
       <Popover
         open={Boolean(anchorEl)}
@@ -188,19 +203,19 @@ export function ZoomControls({
           <SliderDivider />
           <ZoomActionButton data-testid="zoom-in" onClick={onZoomIn}>
             <span>Zoom In</span>
-            <ShortcutHint>Ctrl+=</ShortcutHint>
+            <ShortcutHint>{keyTipLabel('=')}</ShortcutHint>
           </ZoomActionButton>
           <ZoomActionButton data-testid="zoom-out" onClick={onZoomOut}>
             <span>Zoom Out</span>
-            <ShortcutHint>Ctrl+-</ShortcutHint>
+            <ShortcutHint>{keyTipLabel('-')}</ShortcutHint>
           </ZoomActionButton>
           <ZoomActionButton data-testid="zoom-fit" onClick={onZoomFit}>
             <span>Fit to Window</span>
-            <ShortcutHint>Ctrl+0</ShortcutHint>
+            <ShortcutHint>{keyTipLabel('0')}</ShortcutHint>
           </ZoomActionButton>
           <ZoomActionButton data-testid="zoom-100" onClick={onZoom100}>
             <span>Actual Size</span>
-            <ShortcutHint>Ctrl+1</ShortcutHint>
+            <ShortcutHint>{keyTipLabel('1')}</ShortcutHint>
           </ZoomActionButton>
         </DropdownContent>
       </Popover>

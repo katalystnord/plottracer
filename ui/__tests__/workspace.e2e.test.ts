@@ -3815,7 +3815,11 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await page.keyboard.down('Alt');
     await page.getByTestId('keytip-undo').waitFor({ state: 'visible', timeout: 5000 });
     expect(await textOf('keytip-undo')).toMatch(/Z$/);
-    expect(await textOf('keytip-redo')).toMatch(/Z$/);
+    // ⚑ Redo has THREE real bindings (Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y, all since ckpt 38),
+    // so the badge names the one that platform's users were trained on: Ctrl+Y on
+    // Windows/Linux, Cmd+Shift+Z on macOS. Badging the other teaches a keystroke their
+    // other applications will not answer to.
+    expect(await textOf('keytip-redo')).toMatch(process.platform === 'darwin' ? /Z$/ : /Y$/);
     // The real accelerator, not an Office-style letter to press next.
     expect(await textOf('keytip-undo')).toMatch(/Ctrl|⌘/);
 
