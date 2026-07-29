@@ -150,3 +150,26 @@ describe('PieAxes — what a sector is worth', () => {
     expect(wrapped).toBeCloseTo(20, 4);
   });
 });
+
+describe('how many digits a reading may honestly show', () => {
+  it('says what one pixel at the rim is worth', () => {
+    // ⚑ The bound on precision, derived from the geometry rather than chosen. A pixel
+    // at radius r subtends 1/r radians, so it is worth (1/r)/sweep x total.
+    const axes = pie(360, 2500, [0, 120, 240]); // radius 50 in this fixture
+    const perPixel = axes.valuePerPixel(2500);
+    expect(perPixel).toBeCloseTo((1 / 50 / (2 * Math.PI)) * 2500, 9);
+    // ...so on a coarse figure a whole unit is below the noise floor.
+    expect(perPixel).toBeGreaterThan(1);
+  });
+
+  it('gives a bigger figure more digits and a smaller one fewer', () => {
+    // Same geometry, different totals: the honest precision follows the units.
+    const axes = pie(360, 100, [0, 120, 240]);
+    expect(axes.valuePerPixel(100)).toBeLessThan(axes.valuePerPixel(2500));
+  });
+
+  it('is zero for an uncalibrated pie rather than infinite', () => {
+    const bare = new PieAxes();
+    expect(bare.valuePerPixel(100)).toBe(0);
+  });
+});

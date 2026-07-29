@@ -1388,6 +1388,36 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 })}
                 {calibrationPreview?.circles.map((c, i) => {
                   const centre = imageToScreen(view, c.cx, c.cy);
+                  // A marker is a POSITION, not a measurement: solid, fully opaque,
+                  // crosshaired, and at a fixed screen size so it stays findable at
+                  // any zoom. See PreviewCircle.marker for why the two differ.
+                  if (c.marker) {
+                    const arm = c.r * 1.9;
+                    return (
+                      <Group key={`calib-circle-${i}`} listening={false}>
+                        <Line
+                          points={[centre.x - arm, centre.y, centre.x + arm, centre.y]}
+                          stroke={c.color}
+                          strokeWidth={2}
+                          listening={false}
+                        />
+                        <Line
+                          points={[centre.x, centre.y - arm, centre.x, centre.y + arm]}
+                          stroke={c.color}
+                          strokeWidth={2}
+                          listening={false}
+                        />
+                        <Circle
+                          x={centre.x}
+                          y={centre.y}
+                          radius={c.r}
+                          stroke={c.color}
+                          strokeWidth={2.5}
+                          listening={false}
+                        />
+                      </Group>
+                    );
+                  }
                   return (
                     <Circle
                       key={`calib-circle-${i}`}

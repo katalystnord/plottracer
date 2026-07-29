@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, PIE_AXES_CONFIG } from '../calibrationSession.js';
+import { BOX_PLOT_AXES_CONFIG, CalibrationSession, PIE_AXES_CONFIG } from '../calibrationSession.js';
 import type { PieAxes } from '../../core/axes/pie.js';
 
 /**
@@ -211,6 +211,40 @@ describe('an exploded slice is captured about its own apex', () => {
   });
 });
 
+describe('an exploded slice is named like every other', () => {
+  it('gets its auto category label', () => {
+    // ⚑ THE BLANK-CATEGORY DEFECT, found by driving the app: a captured pie read
+    // Slice0, (blank), Slice2, Slice3 -- the hole being the exploded one.
+    //
+    // The cause is an ordering trap the rest of the file cannot hit. A label is stored
+    // as metadata on the tuple's PRIMARY PIXEL, so `setTupleLabel` silently returns
+    // when there is no primary pixel yet. Every other path labels a tuple that has
+    // just had a pixel filed into it; the apex branch creates the tuple EMPTY (the
+    // apex is not a pixel, it is per-tuple metadata) and labelled it there and then,
+    // so the write went nowhere. Silent by construction -- `setTupleLabel` has no way
+    // to report that it did nothing.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30);
+    clickBoundaries(session, [0, 60]);
+    expect(session.getTupleLabel(0)).toBe('Slice0');
+  });
+
+  it('numbers it in capture order alongside ordinary slices', () => {
+    // The whole run, as the screenshot showed it: an ordinary slice, then a pulled-out
+    // one, then another ordinary one. No gaps and no repeats.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0]); // slice 0
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30);
+    clickBoundaries(session, [30, 90]); // slice 1, exploded
+    clickBoundaries(session, [140, 200]); // slice 2
+    expect(session.getTupleLabel(0)).toBe('Slice0');
+    expect(session.getTupleLabel(1)).toBe('Slice1');
+    expect(session.getTupleLabel(2)).toBe('Slice2');
+  });
+});
+
 describe('an exploded slice after an ordinary one', () => {
   it('does not strand the tuple that chaining had already opened', () => {
     // ⚑ Found by the e2e, not by reasoning. Completing an ordinary sector pre-opens
@@ -232,5 +266,123 @@ describe('an exploded slice after an ordinary one', () => {
     // The completed sector before it keeps its own two pixels; the copy that had been
     // opened for the sector which never happened is gone with its tuple.
     expect(tuples[0]!.every((v) => v !== null)).toBe(true);
+  });
+  it('leaves NO pixel behind in no tuple at all', () => {
+    // ⚑ THE DUPLICATE-MARKER DEFECT. Discarding the stranded chain dropped its tuple
+    // and kept its pixel, on the stated reasoning that the pixel was "a real click"
+    // belonging to the sector before. It is not: chaining COPIES the boundary (a pixel
+    // serialises with one {tuple, group}, so it cannot be shared), and that sector
+    // already holds its own copy. What stayed was a second marker sitting exactly on
+    // the first, in no tuple, drawn on the figure and written to the project file for
+    // good -- invisible in the table, which reads tuples, and permanent.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0]); // one complete sector; the next is chained open
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // the apex click is where the chain is cut
+
+    const ds = session.getDataset();
+    const referenced = new Set(ds.getAllTuples().flat().filter((v) => v !== null));
+    const orphans = [...Array(ds.getCount()).keys()].filter((i) => !referenced.has(i));
+    expect(orphans).toEqual([]);
+    // And nothing that IS referenced was disturbed by the removal: the completed
+    // sector still points at its own two pixels, at the angles they were clicked.
+    expect(ds.getTuple(0)!.every((v) => v !== null)).toBe(true);
+    expect(ds.getPixel(ds.getTuple(0)![1]!).x).toBeCloseTo(at(0)[0], 9);
+  });
+});
+
+/**
+ * What the SCREEN is told while an exploded slice is being captured.
+ *
+ * ⚑ These exist because the control failed the keystone test outright: the person who
+ * asked for it went looking and could not find it, so it moved from an 11px chip in
+ * the sidebar onto the figure itself (ui/src/ExplodedSliceControl.tsx). What the button
+ * offers has to be true in every state it is shown in, and that is what is asserted
+ * here -- the UI reads these two accessors and nothing else.
+ */
+describe('what the exploded control can say and do', () => {
+  it('reports all three clicks, not just the first', () => {
+    // ⚑ THE DEFECT THIS NAMES. `isAwaitingExplodedApex()` goes false the instant the
+    // tip lands, so a screen reading only that flag would show "nothing armed" for
+    // BOTH edge clicks -- exactly when the user needs telling that this slice is
+    // measured about its own tip and that the chain is broken, so both its edges must
+    // be clicked. Three distinct states, because three distinct things are being asked.
+    const session = calibratedPie();
+    expect(session.getExplodedStage()).toBe('off');
+
+    session.setNextSectorExploded(true);
+    expect(session.getExplodedStage()).toBe('apex');
+    expect(session.getExplodedEdgesPlaced()).toBe(0);
+
+    session.addDataPoint(CX + 30, CY + 30); // the tip
+    expect(session.getExplodedStage()).toBe('edges');
+    expect(session.getExplodedEdgesPlaced()).toBe(0);
+
+    clickBoundaries(session, [0]);
+    expect(session.getExplodedStage()).toBe('edges');
+    expect(session.getExplodedEdgesPlaced()).toBe(1);
+
+    clickBoundaries(session, [60]);
+    // Complete: the slice is an ordinary recorded sector now, and the NEXT one goes
+    // back to the pie's centre. Explosion is a per-slice exception, not a mode.
+    expect(session.getExplodedStage()).toBe('off');
+  });
+
+  it('cancels before the tip is placed', () => {
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.cancelExplodedSector();
+    expect(session.getExplodedStage()).toBe('off');
+    expect(session.getDataset().getTupleCount()).toBe(0);
+  });
+
+  it('cancels AFTER the tip, discarding the edges already clicked', () => {
+    // ⚑ The state `setNextSectorExploded(false)` cannot reach: past the apex the
+    // arming flag is already down and everything that matters lives in the pending
+    // tuple. A cancel button that silently does nothing in two of the three states it
+    // is offered in is worse than no button at all.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30);
+    clickBoundaries(session, [0]);
+    expect(session.getDataset().getTupleCount()).toBe(1);
+
+    session.cancelExplodedSector();
+    expect(session.getExplodedStage()).toBe('off');
+    // The half-built sector goes, and its edge with it -- read about the shared centre
+    // that click is several points wrong, so keeping it would turn a cancel into a
+    // silently mis-measured row.
+    expect(session.getDataset().getTupleCount()).toBe(0);
+    expect(session.getDataset().getCount()).toBe(0);
+  });
+
+  it('leaves finished slices alone when a later one is cancelled', () => {
+    // The guard that matters: cancel must reach only the slice in progress. It runs
+    // against a dataset that already holds completed sectors AND the chained tuple
+    // that arming discards, which is where an off-by-one would land.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0, 60]); // two complete sectors
+    const before = session.getDataset().getCount();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30);
+    clickBoundaries(session, [120]);
+    session.cancelExplodedSector();
+
+    const ds = session.getDataset();
+    expect(ds.getTupleCount()).toBe(2);
+    for (const t of ds.getAllTuples()) expect(t.every((v) => v !== null)).toBe(true);
+    // Arming discarded the chained tuple's copy of the shared boundary, so one pixel
+    // fewer than before -- the completed sectors' own four are untouched.
+    expect(ds.getCount()).toBe(before - 1);
+    // ...and every surviving tuple still points at a real pixel.
+    for (const t of ds.getAllTuples()) {
+      for (const i of t) expect(i!).toBeLessThan(ds.getCount());
+    }
+  });
+
+  it('is off for every type that is not a pie', () => {
+    const box = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+    expect(box.getExplodedStage()).toBe('off');
+    expect(box.getExplodedEdgesPlaced()).toBe(0);
   });
 });

@@ -35,7 +35,7 @@
  * caller converts to screen space like every other overlay.
  */
 
-import { getCircleFrom3Pts, type Vec2 } from '../core/mathFunctions.js';
+import { getCircleFrom3Pts, fitCircle, type Vec2 } from '../core/mathFunctions.js';
 
 export interface PreviewPoint {
   x: number;
@@ -68,6 +68,17 @@ export interface PreviewCircle {
   cy: number;
   r: number;
   color: string;
+  /**
+   * A MARKER rather than a measured circle: drawn solid, with crosshair arms, at a
+   * fixed SCREEN size that does not scale with zoom.
+   *
+   * ⚑ The distinction is real and not cosmetic. A fitted rim is a measurement and must
+   * scale, because its whole job is lying on the ink. A derived centre has no extent to
+   * be true to -- only a position -- so scaling it makes it vanish at low zoom, which
+   * is exactly the zoom where you are looking at the whole figure to judge whether the
+   * middle landed right. `r` is then in screen pixels.
+   */
+  marker?: boolean;
 }
 
 export interface CalibrationPreview {
@@ -206,6 +217,28 @@ export function calibrationPreview(
   }
 
   const circles: PreviewCircle[] = [];
+
+  // ⚑ THE PIE'S FITTED CIRCLE, drawn back over the figure (v1.6). This is the only
+  // way to check an outline-first calibration: the centre is DERIVED, so on a donut
+  // there is nothing in the image to compare it against -- seeing the ring laid over
+  // the rim, and the centre marker sitting where the slices meet, is the check.
+  // Same "draw it back on the figure" job the spider's whiskers do.
+  if (shape.axesKind === 'pie') {
+    const pts: Vec2[] = [];
+    for (const st of shape.steps) {
+      const p = at(st.key);
+      if (p) pts.push([p.x, p.y]);
+    }
+    const fitted = pts.length >= 3 ? fitCircle(pts) : null;
+    if (fitted && Number.isFinite(fitted.radius) && fitted.radius > 0 && fitted.radius < 1e6) {
+      circles.push({ cx: fitted.x0, cy: fitted.y0, r: fitted.radius, color: LIVE_STEP_COLOR });
+      // A crosshair AT the centre, so the derived middle is visible as a thing you can
+      // disagree with rather than an invisible assumption. Sized in SCREEN pixels (see
+      // `marker`): the first attempt scaled with the figure and, on a pie whose slices
+      // meet in a busy tangle of boundary lines and labels, was lost in them.
+      circles.push({ cx: fitted.x0, cy: fitted.y0, r: 9, color: LIVE_STEP_COLOR, marker: true });
+    }
+  }
   for (const [a, b, c] of CIRCLE_TRIPLES[shape.axesKind] ?? []) {
     const p1 = at(a);
     const p2 = at(b);

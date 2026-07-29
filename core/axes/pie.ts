@@ -224,6 +224,21 @@ export class PieAxes {
     return this.residual;
   }
 
+  /**
+   * What ONE PIXEL of movement at the rim is worth, in the units of `total`.
+   *
+   * ⚑ The honest limit on how many digits a reading may show. A pixel at radius r
+   * subtends 1/r radians, so it is worth (1/r)/sweep x total -- about 1.1 units on a
+   * 2500-unit donut at 350px. Printing 611.347 there asserts a precision a thousand
+   * times finer than a click can resolve, which is the same overstatement as the
+   * origin point that once printed as 0.00000000000000222045.
+   */
+  valuePerPixel(total: number): number {
+    const r = this.getRadius();
+    if (!(r > 0) || !(this.sweep > 0)) return 0;
+    return (1 / r / this.sweep) * Math.abs(total);
+  }
+
   /** The fitted radius, in pixels. */
   getRadius(): number {
     return Math.hypot(this.ax, this.ay);

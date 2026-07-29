@@ -1515,11 +1515,22 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
       const [start, end] = points;
       if (!start || !end) return null; // a half-captured sector has no value yet
       const apex = ctx.apex ?? undefined; // an exploded slice measures about its own
-      return axes.sectorValue(
+      const total = axes.getDefaultTotal();
+      const value = axes.sectorValue(
         axes.angleAt(start.px, start.py, apex),
         axes.angleAt(end.px, end.py, apex),
-        axes.getDefaultTotal()
+        total
       );
+      // ⚑ Shown only to the precision ONE PIXEL at the rim can resolve. A 2500-unit
+      // donut at 350px is worth ~1.1 units per pixel, so "611.347" claims a thousand
+      // times finer than any click -- the same overstatement as the origin point that
+      // once printed as 0.00000000000000222045. Derived from the geometry rather than
+      // chosen, so a big figure earns more digits and a small one fewer.
+      const perPixel = axes.valuePerPixel(total);
+      if (!(perPixel > 0)) return value;
+      const decimals = Math.min(6, Math.max(0, Math.ceil(-Math.log10(perPixel))));
+      const f = 10 ** decimals;
+      return Math.round(value * f) / f;
     },
   },
   // A sector IS one object: lose an edge and there is no sector left, unlike the
@@ -3070,11 +3081,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // the next one holding the shared boundary -- but a pulled-out slice shares
         // nothing, so that half-open tuple is now for a sector that will never exist.
         // Left behind it becomes a permanently incomplete row in the table and an
-        // orphan in the file. The PIXEL stays: it is a real click, and it still
-        // belongs to the completed sector before it.
+        // orphan in the file.
+        //
+        // ⚑ AND ITS PIXEL GOES WITH IT. This once read "the PIXEL stays: it is a real
+        // click, and it still belongs to the completed sector before it" -- which is
+        // false, and cost a duplicate every time. Chaining does not SHARE the boundary
+        // pixel, it COPIES it (a pixel serialises with one {tuple, group}, so sharing
+        // could not survive the file); the sector before already holds its own copy.
+        // What was left behind was therefore a second marker sitting exactly on the
+        // first, in no tuple, riding into the project file for good.
         const open = entry.slotCursor.tupleIndex;
         if (open !== null && dataset.getAllTuples()[open]?.some((v) => v === null)) {
-          dataset.removeTuple(open);
+          this.discardTuple(open);
         }
         // Start a fresh tuple for this slice; its apex rides on the tuple, and the
         // next two clicks fill its edges as an ordinary (unchained) pair.
@@ -3084,7 +3102,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
         entry.slotCursor.groupIndex = 0;
         this.pendingExplodedTuple = t;
         this.pendingApex = { x: px, y: py };
-        this.autoLabelTuple(t);
+        // ⚑ NOT LABELLED HERE. A label is metadata on the tuple's PRIMARY PIXEL, and
+        // this tuple has none yet -- the apex is not a pixel, it is per-tuple metadata,
+        // so the tuple is genuinely empty until the first edge lands. `setTupleLabel`
+        // returns silently in that case, which is how the exploded slice shipped with a
+        // blank category between Slice0 and Slice2. It is labelled below, at the same
+        // point the apex is written, for exactly the same reason: that is the first
+        // moment there is somewhere to put it.
         return 'point-added';
       }
       // Slots (Box Plot etc.) file each click into a tuple slot at the
@@ -3132,6 +3156,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const t = this.pendingExplodedTuple;
         if (dataset.getAllTuples()[t]?.[0] != null) {
           this.setSectorApex(t, this.pendingApex.x, this.pendingApex.y);
+          // The tuple now has a primary pixel, so it finally has somewhere to hold a
+          // name -- see the apex branch above for why this could not happen earlier.
+          this.autoLabelTuple(t);
         }
         // Hold the suppression until this slice's SECOND edge lands, then release.
         if (dataset.getAllTuples()[t]?.every((v) => v !== null)) {
@@ -3645,6 +3672,84 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Is the next click an exploded slice's apex? Drives the capture prompt. */
   isAwaitingExplodedApex(): boolean {
     return this.explodedApexPending;
+  }
+
+  /**
+   * How far through an exploded slice's three clicks we are: `'off'` when none is
+   * armed, `'apex'` when the next click places the slice's tip, `'edges'` while its
+   * two boundaries are being clicked.
+   *
+   * ⚑ ONE value rather than the two private booleans it is derived from, because the
+   * screen has to say which of three things the next click does. A caller reading only
+   * `isAwaitingExplodedApex()` reverts to "off" the instant the tip lands -- which is
+   * precisely the point where the user most needs telling that this slice is being
+   * measured about its own tip and NOT the pie's centre, and that the chain is broken
+   * so both its edges have to be clicked.
+   */
+  getExplodedStage(): 'off' | 'apex' | 'edges' {
+    if (this.explodedApexPending) return 'apex';
+    return this.pendingExplodedTuple !== null ? 'edges' : 'off';
+  }
+
+  /**
+   * Abandon the exploded slice in progress: disarm, and discard the half-built sector
+   * along with whatever edges were already clicked.
+   *
+   * ⚑ Needed because the control offers to cancel through ALL THREE clicks, and
+   * `setNextSectorExploded(false)` can only undo the first of them -- past the apex
+   * the arming flag is already down and the state that matters lives in the pending
+   * tuple. A button that says "cancel" and silently does nothing for two of the three
+   * states it is shown in is worse than no button.
+   *
+   * The edges go with it rather than being left as a sector missing its apex: they
+   * were clicked as an exploded slice's edges, and read about the shared centre they
+   * would be several points wrong -- keeping them would turn a cancel into a silently
+   * mis-measured row.
+   */
+  cancelExplodedSector(): void {
+    this.explodedApexPending = false;
+    const t = this.pendingExplodedTuple;
+    this.pendingExplodedTuple = null;
+    this.pendingApex = null;
+    if (t === null) return;
+    this.discardTuple(t);
+  }
+
+  /**
+   * Remove a tuple AND the pixels only it held, keeping every other tuple pointing at
+   * the same pixels it did before.
+   *
+   * ⚑ `Dataset.removeTuple` drops the tuple alone, which is right for it -- the model
+   * cannot know whether a pixel is wanted without its tuple. Every caller that wants
+   * the whole sector gone has to do this, and both pie callers did it differently
+   * (one not at all, leaving a duplicate marker in the file), so it lives in one place.
+   * Highest index first, so the lower ones keep their numbering while we work down.
+   */
+  private discardTuple(tupleIndex: number): void {
+    const entry = this.activeEntry;
+    const dataset = entry.dataset;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return;
+    const pixels = [...new Set(tuple.filter((v): v is number => v !== null))].sort((a, b) => b - a);
+    for (const i of pixels) {
+      dataset.removePixelAtIndex(i);
+      dataset.refreshTuplesAfterPixelRemoval(i);
+    }
+    dataset.removeTuple(tupleIndex);
+    if (entry.slotCursor.tupleIndex !== null && entry.slotCursor.tupleIndex >= tupleIndex) {
+      entry.slotCursor.tupleIndex = null;
+      entry.slotCursor.groupIndex = 0;
+    }
+  }
+
+  /** How many of the armed slice's edges are already placed (0-2); 0 when none is
+   * armed. Lets the guidance tick off what is done instead of restating all of it. */
+  getExplodedEdgesPlaced(): number {
+    const t = this.pendingExplodedTuple;
+    if (t === null) return 0;
+    const tuple = this.activeEntry.dataset.getAllTuples()[t];
+    if (!tuple) return 0;
+    return tuple.filter((v) => v !== null).length;
   }
 
   /** The apex a sector was measured about, or null for an ordinary slice sharing the

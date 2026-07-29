@@ -4536,15 +4536,21 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-polar').waitFor({ state: 'visible' });
     // All bundled examples are listed (one per graph type, plus the 4-series XY,
-    // the scatter, the dash-coded release curves, and the multi-page PDF). 15
-    // since v1.4 added the spider/radar example -- the others: XY, XY-multi,
-    // scatter, dash-styles, error-bar, histogram, bar, categorical, box-plot,
-    // polar, ternary, map, CCR, multi-page PDF.
+    // the scatter, the dash-coded release curves, and the multi-page PDF). 19
+    // since v1.6 added FOUR pie figures -- plain, exploded, donut and tilted --
+    // the others: XY, XY-multi, scatter, dash-styles, error-bar, histogram, bar,
+    // categorical, box-plot, polar, spider, ternary, map, CCR, multi-page PDF.
+    //
+    // ⚑ Four rather than one, and that is the point of the type rather than
+    // padding: a pie's hard cases are not variations on the plain one. The donut
+    // has no centre to click, the exploded slice does not share the centre it does
+    // have, and the tilted one is a circle only under an affine map. One example
+    // would show that pie "works" while leaving three of its four shapes untried.
     //
     // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
     // without its Help entry is invisible, which is how a graph type ends up with
     // no way in for anyone who did not build it.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(15);
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(19);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
@@ -6968,6 +6974,42 @@ describe('spider charts', () => {
     }
   });
 
+  it('says how far through the profile you are, and what you left behind', async () => {
+    // ⚑ WHAT THIS LINE IS FOR (v1.6). It used to read "Next point fills: Axis 1 (new
+    // profile)" -- a strict SUBSET of the tips bar two inches below, which already
+    // said "Click where the shape crosses the Axis 1 axis … (starting a new profile)".
+    // Two surfaces doing one job. Now the tips bar owns the instruction and this owns
+    // the STATE, which is the half that was nowhere on screen.
+    await resetWorkspace('spider');
+    await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
+
+    // Nothing recorded: no accusation, because nothing has been abandoned.
+    expect(await textOf('slot-status')).toBe('Next: Strength — new profile (0 of 3 filled)');
+
+    // Part-way through the first profile it counts up, and STILL says nothing about
+    // incompleteness -- the profile in hand is unfinished because you are in it.
+    await clickAt(...spoke(0, 3, R / 2));
+    expect(await textOf('slot-status')).toMatch(/Weight — profile 1 \(1 of 3 filled\)$/);
+    await clickAt(...spoke(1, 3, R / 2));
+    expect(await textOf('slot-status')).toMatch(/Cost — profile 1 \(2 of 3 filled\)$/);
+
+    // Finish it, and start a second.
+    await clickAt(...spoke(2, 3, R / 2));
+    expect(await textOf('slot-status')).toMatch(/new profile \(0 of 3 filled\)$/);
+    await clickAt(...spoke(0, 3, R / 4));
+    expect(await textOf('slot-status')).toMatch(/profile 2 \(1 of 3 filled\)$/);
+
+    // ⚑ THE SIGNAL. Punch a hole in the FINISHED profile while the second is in hand.
+    // A spider's slots are N×1D -- independently meaningful and independently EMPTY --
+    // so a profile missing one axis looks exactly like a whole one on the figure, and
+    // reads as a single dash in a table you would have to scan row by row. Now it is
+    // said out loud, in the place you are already looking.
+    await page.getByTestId('mode-eraser').click();
+    await clickAt(...spoke(1, 3, R / 2));
+    await page.waitForTimeout(150);
+    expect(await textOf('slot-status')).toContain('1 profile incomplete');
+  });
+
   it('erases ONE reading, and the freed slot can be re-aimed from the table', async () => {
     // ⚑ Both halves found by driving the app. The Eraser blanked a whole six-axis
     // series, because a spider inherited the Box Plot rule that a member stands for
@@ -7218,4 +7260,106 @@ describe('pie charts (v1.6)', () => {
       }
     }, 30000);
   }
+
+  /**
+   * The "Exploded slice" control, driven as a user drives it.
+   *
+   * ⚑ WHY THIS EXISTS. The control shipped as an 11px chip in the right-hand sidebar
+   * and failed the keystone test in the most direct way there is: the person who asked
+   * for it went looking and could not find it. The four figure tests above prove an
+   * exploded slice READS correctly -- they call the session directly and would go on
+   * passing with no button on screen at all. This is the test that says a user can
+   * reach it, and that it tells the truth in every state it is shown in.
+   */
+  describe('the exploded-slice control', () => {
+    /** Calibrate a pie by clicking three points on the canvas -- any three that are
+     * not collinear describe a circle, which is all this needs. */
+    async function calibratePieByHand() {
+      for (const [x, y] of [[200, 120], [320, 240], [200, 360]] as const) await clickAt(x, y);
+      await page.getByTestId('global-field-total').fill('100');
+      await page.getByTestId('run-calibration').click();
+      await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
+      await page.getByTestId('mode-place-point').click();
+    }
+
+    it('is not offered before there is a pie to have slices of', async () => {
+      // ⚑ An affordance that does nothing is worse than none: it invites the click
+      // that teaches the user the app is unpredictable. Before calibration there is
+      // no sector to call exploded.
+      expect(await page.getByTestId('pie-exploded-slice').count()).toBe(0);
+    });
+
+    it('is on the FIGURE, in reach of the boundary being clicked', async () => {
+      await calibratePieByHand();
+      const button = page.getByTestId('pie-exploded-slice');
+      await button.waitFor({ state: 'visible' });
+      // ⚑ Asserted by GEOMETRY, not by existence. The chip it replaced was present and
+      // visible too -- and unfindable. It has to be over the figure and in its
+      // lower-right, where the eye already is while clicking boundaries round the rim.
+      const btn = (await button.boundingBox())!;
+      const canvas = (await page.locator('canvas').first().boundingBox())!;
+      expect(btn.x).toBeGreaterThan(canvas.x + canvas.width / 2);
+      expect(btn.y).toBeGreaterThan(canvas.y + canvas.height / 2);
+      expect(btn.x + btn.width).toBeLessThanOrEqual(canvas.x + canvas.width + 1);
+      // And big enough to read as a control rather than as a label.
+      expect(btn.height).toBeGreaterThan(28);
+      expect(await button.textContent()).toMatch(/Exploded slice/i);
+    });
+
+    it('folds out instructions that follow the three clicks', async () => {
+      await calibratePieByHand();
+      // Nothing is explained until it is asked for -- the guidance is not permanent
+      // furniture over the figure.
+      expect(await page.getByTestId('exploded-slice-guide').count()).toBe(0);
+
+      await page.getByTestId('pie-exploded-slice').click();
+      const guide = page.getByTestId('exploded-slice-guide');
+      await guide.waitFor({ state: 'visible' });
+      // ⚑ It opens UP AND TO THE LEFT of a bottom-right button, so it stays on screen.
+      const g = (await guide.boundingBox())!;
+      const btn = (await page.getByTestId('pie-exploded-slice').boundingBox())!;
+      const canvas = (await page.locator('canvas').first().boundingBox())!;
+      expect(g.y + g.height).toBeLessThanOrEqual(btn.y + 1);
+      expect(g.x).toBeGreaterThanOrEqual(canvas.x - 1);
+
+      // The tip is what is being asked for FIRST, and the panel says so.
+      expect(await page.getByTestId('exploded-step-1').getAttribute('data-state')).toBe('now');
+      expect(await page.getByTestId('exploded-step-2').getAttribute('data-state')).toBe('todo');
+
+      // Place the tip: step 1 is done and the ask moves on, WITHOUT the panel closing.
+      // ⚑ This is the state the old chip could not express -- it read from
+      // `isAwaitingExplodedApex()`, which goes false the instant the tip lands, so the
+      // screen said "nothing armed" through both edge clicks.
+      await clickAt(260, 240);
+      await expect
+        .poll(async () => page.getByTestId('exploded-step-1').getAttribute('data-state'), { timeout: 5000 })
+        .toBe('done');
+      expect(await page.getByTestId('exploded-step-2').getAttribute('data-state')).toBe('now');
+    });
+
+    it('cancels mid-capture, and puts the discarded edge back on undo', async () => {
+      await calibratePieByHand();
+      await page.getByTestId('pie-exploded-slice').click();
+      await clickAt(260, 240); // the tip
+      await clickAt(300, 180); // one edge of two
+      await expect
+        .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 5000 })
+        .toBe(1);
+
+      // ⚑ The button offers "cancel" through all three clicks, so it must WORK through
+      // all three. Past the tip the arming flag is already down, and a cancel that
+      // silently did nothing there would be worse than no cancel at all.
+      await page.getByTestId('pie-exploded-slice').click();
+      await expect
+        .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 5000 })
+        .toBe(0);
+      await expect.poll(() => page.getByTestId('exploded-slice-guide').count(), { timeout: 5000 }).toBe(0);
+
+      // It discards real clicks, so it goes through history like every other removal.
+      await page.keyboard.press('Control+z');
+      await expect
+        .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 5000 })
+        .toBe(1);
+    });
+  });
 });

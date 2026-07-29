@@ -38,12 +38,21 @@ const LabelledRow = styled('div')({
   display: 'flex',
   alignItems: 'center',
   gap: 6,
-  // ⚑ Its own leading space. TopBarGroup sets gap:1, which is enough between two
-  // BUTTONS -- they carry 8px of padding each, so their labels end up ~17px apart --
-  // but this row starts with bare text, so "Open Image" and "Graph type" ran together
-  // as one phrase (David). Matching the button rhythm here rather than widening
-  // TopBarGroup, which would loosen every other group in the bar to fix one seam.
-  marginLeft: 8,
+  // ⚑ NO leading margin. This once carried marginLeft:8 to stop "Open Image" and
+  // "Graph type" reading as one phrase (David) -- and it did not work, because the two
+  // shared a TopBarGroup and a gap inside one card is still inside one card. The
+  // selector has its own TopBarGroup now, which is the mechanism that file's own
+  // comment prescribes; the card's padding, background and shadow make the seam, so a
+  // margin here would only push the label off-centre in its own card.
+  //
+  // ⚑ No MARGIN in its place, but the same INSET. David: "we want the same spacing as
+  // there is between the other buttons" -- so the seam between cards has to be
+  // TopBar's own 4px gap and nothing else, exactly as between Open Project's card and
+  // Grid Removal's. What the label does need is TopBarButton's 8px left padding, so
+  // its text starts the same distance inside its card as "Open Image" does inside
+  // its own. Margin (outside, breaks the rhythm) and padding (inside, restores it)
+  // are opposite fixes here, and the first one is what failed twice.
+  paddingLeft: 8,
 });
 
 // A visible caption, not just a tooltip: the target user can only use what is
@@ -51,8 +60,14 @@ const LabelledRow = styled('div')({
 // polar or ternary figure that a graph TYPE exists to choose before calibrating
 // (wrong type -> wrong data model out). Naming it on screen is the fix.
 const FieldLabel = styled('label')({
-  fontSize: theme.font.size.small,
-  color: theme.color.text.secondary,
+  // ⚑ TopBarButton's exact type, not a caption's (David). It was set one step down --
+  // 11px secondary grey -- on the reasoning that a field label is subordinate to the
+  // field. Wrong for this bar: every other word on the row is a 13px primary-colour
+  // button label, so the one caption in smaller grey read as a different KIND of
+  // thing, sitting next to controls rather than being one. Keep these three in step
+  // with TopBarButton if that ever changes.
+  fontSize: theme.font.size.regular,
+  color: theme.color.text.primary,
   fontFamily: theme.font.family,
   whiteSpace: 'nowrap',
 });

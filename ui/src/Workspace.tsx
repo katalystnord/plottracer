@@ -18,6 +18,7 @@ import {
   type CalibratedAxes,
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
+import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
@@ -75,6 +76,7 @@ import { MeasureCard, measureIcons, type MeasureRef, type MeasureToolId, type Me
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
 import { ChallengeOverlay, type ChallengePhase } from './ChallengeOverlay.js';
+import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
 import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
 import {
@@ -111,6 +113,10 @@ import categoricalSample from '../../samples/categorical-fibre-modulus.png';
 import barBoxSample from '../../samples/bar-box-plot-tensile-strength.png';
 import polarSample from '../../samples/polar-diffusion-rate.png';
 import spiderSample from '../../samples/spider-material-profile.png';
+import pieSample from '../../samples/pie-filler-composition.png';
+import pieExplodedSample from '../../samples/pie-exploded-market-share.png';
+import donutSample from '../../samples/donut-donut-flavours.png';
+import pieTiltedSample from '../../samples/pie-tilted-market-segments.png';
 import ternarySample from '../../samples/ternary-blend-composition.png';
 import mapSample from '../../samples/map-collection-sites.png';
 import ccrSample from '../../samples/circular-temperature-recording.png';
@@ -686,9 +692,6 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
 type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 
-/** Where the manual lives. Stated rather than linked -- see the Help card. */
-const MANUAL_URL = 'https://github.com/katalystnord/plottracer/blob/master/MANUAL.md';
-
 // Small inline glyphs for the per-row "copy to clipboard" affordance in the
 // Export menu (v1.1 #4) -- the overlapping-cards copy mark, swapped for a tick
 // on success. Kept local (like MeasureCard's own copy glyph) rather than routed
@@ -744,6 +747,23 @@ const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; 
   // exists to buy. Line-only polygons: filled radar shapes blend into new colours
   // where they overlap, and every vertex has to stay clickable.
   { id: 'spider', name: 'Spider / Radar — material performance profile', src: spiderSample, axes: 'spider' },
+  // ⚑ FOUR pies, because each isolates ONE thing the type can do, and a single
+  // example would leave three of them undiscoverable. They are also the acceptance
+  // set the e2e drives against their own committed ground truth, so what is offered
+  // here is exactly what is proven to read correctly.
+  { id: 'pie', name: 'Pie — filler composition', src: pieSample, axes: 'pie' },
+  // The pulled-out slice: click "Slice is exploded", then its tip before its edges.
+  // Named for the button because an example whose point is a control you cannot see
+  // is not an example (the keystone: he can only use what he sees on screen).
+  { id: 'pie-exploded', name: 'Pie — one slice pulled out (Slice is exploded)', src: pieExplodedSample, axes: 'pie' },
+  // A donut, and the case that made the centre FITTED rather than clicked: there is
+  // no centre in the image to click. Its total is printed in the hole, so it also
+  // exercises a Total that is not the prefilled 100.
+  { id: 'donut', name: 'Donut — most popular donut flavours (total in the hole)', src: donutSample, axes: 'pie' },
+  // Tilted, standing in for a 3D chart's top face. Named for the checkbox for the
+  // same reason as the exploded one -- read flat it is wrong by several points and
+  // still sums to 100, so the control is the whole lesson.
+  { id: 'pie-tilted', name: 'Pie — tilted / 3D top face (tick Tilted)', src: pieTiltedSample, axes: 'pie' },
   { id: 'ternary', name: 'Ternary — blend composition', src: ternarySample, axes: 'ternary' },
   { id: 'map', name: 'Map — collection sites', src: mapSample, axes: 'map' },
   { id: 'ccr', name: 'Circular chart — temperature', src: ccrSample, axes: 'ccr' },
@@ -4666,6 +4686,16 @@ export function Workspace() {
   const currentGroupLabel = useMemo(() => session.getCurrentSlotLabel(), [session, version]);
   const currentTupleIndex = useMemo(() => session.getCurrentTupleIndex(), [session, version]);
   const currentGroupIndex = useMemo(() => session.getCurrentSlotIndex(), [session, version]);
+  const captureProgress = useMemo(
+    () =>
+      describeCaptureProgress({
+        slotLabel: currentGroupLabel,
+        tupleIndex: currentTupleIndex,
+        tupleNoun,
+        dataset: session.getDataset(),
+      }),
+    [session, version, currentGroupLabel, currentTupleIndex, tupleNoun]
+  );
   const boxPlotGlyphs = useMemo(() => session.getBoxPlotGlyphs(), [session, version]);
   // Multi-figure (checkpoint 110). figuresRef is a ref, but every figure op ends
   // in setActiveFigureIndex, so this reads fresh on the re-render that follows.
@@ -5583,6 +5613,19 @@ export function Workspace() {
             <ImageIcon /> Open Image
             {keyTips && <KeyTip>{keyTipLabel('O')}</KeyTip>}
           </TopBarButton>
+        </TopBarGroup>
+
+        {/* ⚑ ITS OWN GROUP, which is what TopBarGroup's own comment prescribes: "when
+            something needs air, give it its own TopBarGroup rather than loosening this".
+            Sharing a card with Open Image made "Open Image" and "Graph type" read as one
+            phrase, and the 8px margin that was tried first could not fix it -- inside one
+            card they are still one card, and a gap between two runs of plain dark text is
+            a weak signal next to a boundary. The card supplies padding, background and
+            shadow, so the seam is now visible rather than merely wider.
+
+            It is also the honest grouping: every other member of this bar is an ACTION,
+            and this is a SETTING that governs how the axes are read. */}
+        <TopBarGroup>
           <AxesTypeSelect
             options={AXES_TYPE_CONFIGS}
             value={axesTypeId}
@@ -5932,32 +5975,6 @@ export function Workspace() {
                 >
                   🎯 Take The Trace Challenge
                 </button>
-                <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
-                {/* ⚑ The manual is TOLD, not linked (David). The app must work fully
-                    offline, so a link that silently fails on a plane is worse than a
-                    sentence that stays true -- and a URL nobody can act on is worse
-                    than one they can copy, which the clipboard already gives us with no
-                    new IPC. Deliberately not a bundled viewer: this states where the
-                    manual is and gets out of the way, which is all that was asked for.
-                    ⚠️ Removing the native menu also took its Report Issue and
-                    Documentation links, and the renderer still has no openExternal --
-                    so this is currently the ONLY route from the app to anything online. */}
-                <div
-                  data-testid="help-manual"
-                  style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}
-                >
-                  More detail — every tool, every export format, the calibration steps —
-                  is in the online manual:
-                  {/* ⚑ No Copy button, deliberately (David): one on a URL announces
-                      that the link does not work, and reads as friction rather than
-                      help. The address is selectable text -- anyone who wants it can
-                      take it the way they take any other text. */}
-                  <div style={{ marginTop: 4 }}>
-                    <code style={{ fontSize: theme.font.size.small, wordBreak: 'break-all' }}>
-                      {MANUAL_URL}
-                    </code>
-                  </div>
-                </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
                 <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}>
                   <strong>PlotTracer</strong> <span data-testid="app-version">v{__APP_VERSION__}</span> — a
@@ -6328,7 +6345,14 @@ export function Workspace() {
               unintentional" beside setOption). `!isCalibrating` stays: while you
               are still clicking calibration points, the field belongs in the step
               flow, not floating alongside it. */}
-          {figureCaptured && calibExpanded && !isCalibrating && config.globalFields.length > 0 && (
+          {/* ⚑ Shown WHENEVER the card is open, including after calibrating (David).
+              A total is a transcription, and it is often only discovered once you
+              have looked properly at the figure -- the 2500 printed in a donut's
+              hole. Gating it on !isCalibrating meant the one way to correct it was
+              to throw the calibration away and start again. setGlobalFieldValue
+              already re-runs the calibration live, so editing it here re-reads every
+              slice immediately. */}
+          {figureCaptured && calibExpanded && config.globalFields.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: theme.color.text.secondary }}>
               {config.globalFields.map((gf) => (
                 <label key={gf.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -7131,6 +7155,26 @@ export function Workspace() {
             </MenuItem>,
           ]}
         </Menu>
+        {/* ⚑ ON THE FIGURE, not in the sidebar. Only while a pie is actually being
+            captured: before calibration there is no sector to call exploded, and
+            offering it then would be a control that does nothing. */}
+        {session.getConfig().axesKind === 'pie' && axes !== null && mode === 'place-point' && (
+          <ExplodedSliceControl
+            stage={session.getExplodedStage()}
+            edgesPlaced={session.getExplodedEdgesPlaced()}
+            onToggle={() => {
+              if (session.getExplodedStage() === 'off') {
+                session.setNextSectorExploded(true);
+                bump();
+              } else {
+                // Cancelling can discard already-placed edges, so it goes through
+                // history like any other point removal -- undo puts them back.
+                session.cancelExplodedSector();
+                commit();
+              }
+            }}
+          />
+        )}
         {eyedropper !== null && (
           <div
             data-testid="eyedropper-hint"
@@ -7398,51 +7442,18 @@ export function Workspace() {
               "Calibrated ✓" status and the bottom tips bar already say it. */}
           {hasSlots && (
             <p data-testid="slot-status">
-              {session.isAwaitingExplodedApex() ? (
-                <>Next point sets the pulled-out slice&rsquo;s TIP</>
-              ) : (
-                <>
-                  Next point fills: {currentGroupLabel}{' '}
-                  {currentTupleIndex === null ? `(new ${tupleNoun})` : `(${tupleNoun} ${currentTupleIndex + 1})`}
-                </>
-              )}
+              {/* ⚑ Where you ARE, not what to do -- the tips bar owns the instruction
+                  and this used to be a strict subset of it. See engine/captureProgress.ts
+                  for the split and for why the "incomplete" clause excludes the tuple in
+                  hand. The exploded-apex branch that was here is gone: the canvas card
+                  says it in all three of its states rather than only the first. */}
+              {captureProgress.text}
               {/* Konva-rendered glyphs aren't DOM-inspectable -- this readout
                   exists purely so e2e coverage can assert on it, same
                   precedent as ImageCanvas's own "view-state" testid. */}
-              {/* ⚑ A VISIBLE CONTROL, not a modifier (v1.6). Ctrl+click was the first
-                  idea and is unavailable -- Ctrl+Left is the canvas pan on
-                  Windows/Linux and the system context-menu gesture on macOS -- but the
-                  deciding reason is the keystone: a capability reachable only by a
-                  held key is the shortcut-only path it names as a failure. It sits
-                  here, beside the line that says what the next click does, so the
-                  button and its consequence read together.
-                  Arms ONE slice: explosion is a per-slice exception, not a mode, and a
-                  sticky one would quietly mis-measure every ordinary slice after it. */}
-              {session.getConfig().axesKind === 'pie' && (
-                <button
-                  type="button"
-                  data-testid="pie-exploded-slice"
-                  aria-pressed={session.isAwaitingExplodedApex()}
-                  title="This slice is pulled out of the pie — click its tip first, then its two edges"
-                  onClick={() => {
-                    session.setNextSectorExploded(!session.isAwaitingExplodedApex());
-                    bump();
-                  }}
-                  style={{
-                    marginLeft: 8,
-                    fontSize: theme.font.size.small,
-                    fontFamily: theme.font.family,
-                    padding: '1px 6px',
-                    borderRadius: theme.border.radius.regular,
-                    cursor: 'pointer',
-                    border: `1px solid ${session.isAwaitingExplodedApex() ? theme.color.primary.main : theme.color.border.regular}`,
-                    background: session.isAwaitingExplodedApex() ? theme.color.primary.clicked : theme.color.background.primary,
-                    color: session.isAwaitingExplodedApex() ? theme.color.background.primary : theme.color.text.primary,
-                  }}
-                >
-                  Slice is exploded
-                </button>
-              )}
+              {/* The "Exploded slice" control used to live HERE, as a chip beside this
+                  line. It moved onto the canvas (ExplodedSliceControl) because it could
+                  not be found in the sidebar -- see that file's header. */}
               <span data-testid="box-plot-glyph-count" style={{ display: 'none' }}>
                 {boxPlotGlyphs.length}
               </span>
