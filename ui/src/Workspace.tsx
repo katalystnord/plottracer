@@ -7387,11 +7387,51 @@ export function Workspace() {
               "Calibrated ✓" status and the bottom tips bar already say it. */}
           {hasSlots && (
             <p data-testid="slot-status">
-              Next point fills: {currentGroupLabel}{' '}
-              {currentTupleIndex === null ? `(new ${tupleNoun})` : `(${tupleNoun} ${currentTupleIndex + 1})`}
+              {session.isAwaitingExplodedApex() ? (
+                <>Next point sets the pulled-out slice&rsquo;s TIP</>
+              ) : (
+                <>
+                  Next point fills: {currentGroupLabel}{' '}
+                  {currentTupleIndex === null ? `(new ${tupleNoun})` : `(${tupleNoun} ${currentTupleIndex + 1})`}
+                </>
+              )}
               {/* Konva-rendered glyphs aren't DOM-inspectable -- this readout
                   exists purely so e2e coverage can assert on it, same
                   precedent as ImageCanvas's own "view-state" testid. */}
+              {/* ⚑ A VISIBLE CONTROL, not a modifier (v1.6). Ctrl+click was the first
+                  idea and is unavailable -- Ctrl+Left is the canvas pan on
+                  Windows/Linux and the system context-menu gesture on macOS -- but the
+                  deciding reason is the keystone: a capability reachable only by a
+                  held key is the shortcut-only path it names as a failure. It sits
+                  here, beside the line that says what the next click does, so the
+                  button and its consequence read together.
+                  Arms ONE slice: explosion is a per-slice exception, not a mode, and a
+                  sticky one would quietly mis-measure every ordinary slice after it. */}
+              {session.getConfig().axesKind === 'pie' && (
+                <button
+                  type="button"
+                  data-testid="pie-exploded-slice"
+                  aria-pressed={session.isAwaitingExplodedApex()}
+                  title="This slice is pulled out of the pie — click its tip first, then its two edges"
+                  onClick={() => {
+                    session.setNextSectorExploded(!session.isAwaitingExplodedApex());
+                    bump();
+                  }}
+                  style={{
+                    marginLeft: 8,
+                    fontSize: theme.font.size.small,
+                    fontFamily: theme.font.family,
+                    padding: '1px 6px',
+                    borderRadius: theme.border.radius.regular,
+                    cursor: 'pointer',
+                    border: `1px solid ${session.isAwaitingExplodedApex() ? theme.color.primary.main : theme.color.border.regular}`,
+                    background: session.isAwaitingExplodedApex() ? theme.color.primary.clicked : theme.color.background.primary,
+                    color: session.isAwaitingExplodedApex() ? theme.color.background.primary : theme.color.text.primary,
+                  }}
+                >
+                  Slice is exploded
+                </button>
+              )}
               <span data-testid="box-plot-glyph-count" style={{ display: 'none' }}>
                 {boxPlotGlyphs.length}
               </span>

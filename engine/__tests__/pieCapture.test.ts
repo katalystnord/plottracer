@@ -126,3 +126,79 @@ describe('the direction of the walk', () => {
     expect(values.reduce((s2, v) => s2 + v, 0)).toBeGreaterThan(100);
   });
 });
+
+describe('an exploded slice is captured about its own apex', () => {
+  it('takes the apex first, then its two edges', () => {
+    // ⚑ Apex FIRST so the guide arc can be drawn about it while the edges are being
+    // placed. A pulled-out slice is translated, so its edges no longer point at the
+    // pie's centre; measured from there a 90° slice pulled out a tenth of the radius
+    // reads ~8° wrong, with the two edges erring in opposite directions so the errors
+    // add.
+    const session = calibratedPie();
+    const apex = { x: CX + 30, y: CY + 30 };
+
+    session.setNextSectorExploded(true);
+    expect(session.isAwaitingExplodedApex()).toBe(true);
+    expect(session.addDataPoint(apex.x, apex.y)).toBe('point-added');
+    // Consumed: explosion arms ONE sector, it is not a mode the figure is in.
+    expect(session.isAwaitingExplodedApex()).toBe(false);
+
+    // The apex is not a data point — it is geometry the sector is measured about.
+    expect(session.getDataset().getCount()).toBe(0);
+
+    // Its two edges, as a pair: a pulled-out slice shares boundaries with nobody.
+    expect(session.addDataPoint(apex.x + 120, apex.y)).toBe('point-added');
+    expect(session.addDataPoint(apex.x, apex.y + 120)).toBe('point-added');
+
+    const stored = session.getSectorApex(0);
+    expect(stored).not.toBeNull();
+    expect(stored!.x).toBeCloseTo(apex.x, 6);
+    expect(stored!.y).toBeCloseTo(apex.y, 6);
+  });
+
+  it('does NOT chain out of an exploded slice', () => {
+    // The gap on both sides is real: the next slice's boundary is its own click, not
+    // a continuation of this one. Chaining here would file the exploded slice's edge
+    // as its neighbour's start and put every later boundary in the wrong slice.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30);
+    session.addDataPoint(CX + 150, CY + 30);
+    session.addDataPoint(CX + 30, CY + 150);
+    // One tuple, complete, and NO half-open successor opened by the closing click.
+    const tuples = session.getDataset().getAllTuples();
+    expect(tuples).toHaveLength(1);
+    expect(tuples[0]!.every((v) => v !== null)).toBe(true);
+  });
+
+  it('reads the pulled-out slice correctly, where the shared centre would not', () => {
+    // ⚑ The measurement this whole mechanism exists for.
+    const session = calibratedPie();
+    const axes = session.getAxes()!;
+    // A quarter-turn slice, translated 40px down-right from the fitted centre.
+    const apex = { x: CX + 40, y: CY + 40 };
+    session.setNextSectorExploded(true);
+    session.addDataPoint(apex.x, apex.y);
+    session.addDataPoint(apex.x + R, apex.y); // 0°
+    session.addDataPoint(apex.x, apex.y + R); // 90°
+
+    const ds = session.getDataset();
+    const t = ds.getTuple(0);
+    const a = ds.getPixel(t[0]!);
+    const b = ds.getPixel(t[1]!);
+    const own = session.getSectorApex(0)!;
+
+    const correct = axes.sectorValue(axes.angleAt(a.x, a.y, own), axes.angleAt(b.x, b.y, own), 100);
+    const naive = axes.sectorValue(axes.angleAt(a.x, a.y), axes.angleAt(b.x, b.y), 100);
+    expect(correct).toBeCloseTo(25, 6);
+    expect(Math.abs(naive - 25)).toBeGreaterThan(2); // several points of share
+  });
+
+  it('leaves ordinary slices measured about the fitted centre', () => {
+    // No apex stored means "this slice never moved" — so the fallback is the pie's
+    // own centre, and nothing about an ordinary capture changes.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0]);
+    expect(session.getSectorApex(0)).toBeNull();
+  });
+});

@@ -1752,6 +1752,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * fixed-shape type. */
   private repeatCount: number;
 
+  /**
+   * Armed by the "Slice is exploded" control: the NEXT sector is a pulled-out one,
+   * so its first click places its own APEX rather than a boundary (v1.6).
+   *
+   * ⚑ Why a sector needs its own apex at all: pulling a slice out TRANSLATES it, so
+   * its edges no longer point at the pie's centre. Measured from the shared centre a
+   * 90-degree slice pulled out by a tenth of the radius reads about 8 degrees wrong,
+   * and the two edges err in opposite directions so the errors add. Measured about
+   * its own apex it reads exactly as it did before it was pulled out.
+   */
+  private explodedApexPending = false;
+
+  /** The exploded sector currently being captured, and its apex, held until the
+   * tuple has a primary pixel to store it on. Also suppresses chaining for exactly
+   * that slice -- see addDataPoint. */
+  private pendingExplodedTuple: number | null = null;
+  private pendingApex: { x: number; y: number } | null = null;
+
   constructor(private readonly config: AxesTypeConfig<A>) {
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.optionValues = defaultOptionValues(config as unknown as AxesTypeConfig<CalibratedAxes>);
@@ -2979,6 +2997,29 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const entry = this.activeEntry;
     const dataset = entry.dataset;
     if (dataset.hasSlots()) {
+      // ⚑ AN EXPLODED SLICE'S APEX (v1.6, pie). Armed by the "Slice is exploded"
+      // control, the first click after it places the slice's own TIP rather than a
+      // boundary -- apex first, so the guide arc can be drawn about it WHILE its two
+      // edges are placed, which is the whole point of having a guide.
+      //
+      // ⚑ It also BREAKS THE CHAIN, and that falls out of the geometry rather than
+      // being a rule imposed on it: a pulled-out slice does not share its boundaries
+      // with anyone -- there is a visible gap on both sides -- so its two edges are
+      // its own and must be clicked as a pair. Chaining and explosion are mutually
+      // exclusive per sector.
+      if (this.explodedApexPending) {
+        this.explodedApexPending = false;
+        // Start a fresh tuple for this slice; its apex rides on the tuple, and the
+        // next two clicks fill its edges as an ordinary (unchained) pair.
+        const t = dataset.getAllTuples().length;
+        dataset.addEmptyTupleAt(t);
+        entry.slotCursor.tupleIndex = t;
+        entry.slotCursor.groupIndex = 0;
+        this.pendingExplodedTuple = t;
+        this.pendingApex = { x: px, y: py };
+        this.autoLabelTuple(t);
+        return 'point-added';
+      }
       // Slots (Box Plot etc.) file each click into a tuple slot at the
       // cursor -- APPEND, then wire that new index in; the tuple layout, not the
       // point sequence, carries the meaning here, so insert-in-place must not run.
@@ -3019,6 +3060,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // first boundary is something only the figure knows (a half pie does not), and
       // guessing "you must be finished now" from a click count would be inferring
       // rather than measuring. Closing is the user's own final click.
+      // The apex is written once the tuple has a primary pixel to hang it on.
+      if (this.pendingExplodedTuple !== null && this.pendingApex) {
+        const t = this.pendingExplodedTuple;
+        if (dataset.getAllTuples()[t]?.[0] != null) {
+          this.setSectorApex(t, this.pendingApex.x, this.pendingApex.y);
+        }
+        // Hold the suppression until this slice's SECOND edge lands, then release.
+        if (dataset.getAllTuples()[t]?.every((v) => v !== null)) {
+          this.pendingExplodedTuple = null;
+          this.pendingApex = null;
+        }
+        return 'point-added'; // no chaining out of, or into, an exploded slice
+      }
       if (this.config.chainTuples) this.chainToNextTuple(index);
       return 'point-added';
     }
@@ -3494,6 +3548,49 @@ export class CalibrationSession<A extends CalibratedAxes> {
     entry.slotCursor.tupleIndex = next;
     entry.slotCursor.groupIndex = 1;
     this.autoLabelTuple(next);
+  }
+
+  /**
+   * Arm (or disarm) the next sector as an exploded one.
+   *
+   * ⚑ Arms ONE sector, then reverts -- explosion is a per-slice exception, not a mode
+   * the figure is in. In a real figure nine slices share the centre and one does not;
+   * a sticky mode would quietly make the other nine wrong.
+   */
+  setNextSectorExploded(on: boolean): void {
+    this.explodedApexPending = on;
+  }
+
+  /** Is the next click an exploded slice's apex? Drives the capture prompt. */
+  isAwaitingExplodedApex(): boolean {
+    return this.explodedApexPending;
+  }
+
+  /** The apex a sector was measured about, or null for an ordinary slice sharing the
+   * pie's fitted centre. Stored per-tuple, read back for every reading. */
+  getSectorApex(tupleIndex: number): { x: number; y: number } | null {
+    const dataset = this.activeEntry.dataset;
+    const primaryIndex = dataset.getAllTuples()[tupleIndex]?.[0];
+    if (primaryIndex === null || primaryIndex === undefined) return null;
+    const meta = dataset.getPixel(primaryIndex).metadata as Record<string, unknown> | null | undefined;
+    const x = Number(meta?.['apexX']);
+    const y = Number(meta?.['apexY']);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+
+  /** Record the apex on the tuple's own primary pixel — the same per-pixel metadata
+   * channel the category label uses, so it round-trips through the project file
+   * without a new home in the format. */
+  private setSectorApex(tupleIndex: number, x: number, y: number): void {
+    const dataset = this.activeEntry.dataset;
+    const primaryIndex = dataset.getAllTuples()[tupleIndex]?.[0];
+    if (primaryIndex === null || primaryIndex === undefined) return;
+    const existing = dataset.getPixel(primaryIndex).metadata ?? {};
+    dataset.setMetadataAt(primaryIndex, { ...existing, apexX: x, apexY: y });
+    const keys = dataset.getMetadataKeys();
+    for (const k of ['apexX', 'apexY']) {
+      if (!keys.includes(k)) dataset.setMetadataKeys([...dataset.getMetadataKeys(), k]);
+    }
   }
 
   nextSlot(): void {
