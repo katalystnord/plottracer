@@ -148,23 +148,9 @@ import { identifyProject, unsupportedFileMessage } from '../../engine/importRegi
 import { exportOmissionNote, formatLimitationNote } from '../../engine/exportCapability.js';
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
-import {
-  buildSeriesJSON,
-  buildHistogramJSON,
-  flatDataSection,
-  allSeriesSection,
-  tupleDataSection,
-  histogramSection,
-  measurementsSection,
-  curveFitSummarySection,
-  fittedCurveSection,
-  geometrySummarySection,
-  geometryTableSection,
-  type SeriesForCSV,
-  type CurveFitExport,
-} from '../../engine/csvExport.js';
-import { renderTable, TABLE_FORMAT_EXTENSION, type TableSection, type TableFormat } from '../../engine/tableFormats.js';
-import { makeRounder, type PrecisionMode } from '../../core/exportPrecision.js';
+import { buildExportJson, buildExportSections } from '../../engine/exportAssembly.js';
+import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
+import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { formatDateNumber } from '../../core/dateConversion.js';
 import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
@@ -4007,159 +3993,48 @@ export function Workspace() {
       // second format can be grabbed; a file export dismisses it as before.
       if (target === 'file') setExportAnchor(null);
 
-      // Precision: round each value to the figure's own resolution unless the user
-      // asked for full precision (v1.0). The flat/JSON series paths round inside
-      // valueAtPixel (via getExportRows(mode)); the type-specific sections below
-      // take this rounder (core/exportPrecision.ts).
+      // Precision: round each value to the figure's own resolution unless the
+      // user asked for full precision (v1.0). Only the CHOICE is made here --
+      // the assembly turns it into a rounder and applies it (the flat/JSON
+      // paths round inside valueAtPixel, the type-specific sections take the
+      // rounder itself; see core/exportPrecision.ts).
       const mode: PrecisionMode = exportFullPrecision ? 'full' : 'auto';
-      const rounder = makeRounder(exportAxes, mode);
 
-      // Checkpoint 76: headers and values come from the AXES' own contract now
-      // (core/exportValues.ts), not from config.valueLabels, which had diverged
-      // -- Bar lost its Label column entirely, CCR wrote julian floats, and the
-      // headers said `t`/`value` where WPD says `Time`/`Magnitude`.
-      // The right-panel table now uses the same axes-sourced labels
-      // (session.getTableValueLabels, checkpoint 92), so screen and file agree.
-      const exportFields = session.getExportFields();
       // Raw numbers + their unit (checkpoint 82), never the card's formatted
       // string -- core/measurementValues.ts is the one place a value is decided.
+      // Resolved HERE because only the component holds the recorded overlays
+      // and the measure scale; everything downstream of this is plain data.
       const measures = measurementsRef.current.flatMap((m) => {
         const raw = measurementValue(m.tool, m.overlay.points, { scale: measureScaleRef.current, axes });
         return raw ? [{ tool: m.tool, value: raw.values[0]!, unit: raw.unit }] : [];
       });
-      const seriesRows = (index: number) => session.getExportRows(index, mode);
-      const activeIndex = session.getActiveDatasetIndex();
 
-      // A curve fit ready to export (v0.8): the model (equation + coefficients),
-      // its goodness-of-fit, and a dense sampling of the fitted curve in DATA
-      // space. Null when a series has no stored fit -- fits are XY-only, so a
-      // grouped/histogram series simply contributes no fit block. It is always
-      // emitted SEPARATELY from the record (its own JSON key / its own labelled
-      // block), never mixed into the points (David; tenet 9).
-      const fitFor = (index: number, name: string): CurveFitExport | null => {
-        const ds = session.getDatasets()[index];
-        if (!ds) return null;
-        const fit = getCurveFitState(ds);
-        if (!fit) return null;
-        return {
-          series: name,
-          model: fit.model ?? 'polynomial',
-          degree: fit.degree,
-          equation: formatCurveFitEquation(fit),
-          coefficients: fit.coefficients,
-          rSquared: fit.rSquared,
-          rms: fit.rms,
-          n: fit.n,
-          // ⚑ The warning the card shows in red has to ride into the file too.
-          // Undefined for a polynomial, and stays undefined -- the export writes
-          // "n/a" for that rather than claiming it settled.
-          converged: fit.converged,
-          samples: sampleCurveFitLine(fit, 100).map((p) => ({ x: p.x, y: p.y })),
-        };
-      };
-
-      // Geometry for a series (v1.1), if it's ON and can compute -- a derived
-      // block exported separately from the record, like the fit.
-      const geometryFor = (index: number) => {
-        const ds = session.getDatasets()[index];
-        if (!ds || config.id !== 'xy' || !exportAxes) return null;
-        if (!getGeometryState(ds)) return null;
-        const gs = getGeometryState(ds)!;
-        const r = runGeometry(ds, exportAxes as unknown as AnyAxes, gs.closed);
-        return 'geometry' in r ? r.geometry : null;
+      // ⚑ WHAT A FILE IS MADE OF now lives in engine/exportAssembly.ts -- which
+      // sections exist, what each holds, and the rules that keep a derived thing
+      // (a fit, a geometry run) in its OWN block rather than mixed into the
+      // record (David; tenet 9). It came out of this component so it could be
+      // tested without launching Electron. What stays here is the part that is
+      // genuinely the component's: where the bytes end up.
+      const assembly = {
+        session,
+        axes: exportAxes,
+        configId: config.id,
+        scope: exportScope,
+        precision: mode,
+        measures,
       };
 
       let content: string;
       let ext: string;
       if (format === 'json') {
         ext = 'json';
-        // Pixel-free series objects (Box Plot exports its points flat here too).
-        const infos = session.getDatasetInfos();
-        const all: SeriesForCSV[] = infos.map((info) => {
-          const rel = session.getErrorRelation(info.index);
-          const fit = fitFor(info.index, info.name);
-          const geom = geometryFor(info.index);
-          return {
-            name: info.name,
-            rows: seriesRows(info.index),
-            // An error series exports as an ordinary series carrying its relation
-            // (checkpoint 77) -- which is what it is. Omitted for everything else.
-            ...(rel ? { relation: rel } : {}),
-            ...(fit ? { fit } : {}),
-            ...(geom ? { geometry: geom } : {}),
-          };
-        });
-        const scoped = exportScope === 'all' ? all : [all[activeIndex]!];
-        // A histogram's measurement is its bins, not the corner clicks that
-        // produced them (see engine/csvExport.ts's buildHistogramJSON).
-        // Only the ACTIVE series' bins are exported. The Active/All-series
-        // toggle is hidden for grouped types (see its own gate below), so
-        // nothing on screen claims otherwise. Tracked as a known limitation
-        // rather than papered over: fixing it properly means
-        // getHistogramBins(datasetIndex).
-        content = session.getConfig().id === 'histogram'
-          ? buildHistogramJSON(
-              session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1',
-              session.getHistogramBins(),
-              rounder,
-              measures
-            )
-          : buildSeriesJSON(scoped, exportFields, measures);
+        content = buildExportJson(assembly);
       } else {
-        // Every non-JSON format (csv/tsv/latex/matlab/python AND xlsx) is built
-        // from one list of SECTIONS -- the record's table, then the measurements
-        // and each curve fit as their own separate blocks (David). Text formats
-        // render via engine/tableFormats.ts; XLSX turns each section into a
-        // worksheet (engine/xlsxExport.ts).
-        const sections: TableSection[] = [];
-        const fits: CurveFitExport[] = [];
-        const geometries: { series: string; result: ReturnType<typeof geometryFor> }[] = [];
-        // ⚑ The SHAPE is the session's answer, not a cascade of identity checks
-        // here (refactor 2): this used to read `id === 'histogram'`, then a
-        // grouped test — a cascade of questions about what a
-        // type is CALLED, in the UI, where a wrong branch sent every spider export
-        // through the tuple table. What a type's data looks like in a file is a
-        // property of the type; only the Bar-with-box-plot-groups case is dynamic,
-        // and getExportShape is the one place that knows.
-        const exportShape = session.getExportShape();
-        if (exportShape === 'bins') {
-          sections.push(histogramSection(session.getHistogramBins(), rounder));
-        } else if (exportShape === 'tuples') {
-          sections.push(tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder));
-        } else if (exportScope === 'all') {
-          const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
-            const rel = session.getErrorRelation(info.index);
-            return { name: info.name, rows: seriesRows(info.index), ...(rel ? { relation: rel } : {}) };
-          });
-          sections.push(allSeriesSection(seriesList, exportFields));
-          for (const info of session.getDatasetInfos()) {
-            const f = fitFor(info.index, info.name);
-            if (f) fits.push(f);
-            const g = geometryFor(info.index);
-            if (g) geometries.push({ series: info.name, result: g });
-          }
-        } else {
-          const info = session.getDatasetInfos().find((i) => i.index === activeIndex);
-          sections.push(flatDataSection(seriesRows(activeIndex), exportFields));
-          const f = fitFor(activeIndex, info?.name ?? 'Series');
-          if (f) fits.push(f);
-          const g = geometryFor(activeIndex);
-          if (g) geometries.push({ series: info?.name ?? 'Series', result: g });
-        }
-        if (measures.length > 0) sections.push(measurementsSection(measures));
-        // Curve fits as their own SEPARATE blocks (David): a summary of every
-        // fit, then each fitted curve's samples -- never mixed into the data.
-        if (fits.length > 0) {
-          sections.push(curveFitSummarySection(fits));
-          for (const f of fits) sections.push(fittedCurveSection(f, exportFields));
-        }
-        // Geometry the same way (v1.1): a summary block, then each series'
-        // per-point cumulative-length / curvature table -- both derived, separate.
-        const geoms = geometries.filter((g): g is { series: string; result: NonNullable<typeof g.result> } => g.result != null);
-        if (geoms.length > 0) {
-          sections.push(geometrySummarySection(geoms));
-          for (const g of geoms) sections.push(geometryTableSection(g.series, g.result, exportFields));
-        }
+        // Every non-JSON format (csv/tsv/latex/matlab/python AND xlsx) renders
+        // the SAME section list. Text formats go through
+        // engine/tableFormats.ts; the two spreadsheet formats turn each section
+        // into a worksheet.
+        const sections = buildExportSections(assembly);
         // XLSX is a binary workbook: build the bytes and save through the same
         // base64 IPC path the .zip project save uses (checkpoint 93), then done.
         // ⚑ OpenDocument first among the spreadsheet formats — it is the ISO
