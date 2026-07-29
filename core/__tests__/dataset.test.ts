@@ -131,6 +131,26 @@ describe('Dataset', () => {
     expect(ds.getPixel(ds.getTuple(0)[1]!).x).toBe(20);
   });
 
+  it('insertPixel shifts the tuples along with the pixels', () => {
+    // The mirror of refreshTuplesAfterPixelRemoval, which the model had while
+    // insertion had nothing -- so a tuple holding index 1 would have gone on
+    // meaning index 1, which is now the point that was just spliced in front of it.
+    const ds = new Dataset(2);
+    ds.setSlotNames(['min', 'max']);
+    ds.addPixel(10, 10);
+    ds.addPixel(20, 20);
+    ds.addEmptyTupleAt(0);
+    ds.addToTupleAt(0, 0, 0);
+    ds.addToTupleAt(0, 1, 1);
+
+    ds.insertPixel(1, 15, 15); // between them
+
+    expect(ds.getAllPixels().map((p) => p.x)).toEqual([10, 15, 20]);
+    // The pair still means (10,20) -- the spliced point belongs to no tuple.
+    expect(ds.getTuple(0).map((i) => ds.getPixel(i!).x)).toEqual([10, 20]);
+    expect(ds.getTupleIndex(1)).toBe(-1);
+  });
+
   it('reorderPixels refuses anything that is not a permutation, changing nothing', () => {
     // Taking the ORDER rather than the reordered pixels is what makes this
     // checkable at all: the old signature could only trust the caller's comment.

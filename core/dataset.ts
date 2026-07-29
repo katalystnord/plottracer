@@ -92,10 +92,31 @@ export class Dataset {
     }
   }
 
+  /**
+   * Splice a pixel in at `index`, shifting the rest along.
+   *
+   * ⚑ Shifts the tuples with them. Every index at or past the insertion point
+   * moves by one, and a tuple holding the OLD number would point at its
+   * neighbour -- the same silent re-pointing `reorderPixels` documents, reached
+   * by the other direction. The model had `refreshTuplesAfterPixelRemoval` and no
+   * counterpart for insertion, which is exactly why the insert-in-place path had
+   * to be fenced off from slotted series in the SESSION (`addDataPoint` appends
+   * instead when `hasSlots()`). Done here rather than left to the caller because,
+   * unlike removal -- where the caller must also decide whether a now-empty tuple
+   * should go -- the shift is mechanical and always right.
+   */
   insertPixel(index: number, pxi: number, pyi: number, mdata?: PixelMetadata): void {
     this._dataPoints.splice(index, 0, { x: pxi, y: pyi, metadata: mdata });
     if (mdata != null) {
       this._pixelMetadataCount++;
+    }
+    for (const tuple of this._tuples) {
+      for (let groupIndex = 0; groupIndex < tuple.length; groupIndex++) {
+        const pixelIndex = tuple[groupIndex];
+        if (pixelIndex != null && pixelIndex >= index) {
+          tuple[groupIndex] = pixelIndex + 1;
+        }
+      }
     }
   }
 
