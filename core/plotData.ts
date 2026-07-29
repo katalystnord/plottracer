@@ -34,9 +34,10 @@ import { MapAxes, type OriginLocation } from './axes/map.js';
 import { ImageAxes } from './axes/image.js';
 import { CircularChartRecorderAxes, type RotationDirection, type RotationTime } from './axes/circularChartRecorder.js';
 import { SpiderAxes } from './axes/spider.js';
+import { PieAxes } from './axes/pie.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from './connectedPoints.js';
 
-export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes | SpiderAxes;
+export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes | SpiderAxes | PieAxes;
 export type AnyMeasurement = DistanceMeasurement | AngleMeasurement | AreaMeasurement;
 
 interface DocumentMetadataGroup {
@@ -435,6 +436,16 @@ export class PlotData {
           }
           calibration!.maxPointCount = calibration!.getCount();
           axes.calibrate(calibration!, Boolean(axData.isLog));
+        } else if (axData.type === 'PieAxes') {
+          axes = new PieAxes();
+          calibration!.labels = ['Centre', 'Rim'];
+          calibration!.labelPositions = ['E', 'S'];
+          calibration!.maxPointCount = 2;
+          // The two transcribed numbers ride on the RIM point (dx total, dy sweep),
+          // which is where the calibration collected them -- no separate axes-level
+          // copy, so there is only one home for each and no way for two to disagree.
+          const rim = calibration!.getPoint(1);
+          axes.calibrate(calibration!, parseFloat(String(rim?.dx ?? '')), parseFloat(String(rim?.dy ?? '')));
         } else if (axData.type === 'ImageAxes') {
           axes = new ImageAxes();
         } else if (axData.type === 'CircularChartRecorderAxes') {
@@ -618,6 +629,13 @@ export class PlotData {
         axData.startTime = axes.getStartTime();
         axData.rotationTime = axes.getRotationTime();
         axData.rotationDirection = axes.getRotationDirection();
+      } else if (axes instanceof PieAxes) {
+        axData.type = 'PieAxes';
+        // ⚑ Nothing pie-specific is written here, deliberately. The total and the
+        // sweep live on the rim calibration point, which the shared block below
+        // already writes -- a second copy on the axes entry would be a second home
+        // for a fact the points already carry, and two homes eventually disagree.
+        // Same reasoning as the spider's centre value.
       } else if (axes instanceof SpiderAxes) {
         axData.type = 'SpiderAxes';
         // Everything else about a spider lives in the calibration points, one per

@@ -30,6 +30,7 @@ see the scratch measurement scripts' method in each generator's docstring.
 """
 
 import json
+import math
 import os
 
 import numpy as np
@@ -700,24 +701,6 @@ def gen_multipage_pdf():
     })
 
 
-if __name__ == "__main__":
-    gen_scatter()
-    gen_multiseries()
-    gen_bar()
-    gen_histogram()
-    gen_categorical()
-    gen_stress_strain()
-    gen_errorbar()
-    gen_boxplot()
-    gen_polar()
-    gen_ccr()
-    gen_dashstyles()
-    gen_ternary()
-    gen_map()
-    gen_multipage_pdf()
-    print("generated all 14 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf.")
-
-
 def gen_spider():
     """Spider / radar — material performance profile, three biopolymer films
     (v1.4).
@@ -862,3 +845,211 @@ def gen_spider():
             for sname, _colour, values, _marker in series
         ],
     })
+
+
+# --- Pie family (v1.6) -------------------------------------------------------
+#
+# Three figures rather than one, each isolating ONE capability, so a failing
+# extraction points at a single thing:
+#   1. a perfectly circular pie   -- the base case
+#   2. a pie with one slice pulled out -- the own-apex capture
+#   3. a donut, in real units with the total in the hole -- inner radius + a
+#      total that is not 100
+#
+# ⚑ ALL THREE ARE DRAWN CLOCKWISE FROM 12 O'CLOCK (`startangle=90`,
+# `counterclock=False`), which is how pies are conventionally read, and is stated
+# here rather than left to matplotlib's default (0° = east, anticlockwise) so the
+# truth's boundary angles are unambiguous.
+#
+# ⚑ The truth carries the SLICE VALUES as `{category, value}` -- the bar-shaped
+# record -- because that is what the app stores and what a pie must be able to
+# redraw as. The boundary PIXELS ride in the `calibration` block so an e2e can
+# click the real figure rather than geometry it invented for itself.
+
+def _pie_truth_geometry(fig, ax, values, *, radius=1.0, explode=None, start=90.0):
+    """Centre, rim and every slice boundary in IMAGE pixel space (origin top-left,
+    y DOWN) -- the space PlotTracer calibrates in.
+
+    A boundary is emitted at the radius of the slice it bounds, and an EXPLODED
+    slice's boundaries are measured about its own translated apex: pulling a slice
+    out is a translation, so its arc keeps `radius` while the centre of that arc
+    moves. Measuring it against the shared centre is what would misread it."""
+    # ⚑ DRAW FIRST. `set_aspect("equal")` does not adjust the axes box until draw
+    # time, so reading transData before then yields an ANISOTROPIC transform: the
+    # figure renders as a circle while every anchor is computed on an ellipse. The
+    # symptom was subtle and would have poisoned the ground truth -- distances from
+    # centre to the recorded edges came out 258/282/320/329 px where all should be
+    # 348, and the boundary angles drifted several degrees from the ones intended.
+    # No other generator hits this because none of them constrain aspect.
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+    w = fig.get_figwidth() * fig.dpi
+
+    def px(dx, dy):
+        sx, sy = ax.transData.transform((dx, dy))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2)}
+
+    total = float(sum(values))
+    explode = explode or [0.0] * len(values)
+    # Boundary k sits at the cumulative fraction, going CLOCKWISE from `start`.
+    cum = 0.0
+    edges = []          # (angle_deg, index_of_slice_starting_here)
+    for i, v in enumerate(values):
+        edges.append((start - 360.0 * (cum / total), i))
+        cum += v
+    anchors = {"centre": px(0.0, 0.0), "rim": px(radius, 0.0)}
+    slices = []
+    for i, v in enumerate(values):
+        a0 = edges[i][0]
+        a1 = start - 360.0 * ((sum(values[: i + 1])) / total)
+        mid = math.radians((a0 + a1) / 2.0)
+        # An exploded slice's apex moves out along its own bisector.
+        ax0, ay0 = explode[i] * math.cos(mid), explode[i] * math.sin(mid)
+        slices.append({
+            "index": i,
+            "startAngle": round(a0, 4),
+            "endAngle": round(a1, 4),
+            "exploded": explode[i] > 0,
+            "apex": px(ax0, ay0),
+            "startEdge": px(ax0 + radius * math.cos(math.radians(a0)), ay0 + radius * math.sin(math.radians(a0))),
+            "endEdge": px(ax0 + radius * math.cos(math.radians(a1)), ay0 + radius * math.sin(math.radians(a1))),
+        })
+    return {"imageWidth": round(w), "imageHeight": round(h), "anchors": anchors, "slices": slices}
+
+
+PIE_COLOURS = ["#1f4e79", "#c0504d", "#4f9d3a", "#e0a458", "#7a5ba6", "#3aa8a0"]
+
+
+def _pie_figure(title, labels, values, *, explode=None, donut=False, centre_text=None, fmt=None):
+    fig = plt.figure(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    ax = fig.add_subplot()
+    wedgeprops = dict(width=0.45, edgecolor="white") if donut else dict(edgecolor="white")
+    ax.pie(
+        values,
+        labels=labels,
+        explode=explode,
+        colors=PIE_COLOURS[: len(values)],
+        startangle=90,
+        counterclock=False,
+        autopct=fmt,
+        pctdistance=0.75 if donut else 0.62,
+        wedgeprops=wedgeprops,
+        textprops=dict(fontsize=11),
+    )
+    if centre_text:
+        ax.text(0, 0, centre_text, ha="center", va="center", fontsize=14, fontweight="bold")
+    ax.set_aspect("equal")
+    ax.set_title(title, fontsize=15)
+    fig.tight_layout()
+    return fig, ax
+
+
+def gen_pie():
+    """A perfectly circular pie — the base case. Percentages summing to 100, so the
+    calibration's prefilled total of 100 is already correct and the slice values ARE
+    the printed labels."""
+    name = "pie-filler-composition"
+    labels = ["Cellulose", "Lignin", "Hemicellulose", "Ash", "Extractives"]
+    values = [42.0, 23.0, 18.0, 9.0, 8.0]  # sums to 100
+    fig, ax = _pie_figure("Filler composition (%)", labels, values, fmt="%.0f%%")
+    geom = _pie_truth_geometry(fig, ax, values)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth. A plain circular pie; the labels are percentages and sum to 100, so the total IS 100."},
+        "graphType": "pie",
+        "total": 100.0,
+        "unit": "%",
+        "sweep": 360,
+        "calibration": geom,
+        "series": [{"name": "Filler composition",
+                    "points": [{"category": c, "value": v} for c, v in zip(labels, values)]}],
+    })
+
+
+def gen_pie_exploded():
+    """A pie with ONE slice pulled out — the own-apex capture.
+
+    ⚑ The exploded slice is TRANSLATED, so its arc keeps the pie's radius while that
+    arc's centre moves out to the slice's own tip. Measured against the shared centre
+    it misreads by roughly (d/r)·sin(half-angle) on EACH edge, and the two edges err
+    in opposite directions, so a 90° slice pulled out by 10% of the radius reads about
+    8° wrong. That is what this example exists to catch."""
+    name = "pie-exploded-market-share"
+    labels = ["PLA", "PHA", "Starch blend", "PBS", "Other"]
+    values = [34.0, 27.0, 21.0, 11.0, 7.0]  # sums to 100
+    explode = [0.0, 0.18, 0.0, 0.0, 0.0]    # PHA pulled out
+    fig, ax = _pie_figure("Biopolymer film market share (%)", labels, values,
+                          explode=explode, fmt="%.0f%%")
+    geom = _pie_truth_geometry(fig, ax, values, explode=explode)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth. ONE slice (PHA) is pulled out by 0.18 of the radius; its boundaries must be measured about its own translated apex, not the shared centre."},
+        "graphType": "pie",
+        "total": 100.0,
+        "unit": "%",
+        "sweep": 360,
+        "explodedCategory": "PHA",
+        "calibration": geom,
+        "series": [{"name": "Market share",
+                    "points": [{"category": c, "value": v} for c, v in zip(labels, values)]}],
+    })
+
+
+def gen_donut():
+    """A donut chart. About donuts. (David, and he is quite right.)
+
+    The joke is free; the test value is not. This one carries two things the plain pie
+    does not: an INNER RADIUS, which the angle is indifferent to — that indifference is
+    exactly what lets one calibration read every ring — and a total that is NOT 100, so
+    the calibration's prefilled default has to actually be changed to read the figure.
+    The total is printed in the hole, which is where real donut charts put it (the
+    Tableau example David found does the same with $2,297,201)."""
+    name = "donut-donut-flavours"
+    labels = ["Glazed", "Chocolate", "Boston cream", "Jelly", "Old-fashioned", "Maple bar"]
+    values = [820.0, 610.0, 430.0, 290.0, 210.0, 140.0]  # sums to 2500
+    total = float(sum(values))
+    fig, ax = _pie_figure("Most popular donut flavours (thousands sold)", labels, values, donut=True,
+                          centre_text=f"{total:,.0f}".replace(",", " ") + "\nthousand",
+                          fmt=lambda p: f"{p * total / 100:,.0f}".replace(",", " "))
+    geom = _pie_truth_geometry(fig, ax, values)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole — the total is 2500, NOT 100, so the calibration default must be changed to read it."},
+        "graphType": "pie",
+        "total": total,
+        "unit": "thousands sold",
+        "sweep": 360,
+        "innerRadius": 0.55,
+        "calibration": geom,
+        "series": [{"name": "Donut flavours",
+                    "points": [{"category": c, "value": v} for c, v in zip(labels, values)]}],
+    })
+
+
+if __name__ == "__main__":
+    gen_scatter()
+    gen_multiseries()
+    gen_bar()
+    gen_histogram()
+    gen_categorical()
+    gen_stress_strain()
+    gen_errorbar()
+    gen_boxplot()
+    gen_polar()
+    gen_ccr()
+    gen_dashstyles()
+    gen_ternary()
+    gen_map()
+    gen_multipage_pdf()
+    # ⚑ gen_spider used to sit BELOW this block and was therefore never called --
+    # the one sample this file exists to make reproducible could not be regenerated
+    # by the documented command. Found 2026-07-29 while adding the pie family.
+    gen_spider()
+    gen_pie()
+    gen_pie_exploded()
+    gen_donut()
+    print("generated all 18 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut.")

@@ -75,7 +75,7 @@ export interface CalibrationPreview {
   circles: PreviewCircle[];
 }
 
-type AxesKind = 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider';
+type AxesKind = 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider' | 'pie';
 
 /**
  * Which placed points to join, per axes kind, by step key.
@@ -98,6 +98,12 @@ const PAIRS: Record<AxesKind, readonly (readonly [string, string])[]> = {
     ['y1', 'y2'],
   ],
   bar: [['p1', 'p2']],
+  // ⚑ The centre-to-rim vector, which is the pie's whole frame. Drawing it matters
+  // more here than on most types: the rim click is the one place a user can be led
+  // astray, because on a figure whose slices have DIFFERENT radii the reference
+  // circle must sit inside every one of them (David's rule -- click the smallest
+  // slice's edge). Seeing the line makes a rim taken off an over-long slice obvious.
+  pie: [['centre', 'rim']],
   // The radius vectors. Upstream draws nothing for polar; these are the lines
   // whose ANGLE the calibration reads, so seeing them is the whole point.
   polar: [

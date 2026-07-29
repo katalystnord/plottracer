@@ -1,0 +1,166 @@
+{
+  "source": {
+    "imagePath": "donut-donut-flavours.png",
+    "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole \u2014 the total is 2500, NOT 100, so the calibration default must be changed to read it."
+  },
+  "graphType": "pie",
+  "total": 2500.0,
+  "unit": "thousands sold",
+  "sweep": 360,
+  "innerRadius": 0.55,
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "centre": {
+        "px": 450.0,
+        "py": 362.17
+      },
+      "rim": {
+        "px": 708.27,
+        "py": 362.17
+      }
+    },
+    "slices": [
+      {
+        "index": 0,
+        "startAngle": 90.0,
+        "endAngle": -28.08,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 450.0,
+          "py": 103.9
+        },
+        "endEdge": {
+          "px": 677.87,
+          "py": 483.73
+        }
+      },
+      {
+        "index": 1,
+        "startAngle": -28.08,
+        "endAngle": -115.92,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 677.87,
+          "py": 483.73
+        },
+        "endEdge": {
+          "px": 337.11,
+          "py": 594.45
+        }
+      },
+      {
+        "index": 2,
+        "startAngle": -115.92,
+        "endAngle": -177.84,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 337.11,
+          "py": 594.45
+        },
+        "endEdge": {
+          "px": 191.92,
+          "py": 371.9
+        }
+      },
+      {
+        "index": 3,
+        "startAngle": -177.84,
+        "endAngle": -219.6,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 191.92,
+          "py": 371.9
+        },
+        "endEdge": {
+          "px": 251.0,
+          "py": 197.54
+        }
+      },
+      {
+        "index": 4,
+        "startAngle": -219.6,
+        "endAngle": -249.84,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 251.0,
+          "py": 197.54
+        },
+        "endEdge": {
+          "px": 360.99,
+          "py": 119.72
+        }
+      },
+      {
+        "index": 5,
+        "startAngle": -249.84,
+        "endAngle": -270.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 360.99,
+          "py": 119.72
+        },
+        "endEdge": {
+          "px": 450.0,
+          "py": 103.9
+        }
+      }
+    ]
+  },
+  "series": [
+    {
+      "name": "Donut flavours",
+      "points": [
+        {
+          "category": "Glazed",
+          "value": 820.0
+        },
+        {
+          "category": "Chocolate",
+          "value": 610.0
+        },
+        {
+          "category": "Boston cream",
+          "value": 430.0
+        },
+        {
+          "category": "Jelly",
+          "value": 290.0
+        },
+        {
+          "category": "Old-fashioned",
+          "value": 210.0
+        },
+        {
+          "category": "Maple bar",
+          "value": 140.0
+        }
+      ]
+    }
+  ]
+}

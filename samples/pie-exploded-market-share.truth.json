@@ -1,0 +1,144 @@
+{
+  "source": {
+    "imagePath": "pie-exploded-market-share.png",
+    "note": "Synthetic ground truth. ONE slice (PHA) is pulled out by 0.18 of the radius; its boundaries must be measured about its own translated apex, not the shared centre."
+  },
+  "graphType": "pie",
+  "total": 100.0,
+  "unit": "%",
+  "sweep": 360,
+  "explodedCategory": "PHA",
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "centre": {
+        "px": 450.0,
+        "py": 356.88
+      },
+      "rim": {
+        "px": 704.04,
+        "py": 356.88
+      }
+    },
+    "slices": [
+      {
+        "index": 0,
+        "startAngle": 90.0,
+        "endAngle": -32.4,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 356.88
+        },
+        "startEdge": {
+          "px": 450.0,
+          "py": 102.84
+        },
+        "endEdge": {
+          "px": 664.49,
+          "py": 493.0
+        }
+      },
+      {
+        "index": 1,
+        "startAngle": -32.4,
+        "endAngle": -129.6,
+        "exploded": true,
+        "apex": {
+          "px": 457.15,
+          "py": 402.05
+        },
+        "startEdge": {
+          "px": 671.65,
+          "py": 538.17
+        },
+        "endEdge": {
+          "px": 295.22,
+          "py": 597.79
+        }
+      },
+      {
+        "index": 2,
+        "startAngle": -129.6,
+        "endAngle": -205.2,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 356.88
+        },
+        "startEdge": {
+          "px": 288.07,
+          "py": 552.62
+        },
+        "endEdge": {
+          "px": 220.14,
+          "py": 248.72
+        }
+      },
+      {
+        "index": 3,
+        "startAngle": -205.2,
+        "endAngle": -244.8,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 356.88
+        },
+        "startEdge": {
+          "px": 220.14,
+          "py": 248.72
+        },
+        "endEdge": {
+          "px": 341.84,
+          "py": 127.02
+        }
+      },
+      {
+        "index": 4,
+        "startAngle": -244.8,
+        "endAngle": -270.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 356.88
+        },
+        "startEdge": {
+          "px": 341.84,
+          "py": 127.02
+        },
+        "endEdge": {
+          "px": 450.0,
+          "py": 102.84
+        }
+      }
+    ]
+  },
+  "series": [
+    {
+      "name": "Market share",
+      "points": [
+        {
+          "category": "PLA",
+          "value": 34.0
+        },
+        {
+          "category": "PHA",
+          "value": 27.0
+        },
+        {
+          "category": "Starch blend",
+          "value": 21.0
+        },
+        {
+          "category": "PBS",
+          "value": 11.0
+        },
+        {
+          "category": "Other",
+          "value": 7.0
+        }
+      ]
+    }
+  ]
+}

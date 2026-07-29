@@ -1,0 +1,143 @@
+{
+  "source": {
+    "imagePath": "pie-filler-composition.png",
+    "note": "Synthetic ground truth. A plain circular pie; the labels are percentages and sum to 100, so the total IS 100."
+  },
+  "graphType": "pie",
+  "total": 100.0,
+  "unit": "%",
+  "sweep": 360,
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "centre": {
+        "px": 450.0,
+        "py": 362.17
+      },
+      "rim": {
+        "px": 708.27,
+        "py": 362.17
+      }
+    },
+    "slices": [
+      {
+        "index": 0,
+        "startAngle": 90.0,
+        "endAngle": -61.2,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 450.0,
+          "py": 103.9
+        },
+        "endEdge": {
+          "px": 574.42,
+          "py": 588.49
+        }
+      },
+      {
+        "index": 1,
+        "startAngle": -61.2,
+        "endAngle": -144.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 574.42,
+          "py": 588.49
+        },
+        "endEdge": {
+          "px": 241.06,
+          "py": 513.97
+        }
+      },
+      {
+        "index": 2,
+        "startAngle": -144.0,
+        "endAngle": -208.8,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 241.06,
+          "py": 513.97
+        },
+        "endEdge": {
+          "px": 223.68,
+          "py": 237.75
+        }
+      },
+      {
+        "index": 3,
+        "startAngle": -208.8,
+        "endAngle": -241.2,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 223.68,
+          "py": 237.75
+        },
+        "endEdge": {
+          "px": 325.58,
+          "py": 135.85
+        }
+      },
+      {
+        "index": 4,
+        "startAngle": -241.2,
+        "endAngle": -270.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 325.58,
+          "py": 135.85
+        },
+        "endEdge": {
+          "px": 450.0,
+          "py": 103.9
+        }
+      }
+    ]
+  },
+  "series": [
+    {
+      "name": "Filler composition",
+      "points": [
+        {
+          "category": "Cellulose",
+          "value": 42.0
+        },
+        {
+          "category": "Lignin",
+          "value": 23.0
+        },
+        {
+          "category": "Hemicellulose",
+          "value": 18.0
+        },
+        {
+          "category": "Ash",
+          "value": 9.0
+        },
+        {
+          "category": "Extractives",
+          "value": 8.0
+        }
+      ]
+    }
+  ]
+}

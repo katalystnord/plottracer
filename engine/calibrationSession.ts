@@ -189,6 +189,7 @@ import { TernaryAxes } from '../core/axes/ternary.js';
 import { MapAxes } from '../core/axes/map.js';
 import { CircularChartRecorderAxes, type RotationTime, type RotationDirection } from '../core/axes/circularChartRecorder.js';
 import { SpiderAxes } from '../core/axes/spider.js';
+import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
@@ -542,6 +543,16 @@ function checkGuards(
       return `The ${rdg.label} calibration points are the same distance from the origin — they must be at different radii, or the calibration has no radial scale.`;
     }
   }
+  // ⚑ A type's own check on the VALUES that were typed, last because it is the most
+  // specific. Declared on the config rather than performed in buildAxes, and that
+  // distinction is the whole point: buildAxes runs on the CLICK PATH ONLY, so a check
+  // living there is not a guard at all -- a hand-edited or foreign file walks straight
+  // past it. Pie found this the moment it was tested (a total of -50 opened clean),
+  // which is the same "guards belong in the model, and the model has more than one
+  // entrance" lesson as checkpoints 69/72/77/80. Anything that refuses a calibration
+  // belongs here, where both doors run it.
+  const valueError = config.checkValues?.(cal, options);
+  if (valueError) return valueError;
   return null;
 }
 
@@ -635,6 +646,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * the axis NAME in `dz`; a 2-slot Calibration would drop it on the floor while
    * every number still read back correctly — a silent loss, not a visible one. */
   calibrationDimensions?: 2 | 3;
+  /**
+   * A type's own refusal based on the VALUES entered, returning the message or null.
+   *
+   * ⚑ Runs inside checkGuards, so it fires on BOTH entrances -- the click path and a
+   * loaded file. Put a refusal here rather than in `buildAxes`, which only the click
+   * path calls: a check that lives there passes every test written against clicking
+   * and lets a hand-edited file through untouched.
+   */
+  checkValues?: (cal: Calibration, options: Readonly<Record<string, string>>) => string | null;
   /** Dimensionality of the extracted data points (2 for XY/Polar, 1 for Bar). */
   dataDim: number;
   /** Human labels for each data dimension, length === dataDim -- the per-type
@@ -758,7 +778,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * tested `config.id === 'xy'` — so those charts silently lost Curve Fit, slope
    * measurement, auto-straighten and click-to-edit, and were told "Calibrate an
    * XY chart first" on a chart the user had just calibrated as XY. */
-  axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider';
+  axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider' | 'pie';
   /** True when fitting a polynomial through this type's points is meaningful
    * (checkpoint 73). XY and Error Bars qualify — for the latter,
    * algorithms/curveFit.ts's getFitPoints already skips non-primary groups so a
@@ -1386,6 +1406,113 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
     return { isLogRadial: String(axes.isLog()) };
   },
 };
+
+/** A sector is an INTERVAL, and the model already has a shape for that: a two-slot
+ * tuple, exactly as a histogram bin is `['Bin start', 'Bin end']`. Same machinery,
+ * nothing invented -- which is also the shape v2.0's bar model generalises. */
+export const PIE_SECTOR_SLOTS = ['Sector start', 'Sector end'] as const;
+
+/**
+ * Pie / donut / half-pie / gauge (v1.6). The model and its reasoning live in
+ * core/axes/pie.ts; this is the capture side.
+ *
+ * ⚑ THE CALIBRATION IS TINY, and that is the point: two clicks and two transcribed
+ * numbers. A pie has no axis to walk, so what turns its shape into values is the
+ * TOTAL -- asked once on the rim step, prefilled 100, following the spider's rule that
+ * a default the user walks past is not an invention. Leave it and the sectors read as
+ * percent; type the total printed in a donut's hole and they read in the figure's own
+ * units.
+ *
+ * ⚑ THE SWEEP IS TRANSCRIBED TOO, never derived from a slice click. Letting the last
+ * boundary double as the end of the circumference would mix calibration with data
+ * sampling, and breaks outright on a donut where several rings share one frame but own
+ * their boundaries (David, 2026-07-29). Transcribing it also means 360 is never a
+ * constant, which collapses IBM's four documented variants -- Standard, Standard Half,
+ * Donut, Donut Half -- into this one config.
+ */
+export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
+  id: 'pie',
+  label: 'Pie / Donut',
+  axesKind: 'pie',
+  // No auto-extract yet. Sampling colour around the circumference is the obvious
+  // mechanism (the same 1-D scan the spider does along a spoke) but it is a separate
+  // piece of work, and claiming a tool that refuses is worse than not offering it.
+  autoExtractKind: 'none',
+  // One measured number per datum. WHICH slice it belongs to is the tuple's own
+  // category name, not a second coordinate -- a pie is 1.5D, exactly like a bar.
+  dataDim: 1,
+  valueLabels: ['Value'],
+  globalFields: [],
+  defaultSlots: PIE_SECTOR_SLOTS,
+  tupleNoun: 'sector',
+  // A sector IS one object: lose an edge and there is no sector left, unlike the
+  // spider's independent slots where one empty ray is a meaningful state.
+  tupleMembers: 'object',
+  // A rim placed on the centre gives a zero-length frame vector, and every angle
+  // then reads 0 while calibrate() still reports success -- the silently-wrong-number
+  // shape this guard list exists for. Runs on BOTH entrances (click path and file).
+  distinctPixelSteps: [['centre', 'rim']],
+  options: [],
+  // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same refusal
+  // a click does. Written in buildAxes first, and the load-path test caught it
+  // immediately: a total of -50 opened clean, every value silently negative.
+  checkValues(cal) {
+    const rim = cal.getPoint(1);
+    if (!rim) return null; // not placed yet; nothing to judge
+    const total = parseFloat(String(rim.dx ?? ''));
+    const sweep = parseFloat(String(rim.dy ?? ''));
+    // A sector is a fraction of a whole, so a pie cannot show a negative quantity --
+    // IBM documents the same rule for the type, arrived at here independently.
+    if (!Number.isFinite(total) || total <= 0) {
+      return 'The total must be a positive number (100 reads the slices as percentages).';
+    }
+    if (!Number.isFinite(sweep) || sweep <= 0 || sweep > 360) {
+      return 'The sweep must be between 0 and 360 degrees (360 for a whole circle, 180 for a half pie).';
+    }
+    return null;
+  },
+  fixedSteps: [
+    {
+      key: 'centre',
+      label: 'Centre',
+      color: '#5fb47a',
+      prompt: 'Click the centre of the pie — where every slice boundary meets',
+      // No value: the centre of a pie carries no number. Every other type asks for one
+      // here because its origin sits on a scale; a pie's does not.
+      valueFields: [],
+    },
+    {
+      key: 'rim',
+      label: 'Rim',
+      color: '#e0a458',
+      // ⚑ THE SMALLEST slice (David). The rim radius never enters a value -- the angle
+      // is scale-invariant, which is what lets one calibration read every ring of a
+      // donut -- so choosing the shortest costs nothing numerically. What it buys is a
+      // reference circle that lies INSIDE every sector: take the rim off an over-long
+      // slice and the circle escapes the shorter ones, so the overlay runs through
+      // blank paper and "click along this circle" stops being followable.
+      prompt: 'Click the outer edge of the SMALLEST slice, then give the total the whole circle represents',
+      valueFields: [
+        { key: 'total', label: 'Total', field: 'dx', defaultValue: '100' },
+        { key: 'sweep', label: 'Sweep°', field: 'dy', defaultValue: '360' },
+      ],
+    },
+  ],
+  buildAxes(cal) {
+    const rim = cal.getPoint(1);
+    const total = parseFloat(String(rim?.dx ?? ''));
+    const sweep = parseFloat(String(rim?.dy ?? ''));
+    // The values were already refused by checkValues above, on whichever entrance got
+    // here — this only has to convert them.
+    const axes = new PieAxes();
+    if (!axes.calibrate(cal, total, sweep)) {
+      return { error: 'Calibration failed — place the centre and a point on the outer edge.' };
+    }
+    axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'pie' });
+    return { axes };
+  },
+};
+
 
 /** How a point of an interpolation-assist series came to exist.
  *

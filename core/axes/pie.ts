@@ -8,11 +8,15 @@
  * THE MODEL (David, 2026-07-28 / 2026-07-29)
  *
  * A pie inherently shows FRACTIONS OF A WHOLE — that is what "partition of a disc"
- * means, and it holds however the sectors are labelled. So the geometry is the
- * measurement and the printed labels are a claim about some base that may not even be
- * this chart: a figure whose labels sum to 184% is not lying, it is quoting
- * percentages of an outside denominator (multi-response survey data does exactly
- * this). Nothing here compares the two or issues a verdict.
+ * means, and it holds however the sectors are labelled.
+ *
+ * ⚑ SO A PIE CANNOT FAIL TO ADD UP, and no arithmetic here should ever suggest it
+ * might. The printed labels are VALUES WITH A UNIT, and their sum IS the total: a
+ * figure labelled 45 / 68 / 18 / 35 / 18 has a total of 184 — of percents, dollars,
+ * kilograms, whatever the author chose to write. 184 is not "184% of something else"
+ * needing an explanation; it is simply the whole, and the whole is always 100% of the
+ * pie. Type 184 as the total and every reading here reproduces the figure's own
+ * labels. The unit is the author's business and never ours.
  *
  * ⚑ THE TOTAL TURNS A SHAPE INTO VALUES, and that is the whole trick. Every other axes
  * type transcribes known values at known positions (X1=0, X2=10; the spider's centre
@@ -216,6 +220,17 @@ export class PieAxes {
 
   pixelToLiveString(px: number, py: number): string {
     return `${this.pixelToData(px, py)[0]!.toFixed(1)}°`;
+  }
+
+  /**
+   * Not implemented, matching bar/polar/ternary/map/ccr/spider — only XY and Image
+   * genuinely invert. A pie could not invert usefully anyway: a VALUE names a sector's
+   * angular width, which is a whole arc rather than a point, so there is no single
+   * pixel to return. Declared because `CalibratedAxes` requires it; callers must not
+   * assume it inverts (algorithms/errorCapture.ts measures rather than trusting).
+   */
+  dataToPixel(_x: number, _y: number): { x: number; y: number } {
+    return { x: 0, y: 0 };
   }
 
   getMetadata(): AxesMetadata {
