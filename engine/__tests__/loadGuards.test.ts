@@ -90,6 +90,38 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
     expect(session.getDataPoints()).toHaveLength(2); // and so did the work
   });
 
+  it('keeps the refusal through an undo round-trip — the snapshot is the THIRD door', () => {
+    // ⚑ `restoreState` assigns `this.axes` without running checkGuards, unlike both
+    // other entrances. That is sound only because the refusal travels IN the
+    // snapshot: the round-trip goes back through `plotData.deserialize`, which
+    // calls `axes.calibrate` directly — the same call that "reports success on
+    // degenerate input" the whole file is premised on. So if the error did not
+    // survive the trip, one undo would launder a refused calibration into a clean
+    // one: identical null-valued readings with the on-screen reason gone, which is
+    // strictly worse than the file that was refused in the first place.
+    const axes = loadedXY(
+      [
+        [100, 300, '0', '0'],
+        [400, 300, '10', '0'],
+        [100, 300, '0', '0'],
+        [100, 0, '0', '1000'],
+      ],
+      true
+    );
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    const before = session.getCalibrationError();
+    expect(before).toMatch(/log .* cannot pass through zero/i);
+
+    session.restoreState(session.captureState());
+
+    expect(session.getCalibrationError()).toBe(before);
+    expect(session.isCalibrated()).toBe(true);
+    // The option the guard is conditional on has to come back too, or the next
+    // handle drag would re-guard against a linear axis and clear a live refusal.
+    expect(session.getOptions()['isLogY']).toBe('true');
+  });
+
   it('stays RECOVERABLE — fixing the calibration clears the error', () => {
     // The escape hatch that makes "surface, don't refuse" honest: the handles
     // are live, and moving one re-runs runCalibration, which re-guards.
