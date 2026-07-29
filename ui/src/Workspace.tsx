@@ -30,6 +30,7 @@ import {
   AppShell,
   TopBar,
   TopBarButton,
+  KeyTip,
   TopBarGroup,
   BottomBar,
   BottomBarButton,
@@ -186,6 +187,7 @@ import {
   measurementPixelValue,
 } from '../../core/measurementValues.js';
 import { theme, glassSurface } from './theme.js';
+import { useKeyTips, keyTipLabel, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
 
 /**
@@ -838,6 +840,11 @@ export function Workspace() {
     imageHeightRef.current = s.imageHeight;
     sessionRef.current.setImageHeight(s.imageHeight);
   }, []);
+
+  // Alt key-tips (v1.6): hold Alt and every control shows the accelerator it
+  // actually answers to. This is the half that made removing the native menu a trade
+  // rather than a regression -- see ui/src/useKeyTips.ts.
+  const keyTips = useKeyTips();
 
   const [mode, setMode] = useState<ToolMode>('calibrate');
 
@@ -5519,6 +5526,9 @@ export function Workspace() {
     ) : null;
 
   return (
+    // Key-tips are published to the whole tree so every IconButton -- the rail's tools
+    // included -- lights up together when Alt is held, rather than the top bar alone.
+    <KeyTipsContext.Provider value={keyTips}>
     <AppShell style={{ ['--sidebar-width' as string]: `${sidebarWidth}px` } as CSSProperties}>
       <TopBar>
         {/* Clear all points — top-left, matching Ketcher's "new/clear document"
@@ -5547,6 +5557,7 @@ export function Workspace() {
             onClick={() => imageCanvasRef.current?.openImage()}
           >
             <ImageIcon /> Open Image
+            {keyTips && <KeyTip>{keyTipLabel('O')}</KeyTip>}
           </TopBarButton>
           <AxesTypeSelect
             options={AXES_TYPE_CONFIGS}
@@ -5561,6 +5572,7 @@ export function Workspace() {
         <TopBarGroup>
           <TopBarButton type="button" data-testid="open-project" title="Open a saved project" onClick={openProject}>
             <OpenIcon /> Open Project
+            {keyTips && <KeyTip>{keyTipLabel('O', true)}</KeyTip>}
           </TopBarButton>
           <TopBarButton
             type="button"
@@ -5569,6 +5581,7 @@ export function Workspace() {
             onClick={saveProject}
           >
             <SaveIcon /> Save Project
+            {keyTips && <KeyTip>{keyTipLabel('S')}</KeyTip>}
           </TopBarButton>
           <TopBarButton
             type="button"
@@ -5582,6 +5595,7 @@ export function Workspace() {
             disabled={!axes && !canvasHasImage}
           >
             <ExportIcon /> Export <ChevronDownIcon />
+            {keyTips && <KeyTip>{keyTipLabel('S', true)}</KeyTip>}
           </TopBarButton>
           <Popover
             open={Boolean(exportAnchor)}
@@ -5792,6 +5806,7 @@ export function Workspace() {
           <IconButton
             testId="undo"
             icon={<UndoIcon />}
+            keyTip={keyTips ? keyTipLabel('Z') : undefined}
             label="Undo (Ctrl+Z)"
             disabled={!history.canUndo()}
             onClick={undo}
@@ -5799,6 +5814,7 @@ export function Workspace() {
           <IconButton
             testId="redo"
             icon={<RedoIcon />}
+            keyTip={keyTips ? keyTipLabel('Z', true) : undefined}
             label="Redo (Ctrl+Shift+Z)"
             disabled={!history.canRedo()}
             onClick={redo}
@@ -8009,6 +8025,30 @@ export function Workspace() {
           <span aria-hidden style={{ opacity: 0.7 }}>💡</span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{guidanceTip}</span>
         </span>
+        {/* ⚑ THE KEY-TIPS' OWN AFFORDANCE (v1.6). Badges that appear on Alt are only
+            discoverable if something on screen says Alt does anything -- otherwise the
+            cure for shortcut-only paths is itself a shortcut-only path, which is the
+            exact failure the keystone names. So the hint is permanent, sits in the one
+            place the app already uses for "what can I do now?", and steps aside while
+            the badges are actually showing (it has served its purpose at that point,
+            and the row is narrow). */}
+        <span
+          data-testid="keytips-hint"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            marginLeft: 12,
+            flex: '0 0 auto',
+            whiteSpace: 'nowrap',
+            fontSize: theme.font.size.small,
+            color: theme.color.text.legend,
+            opacity: keyTips ? 0 : 1,
+            transition: 'opacity 120ms',
+          }}
+        >
+          Hold <kbd style={{ fontFamily: theme.font.family, border: `1px solid ${theme.color.border.regular}`, borderRadius: 3, padding: '0 4px', fontSize: theme.font.size.small }}>Alt</kbd> for shortcuts
+        </span>
         {/* Recompute-on-edit stale callout (v1.1, David): geometry re-derives live,
             but when an edit makes it impossible (points deleted below 2) the user
             gets a clear warning here in the bottom row -- recompute or clear it. */}
@@ -8217,5 +8257,6 @@ export function Workspace() {
         />
       )}
     </AppShell>
+    </KeyTipsContext.Provider>
   );
 }

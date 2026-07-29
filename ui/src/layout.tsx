@@ -147,6 +147,9 @@ export const TopBarGroup = styled('div')({
  * label that reads clearly. Flat inside its TopBarGroup card, light fill on
  * hover. */
 export const TopBarButton = styled('button')({
+  // Anchors the Alt key-tip chip (KeyTip below) without shifting anything when it
+  // appears -- the badge is absolute, so holding Alt never reflows the top bar.
+  position: 'relative',
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
@@ -169,6 +172,34 @@ export const TopBarButton = styled('button')({
     cursor: 'default',
     opacity: 0.5,
   },
+});
+
+/**
+ * The Alt key-tip chip (v1.6) -- a control's real accelerator, shown while Alt is
+ * held. See ui/src/useKeyTips.ts for why it shows the actual shortcut rather than an
+ * Office-style letter, and why the native menu had to go for Alt to be free at all.
+ *
+ * Absolutely positioned so revealing it never reflows the bar, and given a filled
+ * chip rather than bare text because it lands over icons and labels of every
+ * lightness. Top-RIGHT so it cannot collide with IconButton's own permanent
+ * upper-left digit badge, which the rail buttons already carry.
+ */
+export const KeyTip = styled('span')({
+  position: 'absolute',
+  top: -5,
+  right: -4,
+  padding: '1px 3px',
+  fontSize: 9,
+  lineHeight: 1.1,
+  fontFamily: theme.font.family,
+  fontWeight: 600,
+  color: theme.color.background.primary,
+  background: theme.color.primary.main,
+  border: `1px solid ${theme.color.background.primary}`,
+  borderRadius: 3,
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+  zIndex: 3,
 });
 
 /** Left icon rail, flush against the canvas -- an intrinsic-width vertical

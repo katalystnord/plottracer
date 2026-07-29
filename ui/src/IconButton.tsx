@@ -1,6 +1,9 @@
 import type { MouseEvent, ReactNode } from 'react';
 import styled from '@emotion/styled';
+import { useContext } from 'react';
 import { theme } from './theme.js';
+import { KeyTip } from './layout.js';
+import { KeyTipsContext } from './useKeyTips.js';
 
 /**
  * A single icon-only toolbar button (checkpoint 24, see CLAUDE.md) --
@@ -45,6 +48,11 @@ export interface IconButtonProps {
    * always-visible "there's more here" affordance. Because the arrow lives where
    * the shortcut badge used to, the badge moved to the upper-left corner. */
   foldout?: boolean;
+  /** The Alt key-tip (v1.6): the accelerator to show while Alt is held. Pass it
+   * unconditionally -- whether it renders is read from KeyTipsContext. Omit it and a
+   * button with a `shortcut` shows that instead, which is what lights up the rail's
+   * digits without any rail button opting in. */
+  keyTip?: string;
 }
 
 // `shouldForwardProp` keeps `pressed` out of the DOM -- it's not a real
@@ -127,7 +135,13 @@ export function IconButton({
   onClick,
   testId,
   foldout,
+  keyTip,
 }: IconButtonProps) {
+  // Key-tips come from context so no call site has to opt in -- see useKeyTips.ts.
+  // A button with only a `shortcut` (every rail tool) lights up with that digit.
+  const keyTipsOn = useContext(KeyTipsContext);
+  const tipText = keyTip ?? shortcut;
+  const tipShowing = keyTipsOn && Boolean(tipText);
   const enabledTitle = shortcut ? `${label} (${shortcut})` : label;
   // When disabled, prefer the "why" hint; fall back to the plain label.
   const title = disabled && disabledReason ? disabledReason : enabledTitle;
@@ -146,7 +160,10 @@ export function IconButton({
       pressed={pressed}
     >
       {icon}
-      {shortcut && <ShortcutBadge>{shortcut}</ShortcutBadge>}
+      {/* While key-tips are up the chip REPLACES the plain badge rather than joining
+          it -- otherwise a rail tool would show its own digit twice, in two styles. */}
+      {shortcut && !tipShowing && <ShortcutBadge>{shortcut}</ShortcutBadge>}
+      {tipShowing && <KeyTip data-testid={`keytip-${testId}`}>{tipText}</KeyTip>}
       {foldout && (
         // A rounded right-triangle filling the corner (Ketcher's `dropdown`
         // glyph), pointing into the button's lower-right -- "click to fold out".

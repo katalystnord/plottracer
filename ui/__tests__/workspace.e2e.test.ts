@@ -3797,6 +3797,62 @@ describe('Workspace: Zoom Slider (checkpoint 37)', () => {
   });
 });
 
+describe('Workspace: Alt key-tips (v1.6)', () => {
+  // ⚑ The half that makes removing the native menu a trade rather than a regression:
+  // Alt was spent revealing the hidden menu bar, so these badges could not exist while
+  // it did. They cure the keystone's named failure -- a shortcut-only path -- by
+  // turning keyboard knowledge into on-screen state on demand.
+
+  it('shows each control its own accelerator while Alt is held, and nothing before', async () => {
+    await resetWorkspace('xy');
+
+    // Nothing on screen by default -- the badges are on demand, not clutter.
+    expect(await page.getByTestId('keytip-undo').count()).toBe(0);
+    // ...but the affordance that TELLS you they exist is permanent, or the cure would
+    // itself be a shortcut-only path.
+    expect(await textOf('keytips-hint')).toContain('Alt');
+
+    await page.keyboard.down('Alt');
+    await page.getByTestId('keytip-undo').waitFor({ state: 'visible', timeout: 5000 });
+    expect(await textOf('keytip-undo')).toMatch(/Z$/);
+    expect(await textOf('keytip-redo')).toMatch(/Z$/);
+    // The real accelerator, not an Office-style letter to press next.
+    expect(await textOf('keytip-undo')).toMatch(/Ctrl|⌘/);
+
+    await page.keyboard.up('Alt');
+    await expect.poll(() => page.getByTestId('keytip-undo').count(), { timeout: 5000 }).toBe(0);
+  });
+
+  it('lights up the LEFT RAIL too, not just the top bar (David)', async () => {
+    // ⚑ The rail already carries a permanent faint digit on every tool, so without
+    // this the window lands half-dressed while Alt is held -- teal chips across the
+    // top bar, untouched grey digits down the rail. Reading the flag from context is
+    // what makes every IconButton join in without opting in one by one.
+    await resetWorkspace('xy');
+    expect(await page.getByTestId('keytip-mode-calibrate').count()).toBe(0);
+
+    await page.keyboard.down('Alt');
+    await page.getByTestId('keytip-mode-calibrate').waitFor({ state: 'visible', timeout: 5000 });
+    // The rail's own digit, promoted into the same badge the top bar shows.
+    expect(await textOf('keytip-mode-calibrate')).toBe('1');
+
+    await page.keyboard.up('Alt');
+    await expect.poll(() => page.getByTestId('keytip-mode-calibrate').count(), { timeout: 5000 }).toBe(0);
+  });
+
+  it('drops the badges when the window loses focus mid-hold', async () => {
+    // ⚑ Alt+Tab sends the keyup to the OTHER window, so without a blur handler the
+    // badges stay up for as long as the app is left alone -- the first thing anyone
+    // does after pressing Alt.
+    await resetWorkspace('xy');
+    await page.keyboard.down('Alt');
+    await page.getByTestId('keytip-undo').waitFor({ state: 'visible', timeout: 5000 });
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await expect.poll(() => page.getByTestId('keytip-undo').count(), { timeout: 5000 }).toBe(0);
+    await page.keyboard.up('Alt');
+  });
+});
+
 describe('Workspace: Undo/Redo (checkpoint 38)', () => {
   function seriesCount(): Promise<number> {
     return page.locator('[data-testid^="series-option-"]').count();
