@@ -6537,6 +6537,26 @@ describe('spider charts', () => {
     expect(await page.getByTestId('remove-repeat-step').isDisabled()).toBe(true);
   });
 
+  it('undoes and redoes a change to the axis count', async () => {
+    // ⚑ Both buttons commit an undo entry, so the count is on the stack like any
+    // other action -- but the snapshot did not carry it, so pressing undo left the
+    // card reading the NEW count with the entry consumed. The engine test covers
+    // the state; this covers what the user sees, which is the only place the count
+    // is ever read from.
+    await resetWorkspace('spider');
+    await page.getByTestId('add-repeat-step').click();
+    expect(await textOf('repeat-count')).toMatch(/4 axes/);
+
+    await page.getByTestId('undo').click();
+    expect(await textOf('repeat-count')).toMatch(/3 axes/);
+    expect(await textOf('calibrated-status')).toBe('0/4 set');
+    expect(await page.getByTestId('calib-chip-spoke4').count()).toBe(0);
+
+    await page.getByTestId('redo').click();
+    expect(await textOf('repeat-count')).toMatch(/4 axes/);
+    await page.getByTestId('calib-chip-spoke4').waitFor({ state: 'visible' });
+  });
+
   it('calibrates, then captures one value per named axis', async () => {
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);

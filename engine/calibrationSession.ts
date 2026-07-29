@@ -1427,6 +1427,13 @@ export interface SessionSnapshot {
    * undo that didn't restore it would leave the data and the settings
    * disagreeing. */
   optionValues: Record<string, string>;
+  /** How many repeats the variable-length calibration is unrolled to — the spider's
+   * spoke count (0 for every fixed-shape type). Part of the snapshot because both
+   * rail buttons that change it commit an undo entry, and it is the one piece of
+   * session shape that cannot be re-derived from the serialized plotData: an
+   * UNCALIBRATED session has no axes to read the count back off, and those buttons
+   * only work while the calibration is still uncalibrated. */
+  repeatCount: number;
   /** Per-dataset slot cursor, indexed to match plotData's dataset order. */
   cursors: SlotCursor[];
   plotData: SerializedPlotData;
@@ -4078,6 +4085,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       activeDatasetIndex: this.activeDatasetIndex,
       nextDatasetNumber: this.nextDatasetNumber,
       globalValues: { ...this.globalValues },
+      repeatCount: this.repeatCount,
       cursors: this.datasetEntries.map((e) => ({ ...e.slotCursor })),
       plotData: plotData.serialize(),
     };
@@ -4093,6 +4101,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     plotData.deserialize(snapshot.plotData);
     const datasets = plotData.getDatasets();
     this.axes = (plotData.getAxesColl()[0] ?? null) as A | null;
+    // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
+    // Restored BEFORE `placed` and `stepIndex` below, since both are read against
+    // the step list this count decides. The other two entrances already handle it —
+    // loadCalibrated takes it from the file's own calibration length, reset() puts
+    // it back to the minimum — and this one was left out, so an undo of "+ axis"
+    // changed nothing on screen, and an undo of "− axis" brought the placed point
+    // back with no step to hang it on: an orphan the calibration could not see and
+    // the next "+ axis" silently inherited. Same "the model has more than one
+    // entrance" class as the guards in loadCalibrated, reached by a third route.
+    // Clamped to the config's own minimum rather than trusted outright — the same
+    // defensive posture as activeDatasetIndex below.
+    const repeating = this.config.repeatingStep;
+    this.repeatCount = repeating ? Math.max(repeating.min, snapshot.repeatCount) : 0;
     this.datasetEntries = datasets.map((dataset, i) => ({
       dataset,
       slotCursor: snapshot.cursors[i]

@@ -133,6 +133,80 @@ describe('the step list is variable, and comes from the session', () => {
   });
 });
 
+describe('undo carries the spoke count', () => {
+  /** Place the centre and all `n` spokes of an n-axis spider. */
+  function placeAll(session: CalibrationSession<SpiderAxes>, n: number): void {
+    while (session.getRepeatCount() < n) expect(session.addRepeat()).toBe(true);
+    session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues(['0']);
+    for (let i = 0; i < n; i++) {
+      const [px, py] = spokePixel(i, n);
+      session.handleCalibrationClick(px, py);
+      session.confirmCalibrationValues(['10', `A${i}`]);
+    }
+  }
+
+  // ⚑ THE SPOKE COUNT IS DOCUMENT STATE, and the snapshot is its only entrance
+  // that does not derive it: loadCalibrated reads it back off the file's own
+  // calibration length and reset() returns it to the minimum, but restoreState
+  // used to leave `repeatCount` untouched. Both rail buttons commit an undo
+  // entry (Workspace.tsx "+ axis" / "− axis"), so every one of these was a
+  // committed action that undo could not actually undo.
+
+  it('undoes an added axis', () => {
+    const session = newSpider();
+    const before = session.captureState();
+    expect(session.addRepeat()).toBe(true);
+
+    session.restoreState(before);
+    // Without this, the card keeps reading "4 axes" after an undo of the click
+    // that made it 4 — the action is on the stack and pressing undo does nothing.
+    expect(session.getRepeatCount()).toBe(3);
+    expect(session.getSteps().map((s) => s.key)).toEqual(['origin', 'spoke1', 'spoke2', 'spoke3']);
+  });
+
+  it('undoes a removed axis, bringing back the step it was placed on', () => {
+    const session = newSpider();
+    placeAll(session, 4);
+    const before = session.captureState();
+    expect(session.removeRepeat()).toBe(true);
+
+    session.restoreState(before);
+    expect(session.getRepeatCount()).toBe(4);
+    // ⚑ The placed points came back either way — `placed` IS in the snapshot. What
+    // was missing was the step list to hang them on, so spoke4 was left an ORPHAN:
+    // a placed calibration point no step referenced, invisible to the calibration
+    // and silently inherited by the next "+ axis". The invariant is that the two
+    // agree.
+    const stepKeys = session.getSteps().map((s) => s.key);
+    expect(Object.keys(session.getPlacedPoints()).sort()).toEqual([...stepKeys].sort());
+    // And the cursor lands on a step that exists, rather than one past a shorter list.
+    expect(session.getStepIndex()).toBe(5);
+    expect(session.getSteps()).toHaveLength(5);
+  });
+
+  it('redoes a removed axis, dropping its placement again', () => {
+    const session = newSpider();
+    placeAll(session, 4);
+    const before = session.captureState();
+    expect(session.removeRepeat()).toBe(true);
+    const after = session.captureState();
+
+    session.restoreState(before); // undo
+    session.restoreState(after); // redo
+    expect(session.getRepeatCount()).toBe(3);
+    expect(Object.keys(session.getPlacedPoints())).not.toContain('spoke4');
+    expect(session.getSteps()).toHaveLength(4);
+  });
+
+  it('leaves a fixed-shape type at zero repeats through a restore', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.restoreState(session.captureState());
+    expect(session.getRepeatCount()).toBe(0);
+    expect(session.getSteps()).toBe(XY_AXES_CONFIG.fixedSteps);
+  });
+});
+
 describe('calibrating a spider through the click path', () => {
   it('builds a SpiderAxes with one spoke per placed axis', () => {
     const session = newSpider();
