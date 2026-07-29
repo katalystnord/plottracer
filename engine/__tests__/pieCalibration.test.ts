@@ -18,25 +18,55 @@ function newPie(): CalibrationSession<PieAxes> {
   return new CalibrationSession(PIE_AXES_CONFIG);
 }
 
-/** Walk the click path: centre at (100,100), rim 50px right, then the two values. */
-function calibrate(session: CalibrationSession<PieAxes>, total = '100', sweep = '360'): boolean {
-  // ⚑ The centre carries NO value — a pie's centre sits on no scale — so the click
-  // completes the step outright rather than opening a value box.
-  expect(session.handleCalibrationClick(100, 100)).toBe('point-placed');
-  expect(session.handleCalibrationClick(150, 100)).toBe('awaiting-value');
-  expect(session.confirmCalibrationValues([total, sweep])).toBe(true);
+/** Walk the click path: points around a circle of radius 50 centred at (100,100),
+ * then the two global values.
+ *
+ * ⚑ NOTHING CLICKS A CENTRE. The outline is the entire calibration and the centre is
+ * fitted through it — which is the only way a donut works at all, since its centre is
+ * not drawn. Each outline click completes outright ('point-placed'): the points carry
+ * no per-click value, because the total and the sweep belong to the whole figure. */
+function outlineAt(deg: number): [number, number] {
+  const r = (deg * Math.PI) / 180;
+  return [100 + 50 * Math.cos(r), 100 + 50 * Math.sin(r)];
+}
+
+function calibrate(
+  session: CalibrationSession<PieAxes>,
+  total = '100',
+  sweep = '360',
+  angles: number[] = [90, 0, -90]
+): boolean {
+  for (const a of angles) {
+    expect(session.handleCalibrationClick(...outlineAt(a))).toBe('point-placed');
+  }
+  session.setGlobalFieldValue('total', total);
+  session.setGlobalFieldValue('sweep', sweep);
   return session.runCalibration();
 }
 
 /** Build the axes the way a FILE does — calibrate() directly, no session walk. */
 function loadedPie(total: string, sweep: string): PieAxes {
   const cal = new Calibration(2);
-  cal.addPoint(100, 100, '', '');
-  cal.addPoint(150, 100, total, sweep);
+  for (const a of [90, 0, -90]) {
+    const [x, y] = outlineAt(a);
+    cal.addPoint(x, y, '', '');
+  }
   const axes = new PieAxes();
   // The premise: the axes is perfectly happy with input the click path refuses.
   expect(axes.calibrate(cal, parseFloat(total), parseFloat(sweep))).toBe(true);
   return axes;
+}
+
+/** A loaded session carries its globals in the axes metadata, which is where
+ * core/plotData.ts puts them — so the load path must be given them the same way. */
+function loadSession(total: string, sweep: string): CalibrationSession<PieAxes> {
+  const session = new CalibrationSession(PIE_AXES_CONFIG);
+  const axes = loadedPie(total, sweep);
+  axes.setMetadata({ ...axes.getMetadata(), pieTotal: total, pieSweep: sweep });
+  session.setGlobalFieldValue('total', total);
+  session.setGlobalFieldValue('sweep', sweep);
+  session.loadCalibrated(axes, [new Dataset(1)]);
+  return session;
 }
 
 describe('calibrating a pie through the click path', () => {
@@ -52,10 +82,30 @@ describe('calibrating a pie through the click path', () => {
   it('prefills the total with 100 and the sweep with 360', () => {
     // ⚑ Defaults the user WALKS PAST, not inventions — the spider's centre-value rule.
     // Left alone they read the slices as percentages of a whole circle, which is what
-    // a pie is; changed, they read in the figure's own units.
-    const steps = newPie().getSteps();
-    const rim = steps.find((s) => s.key === 'rim')!;
-    expect(rim.valueFields.map((f) => f.defaultValue)).toEqual(['100', '360']);
+    // a pie is; changed, they read in the figure's own units. They are GLOBAL rather
+    // than tied to a click, because neither belongs to any one point.
+    const session = newPie();
+    expect(session.getGlobalFieldValues()).toMatchObject({ total: '100', sweep: '360' });
+    expect(PIE_AXES_CONFIG.globalFields.map((f) => f.key)).toEqual(['total', 'sweep']);
+  });
+
+  it('starts with three outline points and takes more', () => {
+    // Spider's variable-length calibration, for the same reason: the figure decides.
+    const session = newPie();
+    expect(session.getRepeatCount()).toBe(3);
+    expect(session.getSteps().map((s) => s.key)).toEqual(['outline1', 'outline2', 'outline3']);
+    expect(session.addRepeat()).toBe(true);
+    expect(session.getSteps()).toHaveLength(4);
+  });
+
+  it('fits the centre through the outline without it ever being clicked', () => {
+    // The donut case: there is no centre in the image to click.
+    const session = newPie();
+    expect(calibrate(session)).toBe(true);
+    const centre = session.getAxes()!.getCentre();
+    expect(centre.x).toBeCloseTo(100, 6);
+    expect(centre.y).toBeCloseTo(100, 6);
+    expect(session.getAxes()!.getRadius()).toBeCloseTo(50, 6);
   });
 
   it('reads sectors in the units of the total that was typed', () => {
@@ -77,15 +127,17 @@ describe('calibrating a pie through the click path', () => {
 });
 
 describe('the pie refuses the same things on both entrances', () => {
-  it('refuses a rim placed on the centre', () => {
-    // A zero-length frame vector: every angle then reads 0 while calibrate() still
-    // returns true. Caught by distinctPixelSteps, which runs on the file path too.
+  it('refuses outline points that describe no circle', () => {
+    // Three COLLINEAR points fit a circle of infinite radius -- the degenerate case a
+    // least-squares fit cannot report as success. Every angle would read 0 while the
+    // calibration claimed to work, which is the silent-wrong-number shape the guards
+    // exist for.
     const session = newPie();
-    expect(session.handleCalibrationClick(100, 100)).toBe('point-placed');
-    expect(session.handleCalibrationClick(100, 100)).toBe('awaiting-value');
-    expect(session.confirmCalibrationValues(['100', '360'])).toBe(true);
+    for (const x of [100, 150, 200]) {
+      expect(session.handleCalibrationClick(x, 100)).toBe('point-placed');
+    }
     expect(session.runCalibration()).toBe(false);
-    expect(session.getCalibrationError()).toMatch(/same pixel/i);
+    expect(session.getCalibrationError()).toMatch(/must lie on a circle|same pixel/i);
   });
 
   for (const [label, total] of [
@@ -100,9 +152,7 @@ describe('the pie refuses the same things on both entrances', () => {
       expect(calibrate(session, total)).toBe(false);
       expect(session.getCalibrationError()).toMatch(/total must be a positive number/i);
 
-      const loaded = new CalibrationSession(PIE_AXES_CONFIG);
-      loaded.loadCalibrated(loadedPie(total, '360'), [new Dataset(1)]);
-      expect(loaded.getCalibrationError()).toMatch(/total must be a positive number/i);
+      expect(loadSession(total, '360').getCalibrationError()).toMatch(/total must be a positive number/i);
     });
   }
 
@@ -116,9 +166,7 @@ describe('the pie refuses the same things on both entrances', () => {
       expect(calibrate(session, '100', sweep)).toBe(false);
       expect(session.getCalibrationError()).toMatch(/sweep must be between/i);
 
-      const loaded = new CalibrationSession(PIE_AXES_CONFIG);
-      loaded.loadCalibrated(loadedPie('100', sweep), [new Dataset(1)]);
-      expect(loaded.getCalibrationError()).toMatch(/sweep must be between/i);
+      expect(loadSession('100', sweep).getCalibrationError()).toMatch(/sweep must be between/i);
     });
   }
 
@@ -127,8 +175,7 @@ describe('the pie refuses the same things on both entrances', () => {
     expect(calibrate(session)).toBe(true);
     expect(session.getCalibrationError()).toBeNull();
 
-    const loaded = new CalibrationSession(PIE_AXES_CONFIG);
-    loaded.loadCalibrated(loadedPie('100', '360'), [new Dataset(1)]);
+    const loaded = loadSession('100', '360');
     expect(loaded.getCalibrationError()).toBeNull();
     expect(loaded.isCalibrated()).toBe(true);
   });

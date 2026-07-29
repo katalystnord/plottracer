@@ -11,11 +11,20 @@ import { Calibration } from '../calibration.js';
  * record general) and these should all still hold.
  */
 
-/** Calibrate a pie centred at (100,100) with its rim 50px to the right. */
-function pie(sweepDegrees = 360, total = 100): PieAxes {
+/**
+ * Calibrate a pie centred at (100,100) with radius 50 — from OUTLINE points only.
+ *
+ * ⚑ Nothing clicks a centre. The outline is the whole calibration and the centre is
+ * fitted through it, because a donut has no visible centre to click; these tests
+ * therefore never tell the model where the middle is, and every angle below depends
+ * on it having worked that out for itself.
+ */
+function pie(sweepDegrees = 360, total = 100, angles: number[] = [90, 210, 330]): PieAxes {
   const cal = new Calibration(2);
-  cal.addPoint(100, 100, '', '');
-  cal.addPoint(150, 100, String(total), String(sweepDegrees));
+  for (const a of angles) {
+    const r = (a * Math.PI) / 180;
+    cal.addPoint(100 + 50 * Math.cos(r), 100 + 50 * Math.sin(r), '', '');
+  }
   const axes = new PieAxes();
   axes.calibrate(cal, total, sweepDegrees);
   return axes;
@@ -28,12 +37,45 @@ function at(deg: number, r = 50): [number, number] {
   return [100 + r * Math.cos(rad), 100 + r * Math.sin(rad)];
 }
 
+describe('PieAxes — fitting the circle', () => {
+  it('recovers the centre and radius from the outline alone', () => {
+    const axes = pie();
+    expect(axes.getCentre().x).toBeCloseTo(100, 9);
+    expect(axes.getCentre().y).toBeCloseTo(100, 9);
+    expect(axes.getRadius()).toBeCloseTo(50, 9);
+    expect(axes.getFitResidual()).toBeLessThan(1e-9);
+  });
+
+  it('takes more than three points, and says how well they fit', () => {
+    // ⚑ Three points ALWAYS fit perfectly, so a bad click among them is undetectable.
+    // A fourth is real redundancy about the figure, and the residual it produces is
+    // the only thing that can say "this rim is not a circle".
+    const eight = [0, 45, 90, 135, 180, 225, 270, 315];
+    expect(pie(360, 100, eight).getFitResidual()).toBeLessThan(1e-9);
+  });
+
+  it('refuses collinear points, which describe no circle', () => {
+    const cal = new Calibration(2);
+    for (const x of [100, 150, 200]) cal.addPoint(x, 100, '', '');
+    expect(new PieAxes().calibrate(cal, 100, 360)).toBe(false);
+  });
+});
+
 describe('PieAxes — reading an angle', () => {
   it('measures the angle between two boundaries', () => {
     const axes = pie();
     const a = axes.angleAt(...at(0));
     const b = axes.angleAt(...at(90));
     expect(((b - a) * 180) / Math.PI).toBeCloseTo(90, 6);
+  });
+
+  it('reads twelve o\'clock as 0°, not 359.999…°', () => {
+    // ⚑ The fitted centre is a few ulps off exact, so a boundary at precisely 0°
+    // computes a hair BELOW zero and would wrap to the top of the range. Values never
+    // noticed (differences normalise), but the live readout would flicker between
+    // 0.0° and 360.0° — at twelve o'clock, which is where a pie's first boundary
+    // usually sits.
+    expect(pie().angleAt(...at(0))).toBeCloseTo(0, 9);
   });
 
   it('is SCALE-INVARIANT — the same angle at any radius', () => {

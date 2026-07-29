@@ -98,12 +98,13 @@ const PAIRS: Record<AxesKind, readonly (readonly [string, string])[]> = {
     ['y1', 'y2'],
   ],
   bar: [['p1', 'p2']],
-  // ⚑ The centre-to-rim vector, which is the pie's whole frame. Drawing it matters
-  // more here than on most types: the rim click is the one place a user can be led
-  // astray, because on a figure whose slices have DIFFERENT radii the reference
-  // circle must sit inside every one of them (David's rule -- click the smallest
-  // slice's edge). Seeing the line makes a rim taken off an over-long slice obvious.
-  pie: [['centre', 'rim']],
+  // ⚑ Nothing to JOIN on a pie: its calibration is a set of points around the
+  // outline, and the thing worth drawing is the CIRCLE fitted through them, not
+  // segments between them. That is the whole point of the preview here -- seeing the
+  // fitted circle laid back over the figure is what catches a mis-clicked rim point,
+  // and on a donut it is the only way to see whether the derived centre landed
+  // right, since there is no centre in the image to compare it against.
+  pie: [],
   // The radius vectors. Upstream draws nothing for polar; these are the lines
   // whose ANGLE the calibration reads, so seeing them is the whole point.
   polar: [

@@ -66,14 +66,27 @@
  */
 
 import type { Calibration } from '../calibration.js';
+import { fitCircle, circleFitResidual } from '../mathFunctions.js';
 import type { AxesMetadata } from './types.js';
 
 const TWO_PI = Math.PI * 2;
 
-/** Normalise any angle into [0, 2π). */
+/**
+ * Normalise any angle into [0, 2π).
+ *
+ * ⚑ Snaps the top of the range back to zero. The fitted centre lands a few
+ * float-ulps off exact — 100.00000000000003 rather than 100 — so a boundary at
+ * precisely 0° computes atan2(-1e-16, r), a hair BELOW zero, and wraps to 359.9999…°
+ * instead. Sector values never noticed, because the difference is normalised too, but
+ * a live readout would flicker between 0.0° and 360.0° at the top of every pie, and
+ * the first boundary of a pie is drawn at twelve o'clock more often than anywhere
+ * else. The epsilon is far below any angle a click can resolve (1e-9 rad is 6e-8 of a
+ * degree) and far above the float noise it exists to absorb.
+ */
 function normalizeAngle(a: number): number {
   const r = a % TWO_PI;
-  return r < 0 ? r + TWO_PI : r;
+  const positive = r < 0 ? r + TWO_PI : r;
+  return TWO_PI - positive < 1e-9 ? 0 : positive;
 }
 
 export class PieAxes {
@@ -120,32 +133,51 @@ export class PieAxes {
    */
   private defaultTotal = 100;
 
+  /** RMS distance of the outline points from the fitted circle, in pixels. */
+  private residual = 0;
+
   isCalibrated(): boolean {
     return this._isCalibrated;
   }
 
   /**
-   * Calibrate from the two placed points — centre (0) and rim (1) — plus the total
-   * transcribed on the rim step.
+   * Calibrate from points around the OUTLINE — three or more — with the centre and
+   * radius FITTED rather than clicked.
+   *
+   * ⚑ THE CENTRE IS DERIVED, and that is the whole reason for this shape (David,
+   * 2026-07-29). A donut has no visible centre at all: its boundaries stop at the
+   * inner radius, so there is nothing to click. PlotDigitizer, the one competitor
+   * with a pie mode, instructs the user to "approximate the origin" — an eyeball
+   * guess sitting underneath every value in the figure. Fitting the rim replaces
+   * that guess with arithmetic. The outline points remain ordinary calibration
+   * handles, so correcting the fit is the same drag that corrects any other type.
    *
    * ⚑ Reports success on degenerate input, like every other axes class in this
-   * directory. The refusals live in the session's guards (`distinctPixelSteps` catches
-   * a rim placed on the centre) and in the config's `buildAxes` (a total that is not a
-   * positive number), so that BOTH entrances — the click path and a loaded file — run
-   * them. See engine/calibrationSession.ts's checkGuards.
+   * directory — except where the geometry simply does not exist (collinear points
+   * describe no circle). The value refusals live in the config's `checkValues`, run
+   * inside checkGuards, so BOTH entrances see them.
    */
   calibrate(calibration: Calibration, defaultTotal: number, sweepDegrees: number): boolean {
     this.calibration = calibration;
     this._isCalibrated = false;
 
-    const centre = calibration.getPoint(0);
-    const rim = calibration.getPoint(1);
-    if (!centre || !rim) return false;
+    const pts: [number, number][] = [];
+    for (let i = 0; i < calibration.getCount(); i++) {
+      const p = calibration.getPoint(i);
+      if (p) pts.push([p.px, p.py]);
+    }
+    const circle = fitCircle(pts);
+    if (!circle) return false; // fewer than three, or collinear: no circle exists
+    this.residual = circleFitResidual(pts, circle);
 
-    this.cx = centre.px;
-    this.cy = centre.py;
-    this.ax = rim.px - centre.px;
-    this.ay = rim.py - centre.py;
+    this.cx = circle.x0;
+    this.cy = circle.y0;
+    // Any orthogonal basis of equal length gives the same angle DIFFERENCES, and a
+    // sector is a difference — so the frame is simply axis-aligned at the fitted
+    // radius. (The later ellipse takes its basis from the fitted axes instead, which
+    // is the only thing that changes here.)
+    this.ax = circle.radius;
+    this.ay = 0;
 
     // The circle case: b is a rotated a quarter-turn. In image space y runs DOWN, so
     // this fixes the handedness of every angle below — consistently, which is all that
@@ -164,7 +196,19 @@ export class PieAxes {
     return this.sweep;
   }
 
-  /** The total asked once on the rim step — the value each new series starts from.
+  /** How far the outline points stray from the fitted circle (RMS pixels). A
+   * property of the FIGURE — a rim that will not sit on a circle is telling you the
+   * pie is tilted. Reported, never acted on: the app does not infer tilt. */
+  getFitResidual(): number {
+    return this.residual;
+  }
+
+  /** The fitted radius, in pixels. */
+  getRadius(): number {
+    return Math.hypot(this.ax, this.ay);
+  }
+
+  /** The total asked once for the whole figure — the value each new series starts from.
    * The series' own stored total is what a reading actually uses. */
   getDefaultTotal(): number {
     return this.defaultTotal;
@@ -242,7 +286,8 @@ export class PieAxes {
   }
 
   numCalibrationPointsRequired(): number {
-    return 2;
+    // Three points define a circle; more give a least-squares fit and a residual.
+    return 3;
   }
 
   getDimensions(): number {

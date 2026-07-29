@@ -32,7 +32,7 @@ interface PieTruth {
   total: number;
   sweep: number;
   explodedCategory?: string;
-  calibration: { anchors: { centre: Anchor; rim: Anchor }; slices: SliceTruth[] };
+  calibration: { anchors: { centre: Anchor; rim: Anchor; outline: Anchor[] }; slices: SliceTruth[] };
   series: { points: { category: string; value: number }[] }[];
 }
 
@@ -40,12 +40,12 @@ function loadTruth(name: string): PieTruth {
   return JSON.parse(fs.readFileSync(path.join(SAMPLES, `${name}.truth.json`), 'utf8')) as PieTruth;
 }
 
-/** Calibrate exactly as the app does from the truth's own centre and rim anchors. */
+/** Calibrate exactly as the app does — from OUTLINE points only, with the centre and
+ * radius fitted through them. Nothing here clicks a centre, because on a donut there
+ * is none to click. */
 function axesFor(truth: PieTruth): PieAxes {
-  const { centre, rim } = truth.calibration.anchors;
   const cal = new Calibration(2);
-  cal.addPoint(centre.px, centre.py, '', '');
-  cal.addPoint(rim.px, rim.py, String(truth.total), String(truth.sweep));
+  for (const p of truth.calibration.anchors.outline) cal.addPoint(p.px, p.py, '', '');
   const axes = new PieAxes();
   expect(axes.calibrate(cal, truth.total, truth.sweep)).toBe(true);
   return axes;
@@ -145,6 +145,30 @@ describe('the exploded slice is why the apex matters', () => {
       );
       expect(withApex).toBeCloseTo(withCentre, 9);
     }
+  });
+});
+
+describe('the fitted centre', () => {
+  it('lands on the real centre without ever being clicked', () => {
+    // ⚑ The point of outline-first. The generator knows where it put the centre; the
+    // app never sees that number and reconstructs it from four rim points alone.
+    for (const name of ['pie-filler-composition', 'pie-exploded-market-share', 'donut-donut-flavours']) {
+      const truth = loadTruth(name);
+      const axes = axesFor(truth);
+      const fitted = axes.getCentre();
+      const real = truth.calibration.anchors.centre;
+      expect(Math.hypot(fitted.x - real.px, fitted.y - real.py), `${name} centre`).toBeLessThan(0.05);
+      // ...and the radius with it, which is what the boundary clicks are measured at.
+      const realRadius = Math.hypot(real.px - truth.calibration.anchors.rim.px, real.py - truth.calibration.anchors.rim.py);
+      expect(Math.abs(axes.getRadius() - realRadius), `${name} radius`).toBeLessThan(0.05);
+    }
+  });
+
+  it('reports a residual of essentially zero for a true circle', () => {
+    // A property of the FIGURE, not of the fit: a rim that will not sit on a circle
+    // is telling you the pie is tilted. These are drawn as circles, so it is ~0.
+    const axes = axesFor(loadTruth('pie-filler-composition'));
+    expect(axes.getFitResidual()).toBeLessThan(0.05);
   });
 });
 

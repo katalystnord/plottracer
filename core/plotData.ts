@@ -438,14 +438,26 @@ export class PlotData {
           axes.calibrate(calibration!, Boolean(axData.isLog));
         } else if (axData.type === 'PieAxes') {
           axes = new PieAxes();
-          calibration!.labels = ['Centre', 'Rim'];
-          calibration!.labelPositions = ['E', 'S'];
-          calibration!.maxPointCount = 2;
-          // The two transcribed numbers ride on the RIM point (dx total, dy sweep),
-          // which is where the calibration collected them -- no separate axes-level
-          // copy, so there is only one home for each and no way for two to disagree.
-          const rim = calibration!.getPoint(1);
-          axes.calibrate(calibration!, parseFloat(String(rim?.dx ?? '')), parseFloat(String(rim?.dy ?? '')));
+          // ⚑ The outline is variable-length, like a spider's spokes -- three points
+          // or more -- so the labels come from the FILE's own point count rather than
+          // a fixed list. A file written with six outline points must reopen with six,
+          // not be silently reduced to the first three.
+          calibration!.labels = [];
+          calibration!.labelPositions = [];
+          for (let i = 0; i < calibration!.getCount(); i++) {
+            calibration!.labels.push(`Outline ${i + 1}`);
+            calibration!.labelPositions.push('S');
+          }
+          calibration!.maxPointCount = calibration!.getCount();
+          // The total and the sweep are GLOBAL -- properties of the whole figure, not
+          // of any point -- so they ride in the axes metadata, which is the only
+          // per-axes home the format has for a value with no pixel attached.
+          const meta = (axData.metadata ?? {}) as Record<string, unknown>;
+          axes.calibrate(
+            calibration!,
+            parseFloat(String(meta['pieTotal'] ?? '100')),
+            parseFloat(String(meta['pieSweep'] ?? '360'))
+          );
         } else if (axData.type === 'ImageAxes') {
           axes = new ImageAxes();
         } else if (axData.type === 'CircularChartRecorderAxes') {
@@ -631,11 +643,9 @@ export class PlotData {
         axData.rotationDirection = axes.getRotationDirection();
       } else if (axes instanceof PieAxes) {
         axData.type = 'PieAxes';
-        // ⚑ Nothing pie-specific is written here, deliberately. The total and the
-        // sweep live on the rim calibration point, which the shared block below
-        // already writes -- a second copy on the axes entry would be a second home
-        // for a fact the points already carry, and two homes eventually disagree.
-        // Same reasoning as the spider's centre value.
+        // The total and the sweep have no pixel to ride on -- they are global to the
+        // figure -- so the axes metadata is their one home. Written through the shared
+        // metadata block below, which `setMetadata` above has already populated.
       } else if (axes instanceof SpiderAxes) {
         axData.type = 'SpiderAxes';
         // Everything else about a spider lives in the calibration points, one per

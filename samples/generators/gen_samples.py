@@ -897,7 +897,15 @@ def _pie_truth_geometry(fig, ax, values, *, radius=1.0, explode=None, start=90.0
     for i, v in enumerate(values):
         edges.append((start - 360.0 * (cum / total), i))
         cum += v
-    anchors = {"centre": px(0.0, 0.0), "rim": px(radius, 0.0)}
+    # ⚑ OUTLINE points are what the app actually calibrates from (v1.6): the centre is
+    # FITTED through them rather than clicked, because a donut has no visible centre.
+    # Four spread around the rim, so the truth exercises the least-squares path rather
+    # than only the exact three-point case.
+    outline = [px(radius * math.cos(math.radians(a)), radius * math.sin(math.radians(a)))
+               for a in (90.0, 0.0, -90.0, 180.0)]
+    # centre/rim are kept for reference and for the residual check; the app derives
+    # both from `outline`.
+    anchors = {"centre": px(0.0, 0.0), "rim": px(radius, 0.0), "outline": outline}
     slices = []
     for i, v in enumerate(values):
         a0 = edges[i][0]

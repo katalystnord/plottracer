@@ -333,6 +333,11 @@ export type BuildAxesResult<A extends CalibratedAxes> = { axes: A } | { error: s
 export interface GlobalFieldInfo {
   key: string;
   label: string;
+  /** Prefilled value (v1.6). A default the user WALKS PAST and can change is not an
+   * invention -- the spider's centre value established the rule, and the pie's total
+   * is the same shape: leave 100 and the slices read as percentages, which is what a
+   * pie is, or type the figure's own total and they read in its units. */
+  defaultValue?: string;
 }
 
 /**
@@ -448,6 +453,7 @@ function checkGuards(
   config: AxesTypeConfig<CalibratedAxes>,
   cal: Calibration,
   options: Readonly<Record<string, string>>,
+  globalValues: Readonly<Record<string, string>>,
   /** The steps the Calibration was actually built from, in the same order. Only
    * differs from `config.fixedSteps` for a type with a repeating group (v1.4),
    * where the key -> Calibration-index mapping below has to resolve against the
@@ -551,7 +557,7 @@ function checkGuards(
   // which is the same "guards belong in the model, and the model has more than one
   // entrance" lesson as checkpoints 69/72/77/80. Anything that refuses a calibration
   // belongs here, where both doors run it.
-  const valueError = config.checkValues?.(cal, options);
+  const valueError = config.checkValues?.(cal, options, globalValues);
   if (valueError) return valueError;
   return null;
 }
@@ -654,7 +660,11 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * path calls: a check that lives there passes every test written against clicking
    * and lets a hand-edited file through untouched.
    */
-  checkValues?: (cal: Calibration, options: Readonly<Record<string, string>>) => string | null;
+  checkValues?: (
+    cal: Calibration,
+    options: Readonly<Record<string, string>>,
+    globalValues: Readonly<Record<string, string>>
+  ) => string | null;
   /** Dimensionality of the extracted data points (2 for XY/Polar, 1 for Bar). */
   dataDim: number;
   /** Human labels for each data dimension, length === dataDim -- the per-type
@@ -1434,33 +1444,63 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   id: 'pie',
   label: 'Pie / Donut',
   axesKind: 'pie',
-  // No auto-extract yet. Sampling colour around the circumference is the obvious
-  // mechanism (the same 1-D scan the spider does along a spoke) but it is a separate
-  // piece of work, and claiming a tool that refuses is worse than not offering it.
+  // No auto-extract yet. Sampling colour around the fitted circle is the obvious
+  // mechanism -- the same 1-D scan the spider runs along a spoke -- and it needs the
+  // outline to exist first, which is why it waits for this flow rather than racing it.
   autoExtractKind: 'none',
   // One measured number per datum. WHICH slice it belongs to is the tuple's own
   // category name, not a second coordinate -- a pie is 1.5D, exactly like a bar.
   dataDim: 1,
   valueLabels: ['Value'],
-  globalFields: [],
+  // ⚑ THE TOTAL AND THE SWEEP ARE GLOBAL, not tied to any click -- CCR's mechanism,
+  // and for the same reason its chart start time uses it: they are properties of the
+  // WHOLE FIGURE that no single point carries. Both prefilled, and a default the user
+  // walks past is not an invention (the spider's rule). Leave the total at 100 and the
+  // slices read as percentages, which is what a pie is; type the figure's own total --
+  // the number printed in a donut's hole -- and they read in its units. Leave the
+  // sweep at 360 for a whole circle, or type 180 for a half pie, which is why 360 is
+  // never a constant here.
+  globalFields: [
+    { key: 'total', label: 'Total', defaultValue: '100' },
+    { key: 'sweep', label: 'Sweep (degrees)', defaultValue: '360' },
+  ],
   defaultSlots: PIE_SECTOR_SLOTS,
   tupleNoun: 'sector',
   // A sector IS one object: lose an edge and there is no sector left, unlike the
   // spider's independent slots where one empty ray is a meaningful state.
   tupleMembers: 'object',
-  // A rim placed on the centre gives a zero-length frame vector, and every angle
-  // then reads 0 while calibrate() still reports success -- the silently-wrong-number
-  // shape this guard list exists for. Runs on BOTH entrances (click path and file).
-  distinctPixelSteps: [['centre', 'rim']],
   options: [],
+  // ⚑ NO fixedSteps AND NO CENTRE STEP. The outline is the whole calibration, and the
+  // centre is FITTED from it (David, 2026-07-29). That ordering is not a preference:
+  // a donut has no visible centre to click at all -- its boundaries stop at the inner
+  // radius -- and PlotDigitizer, the only competitor with a pie mode, tells the user
+  // to "approximate the origin", putting an eyeball guess underneath every value.
+  // Fitting the rim makes the centre arithmetic instead. The outline points stay
+  // ordinary handles, so correcting the fit is the same drag that corrects any other
+  // calibration; nothing special (David).
+  repeatingStep: {
+    noun: 'outline point',
+    // ⚑ Three define a circle exactly, which is also why three can never disagree:
+    // any three points fit perfectly, so a bad click is undetectable. A fourth is
+    // genuine redundancy about the FIGURE and produces a residual that means
+    // something. Required three, add more where the figure allows -- some pies leave
+    // little clean rim to click (labels crowding it, a cropped figure), which is
+    // exactly why more is optional rather than demanded (David).
+    min: 3,
+    step: {
+      key: 'outline',
+      label: 'Outline #',
+      color: '#e0a458',
+      prompt: 'Click a point on the outer edge of the pie — three or more, spread around it',
+      valueFields: [],
+    },
+  },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same refusal
   // a click does. Written in buildAxes first, and the load-path test caught it
   // immediately: a total of -50 opened clean, every value silently negative.
-  checkValues(cal) {
-    const rim = cal.getPoint(1);
-    if (!rim) return null; // not placed yet; nothing to judge
-    const total = parseFloat(String(rim.dx ?? ''));
-    const sweep = parseFloat(String(rim.dy ?? ''));
+  checkValues(_cal, _options, globalValues) {
+    const total = parseFloat(String(globalValues['total'] ?? ''));
+    const sweep = parseFloat(String(globalValues['sweep'] ?? ''));
     // A sector is a fraction of a whole, so a pie cannot show a negative quantity --
     // IBM documents the same rule for the type, arrived at here independently.
     if (!Number.isFinite(total) || total <= 0) {
@@ -1471,45 +1511,41 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
     }
     return null;
   },
-  fixedSteps: [
-    {
-      key: 'centre',
-      label: 'Centre',
-      color: '#5fb47a',
-      prompt: 'Click the centre of the pie — where every slice boundary meets',
-      // No value: the centre of a pie carries no number. Every other type asks for one
-      // here because its origin sits on a scale; a pie's does not.
-      valueFields: [],
-    },
-    {
-      key: 'rim',
-      label: 'Rim',
-      color: '#e0a458',
-      // ⚑ THE SMALLEST slice (David). The rim radius never enters a value -- the angle
-      // is scale-invariant, which is what lets one calibration read every ring of a
-      // donut -- so choosing the shortest costs nothing numerically. What it buys is a
-      // reference circle that lies INSIDE every sector: take the rim off an over-long
-      // slice and the circle escapes the shorter ones, so the overlay runs through
-      // blank paper and "click along this circle" stops being followable.
-      prompt: 'Click the outer edge of the SMALLEST slice, then give the total the whole circle represents',
-      valueFields: [
-        { key: 'total', label: 'Total', field: 'dx', defaultValue: '100' },
-        { key: 'sweep', label: 'Sweep°', field: 'dy', defaultValue: '360' },
-      ],
-    },
-  ],
-  buildAxes(cal) {
-    const rim = cal.getPoint(1);
-    const total = parseFloat(String(rim?.dx ?? ''));
-    const sweep = parseFloat(String(rim?.dy ?? ''));
-    // The values were already refused by checkValues above, on whichever entrance got
-    // here — this only has to convert them.
+  fixedSteps: [],
+  buildAxes(cal, ctx) {
+    const total = parseFloat(String(ctx.globalValues['total'] ?? ''));
+    const sweep = parseFloat(String(ctx.globalValues['sweep'] ?? ''));
+    // The values were already refused by checkValues on whichever entrance got here;
+    // this only has to convert them.
     const axes = new PieAxes();
     if (!axes.calibrate(cal, total, sweep)) {
-      return { error: 'Calibration failed — place the centre and a point on the outer edge.' };
+      return { error: 'Calibration failed — the outline points must lie on a circle; three collinear points describe none.' };
     }
-    axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'pie' });
+    // ⚑ The total and the sweep have no pixel to ride on, so the axes METADATA is
+    // their one home in the file -- core/plotData.ts reads them straight back out.
+    // Stored as the strings that were typed, not as re-formatted numbers: the file
+    // should say what the user said.
+    axes.setMetadata({
+      ...axes.getMetadata(),
+      [GRAPH_TYPE_METADATA_KEY]: 'pie',
+      pieTotal: String(ctx.globalValues['total'] ?? ''),
+      pieSweep: String(ctx.globalValues['sweep'] ?? ''),
+    });
     return { axes };
+  },
+  // ⚑ WITHOUT THIS, OPENING A SAVED PIE LOSES ITS TOTAL AND SWEEP. `loadCalibrated`
+  // rebuilds globalValues from the axes and falls back to {} when a config declares
+  // no extractor -- so the file path would hand back a pie whose total was blank, and
+  // checkGuards would refuse a project that had been perfectly good when saved. The
+  // click path was unaffected, which is exactly why it needed a load-path test to
+  // find it. Reads back the strings buildAxes wrote, so the round trip is byte-for-
+  // byte what the user typed.
+  extractGlobalValues(axes) {
+    const meta = axes.getMetadata() as Record<string, unknown>;
+    return {
+      total: String(meta['pieTotal'] ?? '100'),
+      sweep: String(meta['pieSweep'] ?? '360'),
+    };
   },
 };
 
@@ -1682,6 +1718,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   constructor(private readonly config: AxesTypeConfig<A>) {
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.optionValues = defaultOptionValues(config as unknown as AxesTypeConfig<CalibratedAxes>);
+    // Prefill any global field that declares a default (v1.6) -- see GlobalFieldInfo.
+    for (const gf of config.globalFields) {
+      if (gf.defaultValue !== undefined) this.globalValues[gf.key] = gf.defaultValue;
+    }
     this.repeatCount = config.repeatingStep?.min ?? 0;
   }
 
@@ -2799,7 +2839,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // runCalibration, which re-guards. Visible and recoverable beats silent and
     // pristine (tenet 1).
     this.calibrationError = cal
-      ? checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, this.getSteps())
+      ? checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, this.globalValues, this.getSteps())
       : null;
     this.axes = axes;
     const finalDatasets = datasets.length > 0 ? datasets : [new Dataset(this.config.dataDim)];
@@ -3709,7 +3749,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // Refusals run BEFORE the axes class sees anything: every axes class
     // reports success on degenerate input, so a guard placed after calibrate()
     // is a guard that never fires (checkpoint 72).
-    const guardError = checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, steps);
+    const guardError = checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, this.globalValues, steps);
     if (guardError) {
       this.calibrationError = guardError;
       return false;
@@ -4186,7 +4226,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.pendingPixel = null;
     this.axes = null;
     this.calibrationError = null;
+    // Back to the DEFAULTS, not to empty -- a prefilled global (the pie's total and
+    // sweep) must survive a reset the same way it survives a fresh session, or the
+    // second figure of a session would be greeted by blank fields the first had
+    // filled in for it.
     this.globalValues = {};
+    for (const gf of this.config.globalFields) {
+      if (gf.defaultValue !== undefined) this.globalValues[gf.key] = gf.defaultValue;
+    }
     // Back to the starting spoke count. Leaving a previous figure's count behind
     // would greet the next figure with handles it never asked for.
     this.repeatCount = this.config.repeatingStep?.min ?? 0;
