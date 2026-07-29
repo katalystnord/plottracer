@@ -173,3 +173,92 @@ describe('how many digits a reading may honestly show', () => {
     expect(bare.valuePerPixel(100)).toBe(0);
   });
 });
+
+describe('snapping a boundary onto the rim', () => {
+  it('CANNOT change the reading — the snap is presentation, provably', () => {
+    // ⚑ The property the whole feature rests on. `angleAt` is atan2 on the basis
+    // coordinates and `snapToRim` scales them by a positive factor; scaling never
+    // moves an atan2. So this is not "close enough within tolerance" -- before and
+    // after are the SAME number, and a boundary click tidied onto the ring records
+    // exactly what the untidied click did.
+    const axes = pie();
+    for (const deg of [0, 37, 90, 179, 270, 359]) {
+      for (const r of [12, 47, 50, 61, 400]) {
+        const [px, py] = at(deg, r);
+        const snapped = axes.snapToRim(px, py);
+        expect(axes.angleAt(snapped.x, snapped.y)).toBeCloseTo(axes.angleAt(px, py), 12);
+      }
+    }
+  });
+
+  it('puts the point ON the rim, whatever radius it was clicked at', () => {
+    const axes = pie();
+    const centre = axes.getCentre();
+    for (const r of [5, 50, 500]) {
+      const s = axes.snapToRim(...at(30, r));
+      expect(Math.hypot(s.x - centre.x, s.y - centre.y)).toBeCloseTo(axes.getRadius(), 6);
+    }
+  });
+
+  it('snaps an exploded slice to ITS OWN arc, not to the pie it left', () => {
+    const axes = pie();
+    const apex = { x: 130, y: 140 };
+    const s = axes.snapToRim(140, 150, apex);
+    expect(Math.hypot(s.x - apex.x, s.y - apex.y)).toBeCloseTo(axes.getRadius(), 6);
+    // ...and the angle about that apex is still untouched.
+    expect(axes.angleAt(s.x, s.y, apex)).toBeCloseTo(axes.angleAt(140, 150, apex), 12);
+  });
+
+  it('leaves the apex itself alone — a point with no angle has none to preserve', () => {
+    const axes = pie();
+    const c = axes.getCentre();
+    expect(axes.snapToRim(c.x, c.y)).toEqual({ x: c.x, y: c.y });
+  });
+});
+
+describe('snapping a TILTED pie', () => {
+  /** A pie squashed to 50% and rotated: a circle under an affine map. */
+  function tilted(): PieAxes {
+    const cal = new Calibration(2);
+    const rot = Math.PI / 7;
+    for (const a of [0, 60, 120, 200, 300]) {
+      const t = (a * Math.PI) / 180;
+      const [ex, ey] = [50 * Math.cos(t), 25 * Math.sin(t)];
+      cal.addPoint(
+        100 + ex * Math.cos(rot) - ey * Math.sin(rot),
+        100 + ex * Math.sin(rot) + ey * Math.cos(rot),
+        '',
+        ''
+      );
+    }
+    const axes = new PieAxes();
+    expect(axes.calibrate(cal, 100, 360, true)).toBe(true);
+    return axes;
+  }
+
+  it('still cannot change the reading', () => {
+    // ⚑ Why the snap is done in the (a, b) FRAME and not by nearest-point geometry.
+    // The nearest point of an ellipse is not along the ray from its centre, so a
+    // Euclidean snap would quietly TURN the boundary and change the slice's value.
+    // Normalising the basis coordinates is exact here for the same reason it is exact
+    // on a circle, and needs no second code path.
+    const axes = tilted();
+    for (const [px, py] of [[130, 108], [70, 90], [100, 130], [112, 82]] as const) {
+      const s = axes.snapToRim(px, py);
+      expect(axes.angleAt(s.x, s.y)).toBeCloseTo(axes.angleAt(px, py), 12);
+    }
+  });
+
+  it('lands the point on the ELLIPSE, which a circular snap would not', () => {
+    // The snapped point is at basis-distance 1 from the centre -- i.e. on the fitted
+    // ellipse -- so its Euclidean distance VARIES with direction, between the two
+    // semi-axes. A snap to a fixed radius would put it off the ink.
+    const axes = tilted();
+    const c = axes.getCentre();
+    const radii = [[130, 108], [100, 130], [70, 90]].map(([px, py]) => {
+      const s = axes.snapToRim(px!, py!);
+      return Math.hypot(s.x - c.x, s.y - c.y);
+    });
+    expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(5);
+  });
+});

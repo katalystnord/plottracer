@@ -386,3 +386,103 @@ describe('what the exploded control can say and do', () => {
     expect(box.getExplodedEdgesPlaced()).toBe(0);
   });
 });
+
+/**
+ * Closing the ring.
+ *
+ * David, driving the app: *"When I come to the end of the ring, I naturally want to
+ * click the first point to close it."* He is right, and the alternative is worse than
+ * inconvenient -- without it the last click opens a sector that will never exist, and
+ * the capture ends on a permanently half-filled row.
+ */
+describe('the last sector closes on the first boundary', () => {
+  it('completes it and stops chaining', () => {
+    const session = calibratedPie();
+    const ds = session.getDataset();
+    clickBoundaries(session, [-90, 0, 90, 180]); // three sectors, the fourth open
+    expect(ds.getTupleCount()).toBe(4);
+
+    // Click the FIRST boundary again -- the far edge of the last sector.
+    const first = ds.getPixel(ds.getTuple(0)![0]!);
+    expect(session.addDataPoint(first.x, first.y)).toBe('point-added');
+
+    // Four complete sectors and NOT a fifth: there is no next one to open.
+    expect(ds.getTupleCount()).toBe(4);
+    for (const t of ds.getAllTuples()) expect(t.every((v) => v !== null)).toBe(true);
+    // The closing edge sits exactly where the opening one does...
+    const closing = ds.getPixel(ds.getTuple(3)![1]!);
+    expect(closing.x).toBeCloseTo(first.x, 9);
+    expect(closing.y).toBeCloseTo(first.y, 9);
+    // ...as its OWN pixel. A shared index cannot survive the project file, which is
+    // the trap that once reopened every sector after the first missing its edge.
+    expect(ds.getTuple(3)![1]).not.toBe(ds.getTuple(0)![0]);
+  });
+
+  it('makes the four sectors of a closed pie account for the whole figure', () => {
+    // The reading, not just the bookkeeping: quarters clicked round the rim and closed
+    // on the first boundary must total the figure's own total.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0, 90, 180]);
+    const ds = session.getDataset();
+    const first = ds.getPixel(ds.getTuple(0)![0]!);
+    session.addDataPoint(first.x, first.y);
+    const total = session.getTupleRows().reduce((a, r) => a + (r.derived ?? 0), 0);
+    expect(total).toBeCloseTo(100, 6);
+  });
+
+  it('is NOT offered on the very first sector, where it would cut the capture short', () => {
+    // ⚑ The trap in the obvious implementation. With one sector open, the user's
+    // ordinary SECOND click is near no earlier boundary except its own opening one --
+    // treat that as "closing" and a two-slice pie can never be captured at all.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90]);
+    const ds = session.getDataset();
+    const first = ds.getPixel(ds.getTuple(0)![0]!);
+    expect(session.ringClosingPixel(first.x, first.y)).toBeNull();
+    clickBoundaries(session, [0]);
+    expect(session.ringClosingPixel(first.x, first.y)).toBeNull();
+  });
+
+  it('is not offered away from the first boundary, nor on other types', () => {
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0, 90]);
+    expect(session.ringClosingPixel(...at(200))).toBeNull();
+    const box = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+    expect(box.ringClosingPixel(0, 0)).toBeNull();
+  });
+
+  it('is not offered while an exploded slice is being captured', () => {
+    // A pulled-out slice shares its edges with nobody -- there is a visible gap on
+    // both sides -- so it can never be the sector that closes a ring.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0, 90]);
+    const first = session.getDataset().getPixel(session.getDataset().getTuple(0)![0]!);
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 20, CY + 20);
+    expect(session.ringClosingPixel(first.x, first.y)).toBeNull();
+  });
+});
+
+describe('a boundary click is tidied onto the rim', () => {
+  it('lands on the ring without moving the reading', () => {
+    const session = calibratedPie();
+    const centre = session.getAxes()!.getCentre();
+    // Clicked a little inside the rim, as a hand does.
+    session.addDataPoint(...at(-90, R * 0.96));
+    const p = session.getDataset().getPixel(0);
+    expect(Math.hypot(p.x - centre.x, p.y - centre.y)).toBeCloseTo(R, 6);
+  });
+
+  it("leaves a DONUT's inner ring exactly where it was clicked", () => {
+    // ⚑ The reason the snap is banded. A click on an inner ring is a legitimate
+    // reading -- angles are scale-invariant, which is precisely why ONE calibration
+    // reads every ring of a donut -- and hauling it out to the rim would drag the
+    // marker off the ink it measured and read as the app misunderstanding the figure.
+    const session = calibratedPie();
+    const inner = at(-90, R * 0.55);
+    session.addDataPoint(...inner);
+    const p = session.getDataset().getPixel(0);
+    expect(p.x).toBeCloseTo(inner[0], 9);
+    expect(p.y).toBeCloseTo(inner[1], 9);
+  });
+});

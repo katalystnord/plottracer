@@ -132,6 +132,40 @@ function dataURLToBytes(dataURL: string): Uint8Array {
  * inspecting grid lines at.
  */
 
+/**
+ * Where a marker's label sits, and how it is aligned.
+ *
+ * Without `labelAway` this is the historical fixed offset: up and to the right. With
+ * it, the label is pushed along the outward direction (marker minus that point), so on
+ * a radial figure the labels fan into the white space outside the rim rather than all
+ * leaning the same way into the ink. Right-aligned when it points left, so the text
+ * grows away from the marker rather than back across it.
+ */
+function labelPlacement(
+  screenX: number,
+  screenY: number,
+  gap: number,
+  away?: { x: number; y: number }
+): { x: number; y: number; align: 'left' | 'right' } {
+  if (!away) return { x: screenX + gap, y: screenY - 20, align: 'left' };
+  const dx = screenX - away.x;
+  const dy = screenY - away.y;
+  const len = Math.hypot(dx, dy);
+  // Dead on the point it should flee: no direction to use, so keep the old behaviour.
+  if (len < 1e-6) return { x: screenX + gap, y: screenY - 20, align: 'left' };
+  const ux = dx / len;
+  const uy = dy / len;
+  const reach = gap + 6;
+  const leftwards = ux < 0;
+  return {
+    x: screenX + ux * reach,
+    // Konva Text is positioned by its TOP edge, so half the line height centres it on
+    // the ray instead of hanging below it.
+    y: screenY + uy * reach - 7,
+    align: leftwards ? 'right' : 'left',
+  };
+}
+
 export interface CanvasMarker {
   /** Stable identity passed back to onMarkerDragEnd — not a React key concern. */
   id: string;
@@ -146,6 +180,20 @@ export interface CanvasMarker {
   /** A calibration handle renders as a crosshair reticle rather than a filled
    * dot (checkpoint 59), so axis references read as distinct from data points. */
   kind?: 'calibration' | 'data';
+  /**
+   * A point in IMAGE coordinates to push this marker's label AWAY from.
+   *
+   * ⚑ Every label is otherwise drawn up-and-to-the-right at a fixed offset, which is
+   * fine on a scatter and wrong on anything radial: a pie's outline handles and its
+   * boundary points all sit ON the rim, so their labels all lean the same way and land
+   * on each other, on the slice percentages, and on the figure's own category names
+   * ("Outline 2" over "PBS" -- David, by screenshot). Given the fitted centre, each
+   * label instead leans outward into the white space that is always there, because the
+   * rim is by definition the edge of the ink.
+   *
+   * Purely presentational: it moves TEXT, never the marker, so nothing measured moves.
+   */
+  labelAway?: { x: number; y: number };
   /** Override the data-dot radius (checkpoint 120): interpolation-assist draws
    * anchors big and derived samples small. Defaults to 5. */
   radius?: number;
@@ -1454,6 +1502,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 {points?.map((point) => {
                   const { x: screenX, y: screenY } = imageToScreen(view, point.x, point.y);
                   const interactive = point.draggable ?? false;
+                  // labelAway is given in image coordinates, like everything else a
+                  // caller hands us; the placement is computed on screen so it does not
+                  // stretch with zoom.
+                  const awayOf = (m: CanvasMarker) =>
+                    m.labelAway ? imageToScreen(view, m.labelAway.x, m.labelAway.y) : undefined;
                   if (point.kind === 'calibration') {
                     // A crosshair reticle (ring + center dot + 4 ticks) so an axis
                     // handle reads as a precise reference, not a data dot. Drawn in
@@ -1482,15 +1535,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           <Line points={[0, -12, 0, -8]} stroke={point.color} strokeWidth={1.6} listening={false} />
                           <Line points={[0, 8, 0, 12]} stroke={point.color} strokeWidth={1.6} listening={false} />
                         </Group>
-                        <KonvaText
-                          x={screenX + 12}
-                          y={screenY - 20}
-                          text={point.label}
-                          fontSize={12}
-                          fontFamily="system-ui, sans-serif"
-                          fill={theme.color.overlay.stroke}
-                          listening={false}
-                        />
+                        {(() => {
+                          const lp = labelPlacement(screenX, screenY, 12, awayOf(point));
+                          return (
+                            <KonvaText
+                              x={lp.align === 'right' ? lp.x - 200 : lp.x}
+                              y={lp.y}
+                              width={200}
+                              align={lp.align}
+                              text={point.label}
+                              fontSize={12}
+                              fontFamily="system-ui, sans-serif"
+                              fill={theme.color.overlay.stroke}
+                              listening={false}
+                            />
+                          );
+                        })()}
                       </Fragment>
                     );
                   }
@@ -1534,15 +1594,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         onDragMove={(e) => setHover({ x: e.target.x(), y: e.target.y() })}
                         onDragEnd={(e) => onMarkerDragEndInternal(point.id, e)}
                       />
-                      <KonvaText
-                        x={screenX + 8}
-                        y={screenY - 20}
-                        text={point.label}
-                        fontSize={12}
-                        fontFamily="system-ui, sans-serif"
-                        fill={theme.color.overlay.stroke}
-                        listening={false}
-                      />
+                      {(() => {
+                        const lp = labelPlacement(screenX, screenY, 8, awayOf(point));
+                        return (
+                          <KonvaText
+                            x={lp.align === 'right' ? lp.x - 200 : lp.x}
+                            y={lp.y}
+                            width={200}
+                            align={lp.align}
+                            text={point.label}
+                            fontSize={12}
+                            fontFamily="system-ui, sans-serif"
+                            fill={theme.color.overlay.stroke}
+                            listening={false}
+                          />
+                        );
+                      })()}
                     </Fragment>
                   );
                 })}

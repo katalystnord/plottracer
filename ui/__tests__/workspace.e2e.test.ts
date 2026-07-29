@@ -6984,20 +6984,20 @@ describe('spider charts', () => {
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
 
     // Nothing recorded: no accusation, because nothing has been abandoned.
-    expect(await textOf('slot-status')).toBe('Next: Strength — new profile (0 of 3 filled)');
+    expect(await textOf('capture-progress')).toBe('Next: Strength — new profile (0 of 3 filled)');
 
     // Part-way through the first profile it counts up, and STILL says nothing about
     // incompleteness -- the profile in hand is unfinished because you are in it.
     await clickAt(...spoke(0, 3, R / 2));
-    expect(await textOf('slot-status')).toMatch(/Weight — profile 1 \(1 of 3 filled\)$/);
+    expect(await textOf('capture-progress')).toBe('Next: Weight — profile 1 (1 of 3 filled)');
     await clickAt(...spoke(1, 3, R / 2));
-    expect(await textOf('slot-status')).toMatch(/Cost — profile 1 \(2 of 3 filled\)$/);
+    expect(await textOf('capture-progress')).toBe('Next: Cost — profile 1 (2 of 3 filled)');
 
     // Finish it, and start a second.
     await clickAt(...spoke(2, 3, R / 2));
-    expect(await textOf('slot-status')).toMatch(/new profile \(0 of 3 filled\)$/);
+    expect(await textOf('capture-progress')).toBe('Next: Strength — new profile (0 of 3 filled)');
     await clickAt(...spoke(0, 3, R / 4));
-    expect(await textOf('slot-status')).toMatch(/profile 2 \(1 of 3 filled\)$/);
+    expect(await textOf('capture-progress')).toBe('Next: Weight — profile 2 (1 of 3 filled)');
 
     // ⚑ THE SIGNAL. Punch a hole in the FINISHED profile while the second is in hand.
     // A spider's slots are N×1D -- independently meaningful and independently EMPTY --
@@ -7007,7 +7007,7 @@ describe('spider charts', () => {
     await page.getByTestId('mode-eraser').click();
     await clickAt(...spoke(1, 3, R / 2));
     await page.waitForTimeout(150);
-    expect(await textOf('slot-status')).toContain('1 profile incomplete');
+    expect(await textOf('capture-progress')).toContain('1 profile incomplete');
   });
 
   it('erases ONE reading, and the freed slot can be re-aimed from the table', async () => {
@@ -7260,6 +7260,57 @@ describe('pie charts (v1.6)', () => {
       }
     }, 30000);
   }
+
+  describe('closing the ring', () => {
+    async function calibratePieByHand() {
+      for (const [x, y] of [[200, 120], [320, 240], [200, 360]] as const) await clickAt(x, y);
+      await page.getByTestId('global-field-total').fill('100');
+      await page.getByTestId('run-calibration').click();
+      await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
+      await page.getByTestId('mode-place-point').click();
+    }
+
+    it('offers the closing click ON THE FIGURE, and only once it is possible', async () => {
+      // ⚑ The keystone test, not a nicety. Recognising a click on the first boundary
+      // is worth nothing if only its author knows it can be done -- that is precisely
+      // the "shortcut-only path" the rule names as a failure. So the offer has to be
+      // visible on screen, and has to be ABSENT while it would be wrong.
+      await calibratePieByHand();
+      const marker = () => page.getByTestId('marker-labels');
+
+      await clickAt(260, 140); // first boundary
+      await clickAt(340, 260);
+      expect(await marker().textContent()).not.toContain('close the ring');
+
+      // Two sectors recorded and a third open: now it is real.
+      await clickAt(260, 380);
+      await expect
+        .poll(async () => marker().textContent(), { timeout: 5000 })
+        .toContain('click to close the ring');
+    });
+
+    it('completes the last sector without opening another', async () => {
+      await calibratePieByHand();
+      for (const [x, y] of [[260, 140], [340, 260], [260, 380], [180, 260]] as const) await clickAt(x, y);
+      const rows = () => page.getByTestId('points-table').locator('tbody tr').count();
+      // Four boundaries: three complete sectors plus the one chaining pre-opened.
+      await expect.poll(rows, { timeout: 5000 }).toBe(4);
+
+      // Click the first boundary again -- the far edge of the last sector.
+      await clickAt(260, 140);
+      // ⚑ Still four. The ring is closed, so there is no next sector to open, and the
+      // capture does not end on a permanently half-filled row.
+      await expect.poll(rows, { timeout: 5000 }).toBe(4);
+      for (let i = 0; i < 4; i++) {
+        expect(await textOf(`tuple-derived-${i}`), `sector ${i}`).not.toBe('—');
+      }
+      // ...and the four now account for the whole figure.
+      const total = await Promise.all(
+        [0, 1, 2, 3].map(async (i) => Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, '')))
+      );
+      expect(total.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 1);
+    });
+  });
 
   /**
    * The "Exploded slice" control, driven as a user drives it.

@@ -1475,6 +1475,19 @@ export const PIE_SECTOR_SLOTS = ['Sector start', 'Sector end'] as const;
  * constant, which collapses IBM's four documented variants -- Standard, Standard Half,
  * Donut, Donut Half -- into this one config.
  */
+/**
+ * How far off the rim a pie boundary click may be and still be tidied onto it, as a
+ * fraction of the fitted radius.
+ *
+ * ⚑ A fraction, not a pixel count, so it means the same thing on a 90px thumbnail and
+ * a 900px figure. 8% of the radius is comfortably wider than a hand's aim at the rim
+ * and comfortably narrower than a donut's ring thickness, which is the collision this
+ * has to avoid: on a donut, a click on an INNER ring is a legitimate reading (angles
+ * are scale-invariant, which is why one calibration reads every ring), and pulling it
+ * out to the rim would drag the marker off the ink it measured.
+ */
+const PIE_RIM_SNAP_FRACTION = 0.08;
+
 export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   id: 'pie',
   label: 'Pie / Donut',
@@ -2704,6 +2717,75 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return -1;
   }
 
+  /**
+   * Tidy a boundary click onto the pie's rim — but only one that was aiming at it.
+   *
+   * ⚑ THE VALUE CANNOT MOVE. `PieAxes.snapToRim` scales the click's vector in the
+   * (a, b) frame, and scaling does not change an atan2, so the recorded angle before
+   * and after is the SAME number. This is cosmetic by construction, which is why it is
+   * allowed to happen silently — unlike the spider's spoke snap, which really does
+   * discard the off-ray distance and therefore has `previewSpiderCapture` to say so.
+   *
+   * ⚑ AND ONLY NEAR THE RIM, which is the donut. A click on an inner ring is entirely
+   * legitimate — angles are scale-invariant, which is the whole reason ONE calibration
+   * reads every ring — so snapping it out to the rim would drag the marker off the ink
+   * it was measuring and make the app look like it had misunderstood the figure. The
+   * band is a fraction of the radius rather than a pixel count so it scales with the
+   * figure instead of being generous on a small one and useless on a large one.
+   */
+  /**
+   * The pixel index of the boundary this click would CLOSE THE RING on, or null.
+   *
+   * ⚑ Public, and that is the whole design. A closing click that only works if you
+   * already know it exists is the "shortcut-only path" the keystone rule names as a
+   * failure, so the canvas asks this on hover and draws the target — the affordance is
+   * on screen before it is used, not discovered by accident afterwards.
+   *
+   * Available only when closing is actually meaningful: a pie, calibrated, with a
+   * sector open and at least two already recorded. One recorded sector plus an open
+   * one is a two-slice pie in progress, where the second boundary click IS the closing
+   * one by the ordinary path -- offering it there would fire on the user's normal
+   * second click and cut the capture short.
+   */
+  ringClosingPixel(px: number, py: number): number | null {
+    if (this.config.axesKind !== 'pie' || !this.axes) return null;
+    const entry = this.activeEntry;
+    const dataset = entry.dataset;
+    const tuples = dataset.getAllTuples();
+    const open = entry.slotCursor.tupleIndex;
+    if (open === null) return null;
+    // The sector in hand must be genuinely open, and cannot be the first one.
+    if (open < 2) return null;
+    if (tuples[open]?.[entry.slotCursor.groupIndex] != null) return null;
+    // An exploded slice shares nothing with anyone, so it never closes a ring.
+    if (this.pendingExplodedTuple !== null) return null;
+    const firstIndex = tuples[0]?.[0];
+    if (firstIndex == null) return null;
+
+    const pie = this.axes as unknown as PieAxes;
+    const radius = pie.getRadius();
+    if (!(radius > 0)) return null;
+    const first = dataset.getPixel(firstIndex);
+    // The same band the rim snap uses, for the same reason: a fraction of the figure,
+    // so it means one thing at every size.
+    const within = radius * PIE_RIM_SNAP_FRACTION;
+    return Math.hypot(px - first.x, py - first.y) <= within ? firstIndex : null;
+  }
+
+  private snapToRim(px: number, py: number): { x: number; y: number } {
+    if (this.config.axesKind !== 'pie' || !this.axes) return { x: px, y: py };
+    const pie = this.axes as unknown as PieAxes;
+    const apex = this.pendingApex ?? undefined;
+    const target = pie.snapToRim(px, py, apex);
+    const origin = apex ?? pie.getCentre();
+    const radius = pie.getRadius();
+    if (!(radius > 0)) return { x: px, y: py };
+    const clicked = Math.hypot(px - origin.x, py - origin.y);
+    const rim = Math.hypot(target.x - origin.x, target.y - origin.y);
+    if (Math.abs(clicked - rim) > radius * PIE_RIM_SNAP_FRACTION) return { x: px, y: py };
+    return target;
+  }
+
   private snapToSpoke(px: number, py: number, groupIndex: number): { x: number; y: number } {
     if (this.config.axesKind !== 'spider' || !this.axes) return { x: px, y: py };
     const spider = this.axes as unknown as SpiderAxes;
@@ -3111,10 +3193,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // moment there is somewhere to put it.
         return 'point-added';
       }
+      // ⚑ CLOSING THE RING (v1.6, pie). The last sector's far edge is the FIRST
+      // boundary already clicked, and David went looking for exactly that: "when I
+      // come to the end of the ring, I naturally want to click the first point to
+      // close it." Clicking near it lands the closing edge on that same pixel's
+      // coordinates and stops chaining, because there is no next sector to open.
+      //
+      // ⚑ This does NOT auto-close. The click is still the user's, which is the point:
+      // whether the last sector wraps round to the first boundary is something only
+      // the figure knows -- a half pie does not -- so inferring "you must be finished"
+      // from a click count would be modelling rather than measuring. All that changes
+      // is that the closing click is recognised for what it is instead of quietly
+      // opening a sector that will never exist.
+      const closing = this.ringClosingPixel(px, py);
+      if (closing !== null) {
+        const first = dataset.getPixel(closing);
+        // Its own copy at the same place, exactly as chaining makes one: a pixel
+        // serialises with one {tuple, group}, so a shared index could not survive the
+        // project file (the trap that made every sector after the first reopen missing
+        // its opening edge).
+        const copy = dataset.addPixel(first.x, first.y);
+        dataset.addToTupleAt(entry.slotCursor.tupleIndex!, entry.slotCursor.groupIndex, copy);
+        this.nextSlot();
+        return 'point-added';
+      }
       // Slots (Box Plot etc.) file each click into a tuple slot at the
       // cursor -- APPEND, then wire that new index in; the tuple layout, not the
       // point sequence, carries the meaning here, so insert-in-place must not run.
-      const snapped = this.snapToSpoke(px, py, entry.slotCursor.groupIndex);
+      const onSpoke = this.snapToSpoke(px, py, entry.slotCursor.groupIndex);
+      const snapped = this.snapToRim(onSpoke.x, onSpoke.y);
       const index = dataset.addPixel(snapped.x, snapped.y);
       const { tupleIndex, groupIndex } = entry.slotCursor;
       if (tupleIndex === null) {

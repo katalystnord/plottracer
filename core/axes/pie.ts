@@ -276,6 +276,43 @@ export class PieAxes {
   }
 
   /**
+   * The point on the rim at the same angle as (px, py) — the pixel moved onto the ring
+   * without turning it.
+   *
+   * ⚑ IT CANNOT CHANGE THE READING, and that is a property of the arithmetic rather
+   * than a tolerance we chose. `angleAt` is `atan2(v, u)` on the basis coordinates, and
+   * this scales (u, v) by a positive factor; scaling a vector does not move its atan2.
+   * So snapping is presentation, provably — the recorded value before and after is the
+   * same number, not merely a close one.
+   *
+   * ⚑ NORMALISED IN THE (a, b) FRAME, not by nearest-point geometry. On a tilted pie
+   * the nearest point of the ellipse is NOT along the ray from the centre, so a
+   * Euclidean snap would quietly turn the boundary and change the value. Working in
+   * the frame is both simpler and the only version that is exact — and it needs no
+   * separate path for the tilted case.
+   *
+   * `apex` defaults to the calibrated centre; an exploded sector passes its own, so its
+   * edges snap to its OWN arc rather than to the pie it was pulled out of.
+   */
+  snapToRim(px: number, py: number, apex?: { x: number; y: number }): { x: number; y: number } {
+    const ox = apex ? apex.x : this.cx;
+    const oy = apex ? apex.y : this.cy;
+    const det = this.ax * this.by - this.ay * this.bx;
+    if (det === 0) return { x: px, y: py };
+    const dx = px - ox;
+    const dy = py - oy;
+    const u = (dx * this.by - dy * this.bx) / det;
+    const v = (this.ax * dy - this.ay * dx) / det;
+    const len = Math.hypot(u, v);
+    // Dead centre has no angle to preserve, so there is nothing to snap it to.
+    if (len === 0) return { x: px, y: py };
+    return {
+      x: ox + (this.ax * u + this.bx * v) / len,
+      y: oy + (this.ay * u + this.by * v) / len,
+    };
+  }
+
+  /**
    * The value of the sector running from `startAngle` to `endAngle` (radians, in the
    * pie's own frame, travelling positively). This is the one place the model's
    * arithmetic lives:  value = (angle / sweep) x total.

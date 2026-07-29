@@ -4939,6 +4939,34 @@ export function Workspace() {
 
   const markers = useMemo<CanvasMarker[]>(() => {
     const result: CanvasMarker[] = [];
+    // ⚑ The point every label on a RADIAL figure should lean away from. A pie's
+    // outline handles and its sector boundaries all sit on the rim, and a spider's
+    // readings all sit on rays out of the origin -- so with the historical fixed
+    // up-and-right offset every label leans the same way, into the ink, and lands on
+    // the neighbouring marker's label and on the figure's own text ("Outline 2" over
+    // "PBS"). Pushed outward instead, they fan into the white space that is guaranteed
+    // to be there, because the rim IS the edge of the drawing.
+    //
+    // Only where a real centre exists. There is no honest one on an XY plot -- the
+    // middle of the axes is not a place labels should flee -- so those keep the fixed
+    // offset they have always had.
+    const labelAway =
+      config.axesKind === 'pie' && axes
+        ? (axes as unknown as { getCentre(): { x: number; y: number } }).getCentre()
+        : config.axesKind === 'spider' && axes
+          ? (axes as unknown as { getOrigin(): { x: number; y: number } }).getOrigin()
+          : undefined;
+    // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
+    // nothing if only its author knows it is possible -- that is the "shortcut-only
+    // path" the keystone rule names as a failure. So while closing is available the
+    // first boundary says so on the figure itself, in the place the click has to go,
+    // and stops saying it the moment it stops being true.
+    const closingIndex = (() => {
+      if (config.axesKind !== 'pie' || !axes) return null;
+      const first = dataPoints[0];
+      if (!first) return null;
+      return session.ringClosingPixel(first.px, first.py) === 0 ? 0 : null;
+    })();
     for (const step of steps) {
       const point = placedPoints[step.key];
       if (point) {
@@ -4959,6 +4987,7 @@ export function Workspace() {
                 : step.label,
           color: step.color,
           kind: 'calibration',
+          labelAway,
           // Selected for keyboard nudge (checkpoint 127) -- highlighted so you can
           // see which handle the arrow keys will move.
           selected: activeHandleKey === step.key,
@@ -5028,8 +5057,9 @@ export function Workspace() {
         id: `point-${i}`,
         x: point.px,
         y: point.py,
-        label: isInterp ? '' : String(i + 1),
+        label: isInterp ? '' : i === closingIndex ? `${i + 1} — click to close the ring` : String(i + 1),
         color: activeColor,
+        labelAway,
         // Inert in Measure mode (v1.1): a measurement click must pass THROUGH a
         // data marker to place the vertex (and snap to it), never get eaten by the
         // marker's own select/drag -- which used to let a measure click grab and
@@ -5045,13 +5075,26 @@ export function Workspace() {
         // and it corrupts a point the user had already placed correctly. The
         // datum is the anchor a cap hangs off; capturing the cap must not move it.
         // Scoped to the TARGET series only -- see isErrorLinkAnchorSeries above.
-        draggable: mode !== 'pan' && mode !== 'measure' && !isErrorLinkAnchorSeries && !isInterp,
+        // ⚑ NOT DRAGGABLE WHILE IT IS THE CLOSING TARGET. To close the ring you must
+        // click the first boundary -- which has a marker drawn on it, and a draggable
+        // marker takes the press for its own drag/select, so the click that closes the
+        // ring was the one click the figure ignored. Exactly the trap the error-bar
+        // link drag hit, and the fix is the mechanism this file already documents:
+        // a non-draggable marker leaves Konva's hit graph entirely, so the press
+        // reaches the stage and registers as the next image click. Only while closing
+        // is actually on offer, so the point stays correctable the rest of the time.
+        draggable:
+          i !== closingIndex &&
+          mode !== 'pan' &&
+          mode !== 'measure' &&
+          !isErrorLinkAnchorSeries &&
+          !isInterp,
         selected,
         radius: isAnchor ? 6.5 : isInterp ? 2.5 : plainDense ? SELECTED_DOT_RADIUS : undefined,
       });
     });
     return result;
-  }, [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
+  }, [session, steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
 
   // Connecting polylines drawn beneath the markers (checkpoint 131) -- the fix for
   // a dense auto-trace rendering as a furry band of overlapping dots. Skipped
@@ -7447,13 +7490,26 @@ export function Workspace() {
                   for the split and for why the "incomplete" clause excludes the tuple in
                   hand. The exploded-apex branch that was here is gone: the canvas card
                   says it in all three of its states rather than only the first. */}
-              {captureProgress.text}
+              {/* ⚑ Its own span so it can be asserted EXACTLY. `slot-status` also holds
+                  several display:none readouts that exist purely for the e2e (Konva
+                  glyphs are not DOM-inspectable), so its textContent is the sentence
+                  with "030" welded on the end. Every earlier assertion used toContain
+                  and never saw it; the first exact one did. */}
+              <span data-testid="capture-progress">{captureProgress.text}</span>
               {/* Konva-rendered glyphs aren't DOM-inspectable -- this readout
                   exists purely so e2e coverage can assert on it, same
                   precedent as ImageCanvas's own "view-state" testid. */}
               {/* The "Exploded slice" control used to live HERE, as a chip beside this
                   line. It moved onto the canvas (ExplodedSliceControl) because it could
                   not be found in the sidebar -- see that file's header. */}
+              {/* Konva draws the marker labels, so nothing else can assert what they
+                  say -- same precedent as the glyph counters below. This one matters
+                  more than most: the ring-closing offer IS a label, so without it a
+                  test can only check that closing works, never that a user could find
+                  out it exists. */}
+              <span data-testid="marker-labels" style={{ display: 'none' }}>
+                {markers.map((m) => m.label).filter(Boolean).join(' | ')}
+              </span>
               <span data-testid="box-plot-glyph-count" style={{ display: 'none' }}>
                 {boxPlotGlyphs.length}
               </span>
