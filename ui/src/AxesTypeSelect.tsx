@@ -38,6 +38,12 @@ const LabelledRow = styled('div')({
   display: 'flex',
   alignItems: 'center',
   gap: 6,
+  // ⚑ Its own leading space. TopBarGroup sets gap:1, which is enough between two
+  // BUTTONS -- they carry 8px of padding each, so their labels end up ~17px apart --
+  // but this row starts with bare text, so "Open Image" and "Graph type" ran together
+  // as one phrase (David). Matching the button rhythm here rather than widening
+  // TopBarGroup, which would loosen every other group in the bar to fix one seam.
+  marginLeft: 8,
 });
 
 // A visible caption, not just a tooltip: the target user can only use what is

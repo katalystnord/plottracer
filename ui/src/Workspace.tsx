@@ -679,6 +679,9 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
 type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 
+/** Where the manual lives. Stated rather than linked -- see the Help card. */
+const MANUAL_URL = 'https://github.com/katalystnord/plottracer/blob/master/MANUAL.md';
+
 // Small inline glyphs for the per-row "copy to clipboard" affordance in the
 // Export menu (v1.1 #4) -- the overlapping-cards copy mark, swapped for a tick
 // on success. Kept local (like MeasureCard's own copy glyph) rather than routed
@@ -4188,6 +4191,17 @@ export function Workspace() {
    */
   useEffect(() => {
     function onAccelerator(e: KeyboardEvent) {
+      // ⚑ F1 = Help, the universal convention, and the last control in the window with
+      // no keyboard route at all (David). Handled before the modifier check because F1
+      // carries no modifier, and it drives the trigger BUTTON rather than reaching into
+      // FloatingPanel's own anchor state -- pressing the key does exactly what pressing
+      // the button does, which is the honest meaning of a shortcut and keeps one code
+      // path for opening the panel.
+      if (e.key === 'F1') {
+        e.preventDefault();
+        document.querySelector<HTMLElement>('[data-testid="help-trigger"]')?.click();
+        return;
+      }
       // Alt-modified combos are left alone -- Alt belongs to the key-tips now.
       if (!primaryMod(e) || e.altKey) return;
       const canvas = imageCanvasRef.current;
@@ -5583,6 +5597,14 @@ export function Workspace() {
             <SaveIcon /> Save Project
             {keyTips && <KeyTip>{keyTipLabel('S')}</KeyTip>}
           </TopBarButton>
+        </TopBarGroup>
+
+        {/* ⚑ Export gets its own card. Open Project and Save Project are two halves of
+            ONE function -- project I/O -- and belong tight together (David); Export
+            writes data OUT in nine other formats and is a different job. Separating
+            them by card rather than by widening the group's gap keeps the pair that
+            belongs together looking like it does. */}
+        <TopBarGroup>
           <TopBarButton
             type="button"
             data-testid="export-csv"
@@ -5595,6 +5617,14 @@ export function Workspace() {
             disabled={!axes && !canvasHasImage}
           >
             <ExportIcon /> Export <ChevronDownIcon />
+            {/* ⚑ Badged here AND on the CSV row inside, which is not two homes for one
+                fact: the trigger says "there is a keyboard route to exporting", the row
+                says "and it gives you this format". Unlike the zoom control -- where
+                Ctrl+0 does one of four things in the menu and naming it on the trigger
+                would be arbitrary -- every item here IS an export, so Ctrl+Shift+S is
+                the fast path through this menu rather than a different action wearing
+                its badge. Leaving the trigger bare cost the one accelerator people
+                actually reach for its only visible home. */}
             {keyTips && <KeyTip>{keyTipLabel('S', true)}</KeyTip>}
           </TopBarButton>
           <Popover
@@ -5668,6 +5698,9 @@ export function Workspace() {
                     style={{ justifyContent: 'flex-start', flex: 1 }}
                   >
                     {label}
+                    {/* The accelerator sits beside the action it performs, not on the
+                        menu that contains it. Only CSV has one. */}
+                    {fmt === 'csv' && keyTips && <KeyTip>{keyTipLabel('S', true)}</KeyTip>}
                   </TopBarButton>
                   {copyable && (
                     <TopBarButton
@@ -5825,7 +5858,7 @@ export function Workspace() {
             plus the upstream/licence attribution -- which needs a home now the
             native menu (its Help > About) is hidden. */}
         <TopBarGroup>
-          <FloatingPanel label="Help" icon={<HelpIcon />} hideLabel testId="help">
+          <FloatingPanel label="Help" icon={<HelpIcon />} hideLabel testId="help" shortcut="F1">
             {(close) => (
               <>
                 <div
@@ -5889,6 +5922,32 @@ export function Workspace() {
                 >
                   🎯 Take The Trace Challenge
                 </button>
+                <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
+                {/* ⚑ The manual is TOLD, not linked (David). The app must work fully
+                    offline, so a link that silently fails on a plane is worse than a
+                    sentence that stays true -- and a URL nobody can act on is worse
+                    than one they can copy, which the clipboard already gives us with no
+                    new IPC. Deliberately not a bundled viewer: this states where the
+                    manual is and gets out of the way, which is all that was asked for.
+                    ⚠️ Removing the native menu also took its Report Issue and
+                    Documentation links, and the renderer still has no openExternal --
+                    so this is currently the ONLY route from the app to anything online. */}
+                <div
+                  data-testid="help-manual"
+                  style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}
+                >
+                  More detail — every tool, every export format, the calibration steps —
+                  is in the online manual:
+                  {/* ⚑ No Copy button, deliberately (David): one on a URL announces
+                      that the link does not work, and reads as friction rather than
+                      help. The address is selectable text -- anyone who wants it can
+                      take it the way they take any other text. */}
+                  <div style={{ marginTop: 4 }}>
+                    <code style={{ fontSize: theme.font.size.small, wordBreak: 'break-all' }}>
+                      {MANUAL_URL}
+                    </code>
+                  </div>
+                </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
                 <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}>
                   <strong>PlotTracer</strong> <span data-testid="app-version">v{__APP_VERSION__}</span> — a

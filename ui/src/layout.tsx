@@ -135,6 +135,12 @@ export const TopBar = styled('div')({
 export const TopBarGroup = styled('div')({
   display: 'flex',
   alignItems: 'center',
+  // ⚑ Deliberately TIGHT. A group is one function, and its members are meant to read
+  // as belonging together -- Open Project and Save Project are two halves of project
+  // I/O (David). Separation between *different* functions comes from the card boundary
+  // instead: TopBar's own gap plus these cards' padding, background and shadow. So
+  // when something needs air, give it its own TopBarGroup rather than loosening this,
+  // which would push every related pair apart to solve one unrelated seam.
   gap: 1,
   padding: 2,
   borderRadius: theme.border.radius.regular,

@@ -1,9 +1,11 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import styled from '@emotion/styled';
 import { Button, Popover } from '@mui/material';
 import { theme, glassSurface } from './theme.js';
 import { ChevronDownIcon } from './icons.js';
 import { IconButton } from './IconButton.js';
+import { KeyTip } from './layout.js';
+import { KeyTipsContext } from './useKeyTips.js';
 
 /**
  * A top-bar button that opens its contents in a floating `@mui/material`
@@ -84,6 +86,7 @@ const PanelBody = styled('div')({
 
 export function FloatingPanel({ label, icon, hideLabel, testId, disabled, children, onOpenChange, placement = 'topbar', shortcut }: FloatingPanelProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const keyTips = useContext(KeyTipsContext);
   const isRail = placement === 'rail';
 
   // One source of truth for open-state notifications (checkpoint 121): fire
@@ -122,13 +125,16 @@ export function FloatingPanel({ label, icon, hideLabel, testId, disabled, childr
       ) : (
         <TriggerButton
           data-testid={`${testId}-trigger`}
-          title={hideLabel ? label : undefined}
+          title={hideLabel ? `${label}${shortcut ? ` (${shortcut})` : ''}` : undefined}
           disabled={disabled}
           onClick={(e: MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget)}
         >
           {icon}
           {!hideLabel && <span>{label}</span>}
           <ChevronDownIcon />
+          {/* The rail variant above gets this free from IconButton, which reads the
+              context itself; the top-bar trigger has to render its own. */}
+          {keyTips && shortcut && <KeyTip data-testid={`keytip-${testId}`}>{shortcut}</KeyTip>}
         </TriggerButton>
       )}
       <Popover

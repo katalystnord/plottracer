@@ -84,12 +84,15 @@ export function useKeyTips(): boolean {
  * `⌘⇧O` faster than `Cmd+Shift+O`); everywhere else gets words.
  */
 export function keyTipLabel(key: string, shift = false): string {
-  // ⚑ `⇧` rather than the word: "Ctrl+Shift+Z" is ~55px at this size and overflowed a
-  // 36px icon button, so the undo and redo chips overlapped into an unreadable
-  // "Ct·Ctrl+Shift+Z" (seen on David's screen, invisible to every test -- the badges
-  // were all present and correct, just illegible). The glyph is standard on both
-  // platforms and takes the chip back inside the button.
-  return IS_MAC ? `⌘${shift ? '⇧' : ''}${key}` : `Ctrl+${shift ? '⇧' : ''}${key}`;
+  // ⚑ Spelled out on Windows/Linux, glyphs on macOS -- each platform's own
+  // convention. `⇧` was briefly used everywhere as a WIDTH fix, because
+  // "Ctrl+Shift+Z" is ~55px at this size and overflowed a 36px icon button (the undo
+  // and redo chips collided into an unreadable "Ct·Ctrl+Shift+Z" on David's screen).
+  // That pressure is gone: redo now badges Ctrl+Y, so no narrow button carries a
+  // Shift at all, and the only chips that still do are the wide labelled ones with
+  // room to spare. A glyph that survives only as a workaround for a problem that no
+  // longer exists is just something else for the reader to decode.
+  return IS_MAC ? `⌘${shift ? '⇧' : ''}${key}` : `Ctrl+${shift ? 'Shift+' : ''}${key}`;
 }
 
 /**
