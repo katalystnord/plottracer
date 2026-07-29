@@ -50,20 +50,28 @@ describe('one click per boundary', () => {
     const session = calibratedPie();
     const ds = session.getDataset();
     clickBoundaries(session, [-90, 0]);
-    // Two clicks: one complete sector, and the next already opened on the shared edge.
-    expect(ds.getCount()).toBe(2);
+    // Two clicks: one complete sector, and the next already opened on that same edge.
     expect(ds.getTupleCount()).toBe(2);
     expect(ds.getTuple(0)).toEqual([0, 1]);
-    expect(ds.getTuple(1)![0]).toBe(1); // the SAME pixel index, not a copy
+    const opened = ds.getTuple(1)![0]!;
     expect(ds.getTuple(1)![1]).toBeNull();
+    // ⚑ Its OWN pixel, at the same place -- not a shared index. Sharing could not
+    // survive the project file: a pixel serialises with one {tuple, group}, so every
+    // sector after the first reopened missing its opening edge.
+    expect(opened).not.toBe(1);
+    expect(ds.getPixel(opened).x).toBeCloseTo(ds.getPixel(1).x, 9);
+    expect(ds.getPixel(opened).y).toBeCloseTo(ds.getPixel(1).y, 9);
   });
 
-  it('records one pixel per boundary, however many slices there are', () => {
-    // ⚑ The point of chaining: a boundary is one piece of ink and is measured once.
-    // Clicking pairs would put two pixels on every shared line and let them disagree.
+  it('asks for one CLICK per boundary, however many slices there are', () => {
+    // ⚑ The point of chaining is the CLICKING, not the storage: a boundary is one
+    // piece of ink and the user points at it once. Each sector still keeps its own
+    // copy, because that is what the project file can represent.
     const session = calibratedPie();
     clickBoundaries(session, [-90, 0, 90, 180]);
-    expect(session.getDataset().getCount()).toBe(4); // not 8
+    const complete = session.getDataset().getAllTuples().filter((t) => t.every((v) => v !== null));
+    expect(complete).toHaveLength(3); // four boundaries bound three sectors
+    for (const t of complete) expect(new Set(t).size).toBe(2); // no sector reuses a pixel
   });
 
   it('reads each completed sector as the angle actually swept', () => {
@@ -200,5 +208,29 @@ describe('an exploded slice is captured about its own apex', () => {
     const session = calibratedPie();
     clickBoundaries(session, [-90, 0]);
     expect(session.getSectorApex(0)).toBeNull();
+  });
+});
+
+describe('an exploded slice after an ordinary one', () => {
+  it('does not strand the tuple that chaining had already opened', () => {
+    // ⚑ Found by the e2e, not by reasoning. Completing an ordinary sector pre-opens
+    // the next one holding the shared boundary. Declaring THAT slice exploded means
+    // the pre-opened tuple is for a sector which will never exist -- left behind it
+    // is a permanently incomplete row in the table and an orphan in the file.
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0]); // one ordinary sector; chain opens the next
+    expect(session.getDataset().getTupleCount()).toBe(2);
+
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 40, CY + 40);
+    session.addDataPoint(CX + 40 + R, CY + 40);
+    session.addDataPoint(CX + 40, CY + 40 + R);
+
+    const tuples = session.getDataset().getAllTuples();
+    expect(tuples).toHaveLength(2); // the completed ordinary one, and the exploded one
+    for (const t of tuples) expect(t.every((v) => v !== null)).toBe(true);
+    // The completed sector before it keeps its own two pixels; the copy that had been
+    // opened for the sector which never happened is gone with its tuple.
+    expect(tuples[0]!.every((v) => v !== null)).toBe(true);
   });
 });

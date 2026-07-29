@@ -31,7 +31,7 @@ import os from 'node:os';
 // process (the same engine code the app itself runs), rather than hand-
 // typing project JSON by hand or driving a full calibration through the
 // browser just to produce a file to open.
-import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG } from '../../engine/calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG } from '../../engine/calibrationSession.js';
 import { serializeProject } from '../../engine/projectFile.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
@@ -55,6 +55,20 @@ const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
 /** The bundled spider example's published ground truth — anchors in IMAGE pixels,
  * plus the values each series states. Read here so the spider trace can be checked
  * against the figure the app itself ships, not against geometry a test invented. */
+/** The bundled pie family's published ground truth (v1.6) — read here so the app can
+ * be driven against the SAME numbers the figures were rendered from, rather than
+ * against geometry a test invented for itself. */
+const PIE_TRUTHS = ['pie-filler-composition', 'pie-exploded-market-share', 'donut-donut-flavours', 'pie-tilted-market-segments'].map(
+  (name) => ({
+    name,
+    truth: JSON.parse(fs.readFileSync(path.join(REPO_ROOT, `samples/${name}.truth.json`), 'utf8')) as {
+      total: number; sweep: number; tilted?: boolean;
+      calibration: { anchors: { outline: { px: number; py: number }[] }; slices: { apex: { px: number; py: number }; startEdge: { px: number; py: number }; endEdge: { px: number; py: number }; exploded: boolean }[] };
+      series: { points: { category: string; value: number }[] }[];
+    },
+  })
+);
+
 const spiderTruth = JSON.parse(
   fs.readFileSync(path.join(REPO_ROOT, 'samples/spider-material-profile.truth.json'), 'utf8')
 ) as {
@@ -206,7 +220,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 7 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -7067,4 +7081,141 @@ describe('spider charts', () => {
       expect(await textOf(`spider-axis-name-${i}`)).toBe(['A', 'B', 'C', 'D', 'E'][i]);
     }
   });
+});
+
+
+/**
+ * Pie / donut (v1.6) — driven against the four bundled figures' OWN ground truth.
+ *
+ * ⚑ THIS IS THE INSTRUMENT THE SPIDER TAUGHT US TO BUILD. Fifteen green e2e once
+ * passed over a trace that read a run's MIDPOINT, because every one of them invented
+ * its own geometry and then agreed with itself. Here the app is driven with the
+ * anchors the generator wrote down, and checked against the values it rendered from,
+ * so agreement means something.
+ *
+ * Calibration and capture are done ENGINE-SIDE and loaded as a project, mirroring the
+ * spider truth test above and for the same reason recorded there: clicking a canvas
+ * whose transform may be one frame stale shifts every click and surfaces seconds
+ * later as a value that never appeared. The click path has its own coverage — both in
+ * engine/__tests__/pieCapture.test.ts and in the calibration test below, which drives
+ * the real UI.
+ */
+describe('pie charts (v1.6)', () => {
+  beforeEach(async () => {
+    await resetWorkspace('pie');
+  });
+
+  it('is offered in the graph-type dropdown and asks for an outline, a total and a sweep', async () => {
+    // ⚑ Nothing clicks a centre — a donut has none to click, so the outline IS the
+    // calibration and the centre is fitted through it.
+    expect(await textOf('repeat-count')).toMatch(/3 outline points/);
+    await page.getByTestId('calib-chip-outline1').waitFor({ state: 'visible' });
+    await page.getByTestId('calib-chip-outline3').waitFor({ state: 'visible' });
+    expect(await page.getByTestId('calib-chip-outline4').count()).toBe(0);
+
+    // ⚑ The total and the sweep are NOT asserted here: they are global fields, and the
+    // card shows them only once every outline point is placed — they belong to the
+    // whole figure, so asking for them mid-walk would be asking about a shape that
+    // does not exist yet. Their defaults and their effect are covered by the four
+    // figure tests below and by engine/__tests__/pieCalibration.test.ts.
+
+    // The outline grows, because some figures leave little clean rim to click.
+    await page.getByTestId('add-repeat-step').click();
+    expect(await textOf('repeat-count')).toMatch(/4 outline points/);
+  });
+
+  for (const { name, truth } of PIE_TRUTHS) {
+    it(`reads ${name} back to the values it was drawn from`, async () => {
+      const fixture = (() => {
+        const session = new CalibrationSession(PIE_AXES_CONFIG);
+        const outline = truth.calibration.anchors.outline;
+        while (session.getRepeatCount() < outline.length) session.addRepeat();
+        for (const p of outline) session.handleCalibrationClick(p.px, p.py);
+        session.setGlobalFieldValue('total', String(truth.total));
+        session.setGlobalFieldValue('sweep', String(truth.sweep));
+        if (truth.tilted) session.setOption('isTilted', 'true');
+        if (!session.runCalibration()) throw new Error(`${name}: fixture calibration failed`);
+
+        // ⚑ CAPTURE AS A USER WOULD: one click per boundary. Ordinary slices SHARE
+        // their edges, so the closing click of one opens the next -- clicking both
+        // edges of every slice would measure each shared line twice and put two
+        // pixels on it. An exploded slice shares nothing, so it is armed first, takes
+        // its own apex, and its two edges are clicked as a pair.
+        let chained = false; // does the next slice already have its opening edge?
+        truth.calibration.slices.forEach((sl) => {
+          if (sl.exploded) {
+            session.setNextSectorExploded(true);
+            session.addDataPoint(sl.apex.px, sl.apex.py);
+            session.addDataPoint(sl.startEdge.px, sl.startEdge.py);
+            session.addDataPoint(sl.endEdge.px, sl.endEdge.py);
+            chained = false; // the gap after it breaks the chain on this side too
+            return;
+          }
+          if (!chained) session.addDataPoint(sl.startEdge.px, sl.startEdge.py);
+          session.addDataPoint(sl.endEdge.px, sl.endEdge.py);
+          chained = true;
+        });
+        // Name each completed sector, in capture order.
+        session
+          .getDataset()
+          .getAllTuples()
+          .forEach((t, i) => {
+            if (t.every((v) => v !== null) && truth.series[0]!.points[i]) {
+              session.setTupleLabel(i, truth.series[0]!.points[i]!.category);
+            }
+          });
+
+        const png = path.join(REPO_ROOT, `samples/${name}.png`);
+        const result = serializeProject(
+          session,
+          `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`,
+          `${name}.png`
+        );
+        if ('error' in result) throw new Error(`${name}: fixture build failed: ${result.error}`);
+        const filePath = path.join(os.tmpdir(), `plottracer-${name}-${process.pid}.json`);
+        fs.writeFileSync(filePath, JSON.stringify(result), 'utf8');
+        return filePath;
+      })();
+
+      try {
+        await app.evaluate(({ dialog }, p) => {
+          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+        }, fixture);
+        await page.getByTestId('open-project').click();
+      } finally {
+        await app.evaluate(({ dialog }, p) => {
+          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+        }, SAMPLE_IMAGE);
+      }
+
+      // The app opened it as a PIE, not as something that merely looked plausible.
+      await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
+      expect(await page.getByTestId('axes-type-select').textContent()).toContain('Pie');
+
+      // ⚑ Every slice, read off the spreadsheet the user actually sees.
+      const expected = truth.series[0]!.points;
+      // ⚑ At least one row per slice, and possibly ONE more: the closing click of the
+      // last sector opens the next, because nothing here infers "you must be finished"
+      // -- a half pie genuinely is not. That trailing row shows a dash until it is
+      // either completed or deleted.
+      await expect
+        .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 10000 })
+        .toBeGreaterThanOrEqual(expected.length);
+      for (let i = 0; i < expected.length; i++) {
+        // ⚑ The CATEGORY is an editable input, not cell text -- the same
+        // always-editable field a Box Plot's tuples have carried since checkpoint 23,
+        // which pie inherits rather than reinventing.
+        expect(await page.getByTestId(`tuple-label-${i}`).inputValue(), `${name} row ${i} category`).toBe(
+          expected[i]!.category
+        );
+        // ⚑ ...and the VALUE is one derived column, not the two boundary angles.
+        // Before this existed the table showed "270" and "61.2" for a slice worth 42.
+        const shown = Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, ''));
+        const want = expected[i]!.value;
+        expect(Math.abs(shown - want) / Math.abs(want), `${name} row ${i}: shown ${shown}, want ${want}`).toBeLessThan(
+          0.001
+        );
+      }
+    }, 30000);
+  }
 });

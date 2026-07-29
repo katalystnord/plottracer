@@ -49,7 +49,7 @@ describe('buildTupleDataCSV', () => {
     const rows: TupleRow[] = [
       {
         tupleIndex: 0,
-        label: 'Sample A',
+        label: 'Sample A', derived: null,
         points: [
           { px: 0, py: 0, data: [1] },
           { px: 0, py: 0, data: [2] },
@@ -64,13 +64,13 @@ describe('buildTupleDataCSV', () => {
 
   it('exports a blank cell for a still-open slot', () => {
     const groupNames = ['Min', 'Q1'];
-    const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Bar0', points: [{ px: 0, py: 0, data: [1] }, null] }];
+    const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Bar0', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min,Q1\nBar0,1,');
   });
 
   it('quotes a category label containing a comma', () => {
     const groupNames = ['Min'];
-    const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Sample, batch 2', points: [{ px: 0, py: 0, data: [1] }] }];
+    const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Sample, batch 2', derived: null, points: [{ px: 0, py: 0, data: [1] }] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min\n"Sample, batch 2",1');
   });
 });

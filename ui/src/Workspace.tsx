@@ -4654,6 +4654,9 @@ export function Workspace() {
   const hasSlots = useMemo(() => session.hasSlots(), [session, version]);
   const pointGroupNames = useMemo(() => session.getSlotNames(), [session, version]);
   const tupleRows = useMemo(() => session.getTupleRows(), [session, version]);
+  // Declared by the type when its datum is the TUPLE rather than its members — the
+  // pie's slice value, which lives in the difference between its two boundaries.
+  const derivedTupleColumn = config.derivedTupleValue ?? null;
   const axesOptions = useMemo(() => session.getOptions(), [session, version]);
   const isHistogram = axesTypeId === HISTOGRAM_AXES_CONFIG.id;
   // The graph type names its own tuples; Box Plot's "box" is only the default
@@ -6222,8 +6225,16 @@ export function Workspace() {
               >
                 − Remove {repeatingStep.noun}
               </button>
+              {/* ⚑ The type's OWN noun, not "axes". Written when spider was the only
+                  variable-length calibration, so the wording was simply spider's: a
+                  pie's outline read "3 axes — add one for every axis the chart draws",
+                  which is wrong twice over. The config has always declared the noun
+                  (`repeatingStep.noun`); the two buttons either side of this already
+                  use it. Caught by the pie e2e. */}
               <span data-testid="repeat-count" style={{ color: theme.color.text.legend }}>
-                {session.getRepeatCount()} axes — add one for every axis the chart draws
+                {session.getRepeatCount()}{' '}
+                {session.getRepeatCount() === 1 ? repeatingStep.noun : repeatingStep.nounPlural} —{' '}
+                {repeatingStep.hint}
               </span>
             </div>
           )}
@@ -7688,11 +7699,15 @@ export function Workspace() {
                 <tr>
                   <th style={{ textAlign: 'left', paddingRight: 16 }}>#</th>
                   <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-                  {pointGroupNames.map((name) => (
-                    <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
-                      {name}
-                    </th>
-                  ))}
+                  {derivedTupleColumn ? (
+                    <th style={{ textAlign: 'left', paddingRight: 16 }}>{derivedTupleColumn.label}</th>
+                  ) : (
+                    pointGroupNames.map((name) => (
+                      <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
+                        {name}
+                      </th>
+                    ))
+                  )}
                   <th aria-hidden />
                 </tr>
               </thead>
@@ -7709,11 +7724,23 @@ export function Workspace() {
                         style={{ width: 100 }}
                       />
                     </td>
-                    {row.points.map((point, gi) => (
-                      <td key={gi} style={{ paddingRight: 16 }}>
-                        {point && point.data ? fmtValue(point.data[0]!) : '—'}
+                    {/* ⚑ One DERIVED column where the type's datum is the tuple
+                        rather than its members (pie): a slice's two boundaries are
+                        angles and neither is the number anyone wants -- the value is
+                        the difference between them. Every other tuple type keeps its
+                        per-slot columns, because a box plot's Min/Q1/Median really
+                        are five separate readings. */}
+                    {derivedTupleColumn ? (
+                      <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
+                        {row.derived === null ? '—' : fmtValue(row.derived)}
                       </td>
-                    ))}
+                    ) : (
+                      row.points.map((point, gi) => (
+                        <td key={gi} style={{ paddingRight: 16 }}>
+                          {point && point.data ? fmtValue(point.data[0]!) : '—'}
+                        </td>
+                      ))
+                    )}
                     <td>
                       <TupleDeleteButton tupleIndex={row.tupleIndex} noun={tupleNoun} onDelete={removeTuple} />
                     </td>

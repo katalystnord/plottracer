@@ -322,6 +322,14 @@ export interface RepeatingStepInfo {
   /** What one repeat is CALLED on screen ("axis"), for the add/remove controls and
    * the progress line. Same job as `tupleNoun` does for slots. */
   noun: string;
+  /** The plural, DECLARED rather than derived: "axis" pluralises to "axes", and
+   * appending an s produced "3 axiss" on screen the moment a second type needed the
+   * wording generalised. */
+  nounPlural: string;
+  /** The one-line "why would I add another?" shown beside the count. Declared per
+   * type because the reason differs: a spider grows an AXIS, a pie needs more of the
+   * rim to fit a circle (or an ellipse) through. */
+  hint: string;
   /** How many repeats a session starts with, and the fewest it can calibrate. */
   min: number;
 }
@@ -714,6 +722,22 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * can have gaps and uneven spacing, so its two corners belong to that bar alone.
    */
   chainTuples?: boolean;
+  /**
+   * A per-TUPLE derived value, shown as one column instead of one-per-slot (v1.6).
+   *
+   * ⚑ For most tuple types each member IS a number the reader wants -- a box plot's
+   * Min/Q1/Median are five real readings. A pie's are not: its two boundaries are
+   * angles, and the slice's value lives in the DIFFERENCE, so showing the members
+   * would put "270" and "61.2" on screen for a slice worth 42.
+   */
+  derivedTupleValue?: {
+    label: string;
+    compute(
+      points: (DataPointView | null)[],
+      axes: A,
+      ctx: { apex: { x: number; y: number } | null }
+    ): number | null;
+  };
   /**
    * What auto-extract MEANS on this graph type — a declared capability, because
    * every caller was asking `config.axesKind === 'spider'` or `axesKind === 'bar'` and
@@ -1365,6 +1389,8 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   ],
   repeatingStep: {
     noun: 'axis',
+    nounPlural: 'axes',
+    hint: 'add one for every axis the chart draws',
     // Three spokes is the fewest that draws a spider, and it is a floor on
     // CALIBRATING rather than on adding -- the add control is visible from the
     // start, so nothing about the shape is hidden.
@@ -1478,6 +1504,24 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // Slices share their boundaries, so each click after the first closes one sector
   // and opens the next -- one click per boundary, not two per slice.
   chainTuples: true,
+  // ⚑ THE SLICE'S VALUE IS THE COLUMN, not its two boundaries. Each boundary is an
+  // ANGLE, and neither is the number anyone wants: the value lives in the difference.
+  // Left as one-column-per-slot the table showed "270" and "61.2" for a slice worth
+  // 42 -- found by driving the real app, because every engine test read the pair
+  // directly and never asked what the screen said.
+  derivedTupleValue: {
+    label: 'Value',
+    compute(points, axes, ctx) {
+      const [start, end] = points;
+      if (!start || !end) return null; // a half-captured sector has no value yet
+      const apex = ctx.apex ?? undefined; // an exploded slice measures about its own
+      return axes.sectorValue(
+        axes.angleAt(start.px, start.py, apex),
+        axes.angleAt(end.px, end.py, apex),
+        axes.getDefaultTotal()
+      );
+    },
+  },
   // A sector IS one object: lose an edge and there is no sector left, unlike the
   // spider's independent slots where one empty ray is a meaningful state.
   tupleMembers: 'object',
@@ -1498,6 +1542,8 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // calibration; nothing special (David).
   repeatingStep: {
     noun: 'outline point',
+    nounPlural: 'outline points',
+    hint: 'three fit a circle, five an ellipse — more the merrier',
     // ⚑ Three define a circle exactly, which is also why three can never disagree:
     // any three points fit perfectly, so a bad click is undetectable. A fourth is
     // genuine redundancy about the FIGURE and produces a residual that means
@@ -1668,6 +1714,17 @@ export interface TupleRow {
    * pixel's metadata -- see getTupleLabel/setTupleLabel. */
   label: string;
   points: (DataPointView | null)[];
+  /**
+   * The row's own DERIVED value, for a type whose datum is the tuple rather than
+   * its members (v1.6, pie). Null when the tuple is incomplete, or for every type
+   * that does not declare `derivedTupleValue`.
+   *
+   * ⚑ A pie's slice is the case this exists for: its two boundaries are angles, and
+   * NEITHER of them is the number the user wants -- the value lives in the
+   * difference. Showing the members instead would put "270" and "61.2" on screen for
+   * a slice worth 42.
+   */
+  derived: number | null;
 }
 
 /** 'point-placed': a value-less step (e.g. Polar's origin) was placed and the
@@ -3009,6 +3066,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // exclusive per sector.
       if (this.explodedApexPending) {
         this.explodedApexPending = false;
+        // ⚑ DISCARD A STRANDED CHAIN FIRST. Completing an ordinary sector pre-opens
+        // the next one holding the shared boundary -- but a pulled-out slice shares
+        // nothing, so that half-open tuple is now for a sector that will never exist.
+        // Left behind it becomes a permanently incomplete row in the table and an
+        // orphan in the file. The PIXEL stays: it is a real click, and it still
+        // belongs to the completed sector before it.
+        const open = entry.slotCursor.tupleIndex;
+        if (open !== null && dataset.getAllTuples()[open]?.some((v) => v === null)) {
+          dataset.removeTuple(open);
+        }
         // Start a fresh tuple for this slice; its apex rides on the tuple, and the
         // next two clicks fill its edges as an ordinary (unchained) pair.
         const t = dataset.getAllTuples().length;
@@ -3529,9 +3596,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Seed the NEXT tuple's first slot with a pixel that has just completed one.
    *
    * Only fires when the tuple it belongs to is now full, so a half-captured sector
-   * is never chained out of. The pixel INDEX is shared rather than copied: both
-   * sectors point at the same recorded click, because it is the same click -- one
-   * boundary, measured once, belonging to the two slices it separates.
+   * is never chained out of.
+   *
+   * ⚑ THE BOUNDARY IS STORED TWICE, once per sector, rather than the two tuples
+   * sharing one pixel index (David's call). Sharing was the first design and it is
+   * unrepresentable in the project file: each pixel serialises with ONE
+   * {tuple, group}, since getTupleIndex returns the FIRST tuple containing it -- so
+   * every sector after the first reopened having lost its opening edge, incomplete,
+   * with no label and no value. Found by driving the real app; the engine tests all
+   * passed because they never went through a file.
+   *
+   * The cost is that the two copies can drift apart if one is dragged, which is the
+   * same "the pairing is not stored" weakness as the error-bar cap and is already
+   * v2.0's business. The alternative -- rebuilding the chain on load -- would leave
+   * the file lossy and make the reader know something the record does not say.
    */
   private chainToNextTuple(pixelIndex: number): void {
     const entry = this.activeEntry;
@@ -3541,10 +3619,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const owning = tuples.findIndex((t) => t.includes(pixelIndex));
     if (owning === -1) return;
     if (tuples[owning]!.some((v) => v === null)) return;
-    // Open the next tuple and file the shared boundary as its opening slot.
+    // Open the next tuple and give it its OWN copy of the shared boundary, so the
+    // record says outright which pixels each sector is made of.
+    const shared = dataset.getPixel(pixelIndex);
+    const copy = dataset.addPixel(shared.x, shared.y);
     const next = tuples.length;
     dataset.addEmptyTupleAt(next);
-    dataset.addToTupleAt(next, 0, pixelIndex);
+    dataset.addToTupleAt(next, 0, copy);
     entry.slotCursor.tupleIndex = next;
     entry.slotCursor.groupIndex = 1;
     this.autoLabelTuple(next);
@@ -3660,15 +3741,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * list. */
   getTupleRows(): TupleRow[] {
     const dataset = this.activeEntry.dataset;
-    return dataset.getAllTuples().map((tuple, tupleIndex) => ({
-      tupleIndex,
-      label: this.getTupleLabel(tupleIndex),
-      points: tuple.map((pixelIndex) => {
+    const derive = this.config.derivedTupleValue;
+    return dataset.getAllTuples().map((tuple, tupleIndex) => {
+      const points = tuple.map((pixelIndex) => {
         if (pixelIndex === null) return null;
         const p = dataset.getPixel(pixelIndex);
         return { px: p.x, py: p.y, data: this.axes ? this.axes.pixelToData(p.x, p.y) : null };
-      }),
-    }));
+      });
+      return {
+        tupleIndex,
+        label: this.getTupleLabel(tupleIndex),
+        points,
+        // The arithmetic stays in the CONFIG, where that type's model lives; the
+        // session only supplies what no config can reach on its own -- the axes, the
+        // tuple's own apex, and the whole the values are read against.
+        derived:
+          derive && this.axes
+            ? derive.compute(points, this.axes, { apex: this.getSectorApex(tupleIndex) })
+            : null,
+      };
+    });
   }
 
   /**
