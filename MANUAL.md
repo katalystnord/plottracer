@@ -21,8 +21,9 @@ fit the view with `Ctrl+0`.
 ## 2. Choose the graph type and calibrate
 
 Pick the graph type from the dropdown in the top bar — **XY** (linear/log/date),
-**Bar**, **Polar**, **Spider / Radar**, **Ternary**, **Map**, **Circular chart
-recorder**, **Histogram**, **Box plot**, or **Line (categorical X)**.
+**Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Ternary**, **Map**,
+**Circular chart recorder**, **Histogram**, **Box plot**, or **Line (categorical
+X)**.
 
 Error bars are not a graph type — they are **rail tool 6**, captured on top of
 whichever series they belong to (§9).
@@ -48,6 +49,50 @@ When every reference is placed, press **Calibrate**. The card shows **Calibrated
 
 > Tip: **Check calibration** overlays the computed axis box so you can confirm the
 > mapping is right before you trace.
+
+**Pie and donut charts** are calibrated from the **outline**, not from the centre.
+Click three or more points around the rim — three fit a circle exactly, five or more
+fit an ellipse and let the app tell you how well the rim really is one — and the
+centre is worked out from them. Nothing asks you to click the middle, because a
+donut has no middle to click. The fitted rim and a crosshair at the fitted centre
+are drawn back over the figure, so you can see whether the fit landed before you
+record anything.
+
+Then two numbers, both prefilled with the answer for an ordinary pie:
+
+- **Total** (`100`) — what the whole circle is worth. Leave it and the slices read
+  as percentages; type the figure's own total (the number printed in a donut's
+  hole, say) and they read in its units. The unit is yours; the whole circle is
+  always all of it.
+- **Sweep** (`360`) — how much of a turn the chart actually draws. A half-pie or a
+  gauge is a smaller sweep, and getting it wrong silently halves every value, so it
+  is measured rather than assumed.
+
+Tick **Tilted / 3D pie** for a chart drawn in perspective. The top face of a 3D pie
+is a complete ellipse — the extrusion hides none of it — so it is fully recoverable,
+and it matters: read flat, a tilted 7% slice can read 13%, *and the slices still sum
+to 100*, so nothing looks wrong.
+
+Capture one click per boundary. Slices share their edges, so the click that closes
+one sector opens the next — a ten-slice pie is ten clicks, not twenty, and no line
+gets measured twice. Clicks near the rim are tidied onto it; this never changes a
+reading, because a slice's value comes from the *angle*, and moving a point straight
+out along its own radius does not change its angle. That is also why a **donut**
+needs no special handling: click any ring you like, at any radius, and one
+calibration reads them all.
+
+When you come back round, the first boundary offers **"click to close the ring"** —
+click it and the last sector completes without opening another. Nothing closes the
+ring for you, because only the figure knows whether it should: a half-pie does not.
+
+**Exploded slices** — a wedge pulled out of the pie — use the **Exploded slice**
+button in the bottom-right of the canvas. It folds out three steps: click the
+slice's own **tip**, then its two edges. The reading is then taken about *that* tip
+rather than the pie's centre, which is the whole of what explosion needs, since
+sliding a wedge sideways does not turn it. This matters more than it looks:
+measured against the shared centre instead, a 27% slice reads about 23% — and the
+figure still adds up to 100, so the error is invisible. The button arms **one**
+slice; the next sector goes back to the pie's centre.
 
 ## 3. Capture the figure
 
@@ -132,6 +177,13 @@ next. A reading you placed by hand is never overwritten.
   - **click an axis name** to type it as the figure prints it. The name is optional
     — an axis whose label is illegible is still a real axis, and an unnamed one
     reads as `—` and exports positionally as `Axis 3`.
+- **Grid Removal** (top bar) pipettes a colour and wipes every pixel within a
+  tolerance of it — useful when gridlines run through the curve you are tracing.
+  It knows nothing about charts, only about colour, which is why it also strips a
+  **spider chart's web** while leaving the spokes you aim along: the bundled radar
+  example draws its rings a lighter grey than its rays. That separation belongs to
+  the *figure*, not to the tool — plenty of radar charts draw both in one grey, and
+  there the rays go too. Check the rays survived before you trace, and undo if not.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
 ## 6. Multiple series and figures

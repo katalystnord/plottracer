@@ -480,7 +480,7 @@
       <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-spider.png" width="2888" height="1888"
           alt="A spider / radar chart in PlotTracer — a six-axis material performance profile — with all three film series traced by colour, each axis named and calibrated on its own scale, and the extracted values listed one row per axis in the right panel.">
-        <figcaption><b>Spider / radar — six axes, six scales.</b> Every spoke is calibrated on its own, so tensile strength on one and a cost index on the next read correctly with no rescaling. Auto-extract walks each ray and records where the series crosses it — and leaves an axis empty, by name, when the evidence is ambiguous. XY, bar, polar, ternary, map and circular chart recorders are calibrated the way each figure draws them too.</figcaption>
+        <figcaption><b>Spider / radar — six axes, six scales.</b> Every spoke is calibrated on its own, so tensile strength on one and a cost index on the next read correctly with no rescaling. Auto-extract walks each ray and records where the series crosses it — and leaves an axis empty, by name, when the evidence is ambiguous. XY, bar, polar, pie/donut, ternary, map and circular chart recorders are calibrated the way each figure draws them too.</figcaption>
       </figure>
     </div>
   </div>
@@ -525,6 +525,10 @@
         <span class="label">Spider / radar</span>
       </div>
       <div class="glyph">
+        <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="56" cy="38" r="25"/></g><path class="g-teal" d="M56 13 L 56 38 L 79 28" fill="none"/><path class="g-teal" d="M56 38 L 34 51" fill="none"/><path class="g-amber" d="M86 47 m -21 12 a 24 24 0 0 0 21 -25 L 65 47 Z" fill="none"/></svg>
+        <span class="label">Pie / donut</span>
+      </div>
+      <div class="glyph">
         <svg viewBox="0 0 120 74"><path class="g-axis" d="M60 8 L 104 66 H 16 Z"/><circle class="g-amber" cx="60" cy="40" r="4"/><circle class="g-amber" cx="74" cy="52" r="4"/></svg>
         <span class="label">Ternary</span>
       </div>
@@ -557,8 +561,14 @@
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M6 16c4-1 6-8 12-11"/></svg>
-        <h3>Six axis systems</h3>
-        <p>XY, bar, polar, ternary, map and circular chart recorders — the widest coverage in the field.</p>
+        <h3>Eleven chart types</h3>
+        <p>XY, bar, categorical line, histogram, box plot, polar, spider/radar, pie/donut, ternary, map and circular chart recorders — each calibrated the way that figure is actually drawn.</p>
+      </div>
+
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="12" r="8"/><path d="M11 4v8l7-3"/><path d="M19 16.5a8 8 0 0 1-5.5 3.4l1.2-4.6z"/></svg>
+        <h3>Pie, donut &amp; exploded slices</h3>
+        <p>Calibrated from the rim, so the centre is fitted rather than clicked — which is what makes a donut readable at all. A pulled-out wedge is measured about <em>its own</em> tip, and a tilted 3D pie is read in the fitted ellipse's frame. Read the naive way, both are wrong by several points of share while still summing to 100.</p>
       </div>
 
       <div class="feature">
@@ -705,7 +715,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v1.5.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v1.6.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 

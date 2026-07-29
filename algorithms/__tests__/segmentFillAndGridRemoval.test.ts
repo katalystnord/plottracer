@@ -290,3 +290,77 @@ describe('gridRemoval', () => {
     expect(hexToRGB('#ffffff')).toEqual([255, 255, 255]);
   });
 });
+
+/**
+ * Grid Removal on a SPIDER's web (David, 2026-07-29, by screenshot: "look, remove
+ * grids worked here too").
+ *
+ * ⚑ It works because the algorithm carries NO chart model — it is squared RGB distance
+ * from one pipetted colour, so a radar chart's web is just more ink of the same shade.
+ * Anything that knew what a "horizontal or vertical gridline" was would have refused
+ * this figure outright. Tenet 10 paying rent: least modelling, so it generalises to a
+ * chart type nobody wrote it for.
+ *
+ * ⚑ WHAT IS ACTUALLY UNDER TEST IS THE COLOURS, not the layout. The operation is
+ * per-pixel and blind to geometry, so where the ink sits cannot affect the outcome —
+ * the only question is whether one tolerance separates the two greys the figure uses.
+ * They are taken from `samples/generators/gen_samples.py`, which is the authority that
+ * DRAWS the bundled spider (`gen_spider`: rings `#dcdcdc`, spokes `#9a9a9a`), and were
+ * confirmed against the committed PNG's own colour histogram.
+ *
+ * ⚑ And the honest limit, which David has already accepted: this is a property of THIS
+ * FIGURE, not of the tool. Most real radar charts — matplotlib's own `polar` included —
+ * draw web and spokes in ONE grey, and there both would go together, taking the rays
+ * you aim along with them. That is fine: you would not normally reach for Grid Removal
+ * on a spider at all.
+ */
+describe('gridRemoval on a spider web', () => {
+  const WEB = hexToRGB('#dcdcdc'); // the concentric rings
+  const SPOKE = hexToRGB('#9a9a9a'); // the radial axes you aim along
+  const WHITE: [number, number, number] = [255, 255, 255];
+
+  /** Two pixels: one of each grey. Geometry is irrelevant — see the header. */
+  function twoGreys(): { data: Uint8ClampedArray; width: number; height: number } {
+    const data = new Uint8ClampedArray(2 * 1 * 4);
+    [WEB, SPOKE].forEach((rgb, i) => {
+      data[i * 4] = rgb[0];
+      data[i * 4 + 1] = rgb[1];
+      data[i * 4 + 2] = rgb[2];
+      data[i * 4 + 3] = 255;
+    });
+    return { data, width: 2, height: 1 };
+  }
+
+  it('takes the web and leaves the spokes', () => {
+    const { data, width, height } = twoGreys();
+    const out = removeGridLinesOp(data, width, height, WEB, WHITE, 10);
+    expect([out.data[0], out.data[1], out.data[2]]).toEqual([255, 255, 255]);
+    expect([out.data[4], out.data[5], out.data[6]]).toEqual(SPOKE);
+  });
+
+  it('separates them by a wide margin, so the default tolerance is not on a knife edge', () => {
+    // ⚑ The real assertion. 0xdc - 0x9a = 66 per channel, so the two greys are ~114
+    // apart in RGB distance: a tolerance would have to be more than TEN TIMES the one
+    // that removes the web before it started eating the spokes. That margin is what
+    // makes this reliable on this figure rather than lucky, and it is exactly what a
+    // careless widening of the default would destroy.
+    const distance = Math.hypot(WEB[0] - SPOKE[0], WEB[1] - SPOKE[1], WEB[2] - SPOKE[2]);
+    expect(distance).toBeGreaterThan(100);
+
+    const { data, width, height } = twoGreys();
+    for (const tolerance of [5, 10, 20, 40, 80]) {
+      const out = removeGridLinesOp(data, width, height, WEB, WHITE, tolerance);
+      expect([out.data[0], out.data[1], out.data[2]], `web at tolerance ${tolerance}`).toEqual(WHITE);
+      expect([out.data[4], out.data[5], out.data[6]], `spoke at tolerance ${tolerance}`).toEqual(SPOKE);
+    }
+  });
+
+  it('DOES take both once the tolerance spans them — the documented limit', () => {
+    // Not a defect, and worth pinning: it says out loud that the separation lives in
+    // the FIGURE. A chart that drew both in one grey behaves like this at any
+    // tolerance, which is why the manual tells you to check the rays survived.
+    const { data, width, height } = twoGreys();
+    const out = removeGridLinesOp(data, width, height, WEB, WHITE, 150);
+    expect([out.data[4], out.data[5], out.data[6]]).toEqual(WHITE);
+  });
+});

@@ -3492,33 +3492,71 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * always-editable inline input instead (Workspace.tsx's tuple table) rather
    * than a shift-click popup, per this rebuild's own "no floating popups"
    * design direction. */
-  private autoLabelTuple(tupleIndex: number): void {
+  private autoLabelTuple(tupleIndex: number): boolean {
     const prefix = (this.axes as unknown as { dataPointsLabelPrefix?: string })?.dataPointsLabelPrefix ?? 'Category';
-    this.setTupleLabel(tupleIndex, `${prefix}${tupleIndex}`);
+    return this.setTupleLabel(tupleIndex, `${prefix}${tupleIndex}`);
   }
 
-  /** The category label for a tuple (Box Plot's per-box name) in the active
-   * dataset, stored as `metadata.label` on the tuple's first (primary
-   * group) pixel. Empty string if the tuple doesn't exist, has no
-   * primary-group point yet, or has never been labeled. */
+  /**
+   * The category label for a tuple (Box Plot's per-box name) in the active dataset.
+   *
+   * ⚑ SCANS THE WHOLE TUPLE rather than reading slot 0. The label is metadata on ONE
+   * of the tuple's pixels, and which one depends on what was filled when it was typed
+   * -- so a read fixed on slot 0 loses it the moment the name was set before slot 0
+   * existed, and a read fixed on "the first non-null slot" loses it the moment an
+   * EARLIER slot is filled afterwards. Scanning is the only version that keeps
+   * agreeing with the write as the tuple fills up. `setTupleLabel` keeps exactly one
+   * label per tuple, so the scan can stop at the first it finds.
+   */
   getTupleLabel(tupleIndex: number): string {
     const dataset = this.activeEntry.dataset;
-    const primaryIndex = dataset.getAllTuples()[tupleIndex]?.[0];
-    if (primaryIndex === null || primaryIndex === undefined) return '';
-    const label = dataset.getPixel(primaryIndex).metadata?.['label'];
-    return typeof label === 'string' ? label : '';
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return '';
+    for (const pixelIndex of tuple) {
+      if (pixelIndex === null || pixelIndex === undefined) continue;
+      const label = dataset.getPixel(pixelIndex).metadata?.['label'];
+      if (typeof label === 'string') return label;
+    }
+    return '';
   }
 
-  /** Sets a tuple's category label in the active dataset, registering the
-   * dataset's "label" metadata key if this is the first one -- mirrors
-   * wpd.dataPointLabelEditor.ok(). */
-  setTupleLabel(tupleIndex: number, label: string): void {
+  /**
+   * Set a tuple's category label. Returns whether it was actually stored.
+   *
+   * ⚑ THIS USED TO GO NOWHERE IN SILENCE. It wrote to the tuple's slot-0 pixel and
+   * returned void if there was none -- so a name typed against a tuple whose slot 0
+   * happened to be empty vanished with nothing on screen to say so. That is ordinary
+   * use on a spider, whose slots are N x 1D: the table's empty cells exist precisely so
+   * a reading can be aimed at a particular gap, so starting a profile on axis 2 leaves
+   * slot 0 null. It also produced the pie's blank category by a second route (the apex
+   * click creates the tuple wholly empty). One class of bug, two sightings.
+   *
+   * ⚑ ONE label per tuple, enforced on write. Writing to whichever pixel exists means
+   * a rename can land on a DIFFERENT pixel than the original did; leaving both would
+   * mean deleting a point could resurrect an old name.
+   *
+   * The remaining false is honest rather than silent: a wholly empty tuple has no
+   * pixel to hang metadata on, and inventing one would put a mark on the figure the
+   * user never made.
+   */
+  setTupleLabel(tupleIndex: number, label: string): boolean {
     const dataset = this.activeEntry.dataset;
-    const primaryIndex = dataset.getAllTuples()[tupleIndex]?.[0];
-    if (primaryIndex === null || primaryIndex === undefined) return;
-    const existing = dataset.getPixel(primaryIndex).metadata ?? {};
-    dataset.setMetadataAt(primaryIndex, { ...existing, label });
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return false;
+    const pixels = tuple.filter((v): v is number => v !== null && v !== undefined);
+    if (pixels.length === 0) return false;
+    const target = pixels[0]!;
+    for (const pixelIndex of pixels) {
+      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
+      if (pixelIndex === target) {
+        dataset.setMetadataAt(pixelIndex, { ...existing, label });
+      } else if ('label' in existing) {
+        const { label: _dropped, ...rest } = existing;
+        dataset.setMetadataAt(pixelIndex, rest);
+      }
+    }
     this.registerLabelMetadataKey(dataset);
+    return true;
   }
 
   /** Register "label" as a per-pixel metadata key so it round-trips through

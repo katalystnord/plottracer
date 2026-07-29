@@ -26,13 +26,19 @@ No account required, no data sent to any server, and no dependency on any compan
 
 ## Features
 
-**Chart / axes types** — XY, Bar, Polar, **Spider / Radar** (every spoke calibrated separately, so each axis keeps its own range), Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis. Error bars are **not** a graph type — they are a rail tool, captured on top of whichever series they belong to.
+**Chart / axes types** — XY, Bar, Polar, **Spider / Radar** (every spoke calibrated separately, so each axis keeps its own range), **Pie / Donut** (calibrated from the *outline*, so the centre is fitted rather than clicked — which is what makes a donut, an **exploded slice** and a **tilted 3D** pie readable), Ternary, Map (scale bar), Circular Chart Recorder, Histogram (captures true bin *edges*, not just centres), Box Plot, Line with a categorical X axis. Error bars are **not** a graph type — they are a rail tool, captured on top of whichever series they belong to.
 
 **Getting points off a figure**
 - Manual point placement, multiple series, drag-to-reposition, arrow-key nudge, click-to-edit values. On a bar or categorical-X figure a **Category** column takes the names off the tick labels — typed once and reused across series.
 - **Auto-extract** (one wand tool): flood-fill (Segment Fill), auto-trace by colour (continuous curve *or* scatter markers), a blob detector, and interpolation-assist (guide points + a centripetal spline). A **live mask preview** shows exactly which pixels a trace will capture before you commit, and you can **restrict a trace to a drawn box**.
 - **Bar-family figures are traced by hand.** Every auto-extract mechanism centres on a filled shape — right for a curve, wrong for a bar, whose value is its *top edge*. Auto-extract is refused on Bar, Histogram and Box Plot rather than quietly return the midpoint.
 - **Spider charts trace along their own axes.** A value on a spider is where the series crosses one particular spoke, so auto-extract walks each calibrated ray and records the crossing — one reading per axis, in that axis's own row. A ray the colour crosses more than once records *nothing* and says which axis it gave up on, so the refusals become the worklist rather than a plausible wrong number.
+- **Pie charts are captured one click per boundary.** Slices share their edges, so
+  the click that closes one sector opens the next, and the first boundary offers to
+  close the ring at the end. A pulled-out wedge is measured about **its own tip**
+  rather than the pie's centre — sliding a slice sideways does not turn it — which is
+  worth several points of share on a real figure *and* invisible without it, because
+  the slices still sum to 100 either way.
 - Grid-line removal to clean a busy plot first.
 
 **Analysis** — curve fitting (polynomial degree 1–9, plus exponential, power-law, logarithmic, Gaussian and logistic models solved by Levenberg–Marquardt; optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
