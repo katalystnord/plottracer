@@ -6019,7 +6019,15 @@ export function Workspace() {
                   🎯 Take The Trace Challenge
                 </button>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
-                <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5, maxWidth: 260 }}>
+                {/* ⚑ NO maxWidth. This carried `maxWidth: 260` from when the help card
+                    was a narrow column, and stayed after the example list grew labels
+                    like "XY Scatter — modulus vs. crosslinker (Auto-trace ▸ Scattered
+                    points)" — which now set the card's width. The attribution was
+                    wrapping to seven lines inside a card twice that wide, with the
+                    right half of every line empty. It is required text (AGPL-3.0 plus
+                    the clean-room and Ketcher acknowledgements), so it should read as
+                    a paragraph rather than a ransom note. */}
+                <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5 }}>
                   <strong>PlotTracer</strong> <span data-testid="app-version">v{__APP_VERSION__}</span> — a
                   desktop plot digitizer based on{' '}
                   <strong>WebPlotDigitizer</strong> by Ankit Rohatgi, distributed under
