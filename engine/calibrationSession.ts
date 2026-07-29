@@ -706,6 +706,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   tupleMembers?: 'object' | 'independent';
   /**
+   * Whether a completed tuple's LAST point also opens the next one (v1.6, pie).
+   *
+   * For a type whose tuples share a boundary -- a pie's slices meet along one line --
+   * this halves the clicking and, more importantly, stops the same piece of ink being
+   * measured twice and answered differently. A histogram's bins do NOT set this: bins
+   * can have gaps and uneven spacing, so its two corners belong to that bar alone.
+   */
+  chainTuples?: boolean;
+  /**
    * What auto-extract MEANS on this graph type — a declared capability, because
    * every caller was asking `config.axesKind === 'spider'` or `axesKind === 'bar'` and
    * getting the answer from the type's NAME rather than from what it can do.
@@ -1466,6 +1475,9 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   ],
   defaultSlots: PIE_SECTOR_SLOTS,
   tupleNoun: 'sector',
+  // Slices share their boundaries, so each click after the first closes one sector
+  // and opens the next -- one click per boundary, not two per slice.
+  chainTuples: true,
   // A sector IS one object: lose an edge and there is no sector left, unlike the
   // spider's independent slots where one empty ray is a meaningful state.
   tupleMembers: 'object',
@@ -2996,6 +3008,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
         dataset.addToTupleAt(tupleIndex, groupIndex, index);
       }
       this.nextSlot();
+      // ⚑ CHAINED TUPLES (v1.6, pie). A pie's slices SHARE their boundaries: the end
+      // of one sector is the start of the next, so making the user click each
+      // boundary twice would be asking them to measure the same piece of ink again --
+      // twenty clicks for a ten-slice pie, and two subtly different answers for one
+      // line. Filing the same pixel into the next sector's opening slot turns it into
+      // one click per boundary, which is how a pie is actually read.
+      //
+      // Deliberately NOT auto-closing the ring: whether the last sector wraps to the
+      // first boundary is something only the figure knows (a half pie does not), and
+      // guessing "you must be finished now" from a click count would be inferring
+      // rather than measuring. Closing is the user's own final click.
+      if (this.config.chainTuples) this.chainToNextTuple(index);
       return 'point-added';
     }
     // Insert-in-place (v1.1 #1): splice the new point into the curve edge it
@@ -3447,6 +3471,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * current tuple past the current group, then later tuples' first open
    * slot, else "new tuple" (tupleIndex null, groupIndex 0). Direct port of
    * pointGroups.js's nextGroup(). */
+  /**
+   * Seed the NEXT tuple's first slot with a pixel that has just completed one.
+   *
+   * Only fires when the tuple it belongs to is now full, so a half-captured sector
+   * is never chained out of. The pixel INDEX is shared rather than copied: both
+   * sectors point at the same recorded click, because it is the same click -- one
+   * boundary, measured once, belonging to the two slices it separates.
+   */
+  private chainToNextTuple(pixelIndex: number): void {
+    const entry = this.activeEntry;
+    const dataset = entry.dataset;
+    const tuples = dataset.getAllTuples();
+    // The tuple the pixel just landed in, and only if it is now complete.
+    const owning = tuples.findIndex((t) => t.includes(pixelIndex));
+    if (owning === -1) return;
+    if (tuples[owning]!.some((v) => v === null)) return;
+    // Open the next tuple and file the shared boundary as its opening slot.
+    const next = tuples.length;
+    dataset.addEmptyTupleAt(next);
+    dataset.addToTupleAt(next, 0, pixelIndex);
+    entry.slotCursor.tupleIndex = next;
+    entry.slotCursor.groupIndex = 1;
+    this.autoLabelTuple(next);
+  }
+
   nextSlot(): void {
     const cursor = this.activeEntry.slotCursor;
     if (cursor.tupleIndex === null) return;
