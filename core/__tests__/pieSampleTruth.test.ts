@@ -29,6 +29,7 @@ interface SliceTruth {
   endEdge: Anchor;
 }
 interface PieTruth {
+  tilted?: boolean;
   total: number;
   sweep: number;
   explodedCategory?: string;
@@ -43,11 +44,11 @@ function loadTruth(name: string): PieTruth {
 /** Calibrate exactly as the app does — from OUTLINE points only, with the centre and
  * radius fitted through them. Nothing here clicks a centre, because on a donut there
  * is none to click. */
-function axesFor(truth: PieTruth): PieAxes {
+function axesFor(truth: PieTruth, tilted = truth.tilted ?? false): PieAxes {
   const cal = new Calibration(2);
   for (const p of truth.calibration.anchors.outline) cal.addPoint(p.px, p.py, '', '');
   const axes = new PieAxes();
-  expect(axes.calibrate(cal, truth.total, truth.sweep)).toBe(true);
+  expect(axes.calibrate(cal, truth.total, truth.sweep, tilted)).toBe(true);
   return axes;
 }
 
@@ -76,6 +77,7 @@ describe.each([
   ['pie-filler-composition', 'a perfectly circular pie'],
   ['pie-exploded-market-share', 'a pie with one slice pulled out'],
   ['donut-donut-flavours', 'a donut, in real units with the total in the hole'],
+  ['pie-tilted-market-segments', 'a TILTED pie — a 3D chart\'s top face'],
 ])('%s — %s', (name) => {
   it('reads every slice back to the value it was drawn from', () => {
     const truth = loadTruth(name);
@@ -195,5 +197,40 @@ describe('the donut', () => {
       100
     );
     expect(asPercent).toBeCloseTo(32.8, 3); // 820 / 2500
+  });
+});
+
+describe('the tilted pie is why the affine inverse matters', () => {
+  it('recovers the true values from a squashed, rotated figure', () => {
+    // ⚑ The figure is a circle under an affine map — squashed to 55% and rotated 18°.
+    // The fitted ellipse's semi-axes ARE the images of two orthogonal circle radii, so
+    // reading the angle in that basis inverts the projection implicitly. No
+    // un-rotating, no un-squashing, no second code path.
+    const truth = loadTruth('pie-tilted-market-segments');
+    expect(truth.tilted).toBe(true);
+    const got = readValues(truth);
+    truth.series[0]!.points.forEach((p, i) => {
+      expect(Math.abs(got[i]! - p.value) / p.value, `${p.category}`).toBeLessThan(1e-4);
+    });
+  });
+
+  it('is BADLY wrong when read as a flat circle — and still sums to 100', () => {
+    // ⚑ The whole danger of this chart type. Every slice is wrong, no slice looks
+    // wrong, and the total reassures you. This is the number that moved the ellipse
+    // into v1.6 rather than leaving it as a nicety for photographed figures.
+    const truth = loadTruth('pie-tilted-market-segments');
+    const flat = axesFor(truth, false); // deliberately NOT inverting the projection
+    const naive = truth.calibration.slices.map((s) =>
+      flat.sectorValue(
+        flat.angleAt(s.startEdge.px, s.startEdge.py, apexOf(s.apex)),
+        flat.angleAt(s.endEdge.px, s.endEdge.py, apexOf(s.apex)),
+        truth.total
+      )
+    );
+    const truthful = truth.series[0]!.points.map((p) => p.value);
+    const worst = Math.max(...naive.map((v, i) => Math.abs(v - truthful[i]!)));
+    expect(worst).toBeGreaterThan(3); // percentage points, on a figure of percentages
+    // ...and the reassuring part: it still adds up.
+    expect(naive.reduce((a, b) => a + b, 0)).toBeCloseTo(truth.total, 6);
   });
 });

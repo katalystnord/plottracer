@@ -1,0 +1,160 @@
+{
+  "source": {
+    "imagePath": "pie-tilted-market-segments.png",
+    "note": "Synthetic ground truth. A pie squashed to 55% height and rotated 18 degrees -- an AFFINE image of a circle, standing in for a 3D chart's top face. Reading it as a flat circle gives the wrong angles; inverting the map gives these."
+  },
+  "graphType": "pie",
+  "total": 100.0,
+  "unit": "%",
+  "sweep": 360,
+  "tilted": true,
+  "projection": {
+    "squash": 0.55,
+    "rotationDeg": 18.0
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "centre": {
+        "px": 450.0,
+        "py": 362.17
+      },
+      "rim": {
+        "px": 729.12,
+        "py": 271.47
+      },
+      "outline": [
+        {
+          "px": 729.12,
+          "py": 271.47
+        },
+        {
+          "px": 612.1,
+          "py": 189.49
+        },
+        {
+          "px": 400.12,
+          "py": 208.65
+        },
+        {
+          "px": 217.36,
+          "py": 317.74
+        },
+        {
+          "px": 170.88,
+          "py": 452.86
+        },
+        {
+          "px": 287.9,
+          "py": 534.85
+        },
+        {
+          "px": 499.88,
+          "py": 515.68
+        },
+        {
+          "px": 682.64,
+          "py": 406.59
+        }
+      ]
+    },
+    "slices": [
+      {
+        "index": 0,
+        "startAngle": 90.0,
+        "endAngle": -72.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 400.12,
+          "py": 208.65
+        },
+        "endEdge": {
+          "px": 583.69,
+          "py": 480.14
+        }
+      },
+      {
+        "index": 1,
+        "startAngle": -72.0,
+        "endAngle": -162.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 583.69,
+          "py": 480.14
+        },
+        "endEdge": {
+          "px": 199.95,
+          "py": 495.86
+        }
+      },
+      {
+        "index": 2,
+        "startAngle": -162.0,
+        "endAngle": -234.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 199.95,
+          "py": 495.86
+        },
+        "endEdge": {
+          "px": 245.58,
+          "py": 291.28
+        }
+      },
+      {
+        "index": 3,
+        "startAngle": -234.0,
+        "endAngle": -270.0,
+        "exploded": false,
+        "apex": {
+          "px": 450.0,
+          "py": 362.17
+        },
+        "startEdge": {
+          "px": 245.58,
+          "py": 291.28
+        },
+        "endEdge": {
+          "px": 400.12,
+          "py": 208.65
+        }
+      }
+    ]
+  },
+  "series": [
+    {
+      "name": "Market segments",
+      "points": [
+        {
+          "category": "Segment A",
+          "value": 45.0
+        },
+        {
+          "category": "Segment B",
+          "value": 25.0
+        },
+        {
+          "category": "Segment C",
+          "value": 20.0
+        },
+        {
+          "category": "Segment D",
+          "value": 10.0
+        }
+      ]
+    }
+  ]
+}

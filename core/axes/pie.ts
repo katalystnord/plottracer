@@ -66,7 +66,7 @@
  */
 
 import type { Calibration } from '../calibration.js';
-import { fitCircle, circleFitResidual } from '../mathFunctions.js';
+import { fitCircle, fitEllipse, circleFitResidual } from '../mathFunctions.js';
 import type { AxesMetadata } from './types.js';
 
 const TWO_PI = Math.PI * 2;
@@ -157,7 +157,7 @@ export class PieAxes {
    * describe no circle). The value refusals live in the config's `checkValues`, run
    * inside checkGuards, so BOTH entrances see them.
    */
-  calibrate(calibration: Calibration, defaultTotal: number, sweepDegrees: number): boolean {
+  calibrate(calibration: Calibration, defaultTotal: number, sweepDegrees: number, tilted = false): boolean {
     this.calibration = calibration;
     this._isCalibrated = false;
 
@@ -166,22 +166,43 @@ export class PieAxes {
       const p = calibration.getPoint(i);
       if (p) pts.push([p.px, p.py]);
     }
+    if (tilted) {
+      // ⚑ A TILTED OR 3D PIE. The figure is an AFFINE image of the circle, and an
+      // affine map does not preserve angles — read one flat and a real 2:1 figure
+      // turns a 7% slice into 13.4% while the readings still sum to 100, so nothing
+      // looks wrong. The fitted semi-axes ARE the images of two orthogonal circle
+      // radii, so expressing a pixel in that basis (see angleAt) applies the inverse
+      // map implicitly: no un-rotating, no un-squashing, no second code path.
+      const ell = fitEllipse(pts);
+      if (!ell) return false; // fewer than five, or the points describe no ellipse
+      this.cx = ell.x0;
+      this.cy = ell.y0;
+      this.ax = ell.ax;
+      this.ay = ell.ay;
+      this.bx = ell.bx;
+      this.by = ell.by;
+      // Residual is reported against the CIRCLE the user did not ask for, so it stays
+      // a comparable "how round is this?" number rather than becoming trivially zero
+      // the moment a five-parameter shape is fitted to five points.
+      const asCircle = fitCircle(pts);
+      this.residual = asCircle ? circleFitResidual(pts, asCircle) : 0;
+      this._isCalibrated = true;
+      return true;
+    }
+
     const circle = fitCircle(pts);
     if (!circle) return false; // fewer than three, or collinear: no circle exists
     this.residual = circleFitResidual(pts, circle);
 
     this.cx = circle.x0;
     this.cy = circle.y0;
-    // Any orthogonal basis of equal length gives the same angle DIFFERENCES, and a
-    // sector is a difference — so the frame is simply axis-aligned at the fitted
-    // radius. (The later ellipse takes its basis from the fitted axes instead, which
-    // is the only thing that changes here.)
+    // A circle is the degenerate ellipse: any orthogonal basis of equal length gives
+    // the same angle DIFFERENCES, and a sector is a difference — so the frame is
+    // simply axis-aligned at the fitted radius.
     this.ax = circle.radius;
     this.ay = 0;
-
-    // The circle case: b is a rotated a quarter-turn. In image space y runs DOWN, so
-    // this fixes the handedness of every angle below — consistently, which is all that
-    // matters, since a sector's extent is a difference of two of them.
+    // b is a rotated a quarter-turn. In image space y runs DOWN, so this fixes the
+    // handedness of every angle below — consistently, which is all that matters.
     this.bx = -this.ay;
     this.by = this.ax;
 

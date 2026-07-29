@@ -1469,7 +1469,13 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // A sector IS one object: lose an edge and there is no sector left, unlike the
   // spider's independent slots where one empty ray is a meaningful state.
   tupleMembers: 'object',
-  options: [],
+  // ⚑ AN EXPLICIT CHOICE, NEVER INFERRED. A tilted or 3D pie is an affine image of
+  // the circle, and fitting an arbitrary ellipse to a genuinely circular pie skews
+  // every slice at once with nothing on screen looking wrong -- so the app does not
+  // decide this, the user does. Moved INTO v1.6 (David) on the evidence: about 12% of
+  // real pie figures are drawn in 3D, and a 3D pie's top face is a complete
+  // unoccluded ellipse, so it is recoverable rather than refusable.
+  options: [{ key: 'isTilted', label: 'Tilted / 3D pie', kind: 'checkbox', default: false }],
   // ⚑ NO fixedSteps AND NO CENTRE STEP. The outline is the whole calibration, and the
   // centre is FITTED from it (David, 2026-07-29). That ordering is not a preference:
   // a donut has no visible centre to click at all -- its boundaries stop at the inner
@@ -1498,7 +1504,14 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same refusal
   // a click does. Written in buildAxes first, and the load-path test caught it
   // immediately: a total of -50 opened clean, every value silently negative.
-  checkValues(_cal, _options, globalValues) {
+  checkValues(cal, options, globalValues) {
+    // ⚑ An ellipse has five degrees of freedom, so five points are the minimum that
+    // can describe one -- and unlike the circle's three, fewer is not "less accurate"
+    // but "no answer at all". Refused here rather than in the fit so the message says
+    // what to do, and so a LOADED file meets the same refusal a click does.
+    if (optionBool(options, 'isTilted') && cal.getCount() < 5) {
+      return 'A tilted pie needs at least five outline points — an ellipse cannot be fixed by fewer.';
+    }
     const total = parseFloat(String(globalValues['total'] ?? ''));
     const sweep = parseFloat(String(globalValues['sweep'] ?? ''));
     // A sector is a fraction of a whole, so a pie cannot show a negative quantity --
@@ -1517,9 +1530,14 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
     const sweep = parseFloat(String(ctx.globalValues['sweep'] ?? ''));
     // The values were already refused by checkValues on whichever entrance got here;
     // this only has to convert them.
+    const tilted = optionBool(ctx.options, 'isTilted');
     const axes = new PieAxes();
-    if (!axes.calibrate(cal, total, sweep)) {
-      return { error: 'Calibration failed — the outline points must lie on a circle; three collinear points describe none.' };
+    if (!axes.calibrate(cal, total, sweep, tilted)) {
+      return {
+        error: tilted
+          ? 'Calibration failed — the outline points must lie on an ellipse. Trace the TOP FACE of a 3D pie, not its outer silhouette.'
+          : 'Calibration failed — the outline points must lie on a circle; three collinear points describe none.',
+      };
     }
     // ⚑ The total and the sweep have no pixel to ride on, so the axes METADATA is
     // their one home in the file -- core/plotData.ts reads them straight back out.
@@ -1530,6 +1548,9 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
       [GRAPH_TYPE_METADATA_KEY]: 'pie',
       pieTotal: String(ctx.globalValues['total'] ?? ''),
       pieSweep: String(ctx.globalValues['sweep'] ?? ''),
+      // Round-trips the choice, so a tilted pie reopens tilted rather than being
+      // silently re-read as a circle -- which would change every value in the file.
+      pieTilted: String(tilted),
     });
     return { axes };
   },
@@ -1540,6 +1561,10 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // click path was unaffected, which is exactly why it needed a load-path test to
   // find it. Reads back the strings buildAxes wrote, so the round trip is byte-for-
   // byte what the user typed.
+  extractOptions(axes) {
+    const meta = axes.getMetadata() as Record<string, unknown>;
+    return { isTilted: String(meta['pieTilted'] ?? 'false') };
+  },
   extractGlobalValues(axes) {
     const meta = axes.getMetadata() as Record<string, unknown>;
     return {

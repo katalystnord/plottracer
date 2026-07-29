@@ -1038,6 +1038,101 @@ def gen_donut():
     })
 
 
+def gen_pie_tilted():
+    """A TILTED pie — the 2D stand-in for a 3D chart's top face.
+
+    ⚑ Why this exists: about 12% of real pie figures in the PMC corpus are drawn in
+    3D, and a 3D pie's top face is a COMPLETE, UNOCCLUDED ellipse — an exact affine
+    image of the circle, so it is recoverable rather than refusable. Read flat, a 2:1
+    figure turns a 7% slice into 13.4% while the readings still sum to 100, which is
+    the silent-wrong-number shape this project exists to avoid.
+
+    Drawn by squashing a circular pie to 55% of its height and rotating it, which is
+    exactly what a projection does — so the truth here is the TRUE angles, and any
+    reader that does not invert the map will disagree with them."""
+    name = "pie-tilted-market-segments"
+    labels = ["Segment A", "Segment B", "Segment C", "Segment D"]
+    values = [45.0, 25.0, 20.0, 10.0]  # sums to 100
+    squash, rot = 0.55, math.radians(18.0)
+
+    fig = plt.figure(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    ax = fig.add_subplot()
+    ax.set_aspect("equal")
+    ax.set_xlim(-1.4, 1.4)
+    ax.set_ylim(-1.1, 1.1)
+    ax.axis("off")
+
+    def project(x, y):
+        """Circle -> ellipse: squash in y, then rotate. An affine map, hence exactly
+        invertible, which is the whole premise."""
+        ys = y * squash
+        return (x * math.cos(rot) - ys * math.sin(rot),
+                x * math.sin(rot) + ys * math.cos(rot))
+
+    total = float(sum(values))
+    cum = 0.0
+    for v, colour in zip(values, PIE_COLOURS):
+        a0 = 90.0 - 360.0 * (cum / total)
+        a1 = 90.0 - 360.0 * ((cum + v) / total)
+        ts = np.linspace(math.radians(a0), math.radians(a1), 200)
+        xy = [project(0.0, 0.0)] + [project(math.cos(t), math.sin(t)) for t in ts]
+        ax.add_patch(plt.Polygon(xy, closed=True, facecolor=colour, edgecolor="white", linewidth=1.5))
+        mid = math.radians((a0 + a1) / 2)
+        lx, ly = project(0.62 * math.cos(mid), 0.62 * math.sin(mid))
+        ax.text(lx, ly, f"{v:.0f}%", ha="center", va="center", color="white", fontsize=12, fontweight="bold")
+        cum += v
+
+    ax.set_title("Market segments (%) — drawn tilted", fontsize=15)
+    fig.tight_layout()
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+    w = fig.get_figwidth() * fig.dpi
+
+    def px(dx, dy):
+        sx, sy = ax.transData.transform((dx, dy))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2)}
+
+    # Outline points on the ELLIPSE (a 3D pie's top-face rim). Eight, because five is
+    # the bare minimum for an ellipse and a real user would place a few more.
+    outline = [px(*project(math.cos(t), math.sin(t)))
+               for t in [i / 8 * 2 * math.pi for i in range(8)]]
+    slices = []
+    cum = 0.0
+    for i, v in enumerate(values):
+        a0 = 90.0 - 360.0 * (cum / total)
+        a1 = 90.0 - 360.0 * ((cum + v) / total)
+        slices.append({
+            "index": i,
+            "startAngle": round(a0, 4),
+            "endAngle": round(a1, 4),
+            "exploded": False,
+            "apex": px(*project(0.0, 0.0)),
+            "startEdge": px(*project(math.cos(math.radians(a0)), math.sin(math.radians(a0)))),
+            "endEdge": px(*project(math.cos(math.radians(a1)), math.sin(math.radians(a1)))),
+        })
+        cum += v
+
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth. A pie squashed to 55% height and rotated 18 degrees -- an AFFINE image of a circle, standing in for a 3D chart's top face. Reading it as a flat circle gives the wrong angles; inverting the map gives these."},
+        "graphType": "pie",
+        "total": 100.0,
+        "unit": "%",
+        "sweep": 360,
+        "tilted": True,
+        "projection": {"squash": squash, "rotationDeg": 18.0},
+        "calibration": {"imageWidth": round(w), "imageHeight": round(h),
+                        "anchors": {"centre": px(*project(0.0, 0.0)),
+                                    "rim": px(*project(1.0, 0.0)),
+                                    "outline": outline},
+                        "slices": slices},
+        "series": [{"name": "Market segments",
+                    "points": [{"category": c, "value": v} for c, v in zip(labels, values)]}],
+    })
+
+
 if __name__ == "__main__":
     gen_scatter()
     gen_multiseries()
@@ -1060,4 +1155,5 @@ if __name__ == "__main__":
     gen_pie()
     gen_pie_exploded()
     gen_donut()
-    print("generated all 18 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut.")
+    gen_pie_tilted()
+    print("generated all 19 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut.")
