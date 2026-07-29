@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // Root vitest config, read by `npm test` (`vitest run` from the repo root).
 // It has to live here, not in ui/vite.config.ts, because vitest resolves its
@@ -25,5 +25,15 @@ export default defineConfig({
     // milliseconds each, so the cost is negligible next to the e2e run). A
     // projects split (parallel unit / serial e2e) is the finer-grained follow-up.
     fileParallelism: false,
+    // ⚑ Stryker's sandbox is a FULL COPY of the repo at `.stryker-tmp/sandbox-*`,
+    // tests included, and vitest's default excludes do not cover it. Left in the
+    // glob, `npm test` silently runs a second, STALE copy of the whole suite --
+    // the pure files twice over and every e2e launching its own extra Electron
+    // app -- against source that is whatever the mutation run last wrote there.
+    // Both failure directions are bad: a fixed defect can still fail, and a live
+    // one can pass. Reproduced during the 2026-07-29 audit, where a single-file
+    // run reported two files. The directory is present during any mutation run
+    // and survives an interrupted one, so this cannot be left to tidiness.
+    exclude: [...configDefaults.exclude, '.stryker-tmp/**', 'reports/**'],
   },
 });
