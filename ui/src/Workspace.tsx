@@ -149,6 +149,13 @@ import { exportOmissionNote, formatLimitationNote } from '../../engine/exportCap
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
 import { buildExportJson, buildExportSections } from '../../engine/exportAssembly.js';
+import {
+  buildSpreadsheetSeries,
+  spreadsheetMaxRows as spreadsheetMaxRowCount,
+  showsCategoryColumn,
+  isDerivedAt,
+  isCellEditable,
+} from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { formatDateNumber } from '../../core/dateConversion.js';
@@ -3121,7 +3128,7 @@ export function Workspace() {
     // catches only a path that gets here another way -- which is exactly the
     // "guards belong in the model, and the model has more than one entrance"
     // lesson this codebase keeps relearning.
-    if (session.getDataPointRoles()[cell.index] === 'interpolated') return;
+    if (isDerivedAt(session.getDataPointRoles(), cell.index)) return;
     const parsed = Number(cell.value);
     if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> revert to derived
 
@@ -4702,21 +4709,7 @@ export function Workspace() {
   // count (= the longest series). Rendered as one table with a per-type value-dim
   // column set under each series -- see the Data section below.
   const spreadsheetSeries = useMemo(
-    () =>
-      allDatasetsData.map((d) => ({
-        index: d.index,
-        name: datasetInfos.find((i) => i.index === d.index)?.name ?? `Series ${d.index + 1}`,
-        color: d.color,
-        active: d.active,
-        values: d.points.map((p) => p.data), // (number[] | null)[]
-        // Per-SERIES roles, so a spline-derived cell can be told apart from one
-        // the user put there -- every series renders at once, and "is this point
-        // derived?" differs between them (v1.3).
-        roles: session.getDataPointRolesFor(d.index),
-        // Per-SERIES category names (v1.3 #9). Bar / categorical-line only; every
-        // other type reads an empty list and shows no Category column.
-        labels: session.getPointLabels(d.index),
-      })),
+    () => buildSpreadsheetSeries(allDatasetsData, datasetInfos, session),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allDatasetsData, datasetInfos, session, version]
   );
@@ -4730,15 +4723,8 @@ export function Workspace() {
   // real date in the table, matching the export, not a raw serial (v1.2 #16).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tableDateFormats = useMemo(() => session.getTableDateFormats(), [session, version, config]);
-  const spreadsheetMaxRows = useMemo(
-    () => spreadsheetSeries.reduce((max, s) => Math.max(max, s.values.length), 0),
-    [spreadsheetSeries]
-  );
-  // The Category column (v1.3 #9) belongs to the two types whose independent
-  // variable is a NAME rather than a number: Bar and Line (categorical X). Box
-  // Plot and Histogram are bar-kind too but never reach this table -- they render
-  // the tuple table above, which has carried its own name field since v0.5.
-  const showCategoryColumn = config.axesKind === 'bar' && !hasSlots;
+  const spreadsheetMaxRows = useMemo(() => spreadsheetMaxRowCount(spreadsheetSeries), [spreadsheetSeries]);
+  const showCategoryColumn = showsCategoryColumn(config.axesKind, hasSlots);
 
   const curveFitOverlay = useMemo(() => {
     if (!curveFitState || config.id !== 'xy' || !axes) return undefined;
@@ -7667,7 +7653,7 @@ export function Workspace() {
                     // moved with an arrow key or deleted -- the v1.3 gate's way
                     // around the read-only cells. A derived sample has no
                     // independent existence: the next anchor move rebuilds it.
-                    const isDerivedRow = dataPointRoles[i] === 'interpolated';
+                    const isDerivedRow = isDerivedAt(dataPointRoles, i);
                     const selectRow = () => {
                       // ⚑ CLEAR rather than ignore. Merely refusing the selection left
                       // the PREVIOUS one active, so the arrow keys then nudged a point
@@ -7727,8 +7713,8 @@ export function Workspace() {
                           // here looked like it took and was silently wiped (v0.6 audit).
                           // It reads muted + italic and refuses the edit, pointing at the
                           // anchors -- which ARE editable, and which the curve follows.
-                          const derived = s.roles[i] === 'interpolated';
-                          const editable = config.axesKind === 'xy' && s.active && !derived;
+                          const derived = isDerivedAt(s.roles, i);
+                          const editable = isCellEditable(config.axesKind, s.active, derived);
                           return [
                             ...(categoryCell ? [categoryCell] : []),
                             ...tableValueLabels.map((_label, d) => {
