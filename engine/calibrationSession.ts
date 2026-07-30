@@ -736,7 +736,16 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
     compute(
       points: (DataPointView | null)[],
       axes: A,
-      ctx: { apex: { x: number; y: number } | null }
+      ctx: {
+        apex: { x: number; y: number } | null;
+        /** v2.0, Phase 5: the active dataset's stack group (setDatasetStackGroup),
+         * or null when it isn't part of one. A stacked segment's value is its own
+         * SPAN -- neither end is the chart's declared baseline, even for the
+         * bottommost layer, so the ordinary baseline-relative/floating-direction
+         * sign convention (see BAR_AXES_CONFIG) does not apply; see its own
+         * derivedTupleValue for how this is used. */
+        stackGroup: string | null;
+      }
     ): number | null;
   };
   /**
@@ -998,11 +1007,19 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   tupleMembers: 'object',
   derivedTupleValue: {
     label: 'Value',
-    compute(points, axes) {
+    compute(points, axes, ctx) {
       const [start, end] = points;
       if (!start?.data || !end?.data) return null; // a half-dragged bar has no value yet
       const v1 = start.data[0]!;
       const v2 = end.data[0]!;
+      // v2.0 Phase 5: a STACKED segment's near end is never the chart's
+      // declared baseline -- not even the bottommost layer, which sits on
+      // top of nothing but still isn't "at zero" in the sense the baseline-
+      // relative sign convention means. Its value is its own SPAN, and
+      // magnitude-not-direction is what's meaningful (a contribution to a
+      // stack is never negative) -- so this bypasses both the baseline and
+      // the floating-direction rules below entirely.
+      if (ctx.stackGroup !== null) return Math.abs(v2 - v1);
       if (axes.hasDeclaredBaseline()) {
         // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
         // position -- a pixel-position rule ("smaller y = far end") is exactly
@@ -3004,6 +3021,43 @@ export class CalibrationSession<A extends CalibratedAxes> {
     entry.dataset.colorRGB = new Color(rgb[0], rgb[1], rgb[2]);
   }
 
+  /**
+   * Tag a dataset as one LAYER of a stacked-bar group (v2.0, Phase 5) — an
+   * arbitrary shared string naming the stack (e.g. "left"/"right" for the
+   * two independent sides of a diverging chart, or any name that groups the
+   * participating series). Stored as ordinary dataset-level metadata
+   * (errorRelation's own mechanism, `core/dataset.ts`'s getMetadata/
+   * setMetadata), so it round-trips through project save/load and undo/redo
+   * with zero new serialization code.
+   *
+   * ⚑ Capture itself needs nothing special once a dataset is tagged — each
+   * segment is still its own ordinary drag-box (BAR_AXES_CONFIG). What DOES
+   * change is the derived VALUE: see its `derivedTupleValue.compute`, which
+   * reads this tag back via getTupleRows' ctx and switches to an unsigned
+   * span, because a stacked segment's near end is never the chart's
+   * declared baseline — not even the bottommost layer — so the ordinary
+   * baseline-relative/floating-direction sign convention does not apply.
+   * Pass `null` to remove a dataset from whichever stack it was in.
+   */
+  setDatasetStackGroup(index: number, group: string | null): void {
+    const entry = this.datasetEntries[index];
+    if (!entry) return;
+    const existing = entry.dataset.getMetadata();
+    if (group === null) {
+      const { stackGroup: _dropped, ...rest } = existing;
+      entry.dataset.setMetadata(rest);
+    } else {
+      entry.dataset.setMetadata({ ...existing, stackGroup: group });
+    }
+  }
+
+  getDatasetStackGroup(index: number): string | null {
+    const entry = this.datasetEntries[index];
+    if (!entry) return null;
+    const group = entry.dataset.getMetadata()['stackGroup'];
+    return typeof group === 'string' ? group : null;
+  }
+
   /** Enter an already-calibrated state directly from a pre-built axes +
    * dataset array, bypassing the click-by-click step walk -- the load half
    * of checkpoint 25's project save/load (see engine/projectFile.ts),
@@ -4294,7 +4348,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // tuple's own apex, and the whole the values are read against.
         derived:
           derive && this.axes
-            ? derive.compute(points, this.axes, { apex: this.getSectorApex(tupleIndex) })
+            ? derive.compute(points, this.axes, {
+                apex: this.getSectorApex(tupleIndex),
+                stackGroup: this.getDatasetStackGroup(this.activeDatasetIndex),
+              })
             : null,
       };
     });

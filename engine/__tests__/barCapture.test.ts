@@ -139,3 +139,91 @@ describe('a floating bar (no declared baseline)', () => {
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(10, 9); // 5 - (-5)
   });
 });
+
+describe('a stacked-bar segment (v2.0, Phase 5)', () => {
+  it('defaults to no stack group', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    expect(session.getDatasetStackGroup(0)).toBeNull();
+  });
+
+  it('reads as an UNSIGNED span, regardless of drag direction -- not baseline-relative', () => {
+    // ⚑ The reason this can't just reuse the baseline-relative rule: a
+    // stacked segment's near end is never the chart's declared baseline --
+    // not even the bottommost layer, which sits on nothing but still isn't
+    // "at zero" in the sense the baseline convention means. A contribution to
+    // a stack is never negative, so magnitude is what's meaningful.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataPoint(150, 420); // value 2
+    session.addDataPoint(150, 300); // value 5
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
+  });
+
+  it('reads the SAME unsigned span with drag direction reversed', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataPoint(150, 300); // value 5
+    session.addDataPoint(150, 420); // value 2
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // still +3, not -3
+  });
+
+  it('a bottommost layer touching the declared baseline still reads as a span, not baseline-relative', () => {
+    // The case that would otherwise be indistinguishable from an ordinary
+    // baseline-anchored bar: this segment's near end genuinely IS at the
+    // chart's baseline (value 0) -- but it's tagged as part of a stack, so
+    // its value must still be its own span (5), not "5 - baseline" (also 5
+    // here, coincidentally -- see the next test for where they'd diverge).
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataPoint(150, 500); // value 0 -- the baseline itself
+    session.addDataPoint(150, 300); // value 5
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(5, 9);
+  });
+
+  it('a non-zero declared baseline does not leak into a stacked segment\'s value', () => {
+    // Where the two rules would actually disagree: baseline declared at 2.
+    // Baseline-relative would read 5-2=3; the stacked rule ignores the
+    // baseline entirely and reads the segment's own span, 20-15=5.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    session.setOption('baselineValue', '2');
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataPoint(150, 200); // value 7.5
+    session.addDataPoint(150, 100); // value 10
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(2.5, 9); // |10 - 7.5|, not baseline-relative
+  });
+
+  it('removing the stack tag (null) reverts to the ordinary sign convention', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataPoint(150, 700); // value -5
+    session.addDataPoint(150, 500); // value 0 (baseline)
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(5, 9); // stacked: unsigned span
+
+    session.setDatasetStackGroup(0, null);
+    expect(session.getDatasetStackGroup(0)).toBeNull();
+    // Same two pixels, re-read under the ordinary baseline-relative rule.
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(-5, 9); // -5 (far) - 0 (baseline)
+  });
+
+  it('two independent stack groups keep separate segment counts -- no assumption they match', () => {
+    // The real chart this resolves: a bidirectional stacked bar with 2
+    // segments on one side and 3 on the other (a real figure from the
+    // survey). Nothing here enforces symmetry between groups.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.setDatasetStackGroup(0, 'left');
+    session.addDataset('Right layer 1');
+    session.addDataset('Right layer 2');
+    session.addDataset('Right layer 3');
+    session.setDatasetStackGroup(1, 'right');
+    session.setDatasetStackGroup(2, 'right');
+    session.setDatasetStackGroup(3, 'right');
+    expect(session.getDatasetStackGroup(0)).toBe('left');
+    expect([1, 2, 3].map((i) => session.getDatasetStackGroup(i))).toEqual(['right', 'right', 'right']);
+  });
+});

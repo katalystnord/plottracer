@@ -810,6 +810,38 @@ describe('Workspace: Bar axes', () => {
     expect(hint).not.toMatch(/Auto-extract/i);
     expect(hint).toMatch(/Add points/i);
   });
+
+  // v2.0 Phase 5: the only UI a stacked bar needs -- naming which group a
+  // series belongs to. Capture itself is the ordinary drag-box every other
+  // bar uses; what changes is the derived value (an unsigned span, not
+  // baseline-relative) and this one field.
+  it('a "Stack group" field tags a series, and a stacked segment reads as an unsigned span', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+
+    const group = page.getByTestId('series-stack-group');
+    expect(await group.inputValue()).toBe(''); // blank by default -- not stacked
+
+    // Baseline (value 0) to value 5, but tagged as stacked -- reads as the
+    // segment's own SPAN, the same wiring path the engine tests cover with a
+    // non-coincidental case; this is the on-screen discoverability check.
+    await group.fill('left');
+    await dragMarker(300, 400, 300, 250);
+    const derived0 = Number((await textOf('tuple-derived-0')).replace(/[^0-9.eE+-]/g, ''));
+    expect(derived0).toBeCloseTo(5, 1);
+
+    // The tag is per-series and survives switching away and back.
+    await page.getByTestId('add-series').click();
+    expect(await page.getByTestId('series-stack-group').inputValue()).toBe(''); // fresh series, untagged
+    await page.getByTestId('series-select').selectOption('0');
+    expect(await page.getByTestId('series-stack-group').inputValue()).toBe('left');
+  });
+
+  it('the "Stack group" field is Bar-only -- absent for an XY chart', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    expect(await page.getByTestId('series-stack-group').count()).toBe(0);
+  });
 });
 
 describe('Workspace: Box Plot / Point Groups', () => {

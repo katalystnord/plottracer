@@ -7478,6 +7478,33 @@ export function Workspace() {
             )}
           </div>
         )}
+        {/* Stacked bars (v2.0, Phase 5): the only UI a stack needs is naming
+            which group a series belongs to -- capture itself is the same
+            drag-box every other bar uses (BAR_AXES_CONFIG), one segment per
+            series. Same group name on two or more series = one visual stack;
+            blank = not stacked. Bar-only: a stack is specifically an ordered
+            sequence of bar segments, and no other graph type has that shape. */}
+        {activeInfo && config.id === 'bar' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
+              Stack group:
+            </label>
+            <input
+              id="series-stack-group"
+              data-testid="series-stack-group"
+              title="Group this series with others into one stacked bar -- same name, same stack. Blank = not stacked."
+              placeholder="none"
+              value={session.getDatasetStackGroup(activeDatasetIndex) ?? ''}
+              onChange={(e) => {
+                session.setDatasetStackGroup(activeDatasetIndex, e.target.value.trim() || null);
+                pendingEditRef.current = true;
+                bump();
+              }}
+              onBlur={commitPendingEdit}
+              style={{ width: 90, fontSize: theme.font.size.small }}
+            />
+          </div>
+        )}
         {nameNotice && (
           <p data-testid="series-name-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
             {nameNotice}
