@@ -80,10 +80,11 @@ describe('captureErrorCap — the drag gesture', () => {
   });
 
   it('works on a BAR chart — the case a data-space mirror would have refused', () => {
-    // BarAxes.dataToPixel is a stub returning {x:0,y:0} (core/axes/bar.ts:93).
-    // An earlier draft mirrored in data space and would have had to disable the
-    // tool here -- or, worse, stored the mirrored cap at the image corner.
-    // Pixel geometry needs nothing from the axes, so bar error capture works.
+    // BarAxes.dataToPixel was a stub returning {x:0,y:0} when this test was
+    // written (it's real since v2.0, core/axes/bar.ts) -- an earlier draft
+    // mirrored in data space and would have had to disable the tool here, or
+    // worse, stored the mirrored cap at the image corner. Pixel geometry needs
+    // nothing from the axes, so bar error capture works regardless.
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     const steps: Array<[number, number, string[]]> = [
       [100, 250, ['0']],

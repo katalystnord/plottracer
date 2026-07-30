@@ -3,17 +3,29 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
- * NOTE (see CLAUDE.md "Product #1 — rebuild design"): dataToPixel() is
- * an unimplemented stub in the original — preserved as-is here, not
- * "fixed", since faithful-port is the goal for Step 1. This is exactly
- * why Curve Fit/Geometry (built earlier, on the current app) are XY-axes
- * only. **Its stubbed-ness is now load-bearing elsewhere and must not be
- * quietly "fixed" either**: algorithms/errorCapture.ts PROBES it and degrades
- * to "unconstrained" when it doesn't invert (checkpoint 79).
+ * ⚑ NO LONGER BYTE-FAITHFUL — two deliberate divergences from upstream.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL — one deliberate divergence, checkpoint 81:
- * calibrate() validates its values and can now return false. See the comment
- * at the divergence. Upstream reports success on input XYAxes refuses.
+ * checkpoint 81: calibrate() validates its values and can now return false.
+ * See the comment at the divergence. Upstream reports success on input
+ * XYAxes refuses.
+ *
+ * v2.0 groundwork: dataToPixel() is now REAL, not upstream's unimplemented
+ * stub (`return {x:0,y:0}`) — the exact algebraic inverse of pixelToData's
+ * projection onto the calibrated line, restricted to that line (a 1-D axes
+ * has nowhere else to invert to). Follows spider.ts's precedent exactly:
+ * returns {NaN, NaN}, never {0,0}, wherever no pixel exists (uncalibrated,
+ * non-positive value on a log scale, or a degenerate calibration where both
+ * points were given the same value) — {0,0} is both a real image coordinate
+ * and the stub's old sentinel, so returning it here would be silently
+ * indistinguishable from "cannot invert."
+ *
+ * ⚠ This does NOT newly activate algorithms/errorCapture.ts's
+ * `capFreeDirection` probe for Bar error caps: that function reads BOTH
+ * elements of `pixelToData`'s return and early-returns null when the second
+ * is `undefined` (`dx === undefined || dy === undefined`) — and Bar's
+ * `pixelToData` returns a length-1 array, `[value]`, unchanged by this fix.
+ * Bar error caps stay "unconstrained" (the documented safe default) until a
+ * later v2.0 phase gives Bar a second, category-axis coordinate to return.
  */
 
 import { taninverse } from '../mathFunctions.js';
@@ -123,9 +135,27 @@ export class BarAxes {
     return [value];
   }
 
-  dataToPixel(_x: number, _y: number): { x: number; y: number } {
-    // not implemented yet — matches the original exactly
-    return { x: 0, y: 0 };
+  /**
+   * Pixel position of `value` along the calibrated line — the inverse of
+   * pixelToData's projection. `_unused` exists only to satisfy the shared
+   * two-argument axes contract (`DataPixelMapping`/`CalibratedAxes`); Bar has
+   * one real data value, not two. See the file header for why this returns
+   * {NaN, NaN} rather than {0, 0} wherever it cannot invert.
+   */
+  dataToPixel(value: number, _unused?: number): { x: number; y: number } {
+    if (!this._isCalibrated) return { x: NaN, y: NaN };
+    let v = value;
+    if (this.isLogScale) {
+      if (!(v > 0)) return { x: NaN, y: NaN };
+      v = Math.log(v) / Math.log(10);
+    }
+    const denom = this.p2 - this.p1;
+    if (denom === 0) return { x: NaN, y: NaN };
+    const t = (v - this.p1) / denom;
+    return {
+      x: this.x1 + t * (this.x2 - this.x1),
+      y: this.y1 + t * (this.y2 - this.y1),
+    };
   }
 
   pixelToLiveString(pxi: number, pyi: number): string {

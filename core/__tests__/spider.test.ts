@@ -282,9 +282,10 @@ describe('nearestSpoke on an EVEN axis count — the collinear-opposites trap', 
 });
 
 describe('SpiderAxes.dataToPixel', () => {
-  it('is a REAL inverse, not BarAxes-style {0,0} stub', () => {
-    // Bar ships WPD's unimplemented dataToPixel, and export precision has to degrade
-    // around it. A spoke is an invertible 1-D scale, so nothing needs to degrade here.
+  it('is a REAL inverse (as BarAxes now also has, since v2.0)', () => {
+    // Polar/Ternary/Map/CCR still ship WPD's unimplemented dataToPixel, and
+    // export precision has to degrade around them. A spoke is an invertible
+    // 1-D scale, so nothing needs to degrade here.
     const axes = threeSpokes();
     const pixel = axes.dataToPixel(0, 50);
     expect(pixel.x).toBeCloseTo(100, 10);

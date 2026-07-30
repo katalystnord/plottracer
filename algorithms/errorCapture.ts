@@ -24,8 +24,10 @@
  * nothing (we do not claim symmetry, and CLAUDE.md's own decision is that the
  * kind of error is not ours to record) and cost a great deal: it needed a
  * capability probe, and it would have **disabled the tool on bar charts**,
- * because `BarAxes.dataToPixel` is a stub returning `{x: 0, y: 0}`
- * (`core/axes/bar.ts:93`) — as are Polar's, Ternary's, Map's and CCR's.
+ * because `BarAxes.dataToPixel` was (at the time of this design) an upstream
+ * stub returning `{x: 0, y: 0}` — as are Polar's, Ternary's, Map's and CCR's
+ * still. (v2.0 gave Bar a real `dataToPixel`, but `capFreeDirection` below
+ * still can't use it for Bar — see that function's own doc comment for why.)
  * Reflecting the pixel needs none of them, so capture works on every graph
  * type, including the asymmetric-error-on-a-bar-plot case that has had zero
  * coverage.
@@ -124,9 +126,14 @@ export interface DataPixelMapping {
  *
  * So the direction is measured off the axes itself, by stepping the datum's
  * value along the role's own axis and seeing which way the pixel moved. Where
- * `dataToPixel` is the upstream stub (Bar, Polar, Ternary, Map, CCR all return
- * `{x: 0, y: 0}` — `core/axes/bar.ts:93`) the step goes nowhere and this
- * returns null.
+ * `dataToPixel` is still the upstream stub (Polar, Ternary, Map, CCR all
+ * return `{x: 0, y: 0}`) the step goes nowhere and this returns null. **Bar
+ * returns null too, but for a different reason since v2.0**: its
+ * `pixelToData` still returns a length-1 array (one real data value, no
+ * second coordinate to step), so `dy === undefined` below fires before
+ * `dataToPixel` is even called — giving Bar a real `dataToPixel` did not by
+ * itself unlock this constraint. It stays "unconstrained" until a later
+ * phase gives Bar a second coordinate to return.
  *
  * **Null degrades to "unconstrained", never to "disabled"** — which is what
  * makes probing safe here, and is the difference from an earlier draft that

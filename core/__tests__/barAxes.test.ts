@@ -158,17 +158,65 @@ describe('reading a bar back', () => {
   });
 });
 
-describe('the two methods nothing had ever asserted', () => {
-  it('dataToPixel is a STUB returning the origin — deliberately, and load-bearing', () => {
-    // ⚑ Do not "fix" this. `algorithms/errorCapture.ts` PROBES dataToPixel and
-    // degrades to "unconstrained" precisely because Bar's does not invert
-    // (checkpoint 79), so making it work would silently change error-bar behaviour.
-    // A mutant replacing the return with `{}` survived, which means nothing checked
-    // even the shape. Pinned here so the stub is a decision on the record rather than
-    // an oversight the next reader quietly repairs.
-    expect(bar([100, 300], [100, 100]).dataToPixel(50, 50)).toEqual({ x: 0, y: 0 });
+describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated line', () => {
+  it('inverts a plain vertical calibration', () => {
+    const axes = bar([100, 300], [100, 100]); // 0 at y=300, 100 at y=100
+    const p = axes.dataToPixel(70);
+    expect(p.x).toBeCloseTo(100, 9);
+    expect(p.y).toBeCloseTo(160, 9);
+    // and the round trip returns the same value
+    expect(axes.pixelToData(p.x, p.y)[0]).toBeCloseTo(70, 9);
   });
 
+  it('inverts a horizontal calibration', () => {
+    const axes = bar([100, 200], [300, 200]); // 0 at x=100, 100 at x=300
+    const p = axes.dataToPixel(25);
+    expect(p.x).toBeCloseTo(150, 9);
+    expect(p.y).toBeCloseTo(200, 9);
+  });
+
+  it('round-trips pixelToData -> dataToPixel -> pixelToData across the whole line, including extrapolated points', () => {
+    const axes = bar([100, 300], [100, 100]);
+    for (const y of [0, 50, 100, 150, 200, 250, 300, 400]) {
+      const value = axes.pixelToData(100, y)[0]!;
+      const back = axes.dataToPixel(value);
+      expect(axes.pixelToData(back.x, back.y)[0]).toBeCloseTo(value, 6);
+    }
+  });
+
+  it('inverts a LOG axis in decades, not linearly', () => {
+    const axes = bar([100, 300], [100, 100], '1', '100', { isLog: true });
+    const p = axes.dataToPixel(10); // halfway in log space, not halfway in value
+    expect(p.y).toBeCloseTo(200, 6);
+    expect(axes.pixelToData(p.x, p.y)[0]).toBeCloseTo(10, 6);
+  });
+
+  // ⚑ {NaN, NaN}, never {0, 0} — {0,0} is both a real image coordinate and the
+  // old stub's sentinel, so returning it here would be silently indistinguishable
+  // from "cannot invert" (see spider.ts's dataToPixel for the same rule, and the
+  // file header for why this matters).
+  it('returns NaN, not {0,0}, for a non-positive value on a log axis', () => {
+    const axes = bar([100, 300], [100, 100], '1', '100', { isLog: true });
+    const p = axes.dataToPixel(0);
+    expect(p.x).toBeNaN();
+    expect(p.y).toBeNaN();
+  });
+
+  it('returns NaN, not {0,0}, before calibration', () => {
+    const p = new BarAxes().dataToPixel(50);
+    expect(p.x).toBeNaN();
+    expect(p.y).toBeNaN();
+  });
+
+  it('returns NaN, not {0,0}, for a degenerate calibration (both references given the same value)', () => {
+    const axes = bar([100, 300], [100, 100], '50', '50');
+    const p = axes.dataToPixel(50);
+    expect(p.x).toBeNaN();
+    expect(p.y).toBeNaN();
+  });
+});
+
+describe('the other method nothing had ever asserted', () => {
   it('the live readout is exponential to four places', () => {
     // A mutant altered the format and nothing noticed. This is the string under the
     // cursor while a user places bars.

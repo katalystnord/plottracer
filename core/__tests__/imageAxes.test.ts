@@ -39,9 +39,9 @@ describe('the mapping is the identity, in both directions', () => {
   });
 
   it('maps data back to the same pixel', () => {
-    // ⚑ Unlike BarAxes, whose dataToPixel is a documented stub returning {0,0}, this
-    // one genuinely inverts — and something downstream may probe it the way
-    // errorCapture probes Bar's. A mutant replacing this with `{}` survived.
+    // ⚑ Genuinely inverts (as BarAxes's now does too, since v2.0) — and something
+    // downstream may probe it the way errorCapture probes Bar's. A mutant
+    // replacing this with `{}` survived.
     expect(new ImageAxes().dataToPixel(40, 60)).toEqual({ x: 40, y: 60 });
   });
 

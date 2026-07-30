@@ -73,13 +73,14 @@ describe('BarAxes', () => {
     expect(axes.pixelToData(300, 300)[0]).toBeCloseTo(5, 10);
   });
 
-  it('dataToPixel is an unimplemented stub, matching the original exactly', () => {
+  it('dataToPixel is now the real inverse of pixelToData (v2.0) -- see core/__tests__/barAxes.test.ts for the full suite', () => {
     const cal = new Calibration(2);
     cal.addPoint(300, 500, 'ignored', '0');
     cal.addPoint(300, 100, 'ignored', '10');
     const axes = new BarAxes();
     axes.calibrate(cal, false, false);
-    expect(axes.dataToPixel(5, 5)).toEqual({ x: 0, y: 0 });
+    expect(axes.dataToPixel(5)).toEqual({ x: 300, y: 300 });
+    expect(axes.pixelToData(300, 300)[0]).toBeCloseTo(5, 10);
   });
 
   it('reports its static metadata correctly', () => {
