@@ -229,7 +229,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 }
 
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
-// so it is no longer selectable here. Error bars are rail tool 7 now.
+// so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
   axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
@@ -6217,7 +6217,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await page.getByTestId('axes-type-trigger').click();
     const options = await page.locator('[data-testid^="axes-option-"]').allTextContents();
     expect(options.join('|')).not.toMatch(/error/i);
-    // Reachable instead as tool 7, visible on the rail with its shortcut badge.
+    // Reachable instead as tool 6, visible on the rail with its shortcut badge.
     expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
   });
 

@@ -672,7 +672,7 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   // histogram a histogram. Offering the right entry by name is what stops that
   // choice being a trap.
   HISTOGRAM_AXES_CONFIG,
-  // Error bars are rail tool 7, not a graph type (checkpoint 79): you trace a
+  // Error bars are rail tool 6, not a graph type (checkpoint 79): you trace a
   // curve and THEN add error to it. As a graph type the choice came *before* you
   // started -- trace an XY curve, then want error, and you started over -- the
   // first of the four problems docs/error-bars-design.md lists against the tuple
