@@ -57,4 +57,24 @@ describe('runBlobDetect', () => {
     const result = runBlobDetect(img, w, h, RED, 40, 'foreground', undefined, { minDiameter: 100 });
     expect('error' in result && result.error).toMatch(/No markers of that size/);
   });
+
+  it('returns points sorted ascending by (x, then y) -- not detectBlobs\' own scan order', () => {
+    // ⚑ detectBlobs's own order is a top-to-bottom, left-to-right PIXEL SCAN
+    // -- an implementation detail of how the flood fill finds its seeds, not
+    // a reading order. For ordered scatter data (e.g. a dose-response curve)
+    // that scan order numbers points top-of-page-first, which for a rising
+    // curve reads as highest-value-first -- scrambled, not ascending. David,
+    // driving the real app against a real 26-point figure: exactly this.
+    // Placed here in an order that would read WRONG under scan order (the
+    // highest marker planted first) to prove the fix sorts by position.
+    const w = 40, h = 40;
+    const img = whiteImage(w, h);
+    fillBlock(img, w, 30, 2, 2, 2, RED); // top-right: scanned FIRST under raster order
+    fillBlock(img, w, 5, 30, 2, 2, RED); // bottom-left: smallest x
+    fillBlock(img, w, 18, 15, 2, 2, RED); // middle
+
+    const result = runBlobDetect(img, w, h, RED, 40);
+    if ('error' in result) throw new Error(result.error);
+    expect(result.points.map((p) => Math.round(p.x))).toEqual([6, 19, 31]);
+  });
 });

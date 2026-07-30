@@ -258,4 +258,53 @@ describe('addBarDetectBoxes (v2.0, Phase 7) -- colour-detected boxes, the SAME r
     expect(added).toBe(0);
     expect(session.getTupleRows()).toHaveLength(0);
   });
+
+  it('files boxes in READING ORDER along the category axis, regardless of the order detection found them in', () => {
+    // ⚑ detectBlobs's own order is a top-to-bottom pixel scan (an
+    // implementation detail of the flood fill), which for an ordinary
+    // baseline-anchored bar chart reads as tallest-bar-first -- David,
+    // driving the real app against a real 6-bar figure: the numbering
+    // went 1,3,5,7,9,11 tallest-to-shortest instead of left-to-right,
+    // scrambling genuinely ordered categorical data (e.g. day 0,4,7,14).
+    // Fed here in an ARBITRARY (deliberately non-positional) order to
+    // prove the fix sorts by position, not by input order.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    const added = session.addBarDetectBoxes([
+      { start: { x: 400, y: 500 }, end: { x: 400, y: 100 } }, // rightmost, tallest (value 10)
+      { start: { x: 150, y: 500 }, end: { x: 150, y: 460 } }, // leftmost, shortest (value 1)
+      { start: { x: 300, y: 500 }, end: { x: 300, y: 300 } }, // middle (value 5)
+    ]);
+    expect(added).toBe(3);
+    const rows = session.getTupleRows();
+    // Left-to-right by x, not the input order and not sorted-by-height order.
+    expect(rows.map((r) => r.derived)).toEqual([
+      expect.closeTo(1, 9),
+      expect.closeTo(5, 9),
+      expect.closeTo(10, 9),
+    ]);
+  });
+
+  it('...and sorts top-to-bottom (by y) instead, for a rotated/horizontal bar session', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    session.setOption('isRotated', 'true');
+    session.handleCalibrationClick(300, 500);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(700, 500);
+    session.confirmCalibrationValues(['10']);
+    expect(session.runCalibration()).toBe(true);
+
+    const added = session.addBarDetectBoxes([
+      { start: { x: 300, y: 400 }, end: { x: 500, y: 430 } }, // bottom row (value 5)
+      { start: { x: 300, y: 100 }, end: { x: 340, y: 130 } }, // top row (value 1)
+      { start: { x: 300, y: 250 }, end: { x: 700, y: 280 } }, // middle row (value 10)
+    ]);
+    expect(added).toBe(3);
+    const rows = session.getTupleRows();
+    expect(rows.map((r) => r.derived)).toEqual([
+      expect.closeTo(1, 9),
+      expect.closeTo(10, 9),
+      expect.closeTo(5, 9),
+    ]);
+  });
 });

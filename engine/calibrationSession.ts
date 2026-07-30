@@ -3576,7 +3576,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addBarDetectBoxes(boxes: readonly { start: { x: number; y: number }; end: { x: number; y: number } }[]): number {
     if (!this.axes) return 0;
     if (!this.isBarIntervalShape(this.activeEntry.dataset)) return 0;
-    for (const box of boxes) {
+    // ⚑ Sorted into READING ORDER along the category axis before filing --
+    // detectBlobs's own order is a top-to-bottom pixel scan (an
+    // implementation detail of how the flood fill finds its seeds), which
+    // for an ordinary baseline-anchored bar chart happens to read as
+    // tallest-bar-first, not left-to-right. Real ordered categorical data
+    // (e.g. "day 0, 4, 7, 14") reads as scrambled in scan order; sorted by
+    // each box's own position along the category axis instead (x for a
+    // normal vertical bar, y when the chart is rotated/horizontal), so the
+    // captured tuples list the same way the figure itself reads.
+    const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
+    const sorted = [...boxes].sort((a, b) =>
+      rotated ? a.start.y + a.end.y - (b.start.y + b.end.y) : a.start.x + a.end.x - (b.start.x + b.end.x)
+    );
+    for (const box of sorted) {
       this.addDataPoint(box.start.x, box.start.y);
       this.addDataPoint(box.end.x, box.end.y);
     }

@@ -50,5 +50,13 @@ export function runBlobDetect(
   if (blobs.length === 0) {
     return { error: 'No markers of that size were found. Lower the minimum marker size, or adjust the colour / tolerance.' };
   }
-  return { points: blobs.map((b) => b.centroid), matched: count, blobs: blobs.length };
+  // ⚑ detectBlobs's own order is a top-to-bottom, left-to-right PIXEL SCAN --
+  // an implementation detail of how the flood-fill finds seeds, not a
+  // reading order. For a scatter series (ordered data, e.g. a time series
+  // or a dose-response curve) that scan order reads as scrambled: a point
+  // sitting higher on the page comes back before one to its left. Sorted
+  // ascending by (x, then y) instead, so the series lists low-to-high the
+  // way the reader -- and the figure's own x-axis -- already does.
+  const points = blobs.map((b) => b.centroid).sort((a, b) => a.x - b.x || a.y - b.y);
+  return { points, matched: count, blobs: blobs.length };
 }
