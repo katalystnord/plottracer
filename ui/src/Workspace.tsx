@@ -2933,6 +2933,25 @@ export function Workspace() {
     [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured]
   );
 
+  // Bar capture (v2.0): a drag's two opposite corners become a bar's two
+  // measured ends in one gesture -- both real pixels, never a baseline
+  // assumed for the near one. A near-zero drag (a plain click) falls back to
+  // filling one slot at a time, the same generic mechanism every other
+  // slotted type already uses (see the tips-bar copy above for why both work,
+  // and boxMode's own gating below for when this fires at all).
+  const handleBoxRect = useCallback(
+    (start: { x: number; y: number }, end: { x: number; y: number }) => {
+      const isClick = Math.abs(end.x - start.x) < 3 && Math.abs(end.y - start.y) < 3;
+      session.addDataPoint(start.x, start.y);
+      if (!isClick) session.addDataPoint(end.x, end.y);
+      const placed = session.getDataPoints();
+      setActivePointIndex(placed.length - 1);
+      setPickedPointIndex(null);
+      commit();
+    },
+    [session, commit]
+  );
+
   // Click a data dot to make it the active point (checkpoint 58). Only the active
   // series' own markers carry the `point-` id; inactive series aren't selectable
   // (select the series in the dropdown first).
@@ -5358,21 +5377,23 @@ export function Workspace() {
         // guidance rather than a rule.
         if (config.axesKind === 'spider' && hasSlots)
           return `Click where the shape crosses the ${currentGroupLabel} axis — how far out along that ray you click IS the number recorded${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
+        // ⚑ v2.0: Bar's own message, checked BEFORE the generic hasSlots branch below
+        // (Bar now always has slots, so the generic line would otherwise catch it
+        // first and say nothing about the drag or why both ends are measured).
+        // Both ends of a bar are real, independently measured pixels -- never a
+        // click-anywhere-on-the-value-axis reading (the v1.3 midpoint error this
+        // wording once guarded against, 59f94a6), and never an assumed baseline --
+        // so the SAME gesture and the SAME wording cover an ordinary zero-based bar
+        // and a floating/offset one (a tornado chart, a temperature range) alike.
+        if (config.id === 'bar' && hasSlots)
+          return `Drag from one corner of the bar to the opposite corner — both ends are measured, so this reads a bar that floats above or below its baseline just as well as an ordinary one${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, filling ${currentGroupLabel})`}. A single click still works too, filling one end at a time.`;
         if (hasSlots)
           return `Click to add a point — filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
-        // ⚑ On a bar-family figure WHERE you click decides the number: the value is
-        // read off the click's position on the value axis, so "click anywhere"
-        // invited the very midpoint error 59f94a6 blocked on the automated path --
-        // by hand, one click at a time. Auto-extract is greyed out here, so Add
-        // points is the ONLY capture tool, and this is the only place the app can
-        // say where to aim. The Trace Challenge already used the right words
-        // ("click the top of each bar"); the main workflow never did. v1.3 gate.
-        // Wording stays orientation-agnostic ("end", not "top"): a rotated
-        // horizontal-bar chart grows sideways, and the option isn't plumbed here.
-        if (config.axesKind === 'bar')
-          return config.id === 'categorical'
-            ? 'Click each category’s marker in turn — where you click on the value axis IS the number recorded.'
-            : 'Click the END of each bar in turn — where you click on the value axis IS the number recorded, so aim at the bar’s end, never its middle.';
+        // ⚑ Categorical Line is the one bar-family type that stays a plain point per
+        // click (v1.3 gate wording, kept): its X is an ordinal position, not an
+        // interval, so there is no second end to drag.
+        if (config.id === 'categorical')
+          return 'Click each category’s marker in turn — where you click on the value axis IS the number recorded.';
         return 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
       }
       if (mode === 'calibrate') {
@@ -5432,9 +5453,11 @@ export function Workspace() {
     if (mode === 'segment-fill') return 'No points yet — click the curve on the image to flood-fill it.';
     if (mode === 'interpolate') return 'No points yet — click a few guide points along one curve.';
     if (mode === 'place-point')
-      return config.axesKind === 'bar'
-        ? 'No points yet — click the end of each bar to record its value.'
-        : 'No points yet — click on the image to add data points.';
+      return config.id === 'bar'
+        ? 'No points yet — drag from one corner of a bar to the opposite corner (or click twice) to record it.'
+        : config.axesKind === 'bar'
+          ? 'No points yet — click the end of each bar to record its value.'
+          : 'No points yet — click on the image to add data points.';
     // Pan / Select / Eraser / Measure / Image-edit / Error-bars: a canvas click
     // adds nothing in any of them, so point at the tools that DO capture.
     //
@@ -5443,6 +5466,7 @@ export function Workspace() {
     // FOURTH instance of the contradiction class this hint was written to kill.
     // Found by the v1.3 gate; reachable with zero points via Select/Pan/Measure/
     // Error-bars/Edit-image on a calibrated bar chart.
+    if (config.id === 'bar') return 'No points yet — pick Add points (3) from the tool rail and drag each bar corner to corner.';
     if (config.axesKind === 'bar') return 'No points yet — pick Add points (3) from the tool rail and click the end of each bar.';
     return 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
   })();
@@ -7073,6 +7097,11 @@ export function Workspace() {
             setColorTraceRegion(r);
           }}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
+          // Bar capture (v2.0): live whenever Add points is active on a plain Bar
+          // series, except while the eyedropper is armed -- same exception
+          // regionMode makes above, same reason (that click samples a colour).
+          boxMode={mode === 'place-point' && config.id === 'bar' && eyedropper === null}
+          onBoxRect={handleBoxRect}
           selectMode={mode === 'select' ? selectSubMode : null}
           onSelectRect={(r) => {
             // A tiny drag is a click, not a marquee -- handleImageClick already
@@ -7769,6 +7798,7 @@ export function Workspace() {
               </tbody>
             </table>
           ) : hasSlots ? (
+            <>
             <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
@@ -7823,6 +7853,21 @@ export function Workspace() {
                 ))}
               </tbody>
             </table>
+            {/* ⚑ v2.0: the empty-state hint the flat table already had (below) was
+                missing here entirely -- every slotted type (Box Plot, Pie, Spider,
+                and now Bar, once it became tuple-shaped) silently lost its
+                "no points yet" guidance the moment its table stopped being the flat
+                spreadsheet, and nothing on screen told a first-run user what to do.
+                Found because a plain Bar chart used to show this and a real e2e
+                test caught the empty screen it left behind -- same `noPointsHint`
+                text (already written generically per mode/graph-type), same
+                testid, just rendered for the other table shape too. */}
+            {tupleRows.length === 0 && (
+              <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
+                {noPointsHint}
+              </div>
+            )}
+            </>
           ) : (
             // The adaptive multi-series spreadsheet (checkpoint 57): every series
             // side by side, one column set per series (this graph type's value

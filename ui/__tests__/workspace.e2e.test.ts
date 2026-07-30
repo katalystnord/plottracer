@@ -747,45 +747,54 @@ describe('Workspace: Bar axes', () => {
     await page.waitForTimeout(150);
   }
 
-  it('walks a shorter 2-step calibration and reads back a single-value data point', async () => {
+  // A tuple-shaped row's numeric read: tuple-derived-N (the Value cell), never
+  // rowValues/expectRow -- that helper reads EVERY non-blank cell text in the
+  // row including the trailing "✕" delete button, which is not a blank string
+  // and breaks length-based assertions on the tuple table (unlike the old flat
+  // per-point table it was written for).
+  async function derivedValue(tupleIndex = 0): Promise<number> {
+    return Number((await textOf(`tuple-derived-${tupleIndex}`)).replace(/[^0-9.eE+-]/g, ''));
+  }
+
+  it('walks a shorter 2-step calibration and reads back a bar dragged corner to corner', async () => {
     await resetWorkspace('bar');
     expect(await textOf('tips-bar')).toMatch(/1\/2 — P1/);
 
     await calibrateBarStandard();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
-    // Midpoint between P1(400) and P2(100) -> exactly 5.000, one value only.
-    await clickAt(300, 250);
-    await expectRow([5]); // Bar data is 1-dimensional -- a single value cell
+    // v2.0: a bar is captured by DRAGGING corner to corner, not one click.
+    // Baseline (y=400, value 0) to the midpoint between P1(400) and P2(100)
+    // (y=250, value 5) -> derived value exactly 5.000.
+    await dragMarker(300, 400, 300, 250);
+    expect(await derivedValue()).toBeCloseTo(5, 2);
   });
 
   it('dragging a Bar calibration handle re-calibrates live', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await clickAt(300, 250); // (5.000), never moved after this
-    await expectRow([5]);
+    await dragMarker(300, 400, 300, 250); // baseline to (5.000), never moved after this
+    expect(await derivedValue()).toBeCloseTo(5, 2);
 
     // Drag P2 from local (300,100) to (300,0): P1@400=0, new P2@0=10,
     // query still at local y=250 -> (400-250)/(400-0) * 10 = 3.750.
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
     await dragMarker(300, 100, 300, 0);
 
-    await expectRow([3.75]);
+    expect(await derivedValue()).toBeCloseTo(3.75, 2);
   });
 
-  // ⚑ On a bar chart WHERE you click decides the number -- the value is read off
-  // the click's position on the value axis. The tips bar said "click ANYWHERE on
-  // the image to add a data point", which invited by hand exactly the midpoint
-  // error 59f94a6 blocked on the automated path. Auto-extract is greyed out here,
-  // so Add points is the only capture tool and the tips bar is the only place the
-  // app can say where to aim. Found by the v1.3 release-gate audit.
-  it('tells you to aim at the bar END, never "anywhere on the image"', async () => {
+  // ⚑ v2.0: both ends of a bar are measured, not "click anywhere on the value
+  // axis" (the wording that invited the midpoint error 59f94a6 blocked on the
+  // automated path). Auto-extract is greyed out here, so Add points is the only
+  // capture tool and the tips bar is the only place the app can say how to aim.
+  it('tells you to drag corner to corner, never "anywhere on the image"', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
     await page.getByTestId('mode-place-point').click();
     const tip = await textOf('tips-bar');
-    expect(tip).toMatch(/END of each bar/i);
-    expect(tip).toMatch(/never its middle/i);
+    expect(tip).toMatch(/opposite corner/i);
+    expect(tip).toMatch(/both ends are measured/i);
     expect(tip).not.toMatch(/anywhere on the image/i);
   });
 
@@ -2089,10 +2098,13 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(csvPath);
   });
 
-  it('a plain Bar chart exports a Category column — the categorical axis (checkpoint 76)', async () => {
-    // The headline defect: a Bar CSV was bare numbers, with nothing saying
-    // which bar produced each. The header comes from BarAxes.getAxesLabels()
-    // and the value from the axes contract, not config.valueLabels (['value']).
+  it('a plain Bar chart exports a Category column and its DERIVED Value (v2.0)', async () => {
+    // v2.0: Bar is now tuple-shaped (its own 2-slot interval record), so the
+    // export is the tuple shape (category, its two raw ends, the derived
+    // Value) -- not the old flat x_px,y_px,Category,Y shape a single click
+    // used to produce. ⚑ Called `Category` since v1.3 -- it was WPD's
+    // inherited `Label`, the one surface using a different word for what the
+    // table, Box Plot and the categorical export all call a Category.
     await resetWorkspace('bar');
     await clickAt(300, 400);
     await confirmValue('0');
@@ -2101,7 +2113,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    await clickAt(300, 250); // one bar, no point groups
+    await dragMarker(300, 400, 300, 250); // baseline (value 0) to value 5, one bar
 
     const csvPath = tempFilePath('csv');
     await stubSaveDialog(csvPath);
@@ -2110,15 +2122,12 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    // Not value1/value2, and the category column is present. ⚑ Called `Category`
-    // since v1.3 -- it was WPD's inherited `Label`, the one surface using a
-    // different word for what the table, Box Plot and the categorical export all
-    // call a Category (David's call). Breaking for name-based readers of a
-    // v1.0-v1.2 Bar export; contents and position unchanged.
-    expect(lines[0]).toBe('x_px,y_px,Category,Y');
+    expect(lines[0]).toBe('category,Bar start,Bar end,Value');
     const cells = lines[1]!.split(',');
-    expect(cells[2]).toBe('Bar0'); // the auto-label, not an empty cell
-    expect(Number(cells[3])).toBeCloseTo(5, 1);
+    expect(cells[0]).toBe('Bar0'); // the auto-label, not an empty cell
+    expect(Number(cells[1])).toBeCloseTo(0, 1); // Bar start -- the baseline end
+    expect(Number(cells[2])).toBeCloseTo(5, 1); // Bar end -- the far end
+    expect(Number(cells[3])).toBeCloseTo(5, 1); // the derived Value
 
     fs.unlinkSync(csvPath);
   });
@@ -2177,8 +2186,11 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
   it('types a category name and prefills it into the next series (v1.3 #9)', async () => {
     // A Bar figure's independent variable is a NAME the reader transcribes off
-    // the tick labels. There was nowhere on screen to put it: the export had a
-    // Label column that only ever said "Bar0".
+    // the tick labels. v2.0: a bar's category is now the TUPLE-label input
+    // (tuple-label-N), not a per-point category-S-N field -- Bar moved from
+    // per-point to per-tuple naming when it became a 2-slot interval record.
+    // The PREFILL algorithm itself (nearest-named-bar-along-the-category-axis)
+    // is unchanged, just ported from points to tuples.
     await resetWorkspace('bar');
     await clickAt(300, 400);
     await confirmValue('0');
@@ -2187,26 +2199,27 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    await clickAt(250, 250);
-    await clickAt(400, 200);
-    await page.getByTestId('category-0-0').fill('Flax');
-    await page.getByTestId('category-0-1').fill('Hemp');
+    await dragMarker(250, 400, 250, 250); // bar 1 (tuple 0)
+    await dragMarker(400, 400, 400, 200); // bar 2 (tuple 1)
+    await page.getByTestId('tuple-label-0').fill('Flax');
+    await page.getByTestId('tuple-label-1').fill('Hemp');
     await page.getByTestId('points-table').click(); // blur -> commit
 
-    // A second series of the same grouped chart inherits the names row by row.
+    // A second series of the same grouped chart inherits the names, matched to
+    // whichever named bar sits nearest along the category axis.
     await page.getByTestId('add-series').click();
     await page.waitForTimeout(100);
-    await clickAt(270, 300);
-    await clickAt(420, 260);
+    await dragMarker(270, 400, 270, 300);
+    await dragMarker(420, 400, 420, 260);
     await page.waitForTimeout(100);
-    expect(await page.getByTestId('category-1-0').inputValue()).toBe('Flax');
-    expect(await page.getByTestId('category-1-1').inputValue()).toBe('Hemp');
+    expect(await page.getByTestId('tuple-label-0').inputValue()).toBe('Flax');
+    expect(await page.getByTestId('tuple-label-1').inputValue()).toBe('Hemp');
 
-    // ...and it is the point's OWN name, so retyping one row moves nothing else.
-    await page.getByTestId('category-1-1').fill('Jute');
+    // ...and it is the bar's OWN name, so retyping one row moves nothing else.
+    await page.getByTestId('tuple-label-1').fill('Jute');
     await page.getByTestId('points-table').click();
     await page.waitForTimeout(100);
-    expect(await page.getByTestId('category-1-1').inputValue()).toBe('Jute');
+    expect(await page.getByTestId('tuple-label-1').inputValue()).toBe('Jute');
 
     // The typed name replaces the Bar<i> placeholder in the file.
     const csvPath = tempFilePath('csv');
@@ -2215,8 +2228,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('x_px,y_px,Category,Y'); // `Label` until v1.3 -- see above
-    expect(lines[1]!.split(',')[2]).toBe('Flax');
+    expect(lines[0]).toBe('category,Bar start,Bar end,Value');
+    expect(lines[1]!.split(',')[0]).toBe('Flax');
     fs.unlinkSync(csvPath);
   });
 
@@ -5550,7 +5563,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
   it('offers every axes type its own options — none left hardcoded', async () => {
     const expected: Record<string, string[]> = {
       xy: ['isLogX', 'isLogY', 'skipRotation'],
-      bar: ['isLog', 'isRotated'],
+      bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue'], // v2.0: the declared-baseline setting
       polar: ['isDegrees', 'isClockwise', 'isLogR'],
       ternary: ['isRange100', 'isNormal'],
       map: ['origin', 'units'],

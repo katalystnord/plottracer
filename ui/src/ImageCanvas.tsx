@@ -318,6 +318,22 @@ interface ImageCanvasProps {
   regionMode?: boolean;
   onRegionRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   regionRect?: { x: number; y: number; width: number; height: number } | null;
+  /** Bar capture (v2.0): when true, a background drag draws a rectangle
+   * reported (image-pixel space) via onBoxRect -- the SAME shared gesture as
+   * crop/region/select-marquee (one drag mechanism, four destinations), but
+   * this one commits real data: its two opposite corners become a bar's two
+   * measured ends the instant the drag ends, no separate Apply step. Styled
+   * distinctly (solid, not dashed) for exactly that reason -- a dashed
+   * rectangle here reads as "select first, decide later"; this one is the
+   * measurement itself. No persistent rect prop, unlike crop/region: once
+   * committed it's a captured bar, drawn as the bar's own on-canvas glyph.
+   *
+   * ⚑ Reports RAW start/end (image-pixel space), NOT a normalized box like
+   * onCropRect/onRegionRect/onSelectRect -- a floating (no-baseline) bar's
+   * sign comes from which corner was pressed first, which normalizing into
+   * {x,y,width,height} would destroy. */
+  boxMode?: boolean;
+  onBoxRect?: (start: { x: number; y: number }, end: { x: number; y: number }) => void;
   /** Select tool sub-mode (v1.1 #6, Ketcher's select multi-tool), or null when the
    * Select tool isn't active. Only the gesture-bearing sub-modes touch the canvas
    * background here: 'rectangle' drags a marquee box (-> onSelectRect), 'lasso'
@@ -442,7 +458,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1033,11 +1049,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         setLassoCurrent([p]);
         return;
       }
-      if ((cropMode || regionMode || selectMode === 'rectangle') && canvas) {
+      if ((cropMode || regionMode || selectMode === 'rectangle' || boxMode) && canvas) {
         // Start a rectangle drag instead of a pan: a crop selection (checkpoint 63),
-        // an auto-extract region (B1), or the Select tool's marquee. Same gesture;
-        // endDrag routes by mode. (A press ON a marker returned above, so the
-        // marquee only ever starts on empty canvas -- a marker press single-selects.)
+        // an auto-extract region (B1), the Select tool's marquee, or a bar capture
+        // (v2.0). Same gesture; endDrag routes by mode. (A press ON a marker
+        // returned above, so the marquee only ever starts on empty canvas -- a
+        // marker press single-selects.)
         const rect = canvas.getBoundingClientRect();
         const p = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
         cropDragRef.current = p;
@@ -1051,7 +1068,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       dragStartRef.current = { x: e.evt.clientX, y: e.evt.clientY, offsetX: view.offsetX, offsetY: view.offsetY, panning: leftButtonPans };
       setIsDragging(true);
     },
-    [view, cropMode, regionMode, selectMode, linkSnap, onLinkDragMove, leftButtonPans]
+    [view, cropMode, regionMode, selectMode, boxMode, linkSnap, onLinkDragMove, leftButtonPans]
   );
 
   const onMouseMove = useCallback(
@@ -1117,15 +1134,20 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         const startP = cropDragRef.current;
         cropDragRef.current = null;
         const canvas = canvasRef.current;
-        // Route the finished rectangle by mode: select marquee, region-restrict
-        // (B1), or crop.
-        const report = selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
-        if (canvas && report) {
+        if (canvas) {
           const rect = canvas.getBoundingClientRect();
           const endP = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
           const a = screenToImage(view, startP.x, startP.y);
           const b = screenToImage(view, endP.x, endP.y);
-          report({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+          if (boxMode) {
+            // Raw press->release order, NOT normalized -- see onBoxRect's own doc.
+            onBoxRect?.(a, b);
+          } else {
+            // Route the finished rectangle by mode: select marquee, region-
+            // restrict (B1), or crop -- all three want a normalized box.
+            const report = selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
+            report?.({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+          }
         }
         setCropCurrent(null);
         return;
@@ -1179,7 +1201,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       const imagePoint = screenToImage(view, screenX, screenY);
       onImageClick(imagePoint.x, imagePoint.y);
     },
-    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, selectMode, onSelectRect, onSelectLasso]
+    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso]
   );
 
   const cancelDrag = useCallback(() => {
@@ -1829,17 +1851,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   />
                 )}
                 {/* Crop selection (checkpoint 63): the live drag rect, or the
-                    confirmed pending rect converted from image-pixel space. */}
+                    confirmed pending rect converted from image-pixel space.
+                    Bar capture (v2.0) reuses this same drag but SOLID rather
+                    than dashed -- a dashed rectangle reads as "select first,
+                    decide later" (crop/region/marquee all are); this one
+                    commits the instant the drag ends, so it should look like
+                    it's drawing the bar itself, not proposing a selection. */}
                 {cropDragRef.current && cropCurrent ? (
                   <Rect
                     x={Math.min(cropDragRef.current.x, cropCurrent.x)}
                     y={Math.min(cropDragRef.current.y, cropCurrent.y)}
                     width={Math.abs(cropCurrent.x - cropDragRef.current.x)}
                     height={Math.abs(cropCurrent.y - cropDragRef.current.y)}
-                    stroke={theme.color.primary.main}
+                    stroke={boxMode ? '#7c3aed' : theme.color.primary.main}
                     strokeWidth={1.5}
-                    dash={[6, 4]}
-                    fill="rgba(22, 119, 130, 0.12)"
+                    dash={boxMode ? undefined : [6, 4]}
+                    fill={boxMode ? 'rgba(124, 58, 237, 0.15)' : 'rgba(22, 119, 130, 0.12)'}
                     listening={false}
                   />
                 ) : (
