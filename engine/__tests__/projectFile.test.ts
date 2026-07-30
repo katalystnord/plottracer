@@ -119,6 +119,38 @@ describe('serializeProject', () => {
     if ('error' in empty) throw new Error(empty.error);
     expect('provenance' in empty).toBe(false);
   });
+
+  it('omits categoryAxisColl entirely for a plain XY project -- every pre-v2.0 file stayed this shape', () => {
+    // v2.0: a session's CategoryAxis (BAR_AXES_CONFIG's, or a fresh unused one
+    // on any other type) must not add a categoryAxisColl key to every saved
+    // file regardless of graph type -- that would grow every plain XY/polar/
+    // spider project's file for a capability it never uses, unlike
+    // captureState's undo snapshot (in memory only, so "unconditional, costs
+    // nothing" holds there but not on disk).
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+
+    const result = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in result) throw new Error(`unexpected error: ${result.error}`);
+    expect(result.plotData.categoryAxisColl).toBeUndefined();
+    expect(result.plotData.datasetColl[0]!.categoryAxisName).toBeUndefined();
+  });
+
+  it('writes categoryAxisColl once a Bar session actually names a category', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    session.addDataPoint(150, 500);
+    session.addDataPoint(150, 300);
+    session.setTupleLabel(0, 'Wheat');
+
+    const result = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in result) throw new Error(`unexpected error: ${result.error}`);
+    expect(result.plotData.categoryAxisColl).toHaveLength(1);
+    expect(result.plotData.categoryAxisColl?.[0]?.categories).toEqual(['Wheat']);
+    expect(result.plotData.datasetColl[0]!.categoryAxisName).toBe(result.plotData.categoryAxisColl?.[0]?.name);
+  });
 });
 
 describe('deserializeProject', () => {
@@ -288,7 +320,7 @@ describe('deserializeProject', () => {
     expect(result.configId).toBe('bar');
 
     const newSession = new CalibrationSession(BAR_AXES_CONFIG);
-    newSession.loadCalibrated(result.axes as BarAxes, result.datasets);
+    newSession.loadCalibrated(result.axes as BarAxes, result.datasets, result.categoryAxis);
     expect(newSession.hasSlots()).toBe(true);
     expect(newSession.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
     const rows = newSession.getTupleRows();
@@ -299,6 +331,63 @@ describe('deserializeProject', () => {
     // it would have live -- recomputePointGroupCursor's "no open slot found" path.
     expect(newSession.getCurrentTupleIndex()).toBeNull();
     expect(newSession.getBoxPlotGlyphs()).toHaveLength(1);
+  });
+
+  it('round-trips a first-class Bar session\'s category, and its SHARED identity survives too', () => {
+    // The real defect this test was written against (v2.0 Phase 6): loadCalibrated
+    // had no way to receive the file's own CategoryAxis, so ANY reopened bar/box-plot
+    // project lost every category's shared identity even though its NAME still
+    // happened to read back correctly via the dataset's own pixel metadata -- a
+    // rename through the CategoryAxis itself (e.g. a "manage categories" UI) would
+    // silently stop reaching the reopened tuple. Proven here by round-tripping,
+    // then renaming through the file's OWN restored CategoryAxis instance.
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    session.addDataPoint(150, 500);
+    session.addDataPoint(150, 300);
+    session.setTupleLabel(0, 'Wheat');
+
+    const serialized = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in serialized) throw new Error(`unexpected error: ${serialized.error}`);
+    const result = deserializeProject(JSON.parse(JSON.stringify(serialized)));
+    if ('error' in result) throw new Error(`unexpected error: ${result.error}`);
+
+    const newSession = new CalibrationSession(BAR_AXES_CONFIG);
+    newSession.loadCalibrated(result.axes as BarAxes, result.datasets, result.categoryAxis);
+    expect(newSession.getTupleLabel(0)).toBe('Wheat');
+
+    // The regression itself: renaming through the RESTORED CategoryAxis (not
+    // through setTupleLabel) must reach the reloaded tuple's read -- proving the
+    // dataset's categoryIndex resolves against the SAME instance the file carried,
+    // not a fresh disconnected one loadCalibrated would otherwise default to.
+    const idx = newSession.getCategoryAxis().getCategoryIndex('Wheat');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    newSession.getCategoryAxis().renameCategory(idx, 'Hemp');
+    expect(newSession.getTupleLabel(0)).toBe('Hemp');
+  });
+
+  it('a file predating v2.0 (no categoryAxisColl) opens with a fresh empty CategoryAxis, not a crash', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    session.addDataPoint(150, 500);
+    session.addDataPoint(150, 300);
+    session.setTupleLabel(0, 'Wheat');
+
+    const serialized = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in serialized) throw new Error(`unexpected error: ${serialized.error}`);
+    // Simulate a pre-v2.0 file: strip the category axis collection entirely.
+    const stripped = JSON.parse(JSON.stringify(serialized));
+    delete stripped.plotData.categoryAxisColl;
+    for (const ds of stripped.plotData.datasetColl ?? []) delete ds.categoryAxisName;
+
+    const result = deserializeProject(stripped);
+    if ('error' in result) throw new Error(`unexpected error: ${result.error}`);
+    expect(result.categoryAxis.getCategoryCount()).toBe(0);
+
+    const newSession = new CalibrationSession(BAR_AXES_CONFIG);
+    expect(() => newSession.loadCalibrated(result.axes as BarAxes, result.datasets, result.categoryAxis)).not.toThrow();
   });
 
   it('round-trips a Circular Chart Recorder session, restoring the Chart Start Time global field', () => {

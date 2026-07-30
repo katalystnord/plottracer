@@ -211,7 +211,7 @@ describe('multi-figure container (checkpoint 115)', () => {
     n1.loadCalibrated(result.figures[0]!.axes as XYAxes, result.figures[0]!.datasets);
     n1.getDataPoints()[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([5, 5][i]!, 6));
     const n2 = new CalibrationSession(BAR_AXES_CONFIG);
-    n2.loadCalibrated(result.figures[1]!.axes as BarAxes, result.figures[1]!.datasets);
+    n2.loadCalibrated(result.figures[1]!.axes as BarAxes, result.figures[1]!.datasets, result.figures[1]!.categoryAxis);
     expect(n2.getDataPoints()[0]!.data![0]).toBeCloseTo(5, 6);
 
     // The shared source document round-trips (bytes and name).

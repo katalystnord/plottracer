@@ -5596,6 +5596,11 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     const expected: Record<string, string[]> = {
       xy: ['isLogX', 'isLogY', 'skipRotation'],
       bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue'], // v2.0: the declared-baseline setting
+      // v2.0 Phase 6: pinned so Box Plot's options can never again silently
+      // inherit Bar's by reference -- it did, briefly, right after Phase 2
+      // added hasBaseline/baselineValue to BAR_AXES_CONFIG.options, and
+      // nothing here had caught it because Box Plot was never in this list.
+      boxplot: ['isLog', 'isRotated'],
       polar: ['isDegrees', 'isClockwise', 'isLogR'],
       ternary: ['isRange100', 'isNormal'],
       map: ['origin', 'units'],

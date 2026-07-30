@@ -43,6 +43,7 @@
  */
 
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
+import { CategoryAxis } from '../core/categoryAxis.js';
 import type { Dataset } from '../core/dataset.js';
 import { GRAPH_TYPE_METADATA_KEY } from './calibrationSession.js';
 import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js';
@@ -181,6 +182,12 @@ export interface DeserializedProject {
   /** Every dataset/series found under that axes, in file order (checkpoint
    * 30) -- always at least one, per deserializeProject's own guard. */
   datasets: Dataset[];
+  /** The file's own canonical category list (v2.0) -- pass straight to
+   * loadCalibrated so a reopened bar/box-plot project keeps its categories'
+   * SHARED identity (renaming one still propagates), not just their names.
+   * A fresh empty CategoryAxis for any file that predates this or a session
+   * whose graph type never uses one. */
+  categoryAxis: CategoryAxis;
   imageDataURL: string;
   imageFileName?: string;
   /** Measure results + scale (checkpoint 56); empty/null when the file predates
@@ -252,9 +259,22 @@ export function serializeProject<A extends CalibratedAxes>(
   const plotData = new PlotData();
   const anyAxes = axes as unknown as AnyAxes;
   plotData.addAxes(anyAxes);
+  const categoryAxis = session.getCategoryAxis();
+  // v2.0: written only when it actually holds something -- unlike
+  // captureState/restoreState's undo snapshot (never touches disk, so
+  // "unconditional, costs nothing" is true there), a SAVED file follows this
+  // module's own "omit entirely when nothing recorded" discipline (see
+  // measurements/provenance/sourceDocument below): every plain XY project
+  // ever written had no categoryAxisColl key, and staying byte-identical for
+  // every session that never used one matters more here than in memory.
+  // (This WAS forgotten entirely at first -- see loadCalibrated's own
+  // comment on the "round-trips a Box Plot session" test that caught it.)
+  const hasCategoryAxis = categoryAxis.getCategoryCount() > 0;
+  if (hasCategoryAxis) plotData.addCategoryAxis(categoryAxis);
   for (const dataset of session.getDatasets()) {
     plotData.addDataset(dataset);
     plotData.setAxesForDataset(dataset, anyAxes);
+    if (hasCategoryAxis) plotData.setCategoryAxisForDataset(dataset, categoryAxis);
   }
 
   const file: ProjectFile = {
@@ -326,6 +346,9 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     configId,
     axes,
     datasets,
+    // Falls back to a fresh empty one for any file predating this (every
+    // file before v2.0), the same fallback loadCalibrated itself applies.
+    categoryAxis: plotData.getCategoryAxisColl()[0] ?? new CategoryAxis(),
     imageDataURL: data.image.dataURL,
     imageFileName: data.image.fileName,
     measurements: Array.isArray(data.measurements) ? data.measurements : [],

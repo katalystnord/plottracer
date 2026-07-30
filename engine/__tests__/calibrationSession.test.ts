@@ -1036,7 +1036,12 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       expect(session.getTupleLabel(1)).toBe('Bar1');
     });
 
-    it('setTupleLabel overrides the auto-generated default and registers the "label" metadata key', () => {
+    it('setTupleLabel overrides the auto-generated default, via the canonical CategoryAxis', () => {
+      // v2.0 Phase 6: the legacy "Box Plot Groups" toggle reaches the same
+      // 5-slot shape as the first-class Box Plot config, so it now shares
+      // the same CategoryAxis naming (usesCategoryAxis is axesKind+hasSlots
+      // based, not gated on which door produced the slots) -- registers
+      // "categoryIndex", not "label".
       const session = new CalibrationSession(BAR_AXES_CONFIG);
       calibrateStandardBar(session);
       session.runCalibration();
@@ -1046,7 +1051,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.setTupleLabel(0, 'Sample A');
       expect(session.getTupleLabel(0)).toBe('Sample A');
       expect(session.getTupleRows()[0]!.label).toBe('Sample A');
-      expect(session.getMetadataKeys()).toContain('label');
+      expect(session.getMetadataKeys()).toContain('categoryIndex');
     });
 
     it('is empty for a tuple index with no primary-group point placed yet', () => {
@@ -1058,6 +1063,45 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
 
       session.setTupleLabel(0, 'ignored, no tuple exists yet'); // no-op, no crash
       expect(session.getTupleLabel(0)).toBe('');
+    });
+
+    it('a first-class Box Plot session resolves its category label live through the canonical CategoryAxis', () => {
+      // The actual payoff of usesCategoryAxis covering Box Plot (v2.0 Phase
+      // 6): getTupleLabel is a live read through the CategoryAxis entry
+      // (metadata.categoryIndex), not a frozen per-tuple string copy -- so
+      // renaming the entry through the CategoryAxis itself (as a "manage
+      // categories" reorder/rename UI would) is reflected immediately,
+      // exactly like it already was for Bar.
+      const session = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+      calibrateStandardBar(session);
+      session.runCalibration();
+      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // tuple 0
+      session.setTupleLabel(0, 'Group A');
+      expect(session.getTupleLabel(0)).toBe('Group A');
+
+      const idx = session.getCategoryAxis().getCategoryIndex('Group A');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      session.getCategoryAxis().renameCategory(idx, 'Group A (renamed)');
+      expect(session.getTupleLabel(0)).toBe('Group A (renamed)');
+    });
+
+    it('protects a sole-owner box\'s name from a typo fix on a DIFFERENT box that shares its typed name', () => {
+      // The v1.3 #9 protection, now proven for Box Plot too: two boxes
+      // happen to share a typed name; correcting a typo on one must not
+      // silently rename the other out from under it, since setTupleLabel
+      // cannot tell "shared on purpose" from "coincidentally identical, one
+      // of them is wrong".
+      const session = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+      calibrateStandardBar(session);
+      session.runCalibration();
+      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // tuple 0
+      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // tuple 1
+      session.setTupleLabel(0, 'Groop A');
+      session.setTupleLabel(1, 'Groop A'); // shares tuple 0's category index
+
+      session.setTupleLabel(0, 'Group A'); // fixes tuple 0's typo only
+      expect(session.getTupleLabel(0)).toBe('Group A');
+      expect(session.getTupleLabel(1)).toBe('Groop A'); // untouched, not silently corrected
     });
   });
 });

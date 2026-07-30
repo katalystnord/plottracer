@@ -156,6 +156,7 @@ import { identifyProject, unsupportedFileMessage } from '../../engine/importRegi
 import { exportOmissionNote, formatLimitationNote } from '../../engine/exportCapability.js';
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
+import type { CategoryAxis } from '../../core/categoryAxis.js';
 import { buildExportJson, buildExportSections } from '../../engine/exportAssembly.js';
 import {
   buildSpreadsheetSeries,
@@ -3492,6 +3493,7 @@ export function Workspace() {
       configId: string;
       axes: CalibratedAxes;
       datasets: Dataset[];
+      categoryAxis?: CategoryAxis;
       imageDataURL: string;
       imageFileName?: string;
       measurements?: RecordedMeasurement[];
@@ -3506,7 +3508,7 @@ export function Workspace() {
       clearFiguresToSingle(); // a single-figure project / WPD import is one figure
       const newSession = new CalibrationSession(nextConfig);
       newSession.setImageHeight(imageHeightRef.current);
-      newSession.loadCalibrated(fig.axes, fig.datasets);
+      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis);
       sessionRef.current = newSession;
       setColorTraceRegion(null); // new figure's pixel space -> old trace region is stale (audit A1)
 
@@ -3804,7 +3806,7 @@ export function Workspace() {
       const config = AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
-      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets);
+      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis);
       return {
         id: ++figureIdRef.current,
         name: f.name,
@@ -4016,6 +4018,7 @@ export function Workspace() {
       configId: result.configId,
       axes: result.axes as CalibratedAxes,
       datasets: result.datasets,
+      categoryAxis: result.categoryAxis,
       imageDataURL: result.imageDataURL,
       imageFileName: result.imageFileName,
       // Our own file carries measurements (checkpoint 56); no value/note --

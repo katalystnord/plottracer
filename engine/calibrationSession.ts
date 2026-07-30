@@ -193,7 +193,7 @@ import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
-import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
+import { binFromCorners, binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
 import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segmentFill.js';
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
@@ -963,6 +963,22 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   fixedSteps: XY_AXES_CONFIG.fixedSteps,
   options: XY_AXES_CONFIG.options,
   extractOptions: XY_AXES_CONFIG.extractOptions,
+  // v2.0 Phase 6: reuses algorithms/histogram.ts's OWN corner-averaging (not
+  // a re-derivation) so the on-screen tuple table and CSV/JSON export (which
+  // read `derived`, see engine/csvExport.ts's tupleDataSection) finally
+  // agree with getHistogramBins()'s own computed height -- previously that
+  // number reached only the dedicated bins-export path, never the table.
+  derivedTupleValue: {
+    label: 'Height',
+    compute(points) {
+      const [a, b] = points;
+      if (!a?.data || !b?.data) return null;
+      const [ax, ay] = a.data;
+      const [bx, by] = b.data;
+      if (ax == null || ay == null || bx == null || by == null) return null;
+      return binFromCorners({ x: ax, y: ay }, { x: bx, y: by }).value;
+    },
+  },
   buildAxes(cal, ctx) {
     const result = XY_AXES_CONFIG.buildAxes(cal, ctx);
     if ('error' in result) return result;
@@ -1134,13 +1150,30 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   defaultSlots: BOX_PLOT_SLOTS,
   tupleNoun: 'box',
-  // Shares Bar's calibration, options (log scale + horizontal bars) and guards --
-  // reusing the arrays keeps them from drifting apart, as Histogram does with XY.
+  // Shares Bar's calibration and guards -- reusing the arrays keeps them from
+  // drifting apart, as Histogram does with XY.
   logScaleGuards: BAR_AXES_CONFIG.logScaleGuards,
   distinctPixelSteps: BAR_AXES_CONFIG.distinctPixelSteps,
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  options: BAR_AXES_CONFIG.options,
-  extractOptions: BAR_AXES_CONFIG.extractOptions,
+  // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
+  // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
+  // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and
+  // sharing the reference leaked those into every Box Plot session too: the
+  // settings panel showed "Bars share a baseline" / "Baseline value"
+  // controls that DID NOTHING -- buildAxes below never reads them, and Box
+  // Plot has no derivedTupleValue that would use them anyway (it shows the
+  // five raw letter values, not a computed extent). A control that changes
+  // nothing when changed is exactly the defect class this project treats as
+  // a real bug, not cosmetic. Found auditing this file for Phase 6, not by
+  // a report -- the "offers every axes type its own options" e2e test never
+  // covered Box Plot, so nothing had caught it.
+  options: [
+    { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
+    { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
+  ],
+  extractOptions(axes) {
+    return { isLog: String(axes.isLog()), isRotated: String(axes.isRotated()) };
+  },
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
@@ -3104,7 +3137,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return dropped;
   }
 
-  loadCalibrated(axes: A, datasets: Dataset[]): void {
+  /** v2.0: `categoryAxis` is the file's own canonical category list (see
+   * engine/projectFile.ts's serializeProject/deserializeProject, which now
+   * carry it through PlotData the same way captureState/restoreState already
+   * do for undo) -- omitted falls back to a fresh empty one, exactly as a
+   * brand-new session already starts. Without this parameter, opening a
+   * saved bar/box-plot project silently dropped every category's shared
+   * identity: renaming would no longer propagate to anything, since a freshly
+   * constructed session's own empty CategoryAxis has no relation to the one
+   * the file's category names actually pointed at (found via the "round-trips
+   * a Box Plot session" test, once usesCategoryAxis widened to cover it). */
+  loadCalibrated(axes: A, datasets: Dataset[], categoryAxis?: CategoryAxis): void {
+    this.categoryAxis = categoryAxis ?? new CategoryAxis();
     this.placed = {};
     const cal = (axes as unknown as { calibration: Calibration | null }).calibration;
     // ⚑ THE SHAPE COMES FROM THE FILE, not from the config. A variable-length
@@ -3638,11 +3682,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const dataset = this.activeEntry.dataset;
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple) return '';
-    // v2.0: a bar-INTERVAL tuple resolves through the canonical CategoryAxis
-    // (metadata.categoryIndex), not a per-tuple copied string -- see
-    // setTupleLabel's own comment for why, and isBarIntervalDataset's for why
-    // this excludes the legacy Box-Plot-via-Bar-toggle shape.
-    if (this.isBarIntervalDataset(dataset)) {
+    // v2.0: any bar-FAMILY tuple (Bar's interval, Box Plot's letter values)
+    // resolves through the canonical CategoryAxis (metadata.categoryIndex),
+    // not a per-tuple copied string -- see setTupleLabel's own comment for
+    // why, and usesCategoryAxis's for exactly which shapes this covers.
+    if (this.usesCategoryAxis(dataset)) {
       for (const pixelIndex of tuple) {
         if (pixelIndex === null || pixelIndex === undefined) continue;
         const idx = dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
@@ -3700,7 +3744,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (pixels.length === 0) return false;
     const target = pixels[0]!;
 
-    if (this.isBarIntervalDataset(dataset)) {
+    if (this.usesCategoryAxis(dataset)) {
       const existingRaw = dataset.getPixel(target).metadata?.['categoryIndex'];
       const existingIdx = typeof existingRaw === 'number' ? existingRaw : -1;
       let idx: number;
@@ -3876,13 +3920,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return rotated ? p.y : p.x;
   }
 
+  /** True for any bar-FAMILY tuple type (v2.0 Phase 6: Bar's 2-slot interval
+   * AND Box Plot's 5-slot letter values, whichever door reaches the 5-slot
+   * shape -- its own first-class config or the legacy "Box Plot Groups"
+   * toggle on a Bar session). getTupleLabel/setTupleLabel resolve through
+   * the canonical CategoryAxis for all of these -- a grouped box plot wants
+   * the same shared-rename behaviour a grouped bar chart does. Excludes
+   * Categorical Line (axesKind 'bar' but never slotted -- "points are
+   * captured like an XY series, not bars") and every non-bar-family type,
+   * which keep the plain per-tuple string label (metadata.label). */
+  private usesCategoryAxis(dataset: Dataset): boolean {
+    return this.config.axesKind === 'bar' && dataset.hasSlots();
+  }
+
   /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never
-   * the legacy "Box Plot Groups" toggle applied to a Bar session -- that is
-   * ALSO `config.id === 'bar'` but reshapes the dataset to 5 letter-value
-   * slots (checkpoint 107), and keeps the plain per-tuple string label like
-   * every other tuple type. Canonical category-axis naming (below) is for
-   * the interval record specifically. */
-  private isBarIntervalDataset(dataset: Dataset): boolean {
+   * a 5-slot Box Plot (its own config, or the legacy toggle on a Bar
+   * session). Gates the auto-PREFILL convenience specifically (not category
+   * storage generally, see usesCategoryAxis above) -- a box has no
+   * comparable "one repeated category set across series" pattern to
+   * prefill from the way a grouped bar chart does. */
+  private wantsAutoCategoryPrefill(dataset: Dataset): boolean {
     return this.config.id === 'bar' && dataset.getSlotNames().length === BAR_INTERVAL_SLOTS.length;
   }
 
@@ -3933,7 +3990,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * silently diverged the instant either series' name was corrected.
    */
   private prefillTupleCategoryLabel(dataset: Dataset, tupleIndex: number): boolean {
-    if (!this.isBarIntervalDataset(dataset)) return false;
+    if (!this.wantsAutoCategoryPrefill(dataset)) return false;
     const tuple = dataset.getAllTuples()[tupleIndex];
     const primaryPixelIndex = tuple?.find((v): v is number => v !== null && v !== undefined);
     if (primaryPixelIndex === undefined) return false;
