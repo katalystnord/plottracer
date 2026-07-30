@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOX_PLOT_AXES_CONFIG, CalibrationSession, PIE_AXES_CONFIG } from '../calibrationSession.js';
+import { BOX_PLOT_AXES_CONFIG, CalibrationSession, PIE_AXES_CONFIG, type CalibratedAxes } from '../calibrationSession.js';
 import type { PieAxes } from '../../core/axes/pie.js';
+import { buildExportJson, buildExportSections, type ExportAssemblyInput } from '../exportAssembly.js';
 
 /**
  * Capturing a pie's slices — one click per boundary.
@@ -484,5 +485,51 @@ describe('a boundary click is tidied onto the rim', () => {
     const p = session.getDataset().getPixel(0);
     expect(p.x).toBeCloseTo(inner[0], 9);
     expect(p.y).toBeCloseTo(inner[1], 9);
+  });
+});
+
+describe('the captured sector VALUE now reaches export (v2.0 groundwork)', () => {
+  // Three equal 120° slices of a 100-total pie -- the fourth click closes the ring.
+  function threeEqualSlices(): CalibrationSession<PieAxes> {
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 30, 150, -90]);
+    return session;
+  }
+
+  function exportInput(session: CalibrationSession<PieAxes>): ExportAssemblyInput {
+    return {
+      session: session as unknown as CalibrationSession<CalibratedAxes>,
+      axes: session.getAxes()! as unknown as CalibratedAxes,
+      configId: 'pie',
+      scope: 'active',
+      precision: 'full',
+      measures: [],
+    };
+  }
+
+  it('CSV/TSV gain a Value column carrying the derived proportion, not just the two raw angles', () => {
+    const session = threeEqualSlices();
+    // The ground truth is whatever the type's OWN derivedTupleValue computes
+    // (rounded to what one pixel at the rim can resolve, per PIE_AXES_CONFIG's
+    // own comment) -- not the ideal 100/3, which the export must NOT re-round
+    // to a different, made-up precision.
+    const expected = session.getTupleRows().map((r) => r.derived);
+    // Sanity check the ground truth itself is plausible (each third of 100,
+    // to the figure's own pixel resolution) before trusting it as the oracle.
+    for (const v of expected) expect(v).toBeCloseTo(100 / 3, 0);
+    const sections = buildExportSections(exportInput(session));
+    expect(sections[0]!.header).toEqual(['category', 'Sector start', 'Sector end', 'Value']);
+    expect(sections[0]!.rows.map((row) => Number(row[row.length - 1]))).toEqual(expected);
+  });
+
+  it('JSON exports each sector as ONE tuple object carrying its derived Value, not two unrelated flat points', () => {
+    const session = threeEqualSlices();
+    const expected = session.getTupleRows().map((r) => r.derived);
+    const content = buildExportJson(exportInput(session));
+    const parsed = JSON.parse(content);
+    expect(parsed.series[0].tuples).toBeDefined();
+    expect(parsed.series[0].points).toBeUndefined();
+    expect(parsed.series[0].tuples).toHaveLength(3);
+    expect(parsed.series[0].tuples.map((t: { Value: number }) => t.Value)).toEqual(expected);
   });
 });

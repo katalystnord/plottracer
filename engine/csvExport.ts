@@ -99,29 +99,58 @@ export function buildFlatDataCSV(rows: readonly ExportRow[], fields: readonly st
 }
 
 /** One row per tuple/category: its label plus one column per slot,
- * in group order. An unfilled slot (still-open tuple) exports as a blank
- * cell, matching the points table's own "—" placeholder in spirit. Only
- * a group's first data value is exported (dataDim is always 1 for the Bar
- * axes Box Plot uses this for -- see calibrationSession.ts's
- * getBoxPlotGlyphs, the only place slots are offered today). */
+ * in group order, plus (v2.0) a trailing DERIVED column when the type
+ * declares one (`AxesTypeConfig.derivedTupleValue`). An unfilled slot
+ * (still-open tuple) exports as a blank cell, matching the points table's
+ * own "—" placeholder in spirit. Only a group's first data value is
+ * exported (dataDim is always 1 for the Bar axes Box Plot uses this for --
+ * see calibrationSession.ts's getBoxPlotGlyphs, the only place slots are
+ * offered today).
+ *
+ * ⚑ `derivedLabel` is what makes this column exist at all -- same
+ * presence-is-the-signal rule as `role` above. Before this, a type's own
+ * computed tuple value (e.g. a pie sector's proportion, `TupleRow.derived`)
+ * reached the on-screen table (Workspace.tsx) but never an export: a reader
+ * got the two raw boundary angles and had to recompute the number they
+ * actually wanted. Required groundwork for v2.0's bar interval, whose
+ * exported "value" is a derived extent, not either of its two stored ends --
+ * and a genuine bug fix for Pie today, not just future-proofing.
+ *
+ * ⚑ `row.derived` is emitted AS-IS, never re-rounded through `rounder` the
+ * way the raw per-slot columns are. `AxesTypeConfig.derivedTupleValue.compute`
+ * already rounds to that TYPE's own appropriate precision (pie's, to what one
+ * pixel at the rim can resolve -- see PIE_AXES_CONFIG's own comment) using
+ * whatever geometry it actually has; re-rounding here via `resolutionAtData`
+ * would need `axes.dataToPixel` to place the derived value back on a pixel,
+ * which is a stub for every non-invertible axes (pie included) and would
+ * silently compute a resolution near image origin (0,0) instead of near the
+ * sector -- caught by a test that expected the exact analytic value and got a
+ * suspiciously round-looking one instead. */
 export function tupleDataSection(
   pointGroupNames: readonly string[],
   tupleRows: readonly TupleRow[],
-  rounder: ValueRounder
+  rounder: ValueRounder,
+  derivedLabel?: string
 ): TableSection {
   // Box Plot's axes is Bar (dataDim 1): each group's single value is dimension 0.
+  const hasDerived = derivedLabel != null && tupleRows.some((r) => r.derived != null);
   return {
-    header: ['category', ...pointGroupNames],
-    rows: tupleRows.map((row) => [row.label, ...row.points.map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : ''))]),
+    header: ['category', ...pointGroupNames, ...(hasDerived ? [derivedLabel] : [])],
+    rows: tupleRows.map((row) => [
+      row.label,
+      ...row.points.map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : '')),
+      ...(hasDerived ? [row.derived ?? ''] : []),
+    ]),
   };
 }
 export function buildTupleDataCSV(
   pointGroupNames: readonly string[],
   tupleRows: readonly TupleRow[],
   rounder: ValueRounder,
-  sep: Delimiter = ','
+  sep: Delimiter = ',',
+  derivedLabel?: string
 ): string {
-  return renderTable([tupleDataSection(pointGroupNames, tupleRows, rounder)], delimitedFormat(sep));
+  return renderTable([tupleDataSection(pointGroupNames, tupleRows, rounder, derivedLabel)], delimitedFormat(sep));
 }
 
 /** One row per histogram bin: its interval and magnitude (checkpoint 66).
@@ -482,6 +511,62 @@ export function buildHistogramJSON(
               ? rounded
               : { ...rounded, valueErr: rounder.scalarAt(b.valueErr, [b.binStart, b.value], 1) };
           }),
+      },
+    ],
+  };
+  if (measurements.length > 0) {
+    doc.measurements = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
+  }
+  return JSON.stringify(doc, null, 2);
+}
+
+/** Structured JSON for a tuple-shaped type (Pie today; Box Plot and Bar in
+ * v2.0) -- one object per tuple/category, keyed by slot name, plus (v2.0) the
+ * type's own derived value when it declares one.
+ *
+ * Same reasoning as `buildHistogramJSON`: `buildExportJson`'s previous only
+ * choice besides histogram was `buildSeriesJSON`, which emits each tuple's
+ * members as flat, unrelated points -- a Pie's two boundary angles with no
+ * hint they belong to the same sector, and no derived value at all. This is
+ * the tuple-shaped counterpart, giving Box Plot/Bar/Pie tuples a real
+ * structured export instead of falling through to the flat per-point shape.
+ *
+ * A still-open tuple's unfilled slot is `null`, matching the CSV blank cell
+ * and the table's own placeholder -- never a fabricated 0.
+ *
+ * ⚑ `row.derived` is emitted as-is, never re-rounded through `rounder` --
+ * see `tupleDataSection`'s matching comment for why (the type's own
+ * `derivedTupleValue.compute` already applied the right precision; routing
+ * it back through the axis-resolution rounder would need a working
+ * `dataToPixel`, which most non-invertible axes -- pie included -- don't
+ * have). */
+export function buildTupleSeriesJSON(
+  name: string,
+  pointGroupNames: readonly string[],
+  tupleRows: readonly TupleRow[],
+  rounder: ValueRounder,
+  derivedLabel: string | undefined,
+  measurements: readonly MeasurementCsvRow[] = []
+): string {
+  const doc: Record<string, unknown> = {
+    series: [
+      {
+        name,
+        tuples: tupleRows.map((row) => {
+          const entry: Record<string, unknown> = {
+            category: row.label,
+            ...Object.fromEntries(
+              pointGroupNames.map((label, i) => {
+                const p = row.points[i];
+                return [label, p?.data ? rounder.at([p.data[0]!], 0) : null];
+              })
+            ),
+          };
+          if (derivedLabel != null && row.derived != null) {
+            entry[derivedLabel] = row.derived;
+          }
+          return entry;
+        }),
       },
     ],
   };

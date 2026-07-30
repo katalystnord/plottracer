@@ -73,6 +73,47 @@ describe('buildTupleDataCSV', () => {
     const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Sample, batch 2', derived: null, points: [{ px: 0, py: 0, data: [1] }] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min\n"Sample, batch 2",1');
   });
+
+  // v2.0 groundwork: TupleRow.derived (a pie sector's proportion, a bar's
+  // extent) previously reached the on-screen table only -- never CSV/TSV/etc.
+  describe('the derived-value column (v2.0)', () => {
+    it('adds no column when no derivedLabel is given -- unchanged from before this fix', () => {
+      const groupNames = ['Sector start', 'Sector end'];
+      const rows: TupleRow[] = [
+        { tupleIndex: 0, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+      ];
+      expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe(
+        'category,Sector start,Sector end\nSlice A,10,20'
+      );
+    });
+
+    it('appends the derived value under its declared label when one is given', () => {
+      const groupNames = ['Sector start', 'Sector end'];
+      const rows: TupleRow[] = [
+        { tupleIndex: 0, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+      ];
+      expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe(
+        'category,Sector start,Sector end,Value\nSlice A,10,20,42'
+      );
+    });
+
+    it('leaves the derived cell blank for a tuple with no derived value, not a fabricated 0', () => {
+      const groupNames = ['Sector start', 'Sector end'];
+      const rows: TupleRow[] = [
+        { tupleIndex: 0, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+        { tupleIndex: 1, label: 'Slice B', derived: null, points: [{ px: 0, py: 0, data: [20] }, null] },
+      ];
+      expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe(
+        'category,Sector start,Sector end,Value\nSlice A,10,20,42\nSlice B,20,,'
+      );
+    });
+
+    it('omits the column entirely when a label is declared but every row is null (matches hasRoles-style presence rule)', () => {
+      const groupNames = ['Min', 'Q1'];
+      const rows: TupleRow[] = [{ tupleIndex: 0, label: 'Sample A', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
+      expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe('category,Min,Q1\nSample A,1,');
+    });
+  });
 });
 
 describe('buildSeriesJSON', () => {

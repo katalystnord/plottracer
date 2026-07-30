@@ -28,6 +28,7 @@ import { runGeometry, getGeometryState } from './geometryPanel.js';
 import {
   buildSeriesJSON,
   buildHistogramJSON,
+  buildTupleSeriesJSON,
   flatDataSection,
   allSeriesSection,
   tupleDataSection,
@@ -141,20 +142,35 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     };
   });
   const scoped = scope === 'all' ? all : [all[activeIndex]!];
-  // A histogram's measurement is its bins, not the corner clicks that produced
-  // them (see engine/csvExport.ts's buildHistogramJSON). Only the ACTIVE
-  // series' bins are exported. The Active/All-series toggle is hidden for
-  // grouped types, so nothing on screen claims otherwise. Tracked as a known
-  // limitation rather than papered over: fixing it properly means
-  // getHistogramBins(datasetIndex).
-  return session.getConfig().id === 'histogram'
-    ? buildHistogramJSON(
-        session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1',
-        session.getHistogramBins(),
-        rounder,
-        measures
-      )
-    : buildSeriesJSON(scoped, exportFields, measures);
+  // ⚑ v2.0: generalized off getExportShape() rather than `id === 'histogram'`
+  // -- the same fix buildExportSections already made for CSV/TSV/etc (see its
+  // own comment). Before this, ANY grouped/tuple-shaped type other than
+  // histogram (Pie today; Box Plot and Bar in v2.0) fell through to
+  // buildSeriesJSON and exported its raw per-point clicks with no hint they
+  // belonged to the same tuple, and no derived value at all -- a known,
+  // now-fixed gap, not a deliberate scope limit.
+  //
+  // Both 'bins' and 'tuples' only export the ACTIVE series (the Active/All
+  // toggle is hidden for grouped types, so nothing on screen claims
+  // otherwise) -- tracked as a known limitation rather than papered over:
+  // fixing it properly means getHistogramBins(datasetIndex)/
+  // getTupleRows(datasetIndex).
+  const exportShape = session.getExportShape();
+  const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1';
+  if (exportShape === 'bins') {
+    return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
+  }
+  if (exportShape === 'tuples') {
+    return buildTupleSeriesJSON(
+      activeName,
+      session.getSlotNames(),
+      session.getTupleRows(),
+      rounder,
+      session.getConfig().derivedTupleValue?.label,
+      measures
+    );
+  }
+  return buildSeriesJSON(scoped, exportFields, measures);
 }
 
 /**
@@ -183,7 +199,9 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   if (exportShape === 'bins') {
     sections.push(histogramSection(session.getHistogramBins(), rounder));
   } else if (exportShape === 'tuples') {
-    sections.push(tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder));
+    sections.push(
+      tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder, session.getConfig().derivedTupleValue?.label)
+    );
   } else if (scope === 'all') {
     const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
       const rel = session.getErrorRelation(info.index);
