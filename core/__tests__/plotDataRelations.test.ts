@@ -4,6 +4,7 @@ import { Dataset } from '../dataset.js';
 import { XYAxes } from '../axes/xy.js';
 import { Calibration } from '../calibration.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from '../connectedPoints.js';
+import { CategoryAxis } from '../categoryAxis.js';
 
 /**
  * PlotData's RELATIONSHIPS — the object→axes map, deletion, and measurements.
@@ -135,6 +136,125 @@ describe('PlotData — deleting a dataset', () => {
 
     expect(pd.getDatasetCount()).toBe(1);
     expect(pd.getDatasets()[0]).toBe(kept);
+  });
+
+  it('removes the category-axis binding too, alongside the value-axes one', () => {
+    const pd = new PlotData();
+    const ds = dataset('data');
+    const cat = new CategoryAxis();
+    pd.addDataset(ds);
+    pd.addCategoryAxis(cat);
+    pd.setCategoryAxisForDataset(ds, cat);
+    expect(pd.getCategoryAxisForDataset(ds)).toBe(cat);
+
+    pd.deleteDataset(ds);
+
+    expect(pd.getCategoryAxisCount()).toBe(1); // the axis itself outlives its dataset
+    expect(pd.getCategoryAxisForDataset(ds)).toBeUndefined();
+  });
+});
+
+describe('PlotData — category axis binding (v2.0 groundwork, unwired)', () => {
+  // Mirrors the value-axes describe blocks above exactly -- CategoryAxis is a
+  // second, independent binding dimension using the identical additive-map
+  // pattern (`_objectAxesMap` for value axes, `_datasetCategoryAxisMap` here).
+  it('binds a dataset to a category axis, independent of its value axes binding', () => {
+    const pd = new PlotData();
+    const axes = xyAxes('A');
+    const ds = dataset('data');
+    const cat = new CategoryAxis();
+    cat.addCategory('Alpha');
+    pd.addAxes(axes);
+    pd.addDataset(ds);
+    pd.addCategoryAxis(cat);
+    pd.setAxesForDataset(ds, axes);
+    pd.setCategoryAxisForDataset(ds, cat);
+
+    expect(pd.getAxesForDataset(ds)).toBe(axes);
+    expect(pd.getCategoryAxisForDataset(ds)).toBe(cat);
+    expect(pd.getCategoryAxisColl()).toEqual([cat]);
+  });
+
+  it('lets two series share ONE category axis while bound to two different value axes', () => {
+    // The exact case the plan calls out: category identity and the value scale
+    // are independent binding dimensions, so sharing one does not couple the
+    // other.
+    const pd = new PlotData();
+    const [a, b] = [xyAxes('A'), xyAxes('B')];
+    const [dsA, dsB] = [dataset('a'), dataset('b')];
+    const sharedCategories = new CategoryAxis();
+    pd.addAxes(a);
+    pd.addAxes(b);
+    pd.addDataset(dsA);
+    pd.addDataset(dsB);
+    pd.addCategoryAxis(sharedCategories);
+    pd.setAxesForDataset(dsA, a);
+    pd.setAxesForDataset(dsB, b);
+    pd.setCategoryAxisForDataset(dsA, sharedCategories);
+    pd.setCategoryAxisForDataset(dsB, sharedCategories);
+
+    expect(pd.getAxesForDataset(dsA)).toBe(a);
+    expect(pd.getAxesForDataset(dsB)).toBe(b);
+    expect(pd.getCategoryAxisForDataset(dsA)).toBe(sharedCategories);
+    expect(pd.getCategoryAxisForDataset(dsB)).toBe(sharedCategories);
+  });
+
+  it('ORPHANS bound datasets when their category axis is deleted, mirroring deleteAxes', () => {
+    const pd = new PlotData();
+    const ds = dataset('data');
+    const cat = new CategoryAxis();
+    pd.addDataset(ds);
+    pd.addCategoryAxis(cat);
+    pd.setCategoryAxisForDataset(ds, cat);
+
+    pd.deleteCategoryAxis(cat);
+
+    expect(pd.getCategoryAxisCount()).toBe(0);
+    expect(pd.getDatasetCount()).toBe(1); // the dataset is NOT deleted with its category axis
+    expect(pd.getCategoryAxisForDataset(ds)).toBeNull();
+  });
+
+  it('leaves every OTHER category-axis binding intact when one is deleted', () => {
+    const pd = new PlotData();
+    const [dsA, dsB] = [dataset('a'), dataset('b')];
+    const [catA, catB] = [new CategoryAxis(), new CategoryAxis()];
+    pd.addDataset(dsA);
+    pd.addDataset(dsB);
+    pd.addCategoryAxis(catA);
+    pd.addCategoryAxis(catB);
+    pd.setCategoryAxisForDataset(dsA, catA);
+    pd.setCategoryAxisForDataset(dsB, catB);
+
+    pd.deleteCategoryAxis(catA);
+
+    expect(pd.getCategoryAxisForDataset(dsA)).toBeNull();
+    expect(pd.getCategoryAxisForDataset(dsB)).toBe(catB);
+    expect(pd.getCategoryAxisCount()).toBe(1);
+  });
+
+  it('does nothing when handed a category axis it does not hold', () => {
+    const pd = new PlotData();
+    const kept = new CategoryAxis();
+    pd.addCategoryAxis(kept);
+
+    pd.deleteCategoryAxis(new CategoryAxis());
+
+    expect(pd.getCategoryAxisCount()).toBe(1);
+    expect(pd.getCategoryAxisColl()[0]).toBe(kept);
+  });
+
+  it('reset() clears the category-axis collection and its bindings', () => {
+    const pd = new PlotData();
+    const ds = dataset('data');
+    const cat = new CategoryAxis();
+    pd.addDataset(ds);
+    pd.addCategoryAxis(cat);
+    pd.setCategoryAxisForDataset(ds, cat);
+
+    pd.reset();
+
+    expect(pd.getCategoryAxisCount()).toBe(0);
+    expect(pd.getCategoryAxisForDataset(ds)).toBeUndefined();
   });
 });
 

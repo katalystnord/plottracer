@@ -21,6 +21,16 @@
  *    by object identity — unchanged from the original, just noting it
  *    since it means two `Dataset` instances are only "the same" by
  *    reference, matching JS's original semantics exactly.
+ *
+ * ⚑ v2.0 GROUNDWORK, NOT A PORT: `_categoryAxisColl`/`_datasetCategoryAxisMap`
+ * and their accessors below have no upstream counterpart. `CategoryAxis`
+ * (core/categoryAxis.ts) is new for the bar model, added here rather than in
+ * a new file because the additive-map pattern it needs — a collection plus
+ * an identity-keyed binding — is exactly what `_objectAxesMap` already does
+ * for value axes, so this mirrors that shape deliberately rather than
+ * inventing a second one. Unwired from `CalibrationSession`/`projectFile.ts`
+ * and from serialize()/deserialize() as of this commit — a later v2.0 phase
+ * wires it in alongside the version-5 file format.
  */
 
 import { Calibration } from './calibration.js';
@@ -36,6 +46,7 @@ import { CircularChartRecorderAxes, type RotationDirection, type RotationTime } 
 import { SpiderAxes } from './axes/spider.js';
 import { PieAxes } from './axes/pie.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from './connectedPoints.js';
+import { CategoryAxis } from './categoryAxis.js';
 
 export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes | SpiderAxes | PieAxes;
 export type AnyMeasurement = DistanceMeasurement | AngleMeasurement | AreaMeasurement;
@@ -134,6 +145,8 @@ export class PlotData {
   private _objectAxesMap = new Map<Dataset | AnyMeasurement, AnyAxes | null>();
   private _datasetAutoDetectionDataMap = new Map<Dataset, unknown>();
   private _gridDetectionData: unknown = null;
+  private _categoryAxisColl: CategoryAxis[] = [];
+  private _datasetCategoryAxisMap = new Map<Dataset, CategoryAxis | null>();
 
   reset(): void {
     this._axesColl = [];
@@ -142,6 +155,8 @@ export class PlotData {
     this._objectAxesMap = new Map();
     this._datasetAutoDetectionDataMap = new Map();
     this._gridDetectionData = null;
+    this._categoryAxisColl = [];
+    this._datasetCategoryAxisMap = new Map();
   }
 
   setTopColors(topColors: unknown): void {
@@ -178,6 +193,41 @@ export class PlotData {
 
   getAxesCount(): number {
     return this._axesColl.length;
+  }
+
+  /** v2.0 groundwork — see the file header. Mirrors addAxes/getAxesColl/
+   * deleteAxes/setAxesForDataset/getAxesForDataset exactly, for CategoryAxis
+   * instead of AnyAxes. */
+  addCategoryAxis(ax: CategoryAxis): void {
+    this._categoryAxisColl.push(ax);
+  }
+
+  getCategoryAxisColl(): CategoryAxis[] {
+    return this._categoryAxisColl;
+  }
+
+  getCategoryAxisCount(): number {
+    return this._categoryAxisColl.length;
+  }
+
+  deleteCategoryAxis(ax: CategoryAxis): void {
+    const idx = this._categoryAxisColl.indexOf(ax);
+    if (idx >= 0) {
+      this._categoryAxisColl.splice(idx, 1);
+      this._datasetCategoryAxisMap.forEach((val, key) => {
+        if (val === ax) {
+          this._datasetCategoryAxisMap.set(key, null);
+        }
+      });
+    }
+  }
+
+  setCategoryAxisForDataset(ds: Dataset, ax: CategoryAxis | null): void {
+    this._datasetCategoryAxisMap.set(ds, ax);
+  }
+
+  getCategoryAxisForDataset(ds: Dataset): CategoryAxis | null | undefined {
+    return this._datasetCategoryAxisMap.get(ds) as CategoryAxis | null | undefined;
   }
 
   addDataset(ds: Dataset): void {
@@ -261,6 +311,7 @@ export class PlotData {
       this._datasetColl.splice(dsIdx, 1);
       this._objectAxesMap.delete(ds);
       this._datasetAutoDetectionDataMap.delete(ds);
+      this._datasetCategoryAxisMap.delete(ds);
     }
   }
 
