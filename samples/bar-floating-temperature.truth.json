@@ -1,0 +1,97 @@
+{
+  "source": {
+    "imagePath": "bar-floating-temperature.png",
+    "note": "Synthetic ground truth -- each bar's two measured ends (low/high), never a single baseline-relative value."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Temperature (\u00b0C)",
+      "min": -15,
+      "max": 32
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 80.53,
+        "py": 660.28,
+        "value": -15
+      },
+      "p2": {
+        "px": 80.53,
+        "py": 39.33,
+        "value": 32
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "temperature range",
+      "points": [
+        {
+          "category": "Jan",
+          "start": -8,
+          "end": 2
+        },
+        {
+          "category": "Feb",
+          "start": -6,
+          "end": 4
+        },
+        {
+          "category": "Mar",
+          "start": -2,
+          "end": 9
+        },
+        {
+          "category": "Apr",
+          "start": 3,
+          "end": 15
+        },
+        {
+          "category": "May",
+          "start": 8,
+          "end": 20
+        },
+        {
+          "category": "Jun",
+          "start": 13,
+          "end": 25
+        },
+        {
+          "category": "Jul",
+          "start": 15,
+          "end": 28
+        },
+        {
+          "category": "Aug",
+          "start": 14,
+          "end": 27
+        },
+        {
+          "category": "Sep",
+          "start": 9,
+          "end": 21
+        },
+        {
+          "category": "Oct",
+          "start": 3,
+          "end": 14
+        },
+        {
+          "category": "Nov",
+          "start": -3,
+          "end": 6
+        },
+        {
+          "category": "Dec",
+          "start": -7,
+          "end": 1
+        }
+      ]
+    }
+  ]
+}

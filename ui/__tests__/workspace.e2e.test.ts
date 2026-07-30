@@ -242,15 +242,17 @@ async function resetWorkspace(
 ) {
   await page.getByTestId('open-image-button').click();
   await waitForImageFitted(); // wait for the async fit-to-container to settle
-  // Checkpoint 35: axes-type-select is a real MUI Select now, not a native
-  // <select> -- .selectOption() no longer applies. Click the trigger to
-  // open the dropdown, then click the matching MenuItem (see
-  // ui/src/AxesTypeSelect.tsx's own axes-option-${id} testids). No
-  // waitForTimeout between these steps: each getByTestId(...).click() /
-  // boundingBox() already auto-waits for its target to be attached, visible
-  // and stable, which covers the MUI menu open-transition and the
-  // session-replace re-render (checkpoint 36 sleep-trim).
-  await page.getByTestId('axes-type-select').click();
+  // v2.0: the graph-type picker is a card GRID now (GraphTypeCardPicker.tsx,
+  // replacing the plain MUI Select AxesTypeSelect.tsx used through checkpoint
+  // 35) -- .selectOption() has never applied since 35, and there is no
+  // <option>/MenuItem anymore either. Click the trigger to open the
+  // FloatingPanel, then click the matching card (axes-option-${id}, the
+  // SAME testid convention the old MenuItems used, kept on purpose so this
+  // click pattern didn't have to change). No waitForTimeout between these
+  // steps: each getByTestId(...).click() already auto-waits for its target
+  // to be attached, visible and stable, which covers the popover's own
+  // open-transition and the session-replace re-render (checkpoint 36 sleep-trim).
+  await page.getByTestId('axes-type-trigger').click();
   await page.getByTestId(`axes-option-${axesTypeId}`).click();
   if (capture) {
     // Establish the figure-of-record (checkpoint 103) -- the confirm is
@@ -996,10 +998,10 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await page.getByTestId('apply-box-plot-groups').count()).toBe(0);
 
     await calibrateBarStandard();
-    // slot-status renders only once calibrated (inside {axes && ...}). That
-    // the groups were active from the start is what makes it read "new box"
-    // immediately, with no toggle click in between.
-    expect(await textOf('slot-status')).toMatch(/Min.*new box/);
+    // The tips bar names the slot once calibrated. That the groups were
+    // active from the start is what makes it read "new box" immediately,
+    // with no toggle click in between.
+    expect(await textOf('tips-bar')).toMatch(/Min.*new box/);
     // No refreshCanvasBox: unlike the toggle path, nothing appears/disappears
     // above the canvas here -- the groups were present from the start.
     const pys = [385, 355, 325, 295, 265];
@@ -1009,18 +1011,18 @@ describe('Workspace: Box Plot / Point Groups', () => {
     }
   });
 
-  it('files 5 clicks into one tuple, the status line and table tracking the cursor, then rolls over to a new box', async () => {
+  it('files 5 clicks into one tuple, the tips bar and table tracking the cursor, then rolls over to a new box', async () => {
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
-    expect(await textOf('slot-status')).toMatch(/Min.*new box/);
+    expect(await textOf('tips-bar')).toMatch(/Min.*new box/);
     expect(await textOf('box-plot-glyph-count')).toBe('0'); // no complete tuple yet
 
     const pys = [385, 355, 325, 295, 265];
     const nextLabels = ['Q1', 'Median', 'Q3', 'Max', 'Min'];
     for (let i = 0; i < pys.length; i++) {
       await clickAt(300, pys[i]!);
-      const status = await textOf('slot-status');
+      const status = await textOf('tips-bar');
       expect(status).toContain(nextLabels[i]);
       expect(status).toMatch(i < pys.length - 1 ? /box 1/ : /new box/);
       // The box-and-whisker glyph (checkpoint 22) only appears once all 5
@@ -1044,14 +1046,14 @@ describe('Workspace: Box Plot / Point Groups', () => {
 
     await clickAt(300, 385); // Min
     await clickAt(300, 355); // Q1
-    expect(await textOf('slot-status')).toContain('Median');
+    expect(await textOf('tips-bar')).toContain('Median');
 
     // Del in Place Point mode deletes the active (newest) point; for the last
     // point it routes through removeLastPoint, preserving the group cursor walk-back.
     await page.keyboard.press('Delete');
     await page.waitForTimeout(100);
 
-    expect(await textOf('slot-status')).toMatch(/Q1.*box 1/);
+    expect(await textOf('tips-bar')).toMatch(/Q1.*box 1/);
     const tableText = await textOf('points-table');
     expect(tableText).toContain('0.5'); // Min still filled (fmtValue formatting)
     expect(tableText).not.toContain('1.5'); // Q1 slot cleared back to '—'
@@ -1071,36 +1073,48 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await textOf('box-plot-glyph-count')).toBe('0');
   });
 
-  it('auto-labels a new tuple, and lets the category name be edited inline', async () => {
+  it('leaves a new tuple unnamed (dash at rest), and lets the category name be edited inline (v2.0)', async () => {
+    // ⚑ v2.0, 2026-07-30: no more WPD-ported "Bar0" default -- David caught the
+    // same fake-name defect live on Pie ("Slice0"/"Slice1") and settled it for
+    // every tuple type at once (tenet 9: a name is the user's to type, never
+    // invented). The category cell is also click-to-edit now (dash-at-rest span,
+    // input only while focused), matching Spider's own axis-name cell exactly.
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
     await clickAt(300, 385); // starts tuple 0 (Min)
-    // BarAxes.dataPointsLabelPrefix === 'Bar' -- real WPD's own default naming.
-    expect(await page.locator('[data-testid="tuple-label-0"]').inputValue()).toBe('Bar0');
+    expect(await textOf('tuple-label-0')).toBe('—');
 
-    await page.locator('[data-testid="tuple-label-0"]').fill('Sample A');
-    expect(await page.locator('[data-testid="tuple-label-0"]').inputValue()).toBe('Sample A');
+    await page.getByTestId('tuple-label-0').click();
+    await page.getByTestId('tuple-label-0').fill('Sample A');
+    await page.getByTestId('tuple-label-0').blur();
+    await page.waitForTimeout(120);
+    expect(await textOf('tuple-label-0')).toBe('Sample A');
 
     // The custom name survives filling the rest of the tuple, and a second
-    // tuple gets its own independent default.
+    // tuple stays unnamed too -- its own independent dash, not "Bar1".
     for (const py of [355, 325, 295, 265]) await clickAt(300, py);
-    expect(await page.locator('[data-testid="tuple-label-0"]').inputValue()).toBe('Sample A');
+    expect(await textOf('tuple-label-0')).toBe('Sample A');
 
     await clickAt(500, 385); // starts tuple 1
-    expect(await page.locator('[data-testid="tuple-label-1"]').inputValue()).toBe('Bar1');
+    expect(await textOf('tuple-label-1')).toBe('—');
   });
 
   it('deletes a whole box with the row ✕, the label rides the box, and undo restores it (checkpoint 129)', async () => {
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
-    // Box 0, named Sample A.
+    // Box 0, named Sample A. Category cell is click-to-edit (v2.0) -- click it
+    // into an input before filling, same as Spider's own axis-name cell.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(300, py);
-    await page.locator('[data-testid="tuple-label-0"]').fill('Sample A');
+    await page.getByTestId('tuple-label-0').click();
+    await page.getByTestId('tuple-label-0').fill('Sample A');
+    await page.getByTestId('tuple-label-0').blur();
     // Box 1 to the right, named Sample B.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(500, py);
-    await page.locator('[data-testid="tuple-label-1"]').fill('Sample B');
+    await page.getByTestId('tuple-label-1').click();
+    await page.getByTestId('tuple-label-1').fill('Sample B');
+    await page.getByTestId('tuple-label-1').blur();
     await page.waitForTimeout(50);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(2);
     expect(await textOf('box-plot-glyph-count')).toBe('2'); // both tuples complete
@@ -1112,7 +1126,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await textOf('box-plot-glyph-count')).toBe('1');
     // Sample B shifted down to row 0 -- the label rides the box, not the index --
     // and it kept its own points (proof box 1 survived, not box 0).
-    expect(await page.locator('[data-testid="tuple-label-0"]').inputValue()).toBe('Sample B');
+    expect(await textOf('tuple-label-0')).toBe('Sample B');
 
     // One undo brings the whole box back.
     await page.getByTestId('undo').click();
@@ -1892,10 +1906,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(400);
 
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
-    // Checkpoint 35: axes-type-select is a real MUI Select, not a native
-    // <select> -- .inputValue() no longer applies. It displays the
-    // selected MenuItem's own label text ('XY', not the config id 'xy').
-    expect(await textOf('axes-type-select')).toContain('XY');
+    // v2.0: the trigger displays the active type's own label text ('XY',
+    // not the config id 'xy'), same as the MUI Select it replaced did.
+    expect(await textOf('axes-type-trigger')).toContain('XY');
     // The selector carries a visible "Graph type" caption so a first-time user
     // knows the bare "XY" chip is the type to change before calibrating a
     // non-XY figure (only what's on screen).
@@ -2237,7 +2250,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
     expect(lines[0]).toBe('category,Min,Q1,Median,Q3,Max');
     const [category, ...values] = lines[1]!.split(',');
-    expect(category).toBe('Bar0'); // BarAxes.dataPointsLabelPrefix + tuple index, checkpoint 23's default naming
+    // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- an
+    // unnamed category exports as an empty cell, not a fake transcription.
+    expect(category).toBe('');
     // closeTo(x, 2), not 6: the values come from pixel clicks mapped through
     // the canvas view, and checkpoint 39's canvas-dominant layout made the
     // canvas larger with a different fit scale, so the same clicks land
@@ -2281,7 +2296,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
     expect(lines[0]).toBe('category,Bar start,Bar end,Value');
     const cells = lines[1]!.split(',');
-    expect(cells[0]).toBe('Bar0'); // the auto-label, not an empty cell
+    // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
+    // category column is still present and exported (proven by lines[0]'s
+    // header above), just empty until the user actually types a name.
+    expect(cells[0]).toBe('');
     expect(Number(cells[1])).toBeCloseTo(0, 1); // Bar start -- the baseline end
     expect(Number(cells[2])).toBeCloseTo(5, 1); // Bar end -- the far end
     expect(Number(cells[3])).toBeCloseTo(5, 1); // the derived Value
@@ -2374,10 +2392,11 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
   it('types a category name and prefills it into the next series (v1.3 #9)', async () => {
     // A Bar figure's independent variable is a NAME the reader transcribes off
-    // the tick labels. v2.0: a bar's category is now the TUPLE-label input
-    // (tuple-label-N), not a per-point category-S-N field -- Bar moved from
-    // per-point to per-tuple naming when it became a 2-slot interval record.
-    // The PREFILL algorithm itself (nearest-named-bar-along-the-category-axis)
+    // the tick labels. v2.0: naming is the shared bar table's own category
+    // column (bar-category-name-N, one row per CATEGORY, click-to-edit --
+    // see getBarCategoryTable), not a per-series tuple-label field -- so a
+    // rename is visible to every series sharing that category at once. The
+    // PREFILL algorithm itself (nearest-named-bar-along-the-category-axis)
     // is unchanged, just ported from points to tuples.
     await resetWorkspace('bar');
     await clickAt(300, 400);
@@ -2387,29 +2406,49 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    await dragMarker(250, 400, 250, 250); // bar 1 (tuple 0)
-    await dragMarker(400, 400, 400, 200); // bar 2 (tuple 1)
-    await page.getByTestId('tuple-label-0').fill('Flax');
-    await page.getByTestId('tuple-label-1').fill('Hemp');
-    await page.getByTestId('points-table').click(); // blur -> commit
+    await dragMarker(250, 400, 250, 250); // bar 1 (category 0)
+    await dragMarker(400, 400, 400, 200); // bar 2 (category 1)
+    await page.getByTestId('bar-category-name-0').click();
+    await page.getByTestId('bar-category-name-0').fill('Flax');
+    await page.getByTestId('bar-category-name-0').blur();
+    await page.getByTestId('bar-category-name-1').click();
+    await page.getByTestId('bar-category-name-1').fill('Hemp');
+    await page.getByTestId('bar-category-name-1').blur();
+    await page.waitForTimeout(100);
 
-    // A second series of the same grouped chart inherits the names, matched to
-    // whichever named bar sits nearest along the category axis.
+    // A second series of the same grouped chart inherits the SAME categories,
+    // matched to whichever named bar sits nearest along the category axis --
+    // proven by the table staying at 2 rows (not growing to 4) with series
+    // 2's own values landing in those same two rows.
     await page.getByTestId('add-series').click();
     await page.waitForTimeout(100);
     await dragMarker(270, 400, 270, 300);
     await dragMarker(420, 400, 420, 260);
     await page.waitForTimeout(100);
-    expect(await page.getByTestId('tuple-label-0').inputValue()).toBe('Flax');
-    expect(await page.getByTestId('tuple-label-1').inputValue()).toBe('Hemp');
+    expect(await textOf('bar-category-name-0')).toBe('Flax');
+    expect(await textOf('bar-category-name-1')).toBe('Hemp');
+    expect(await page.getByTestId('bar-category-name-2').count()).toBe(0); // still 2 rows
+    expect(await textOf('bar-cell-0-0')).not.toBe('—'); // series 1's Flax bar
+    expect(await textOf('bar-cell-1-0')).not.toBe('—'); // series 2's, same row
 
-    // ...and it is the bar's OWN name, so retyping one row moves nothing else.
-    await page.getByTestId('tuple-label-1').fill('Jute');
-    await page.getByTestId('points-table').click();
+    // ...and renaming the ROW is a rename of that one shared category, seen by
+    // every series bound to it at once -- the whole point of one row per
+    // category rather than each series keeping its own independent copy.
+    // (v1.3 #9's original bug -- retyping a wrong per-series guess silently
+    // renaming another series' genuinely-correct bar -- doesn't recur here:
+    // there is no independent per-series copy left TO diverge. Detaching one
+    // series' bar into a category of its own, if a prefill guess is wrong,
+    // is a different action than renaming this shared row and not this
+    // table's job.)
+    await page.getByTestId('bar-category-name-1').click();
+    await page.getByTestId('bar-category-name-1').fill('Jute');
+    await page.getByTestId('bar-category-name-1').blur();
     await page.waitForTimeout(100);
-    expect(await page.getByTestId('tuple-label-1').inputValue()).toBe('Jute');
+    expect(await textOf('bar-category-name-1')).toBe('Jute');
+    expect(await textOf('bar-cell-0-1')).not.toBe('—'); // series 1's bar, same row
+    expect(await textOf('bar-cell-1-1')).not.toBe('—'); // series 2's, still the same row
 
-    // The typed name replaces the Bar<i> placeholder in the file.
+    // The typed name replaces an empty category cell in the file.
     const csvPath = tempFilePath('csv');
     await stubSaveDialog(csvPath);
     await page.getByTestId('export-csv').click();
@@ -3587,7 +3626,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
-    // Auto-trace ▸ Scattered points on the navy markers.
+    // Auto-extract ▸ Scattered points on the navy markers.
     await selectAutoExtract('colour');
     await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
     // calibrateXYStandard's synthetic box does not bound this example's markers,
@@ -4729,40 +4768,45 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
 
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-polar').waitFor({ state: 'visible' });
-    // All bundled examples are listed (one per graph type, plus the 4-series XY,
-    // the scatter, the dash-coded release curves, and the multi-page PDF). 19
-    // since v1.6 added FOUR pie figures -- plain, exploded, donut and tilted --
-    // the others: XY, XY-multi, scatter, dash-styles, error-bar, histogram, bar,
-    // categorical, box-plot, polar, spider, ternary, map, CCR, multi-page PDF.
+    // All bundled examples are listed. 22: XY, XY-multi, scatter, dash-styles,
+    // error-bar, histogram, bar, bar-grouped, bar-stacked, bar-floating,
+    // categorical, box-plot, polar, spider, the four pies (plain, exploded,
+    // donut, tilted), ternary, map, CCR, multi-page PDF.
     //
-    // ⚑ Four rather than one, and that is the point of the type rather than
-    // padding: a pie's hard cases are not variations on the plain one. The donut
-    // has no centre to click, the exploded slice does not share the centre it does
-    // have, and the tilted one is a circle only under an affine map. One example
-    // would show that pie "works" while leaving three of its four shapes untried.
+    // ⚑ Four pies rather than one, and that is the point of the type rather
+    // than padding: a pie's hard cases are not variations on the plain one.
+    // The donut has no centre to click, the exploded slice does not share
+    // the centre it does have, and the tilted one is a circle only under an
+    // affine map. One example would show that pie "works" while leaving
+    // three of its four shapes untried. Same reasoning gave Bar three more
+    // (v2.0, 2026-07-30): grouped, stacked and floating are each a distinct
+    // capture shape, not a variation on the plain single-series case.
     //
     // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
     // without its Help entry is invisible, which is how a graph type ends up with
     // no way in for anyone who did not build it.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(19);
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(22);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
     // The example's image loaded (zoom now enabled) and its graph type was
     // pre-selected.
     expect(await page.getByTestId('zoom-controls-button').isDisabled()).toBe(false);
-    expect(await page.getByTestId('axes-type-select').textContent()).toContain('Polar');
+    expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('Polar');
   });
 
   it('the Line (categorical X) example loads and pre-selects its type (checkpoint 107)', async () => {
     // David: the categorical type needed an example so a first-time user can see
-    // what it means. Verify the new entry wires to the right graph type.
+    // what it means. Verify the new entry wires to the right graph type. The
+    // type's own picker LABEL was shortened to plain "Line" 2026-07-30 (the
+    // parenthetical moved to the icon); the example's own name still says
+    // "(categorical X)" since that's teaching content, not the type's label.
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-categorical').waitFor({ state: 'visible' });
     await page.getByTestId('example-categorical').click();
     await waitForImageFitted();
     expect(await page.getByTestId('zoom-controls-button').isDisabled()).toBe(false);
-    expect(await page.getByTestId('axes-type-select').textContent()).toContain('Line (categorical X)');
+    expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('Line');
   });
 
   it('the multi-page PDF example opens as a PDF with the page flipper (checkpoint 114)', async () => {
@@ -4815,12 +4859,12 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
     await clickAt(250, 175); // a data point, definitely unsaved work
 
     dialogMessages = [];
-    await page.getByTestId('axes-type-select').click();
+    await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-bar').click();
     // The confirm() fired (auto-accepted by the harness), and the switch went
     // through once accepted.
     expect(dialogMessages.some((m) => /unsaved work/i.test(m))).toBe(true);
-    expect(await page.getByTestId('axes-type-select').textContent()).toContain('Bar');
+    expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('Bar');
   });
 
   it('grid-removal eyedropper: shows a hint, then samples a color from the image', async () => {
@@ -4888,7 +4932,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
     await page.getByTestId('example-xy-multi').click();
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
-    expect(await textOf('axes-type-select')).toContain('XY');
+    expect(await textOf('axes-type-trigger')).toContain('XY');
   });
 
   it('the canvas cursor is a crosshair while placing points, a grab hand only when panning', async () => {
@@ -5578,18 +5622,19 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
 
   it('offers Histogram in the graph-type dropdown, beside XY rather than hidden behind Bar', async () => {
     await resetWorkspace('xy');
-    await page.getByTestId('axes-type-select').click();
+    await page.getByTestId('axes-type-trigger').click();
     const labels = await page.locator('[data-testid^="axes-option-"]').allTextContents();
     await page.keyboard.press('Escape');
     // Adjacency is the point: Bar is the tempting-but-wrong pick for a
     // histogram (it has no numeric x at all), so the right entry has to be
     // visible right next to it -- nothing here may depend on tribal knowledge.
     // "Error Bars" is deliberately gone (checkpoint 79): it was checkpoint 70's
-    // interim graph type, and error bars are rail tool 7 now, so error attaches
+    // interim graph type, and error bars are rail tool 6 now, so error attaches
     // to an ordinary series after you have traced it rather than being a kind of
     // chart you must pick before you start.
-    // "Line (categorical X)" (checkpoint 101) sits beside Bar: it shares Bar's
-    // value-only calibration (X is a category, not a number) but plots points.
+    // "Line" (checkpoint 101; label shortened from "Line (categorical X)"
+    // 2026-07-30) sits beside Bar: it shares Bar's value-only calibration (X is a
+    // category, not a number) but plots points.
     // "Box Plot" (checkpoint 107) joins them -- also BarAxes underneath -- promoted
     // from a hidden Bar toggle to a discoverable entry (a keystone-test fix).
     // "Spider / Radar" (v1.4) sits beside Polar for the same adjacency reason: both
@@ -5597,7 +5642,7 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // radial scale with a measured angle, versus N independent axes and no angle at
     // all -- is a question the user should be asked next to the alternative, not
     // left to discover after calibrating the wrong one.
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line (categorical X)', 'Box Plot', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line', 'Box Plot', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {
@@ -5687,7 +5732,7 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     await page.getByTestId('open-project').click();
     await page.waitForTimeout(400);
 
-    expect((await page.getByTestId('axes-type-select').textContent())?.trim()).toContain('Histogram');
+    expect((await page.getByTestId('axes-type-trigger').textContent())?.trim()).toContain('Histogram');
     expect(await binRow(0)).toEqual(['1', '5', '10', '5']);
     fs.unlinkSync(savePath);
   });
@@ -5897,10 +5942,10 @@ describe('Workspace: calibration geometry preview (checkpoint 84)', () => {
 // violations ("nothing may constrain graph in -> reliable data out").
 describe('Workspace: changing graph type is non-destructive (checkpoint 87)', () => {
   async function currentType(): Promise<string> {
-    return textOf('axes-type-select');
+    return textOf('axes-type-trigger');
   }
   async function selectType(id: string) {
-    await page.getByTestId('axes-type-select').click();
+    await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId(`axes-option-${id}`).click();
     await page.waitForTimeout(200);
   }
@@ -6159,17 +6204,18 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await page.getByTestId('example-errorbar').click();
     await page.waitForTimeout(400);
     // The picker shows a real type, not an empty box.
-    expect(await textOf('axes-type-select')).toContain('XY');
+    expect(await textOf('axes-type-trigger')).toContain('XY');
     // And the tool that the example is FOR is right there.
     expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
   });
 
   it('is a rail tool, NOT a graph type — so you trace first and add error after', async () => {
     await resetWorkspace('xy');
-    // The retirement, asserted directly: the dropdown must no longer offer it.
+    // The retirement, asserted directly: the picker must no longer offer it.
     // As a graph type the choice came BEFORE you started (trace an XY curve,
     // then want error, and you started over) -- problem #1 of the tuple model.
-    const options = await page.locator('[data-testid="axes-type-select"] option').allTextContents();
+    await page.getByTestId('axes-type-trigger').click();
+    const options = await page.locator('[data-testid^="axes-option-"]').allTextContents();
     expect(options.join('|')).not.toMatch(/error/i);
     // Reachable instead as tool 7, visible on the rail with its shortcut badge.
     expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
@@ -6879,7 +6925,7 @@ describe('spider charts', () => {
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
 
     // The capture slots are the axes' own names, which no static config could hold.
-    expect(await textOf('slot-status')).toContain('Strength');
+    expect(await textOf('tips-bar')).toContain('Strength');
 
     // Halfway out along each ray reads 50 on each axis's own scale.
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
@@ -6891,7 +6937,7 @@ describe('spider charts', () => {
     // table text — the same way the bar Category column is read.
     expect(await textOf('spider-axis-name-0')).toBe('Strength');
     expect(await textOf('points-table')).toContain('50');
-    expect(await textOf('slot-status')).toMatch(/Strength/);
+    expect(await textOf('tips-bar')).toMatch(/Strength/);
   });
 
   it('tells the user WHERE to aim, and calls a tuple by its own name', async () => {
@@ -7144,10 +7190,14 @@ describe('spider charts', () => {
     await page.getByTestId('spider-axis-name-2').blur();
     await page.waitForTimeout(150);
     expect(await textOf('spider-axis-name-2')).toBe('—');
-    // The capture cursor names the axis it is about to fill — from the same source.
-    expect(await textOf('slot-status')).toContain('Elongation at break (%)');
-    // ...and so does the guidance. (Esc first: with a point selected the tips bar
-    // is showing the nudge line, which is a different branch entirely.)
+    // The capture cursor names the axis it is about to fill — from the tips bar's
+    // own slotAimNote suffix (v2.0, 2026-07-30), which appends it even here: a point
+    // is still selected (the "nudge" branch is active, which never mentions the
+    // axis by name on its own), and slotAimNote covers exactly that gap.
+    expect(await textOf('tips-bar')).toContain('Elongation at break (%)');
+    // ...and once nothing is selected, the tips bar's OWN aim-instruction branch
+    // says it directly (no suffix needed -- that's what slotAimNote's own
+    // "don't repeat what's already said" check is for).
     await page.keyboard.press('Escape');
     await page.waitForTimeout(120);
     expect(await textOf('tips-bar')).toContain('Elongation at break (%)');
@@ -7174,39 +7224,50 @@ describe('spider charts', () => {
   });
 
   it('says how far through the profile you are, and what you left behind', async () => {
-    // ⚑ WHAT THIS LINE IS FOR (v1.6). It used to read "Next point fills: Axis 1 (new
+    // ⚑ WHAT THIS LINE IS FOR. It used to read "Next point fills: Axis 1 (new
     // profile)" -- a strict SUBSET of the tips bar two inches below, which already
     // said "Click where the shape crosses the Axis 1 axis … (starting a new profile)".
-    // Two surfaces doing one job. Now the tips bar owns the instruction and this owns
-    // the STATE, which is the half that was nowhere on screen.
+    // Two surfaces doing one job. v1.6 split it into its own sidebar line (tips bar =
+    // instruction, sidebar = STATE); v2.0 (2026-07-30) folded it back into the tips
+    // bar a second time -- David, re-finding the exact same "two surfaces, one job"
+    // complaint on Pie: "Hint should be in the hint bar, not in other places." It now
+    // lives in guidanceTip's own slotAimNote suffix, appended only where the tips
+    // bar's own branch doesn't already name the slot (see that comment) -- which is
+    // why the exact "(N of M filled)" count only shows up once a point is selected
+    // (the "nudge" branch, below, never names the slot on its own); right after
+    // calibration, with nothing selected yet, the aim branch already says "Strength"
+    // by itself and the count isn't repeated.
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
 
-    // Nothing recorded: no accusation, because nothing has been abandoned.
-    expect(await textOf('capture-progress')).toBe('Next: Strength — new profile (0 of 3 filled)');
+    // Nothing recorded: no accusation, because nothing has been abandoned. (No count
+    // here -- the aim branch already names the axis on its own, see above.)
+    expect(await textOf('tips-bar')).toMatch(/Strength.*new profile/);
 
     // Part-way through the first profile it counts up, and STILL says nothing about
-    // incompleteness -- the profile in hand is unfinished because you are in it.
+    // incompleteness -- the profile in hand is unfinished because you are in it. A
+    // point is selected after each click, so the suffix fires and the count shows.
     await clickAt(...spoke(0, 3, R / 2));
-    expect(await textOf('capture-progress')).toBe('Next: Weight — profile 1 (1 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Weight — profile 1 (1 of 3 filled)');
     await clickAt(...spoke(1, 3, R / 2));
-    expect(await textOf('capture-progress')).toBe('Next: Cost — profile 1 (2 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Cost — profile 1 (2 of 3 filled)');
 
     // Finish it, and start a second.
     await clickAt(...spoke(2, 3, R / 2));
-    expect(await textOf('capture-progress')).toBe('Next: Strength — new profile (0 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Strength — new profile (0 of 3 filled)');
     await clickAt(...spoke(0, 3, R / 4));
-    expect(await textOf('capture-progress')).toBe('Next: Weight — profile 2 (1 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Weight — profile 2 (1 of 3 filled)');
 
     // ⚑ THE SIGNAL. Punch a hole in the FINISHED profile while the second is in hand.
     // A spider's slots are N×1D -- independently meaningful and independently EMPTY --
     // so a profile missing one axis looks exactly like a whole one on the figure, and
     // reads as a single dash in a table you would have to scan row by row. Now it is
-    // said out loud, in the place you are already looking.
+    // said out loud, in the place you are already looking. Eraser mode's own branch
+    // never mentions the slot at all, so the suffix always fires here.
     await page.getByTestId('mode-eraser').click();
     await clickAt(...spoke(1, 3, R / 2));
     await page.waitForTimeout(150);
-    expect(await textOf('capture-progress')).toContain('1 profile incomplete');
+    expect(await textOf('tips-bar')).toContain('1 profile incomplete');
   });
 
   it('erases ONE reading, and the freed slot can be re-aimed from the table', async () => {
@@ -7228,16 +7289,17 @@ describe('spider charts', () => {
     expect(await textOf('spider-cell-0-0')).toMatch(/\d/); // untouched
     expect(await textOf('spider-cell-0-1')).toBe('—'); // the one erased
     expect(await textOf('spider-cell-0-2')).toMatch(/\d/); // untouched
-    // ...and the freed slot is what the next click fills.
-    expect(await textOf('slot-status')).toContain('Weight');
+    // ...and the freed slot is what the next click fills. Eraser mode's own tips-bar
+    // branch never names a slot on its own, so slotAimNote's suffix always fires here.
+    expect(await textOf('tips-bar')).toContain('Weight');
 
     // Now erase a SECOND reading, leaving two gaps, and aim at the later one.
     await clickAt(...spoke(0, 3, R / 2));
     await page.waitForTimeout(150);
-    expect(await textOf('slot-status')).toContain('Strength'); // the first gap
+    expect(await textOf('tips-bar')).toContain('Strength'); // the first gap
     await page.getByTestId('spider-cell-0-1').click();
     await page.waitForTimeout(150);
-    expect(await textOf('slot-status')).toContain('Weight'); // the one asked for
+    expect(await textOf('tips-bar')).toContain('Weight'); // the one asked for
 
     // And a capture lands in the slot that was aimed at, not the first gap.
     await page.getByTestId('mode-place-point').click();
@@ -7313,7 +7375,7 @@ describe('spider charts', () => {
 
     // Every axis kept its own name and its own scale: each ray's known point is a
     // different value, so half way out reads half of THAT axis's range.
-    expect(await textOf('slot-status')).toContain('A');
+    expect(await textOf('tips-bar')).toContain('A');
     for (let i = 0; i < 5; i++) await clickAt(...spoke(i, 5, R / 2));
     const table = await textOf('points-table');
     for (const half of ['5', '10', '15', '20', '25']) expect(table).toContain(half);
@@ -7431,7 +7493,7 @@ describe('pie charts (v1.6)', () => {
 
       // The app opened it as a PIE, not as something that merely looked plausible.
       await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
-      expect(await page.getByTestId('axes-type-select').textContent()).toContain('Pie');
+      expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('Pie');
 
       // ⚑ Every slice, read off the spreadsheet the user actually sees.
       const expected = truth.series[0]!.points;
@@ -7443,12 +7505,12 @@ describe('pie charts (v1.6)', () => {
         .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 10000 })
         .toBeGreaterThanOrEqual(expected.length);
       for (let i = 0; i < expected.length; i++) {
-        // ⚑ The CATEGORY is an editable input, not cell text -- the same
-        // always-editable field a Box Plot's tuples have carried since checkpoint 23,
-        // which pie inherits rather than reinventing.
-        expect(await page.getByTestId(`tuple-label-${i}`).inputValue(), `${name} row ${i} category`).toBe(
-          expected[i]!.category
-        );
+        // ⚑ The CATEGORY is a click-to-edit field (v2.0, 2026-07-30) -- dash-at-rest
+        // text, an input only while focused, the same field a Box Plot's tuples have
+        // carried since checkpoint 23 (now click-to-edit there too), which pie
+        // inherits rather than reinventing. Reading it back is plain text, not
+        // inputValue() -- nothing here needs to enter edit mode.
+        expect(await textOf(`tuple-label-${i}`), `${name} row ${i} category`).toBe(expected[i]!.category);
         // ⚑ ...and the VALUE is one derived column, not the two boundary angles.
         // Before this existed the table showed "270" and "61.2" for a slice worth 42.
         const shown = Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, ''));

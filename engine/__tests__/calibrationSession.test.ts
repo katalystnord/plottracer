@@ -671,18 +671,18 @@ describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple)
     expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Hemp', 'Flax']);
   });
 
-  it('falls back to the plain Bar<i> default rather than reuse a name when the pairing is ambiguous', () => {
+  it('leaves the category unnamed rather than reuse a name when the pairing is ambiguous', () => {
     // A category appears at most once per series, so a second claim on one name
     // means the nearest-bar pairing cannot tell -- and refusing to prefill is
     // honest where reusing a name that looks typed is not (tenets 9+10).
     //
-    // ⚑ v2.0 DIFFERENCE FROM THE OLD PER-POINT BEHAVIOUR: a bar tuple that fails
-    // the prefill now falls back to autoLabelTuple's plain numbered default
-    // ("Bar1"), the SAME fallback every other tuple-shaped type (Box Plot, Pie,
-    // Histogram) already gets unconditionally on every new tuple -- Bar now goes
-    // through that identical code path instead of staying blank the way an
-    // unslotted point used to. Still visibly a placeholder, still editable, and
-    // still never a name that looks transcribed.
+    // ⚑ v2.0, revised: a bar tuple that fails the prefill no longer falls back to
+    // a WPD-style numbered default ("Bar1") either -- David: "we do not need the
+    // names, the position is enough for OUR identification. But the user probably
+    // needs the category names," meaning a name is the user's to type, never
+    // invented and written as if it were one (tenet 9). It gets its own reserved,
+    // distinct category slot (so it has somewhere to hang a name once typed) but
+    // getTupleLabel reads back '' until then, same as a Spider axis nobody named.
     const session = barSession();
     addBar(session, 150, 300, 250);
     session.setTupleLabel(0, 'Flax');
@@ -690,7 +690,21 @@ describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple)
     session.addDataset('Alkali');
     addBar(session, 155, 300, 245);
     addBar(session, 158, 300, 235); // a second bar by the same donor
-    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Bar1']);
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', '']);
+  });
+
+  it('two still-unnamed bars get DISTINCT category slots, not one shared "" category', () => {
+    // The trap a naive fix falls into: writing '' via the same reuse-by-name path
+    // setTupleLabel uses for a typed name would look up the FIRST bar's empty
+    // category and reuse its index for the second -- silently linking two
+    // genuinely different bars, so naming one would rename both. Each reserved
+    // slot must come from a fresh categoryAxis.addCategory('') instead.
+    const session = barSession();
+    addBar(session, 150, 300, 250); // tuple 0, unnamed
+    addBar(session, 250, 300, 200); // tuple 1, unnamed -- must not collapse onto tuple 0
+    session.setTupleLabel(1, 'Hemp');
+    expect(session.getTupleLabel(0)).toBe(''); // untouched by naming the OTHER bar
+    expect(session.getTupleLabel(1)).toBe('Hemp');
   });
 
   it('carries a typed name into the Bar export (no Bar<i> fallback once named)', () => {
@@ -1021,19 +1035,30 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
   });
 
   describe('category naming (checkpoint 23)', () => {
-    it('auto-labels a new tuple with axes.dataPointsLabelPrefix + tuple index', () => {
+    // ⚑ v2.0, revised: a new tuple no longer gets axes.dataPointsLabelPrefix +
+    // index written as if it were a real name ("Bar0") -- David: "we do not
+    // need the names, the position is enough for OUR identification. But the
+    // user probably needs the category names," i.e. a name is the user's to
+    // type, never invented (tenet 9). usesCategoryAxis covers Box Plot exactly
+    // like plain Bar (same comment as the setTupleLabel test below), so this
+    // reserved-but-unnamed default applies here too.
+    it('reserves a distinct, unnamed category slot rather than inventing "Bar0"/"Bar1"', () => {
       const session = new CalibrationSession(BAR_AXES_CONFIG);
       calibrateStandardBar(session);
       session.runCalibration();
       session.applyBoxPlotGroups();
 
       session.addDataPoint(300, 500); // starts tuple 0 (Min)
-      expect(session.getTupleLabel(0)).toBe('Bar0'); // BarAxes.dataPointsLabelPrefix === 'Bar'
-      expect(session.getTupleRows()[0]!.label).toBe('Bar0');
+      expect(session.getTupleLabel(0)).toBe('');
+      expect(session.getTupleRows()[0]!.label).toBe('');
 
       for (const py of [460, 420, 380, 340]) session.addDataPoint(300, py); // Q1, Median, Q3, Max
       session.addDataPoint(300, 500); // starts tuple 1 (Min)
-      expect(session.getTupleLabel(1)).toBe('Bar1');
+      expect(session.getTupleLabel(1)).toBe('');
+      // Distinct slots, not one shared "" category (see calibrationSession's
+      // own "two still-unnamed bars" test for the merge trap this guards).
+      session.setTupleLabel(1, 'Sample B');
+      expect(session.getTupleLabel(0)).toBe('');
     });
 
     it('setTupleLabel overrides the auto-generated default, via the canonical CategoryAxis', () => {
@@ -1989,9 +2014,9 @@ describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoin
   function twoBoxes(session: CalibrationSession<BarAxes>) {
     calibrateStandardBar(session);
     session.runCalibration();
-    // Box 0 (Bar0): Min..Max at py 500,460,420,380,340
+    // Box 0: Min..Max at py 500,460,420,380,340
     for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py);
-    // Box 1 (Bar1): distinct py values so it's identifiable after a re-index
+    // Box 1: distinct py values so it's identifiable after a re-index
     for (const py of [480, 440, 400, 360, 320]) session.addDataPoint(300, py);
   }
 
@@ -2009,11 +2034,15 @@ describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoin
   it('re-indexes the surviving tuples and their labels travel with them, not the index', () => {
     const session = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
     twoBoxes(session);
+    // v2.0: a new tuple no longer gets an invented "Bar<i>" name (tenet 9) --
+    // type real names so this test still proves what it's for: that a LABEL
+    // is metadata on the tuple's own primary point and so travels WITH it
+    // through a re-index, not lost or swapped with the tuple it displaced.
+    session.setTupleLabel(0, 'Box0');
+    session.setTupleLabel(1, 'Box1');
 
     session.removeTuple(0); // box 1 shifts down to index 0
-    // The label is metadata on the tuple's own primary point, so it moves WITH
-    // the box: what was Bar1 is now the only (index-0) row, still named Bar1.
-    expect(session.getTupleLabel(0)).toBe('Bar1');
+    expect(session.getTupleLabel(0)).toBe('Box1');
     // And it carries box 1's data (Min from py 480 -> (500-480)/400*10 = 0.5),
     // proving the right points survived, not box 0's.
     expect(session.getTupleRows()[0]!.points[0]!.data![0]).toBeCloseTo(0.5, 6);
@@ -2204,10 +2233,12 @@ describe('what a graph type declares it CAN DO (v1.5)', () => {
 
   it('bar is the OTHER deliberate exception (v2.0 Phase 7): its blob bounding box IS its two ends', () => {
     expect(BAR_AXES_CONFIG.autoExtractKind).toBe('bounding-box');
-    // Box Plot/Histogram/categorical Line have no comparable "opposite
-    // corners" a bounding box could mean for their own record shape, so
-    // they stay refused entirely, unlike Bar.
-    expect(HISTOGRAM_AXES_CONFIG.autoExtractKind).toBe('none');
+    // Histogram joined it 2026-07-30 -- a bin's bounding box is the same
+    // shape, just read as top corners rather than opposite ones (see
+    // addBarDetectBoxes's own comment). Box Plot/categorical Line have no
+    // comparable shape a bounding box could mean for their own record, so
+    // they stay refused entirely.
+    expect(HISTOGRAM_AXES_CONFIG.autoExtractKind).toBe('bounding-box');
     expect(BOX_PLOT_AXES_CONFIG.autoExtractKind).toBe('none');
     expect(CATEGORICAL_LINE_CONFIG.autoExtractKind).toBe('none');
   });

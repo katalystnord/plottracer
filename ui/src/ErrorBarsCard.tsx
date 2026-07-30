@@ -7,7 +7,7 @@
  * (docs/error-bars-design.md). The graph-type dropdown entry it replaces
  * (`ERROR_BAR_AXES_CONFIG`, checkpoint 70's interim restore) forced the choice
  * *before you started*: trace an XY curve, then want error, and you started
- * over. A rail tool inverts it -- trace the curve, press 7, add error to what is
+ * over. A rail tool inverts it -- trace the curve, press 6, add error to what is
  * already there. That is what makes "error is a property of a series, not a kind
  * of chart" true in the interface rather than only in the model. A plot with no
  * error bars sees one extra icon and nothing else.

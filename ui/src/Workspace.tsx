@@ -26,7 +26,7 @@ import { polylineRuns } from '../../engine/seriesLine.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Popover, Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
-import { AxesTypeSelect } from './AxesTypeSelect.js';
+import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
 import { FloatingPanel } from './FloatingPanel.js';
 import {
   AppShell,
@@ -71,6 +71,7 @@ import {
   MeasureIcon,
   ImageEditIcon,
   ErrorBarsIcon,
+  GRAPH_TYPE_ICONS,
 } from './icons.js';
 import { MeasureCard, measureIcons, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
@@ -109,6 +110,9 @@ import dashedReleaseSample from '../../samples/xy-dashed-release.png';
 import histogramSample from '../../samples/histogram-pore-size.png';
 import errorBarSample from '../../samples/errorbar-tensile-cure.png';
 import barSample from '../../samples/bar-tensile-strength.png';
+import barGroupedSample from '../../samples/bar-grouped-viability.png';
+import barStackedSample from '../../samples/bar-stacked-cost.png';
+import barFloatingSample from '../../samples/bar-floating-temperature.png';
 import categoricalSample from '../../samples/categorical-fibre-modulus.png';
 import barBoxSample from '../../samples/bar-box-plot-tensile-strength.png';
 import polarSample from '../../samples/polar-diffusion-rate.png';
@@ -396,10 +400,11 @@ const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-trace', 
  * checkpoint 122 introduced -- v2.0 Phase 7 adds a second restricted kind
  * for Bar, so this is now the one place both are decided instead of two
  * separate special cases). `'curve'` (undeclared/default) offers all three;
- * `'along-axes'` (Spider) and `'bounding-box'` (Bar) both have exactly one
- * sensible reading path -- By colour -- so Flood-fill/Guide points would run
- * and silently record nothing; `'none'` offers none at all (auto-extract is
- * refused outright: Box Plot, Histogram, categorical Line). */
+ * `'along-axes'` (Spider) and `'bounding-box'` (Bar, and Histogram since
+ * 2026-07-30) both have exactly one sensible reading path -- By colour -- so
+ * Flood-fill/Guide points would run and silently record nothing; `'none'`
+ * offers none at all (auto-extract is refused outright: Box Plot,
+ * categorical Line -- neither has a shape a colour trace could reduce to). */
 function autoExtractModesFor(kind: AxesTypeConfig<CalibratedAxes>['autoExtractKind']): readonly ToolMode[] {
   const k = kind ?? 'curve';
   if (k === 'none') return [];
@@ -725,70 +730,111 @@ const CheckGlyph = () => (
   </svg>
 );
 
-const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; pdf?: boolean }[] = [
-  { id: 'xy', name: 'XY — stress–strain curve', src: xySample, axes: 'xy' },
-  { id: 'xy-multi', name: 'XY Multiseries — 4 curves', src: xyMultiSample, axes: 'xy' },
+// ⚑ v2.0: names shortened to drop the redundant "Type — " prefix (David) --
+// the Open Example card grid now shows the graph-type ICON per row (the
+// same glyph GraphTypeCardPicker.tsx uses, keyed off `axes`), so restating
+// the type in the label is now the icon's job.
+//
+// ⚑ 2026-07-30: went further and dropped every parenthetical TOOL hint too
+// ("(press 6)", "(Auto-extract ▸ Guide points)", "(Exploded slice)", ...) --
+// David: "if we want to give hints -> hint bar!". They were also drifting
+// out of sync with the actual UI (three were caught stale in the same pass:
+// a wrong hotkey number, a renamed button, a checkbox label that had
+// changed). The tips bar (guidanceTip, below) plus each rail button's own
+// visible shortcut badge already teach the relevant tool once an example is
+// open and the right mode is active -- that is the ONE place this kind of
+// guidance belongs, not restated (and liable to rot) in a menu label. A
+// name here still names what the FIGURE is (an example whose point is a
+// feature you can't tell apart from any other pie is not an example --
+// CLAUDE.md's keystone), just not how to operate the tool.
+const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; icon?: string; pdf?: boolean }[] = [
+  { id: 'xy', name: 'Stress–strain curve', src: xySample, axes: 'xy' },
+  { id: 'xy-multi', name: 'Multiseries — 4 curves', src: xyMultiSample, axes: 'xy' },
   // A scatter of single-colour markers (checkpoint 123) -- the shape the Blob
-  // Detector exists for: Auto-trace by colour ▸ Scattered points reduces each
-  // marker to one centroid. XY axes underneath (scatter is plain XY).
-  { id: 'scatter', name: 'XY Scatter — modulus vs. crosslinker (Auto-trace ▸ Scattered points)', src: scatterSample, axes: 'xy' },
+  // Detector exists for: Auto-extract by colour ▸ Scattered points reduces each
+  // marker to one centroid. XY axes underneath (scatter is plain XY). Which
+  // sub-mode to pick is the Auto-extract fly-out's own job now (see the header
+  // comment above) -- the name used to spell it out as "(Auto-extract ▸
+  // Scattered points)" and had drifted to say "Auto-trace", a name that rail
+  // tool has never actually used (fixed 2026-07-30, then dropped entirely).
+  { id: 'scatter', name: 'Scatter — modulus vs. crosslinker', src: scatterSample, axes: 'xy' },
   // A monochrome technical drawing whose 4 curves differ ONLY by dash style
   // (checkpoint: v0.8, David) -- the case Interpolation-assist exists for. All
-  // black, so Auto-trace by colour can't separate them; dashed, so Segment Fill
+  // black, so Auto-extract by colour can't separate them; dashed, so Segment Fill
   // has no unbroken path to flood -- you drop guide points on the dashed curve
-  // you're following and let the spline fill between (tool 8). Plain XY axes.
-  { id: 'dashed', name: 'XY Dashed curves — dash-coded release (Interpolate ▸ press 8)', src: dashedReleaseSample, axes: 'xy' },
+  // you're following and let the spline fill between (Auto-extract's own
+  // "Guide points" sub-mode). Plain XY axes.
+  { id: 'dashed', name: 'Dashed curves — dash-coded release', src: dashedReleaseSample, axes: 'xy' },
   // Error bars sit with the XY family (all axes:'xy'), above Histogram (David).
   // Opens as XY, not as the retired 'errorbar' graph type (finding C3, fixed
-  // ckpt 85): error is captured on an ordinary series via rail tool 7 now, so
+  // ckpt 85): error is captured on an ordinary series via rail tool 6 now, so
   // the example must demonstrate the path that exists. Left declaring
   // 'errorbar', changeAxesType silently fell back to XY while the dropdown's
   // state was still set to a type it no longer lists -- so the Select rendered
-  // BLANK. The name says "press 7" because an example whose point is a tool you
-  // cannot see is not an example (CLAUDE.md's keystone: he can only use what he
-  // sees on screen).
-  { id: 'errorbar', name: 'XY Error bars — tensile strength ± SD (press 7)', src: errorBarSample, axes: 'xy' },
-  { id: 'histogram', name: 'Histogram — pore size distribution', src: histogramSample, axes: 'histogram' },
-  { id: 'bar', name: 'Bar — tensile strength', src: barSample, axes: 'bar' },
-  // Line (categorical X) needs an example of its own so a first-time user can
-  // see what "X is a category, not a number" means (David) -- a line over
-  // discrete fibre types, the shape the type exists for (checkpoint 101).
-  { id: 'categorical', name: 'Line (categorical X) — fibre modulus', src: categoricalSample, axes: 'categorical' },
+  // BLANK. `icon: 'errorbars'` overrides the shared XY glyph so this row
+  // doesn't look identical to every other XY example.
+  { id: 'errorbar', name: 'Error bars — tensile strength ± SD', src: errorBarSample, axes: 'xy', icon: 'errorbars' },
+  { id: 'histogram', name: 'Pore size distribution', src: histogramSample, axes: 'histogram' },
+  { id: 'bar', name: 'Tensile strength', src: barSample, axes: 'bar' },
+  // Three more bar examples (v2.0, David: "some more bar graph test cases"),
+  // each isolating one shape the v2.0 model exists for -- the same
+  // one-example-per-capability reasoning as the four pies below. Plain
+  // "Tensile strength" above stays the single-series baseline case.
+  //
+  // Grouped: two series sharing one category axis, side by side per category
+  // -- ordinary zero-baseline bars, just two of them per row.
+  { id: 'bar-grouped', name: 'Cell viability — control vs. treatment', src: barGroupedSample, axes: 'bar' },
+  // Stacked: each segment its own drag-box (v2.0's capture model), not a
+  // shared-baseline reading -- the case stackGroup/derivedTupleValue's
+  // SPAN-not-cumulative rule exists for.
+  { id: 'bar-stacked', name: 'Quarterly cost breakdown', src: barStackedSample, axes: 'bar' },
+  // Floating: neither end is the chart's baseline, and several bars cross
+  // zero -- the case the two-corner drag-box exists for (no baseline to
+  // assume, unlike an ordinary bar).
+  { id: 'bar-floating', name: 'Monthly temperature range', src: barFloatingSample, axes: 'bar' },
+  // Line needs an example of its own so a first-time user can see what "X is
+  // a category, not a number" means (David) -- a line over discrete fibre
+  // types, the shape the type exists for (checkpoint 101). Name dropped its
+  // own "(categorical X)" 2026-07-30, matching the type label's own rename
+  // (David: consistency -- the icon carries the distinction now, same as
+  // every other example here).
+  { id: 'categorical', name: 'Fibre modulus', src: categoricalSample, axes: 'categorical' },
   // Opens as the first-class 'boxplot' type (checkpoint 107), not 'bar' + the
   // hidden toggle -- so the example demonstrates the discoverable path.
-  { id: 'boxplot', name: 'Box plot — tensile strength', src: barBoxSample, axes: 'boxplot' },
-  { id: 'polar', name: 'Polar — diffusion rate', src: polarSample, axes: 'polar' },
+  { id: 'boxplot', name: 'Tensile strength (box plot)', src: barBoxSample, axes: 'boxplot' },
+  { id: 'polar', name: 'Diffusion rate', src: polarSample, axes: 'polar' },
   // Spider (v1.4). Three series in distinct colours and, deliberately, SIX AXES
   // WITH SIX DIFFERENT RANGES (tensile 0-120 MPa beside a cost index 0-5) sharing
   // a centre of 0 -- the per-axis-scale case the only prior art excludes by
   // assuming one shared scale, and the thing placing a known point on every spoke
   // exists to buy. Line-only polygons: filled radar shapes blend into new colours
   // where they overlap, and every vertex has to stay clickable.
-  { id: 'spider', name: 'Spider / Radar — material performance profile', src: spiderSample, axes: 'spider' },
+  { id: 'spider', name: 'Material performance profile', src: spiderSample, axes: 'spider' },
   // ⚑ FOUR pies, because each isolates ONE thing the type can do, and a single
   // example would leave three of them undiscoverable. They are also the acceptance
   // set the e2e drives against their own committed ground truth, so what is offered
   // here is exactly what is proven to read correctly.
-  { id: 'pie', name: 'Pie — filler composition', src: pieSample, axes: 'pie' },
-  // The pulled-out slice: click "Slice is exploded", then its tip before its edges.
-  // Named for the button because an example whose point is a control you cannot see
-  // is not an example (the keystone: he can only use what he sees on screen).
-  { id: 'pie-exploded', name: 'Pie — one slice pulled out (Slice is exploded)', src: pieExplodedSample, axes: 'pie' },
+  { id: 'pie', name: 'Filler composition', src: pieSample, axes: 'pie' },
+  // The pulled-out slice: the ExplodedSliceControl.tsx button ("Exploded
+  // slice") sits on the canvas the moment a pie is being captured, so it
+  // needs no menu-label pointer -- click its tip, then its two edges.
+  { id: 'pie-exploded', name: 'One slice pulled out', src: pieExplodedSample, axes: 'pie' },
   // A donut, and the case that made the centre FITTED rather than clicked: there is
   // no centre in the image to click. Its total is printed in the hole, so it also
   // exercises a Total that is not the prefilled 100.
-  { id: 'donut', name: 'Donut — most popular donut flavours (total in the hole)', src: donutSample, axes: 'pie' },
-  // Tilted, standing in for a 3D chart's top face. Named for the checkbox for the
-  // same reason as the exploded one -- read flat it is wrong by several points and
-  // still sums to 100, so the control is the whole lesson.
-  { id: 'pie-tilted', name: 'Pie — tilted / 3D top face (tick Tilted)', src: pieTiltedSample, axes: 'pie' },
-  { id: 'ternary', name: 'Ternary — blend composition', src: ternarySample, axes: 'ternary' },
-  { id: 'map', name: 'Map — collection sites', src: mapSample, axes: 'map' },
-  { id: 'ccr', name: 'Circular chart — temperature', src: ccrSample, axes: 'ccr' },
+  { id: 'donut', name: 'Donut flavours', src: donutSample, axes: 'pie', icon: 'donut' },
+  // Tilted, standing in for a 3D chart's top face -- read flat it is wrong by
+  // several points and still sums to 100, so the "Tilted / 3D pie" checkbox
+  // (a calibration-step option, calibrationSession.ts:1676 -- always visible
+  // there, not hidden) is the whole lesson.
+  { id: 'pie-tilted', name: 'Tilted / 3D top face', src: pieTiltedSample, axes: 'pie' },
+  { id: 'ternary', name: 'Blend composition', src: ternarySample, axes: 'ternary' },
+  { id: 'map', name: 'Collection sites', src: mapSample, axes: 'map' },
+  { id: 'ccr', name: 'Temperature', src: ccrSample, axes: 'ccr' },
   // A multi-page PDF (checkpoint 114) -- opens the PDF (not a single image), so
-  // the page flipper appears and you can capture a figure per page. Demonstrates
-  // the whole multi-figure workflow end to end.
-  { id: 'multipage-pdf', name: 'Multi-page PDF — 3 figures (flip pages, extract each)', src: multipagePdfSample, axes: 'xy', pdf: true },
+  // the page flipper appears on its own and you can capture a figure per page.
+  // Demonstrates the whole multi-figure workflow end to end.
+  { id: 'multipage-pdf', name: 'Multi-page PDF — 3 figures', src: multipagePdfSample, axes: 'xy', pdf: true },
 ];
 
 export function Workspace() {
@@ -939,6 +985,17 @@ export function Workspace() {
   /** Which axis name is being typed into, or null. Click-to-edit, like a value cell
    * -- the name is optional, so it must not sit there as a box demanding input. */
   const [editingAxisName, setEditingAxisName] = useState<number | null>(null);
+  /** Which bar-table CATEGORY row is being typed into, or null -- the same
+   * click-to-edit affordance as editingAxisName above, keyed by categoryIndex
+   * instead of spoke index (v2.0). */
+  const [editingCategoryName, setEditingCategoryName] = useState<number | null>(null);
+  /** Which tuple's plain per-tuple label (Pie's sector name, Box Plot's box
+   * name) is being typed into, or null -- same click-to-edit affordance,
+   * keyed by tupleIndex, for the generic `hasSlots` table's Category column.
+   * v2.0, 2026-07-30: this table used to render a PERMANENT input box
+   * pre-filled with an invented "Slice0"/"Slice1" -- the same defect found
+   * on Bar, caught live on Pie (David: "Same fix here too!!"). */
+  const [editingTupleLabel, setEditingTupleLabel] = useState<number | null>(null);
   // The Select tool's multi-selection (David 2026-07-21): a set of active-series
   // DATA-point indices, filled by a marquee box or single/Shift clicks. Kept
   // separate from activePointIndex (single-select, used by Place Point) so the
@@ -1409,10 +1466,11 @@ export function Workspace() {
   const preAutoExtractModeRef = useRef<ToolMode>('pan');
   const lastAutoExtractMechRef = useRef<ToolMode>('segment-fill');
   const toggleAutoExtract = useCallback(() => {
-    // The rail button greys out for Box Plot/Histogram/categorical Line; the `4`
-    // hotkey is the other door, so the rule lives here where both converge.
-    // Every OTHER mechanism here is a curve tool and would record one of these
-    // types' own datum wrong (a box's whiskers, a bin's height, an ordinal click).
+    // The rail button greys out for Box Plot/categorical Line; the `4` hotkey is
+    // the other door, so the rule lives here where both converge. Every OTHER
+    // mechanism here is a curve tool and would record one of these types' own
+    // datum wrong (a box's whiskers, an ordinal click) -- Histogram used to be
+    // refused here too, until its own bounding-box path landed (2026-07-30).
     if ((session.getConfig().autoExtractKind ?? 'curve') === 'none') return;
     // ⚑ A spider or a bar has exactly ONE mechanism: the axis-aware colour trace
     // for a spider, the bounding-box colour trace for a bar. Flood-fill and Guide
@@ -3268,6 +3326,20 @@ export function Workspace() {
     [session, bump]
   );
 
+  // Rename a bar CATEGORY from the shared table (v2.0) -- the bar-table
+  // counterpart of setSpokeName above. Renames the canonical CategoryAxis
+  // entry directly (session.renameCategory), so every series sharing this
+  // category picks up the new name at once. Same text-edit-commits-on-blur
+  // rule as every other spreadsheet field here.
+  const renameCategory = useCallback(
+    (categoryIndex: number, name: string) => {
+      if (!session.renameCategory(categoryIndex, name)) return;
+      pendingEditRef.current = true;
+      bump();
+    },
+    [session, bump]
+  );
+
   // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
   // categorical-line counterpart of setTupleLabel above, and it commits the same
   // way: a text edit is one undo step on blur, not one per keystroke.
@@ -4431,7 +4503,7 @@ export function Workspace() {
       (config.autoExtractKind ?? 'curve') === 'none' ||
       (session.hasSlots() && config.autoExtractKind !== 'along-axes' && config.autoExtractKind !== 'bounding-box')
     ) {
-      setColorTraceInfo('Auto-trace adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
+      setColorTraceInfo('Auto-extract adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
       return;
     }
     const imageData = imageCanvasRef.current?.getImageData();
@@ -4516,14 +4588,18 @@ export function Workspace() {
       }
       return;
     }
-    // ⚑ THE BAR TRACE (v2.0 Phase 7) -- the direct fix for the defect the spider
-    // comment above describes: every mechanism below this point reduces the
-    // colour mask to a column-average or a blob CENTROID, either of which reads
-    // the MIDDLE of a filled bar, never its end (`59f94a6`). A bar blob's own
-    // bounding box IS its two measured ends, so nothing here is averaged away --
-    // see engine/barDetectRun.ts. One box per detected bar, filed through the
-    // identical two-corner path a manual drag-box uses (addBarDetectBoxes).
+    // ⚑ THE BAR TRACE (v2.0 Phase 7, extended to Histogram bins 2026-07-30) --
+    // the direct fix for the defect the spider comment above describes: every
+    // mechanism below this point reduces the colour mask to a column-average
+    // or a blob CENTROID, either of which reads the MIDDLE of a filled shape,
+    // never its end (`59f94a6`). A blob's own bounding box IS its measured
+    // ends, so nothing here is averaged away -- see engine/barDetectRun.ts.
+    // One box per detected shape, filed through the identical two-corner path
+    // a manual drag-box uses (addBarDetectBoxes), which is also what decides
+    // opposite-corners-vs-top-corners per type -- this handler stays type-
+    // agnostic. `noun` names whichever the active type actually captures.
     if (config.autoExtractKind === 'bounding-box') {
+      const noun = config.tupleNoun ?? 'bar';
       const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
       if ('error' in result) {
         setColorTraceInfo(result.error);
@@ -4533,7 +4609,7 @@ export function Workspace() {
       adoptTracedColour();
       const { pct, warn } = overBroad(result.matched);
       setColorTraceInfo(
-        `Placed ${added} bar${added === 1 ? '' : 's'} (one box per detected bar) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
+        `Placed ${added} ${noun}${added === 1 ? '' : 's'} (one box per detected ${noun}) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
       );
       commit();
       return;
@@ -4563,7 +4639,7 @@ export function Workspace() {
     const { pct, warn } = overBroad(result.matched);
     setColorTraceInfo(`Traced ${result.points.length} points from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
     commit();
-  }, [session, config.autoExtractKind, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -4729,6 +4805,11 @@ export function Workspace() {
   const steps = useMemo(() => session.getSteps(), [session, version]);
   // The spider table: one ROW per axis, one COLUMN per series (David, 2026-07-27).
   const spiderTable = useMemo(() => session.getSpiderTable(), [session, version]);
+  // The bar table: one ROW per category, one COLUMN per series (v2.0), the
+  // same shape spiderTable uses above, replacing Bar's own per-series
+  // switching table (David: "we need to store them, series by series, as
+  // columns. Like this [spider's table]").
+  const barTable = useMemo(() => session.getBarCategoryTable(), [session, version]);
   // Spider points sitting nearer another axis than the one they were captured on.
   // Recomputed on the same tick, so dragging a stray point back onto its ray
   // clears its warning as you drop it.
@@ -5296,51 +5377,98 @@ export function Workspace() {
     );
   };
 
-  // The axis's name in the spreadsheet: plain text at rest, an input while it is
-  // the cell being edited — the same click-to-edit affordance the value cells use.
+  // One click-to-edit name field, shared by every "name this row" column in the
+  // app: plain text at rest (a dash when unnamed), an input only while it's the
+  // cell being typed into. Three call sites used to each hand-roll this exact
+  // span/input pair (Spider's axis name, Bar's CategoryAxis-backed category,
+  // Pie/Box Plot's plain per-tuple label) -- consolidated 2026-07-30, David:
+  // "a lot of ... duplicate or near duplicate code for things that should
+  // really be almost the same code." They differ only in which state tracks
+  // "currently editing", which callback commits the change, and their
+  // testid/placeholder/title/width strings.
   //
-  // ⚑ NOT a permanent boxed field (David, 2026-07-27): "now a user thinks he HAS to
-  // add something". The name is optional — an axis whose label the figure prints
-  // illegibly is still a real axis — so an unnamed one reads as a dash, exactly
-  // like a value nobody recorded, and looks like the rest of the table until you
-  // click it.
-  const renderEditableAxisName = (axisIndex: number, rawName: string) => {
-    if (editingAxisName === axisIndex) {
+  // ⚑ NOT a permanent boxed field (David, 2026-07-27, re Spider): "now a user
+  // thinks he HAS to add something". A name is optional everywhere this is
+  // used -- an axis/category/box the figure prints illegibly is still real --
+  // so unnamed reads as a dash, exactly like a value nobody recorded, and
+  // looks like the rest of the table until clicked.
+  function renderEditableName(
+    index: number,
+    rawName: string,
+    editingIndex: number | null,
+    setEditingIndex: (i: number | null) => void,
+    onChange: (index: number, name: string) => void,
+    testId: string,
+    placeholder: string,
+    title: string,
+    width: number
+  ) {
+    if (editingIndex === index) {
       return (
         <input
-          data-testid={`spider-axis-name-${axisIndex}`}
+          data-testid={testId}
           autoFocus
           value={rawName}
-          placeholder={`Axis ${axisIndex + 1}`}
-          onChange={(e) => setSpokeName(axisIndex, e.target.value)}
+          placeholder={placeholder}
+          onChange={(e) => onChange(index, e.target.value)}
           onBlur={() => {
-            setEditingAxisName(null);
+            setEditingIndex(null);
             commitPendingEdit();
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
           }}
           onClick={(e) => e.stopPropagation()}
-          style={{ width: 150, fontSize: 12.5 }}
+          style={{ width, fontSize: 12.5 }}
         />
       );
     }
     return (
       <span
-        data-testid={`spider-axis-name-${axisIndex}`}
-        onClick={() => setEditingAxisName(axisIndex)}
-        title="Click to name this axis, as the figure prints it"
+        data-testid={testId}
+        onClick={() => setEditingIndex(index)}
+        title={title}
         style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
       >
         {rawName === '' ? <span style={{ color: theme.color.text.legend }}>—</span> : rawName}
       </span>
     );
-  };
+  }
+
+  const renderEditableAxisName = (axisIndex: number, rawName: string) =>
+    renderEditableName(
+      axisIndex, rawName, editingAxisName, setEditingAxisName, setSpokeName,
+      `spider-axis-name-${axisIndex}`, `Axis ${axisIndex + 1}`,
+      'Click to name this axis, as the figure prints it', 150
+    );
+
+  // Bar's category (v2.0): position (the row's own place in the table) is the
+  // only identity the app itself needs (autoLabelTuple no longer invents a
+  // "Bar0"-style name -- see engine/calibrationSession.ts) -- the name is
+  // purely for the human reading the table.
+  const renderEditableCategoryName = (categoryIndex: number, rawName: string) =>
+    renderEditableName(
+      categoryIndex, rawName, editingCategoryName, setEditingCategoryName, renameCategory,
+      `bar-category-name-${categoryIndex}`, `Category ${categoryIndex + 1}`,
+      'Click to name this category, as the figure prints it', 120
+    );
+
+  // The generic tuple table's category name (Pie's sector, Box Plot's box) --
+  // the PLAIN per-tuple metadata.label mechanism (setTupleLabel's
+  // non-categoryAxis branch), since Pie has no cross-series category identity
+  // to share. tupleNoun gives a nicer, type-specific placeholder ("Sector 1",
+  // "Box 1") than a generic "Category N" would.
+  const renderEditableTupleLabel = (tupleIndex: number, rawLabel: string) =>
+    renderEditableName(
+      tupleIndex, rawLabel, editingTupleLabel, setEditingTupleLabel, setTupleLabel,
+      `tuple-label-${tupleIndex}`, `${tupleNoun.charAt(0).toUpperCase()}${tupleNoun.slice(1)} ${tupleIndex + 1}`,
+      `Click to name this ${tupleNoun}, as the figure prints it`, 100
+    );
 
   // The single contextual "what do I do now?" line shown in the bottom tips bar
   // (checkpoint 50) -- the one constant place for guidance, so it no longer
   // pops in and out of the right panel.
-  const guidanceTip = (() => {
+  const guidanceTipBase = (() => {
     if (!canvasHasImage) return 'Open an image to begin — or drag-and-drop / paste one onto the canvas.';
     // Before capture, the only real actions are frame (pan/zoom) + Capture. Say
     // so, and state the WYSIWYG model so the framing is deliberate (David).
@@ -5467,7 +5595,7 @@ export function Workspace() {
         if (config.autoExtractKind === 'along-axes')
           return 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.';
         if (config.autoExtractKind === 'bounding-box')
-          return 'By colour — pick a bar colour (or take it from the image with the pipette), set the tolerance, then press Trace: it finds every bar of that colour and records its own bounding box. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+          return `By colour — pick a ${tupleNoun} colour (or take it from the image with the pipette), set the tolerance, then press Trace: it finds every ${tupleNoun} of that colour and records its own bounding box. Drag a box on the image to limit the trace to it; a plain click does nothing.`;
         return 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
       }
       if (mode === 'interpolate') {
@@ -5492,6 +5620,31 @@ export function Workspace() {
     }
     return 'Pick a graph type, then calibrate the axes to begin.';
   })();
+
+  // ⚑ v2.0, 2026-07-30: the sidebar used to carry a SECOND line for this
+  // (engine/captureProgress.ts's "Next: {slot} — {tuple} (N of M filled)"),
+  // split off from the tips bar in v1.6 specifically because it duplicated
+  // it. David, seeing it again on Pie: "Hint should be in the hint bar, not
+  // in other places" -- one location, full stop. Folded back in here rather
+  // than deleted outright, because it is NOT always a strict duplicate: in
+  // Eraser/Select/Pan/etc. the tips bar's own branch says nothing about
+  // which slot the capture cursor is aimed at, so that visibility would be
+  // lost entirely without this. `guidanceTipBase.includes(currentGroupLabel)`
+  // is the cheap, robust way to detect "did this branch already say it" --
+  // true exactly when mode is place-point with nothing selected (the one
+  // branch that interpolates ${currentGroupLabel} into its own sentence),
+  // false everywhere else, so the note appears only where it adds
+  // information instead of restating the sentence above it. `axes &&` keeps
+  // it off entirely before calibration finishes -- Bar's slots exist (and
+  // captureProgress.text is non-null) from the moment the type is picked,
+  // so without this guard "Calibration step 1/2 — P1: ..." grew a bogus
+  // "— Bar start — new bar (0 of 2 filled)" tacked onto it, caught via a
+  // debug script while chasing the Bar e2e timeouts.
+  const slotAimNote =
+    axes && hasSlots && captureProgress.text && !guidanceTipBase.includes(currentGroupLabel)
+      ? ` — ${captureProgress.text.replace(/^Next: /, '')}`
+      : '';
+  const guidanceTip = guidanceTipBase + slotAimNote;
 
   // The empty data table's hint, matched to the ACTIVE TOOL.
   //
@@ -5752,7 +5905,7 @@ export function Workspace() {
             It is also the honest grouping: every other member of this bar is an ACTION,
             and this is a SETTING that governs how the axes are read. */}
         <TopBarGroup>
-          <AxesTypeSelect
+          <GraphTypeCardPicker
             options={AXES_TYPE_CONFIGS}
             value={axesTypeId}
             onChange={(id) => {
@@ -6052,30 +6205,58 @@ export function Workspace() {
                 >
                   Open example
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 220 }}>
-                  {EXAMPLES.map((ex) => (
-                    <button
-                      key={ex.id}
-                      type="button"
-                      data-testid={`example-${ex.id}`}
-                      onClick={() => {
-                        close(); // dismiss the dropdown when an example is chosen
-                        void openExample(ex);
-                      }}
-                      style={{
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '5px 6px',
-                        borderRadius: theme.border.radius.regular,
-                        cursor: 'pointer',
-                        fontSize: theme.font.size.regular,
-                        color: theme.color.text.primary,
-                      }}
-                    >
-                      {ex.name}
-                    </button>
-                  ))}
+                {/* v2.0: a 2-column grid of icon+label cards (David), the same
+                    graph-type glyph GraphTypeCardPicker.tsx uses -- so the type
+                    reads at a glance instead of only via the text prefix the
+                    labels used to carry (now shortened, see EXAMPLES's own
+                    comment on why). */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4, width: 420 }}>
+                  {EXAMPLES.map((ex) => {
+                    const ExampleIcon = GRAPH_TYPE_ICONS[ex.icon ?? ex.axes];
+                    return (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        data-testid={`example-${ex.id}`}
+                        onClick={() => {
+                          close(); // dismiss the dropdown when an example is chosen
+                          void openExample(ex);
+                        }}
+                        title={ex.name}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 6,
+                          textAlign: 'left',
+                          background: 'transparent',
+                          border: 'none',
+                          padding: '5px 6px',
+                          borderRadius: theme.border.radius.regular,
+                          cursor: 'pointer',
+                          fontSize: 11.5,
+                          lineHeight: 1.3,
+                          color: theme.color.text.primary,
+                        }}
+                      >
+                        {ExampleIcon && (
+                          // ⚑ 20px + text.secondary, not 16px + text.legend (David: "a
+                          // little small hard to see") -- the fine detail in some glyphs
+                          // (spider's hexagon+spokes, ternary's triangle+gridlines) needs
+                          // the extra 4px and the darker ink to actually read at this scale.
+                          <span
+                            style={{
+                              flex: '0 0 auto',
+                              display: 'inline-flex',
+                              color: theme.color.text.secondary,
+                            }}
+                          >
+                            <ExampleIcon size={20} />
+                          </span>
+                        )}
+                        <span>{ex.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
                 <button
@@ -6682,9 +6863,12 @@ export function Workspace() {
             // against. v2.0 Phase 7 makes Bar a SECOND correctness exception: a
             // bar blob's own bounding box IS its two ends (engine/barDetectRun.ts),
             // so it no longer belongs in this refused bucket at all -- see
-            // BAR_AXES_CONFIG's autoExtractKind. Box Plot / categorical Line
-            // remain refused: neither has anything a colour trace could read as
-            // its own record (five letter-values; an ordinal click).
+            // BAR_AXES_CONFIG's autoExtractKind. Histogram joined it 2026-07-30 --
+            // a bin's bounding box is the same shape, just read as top corners
+            // rather than opposite ones (addBarDetectBoxes's own comment). Box
+            // Plot / categorical Line remain refused: neither has anything a
+            // colour trace could read as its own record (five letter-values; an
+            // ordinal click).
             disabled={!axes || (config.autoExtractKind ?? 'curve') === 'none'}
             disabledReason={
               !axes
@@ -6932,10 +7116,11 @@ export function Workspace() {
                       </>
                     ) : config.autoExtractKind === 'bounding-box' ? (
                       <>
-                        Finds every bar of that colour and records its own bounding box — both
-                        ends measured directly, never a midpoint. Bars of the identical colour
-                        touching with no gap between them are read as one merged bar.
-                        The highlighted pixels show what the trace reads.
+                        Finds every {tupleNoun} of that colour and records its own bounding box —
+                        measured directly, never a midpoint. {tupleNoun.charAt(0).toUpperCase()}
+                        {tupleNoun.slice(1)}s of the identical colour touching with no gap between
+                        them are read as one merged {tupleNoun}. The highlighted pixels show what
+                        the trace reads.
                       </>
                     ) : (
                       <>
@@ -6984,13 +7169,13 @@ export function Workspace() {
                     </select>
                   </div>
                   {/* Min blob size applies to any reduction that runs blob detection --
-                      Scattered points (curve kind) and Bar's own bounding-box detection
-                      both do, so this shows for either rather than living nested only
-                      under the (here, hidden) Shape selector. */}
+                      Scattered points (curve kind) and bounding-box detection (Bar,
+                      Histogram) both do, so this shows for either rather than living
+                      nested only under the (here, hidden) Shape selector. */}
                   {((config.autoExtractKind ?? 'curve') === 'curve' && colorTraceShape === 'scatter') ||
                   config.autoExtractKind === 'bounding-box' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span>Min {config.autoExtractKind === 'bounding-box' ? 'bar' : 'marker'} &empty;:</span>
+                      <span>Min {config.autoExtractKind === 'bounding-box' ? tupleNoun : 'marker'} &empty;:</span>
                       <input
                         type="number"
                         data-testid="color-trace-min-blob"
@@ -7628,28 +7813,19 @@ export function Workspace() {
               "Calibrated ✓" status and the bottom tips bar already say it. */}
           {hasSlots && (
             <p data-testid="slot-status">
-              {/* ⚑ Where you ARE, not what to do -- the tips bar owns the instruction
-                  and this used to be a strict subset of it. See engine/captureProgress.ts
-                  for the split and for why the "incomplete" clause excludes the tuple in
-                  hand. The exploded-apex branch that was here is gone: the canvas card
-                  says it in all three of its states rather than only the first. */}
-              {/* ⚑ Its own span so it can be asserted EXACTLY. `slot-status` also holds
-                  several display:none readouts that exist purely for the e2e (Konva
-                  glyphs are not DOM-inspectable), so its textContent is the sentence
-                  with "030" welded on the end. Every earlier assertion used toContain
-                  and never saw it; the first exact one did. */}
-              <span data-testid="capture-progress">{captureProgress.text}</span>
-              {/* Konva-rendered glyphs aren't DOM-inspectable -- this readout
-                  exists purely so e2e coverage can assert on it, same
-                  precedent as ImageCanvas's own "view-state" testid. */}
-              {/* The "Exploded slice" control used to live HERE, as a chip beside this
-                  line. It moved onto the canvas (ExplodedSliceControl) because it could
-                  not be found in the sidebar -- see that file's header. */}
-              {/* Konva draws the marker labels, so nothing else can assert what they
-                  say -- same precedent as the glyph counters below. This one matters
-                  more than most: the ring-closing offer IS a label, so without it a
-                  test can only check that closing works, never that a user could find
-                  out it exists. */}
+              {/* ⚑ v2.0, 2026-07-30: the visible "Next: {slot} — {tuple} (N of M
+                  filled)" sentence that used to live here (a v1.6 split from the
+                  tips bar, on the theory that it was STATE rather than an
+                  instruction) is GONE -- David, seeing "Slice0"/"Slice1" on Pie
+                  reopened the question and settled it further: "Hint should be in
+                  the hint bar, not in other places," full stop. Its content
+                  (including the "N incomplete" nudge) now lives in guidanceTip's
+                  own slotAimNote suffix instead -- see that comment for why it
+                  folds in only where the tips bar doesn't already say it (mode ===
+                  'place-point' with nothing selected covers itself; every other
+                  mode gets the note appended). This element survives ONLY to hold
+                  the display:none e2e readouts below (Konva glyphs are not
+                  DOM-inspectable) -- it renders no visible text of its own now. */}
               <span data-testid="marker-labels" style={{ display: 'none' }}>
                 {markers.map((m) => m.label).filter(Boolean).join(' | ')}
               </span>
@@ -7903,6 +8079,100 @@ export function Workspace() {
                 ))}
               </tbody>
             </table>
+          ) : config.id === 'bar' && axes ? (
+            /* Bar (v2.0): `# | Category | Series 1 | Series 2 | …` — one row per
+               CATEGORY, one column per series, exactly mirroring Spider's own
+               table above (David: "we need to store them, series by series, as
+               columns. Like this"). Replaces the per-series switching table
+               (below, still used by Box Plot / Pie) that hid every other
+               series' bars the moment you switched the active one. */
+            <>
+            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
+                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
+                  {barTable.columns.map((col) => (
+                    <th
+                      key={col.seriesIndex}
+                      data-testid={`bar-col-${col.seriesIndex}`}
+                      style={{
+                        textAlign: 'right',
+                        paddingRight: 16,
+                        borderLeft: `1px solid ${theme.color.border.regular}`,
+                        paddingLeft: 10,
+                        fontWeight: 600,
+                        color: col.seriesIndex === activeDatasetIndex ? theme.color.primary.main : theme.color.text.primary,
+                      }}
+                    >
+                      {col.seriesName}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {barTable.categoryNames.map((categoryName, categoryIndex) => (
+                  <tr key={categoryIndex}>
+                    <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{categoryIndex + 1}</td>
+                    <td style={{ paddingRight: 16 }}>
+                      {renderEditableCategoryName(categoryIndex, barTable.categoryRawNames[categoryIndex] ?? '')}
+                    </td>
+                    {barTable.columns.map((col) => {
+                      const value = col.values[categoryIndex];
+                      const tupleIndex = col.tupleIndices[categoryIndex];
+                      const isActive = col.seriesIndex === activeDatasetIndex;
+                      return (
+                        <td
+                          key={col.seriesIndex}
+                          data-testid={`bar-cell-${col.seriesIndex}-${categoryIndex}`}
+                          // Clicking a cell of an INACTIVE series switches to it --
+                          // the same reachability rule Spider's own cells follow,
+                          // since deleting a bar (below) is offered on the active
+                          // series only.
+                          onClick={() => {
+                            if (!isActive) handleSelectDataset(col.seriesIndex);
+                          }}
+                          title={value == null ? `${col.seriesName} has no ${categoryName} bar` : undefined}
+                          style={{
+                            textAlign: 'right',
+                            paddingRight: 16,
+                            paddingLeft: 10,
+                            borderLeft: `1px solid ${theme.color.border.regular}`,
+                            cursor: isActive ? 'default' : 'pointer',
+                          }}
+                        >
+                          {value == null ? (
+                            <span style={{ color: theme.color.text.legend }}>—</span>
+                          ) : (
+                            <>
+                              {/* `tuple-derived-N`, not just this cell's own bar-cell-S-C
+                                  testid: the ACTIVE series' Nth tuple (capture order),
+                                  same identifier the generic hasSlots table (Pie/Box
+                                  Plot) has always used for its one-series-at-a-time
+                                  Value column -- kept so e2e's shared derivedValue()
+                                  helper reads either table the same way. Active-series
+                                  only, since that's the one whose tupleIndex this is. */}
+                              <span data-testid={isActive && tupleIndex != null ? `tuple-derived-${tupleIndex}` : undefined}>
+                                {fmtValue(value)}
+                              </span>
+                              {isActive && tupleIndex != null && (
+                                <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={removeTuple} />
+                              )}
+                            </>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {barTable.categoryNames.length === 0 && (
+              <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
+                {noPointsHint}
+              </div>
+            )}
+            </>
           ) : hasSlots ? (
             <>
             <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -7926,15 +8196,7 @@ export function Workspace() {
                 {tupleRows.map((row) => (
                   <tr key={row.tupleIndex}>
                     <td style={{ paddingRight: 16 }}>{row.tupleIndex + 1}</td>
-                    <td style={{ paddingRight: 16 }}>
-                      <input
-                        data-testid={`tuple-label-${row.tupleIndex}`}
-                        value={row.label}
-                        onChange={(e) => setTupleLabel(row.tupleIndex, e.target.value)}
-                        onBlur={commitPendingEdit}
-                        style={{ width: 100 }}
-                      />
-                    </td>
+                    <td style={{ paddingRight: 16 }}>{renderEditableTupleLabel(row.tupleIndex, row.label)}</td>
                     {/* ⚑ One DERIVED column where the type's datum is the tuple
                         rather than its members (pie): a slice's two boundaries are
                         angles and neither is the number anyone wants -- the value is

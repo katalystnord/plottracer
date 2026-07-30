@@ -1,24 +1,29 @@
 import type { Dataset } from '../core/dataset.js';
 
 /**
- * The capture-progress line — where you ARE, not what to do.
+ * The capture-progress sentence — "where you ARE" (which slot is next, how
+ * many of the tuple's slots are filled, whether anything was left behind
+ * incomplete). Pure string-building only; where this text actually APPEARS
+ * on screen has moved twice now:
  *
- * ⚑ WHY IT CHANGED (v1.6, David: *"do we need it? … lets make it more meaningful"*).
- * The old line read `Next point fills: Axis 1 (new profile)` while the tips bar two
- * inches below already read *"Click where the shape crosses the Axis 1 axis — how far
- * out along that ray you click IS the number recorded (starting a new profile)."* The
- * sidebar line was a strict SUBSET of the tips bar. It was not wrong; it was a
- * duplicate, which is why it read as noise.
+ * ⚑ v1.6 (David: *"do we need it? … lets make it more meaningful"*) split it OUT
+ * of the tips bar into its own sidebar line, because the old line read `Next point
+ * fills: Axis 1 (new profile)` while the tips bar two inches below already read
+ * *"Click where the shape crosses the Axis 1 axis — how far out along that ray you
+ * click IS the number recorded (starting a new profile)."* -- a strict SUBSET,
+ * hence noise. The split was: tips bar → what to DO, sidebar → where you ARE
+ * (completeness, the one thing the figure itself cannot tell you -- a spider's
+ * N×1D slots make a partial profile look exactly like a finished one unless you
+ * scan the table for dashes).
  *
- * So the two surfaces are split by job:
- *   tips bar → what to DO      (an instruction, already good)
- *   this     → where you ARE   (state, which was nowhere on screen)
- *
- * ⚑ THE STATE WORTH SHOWING IS COMPLETENESS, because it is the one thing the figure
- * cannot tell you. On a spider a profile may be legitimately partial — its slots are
- * N×1D, independently meaningful and independently EMPTY — so three half-finished
- * profiles look exactly like three finished ones unless you scan the table for
- * dashes. The count says so in the place you are already looking.
+ * ⚑ v2.0 (2026-07-30) folded it back INTO the tips bar, a second time -- David hit
+ * the identical "two surfaces, one job" feeling again, now on Pie, and settled it
+ * harder: "Hint should be in the hint bar, not in other places." Workspace.tsx's
+ * `guidanceTip` now appends this sentence (minus its own "Next: " prefix) as a
+ * suffix, but ONLY where its own branch doesn't already name the slot -- so the
+ * "(N of M filled)" count is visible whenever it would add information, and never
+ * printed as a literal duplicate of the sentence right above it. See guidanceTip's
+ * own `slotAimNote` comment for the exact rule.
  *
  * Lives here rather than in JSX so the strings are unit-testable: this is the same
  * "move the body into engine/, never the hook" method the last two refactors used.
@@ -63,7 +68,7 @@ function countIncompleteElsewhere(tuples: (number | null)[][], current: number |
 }
 
 /** Pluralise by count — "2 profiles incomplete" but "1 profile incomplete". */
-function plural(n: number, noun: string): string {
+export function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 

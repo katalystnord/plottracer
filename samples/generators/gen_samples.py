@@ -231,6 +231,122 @@ def gen_bar():
     })
 
 
+def gen_bar_grouped():
+    """Cell viability, control vs. treatment — a GROUPED bar (v2.0): two series
+    sharing one category axis, side by side per category rather than stacked.
+    Truth = per-bar value, one entry per series, same shape as gen_bar's single
+    series repeated -- a grouped bar has no shared-baseline arithmetic to get
+    wrong, unlike a stacked one."""
+    name = "bar-grouped-viability"
+    cats = ["Day 3", "Day 7", "Day 14", "Day 21"]
+    control = [12, 18, 22, 25]
+    treatment = [12, 28, 45, 58]
+    x = np.arange(len(cats))
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    ax.bar(x - width / 2, control, width, color=NAVY, label="Control")
+    ax.bar(x + width / 2, treatment, width, color="#c0392b", label="Treatment")
+    ax.set_axisbelow(True)
+    ax.set_xticks(x)
+    ax.set_xticklabels(cats)
+    ax.set_ylim(0, 70)
+    ax.set_ylabel("Cell viability (%)", fontsize=13)
+    ax.set_title("Cell viability — control vs. treatment", fontsize=15)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.legend(fontsize=10)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 70)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — per-bar value, one series per group."},
+        "graphType": "bar",
+        "axes": {"y": {"label": "Cell viability (%)", "min": 0, "max": 70}},
+        "calibration": calib,
+        "series": [
+            {"name": "Control", "points": [{"category": c, "value": v} for c, v in zip(cats, control)]},
+            {"name": "Treatment", "points": [{"category": c, "value": v} for c, v in zip(cats, treatment)]},
+        ],
+    })
+
+
+def gen_bar_stacked():
+    """Quarterly cost breakdown — a STACKED bar (v2.0): four series drawn as
+    segments of one bar per quarter. Truth = each series' own SEGMENT height
+    (its SPAN), never the cumulative top it visually reaches -- matching the
+    capture model (v2.0 design): each segment is its own honestly-dragged box,
+    not a shared-baseline reading. Summing a category's segments reproduces the
+    bar's visual total, but that sum is a derived check, not the record."""
+    name = "bar-stacked-cost"
+    cats = ["Q1", "Q2", "Q3", "Q4"]
+    layers = [
+        ("Materials", "#1f4e79", [120, 130, 125, 140]),
+        ("Labor", "#5fb4e0", [90, 95, 100, 98]),
+        ("Overhead", "#e0a458", [40, 42, 38, 45]),
+        ("Shipping", "#8e44ad", [20, 25, 22, 28]),
+    ]
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    bottom = np.zeros(len(cats))
+    for label, color, vals in layers:
+        ax.bar(cats, vals, bottom=bottom, color=color, width=0.6, label=label)
+        bottom += np.array(vals, dtype=float)
+    ax.set_axisbelow(True)
+    ax.set_ylim(0, 360)
+    ax.set_ylabel("Cost (k$)", fontsize=13)
+    ax.set_title("Quarterly cost breakdown", fontsize=15)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.legend(fontsize=10)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 360)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth -- each series' own SEGMENT height, not the cumulative stack top."},
+        "graphType": "bar",
+        "axes": {"y": {"label": "Cost (k$)", "min": 0, "max": 360}},
+        "calibration": calib,
+        "series": [{"name": label, "points": [{"category": c, "value": v} for c, v in zip(cats, vals)]} for label, _, vals in layers],
+    })
+
+
+def gen_bar_floating():
+    """Monthly temperature range — a FLOATING bar (v2.0): neither end is the
+    chart's baseline (zero), and several bars cross zero entirely. Truth =
+    each bar's two measured ENDS (start/end), not a single value -- a floating
+    bar has no baseline-relative magnitude to reduce to, which is exactly the
+    shape the two-corner drag-box capture exists for."""
+    name = "bar-floating-temperature"
+    cats = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    lows = [-8, -6, -2, 3, 8, 13, 15, 14, 9, 3, -3, -7]
+    highs = [2, 4, 9, 15, 20, 25, 28, 27, 21, 14, 6, 1]
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    heights = [h - l for l, h in zip(lows, highs)]
+    ax.bar(cats, heights, bottom=lows, color=NAVY, width=0.6)
+    ax.axhline(0, color="#666666", linewidth=1.2, zorder=1)
+    ax.set_axisbelow(True)
+    ax.set_ylim(-15, 32)
+    ax.set_ylabel("Temperature (°C)", fontsize=13)
+    ax.set_title("Monthly temperature range", fontsize=15)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, -15, 32)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth -- each bar's two measured ends (low/high), never a single baseline-relative value."},
+        "graphType": "bar",
+        "axes": {"y": {"label": "Temperature (°C)", "min": -15, "max": 32}},
+        "calibration": calib,
+        "series": [{"name": "temperature range",
+                    "points": [{"category": c, "start": lo, "end": hi} for c, lo, hi in zip(cats, lows, highs)]}],
+    })
+
+
 def gen_histogram():
     """Pore-size distribution — a histogram over uniform bins. Truth = each bin's
     edges and count (the record PlotTracer captures as true bin intervals)."""
@@ -1137,6 +1253,9 @@ if __name__ == "__main__":
     gen_scatter()
     gen_multiseries()
     gen_bar()
+    gen_bar_grouped()
+    gen_bar_stacked()
+    gen_bar_floating()
     gen_histogram()
     gen_categorical()
     gen_stress_strain()
@@ -1156,4 +1275,4 @@ if __name__ == "__main__":
     gen_pie_exploded()
     gen_donut()
     gen_pie_tilted()
-    print("generated all 19 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut.")
+    print("generated all 22 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, stacked bar, floating bar.")

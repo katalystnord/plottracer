@@ -213,25 +213,27 @@ describe('an exploded slice is captured about its own apex', () => {
 });
 
 describe('an exploded slice is named like every other', () => {
-  it('gets its auto category label', () => {
-    // ⚑ THE BLANK-CATEGORY DEFECT, found by driving the app: a captured pie read
-    // Slice0, (blank), Slice2, Slice3 -- the hole being the exploded one.
+  it('gets the same (unnamed) category treatment as an ordinary slice, not a silent gap', () => {
+    // ⚑ THE ORIGINAL BLANK-CATEGORY DEFECT, found by driving the app: a captured pie
+    // read Slice0, (blank), Slice2, Slice3 -- the hole being the exploded one, because
+    // `setTupleLabel` writes to the tuple's PRIMARY PIXEL, and the apex branch used to
+    // create the tuple EMPTY (the apex is per-tuple metadata, not a pixel) and label it
+    // there and then, before any pixel existed to hang the write on -- so the write went
+    // nowhere, silently (setTupleLabel has no way to report that it did nothing).
     //
-    // The cause is an ordering trap the rest of the file cannot hit. A label is stored
-    // as metadata on the tuple's PRIMARY PIXEL, so `setTupleLabel` silently returns
-    // when there is no primary pixel yet. Every other path labels a tuple that has
-    // just had a pixel filed into it; the apex branch creates the tuple EMPTY (the
-    // apex is not a pixel, it is per-tuple metadata) and labelled it there and then,
-    // so the write went nowhere. Silent by construction -- `setTupleLabel` has no way
-    // to report that it did nothing.
+    // v2.0, 2026-07-30: autoLabelTuple no longer invents ANY name for Pie (tenet 9,
+    // generalized from the Bar fix -- David caught the exact same "SliceN" defect live).
+    // So the regression this test now guards is narrower but the same shape: every
+    // slice reads '' uniformly -- an exploded one must not be the ONE exception that
+    // silently differs from its neighbours.
     const session = calibratedPie();
     session.setNextSectorExploded(true);
     session.addDataPoint(CX + 30, CY + 30);
     clickBoundaries(session, [0, 60]);
-    expect(session.getTupleLabel(0)).toBe('Slice0');
+    expect(session.getTupleLabel(0)).toBe('');
   });
 
-  it('numbers it in capture order alongside ordinary slices', () => {
+  it('numbers uniformly (all unnamed) alongside ordinary slices -- no gap, no special case', () => {
     // The whole run, as the screenshot showed it: an ordinary slice, then a pulled-out
     // one, then another ordinary one. No gaps and no repeats.
     const session = calibratedPie();
@@ -240,9 +242,9 @@ describe('an exploded slice is named like every other', () => {
     session.addDataPoint(CX + 30, CY + 30);
     clickBoundaries(session, [30, 90]); // slice 1, exploded
     clickBoundaries(session, [140, 200]); // slice 2
-    expect(session.getTupleLabel(0)).toBe('Slice0');
-    expect(session.getTupleLabel(1)).toBe('Slice1');
-    expect(session.getTupleLabel(2)).toBe('Slice2');
+    expect(session.getTupleLabel(0)).toBe('');
+    expect(session.getTupleLabel(1)).toBe('');
+    expect(session.getTupleLabel(2)).toBe('');
   });
 });
 

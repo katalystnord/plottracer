@@ -380,7 +380,7 @@ describe('ui/electron-main.cjs — a foreign digitizer\'s .tar, imported through
         .poll(async () => page.getByTestId('calibrated-status').textContent(), { timeout: 10000 })
         .toContain('Calibrated');
       // ...as an XY chart, and with its data series present.
-      expect(await page.getByTestId('axes-type-select').textContent()).toContain('XY');
+      expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('XY');
       expect(await page.locator('[data-testid^="series-option-"]').count()).toBeGreaterThan(0);
     } finally {
       await app.close();

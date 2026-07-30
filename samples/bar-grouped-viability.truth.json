@@ -1,0 +1,74 @@
+{
+  "source": {
+    "imagePath": "bar-grouped-viability.png",
+    "note": "Synthetic ground truth \u2014 per-bar value, one series per group."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Cell viability (%)",
+      "min": 0,
+      "max": 70
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 67.78,
+        "py": 660.28,
+        "value": 0
+      },
+      "p2": {
+        "px": 67.78,
+        "py": 39.33,
+        "value": 70
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "Control",
+      "points": [
+        {
+          "category": "Day 3",
+          "value": 12
+        },
+        {
+          "category": "Day 7",
+          "value": 18
+        },
+        {
+          "category": "Day 14",
+          "value": 22
+        },
+        {
+          "category": "Day 21",
+          "value": 25
+        }
+      ]
+    },
+    {
+      "name": "Treatment",
+      "points": [
+        {
+          "category": "Day 3",
+          "value": 12
+        },
+        {
+          "category": "Day 7",
+          "value": 28
+        },
+        {
+          "category": "Day 14",
+          "value": 45
+        },
+        {
+          "category": "Day 21",
+          "value": 58
+        }
+      ]
+    }
+  ]
+}

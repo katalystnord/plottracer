@@ -3,13 +3,13 @@ import { describeCaptureProgress } from '../captureProgress.js';
 import { Dataset } from '../../core/dataset.js';
 
 /**
- * The capture-progress line.
- *
- * ⚑ It exists in this form because the old one was a DUPLICATE, not because it was
- * wrong: it read `Next point fills: Axis 1 (new profile)` while the tips bar below
- * already said "Click where the shape crosses the Axis 1 axis … (starting a new
- * profile)". Two surfaces, one job. The split now is tips bar → what to DO, this →
- * where you ARE, and these tests are about the second half of that.
+ * The capture-progress SENTENCE (pure string-building, describeCaptureProgress) --
+ * these tests are about its text and counting rules only, not where it's displayed.
+ * It exists in this form because the old sidebar line was a DUPLICATE of the tips
+ * bar, not because the wording was wrong: see captureProgress.ts's own header
+ * comment for the full history (v1.6 split it out, v2.0 2026-07-30 folded it back
+ * into the tips bar as guidanceTip's slotAimNote suffix). This file never changed
+ * through either move -- the sentence-building logic stayed exactly as useful.
  */
 
 /** A dataset with `slots` named slots and the given tuples, built directly — the

@@ -62,7 +62,7 @@ describe.runIf(RUN)('spider screenshot harness', () => {
 
     await page.getByTestId('open-image-button').click();
     await page.waitForTimeout(1200);
-    await page.getByTestId('axes-type-select').click();
+    await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-spider').click();
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(200);

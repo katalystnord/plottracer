@@ -1,0 +1,116 @@
+{
+  "source": {
+    "imagePath": "bar-stacked-cost.png",
+    "note": "Synthetic ground truth -- each series' own SEGMENT height, not the cumulative stack top."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Cost (k$)",
+      "min": 0,
+      "max": 360
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 77.53,
+        "py": 660.28,
+        "value": 0
+      },
+      "p2": {
+        "px": 77.53,
+        "py": 39.33,
+        "value": 360
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "Materials",
+      "points": [
+        {
+          "category": "Q1",
+          "value": 120
+        },
+        {
+          "category": "Q2",
+          "value": 130
+        },
+        {
+          "category": "Q3",
+          "value": 125
+        },
+        {
+          "category": "Q4",
+          "value": 140
+        }
+      ]
+    },
+    {
+      "name": "Labor",
+      "points": [
+        {
+          "category": "Q1",
+          "value": 90
+        },
+        {
+          "category": "Q2",
+          "value": 95
+        },
+        {
+          "category": "Q3",
+          "value": 100
+        },
+        {
+          "category": "Q4",
+          "value": 98
+        }
+      ]
+    },
+    {
+      "name": "Overhead",
+      "points": [
+        {
+          "category": "Q1",
+          "value": 40
+        },
+        {
+          "category": "Q2",
+          "value": 42
+        },
+        {
+          "category": "Q3",
+          "value": 38
+        },
+        {
+          "category": "Q4",
+          "value": 45
+        }
+      ]
+    },
+    {
+      "name": "Shipping",
+      "points": [
+        {
+          "category": "Q1",
+          "value": 20
+        },
+        {
+          "category": "Q2",
+          "value": 25
+        },
+        {
+          "category": "Q3",
+          "value": 22
+        },
+        {
+          "category": "Q4",
+          "value": 28
+        }
+      ]
+    }
+  ]
+}

@@ -115,16 +115,17 @@
  * point's "label") is stored the same way WPD stores it -- as
  * `metadata.label` on the tuple's first (primary group) pixel, per
  * core/dataset.ts's already-ported per-pixel metadata. Starting a new
- * tuple auto-labels it with WPD's own default (axes.dataPointsLabelPrefix
- * + tuple index -- ManualSelectionTool.onMouseClick, manualDetectionTools.js),
- * via a narrow duck-typed read off `this.axes` the same way
- * getBoxPlotGlyphs reads calculateOrientation. Real WPD lets a user
- * override this default through a shift-click popup
- * (wpd.dataPointLabelEditor, controllers/manualDetection.js) --
- * deliberately not ported as a popup here: Workspace.tsx instead renders
- * an always-editable inline text input in the tuple table, consistent
- * with this rebuild's own "no floating popups" design direction (see
- * CLAUDE.md's Product #1 design notes).
+ * tuple used to auto-label it with WPD's own default
+ * (axes.dataPointsLabelPrefix + tuple index --
+ * ManualSelectionTool.onMouseClick, manualDetectionTools.js); v2.0 (2026-07-30)
+ * dropped that default GENERALLY, not just for Bar -- see autoLabelTuple's own
+ * comment. Real WPD lets a user override the (now-gone) default through a
+ * shift-click popup (wpd.dataPointLabelEditor, controllers/manualDetection.js)
+ * -- deliberately not ported as a popup here: Workspace.tsx instead renders a
+ * click-to-edit inline text field in the tuple table (dash at rest, matching
+ * Spider's own axis-name cell), consistent with this rebuild's own "no
+ * floating popups" design direction (see CLAUDE.md's Product #1 design
+ * notes).
  *
  * Checkpoint 25 adds loadCalibrated(axes, dataset), the read side of
  * engine/projectFile.ts's project save/load: jumps straight to the
@@ -955,7 +956,13 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   label: 'Histogram',
   axesKind: 'xy',
   exportShape: 'bins',
-  autoExtractKind: 'none',
+  // v2.0, 2026-07-30: was 'none' -- a leftover from before Bar's own bounding-box
+  // detection existed, never revisited once it landed. A bin is structurally the
+  // same shape a colour-detected blob's bbox already gives (see
+  // addBarDetectBoxes's isHistogramBinShape branch for the one real
+  // difference from Bar: both filed points share the box's TOP edge, not
+  // opposite corners -- a bin's height is one measurement, not an extent).
+  autoExtractKind: 'bounding-box',
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
@@ -1092,21 +1099,24 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   },
 };
 
-// "Line (categorical X)" — checkpoint 101. For a plot whose X axis is CATEGORICAL
-// (species, treatments, sites…) with a numeric Y, e.g. Fig 12 of the snow-line
-// paper this tool was validated on. "X is not numeric" (David): you cannot
-// calibrate an X value where none was measured, so this reuses BarAxes -- whose
-// calibration is TWO points on the VALUE axis only, no X clicks (tenet 10, reuse
-// the categorical model bars already have). Points are captured like an XY
-// series (dots), not bars; each point's Y is read from the value calibration and
-// its X is its ORDINAL position (derived from left-to-right pixel order at
+// "Line" (checkpoint 101; label shortened from "Line (categorical X)" 2026-07-30,
+// David: rename it "Line" everywhere -- the picker's own icon, sitting beside
+// XY's, now carries the categorical-vs-continuous distinction the parenthetical
+// used to spell out in text). For a plot whose X axis is CATEGORICAL (species,
+// treatments, sites…) with a numeric Y, e.g. Fig 12 of the snow-line paper this
+// tool was validated on. "X is not numeric" (David): you cannot calibrate an X
+// value where none was measured, so this reuses BarAxes -- whose calibration is
+// TWO points on the VALUE axis only, no X clicks (tenet 10, reuse the
+// categorical model bars already have). Points are captured like an XY series
+// (dots), not bars; each point's Y is read from the value calibration and its X
+// is its ORDINAL position (derived from left-to-right pixel order at
 // export/display time, never stored -- tenet 9). A per-point NAME is deliberately
 // left as reserved metadata (the same slot Bar's label uses), unwritten today so
 // a future OCR pass (or a manual rename) can fill in the real category names with
 // no migration -- the "window to the future" kept open on purpose (David).
 export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'categorical',
-  label: 'Line (categorical X)',
+  label: 'Line',
   axesKind: 'bar',
   autoExtractKind: 'none',
   dataDim: 1,
@@ -3558,24 +3568,27 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return added;
   }
 
-  /** Bulk-adds bar boxes detected by colour (v2.0 Phase 7, see
-   * engine/barDetectRun.ts) -- each box's two opposite corners fill one
-   * bar's two measured ends, via the SAME two-clicks-per-tuple path a
-   * manual drag-box uses (Workspace.tsx's handleBoxRect), just looped over
-   * every blob one Trace press found. This is why no new capture logic
-   * exists for this: a detected box and a dragged box are the identical
-   * record from the moment they reach the session.
+  /** Bulk-adds bar/bin boxes detected by colour (v2.0 Phase 7, extended to
+   * Histogram 2026-07-30 -- see engine/barDetectRun.ts), via the SAME
+   * two-clicks-per-tuple path a manual drag-box uses (Workspace.tsx's
+   * handleBoxRect). Gated to the two shapes a bounding box can fill:
    *
-   * Gated to the genuine bar-interval shape only (isBarIntervalShape) --
-   * Box Plot/Histogram have no "opposite corners" a bounding box could mean
-   * for their own record shape, so bounding-box detection is Bar-only (see
-   * BAR_AXES_CONFIG's autoExtractKind).
+   * - Bar: the box's two OPPOSITE corners ARE a bar's two measured ends.
+   * - Histogram: a bin's two slots are its TOP corners, averaged into one
+   *   height by binFromCorners -- NOT opposite corners. Feeding it the true
+   *   opposite corners would average the top edge with the baseline,
+   *   silently halving every reading (the same defect this capability
+   *   exists to avoid). So both filed points share the box's own top edge
+   *   (`box.start.y`) -- only their x's differ.
    *
-   * Returns how many boxes were actually added (0 if not calibrated or the
-   * active dataset isn't a bar interval). */
+   * Box Plot has neither shape (five letter values), so it stays refused.
+   * Returns how many boxes were added (0 if not calibrated or neither shape). */
   addBarDetectBoxes(boxes: readonly { start: { x: number; y: number }; end: { x: number; y: number } }[]): number {
     if (!this.axes) return 0;
-    if (!this.isBarIntervalShape(this.activeEntry.dataset)) return 0;
+    const dataset = this.activeEntry.dataset;
+    const isBar = this.isBarIntervalShape(dataset);
+    const isHistogramBin = this.isHistogramBinShape(dataset);
+    if (!isBar && !isHistogramBin) return 0;
     // ⚑ Sorted into READING ORDER along the category axis before filing --
     // detectBlobs's own order is a top-to-bottom pixel scan (an
     // implementation detail of how the flood fill finds its seeds), which
@@ -3584,14 +3597,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // (e.g. "day 0, 4, 7, 14") reads as scrambled in scan order; sorted by
     // each box's own position along the category axis instead (x for a
     // normal vertical bar, y when the chart is rotated/horizontal), so the
-    // captured tuples list the same way the figure itself reads.
+    // captured tuples list the same way the figure itself reads. A
+    // histogram is never rotated (no orientation option -- always upright),
+    // so `rotated` naturally stays false there.
     const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
     const sorted = [...boxes].sort((a, b) =>
       rotated ? a.start.y + a.end.y - (b.start.y + b.end.y) : a.start.x + a.end.x - (b.start.x + b.end.x)
     );
     for (const box of sorted) {
       this.addDataPoint(box.start.x, box.start.y);
-      this.addDataPoint(box.end.x, box.end.y);
+      this.addDataPoint(box.end.x, isHistogramBin ? box.start.y : box.end.y);
     }
     return boxes.length;
   }
@@ -3700,19 +3715,47 @@ export class CalibrationSession<A extends CalibratedAxes> {
     });
   }
 
-  /** Assigns a default category label to a newly started tuple, e.g. "Bar0" --
-   * a direct port of real WPD's own default (axes.dataPointsLabelPrefix +
-   * tuple index, wpd-core/javascript/tools/manualDetectionTools.js), stored the
-   * same way WPD stores it: as `metadata.label` on the tuple's first (primary
-   * group) pixel. Meant to be renamed via setTupleLabel, not kept as-is --
-   * WPD's own real UI (wpd.dataPointLabelEditor, shift-click to rename) is
-   * "optional" per this feature's own commit history; this rebuild exposes an
-   * always-editable inline input instead (Workspace.tsx's tuple table) rather
-   * than a shift-click popup, per this rebuild's own "no floating popups"
-   * design direction. */
+  /** Called when a new tuple starts, to give it a category identity. Used to
+   * write a WPD-ported default like "Bar0" (axes.dataPointsLabelPrefix +
+   * index) into metadata.label -- removed v2.0, 2026-07-30, for every tuple
+   * type at once (found on Bar, then the identical bug live on Pie as
+   * "Slice0"/"Slice1"): position already identifies a row; a name is the
+   * user's to type, never invented (tenet 9), matching how Spider's own
+   * spoke naming already worked (core/axes/spider.ts). Bar-family tuples
+   * still need a distinct, ADDRESSABLE CategoryAxis slot reserved up front
+   * so a later rename has somewhere to land (reserveEmptyCategorySlot);
+   * every other type needs nothing here at all. */
   private autoLabelTuple(tupleIndex: number): boolean {
-    const prefix = (this.axes as unknown as { dataPointsLabelPrefix?: string })?.dataPointsLabelPrefix ?? 'Category';
-    return this.setTupleLabel(tupleIndex, `${prefix}${tupleIndex}`);
+    const dataset = this.activeEntry.dataset;
+    if (this.usesCategoryAxis(dataset)) return this.reserveEmptyCategorySlot(tupleIndex);
+    return true;
+  }
+
+  /** The bar-family counterpart of autoLabelTuple's plain no-op: reserves a
+   * fresh, unnamed categoryIndex. NOT `setTupleLabel(tupleIndex, '')` --
+   * that reuses an EXISTING category by matching name, and two still-unnamed
+   * bars must not collapse onto one shared '' category the instant a second
+   * is added (naming one would then rename both). addCategory('') always
+   * mints a distinct index instead. */
+  private reserveEmptyCategorySlot(tupleIndex: number): boolean {
+    const dataset = this.activeEntry.dataset;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return false;
+    const pixels = tuple.filter((v): v is number => v !== null && v !== undefined);
+    if (pixels.length === 0) return false;
+    const target = pixels[0]!;
+    const idx = this.categoryAxis.addCategory('');
+    for (const pixelIndex of pixels) {
+      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
+      if (pixelIndex === target) {
+        dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: idx });
+      } else if ('categoryIndex' in existing) {
+        const { categoryIndex: _dropped, ...rest } = existing;
+        dataset.setMetadataAt(pixelIndex, rest);
+      }
+    }
+    this.registerCategoryIndexMetadataKey(dataset);
+    return true;
   }
 
   /**
@@ -3983,15 +4026,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never a
    * 5-slot Box Plot (its own config, or the legacy toggle on a Bar session).
-   * The one shape check two DIFFERENT bar-only capabilities happen to share:
-   * auto-category-PREFILL (wantsAutoCategoryPrefill below -- a box has no
-   * comparable "one repeated category set across series" pattern to prefill
-   * from) and colour-detected bounding boxes (addBarDetectBoxes -- a box's
-   * five letter values have no "opposite corners" a bbox could mean). Kept
-   * as one predicate rather than duplicated so the two never silently drift
-   * apart on what "a genuine bar interval" means. */
+   * Gates the auto-category-PREFILL convenience (wantsAutoCategoryPrefill
+   * below) and the CategoryAxis-backed bar table (getBarCategoryTable) --
+   * neither has a Box Plot or Histogram counterpart: a box's five letter
+   * values have no "one repeated category set across series" pattern to
+   * prefill from, and Histogram bins aren't named at all (see
+   * isHistogramBinShape below for the ONE thing they DO share with Bar). */
   private isBarIntervalShape(dataset: Dataset): boolean {
     return this.config.id === 'bar' && dataset.getSlotNames().length === BAR_INTERVAL_SLOTS.length;
+  }
+
+  /** True for a genuine 2-slot Histogram bin (HISTOGRAM_SLOTS). v2.0, 2026-07-30:
+   * split out from isBarIntervalShape rather than folded into it, because the two
+   * shapes are NOT interchangeable everywhere -- a histogram bin has no category
+   * name to prefill or share (isBarIntervalShape's other two uses stay Bar-only),
+   * but it DOES have a genuine bounding box a colour trace can find: see
+   * addBarDetectBoxes, which is the one place this predicate is used. */
+  private isHistogramBinShape(dataset: Dataset): boolean {
+    return this.config.id === 'histogram' && dataset.getSlotNames().length === HISTOGRAM_SLOTS.length;
   }
 
   /** Gates the auto-PREFILL convenience specifically (not category storage
@@ -4542,6 +4594,99 @@ export class CalibrationSession<A extends CalibratedAxes> {
       });
     });
     return { axisNames, axisRawNames, columns };
+  }
+
+  /**
+   * The bar table (v2.0): `# | Category | Series 1 | Series 2 | …` — one ROW
+   * per CATEGORY, one COLUMN per series, mirroring getSpiderTable's own
+   * shape and reasoning exactly (David: "we need to store them, series by
+   * series, as columns. Like this [spider's table]").
+   *
+   * ⚑ Replaces the per-series switching table Bar used to fall into
+   * (`hasSlots` below): that table showed the ACTIVE series' bars only, so a
+   * second series' bars vanished from the screen the moment you switched —
+   * the same defect getSpiderTable's own comment describes, on the same
+   * underlying table.
+   *
+   * Rows are the canonical CategoryAxis, in ITS OWN order (not any one
+   * series' capture order) — the whole point of a shared axis is that every
+   * series aligns to the same row regardless of which order each series was
+   * captured in. A series with no bar for a given category yet leaves that
+   * cell null, exactly like Spider's own empty cells.
+   */
+  getBarCategoryTable(): {
+    categoryNames: string[];
+    /** The names AS STORED — empty where a bar was captured but never
+     * named (autoLabelTuple's v2.0 change: position alone is enough for
+     * OUR identification, so nothing is invented here). `categoryNames`
+     * carries the positional fallback for display; an editable field must
+     * show THIS one, exactly as spider's axisRawNames/axisNames split. */
+    categoryRawNames: string[];
+    columns: {
+      seriesIndex: number;
+      seriesName: string;
+      values: (number | null)[];
+      /** Which tuple (in that series' OWN dataset) fills each row, so a
+       * click can select/delete it -- one series' tupleIndex is meaningless
+       * against another series' dataset, so this is per-column, not global. */
+      tupleIndices: (number | null)[];
+    }[];
+  } {
+    if (!this.axes || !this.isBarIntervalShape(this.activeEntry.dataset)) {
+      return { categoryNames: [], categoryRawNames: [], columns: [] };
+    }
+    const axes = this.axes;
+    const categories = this.categoryAxis.getCategories();
+    const categoryRawNames = [...categories];
+    const categoryNames = categories.map((name, i) => (name === '' ? `Category ${i + 1}` : name));
+    const derive = this.config.derivedTupleValue;
+
+    const columns = this.datasetEntries.map((entry, seriesIndex) => {
+      const dataset = entry.dataset;
+      const tuples = dataset.getAllTuples();
+      // categoryIndex -> tupleIndex, for this series only.
+      const tupleForCategory = new Map<number, number>();
+      tuples.forEach((tuple, tupleIndex) => {
+        const primary = tuple.find((v): v is number => v !== null && v !== undefined);
+        if (primary === undefined) return;
+        const idx = dataset.getPixel(primary).metadata?.['categoryIndex'];
+        if (typeof idx === 'number') tupleForCategory.set(idx, tupleIndex);
+      });
+      const values: (number | null)[] = [];
+      const tupleIndices: (number | null)[] = [];
+      categories.forEach((_, categoryIndex) => {
+        const tupleIndex = tupleForCategory.get(categoryIndex);
+        if (tupleIndex === undefined) {
+          values.push(null);
+          tupleIndices.push(null);
+          return;
+        }
+        const tuple = tuples[tupleIndex]!;
+        const points = tuple.map((pixelIndex) => {
+          if (pixelIndex === null || pixelIndex === undefined) return null;
+          const p = dataset.getPixel(pixelIndex);
+          return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
+        });
+        const derived =
+          derive?.compute(points, axes, { apex: null, stackGroup: this.getDatasetStackGroup(seriesIndex) }) ?? null;
+        values.push(derived);
+        tupleIndices.push(tupleIndex);
+      });
+      return { seriesIndex, seriesName: dataset.name, values, tupleIndices };
+    });
+    return { categoryNames, categoryRawNames, columns };
+  }
+
+  /** Renames a category directly by its canonical CategoryAxis index — the
+   * bar table's own counterpart of setSpokeName, and simpler than
+   * setTupleLabel: a shared table's row already names an EXISTING,
+   * unambiguous categoryIndex (there is nothing to look up or merge, unlike
+   * setTupleLabel's job of deciding whether a freshly-typed name matches an
+   * existing category or starts a new one). Every series sharing this
+   * category sees the new name immediately, since all of them resolve the
+   * name through this same index. */
+  renameCategory(categoryIndex: number, name: string): boolean {
+    return this.categoryAxis.renameCategory(categoryIndex, name);
   }
 
   /** The active series' bins, one entry per captured tuple in capture order,
