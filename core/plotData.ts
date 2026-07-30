@@ -28,9 +28,14 @@
  * a new file because the additive-map pattern it needs — a collection plus
  * an identity-keyed binding — is exactly what `_objectAxesMap` already does
  * for value axes, so this mirrors that shape deliberately rather than
- * inventing a second one. Unwired from `CalibrationSession`/`projectFile.ts`
- * and from serialize()/deserialize() as of this commit — a later v2.0 phase
- * wires it in alongside the version-5 file format.
+ * inventing a second one. Wired into `CalibrationSession`/`projectFile.ts`
+ * and serialize()/deserialize() in a later v2.0 phase — additively, into the
+ * SAME version [4, 2] shape this file already writes: `categoryAxisColl`/
+ * `categoryAxisName` are both omitted-when-unused, so an older reader (or a
+ * plain XY/polar/spider project that never uses one) sees a byte-identical
+ * file. No version bump ever became necessary for the bar model — the
+ * tuple/slot machinery it rides on (`_tuples`, per-pixel metadata) was
+ * already fully generic before this release touched it.
  */
 
 import { Calibration } from './calibration.js';
@@ -661,16 +666,30 @@ export class PlotData {
     return documentMetadata;
   }
 
+  /** v2.0 Phase 8: an unrecognized major version -- or no format marker at
+   * all -- now fails (`false`) rather than the pre-existing fallthrough
+   * `return true`, which left the PlotData wholly empty (`reset()` above
+   * already cleared it) while telling the caller it had succeeded. A file
+   * this build cannot read deserves a visible "can't open this" (every real
+   * caller already checks for `false` -- engine/projectFile.ts's
+   * deserializeProject, engine/wpdImport.ts), not a silent blank project
+   * that reads as "this figure has no data" instead of "this file could not
+   * be opened". No version bump of v2.0's OWN format accompanies this: every
+   * field the bar model added (categoryAxisColl, categoryAxisName) is
+   * additive, so a v[4,2] reader already ignores what it doesn't recognize
+   * -- see this file's own header comment on why. */
   deserialize(data: { wpd?: PreV4Data & { version: number[] }; version?: number[] } & Partial<SerializedPlotData>): boolean | DocumentMetadata {
     this.reset();
     try {
-      if (data.wpd != null && data.wpd.version[0] === 3) {
-        return this._deserializePreVersion4(data.wpd);
+      if (data.wpd != null) {
+        if (data.wpd.version[0] === 3) return this._deserializePreVersion4(data.wpd);
+        return false;
       }
-      if (data.version != null && data.version[0] === 4) {
-        return this._deserializeVersion4(data as SerializedPlotData);
+      if (data.version != null) {
+        if (data.version[0] === 4) return this._deserializeVersion4(data as SerializedPlotData);
+        return false;
       }
-      return true;
+      return false;
     } catch (e) {
       console.log(e);
       return false;

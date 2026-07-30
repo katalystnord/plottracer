@@ -170,6 +170,23 @@ describe('deserializeProject', () => {
     expect(result).toEqual({ error: 'Project file has no calibrated axes.' });
   });
 
+  it('rejects a plotData version this build does not recognize, visibly (v2.0 Phase 8)', () => {
+    // ⚑ Before core/plotData.ts's own hardening, an unrecognized version fell
+    // through to a silent empty PlotData reported as SUCCESS -- so this path
+    // would have read "Project file has no calibrated axes or dataset."
+    // (a confusing error blaming the wrong thing) rather than the actual
+    // problem: the file's format itself could not be read. A real-looking
+    // axesColl[0].type is needed so the EARLIER "no calibrated axes" guard
+    // (which reads the raw JSON directly, before plotData.deserialize runs
+    // at all) doesn't mask what's actually under test here.
+    const result = deserializeProject({
+      plotTracerProject: 1,
+      image: { dataURL: FAKE_IMAGE_DATA_URL },
+      plotData: { version: [99, 0], axesColl: [{ name: 'X', type: 'XYAxes' }], datasetColl: [], measurementColl: [] },
+    });
+    expect(result).toEqual({ error: 'Failed to parse project data.' });
+  });
+
   it('round-trips a calibrated XY session exactly: axes, dataset points, and image', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);

@@ -151,4 +151,42 @@ describe('PlotData', () => {
     const ds2 = pd2.getDatasets()[0]!;
     expect(ds2.getPixel(0).metadata).toEqual({ overrides: { y: 99.5 } });
   });
+
+  describe('deserialize: an unrecognized file fails visibly (v2.0 Phase 8)', () => {
+    // ⚑ The gap this closes: `reset()` already empties the PlotData before
+    // any version check runs, so the OLD fallthrough (`return true`) reported
+    // SUCCESS for data it had done nothing with -- a project file this build
+    // cannot read opened as a blank, "this figure has no data" project rather
+    // than the "this file could not be opened" it actually was. Every real
+    // caller already checks for `false` (engine/projectFile.ts's
+    // deserializeProject, engine/wpdImport.ts), so returning it here is a
+    // real, visible error message reaching the user, not a new contract.
+    it('fails for a version this build does not recognize (e.g. a hypothetical future v5)', () => {
+      const pd = new PlotData();
+      expect(pd.deserialize({ version: [5, 0], axesColl: [], datasetColl: [] } as unknown as Parameters<PlotData['deserialize']>[0])).toBe(false);
+    });
+
+    it('fails for a WPD version this build does not recognize', () => {
+      const pd = new PlotData();
+      expect(pd.deserialize({ wpd: { version: [2, 0] } } as unknown as Parameters<PlotData['deserialize']>[0])).toBe(false);
+    });
+
+    it('fails for data with no format marker at all', () => {
+      const pd = new PlotData();
+      expect(pd.deserialize({} as unknown as Parameters<PlotData['deserialize']>[0])).toBe(false);
+    });
+
+    it('still succeeds for the two real formats -- our own v4 and WPD v3', () => {
+      const pd = buildXYProject();
+      const ours = new PlotData();
+      expect(ours.deserialize(pd.serialize() as unknown as Parameters<PlotData['deserialize']>[0])).not.toBe(false);
+
+      const wpd = new PlotData();
+      expect(
+        wpd.deserialize({
+          wpd: { version: [3, 0], axesColl: [], datasetColl: [] },
+        } as unknown as Parameters<PlotData['deserialize']>[0])
+      ).not.toBe(false);
+    });
+  });
 });
