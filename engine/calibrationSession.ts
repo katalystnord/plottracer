@@ -2772,9 +2772,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // Position, Category, Value -- independent first, dependent last, matching
         // getExportFields() and the on-screen table. An unnamed point in a figure
         // that HAS names exports a BLANK cell, so a reader can see which ticks were
-        // actually transcribed. (Bar's own Label column keeps WPD's inherited
-        // `Bar<i>` fallback -- a different, older contract with tests pinning it;
-        // not changed here.)
+        // actually transcribed. (Bar's own Label column carried WPD's inherited
+        // `Bar<i>` fallback too, in core/exportValues.ts's valueAtPixel -- fixed
+        // 2026-07-30, the same tenet-9 pass that found it via this exact comment.)
         const values: ExportValue[] = withCategory
           ? [rank[i]!, typeof label === 'string' ? label : '', value]
           : [rank[i]!, value];

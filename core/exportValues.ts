@@ -78,8 +78,14 @@ export function exportLabelsFor(axes: ExportableAxes): string[] {
  * - **Bar** returns `[label, value]`. `pixelToData` yields ONE number, but the
  *   label — the independent variable, the whole point of a bar chart — lives in
  *   the point's metadata, which is why `getDimensions()` is 2 while `dataDim` is
- *   1. Falls back to `Bar<i>` exactly as upstream does, so an unnamed bar still
- *   gets a stable identifier rather than an empty cell.
+ *   1. An unnamed bar exports a BLANK cell, not an invented `Bar<i>` (v2.0,
+ *   2026-07-30 -- was upstream's own fallback; found still here, discarded-but-
+ *   still-executed for v2.0's tuple-shaped Bar export, while auditing the same
+ *   fake-name defect fixed everywhere else this session, e.g.
+ *   engine/calibrationSession.ts's autoLabelTuple. A name that looks
+ *   transcribed but wasn't is worse than an empty cell -- tenet 9). Matches
+ *   the categorical-line branch's own identical fix, just above this file's
+ *   BarAxes-based sibling (engine/calibrationSession.ts's getExportRows).
  * - **CCR** formats its time column unconditionally (upstream does this with no
  *   opt-in, `dataExport.js:36-37`), so 100% of CCR extractions currently read
  *   `2460123.45` where WPD reads a real time.
@@ -112,7 +118,7 @@ export function valueAtPixel(
   let out: ExportValue[];
   if (axes instanceof BarAxes) {
     const label = pixel.metadata?.['label'];
-    out = [typeof label === 'string' && label.length > 0 ? label : `Bar${ptIndex}`, val[0] ?? null];
+    out = [typeof label === 'string' ? label : '', val[0] ?? null];
   } else if (axes instanceof CircularChartRecorderAxes) {
     out = [formatIfNumber(val[0], axes.getTimeFormat()), ...val.slice(1)];
   } else if (axes instanceof XYAxes) {

@@ -101,16 +101,21 @@ describe('valueAtPixel — Bar', () => {
     expect(row[1]).toBeCloseTo(50, 6);
   });
 
-  it('falls back to Bar<i> for an unnamed bar, matching upstream', () => {
+  it('exports a blank cell for an unnamed bar, not an invented "Bar<i>" (v2.0, 2026-07-30)', () => {
+    // ⚑ Used to fall back to upstream's own `Bar<i>` -- the identical fake-name
+    // defect fixed everywhere else this session (engine/calibrationSession.ts's
+    // autoLabelTuple), found still here by grepping for its own leftover test.
+    // A name that looks transcribed but wasn't is worse than an empty cell
+    // (tenet 9) -- same fix the categorical-line branch already had.
     const ds = new Dataset(1);
     ds.addPixel(150, 200);
-    expect(valueAtPixel(3, barAxes(), ds.getPixel(0))[0]).toBe('Bar3');
+    expect(valueAtPixel(3, barAxes(), ds.getPixel(0))[0]).toBe('');
   });
 
-  it('falls back for an empty label rather than emitting a blank cell', () => {
+  it('exports a blank cell for an explicitly empty label too, the same as no label at all', () => {
     const ds = new Dataset(1);
     ds.addPixel(150, 200, { label: '' });
-    expect(valueAtPixel(0, barAxes(), ds.getPixel(0))[0]).toBe('Bar0');
+    expect(valueAtPixel(0, barAxes(), ds.getPixel(0))[0]).toBe('');
   });
 });
 
