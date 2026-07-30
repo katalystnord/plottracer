@@ -191,6 +191,7 @@ import { CircularChartRecorderAxes, type RotationTime, type RotationDirection } 
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
+import { CategoryAxis } from '../core/categoryAxis.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
@@ -1885,6 +1886,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * y value on a map. */
   private imageHeight = 0;
 
+  /** The canonical category list (v2.0), currently read/written only for
+   * `config.id === 'bar'` -- see setTupleLabel/getTupleLabel. Present
+   * unconditionally on every session (rather than null until first needed)
+   * so no call site has to cope with "not created yet"; every other graph
+   * type simply never reads or writes it. Not a CalibratedAxes -- see
+   * core/categoryAxis.ts for why. */
+  private categoryAxis: CategoryAxis = new CategoryAxis();
+
   /** How many times `config.repeatingStep` is currently unrolled — the spoke count
    * of the spider being calibrated. Meaningless (and left at 0) for every
    * fixed-shape type. */
@@ -3575,6 +3584,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const dataset = this.activeEntry.dataset;
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple) return '';
+    // v2.0: a bar-INTERVAL tuple resolves through the canonical CategoryAxis
+    // (metadata.categoryIndex), not a per-tuple copied string -- see
+    // setTupleLabel's own comment for why, and isBarIntervalDataset's for why
+    // this excludes the legacy Box-Plot-via-Bar-toggle shape.
+    if (this.isBarIntervalDataset(dataset)) {
+      for (const pixelIndex of tuple) {
+        if (pixelIndex === null || pixelIndex === undefined) continue;
+        const idx = dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
+        if (typeof idx === 'number') return this.categoryAxis.getCategories()[idx] ?? '';
+      }
+      return '';
+    }
     for (const pixelIndex of tuple) {
       if (pixelIndex === null || pixelIndex === undefined) continue;
       const label = dataset.getPixel(pixelIndex).metadata?.['label'];
@@ -3601,6 +3622,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The remaining false is honest rather than silent: a wholly empty tuple has no
    * pixel to hang metadata on, and inventing one would put a mark on the figure the
    * user never made.
+   *
+   * ⚑ v2.0: a bar-interval tuple goes through the CategoryAxis instead of
+   * copying a string per tuple (David's steer, Phase 3: "category axis
+   * wiring + grouped bars") -- this is what lets renaming a category
+   * propagate to every series sharing it, which a per-tuple string copy
+   * structurally cannot do. The rule, and why it is NOT simply "always
+   * rename in place": if this tuple is the tuple SOLE owner of its current
+   * category, retyping renames it in place (safe -- nothing else is
+   * affected, and this is what lets a genuine typo fix propagate once a
+   * second series later adopts the same name). If the category is SHARED
+   * with another series' bar, retyping instead reuses an existing category
+   * with that exact name or creates a new one -- covering the real case
+   * this needed fixing for (v1.3 #9's "series 2 has no Hemp bar": its
+   * prefilled "Hemp" guess is wrong, and correcting it must not silently
+   * rename series 1's genuinely-Hemp bar too).
    */
   setTupleLabel(tupleIndex: number, label: string): boolean {
     const dataset = this.activeEntry.dataset;
@@ -3609,6 +3645,39 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const pixels = tuple.filter((v): v is number => v !== null && v !== undefined);
     if (pixels.length === 0) return false;
     const target = pixels[0]!;
+
+    if (this.isBarIntervalDataset(dataset)) {
+      const existingRaw = dataset.getPixel(target).metadata?.['categoryIndex'];
+      const existingIdx = typeof existingRaw === 'number' ? existingRaw : -1;
+      let idx: number;
+      if (existingIdx >= 0 && !this.categoryIndexHasOtherOwner(existingIdx, dataset, tupleIndex)) {
+        // Sole owner of this category: renaming it in place is unambiguous
+        // (no other bar, in any series, is affected) -- this is what lets a
+        // genuine typo fix propagate once a SECOND series adopts it later.
+        this.categoryAxis.renameCategory(existingIdx, label);
+        idx = existingIdx;
+      } else {
+        // Either unassigned yet, or SHARED with another series' bar (e.g. a
+        // prefilled guess that turned out wrong -- v1.3 #9's "series 2 has no
+        // Hemp bar" case). Never silently rename a category out from under
+        // another series' bar; reuse an existing category with this exact
+        // name, or create a new one.
+        idx = this.categoryAxis.getCategoryIndex(label);
+        if (idx < 0) idx = this.categoryAxis.addCategory(label);
+      }
+      for (const pixelIndex of pixels) {
+        const existing = dataset.getPixel(pixelIndex).metadata ?? {};
+        if (pixelIndex === target) {
+          dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: idx });
+        } else if ('categoryIndex' in existing) {
+          const { categoryIndex: _dropped, ...rest } = existing;
+          dataset.setMetadataAt(pixelIndex, rest);
+        }
+      }
+      this.registerCategoryIndexMetadataKey(dataset);
+      return true;
+    }
+
     for (const pixelIndex of pixels) {
       const existing = dataset.getPixel(pixelIndex).metadata ?? {};
       if (pixelIndex === target) {
@@ -3620,6 +3689,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     this.registerLabelMetadataKey(dataset);
     return true;
+  }
+
+  /** Register "categoryIndex" as a per-pixel metadata key so it round-trips
+   * through core/plotData.ts -- same registration registerLabelMetadataKey
+   * does for "label". Idempotent. */
+  private registerCategoryIndexMetadataKey(dataset: Dataset): void {
+    const keys = dataset.getMetadataKeys();
+    if (!keys.includes('categoryIndex')) dataset.setMetadataKeys([...keys, 'categoryIndex']);
   }
 
   /** Register "label" as a per-pixel metadata key so it round-trips through
@@ -3745,6 +3822,38 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return rotated ? p.y : p.x;
   }
 
+  /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never
+   * the legacy "Box Plot Groups" toggle applied to a Bar session -- that is
+   * ALSO `config.id === 'bar'` but reshapes the dataset to 5 letter-value
+   * slots (checkpoint 107), and keeps the plain per-tuple string label like
+   * every other tuple type. Canonical category-axis naming (below) is for
+   * the interval record specifically. */
+  private isBarIntervalDataset(dataset: Dataset): boolean {
+    return this.config.id === 'bar' && dataset.getSlotNames().length === BAR_INTERVAL_SLOTS.length;
+  }
+
+  /** Does any tuple OTHER than (dataset, tupleIndex) already reference this
+   * categoryIndex? Answers whether renaming it in place is safe (no other
+   * bar, in any series, would be silently relabeled) or whether it must be
+   * treated as a reassignment instead -- see setTupleLabel's own comment for
+   * why this distinction is the whole point. */
+  private categoryIndexHasOtherOwner(categoryIndex: number, dataset: Dataset, tupleIndex: number): boolean {
+    for (const entry of this.datasetEntries) {
+      const tuples = entry.dataset.getAllTuples();
+      for (let i = 0; i < tuples.length; i++) {
+        if (entry.dataset === dataset && i === tupleIndex) continue;
+        const owns = tuples[i]!.some(
+          (pixelIndex) =>
+            pixelIndex !== null &&
+            pixelIndex !== undefined &&
+            entry.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'] === categoryIndex
+        );
+        if (owns) return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Tuple-shaped counterpart of prefillCategoryLabel (v2.0). A bar is now TWO
    * pixels (its dragged corners), not one, so a NEW TUPLE — not a new pixel —
@@ -3762,39 +3871,45 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Returns whether it wrote a name, so the caller can fall back to
    * autoLabelTuple's plain default when there is no donor — mirroring how
    * the old per-point path left a name blank rather than inventing one.
+   *
+   * ⚑ v2.0: assigns the donor's CATEGORYINDEX, not a copied string -- the new
+   * tuple shares canonical identity with its donor from the moment it's
+   * created, so renaming either one afterward (setTupleLabel) renames both.
+   * A copied string would have looked identical on screen at prefill time but
+   * silently diverged the instant either series' name was corrected.
    */
   private prefillTupleCategoryLabel(dataset: Dataset, tupleIndex: number): boolean {
-    if (this.config.id !== 'bar') return false;
+    if (!this.isBarIntervalDataset(dataset)) return false;
     const tuple = dataset.getAllTuples()[tupleIndex];
     const primaryPixelIndex = tuple?.find((v): v is number => v !== null && v !== undefined);
     if (primaryPixelIndex === undefined) return false;
     const here = this.categoryCoordOf(dataset.getPixel(primaryPixelIndex));
 
-    let bestLabel: string | null = null;
+    let bestIdx: number | null = null;
     let bestDistance = Infinity;
     for (const other of this.datasetEntries) {
       if (other.dataset === dataset) continue;
       for (const otherTuple of other.dataset.getAllTuples()) {
         const otherPrimary = otherTuple.find((v): v is number => v !== null && v !== undefined);
         if (otherPrimary === undefined) continue;
-        let label: string | null = null;
+        let idx: number | null = null;
         for (const pixelIndex of otherTuple) {
           if (pixelIndex === null || pixelIndex === undefined) continue;
-          const candidate = other.dataset.getPixel(pixelIndex).metadata?.['label'];
-          if (typeof candidate === 'string' && candidate.length > 0) {
-            label = candidate;
+          const candidate = other.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
+          if (typeof candidate === 'number') {
+            idx = candidate;
             break;
           }
         }
-        if (label === null) continue;
+        if (idx === null) continue;
         const distance = Math.abs(this.categoryCoordOf(other.dataset.getPixel(otherPrimary)) - here);
         if (distance < bestDistance) {
           bestDistance = distance;
-          bestLabel = label;
+          bestIdx = idx;
         }
       }
     }
-    if (bestLabel === null) return false;
+    if (bestIdx === null) return false;
 
     // Already used by another tuple in THIS dataset -> ambiguous, write nothing.
     const taken = dataset.getAllTuples().some((t, i) => {
@@ -3803,7 +3918,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         (pixelIndex) =>
           pixelIndex !== null &&
           pixelIndex !== undefined &&
-          dataset.getPixel(pixelIndex).metadata?.['label'] === bestLabel
+          dataset.getPixel(pixelIndex).metadata?.['categoryIndex'] === bestIdx
       );
     });
     if (taken) return false;
@@ -3816,13 +3931,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const pixelIndex of pixels) {
       const existing = dataset.getPixel(pixelIndex).metadata ?? {};
       if (pixelIndex === target) {
-        dataset.setMetadataAt(pixelIndex, { ...existing, label: bestLabel });
-      } else if ('label' in existing) {
-        const { label: _dropped, ...rest } = existing;
+        dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: bestIdx });
+      } else if ('categoryIndex' in existing) {
+        const { categoryIndex: _dropped, ...rest } = existing;
         dataset.setMetadataAt(pixelIndex, rest);
       }
     }
-    this.registerLabelMetadataKey(dataset);
+    this.registerCategoryIndexMetadataKey(dataset);
     return true;
   }
 
@@ -3836,6 +3951,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Whether the active dataset has named slots configured (Box Plot etc.). */
   hasSlots(): boolean {
     return this.activeEntry.dataset.hasSlots();
+  }
+
+  /** The session's canonical category list (v2.0) -- see the field's own
+   * comment for why this exists on every session rather than only bar ones. */
+  getCategoryAxis(): CategoryAxis {
+    return this.categoryAxis;
   }
 
   getSlotNames(): string[] {
@@ -4933,9 +5054,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const plotData = new PlotData();
     const axes = this.axes as unknown as AnyAxes | null;
     if (axes) plotData.addAxes(axes);
+    // v2.0: the category axis is a THIRD entrance the undo snapshot must not
+    // miss (the pre-v2.0 audit's own lesson -- "the undo snapshot is an
+    // entrance", found on the spider's repeat count). Bound to every dataset
+    // unconditionally, same as `axes` above: non-bar types simply never read
+    // or write it, so binding it costs nothing and there's no type to check.
+    plotData.addCategoryAxis(this.categoryAxis);
     for (const entry of this.datasetEntries) {
       plotData.addDataset(entry.dataset);
       if (axes) plotData.setAxesForDataset(entry.dataset, axes);
+      plotData.setCategoryAxisForDataset(entry.dataset, this.categoryAxis);
     }
     return {
       placed: structuredClone(this.placed),
@@ -4962,6 +5090,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
     plotData.deserialize(snapshot.plotData);
     const datasets = plotData.getDatasets();
     this.axes = (plotData.getAxesColl()[0] ?? null) as A | null;
+    // v2.0: restore the SAME category-axis instance captureState bound every
+    // dataset to -- falls back to a fresh empty one only if the snapshot
+    // somehow predates this field entirely (never true in practice, since
+    // captureState always adds one; defensive rather than assumed).
+    this.categoryAxis = plotData.getCategoryAxisColl()[0] ?? new CategoryAxis();
     // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
     // Restored BEFORE `placed` and `stepIndex` below, since both are read against
     // the step list this count decides. The other two entrances already handle it —

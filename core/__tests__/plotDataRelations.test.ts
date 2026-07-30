@@ -336,3 +336,45 @@ describe('PlotData — reset', () => {
     expect(pd.getMeasurementColl()).toHaveLength(0);
   });
 });
+
+describe('PlotData — category axis serialization (v2.0 groundwork)', () => {
+  it('carries a category axis and its binding through serialize and back', () => {
+    const pd = new PlotData();
+    const dsA = dataset('a');
+    const dsB = dataset('b');
+    const cat = new CategoryAxis();
+    cat.name = 'Categories 1';
+    cat.addCategory('Flax');
+    cat.addCategory('Hemp');
+    pd.addDataset(dsA);
+    pd.addDataset(dsB);
+    pd.addCategoryAxis(cat);
+    pd.setCategoryAxisForDataset(dsA, cat);
+    pd.setCategoryAxisForDataset(dsB, cat);
+
+    const restored = new PlotData();
+    const json = JSON.parse(JSON.stringify(pd.serialize()));
+    expect(restored.deserialize(json)).not.toBe(false);
+
+    expect(restored.getCategoryAxisCount()).toBe(1);
+    const restoredCategories = restored.getCategoryAxisColl()[0]!.getCategories();
+    expect(restoredCategories).toEqual(['Flax', 'Hemp']);
+
+    // Both datasets are bound to the SAME restored instance -- a rename after
+    // reload must still propagate to both, exactly as it did before saving.
+    const [restoredA, restoredB] = restored.getDatasets();
+    const caForA = restored.getCategoryAxisForDataset(restoredA!);
+    const caForB = restored.getCategoryAxisForDataset(restoredB!);
+    expect(caForA).toBe(caForB);
+    caForA!.renameCategory(0, 'Flax (renamed)');
+    expect(restored.getCategoryAxisForDataset(restoredB!)!.getCategories()[0]).toBe('Flax (renamed)');
+  });
+
+  it('adds no categoryAxisColl key at all when nothing uses one -- old files stay byte-identical', () => {
+    const pd = new PlotData();
+    pd.addDataset(dataset('d'));
+    const serialized = pd.serialize();
+    expect(serialized.categoryAxisColl).toBeUndefined();
+    expect(serialized.datasetColl[0]!.categoryAxisName).toBeUndefined();
+  });
+});

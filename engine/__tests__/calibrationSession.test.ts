@@ -587,15 +587,17 @@ describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple)
     expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']);
   });
 
-  it('registers the label metadata key as soon as a bar is captured', () => {
+  it('registers the categoryIndex metadata key as soon as a bar is captured', () => {
     // The record is only durable if plotData knows to serialize the key.
     // v2.0: unlike the old per-point behaviour, the key is registered
     // IMMEDIATELY on capture, not only once a name is explicitly typed --
     // autoLabelTuple names every new tuple right away (same as Box Plot/Pie/
     // Histogram already do), so there is no longer an unlabeled-tuple state.
+    // Phase 3: the key is "categoryIndex" now, not "label" -- a bar's category
+    // resolves through the canonical CategoryAxis, not a per-tuple string.
     const session = barSession();
     addBar(session, 150, 300, 250);
-    expect(session.getMetadataKeys()).toContain('label');
+    expect(session.getMetadataKeys()).toContain('categoryIndex');
   });
 
   it('prefills a new series\' bar from whichever series already named that column', () => {
@@ -696,6 +698,40 @@ describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple)
     addBar(session, 150, 300, 250);
     session.setTupleLabel(0, 'Flax');
     expect(session.getTupleRows()[0]!.label).toBe('Flax');
+  });
+
+  // ⚑ v2.0 Phase 3: the canonical CategoryAxis is what makes these two true
+  // at once -- a rename propagates when it's safe, and never corrupts a
+  // sibling series' data when it isn't. Direct coverage beyond what the
+  // adapted tests above exercise incidentally.
+  it('renaming a category with no other owner propagates in place -- the same category, just a better name', () => {
+    const session = barSession();
+    addBar(session, 150, 300, 250);
+    session.setTupleLabel(0, 'Flax'); // sole owner: renames in place
+    session.setTupleLabel(0, 'Flaxseed'); // retyping again, still sole owner
+    expect(session.getTupleLabel(0)).toBe('Flaxseed');
+    // It's a RENAME, not a new category sitting alongside the old one.
+    expect(session.getCategoryAxis().getCategories()).toEqual(['Flaxseed']);
+  });
+
+  it('typing an EXISTING category\'s exact name joins it by canonical identity, not just by position', () => {
+    // Distinct from prefill (which matches by nearest position): this is the
+    // user directly typing a name that already exists elsewhere, and it must
+    // share the SAME index -- so renaming either bar afterward renames both,
+    // exactly as if prefill had assigned it.
+    const session = barSession();
+    addBar(session, 150, 300, 250);
+    session.setTupleLabel(0, 'Flax');
+
+    session.addDataset('Alkali');
+    addBar(session, 900, 300, 200); // far away -- prefill would NOT have matched this to Flax
+    session.setTupleLabel(0, 'Flax'); // typed manually, same exact name
+    expect(session.getCategoryAxis().getCategories()).toEqual(['Flax']); // joined, not duplicated
+
+    // Now shared -- renaming this series' bar must not corrupt series 1's.
+    session.setTupleLabel(0, 'Flax (batch 2)');
+    session.setActiveDataset(0);
+    expect(session.getTupleLabel(0)).toBe('Flax'); // untouched
   });
 
   it('grows the categorical export a Category column only once something is named', () => {

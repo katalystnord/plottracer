@@ -109,6 +109,23 @@ export interface SerializedDatasetData {
   metadata?: Record<string, unknown>;
   data: SerializedPixel[];
   autoDetectionData?: unknown;
+  /** v2.0 groundwork -- see SerializedCategoryAxisData. Absent for every
+   * dataset not bound to a CategoryAxis (every project before this, and
+   * every non-bar-family dataset after it). */
+  categoryAxisName?: string;
+}
+
+/** v2.0 groundwork: a CategoryAxis's serialized form -- an ordered name list,
+ * nothing else (see core/categoryAxis.ts, which has no pixel transform to
+ * serialize). Linked to a dataset by NAME, exactly like axesColl/axesName --
+ * plain object references don't survive JSON, so every cross-reference in
+ * this format already works this way. Purely ADDITIVE to the existing
+ * version [4, x] shape: an older reader drops `categoryAxisColl` and
+ * `categoryAxisName` on the floor and reads everything else unchanged, so
+ * this needs no version bump of its own. */
+export interface SerializedCategoryAxisData {
+  name: string;
+  categories: string[];
 }
 
 export interface SerializedMeasurementData {
@@ -125,6 +142,8 @@ export interface SerializedPlotData {
   axesColl: SerializedAxesData[];
   datasetColl: SerializedDatasetData[];
   measurementColl: SerializedMeasurementData[];
+  /** v2.0 groundwork, additive -- see SerializedCategoryAxisData. */
+  categoryAxisColl?: SerializedCategoryAxisData[];
   misc?: unknown;
 }
 
@@ -542,6 +561,17 @@ export class PlotData {
       }
     }
 
+    // v2.0 groundwork, additive -- see SerializedCategoryAxisData. Read BEFORE
+    // the dataset loop below, which looks these up by name to rebind.
+    if (data.categoryAxisColl != null) {
+      for (const caData of data.categoryAxisColl) {
+        const ca = new CategoryAxis();
+        ca.name = caData.name;
+        for (const category of caData.categories) ca.addCategory(category);
+        this.addCategoryAxis(ca);
+      }
+    }
+
     if (data.datasetColl != null) {
       for (const dsData of data.datasetColl) {
         const ds = new Dataset();
@@ -583,6 +613,11 @@ export class PlotData {
         const axIdx = this.getAxesNames().indexOf(dsData.axesName);
         if (axIdx >= 0) {
           this.setAxesForDataset(ds, this._axesColl[axIdx]!);
+        }
+
+        if (dsData.categoryAxisName != null) {
+          const caIdx = this._categoryAxisColl.findIndex((ca) => ca.name === dsData.categoryAxisName);
+          if (caIdx >= 0) this.setCategoryAxisForDataset(ds, this._categoryAxisColl[caIdx]!);
         }
 
         if (dsData.autoDetectionData != null) {
@@ -727,8 +762,16 @@ export class PlotData {
       data.axesColl.push(axData);
     }
 
+    // v2.0 groundwork, additive (see SerializedCategoryAxisData) -- only
+    // written when at least one exists, so a project with none round-trips
+    // byte-for-byte identically to before this field existed.
+    if (this._categoryAxisColl.length > 0) {
+      data.categoryAxisColl = this._categoryAxisColl.map((ca) => ({ name: ca.name, categories: [...ca.getCategories()] }));
+    }
+
     for (const ds of this._datasetColl) {
       const axes = this.getAxesForDataset(ds);
+      const categoryAxis = this.getCategoryAxisForDataset(ds);
       const autoDetectionData = this.getAutoDetectionDataForDataset(ds);
 
       const dsData: SerializedDatasetData = {
@@ -737,6 +780,7 @@ export class PlotData {
         colorRGB: ds.colorRGB.serialize(),
         metadataKeys: ds.getMetadataKeys(),
         data: [],
+        ...(categoryAxis != null ? { categoryAxisName: categoryAxis.name } : {}),
       };
 
       if (documentMetadata) {
