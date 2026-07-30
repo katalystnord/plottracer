@@ -444,7 +444,7 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     expect(THREE().getExportShape()).toBe('flat');
   });
 
-  it('answers tuples for a Box Plot — including one reached as a Bar toggle', () => {
+  it('answers tuples for a Box Plot — including one reached as a Bar toggle, and for plain Bar\'s own interval record (v2.0)', () => {
     // ⚑ Why this cannot be a static config field alone. Box Plot is two doors: its
     // own graph type, and a toggle that gives a BAR session Min/Q1/Median/Q3/Max.
     // The second has a config that says nothing about tuples.
@@ -456,9 +456,14 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     bar.handleCalibrationClick(100, 100);
     bar.confirmCalibrationValues(['10']);
     expect(bar.runCalibration()).toBe(true);
-    expect(bar.getExportShape()).toBe('flat'); // a plain bar series
+    // v2.0: a plain bar is ALREADY tuple-shaped (its own 2-slot interval
+    // record, BAR_INTERVAL_SLOTS) -- not the 'flat' shape a pre-v2.0 bar
+    // session had before Box Plot Groups was applied.
+    expect(bar.getExportShape()).toBe('tuples');
+    expect(bar.getSlotNames()).toEqual(['Bar start', 'Bar end']);
     expect(bar.applyBoxPlotGroups()).toBe(true);
-    expect(bar.getExportShape()).toBe('tuples'); // ...the same session, toggled
+    expect(bar.getExportShape()).toBe('tuples'); // ...the same session, toggled to the 5-slot shape
+    expect(bar.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
   });
 
   it('answers bins for the type that has its own table', () => {

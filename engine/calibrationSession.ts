@@ -961,6 +961,12 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   },
 };
 
+/** A bar's two captured opposite corners, in drag order (v2.0). Order carries
+ * no meaning for an anchored bar (derivedTupleValue compares each corner's
+ * VALUE to the declared baseline, never the slot position) but IS the signal
+ * for a floating/offset bar's direction — see derivedTupleValue below. */
+export const BAR_INTERVAL_SLOTS = ['Bar start', 'Bar end'] as const;
+
 export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   label: 'Bar',
@@ -975,19 +981,70 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
     { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
+    // v2.0: a declared setting, not a calibration value -- see BarAxes.setBaseline.
+    // Defaults ON at '0', the ordinary bar chart, walked past like pie's total/sweep.
+    { key: 'hasBaseline', label: 'Bars share a baseline', kind: 'checkbox', default: true },
+    { key: 'baselineValue', label: 'Baseline value', kind: 'text', default: '0' },
   ],
   fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click the pixel position of a known bar value (e.g. 0)', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
     { key: 'p2', label: 'P2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different bar value', valueFields: [{ key: 'p2', label: 'value', field: 'dy' }] },
   ],
+  // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
+  // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
+  defaultSlots: BAR_INTERVAL_SLOTS,
+  tupleNoun: 'bar',
+  tupleMembers: 'object',
+  derivedTupleValue: {
+    label: 'Value',
+    compute(points, axes) {
+      const [start, end] = points;
+      if (!start?.data || !end?.data) return null; // a half-dragged bar has no value yet
+      const v1 = start.data[0]!;
+      const v2 = end.data[0]!;
+      if (axes.hasDeclaredBaseline()) {
+        // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
+        // position -- a pixel-position rule ("smaller y = far end") is exactly
+        // backwards for a bar below baseline in a normal vertical orientation,
+        // and pixelToData already encodes orientation/direction/log-scale
+        // correctly, so comparing values needs no such reversal at all.
+        const baseline = axes.getBaselineValue();
+        const nearIsStart = Math.abs(v1 - baseline) <= Math.abs(v2 - baseline);
+        const far = nearIsStart ? v2 : v1;
+        return far - baseline;
+      }
+      // Floating/offset bar (no declared baseline): there is no reference to
+      // sign against, so the recorded DRAG DIRECTION carries the meaning
+      // instead -- same principle as pie preserving its boundary-walk
+      // direction rather than normalising it away.
+      return v2 - v1;
+    },
+  },
+  // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
+  // refusal a click does (same reasoning as pie's checkValues above it).
+  checkValues(_cal, options) {
+    if (optionBool(options, 'hasBaseline')) {
+      const baseline = parseFloat(options['baselineValue'] ?? '');
+      if (!Number.isFinite(baseline)) {
+        return 'The baseline value must be a number (0 for an ordinary zero-based bar chart).';
+      }
+    }
+    return null;
+  },
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
     if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    axes.setBaseline(optionBool(ctx.options, 'hasBaseline'), parseFloat(ctx.options.baselineValue ?? '0'));
     return { axes };
   },
   extractOptions(axes) {
-    return { isLog: String(axes.isLog()), isRotated: String(axes.isRotated()) };
+    return {
+      isLog: String(axes.isLog()),
+      isRotated: String(axes.isRotated()),
+      hasBaseline: String(axes.hasDeclaredBaseline()),
+      baselineValue: String(axes.getBaselineValue()),
+    };
   },
 };
 
@@ -3242,7 +3299,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
           newTupleIndex = dataset.addTuple(index);
         }
         entry.slotCursor.tupleIndex = newTupleIndex;
-        if (newTupleIndex !== null) this.autoLabelTuple(newTupleIndex);
+        // v2.0: a bar tuple tries the smart cross-series prefill first (same
+        // convenience plain Bar always had, ported from per-point to
+        // per-tuple); every other slotted type keeps its plain default,
+        // since prefillTupleCategoryLabel no-ops immediately for them.
+        if (newTupleIndex !== null && !this.prefillTupleCategoryLabel(dataset, newTupleIndex)) {
+          this.autoLabelTuple(newTupleIndex);
+        }
       } else {
         dataset.addToTupleAt(tupleIndex, groupIndex, index);
       }
@@ -3673,6 +3736,96 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.registerLabelMetadataKey(dataset);
   }
 
+  /** Category-axis coordinate of a pixel: x for upright bars, y once
+   * "Horizontal bars" is checked. Shared by prefillCategoryLabel (per-point)
+   * and prefillTupleCategoryLabel (per-tuple, v2.0) so the two agree on which
+   * axis "along the bars" means. */
+  private categoryCoordOf(p: { x: number; y: number }): number {
+    const rotated = this.axes instanceof BarAxes ? this.axes.isRotated() : false;
+    return rotated ? p.y : p.x;
+  }
+
+  /**
+   * Tuple-shaped counterpart of prefillCategoryLabel (v2.0). A bar is now TWO
+   * pixels (its dragged corners), not one, so a NEW TUPLE — not a new pixel —
+   * is the thing that needs a category name, and the donor search/ambiguity
+   * guard both need to compare TUPLES (via getTupleLabel-style scanning and
+   * each tuple's PRIMARY pixel for position) rather than raw pixel indexes.
+   * Same algorithm, same fail-safe-on-ambiguity rule as prefillCategoryLabel
+   * — see its doc comment for the full reasoning, not repeated here.
+   *
+   * Bar-only (`config.id === 'bar'`, not just `axesKind === 'bar'`): Box Plot
+   * shares BarAxes but a box has no comparable "one repeated category set
+   * across series" pattern to prefill from, and keeps its own plain
+   * `Bar<i>`-via-autoLabelTuple default.
+   *
+   * Returns whether it wrote a name, so the caller can fall back to
+   * autoLabelTuple's plain default when there is no donor — mirroring how
+   * the old per-point path left a name blank rather than inventing one.
+   */
+  private prefillTupleCategoryLabel(dataset: Dataset, tupleIndex: number): boolean {
+    if (this.config.id !== 'bar') return false;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    const primaryPixelIndex = tuple?.find((v): v is number => v !== null && v !== undefined);
+    if (primaryPixelIndex === undefined) return false;
+    const here = this.categoryCoordOf(dataset.getPixel(primaryPixelIndex));
+
+    let bestLabel: string | null = null;
+    let bestDistance = Infinity;
+    for (const other of this.datasetEntries) {
+      if (other.dataset === dataset) continue;
+      for (const otherTuple of other.dataset.getAllTuples()) {
+        const otherPrimary = otherTuple.find((v): v is number => v !== null && v !== undefined);
+        if (otherPrimary === undefined) continue;
+        let label: string | null = null;
+        for (const pixelIndex of otherTuple) {
+          if (pixelIndex === null || pixelIndex === undefined) continue;
+          const candidate = other.dataset.getPixel(pixelIndex).metadata?.['label'];
+          if (typeof candidate === 'string' && candidate.length > 0) {
+            label = candidate;
+            break;
+          }
+        }
+        if (label === null) continue;
+        const distance = Math.abs(this.categoryCoordOf(other.dataset.getPixel(otherPrimary)) - here);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestLabel = label;
+        }
+      }
+    }
+    if (bestLabel === null) return false;
+
+    // Already used by another tuple in THIS dataset -> ambiguous, write nothing.
+    const taken = dataset.getAllTuples().some((t, i) => {
+      if (i === tupleIndex) return false;
+      return t.some(
+        (pixelIndex) =>
+          pixelIndex !== null &&
+          pixelIndex !== undefined &&
+          dataset.getPixel(pixelIndex).metadata?.['label'] === bestLabel
+      );
+    });
+    if (taken) return false;
+
+    // Same write shape as setTupleLabel, parameterized on `dataset` rather
+    // than assumed to be the active one -- matching prefillCategoryLabel's
+    // own defensive style above.
+    const pixels = tuple!.filter((v): v is number => v !== null && v !== undefined);
+    const target = pixels[0]!;
+    for (const pixelIndex of pixels) {
+      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
+      if (pixelIndex === target) {
+        dataset.setMetadataAt(pixelIndex, { ...existing, label: bestLabel });
+      } else if ('label' in existing) {
+        const { label: _dropped, ...rest } = existing;
+        dataset.setMetadataAt(pixelIndex, rest);
+      }
+    }
+    this.registerLabelMetadataKey(dataset);
+    return true;
+  }
+
   /** The active dataset's registered per-pixel metadata keys (e.g. "label"
    * once any tuple has been labeled) -- core/dataset.ts's
    * setMetadataKeys/getMetadataKeys. */
@@ -3692,12 +3845,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Configure named slots for tuple-based data entry on the active
    * dataset (WPD's Point Groups feature, wpd-core's
    * javascript/widgets/pointGroups.js). Declines (returns false, no
-   * mutation) if the active dataset already has groups configured --
-   * safely diffing an in-use tuple structure is the current app's separate
-   * "Edit Point Groups" popup, not this convenience. */
+   * mutation) if the active dataset already has CAPTURED DATA under its
+   * current slots -- safely diffing an in-use tuple structure is the
+   * current app's separate "Edit Point Groups" popup, not this convenience.
+   *
+   * ⚑ v2.0: relaxed from "declines whenever `hasSlots()`" to "declines only
+   * when a tuple actually exists" -- Bar now declares `defaultSlots`
+   * (`BAR_INTERVAL_SLOTS`) unconditionally, so EVERY Bar dataset has slots
+   * from the moment it's created, before anything is captured. Under the
+   * old guard, `applyBoxPlotGroups()` (this method's only caller) would
+   * silently no-op on every fresh Bar session -- a UI button that stopped
+   * working, not a feature that stopped applying. Checking tuple count
+   * instead of slot presence preserves the actual safety property (never
+   * reshape a slot structure that already holds real clicks) while letting
+   * the legacy toggle upgrade an untouched Bar session's default 2 slots
+   * into Box Plot's 5, exactly as it always could before Bar had any
+   * default shape of its own. */
   setSlotNames(names: string[]): boolean {
     const entry = this.activeEntry;
-    if (entry.dataset.hasSlots()) return false;
+    if (entry.dataset.hasSlots() && entry.dataset.getTupleCount() > 0) return false;
     entry.dataset.setSlotNames(names);
     entry.slotCursor = { tupleIndex: null, groupIndex: 0 };
     return true;

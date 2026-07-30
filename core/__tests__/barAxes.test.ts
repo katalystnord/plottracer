@@ -216,6 +216,39 @@ describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated 
   });
 });
 
+describe('the declared baseline (v2.0) — a setting, not a calibration value', () => {
+  it('defaults to a shared baseline at zero -- the ordinary bar chart, walked past', () => {
+    const axes = new BarAxes();
+    expect(axes.hasDeclaredBaseline()).toBe(true);
+    expect(axes.getBaselineValue()).toBe(0);
+  });
+
+  it('is set independently of calibrate() and survives it', () => {
+    const axes = bar([100, 300], [100, 100]);
+    axes.setBaseline(true, 20);
+    expect(axes.hasDeclaredBaseline()).toBe(true);
+    expect(axes.getBaselineValue()).toBe(20);
+  });
+
+  it('can be declared absent, for a floating/offset series', () => {
+    const axes = new BarAxes();
+    axes.setBaseline(false, 0);
+    expect(axes.hasDeclaredBaseline()).toBe(false);
+  });
+
+  it('refuses a non-finite value at the MODEL, not just the interactive door -- falls back to 0', () => {
+    // ⚑ A hand-edited project file reaches this directly (BAR_AXES_CONFIG's
+    // checkValues only guards the click path); the axes itself must never
+    // land in a state where every derived value reads NaN with no visible
+    // reason.
+    const axes = new BarAxes();
+    axes.setBaseline(true, NaN);
+    expect(axes.getBaselineValue()).toBe(0);
+    axes.setBaseline(true, Infinity);
+    expect(axes.getBaselineValue()).toBe(0);
+  });
+});
+
 describe('the other method nothing had ever asserted', () => {
   it('the live readout is exponential to four places', () => {
     // A mutant altered the format and nothing noticed. This is the string under the

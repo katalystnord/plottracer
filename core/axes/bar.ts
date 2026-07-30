@@ -56,6 +56,9 @@ export class BarAxes {
   private p1 = 0;
   private p2 = 0;
   private orientation: Orientation = { axes: 'Y', direction: 'increasing', angle: 0 };
+  // v2.0: a declared baseline, not a calibration value -- see setBaseline.
+  private _hasBaseline = true;
+  private _baselineValue = 0;
 
   isCalibrated(): boolean {
     return this._isCalibrated;
@@ -169,6 +172,37 @@ export class BarAxes {
 
   isRotated(): boolean {
     return this.isRotatedAxes;
+  }
+
+  /**
+   * Declares whether this series' bars share a common baseline, and what
+   * value it sits at (v2.0). NOT a calibration value — nothing was clicked
+   * for it — a visible, editable setting the user walks past at its default
+   * (`true`/`0`, the ordinary zero-based bar chart) exactly the way pie's
+   * total/sweep defaults work. Read by `BAR_AXES_CONFIG.derivedTupleValue`
+   * to decide a captured bar's sign: with a baseline, sign comes from which
+   * side of it the bar's far end lands on; without one (a floating/offset
+   * bar — a tornado chart, a temperature range), there is no reference to
+   * be signed against, so the recorded click ORDER carries the direction
+   * instead.
+   *
+   * ⚑ Defensive at the MODEL, not just the click path (`BAR_AXES_CONFIG`
+   * also has a `checkValues` refusal for the interactive door) — a
+   * non-finite `value` is not stored, so a hand-edited project file cannot
+   * put this axes into a state where every derived value reads NaN with no
+   * visible reason.
+   */
+  setBaseline(has: boolean, value: number): void {
+    this._hasBaseline = has;
+    this._baselineValue = Number.isFinite(value) ? value : 0;
+  }
+
+  hasDeclaredBaseline(): boolean {
+    return this._hasBaseline;
+  }
+
+  getBaselineValue(): number {
+    return this._baselineValue;
   }
 
   calculateOrientation(): Orientation {

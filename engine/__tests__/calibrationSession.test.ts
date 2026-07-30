@@ -554,7 +554,16 @@ describe('interpolation roles reach the export rows (v1.3)', () => {
 // reader transcribes it off the tick labels. Until now there was nowhere to put
 // it (Bar's export read metadata.label but nothing could write it; the
 // categorical line exported a bare ordinal).
-describe('categorical-X labels (v1.3 #9)', () => {
+describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple), not 1', () => {
+  // ⚑ Bar's category name moved from the per-POINT API (getPointLabels/
+  // setPointLabel, one label per pixel) to the per-TUPLE API (getTupleLabel/
+  // setTupleLabel, one label per captured bar) once BAR_AXES_CONFIG declared
+  // defaultSlots -- every Bar dataset is now tuple-shaped from creation, the
+  // same API Box Plot/Pie/Histogram already use for their own category names.
+  // The PREFILL behaviour itself (this whole describe block) is ported to
+  // tuples by prefillTupleCategoryLabel, same algorithm as the old
+  // prefillCategoryLabel, operating on each tuple's PRIMARY (first-clicked)
+  // pixel instead of a single point.
   function barSession() {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
@@ -562,54 +571,66 @@ describe('categorical-X labels (v1.3 #9)', () => {
     return session;
   }
 
-  it('names a point and reads it back per series', () => {
+  /** Two clicks at the same x (Bar start, Bar end) capture one bar/tuple --
+   * standing in for a drag-box's two corners in these engine-level tests. */
+  function addBar(session: CalibrationSession<BarAxes>, x: number, yStart: number, yEnd: number) {
+    session.addDataPoint(x, yStart);
+    session.addDataPoint(x, yEnd);
+  }
+
+  it('names a tuple and reads it back per series', () => {
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.addDataPoint(250, 200);
-    session.setPointLabel(0, 'Flax');
-    session.setPointLabel(1, 'Hemp');
-    expect(session.getPointLabels(0)).toEqual(['Flax', 'Hemp']);
+    addBar(session, 150, 300, 250);
+    addBar(session, 250, 300, 200);
+    session.setTupleLabel(0, 'Flax');
+    session.setTupleLabel(1, 'Hemp');
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']);
   });
 
-  it('registers the label metadata key so the name survives save/reload', () => {
+  it('registers the label metadata key as soon as a bar is captured', () => {
     // The record is only durable if plotData knows to serialize the key.
+    // v2.0: unlike the old per-point behaviour, the key is registered
+    // IMMEDIATELY on capture, not only once a name is explicitly typed --
+    // autoLabelTuple names every new tuple right away (same as Box Plot/Pie/
+    // Histogram already do), so there is no longer an unlabeled-tuple state.
     const session = barSession();
-    session.addDataPoint(150, 300);
-    expect(session.getMetadataKeys()).not.toContain('label');
-    session.setPointLabel(0, 'Flax');
+    addBar(session, 150, 300, 250);
     expect(session.getMetadataKeys()).toContain('label');
   });
 
-  it('prefills a new series\' point from whichever series already named that row', () => {
+  it('prefills a new series\' bar from whichever series already named that column', () => {
     // A grouped bar chart repeats one category set across series; typing it again
     // per series is pure friction (David's call: prefill, not a shared list).
+    // The prefill fires the moment a new tuple's FIRST corner lands, same timing
+    // as the old per-point version's single click.
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.addDataPoint(250, 200);
-    session.setPointLabel(0, 'Flax');
-    session.setPointLabel(1, 'Hemp');
+    addBar(session, 150, 300, 250);
+    addBar(session, 250, 300, 200);
+    session.setTupleLabel(0, 'Flax');
+    session.setTupleLabel(1, 'Hemp');
 
     session.addDataset('Alkali');
-    session.addDataPoint(160, 250);
-    session.addDataPoint(260, 150);
-    expect(session.getPointLabels(1)).toEqual(['Flax', 'Hemp']);
+    addBar(session, 160, 300, 240);
+    addBar(session, 260, 300, 190);
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']);
   });
 
-  it('writes the prefilled name ONTO the point, so retyping one row moves nothing else', () => {
+  it('writes the prefilled name ONTO the tuple, so retyping one bar moves nothing else', () => {
     // The reason this is a prefill and not a shared positional list: a series
     // that skips a category must be correctable without shifting its neighbours.
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.addDataPoint(250, 200);
-    session.setPointLabel(0, 'Flax');
-    session.setPointLabel(1, 'Hemp');
+    addBar(session, 150, 300, 250);
+    addBar(session, 250, 300, 200);
+    session.setTupleLabel(0, 'Flax');
+    session.setTupleLabel(1, 'Hemp');
     session.addDataset('Alkali');
-    session.addDataPoint(160, 250);
-    session.addDataPoint(260, 150);
+    addBar(session, 160, 300, 240);
+    addBar(session, 260, 300, 190);
 
-    session.setPointLabel(1, 'Jute'); // series 2 has no Hemp bar
-    expect(session.getPointLabels(1)).toEqual(['Flax', 'Jute']);
-    expect(session.getPointLabels(0)).toEqual(['Flax', 'Hemp']); // series 1 untouched
+    session.setTupleLabel(1, 'Jute'); // series 2 has no Hemp bar
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Jute']);
+    session.setActiveDataset(0);
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']); // series 1 untouched
   });
 
   // ⚑ The v1.3 release-gate audit proved the prefill could fabricate a WRONG name
@@ -619,60 +640,62 @@ describe('categorical-X labels (v1.3 #9)', () => {
   // user clicks and whatever they skip. These three pin the failure modes.
   it('a series that SKIPS a category is not given the skipped name', () => {
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.addDataPoint(250, 200);
-    session.addDataPoint(350, 250);
-    session.setPointLabel(0, 'Flax');
-    session.setPointLabel(1, 'Hemp');
-    session.setPointLabel(2, 'Jute');
+    addBar(session, 150, 300, 250);
+    addBar(session, 250, 300, 200);
+    addBar(session, 350, 300, 220);
+    session.setTupleLabel(0, 'Flax');
+    session.setTupleLabel(1, 'Hemp');
+    session.setTupleLabel(2, 'Jute');
 
-    // Series 2 has no Hemp bar: the user clicks the Flax bar, then the Jute bar.
+    // Series 2 has no Hemp bar: the user drags the Flax bar, then the Jute bar.
     session.addDataset('Alkali');
-    session.addDataPoint(160, 250);
-    session.addDataPoint(360, 180);
-    // Row-index matching gave row 1 the name "Hemp" -- against the JUTE bar.
-    expect(session.getPointLabels(1)).toEqual(['Flax', 'Jute']);
+    addBar(session, 160, 300, 240);
+    addBar(session, 360, 300, 180);
+    // Row-index matching gave tuple 1 the name "Hemp" -- against the JUTE bar.
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Jute']);
   });
 
-  it('names follow the bar clicked, not the order it was clicked in', () => {
+  it('names follow the bar dragged, not the order it was dragged in', () => {
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.addDataPoint(250, 200);
-    session.setPointLabel(0, 'Flax');
-    session.setPointLabel(1, 'Hemp');
+    addBar(session, 150, 300, 250);
+    addBar(session, 250, 300, 200);
+    session.setTupleLabel(0, 'Flax');
+    session.setTupleLabel(1, 'Hemp');
 
-    // Series 2 traced right-to-left. Row 0 is the HEMP bar.
+    // Series 2 traced right-to-left. Tuple 0 is the HEMP bar.
     session.addDataset('Alkali');
-    session.addDataPoint(260, 150);
-    session.addDataPoint(160, 250);
-    expect(session.getPointLabels(1)).toEqual(['Hemp', 'Flax']);
+    addBar(session, 260, 300, 190);
+    addBar(session, 160, 300, 240);
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Hemp', 'Flax']);
   });
 
-  it('writes NOTHING rather than reuse a name when the pairing is ambiguous', () => {
+  it('falls back to the plain Bar<i> default rather than reuse a name when the pairing is ambiguous', () => {
     // A category appears at most once per series, so a second claim on one name
-    // means the nearest-bar pairing cannot tell -- and a blank cell the user fills
-    // in is honest where a duplicated name that looks typed is not (tenets 9+10).
+    // means the nearest-bar pairing cannot tell -- and refusing to prefill is
+    // honest where reusing a name that looks typed is not (tenets 9+10).
     //
-    // ⚑ This one PINS behaviour rather than proving the fix: under the old
-    // row-index matching it also came out blank, because series 1 has no point at
-    // row 1 to donate. The two tests above are the ones that fail without the fix
-    // ('Hemp' where Jute belongs). Kept because the reuse guard is what makes
-    // nearest-bar matching safe, and nothing else pins it.
+    // ⚑ v2.0 DIFFERENCE FROM THE OLD PER-POINT BEHAVIOUR: a bar tuple that fails
+    // the prefill now falls back to autoLabelTuple's plain numbered default
+    // ("Bar1"), the SAME fallback every other tuple-shaped type (Box Plot, Pie,
+    // Histogram) already gets unconditionally on every new tuple -- Bar now goes
+    // through that identical code path instead of staying blank the way an
+    // unslotted point used to. Still visibly a placeholder, still editable, and
+    // still never a name that looks transcribed.
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.setPointLabel(0, 'Flax');
+    addBar(session, 150, 300, 250);
+    session.setTupleLabel(0, 'Flax');
 
     session.addDataset('Alkali');
-    session.addDataPoint(155, 250);
-    session.addDataPoint(158, 240); // a second point by the same bar
-    expect(session.getPointLabels(1)).toEqual(['Flax', '']);
+    addBar(session, 155, 300, 245);
+    addBar(session, 158, 300, 235); // a second bar by the same donor
+    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Bar1']);
   });
 
   it('carries a typed name into the Bar export (no Bar<i> fallback once named)', () => {
     const session = barSession();
-    session.addDataPoint(150, 300);
-    session.setPointLabel(0, 'Flax');
-    expect(session.getExportRows(0)[0]!.values[0]).toBe('Flax');
+    addBar(session, 150, 300, 250);
+    session.setTupleLabel(0, 'Flax');
+    expect(session.getTupleRows()[0]!.label).toBe('Flax');
   });
 
   it('grows the categorical export a Category column only once something is named', () => {
@@ -751,7 +774,11 @@ describe('CalibrationSession (Bar axes)', () => {
 
 describe('CalibrationSession (Point Groups / Box Plot)', () => {
   it('addDataPoint behaves like an ungrouped dataset until slots are configured', () => {
-    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    // v2.0: BAR_AXES_CONFIG itself is no longer a genuinely ungrouped fixture
+    // (it declares defaultSlots unconditionally) -- CATEGORICAL_LINE_CONFIG
+    // shares BarAxes but is still deliberately ungrouped ("points are captured
+    // like an XY series, not bars"), so it's the fixture for this behaviour now.
+    const session = new CalibrationSession(CATEGORICAL_LINE_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
     expect(session.hasSlots()).toBe(false);
@@ -761,15 +788,21 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     expect(session.getTupleRows()).toEqual([]);
   });
 
-  it('applyBoxPlotGroups sets Min/Q1/Median/Q3/Max and declines a second time', () => {
+  it('applyBoxPlotGroups sets Min/Q1/Median/Q3/Max, and setSlotNames declines once real data exists', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
     expect(session.applyBoxPlotGroups()).toBe(true);
     expect(session.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
     expect(session.hasSlots()).toBe(true);
 
-    // Declines once already configured -- matches the current app's own
-    // "Box Plot Groups" button (011ef1c), which safely diffing an in-use
-    // tuple structure is a separate feature ("Edit Point Groups"), not this one.
+    // ⚑ v2.0: relaxed from "declines whenever slots exist" to "declines once a
+    // tuple actually holds data" -- Bar now declares its own 2 default slots
+    // unconditionally, so the OLD guard would have made applyBoxPlotGroups a
+    // permanent no-op on every fresh Bar session. See setSlotNames's own
+    // comment. The safety property that matters -- never reshape a slot
+    // structure that already holds real clicks -- still holds once data exists.
+    session.addDataPoint(300, 500); // Min -- real captured data now exists
     expect(session.setSlotNames(['A', 'B'])).toBe(false);
     expect(session.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
   });
@@ -847,7 +880,12 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     expect(session.getCurrentSlotIndex()).toBe(0);
   });
 
-  it('reset and clearPoints drop slots along with the dataset', () => {
+  it('clearPoints resets the cursor and reverts to the graph type\'s OWN default slots', () => {
+    // v2.0: Bar's own default is now 2 slots (BAR_INTERVAL_SLOTS), not none.
+    // applyBoxPlotGroups's 5-slot upgrade is the OPT-IN state clearPoints
+    // always drops; the type's OWN shape is what survives a clear -- exactly
+    // what clearPoints's own comment already says ("Only the graph type's OWN
+    // groups come back"), just truer now that Bar has an own shape at all.
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
@@ -855,7 +893,8 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
     session.addDataPoint(300, 500);
 
     session.clearPoints();
-    expect(session.hasSlots()).toBe(false);
+    expect(session.hasSlots()).toBe(true);
+    expect(session.getSlotNames()).toEqual(['Bar start', 'Bar end']);
     expect(session.getCurrentTupleIndex()).toBeNull();
     expect(session.getCurrentSlotIndex()).toBe(0);
   });
@@ -1448,8 +1487,9 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
     session.addDataPoint(300, 500); // Series 1: Min filled, cursor -> Q1
     expect(session.getCurrentSlotLabel()).toBe('Q1');
 
-    session.addDataset(); // Series 2, active, no slots yet
-    expect(session.hasSlots()).toBe(false);
+    session.addDataset(); // Series 2, active -- starts with Bar's own 2 default slots
+    expect(session.hasSlots()).toBe(true);
+    expect(session.getSlotNames()).toEqual(['Bar start', 'Bar end']);
     session.applyBoxPlotGroups();
     expect(session.getCurrentSlotLabel()).toBe('Min'); // fresh cursor, unaffected by Series 1's
 
