@@ -1840,6 +1840,20 @@ export interface SessionSnapshot {
    * UNCALIBRATED session has no axes to read the count back off, and those buttons
    * only work while the calibration is still uncalibrated. */
   repeatCount: number;
+  /** Pie's exploded-slice capture in progress, if any (v1.6) -- the pre-v2.0
+   * audit's own "snapshot is a fourth entrance" recipe applied to itself,
+   * 2026-07-30: `pendingExplodedTuple` is a tuple INDEX into the very
+   * datasets this snapshot's `plotData` restores, so leaving it out let a
+   * restore land on a dataset shorter than the stale index -- silently
+   * swallowing every click afterward with no error (addDataPoint's guard on
+   * `dataset.getAllTuples()[t]` degrades to a no-op when `t` is now out of
+   * range, never clearing the pending state that caused it). Captured
+   * verbatim rather than reset-on-restore because it is genuinely
+   * gesture-in-progress state, exactly like `cursors` below -- an undo
+   * mid-explode should land back in the same mid-explode state, not lose it. */
+  explodedApexPending: boolean;
+  pendingExplodedTuple: number | null;
+  pendingApex: { x: number; y: number } | null;
   /** Per-dataset slot cursor, indexed to match plotData's dataset order. */
   cursors: SlotCursor[];
   plotData: SerializedPlotData;
@@ -3194,6 +3208,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     this.stepIndex = this.getSteps().length;
     this.pendingPixel = null;
+    // ⚑ THE THIRD ENTRANCE (found alongside restoreState's own fix, 2026-07-30,
+    // same audit recipe). A project FILE has no serialized concept of "an
+    // exploded-slice capture was mid-way through" -- there is nowhere for one
+    // to have come FROM here, unlike restoreState's undo/redo, where the
+    // in-progress gesture genuinely is document state to bring back. So this
+    // entrance's fix is a plain reset, not a restore: without it, opening any
+    // new project while mid-explode on a DIFFERENT figure left a stale tuple
+    // index pointing into a dataset that has nothing to do with it -- the
+    // same silent-forever-swallowed-clicks failure restoreState's fix
+    // prevents, reached a third way.
+    this.explodedApexPending = false;
+    this.pendingExplodedTuple = null;
+    this.pendingApex = null;
 
     this.globalValues = this.config.extractGlobalValues?.(axes) ?? {};
     // Options come back from the axes instance itself, so a reopened project
@@ -5357,6 +5384,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.activeDatasetIndex = 0;
     this.nextDatasetNumber = 2;
+    // ⚑ THE FOURTH ENTRANCE (same audit recipe, 2026-07-30, alongside
+    // restoreState's and loadCalibrated's own fixes). "Reset calibration"
+    // (this method's real, direct call site) promises to discard every
+    // series and point -- a stale `pendingExplodedTuple` pointing into the
+    // dataset that just got wiped down to one empty series would silently
+    // swallow every click afterward (the same failure the other two fixes
+    // prevent), and a stale `categoryAxis` would leave the OLD figure's
+    // category names available for the new one to silently reuse, which
+    // "discard every series and point" does not actually promise to keep.
+    this.explodedApexPending = false;
+    this.pendingExplodedTuple = null;
+    this.pendingApex = null;
+    this.categoryAxis = new CategoryAxis();
   }
 
   /** Capture the whole mutable state for the undo stack (checkpoint 38, see
@@ -5392,6 +5432,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
       nextDatasetNumber: this.nextDatasetNumber,
       globalValues: { ...this.globalValues },
       repeatCount: this.repeatCount,
+      explodedApexPending: this.explodedApexPending,
+      pendingExplodedTuple: this.pendingExplodedTuple,
+      pendingApex: this.pendingApex ? { ...this.pendingApex } : null,
       cursors: this.datasetEntries.map((e) => ({ ...e.slotCursor })),
       plotData: plotData.serialize(),
     };
@@ -5439,5 +5482,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.nextDatasetNumber = snapshot.nextDatasetNumber;
     this.globalValues = { ...snapshot.globalValues };
     this.optionValues = { ...snapshot.optionValues };
+    // ⚑ Found via the pre-v2.0 audit's own recipe applied to itself, 2026-07-30:
+    // these three were the fourth+fifth+sixth fields missing from the snapshot,
+    // same class of bug as repeatCount above. `pendingExplodedTuple` is a tuple
+    // INDEX into the datasets just restored above, so leaving it at its stale
+    // live value (from AFTER this snapshot was taken) could point past the
+    // now-shorter dataset -- and addDataPoint's own guard on
+    // `dataset.getAllTuples()[t]` degrades to a silent no-op when `t` is out of
+    // range, permanently swallowing every future click with no error shown.
+    // Restored verbatim (not reset to "off"): an undo landing mid-explode
+    // should show mid-explode, matching what `cursors` already does for the
+    // ordinary per-series capture cursor.
+    this.explodedApexPending = snapshot.explodedApexPending;
+    this.pendingExplodedTuple = snapshot.pendingExplodedTuple;
+    this.pendingApex = snapshot.pendingApex ? { ...snapshot.pendingApex } : null;
   }
 }

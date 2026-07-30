@@ -388,6 +388,95 @@ describe('what the exploded control can say and do', () => {
     expect(box.getExplodedStage()).toBe('off');
     expect(box.getExplodedEdgesPlaced()).toBe(0);
   });
+
+  it('survives an undo mid-capture instead of leaving a stale tuple index behind (v2.0)', () => {
+    // ⚑ THE PRE-v2.0 AUDIT'S OWN RECIPE, applied to itself: "for a class that can
+    // capture/restore itself, its mutable fields minus what the snapshot carries IS
+    // the bug list" -- found `explodedApexPending`/`pendingExplodedTuple`/`pendingApex`
+    // missing from SessionSnapshot. `pendingExplodedTuple` is a tuple INDEX into the
+    // very dataset restoreState rebuilds, so a restore to a snapshot taken BEFORE the
+    // explode started left the field pointing at a tuple the restored dataset no
+    // longer has. That is not just a wrong read: addDataPoint's own guard
+    // (`dataset.getAllTuples()[t]?.[0] != null`) silently degrades to a no-op when `t`
+    // is out of range and NEVER clears the pending state that caused it -- so every
+    // click after this exact undo sequence would report 'point-added' while writing
+    // nothing, forever. Reads exactly like "nothing happens when I click."
+    const session = calibratedPie();
+    clickBoundaries(session, [-90, 0]); // one complete sector; the next is chain-opened
+    const beforeExplode = session.captureState();
+
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex
+    clickBoundaries(session, [60]); // first edge
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.restoreState(beforeExplode);
+    expect(session.getExplodedStage()).toBe('off');
+
+    // The real consequence, not just the flag: a click after the restore must
+    // actually register as an ordinary boundary, completing the chain-opened
+    // tuple 1 -- not vanish into the stale guard (which would leave it stuck
+    // half-filled forever, exactly like the original defect this test names).
+    expect(session.getDataset().getAllTuples()[1]!.every((v) => v !== null)).toBe(false);
+    clickBoundaries(session, [90]);
+    expect(session.getDataset().getAllTuples()[1]!.every((v) => v !== null)).toBe(true);
+  });
+
+  it('survives "Reset calibration" mid-capture too -- the SAME entrance, reached a second way (v2.0)', () => {
+    // ⚑ session.reset() is the live, reachable call site ("Reset calibration"
+    // wipes the session down to one empty series but stays undoable, so it
+    // runs on the SAME session instance, unlike loadCalibrated which the UI
+    // only ever calls on a freshly-constructed one). Without this fix, a
+    // reset mid-explode left `pendingExplodedTuple` pointing into the
+    // just-emptied dataset -- the identical silently-swallowed-clicks defect
+    // as the undo case above, reached through the button instead of Ctrl+Z.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex
+    clickBoundaries(session, [0]); // first edge
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.reset();
+    expect(session.getExplodedStage()).toBe('off');
+    expect(session.getDataset().getTupleCount()).toBe(0);
+
+    // A click on the fresh document (recalibrated the same way calibratedPie
+    // does) must register as an ordinary point, not vanish into a stale guard.
+    for (const a of [90, 210, 330]) session.handleCalibrationClick(...at(a));
+    session.setGlobalFieldValue('total', '100');
+    expect(session.runCalibration()).toBe(true);
+    clickBoundaries(session, [-90]);
+    expect(session.getDataset().getTupleCount()).toBe(1);
+  });
+
+  it('loadCalibrated resets it too, as a defensive API contract (v2.0)', () => {
+    // ⚑ Not currently reachable through the UI (Workspace.tsx only ever calls
+    // loadCalibrated on a freshly-constructed CalibrationSession, which
+    // already starts with these at their defaults) -- but loadCalibrated is a
+    // PUBLIC method with no such restriction of its own, and a project file
+    // has no serialized concept of "mid-explode" to legitimately restore
+    // here (unlike restoreState's undo/redo). Closing the same latent trap on
+    // this entrance too, per the audit's own standing rule: check every path
+    // once you find a field derived/reset on some but not all of them.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex
+    clickBoundaries(session, [0]); // first edge
+    expect(session.getExplodedStage()).toBe('edges');
+
+    // Reuse the SAME (now mid-explode) instance for a second load, simulating
+    // a future caller that does not construct fresh -- the scenario this
+    // fix exists for even though today's UI never triggers it.
+    const fresh = new CalibrationSession(PIE_AXES_CONFIG);
+    for (const a of [90, 210, 330]) fresh.handleCalibrationClick(...at(a));
+    fresh.setGlobalFieldValue('total', '100');
+    expect(fresh.runCalibration()).toBe(true);
+    session.loadCalibrated(fresh.getAxes()!, [fresh.getDataset()]);
+
+    expect(session.getExplodedStage()).toBe('off');
+    clickBoundaries(session, [-90]);
+    expect(session.getDataset().getTupleCount()).toBe(1);
+  });
 });
 
 /**
