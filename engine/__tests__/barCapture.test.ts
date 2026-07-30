@@ -227,3 +227,35 @@ describe('a stacked-bar segment (v2.0, Phase 5)', () => {
     expect([1, 2, 3].map((i) => session.getDatasetStackGroup(i))).toEqual(['right', 'right', 'right']);
   });
 });
+
+describe('addBarDetectBoxes (v2.0, Phase 7) -- colour-detected boxes, the SAME record a manual drag-box makes', () => {
+  it('files each box as its own bar tuple, two calls per box, in order', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    const added = session.addBarDetectBoxes([
+      { start: { x: 150, y: 500 }, end: { x: 150, y: 300 } }, // value 5
+      { start: { x: 200, y: 500 }, end: { x: 200, y: 420 } }, // value 2
+    ]);
+    expect(added).toBe(2);
+    const rows = session.getTupleRows();
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.derived).toBeCloseTo(5, 9);
+    expect(rows[1]!.derived).toBeCloseTo(2, 9);
+  });
+
+  it('does nothing before calibration -- no axes to convert a detected box through yet', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    const added = session.addBarDetectBoxes([{ start: { x: 150, y: 500 }, end: { x: 150, y: 300 } }]);
+    expect(added).toBe(0);
+    expect(session.getTupleRows()).toHaveLength(0);
+  });
+
+  it('does nothing on a 5-slot Box Plot session -- no "opposite corners" a bbox could mean there', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.applyBoxPlotGroups();
+    const added = session.addBarDetectBoxes([{ start: { x: 150, y: 500 }, end: { x: 150, y: 300 } }]);
+    expect(added).toBe(0);
+    expect(session.getTupleRows()).toHaveLength(0);
+  });
+});

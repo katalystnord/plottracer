@@ -31,7 +31,7 @@ import os from 'node:os';
 // process (the same engine code the app itself runs), rather than hand-
 // typing project JSON by hand or driving a full calibration through the
 // browser just to produce a file to open.
-import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG } from '../../engine/calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG, BAR_AXES_CONFIG } from '../../engine/calibrationSession.js';
 import { serializeProject } from '../../engine/projectFile.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
@@ -75,6 +75,17 @@ const spiderTruth = JSON.parse(
   axes: { axis: number; name: string; centre: number; max: number }[];
   calibration: { anchors: Record<string, { px: number; py: number }> };
   series: { name: string; points: { axis: number; name: string; value: number }[] }[];
+};
+
+/** The bundled bar example's published ground truth (v2.0 Phase 7) -- read here
+ * so the bounding-box auto-extract can be checked against the SAME figure and
+ * values it was rendered from, not against geometry a test invented. */
+const barTruth = JSON.parse(
+  fs.readFileSync(path.join(REPO_ROOT, 'samples/bar-tensile-strength.truth.json'), 'utf8')
+) as {
+  axes: { y: { min: number; max: number } };
+  calibration: { anchors: { p1: { px: number; py: number; value: number }; p2: { px: number; py: number; value: number } } };
+  series: { points: { category: string; value: number }[] }[];
 };
 
 // Checkpoint 94: a saved project is a `.zip` container. Read its project.json
@@ -786,8 +797,8 @@ describe('Workspace: Bar axes', () => {
 
   // ⚑ v2.0: both ends of a bar are measured, not "click anywhere on the value
   // axis" (the wording that invited the midpoint error 59f94a6 blocked on the
-  // automated path). Auto-extract is greyed out here, so Add points is the only
-  // capture tool and the tips bar is the only place the app can say how to aim.
+  // automated path). Add points is the manual capture tool and the tips bar
+  // is the only place the app can say how to aim it.
   it('tells you to drag corner to corner, never "anywhere on the image"', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
@@ -798,14 +809,25 @@ describe('Workspace: Bar axes', () => {
     expect(tip).not.toMatch(/anywhere on the image/i);
   });
 
-  // The empty-table hint named Auto-extract (4) -- which this release greys out
-  // permanently for the bar family. Two panels on screen, one recommending what
-  // the other refuses: a FOURTH instance of the contradiction class 9612378 was
-  // written to sweep. Reachable with zero points by picking any non-capture tool.
-  it('the empty-table hint never sends a bar chart to the greyed-out Auto-extract', async () => {
+  // v2.0 Phase 7: Auto-extract is now a REAL option for Bar (a bar blob's own
+  // bounding box is its two ends), so the empty-table hint names it again --
+  // the opposite of the pre-Phase-7 rule this test used to guard (Auto-extract
+  // permanently greyed, so naming it would have been the contradiction
+  // 9612378 was written to sweep). Box Plot/categorical Line still refuse it
+  // outright and must still not name it -- see the next test.
+  it('the empty-table hint recommends BOTH Add points and Auto-extract for a bar chart', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
     await page.getByTestId('mode-select').click(); // a tool whose canvas click captures nothing
+    const hint = await textOf('no-points');
+    expect(hint).toMatch(/Add points/i);
+    expect(hint).toMatch(/Auto-extract/i);
+  });
+
+  it('...but the hint still never sends a Box Plot to its still-greyed-out Auto-extract', async () => {
+    await resetWorkspace('boxplot');
+    await calibrateBarStandard();
+    await page.getByTestId('mode-select').click();
     const hint = await textOf('no-points');
     expect(hint).not.toMatch(/Auto-extract/i);
     expect(hint).toMatch(/Add points/i);
@@ -842,6 +864,109 @@ describe('Workspace: Bar axes', () => {
     await calibrateXYStandard();
     expect(await page.getByTestId('series-stack-group').count()).toBe(0);
   });
+});
+
+describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
+  /** Open the bundled bar example's REAL calibration as a project -- same
+   * technique as the spider suite's openSpiderTruthProject (see its own
+   * comment for why this is built in-process rather than driven through
+   * canvas clicks): the fixture is the app's own sample figure, calibrated
+   * on the anchors its truth file publishes, so what is under test here is
+   * the trace, not the clicking path (covered thoroughly elsewhere). */
+  async function openBarTruthProject() {
+    const fixture = (() => {
+      const session = new CalibrationSession(BAR_AXES_CONFIG);
+      const { p1, p2 } = barTruth.calibration.anchors;
+      session.handleCalibrationClick(p1.px, p1.py);
+      session.confirmCalibrationValues([String(p1.value)]);
+      session.handleCalibrationClick(p2.px, p2.py);
+      session.confirmCalibrationValues([String(p2.value)]);
+      if (!session.runCalibration()) throw new Error('fixture calibration failed');
+      const png = path.join(REPO_ROOT, 'samples/bar-tensile-strength.png');
+      const result = serializeProject(
+        session,
+        `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`,
+        'bar-tensile-strength.png'
+      );
+      if ('error' in result) throw new Error(`fixture build failed: ${result.error}`);
+      const filePath = path.join(os.tmpdir(), `plottracer-bar-truth-${process.pid}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(result), 'utf8');
+      return filePath;
+    })();
+
+    try {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, fixture);
+      await page.getByTestId('open-project').click();
+    } finally {
+      // Restore immediately, so a failure here cannot silently re-point every
+      // later test's Open dialog at this fixture.
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+    }
+    await waitForImageFitted();
+  }
+
+  it('finds every bar by its OWN colour and recovers the published values -- not a midpoint', async () => {
+    // ⚑ The whole pipeline against ground truth: the app's OWN sample figure,
+    // opened for real, calibrated on the anchors its truth file publishes,
+    // traced by the navy the figure's own bars are drawn in (#1f4e79, sampled
+    // directly off the PNG), compared with the values the figure states. Six
+    // bars from 165 to 400 MPa, so a reading that was secretly a midpoint
+    // (the exact defect `59f94a6` refused rather than ship) would miss by
+    // roughly HALF its bar's height -- tens of MPa, not a rounding error.
+    //
+    // Blobs come back in scan order (top-to-bottom, i.e. roughly tallest-first),
+    // not left-to-right category order, so the comparison sorts both sides
+    // rather than zipping index-for-index against barTruth's series.
+    await openBarTruthProject();
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('60');
+    // Filters out the small same-colour noise (axis ticks, a stray swatch)
+    // the real PNG carries alongside its six actual bars -- verified against
+    // the image directly: every real bar's equivalent diameter is >100px,
+    // every noise speck's is under 6px.
+    await page.getByTestId('color-trace-min-blob').fill('30');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(300);
+
+    expect(await textOf('color-trace-info')).toMatch(/Placed 6 bars/);
+
+    const read: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      read.push(Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, '')));
+    }
+    read.sort((a, b) => a - b);
+    const published = barTruth.series[0]!.points.map((p) => p.value).sort((a, b) => a - b);
+    const range = barTruth.axes.y.max - barTruth.axes.y.min;
+    for (let i = 0; i < published.length; i++) {
+      // Within 3% of the axis's own range -- generous for anti-aliased bar
+      // edges, far tighter than the ~50% a midpoint-reading defect would miss by.
+      expect(
+        Math.abs(read[i]! - published[i]!),
+        `sorted index ${i}: read ${read[i]}, published ${published[i]}`
+      ).toBeLessThan(range * 0.03);
+    }
+  }, 30000);
+
+  it('gives the series the colour it was traced from, same as every other By-colour trace', async () => {
+    await openBarTruthProject();
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('60');
+    await page.getByTestId('color-trace-min-blob').fill('30');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('color-trace-info')).toMatch(/Placed [1-9]/);
+
+    await page.getByTestId('series-color-button').click();
+    expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');
+  }, 30000);
 });
 
 describe('Workspace: Box Plot / Point Groups', () => {
@@ -2184,12 +2309,43 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(hint).not.toContain('click on the image to add');
   });
 
-  it('refuses auto-extract on a Bar chart, and says why (v1.3)', async () => {
-    // ⚑ Correctness gate, not a missing feature. Every auto-extract mechanism is a
-    // CURVE tool: pointsFromColumnRuns takes the MIDDLE of each column run, so a
-    // bar of true value 10 was recorded as 5, silently. Both doors are closed --
-    // the rail button and the `4` hotkey.
+  it('offers auto-extract on a Bar chart, By colour only (v2.0 Phase 7)', async () => {
+    // ⚑ A correctness FIX, not a new feature layered on top of a still-broken
+    // one: every OTHER auto-extract mechanism is a curve tool
+    // (pointsFromColumnRuns takes the MIDDLE of a column run), which is why
+    // this was refused outright at 59f94a6. What changed is a bar blob's own
+    // bounding box IS its two ends -- see engine/barDetectRun.ts -- so the
+    // rail button now works instead of staying permanently grey.
     await resetWorkspace('bar');
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+
+    const tool = page.getByTestId('mode-auto-extract');
+    expect(await tool.isDisabled()).toBe(false);
+
+    await tool.click();
+    await page.waitForTimeout(100);
+    expect(await tool.getAttribute('aria-pressed')).toBe('true');
+    // Only By colour applies -- Flood-fill/Guide points are curve tools with
+    // no slot to file their output into (a bar's two slots are its measured
+    // ends, not a curve to follow), same reasoning as the spider's own
+    // single-mechanism restriction.
+    expect(await page.getByTestId('auto-extract-flood').count()).toBe(0);
+    expect(await page.getByTestId('auto-extract-guide').count()).toBe(0);
+    expect(await page.getByTestId('auto-extract-colour').count()).toBe(1);
+    // No curve/scatter shape choice either -- a bar's shape is always its box.
+    expect(await page.getByTestId('color-trace-shape').isVisible()).toBe(false);
+  });
+
+  it('...but still refuses it outright on a Box Plot, and says why', async () => {
+    // Box Plot shares Bar's calibration but has no "opposite corners" a
+    // bounding box could mean for its own five-value record, so it stays in
+    // the refused bucket Bar itself has now left.
+    await resetWorkspace('boxplot');
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -2203,14 +2359,14 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // dead button -- Parallel Universe David has to learn WHY on screen. A disabled
     // <button> suppresses its own tooltip in Chromium, so IconButton puts the title
     // on a wrapping span and keeps aria-label on the button; assert the latter.
-    expect(await tool.getAttribute('aria-label')).toContain('middle of each bar');
+    expect(await tool.getAttribute('aria-label')).toContain('five values');
 
     // The hotkey must not sneak past the greyed button.
     await page.keyboard.press('4');
     await page.waitForTimeout(100);
     expect(await tool.getAttribute('aria-pressed')).toBe('false');
 
-    // ...while an XY figure still has it, so the gate is bar-specific.
+    // ...while an XY figure still has it, so the gate is graph-type-specific.
     await resetWorkspace('xy');
     await calibrateXYStandard();
     expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
@@ -2454,26 +2610,19 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
   });
 
-  it('Segment Fill is disabled for the whole bar family, unlike Place Point', async () => {
-    // ⚑ REVERSED 2026-07-25. This test used to assert that a plain Bar chart KEEPS
-    // Segment Fill enabled -- it pinned the defect: every auto-extract mechanism is
-    // a curve tool, and on a filled bar pointsFromColumnRuns records the bar's
-    // MIDPOINT, so a bar of true value 10 came out as 5. The gate is now the whole
-    // bar family, not just the point-group types.
-    await resetWorkspace('bar');
-    await clickAt(300, 400);
-    await confirmValue('0');
-    await clickAt(300, 100);
-    await confirmValue('10');
-    await page.getByTestId('run-calibration').click();
-    await page.waitForTimeout(150);
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true);
-    expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(false); // still allowed
-
-    // Box Plot's datasets carry point groups from the start (checkpoint
-    // 107 -- no toggle to flip anymore), so Segment Fill, a curve flood-fill with
-    // no group slot to file into, is disabled for that reason too, while Place
-    // Point stays available.
+  it('Auto-extract is disabled for Box Plot / categorical Line, unlike Place Point', async () => {
+    // ⚑ REVERSED TWICE. First reversed 2026-07-25 to pin the defect: every
+    // auto-extract mechanism was a curve tool, and on a filled bar
+    // pointsFromColumnRuns recorded the bar's MIDPOINT, so a bar of true value
+    // 10 came out as 5 -- the gate became the whole bar family, not just the
+    // point-group types. Reversed again for Bar specifically (v2.0 Phase 7,
+    // see the "offers auto-extract on a Bar chart" test above): a bar blob's
+    // own bounding box IS its two ends, so Bar now has a CORRECT mechanism
+    // and belongs back among the enabled types. Box Plot's datasets carry
+    // point groups from the start (checkpoint 107), so Segment Fill/Guide
+    // points, curve tools with no group slot to file into, stay disabled for
+    // that reason; categorical Line stays disabled too (an ordinal click has
+    // nothing a colour trace could read as its own record).
     await resetWorkspace('boxplot');
     await clickAt(300, 400);
     await confirmValue('0');

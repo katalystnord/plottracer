@@ -31,6 +31,13 @@ export interface Blob {
   /** Equivalent-circle diameter in pixels: 2·√(area/π). Used for size filtering
    * (drop antialiasing specks / a merged gridline blob). */
   diameter: number;
+  /** The blob's axis-aligned bounding box, in the SAME continuous-pixel space
+   * as centroid (i.e. `max` is one past the last matched pixel index, so the
+   * box spans the blob's true visual extent) -- v2.0 Phase 7, added for
+   * engine/barDetectRun.ts's opposite-corner bar capture. WPD's own blob
+   * detector never tracked this; nothing upstream to port, and free during
+   * the same flood that already visits every member pixel once. */
+  bbox: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface BlobDetectOptions {
@@ -74,6 +81,10 @@ export function detectBlobs(
       let sumX = 0;
       let sumY = 0;
       let area = 0;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
       while (stack.length > 0) {
         const p = stack.pop()!;
         const px = p % width;
@@ -81,6 +92,10 @@ export function detectBlobs(
         sumX += px;
         sumY += py;
         area++;
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
         for (let ny = py - 1; ny <= py + 1; ny++) {
           if (ny < 0 || ny >= height) continue;
           for (let nx = px - 1; nx <= px + 1; nx++) {
@@ -96,8 +111,16 @@ export function detectBlobs(
 
       const diameter = 2 * Math.sqrt(area / Math.PI);
       if (diameter >= minDia && diameter <= maxDia) {
-        // +0.5 shifts to the pixel centre, matching WPD.
-        blobs.push({ centroid: { x: sumX / area + 0.5, y: sumY / area + 0.5 }, area, diameter });
+        // +0.5 shifts to the pixel centre, matching WPD. The bbox's max is
+        // +1 past the last matched pixel INDEX, so it spans the blob's true
+        // visual extent (a pixel at column x covers [x, x+1)), not the
+        // narrower box you'd get from the raw index range.
+        blobs.push({
+          centroid: { x: sumX / area + 0.5, y: sumY / area + 0.5 },
+          area,
+          diameter,
+          bbox: { minX, minY, maxX: maxX + 1, maxY: maxY + 1 },
+        });
       }
     }
   }

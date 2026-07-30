@@ -33,6 +33,29 @@ describe('detectBlobs', () => {
     expect(blobs[0]!.centroid).toEqual({ x: 2.5, y: 2.5 });
   });
 
+  it('reports a bbox spanning the blob\'s true visual extent (v2.0 Phase 7)', () => {
+    // A 3-wide x 5-tall bar-shaped block, columns 2..4, rows 1..5. The box
+    // must cover [2,5)x[1,6) -- one past the last matched INDEX in each
+    // dimension, not the narrower [2,4]x[1,5] index range.
+    const set: [number, number][] = [];
+    for (let y = 1; y <= 5; y++) for (let x = 2; x <= 4; x++) set.push([x, y]);
+    const blobs = detectBlobs(makeMask(10, 10, set), 10, 10);
+    expect(blobs).toHaveLength(1);
+    expect(blobs[0]!.bbox).toEqual({ minX: 2, minY: 1, maxX: 5, maxY: 6 });
+  });
+
+  it('reports a distinct bbox per blob, not the union of all of them', () => {
+    const mask = makeMask(10, 10, [
+      [1, 1],
+      [7, 7],
+      [7, 8],
+    ]);
+    const blobs = detectBlobs(mask, 10, 10);
+    expect(blobs).toHaveLength(2);
+    expect(blobs[0]!.bbox).toEqual({ minX: 1, minY: 1, maxX: 2, maxY: 2 });
+    expect(blobs[1]!.bbox).toEqual({ minX: 7, minY: 7, maxX: 8, maxY: 9 });
+  });
+
   it('is 8-connected: diagonally touching pixels are one blob, not two', () => {
     const mask = makeMask(6, 6, [
       [1, 1],

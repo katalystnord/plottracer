@@ -2201,4 +2201,14 @@ describe('what a graph type declares it CAN DO (v1.5)', () => {
   it('spider is the deliberate exception: its slots ARE traced, along the spokes', () => {
     expect(SPIDER_AXES_CONFIG.autoExtractKind).toBe('along-axes');
   });
+
+  it('bar is the OTHER deliberate exception (v2.0 Phase 7): its blob bounding box IS its two ends', () => {
+    expect(BAR_AXES_CONFIG.autoExtractKind).toBe('bounding-box');
+    // Box Plot/Histogram/categorical Line have no comparable "opposite
+    // corners" a bounding box could mean for their own record shape, so
+    // they stay refused entirely, unlike Bar.
+    expect(HISTOGRAM_AXES_CONFIG.autoExtractKind).toBe('none');
+    expect(BOX_PLOT_AXES_CONFIG.autoExtractKind).toBe('none');
+    expect(CATEGORICAL_LINE_CONFIG.autoExtractKind).toBe('none');
+  });
 });

@@ -174,6 +174,7 @@ import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
+import { runBarDetect } from '../../engine/barDetectRun.js';
 import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
 import {
   runCurveFit,
@@ -389,6 +390,22 @@ type ToolMode = 'pan' | 'calibrate' | 'place-point' | 'select' | 'eraser' | 'seg
 
 /** The three modes fronted by the single Auto-extract rail tool. */
 const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-trace', 'interpolate'];
+
+/** Which of the three Auto-extract modes actually apply to a graph type's
+ * declared `autoExtractKind` (generalizes the spider-only restriction
+ * checkpoint 122 introduced -- v2.0 Phase 7 adds a second restricted kind
+ * for Bar, so this is now the one place both are decided instead of two
+ * separate special cases). `'curve'` (undeclared/default) offers all three;
+ * `'along-axes'` (Spider) and `'bounding-box'` (Bar) both have exactly one
+ * sensible reading path -- By colour -- so Flood-fill/Guide points would run
+ * and silently record nothing; `'none'` offers none at all (auto-extract is
+ * refused outright: Box Plot, Histogram, categorical Line). */
+function autoExtractModesFor(kind: AxesTypeConfig<CalibratedAxes>['autoExtractKind']): readonly ToolMode[] {
+  const k = kind ?? 'curve';
+  if (k === 'none') return [];
+  if (k === 'curve') return AUTO_EXTRACT_MODES;
+  return ['color-trace'];
+}
 
 /** The Select tool's four sub-modes (v1.1 #6, mirroring Ketcher's select
  * multi-tool). All select DATA points only (never calibration handles) and feed
@@ -1392,16 +1409,19 @@ export function Workspace() {
   const preAutoExtractModeRef = useRef<ToolMode>('pan');
   const lastAutoExtractMechRef = useRef<ToolMode>('segment-fill');
   const toggleAutoExtract = useCallback(() => {
-    // The rail button greys out for bar-family types; the `4` hotkey is the other
-    // door, so the rule lives here where both converge. Auto-extract's mechanisms
-    // are curve tools and would record a bar's MIDPOINT as its value.
+    // The rail button greys out for Box Plot/Histogram/categorical Line; the `4`
+    // hotkey is the other door, so the rule lives here where both converge.
+    // Every OTHER mechanism here is a curve tool and would record one of these
+    // types' own datum wrong (a box's whiskers, a bin's height, an ordinal click).
     if ((session.getConfig().autoExtractKind ?? 'curve') === 'none') return;
-    // ⚑ A spider has exactly ONE mechanism: the axis-aware colour trace. Flood-fill
-    // and Guide points are curve tools with nowhere to file their output (a spider's
-    // slots are its axes), so they are not offered -- and this is where the card is
-    // ENTERED, so without it the last-used mechanism could open a card whose button
-    // would silently do nothing.
-    if (session.getConfig().autoExtractKind === 'along-axes') lastAutoExtractMechRef.current = 'color-trace';
+    // ⚑ A spider or a bar has exactly ONE mechanism: the axis-aware colour trace
+    // for a spider, the bounding-box colour trace for a bar. Flood-fill and Guide
+    // points are curve tools with nowhere sensible to file their output (a
+    // spider's slots are its axes; a bar's two slots are its measured ends, not
+    // a curve to follow), so they are not offered -- and this is where the card
+    // is ENTERED, so without this the last-used mechanism could open a card
+    // whose button would silently do nothing.
+    if (autoExtractModesFor(session.getConfig().autoExtractKind).length === 1) lastAutoExtractMechRef.current = 'color-trace';
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
@@ -1750,14 +1770,18 @@ export function Workspace() {
     // work fine uncalibrated (Measure's Distance/Set-scale need no axes), so a
     // measurement undo shouldn't kick the user out of the Measure card.
     setMode((m) => (!s.getAxes() && (m === 'place-point' || m === 'eraser' || m === 'segment-fill' || m === 'color-trace' || m === 'interpolate') ? 'calibrate' : m));
-    // ⚑ An auto-extract mode must also drop when the restored config is bar-family:
-    // its mechanisms record a bar's MIDPOINT (59f94a6 closed the rail button and
-    // the `4` hotkey, but not this door). Undoing back across a graph-type change
-    // rebuilds the session under the snapshot's config while the MODE is untouched,
-    // so a bar chart could be left sitting in segment-fill with the fold-out open
-    // and the stage handler live -- confidently wrong numbers. Found by the v1.3
-    // gate. openProject/restoreFigure already reset the mode; this path did not.
-    setMode((m) => (s.getConfig().axesKind === 'bar' && AUTO_EXTRACT_MODES.includes(m) ? 'place-point' : m));
+    // ⚑ An auto-extract mode must also drop when it is not one the RESTORED
+    // config actually offers (59f94a6 closed the rail button and the `4`
+    // hotkey, but not this door). Undoing back across a graph-type change
+    // rebuilds the session under the snapshot's config while the MODE is
+    // untouched, so e.g. a Box Plot could be left sitting in segment-fill with
+    // the fold-out open and the stage handler live -- confidently wrong
+    // numbers (a box's whiskers, not a curve to flood-fill). Found by the v1.3
+    // gate. openProject/restoreFigure already reset the mode; this path did
+    // not. Generalized (v2.0 Phase 7) off autoExtractModesFor rather than
+    // "any bar-family type": Bar itself now offers color-trace (bounding-box
+    // detection), so it alone must NOT be kicked out of that one mechanism.
+    setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind).includes(m) ? 'place-point' : m));
   }, []);
 
   const restoreDoc = useCallback(
@@ -4403,7 +4427,10 @@ export function Workspace() {
       setColorTraceInfo('Calibrate the axes first — traced points need a coordinate system.');
       return;
     }
-    if ((config.autoExtractKind ?? 'curve') === 'none' || (session.hasSlots() && config.autoExtractKind !== 'along-axes')) {
+    if (
+      (config.autoExtractKind ?? 'curve') === 'none' ||
+      (session.hasSlots() && config.autoExtractKind !== 'along-axes' && config.autoExtractKind !== 'bounding-box')
+    ) {
       setColorTraceInfo('Auto-trace adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
       return;
     }
@@ -4487,6 +4514,28 @@ export function Workspace() {
         adoptTracedColour();
         commit();
       }
+      return;
+    }
+    // ⚑ THE BAR TRACE (v2.0 Phase 7) -- the direct fix for the defect the spider
+    // comment above describes: every mechanism below this point reduces the
+    // colour mask to a column-average or a blob CENTROID, either of which reads
+    // the MIDDLE of a filled bar, never its end (`59f94a6`). A bar blob's own
+    // bounding box IS its two measured ends, so nothing here is averaged away --
+    // see engine/barDetectRun.ts. One box per detected bar, filed through the
+    // identical two-corner path a manual drag-box uses (addBarDetectBoxes).
+    if (config.autoExtractKind === 'bounding-box') {
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
+      if ('error' in result) {
+        setColorTraceInfo(result.error);
+        return;
+      }
+      const added = session.addBarDetectBoxes(result.boxes);
+      adoptTracedColour();
+      const { pct, warn } = overBroad(result.matched);
+      setColorTraceInfo(
+        `Placed ${added} bar${added === 1 ? '' : 's'} (one box per detected bar) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
+      );
+      commit();
       return;
     }
     if (colorTraceShape === 'scatter') {
@@ -5408,15 +5457,19 @@ export function Workspace() {
       // By-colour traces via the Trace button, not a canvas click (v0.8 audit #2:
       // without this the tip fell through to "calibrate the axes" on an already-
       // calibrated chart, and gave no hint that a stray click does nothing).
-      // ⚑ On a spider it does a different job, and the tip has to say so: it reads
-      // ALONG the calibrated rays, one value per axis, and leaves an axis empty
-      // where the evidence is doubtful. Without that, "Trace" reads as the curve
-      // tool it is everywhere else, and an axis coming back empty looks like a bug
-      // rather than the refusal it is.
-      if (mode === 'color-trace')
-        return config.autoExtractKind === 'along-axes'
-          ? 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.'
-          : 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+      // ⚑ On a spider or a bar it does a different job, and the tip has to say so.
+      // Spider reads ALONG the calibrated rays, one value per axis, and leaves an
+      // axis empty where the evidence is doubtful. Bar (v2.0 Phase 7) reads each
+      // detected blob's own BOUNDING BOX -- both ends measured, never a midpoint.
+      // Without this, "Trace" reads as the curve tool it is everywhere else, and
+      // an axis coming back empty (spider) looks like a bug rather than a refusal.
+      if (mode === 'color-trace') {
+        if (config.autoExtractKind === 'along-axes')
+          return 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.';
+        if (config.autoExtractKind === 'bounding-box')
+          return 'By colour — pick a bar colour (or take it from the image with the pipette), set the tolerance, then press Trace: it finds every bar of that colour and records its own bounding box. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+        return 'By colour — pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+      }
       if (mode === 'interpolate') {
         if (dataPoints.length === 0)
           return 'Interpolate — click a few guide points along one curve; the curve fills in between them.';
@@ -5464,12 +5517,15 @@ export function Workspace() {
     // Pan / Select / Eraser / Measure / Image-edit / Error-bars: a canvas click
     // adds nothing in any of them, so point at the tools that DO capture.
     //
-    // ⚑ Auto-extract is permanently greyed for the bar family (59f94a6), so naming
-    // it here put two panels on screen recommending what the other refuses -- a
-    // FOURTH instance of the contradiction class this hint was written to kill.
-    // Found by the v1.3 gate; reachable with zero points via Select/Pan/Measure/
-    // Error-bars/Edit-image on a calibrated bar chart.
-    if (config.id === 'bar') return 'No points yet — pick Add points (3) from the tool rail and drag each bar corner to corner.';
+    // ⚑ Auto-extract is permanently greyed for Box Plot/categorical Line
+    // (59f94a6), so naming it here put two panels on screen recommending what
+    // the other refuses -- a FOURTH instance of the contradiction class this
+    // hint was written to kill. Found by the v1.3 gate; reachable with zero
+    // points via Select/Pan/Measure/Error-bars/Edit-image on a calibrated
+    // chart of either type. Bar itself is the exception (v2.0 Phase 7): its
+    // own Auto-extract now finds bars by colour correctly, so this hint
+    // names it again for Bar specifically, same as the generic fallback does.
+    if (config.id === 'bar') return 'No points yet — drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.';
     if (config.axesKind === 'bar') return 'No points yet — pick Add points (3) from the tool rail and click the end of each bar.';
     return 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
   })();
@@ -6623,14 +6679,20 @@ export function Workspace() {
             // ⚑ Spider is the one slot type auto-extract IS offered for, and
             // the exception is a correctness one too: its slots ARE the axes the
             // trace searches, so every reading has a home the tool measured it
-            // against. The Box Plot / Error Bar refusal stands -- a Min/Q1/Median
-            // slot is not something a colour trace can identify.
+            // against. v2.0 Phase 7 makes Bar a SECOND correctness exception: a
+            // bar blob's own bounding box IS its two ends (engine/barDetectRun.ts),
+            // so it no longer belongs in this refused bucket at all -- see
+            // BAR_AXES_CONFIG's autoExtractKind. Box Plot / categorical Line
+            // remain refused: neither has anything a colour trace could read as
+            // its own record (five letter-values; an ordinal click).
             disabled={!axes || (config.autoExtractKind ?? 'curve') === 'none'}
             disabledReason={
               !axes
                 ? 'Calibrate the axes first'
-                : config.axesKind === 'bar'
-                ? 'Auto-extract follows curves — on bars it would record the middle of each bar, not its end. Place points on the bar ends instead.'
+                : config.id === 'boxplot'
+                ? 'Auto-extract can’t find a box’s five values from its colour — place its Min/Q1/Median/Q3/Max points by hand.'
+                : config.id === 'categorical'
+                ? 'Auto-extract has nothing to trace here — each category is one click, not a curve or a blob. Place points by hand.'
                 : 'Not available for this graph type'
             }
             onClick={toggleAutoExtract}
@@ -6807,11 +6869,12 @@ export function Workspace() {
                   { m: 'color-trace' as ToolMode, id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
                   { m: 'interpolate' as ToolMode, id: 'guide', label: 'Guide points', hint: 'by eye' },
                 ])
-                  // ⚑ A spider gets ONE mechanism. The other two are curve tools that
-                  // produce ordinary points, and a spider series has no slot for one:
-                  // they would have run and recorded nothing, which reads as a broken
-                  // button rather than as a tool that does not apply here.
-                  .filter(({ m }) => config.autoExtractKind !== 'along-axes' || m === 'color-trace')
+                  // ⚑ A spider or a bar gets ONE mechanism (autoExtractModesFor). The
+                  // other two are curve tools that produce ordinary points, and neither
+                  // a spider's axis slots nor a bar's two-corner slots have anywhere to
+                  // file one: they would have run and recorded nothing, which reads as
+                  // a broken button rather than as a tool that does not apply here.
+                  .filter(({ m }) => autoExtractModesFor(config.autoExtractKind).includes(m))
                   .map(({ m, id, label }) => (
                   <button
                     key={id}
@@ -6867,6 +6930,13 @@ export function Workspace() {
                         crosses more than once is left EMPTY for you to place, and named below.
                         The highlighted pixels show what the trace reads.
                       </>
+                    ) : config.autoExtractKind === 'bounding-box' ? (
+                      <>
+                        Finds every bar of that colour and records its own bounding box — both
+                        ends measured directly, never a midpoint. Bars of the identical colour
+                        touching with no gap between them are read as one merged bar.
+                        The highlighted pixels show what the trace reads.
+                      </>
                     ) : (
                       <>
                         Selects every pixel of a series&rsquo; colour — a dashed or marker-only line
@@ -6899,9 +6969,10 @@ export function Workspace() {
                       Pick from image
                     </button>
                   </div>
-                  {/* No shape to choose on a spider: the rays decide where to read, so
-                      curve-vs-scatter has nothing to select between. */}
-                  <div style={{ display: config.autoExtractKind === 'along-axes' ? 'none' : 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {/* No shape to choose on a spider or a bar: the rays decide where a
+                      spider reads, and a bar's shape is always its bounding box -- neither
+                      has a curve-vs-scatter choice to make. */}
+                  <div style={{ display: config.autoExtractKind === 'curve' || config.autoExtractKind == null ? 'flex' : 'none', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>Shape:</span>
                     <select
                       data-testid="color-trace-shape"
@@ -6911,22 +6982,27 @@ export function Workspace() {
                       <option value="curve">Curve (line)</option>
                       <option value="scatter">Scattered points</option>
                     </select>
-                    {colorTraceShape === 'scatter' && (
-                      <>
-                        <span>Min marker &empty;:</span>
-                        <input
-                          type="number"
-                          data-testid="color-trace-min-blob"
-                          min={0}
-                          max={200}
-                          value={colorTraceMinBlob}
-                          onChange={(e) => setColorTraceMinBlob(Math.max(0, Math.min(200, Number(e.target.value) || 0)))}
-                          style={{ width: 52 }}
-                        />
-                        <span>px</span>
-                      </>
-                    )}
                   </div>
+                  {/* Min blob size applies to any reduction that runs blob detection --
+                      Scattered points (curve kind) and Bar's own bounding-box detection
+                      both do, so this shows for either rather than living nested only
+                      under the (here, hidden) Shape selector. */}
+                  {((config.autoExtractKind ?? 'curve') === 'curve' && colorTraceShape === 'scatter') ||
+                  config.autoExtractKind === 'bounding-box' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>Min {config.autoExtractKind === 'bounding-box' ? 'bar' : 'marker'} &empty;:</span>
+                      <input
+                        type="number"
+                        data-testid="color-trace-min-blob"
+                        min={0}
+                        max={200}
+                        value={colorTraceMinBlob}
+                        onChange={(e) => setColorTraceMinBlob(Math.max(0, Math.min(200, Number(e.target.value) || 0)))}
+                        style={{ width: 52 }}
+                      />
+                      <span>px</span>
+                    </div>
+                  ) : null}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>Tolerance:</span>
                     <input

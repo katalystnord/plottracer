@@ -757,12 +757,19 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   colour trace by column, blob detection. Right wherever a series IS a curve.
    * - `'along-axes'` — the reading is where the series crosses a calibrated ray,
    *   so the trace walks the rays instead of the columns (Spider).
+   * - `'bounding-box'` (v2.0 Phase 7) — the direct fix for the `'none'` case
+   *   below, for the one bar-family type where it actually applies: a bar
+   *   blob's OWN bounding box is its two measured ends (see
+   *   engine/barDetectRun.ts), so nothing is averaged or centroided away.
+   *   Bar only — Box Plot/Histogram/categorical Line still have no bounding
+   *   box that would mean their own record (a box's whiskers, a bin's
+   *   height-only extent, a line's ordinal click), so they stay `'none'`.
    * - `'none'` — refused, and this is a CORRECTNESS gate rather than a missing
-   *   feature: every curve mechanism returns the MIDDLE of a filled shape, and a
-   *   bar's value is its end, so the number produced was never the datum
-   *   (`59f94a6`). Bar, Histogram, Box Plot, categorical Line.
+   *   feature: every CURVE mechanism returns the MIDDLE of a filled shape, and
+   *   a bar's value is its end, so the number produced was never the datum
+   *   (`59f94a6`). Histogram, Box Plot, categorical Line.
    */
-  autoExtractKind?: 'curve' | 'along-axes' | 'none';
+  autoExtractKind?: 'curve' | 'along-axes' | 'bounding-box' | 'none';
   /**
    * The SHAPE this type's data takes in an export file — declared, because the
    * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
@@ -997,7 +1004,10 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   label: 'Bar',
   axesKind: 'bar',
-  autoExtractKind: 'none',
+  // v2.0 Phase 7: a bounding box IS a bar's two measured ends, so unlike the
+  // curve mechanisms this refused at `59f94a6`, nothing here is averaged or
+  // centroided away -- see engine/barDetectRun.ts and this field's own doc.
+  autoExtractKind: 'bounding-box',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
@@ -3548,6 +3558,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return added;
   }
 
+  /** Bulk-adds bar boxes detected by colour (v2.0 Phase 7, see
+   * engine/barDetectRun.ts) -- each box's two opposite corners fill one
+   * bar's two measured ends, via the SAME two-clicks-per-tuple path a
+   * manual drag-box uses (Workspace.tsx's handleBoxRect), just looped over
+   * every blob one Trace press found. This is why no new capture logic
+   * exists for this: a detected box and a dragged box are the identical
+   * record from the moment they reach the session.
+   *
+   * Gated to the genuine bar-interval shape only (isBarIntervalShape) --
+   * Box Plot/Histogram have no "opposite corners" a bounding box could mean
+   * for their own record shape, so bounding-box detection is Bar-only (see
+   * BAR_AXES_CONFIG's autoExtractKind).
+   *
+   * Returns how many boxes were actually added (0 if not calibrated or the
+   * active dataset isn't a bar interval). */
+  addBarDetectBoxes(boxes: readonly { start: { x: number; y: number }; end: { x: number; y: number } }[]): number {
+    if (!this.axes) return 0;
+    if (!this.isBarIntervalShape(this.activeEntry.dataset)) return 0;
+    for (const box of boxes) {
+      this.addDataPoint(box.start.x, box.start.y);
+      this.addDataPoint(box.end.x, box.end.y);
+    }
+    return boxes.length;
+  }
+
   /** Interpolation-assist (checkpoint 120, David's LIVE mode): the human drops a
    * handful of GUIDE POINTS along one curve and the tool fills the curve between
    * them (algorithms/interpolate.ts, a centripetal Catmull-Rom spline). This is
@@ -3933,14 +3968,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.config.axesKind === 'bar' && dataset.hasSlots();
   }
 
-  /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never
-   * a 5-slot Box Plot (its own config, or the legacy toggle on a Bar
-   * session). Gates the auto-PREFILL convenience specifically (not category
-   * storage generally, see usesCategoryAxis above) -- a box has no
-   * comparable "one repeated category set across series" pattern to
-   * prefill from the way a grouped bar chart does. */
-  private wantsAutoCategoryPrefill(dataset: Dataset): boolean {
+  /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never a
+   * 5-slot Box Plot (its own config, or the legacy toggle on a Bar session).
+   * The one shape check two DIFFERENT bar-only capabilities happen to share:
+   * auto-category-PREFILL (wantsAutoCategoryPrefill below -- a box has no
+   * comparable "one repeated category set across series" pattern to prefill
+   * from) and colour-detected bounding boxes (addBarDetectBoxes -- a box's
+   * five letter values have no "opposite corners" a bbox could mean). Kept
+   * as one predicate rather than duplicated so the two never silently drift
+   * apart on what "a genuine bar interval" means. */
+  private isBarIntervalShape(dataset: Dataset): boolean {
     return this.config.id === 'bar' && dataset.getSlotNames().length === BAR_INTERVAL_SLOTS.length;
+  }
+
+  /** Gates the auto-PREFILL convenience specifically (not category storage
+   * generally, see usesCategoryAxis above) -- see isBarIntervalShape for why
+   * this is Bar-2-slot-interval only. */
+  private wantsAutoCategoryPrefill(dataset: Dataset): boolean {
+    return this.isBarIntervalShape(dataset);
   }
 
   /** Does any tuple OTHER than (dataset, tupleIndex) already reference this
