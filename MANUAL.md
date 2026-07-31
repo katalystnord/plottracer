@@ -20,7 +20,9 @@ fit the view with `Ctrl+0`.
 
 ## 2. Choose the graph type and calibrate
 
-Pick the graph type from the dropdown in the top bar — **XY** (linear/log/date),
+Pick the graph type from the **card picker** in the top bar — each type shows its
+own icon, so a bar chart and a histogram are told apart by their shape rather than
+by reading two similar names. The types are **XY** (linear/log/date),
 **Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Ternary**, **Map**,
 **Circular chart recorder**, **Histogram**, **Box plot**, or **Line (categorical
 X)**.
@@ -124,11 +126,18 @@ Several ways, depending on the figure — all on the left rail:
 Every automatic method shows you what it captured *before* you commit, so you can
 trust the result.
 
-**Bar-family figures are traced by hand.** Auto-extract is greyed out for Bar,
-Histogram, Box plot, and Line (categorical X): its mechanisms all follow the
-*middle* of a shape, which is a curve's position but only half of a bar. Place
-points on the bar ends with **Add points** (`3`) instead — the loupe gives you
-the pixel precision.
+**Bars are captured as a drag-box.** With **Add points** (`3`) on a Bar chart you
+press at one corner of a bar and release at the opposite one: a bar's value is its
+*extent*, not a point on it, so those two corners **are** the measurement. Plain,
+grouped, stacked and floating bars all work this way, and a bar below the baseline
+reads negative. A plain click places one corner and leaves the bar half-captured —
+its row shows a dash until you place the other.
+
+**Auto-extract ▸ By colour also works on Bar and Histogram**, for the same reason:
+a bar blob's own *bounding box* is its two ends, so nothing is averaged or
+centroided away. It is still greyed out for **Box plot** and **Line (categorical
+X)** — a box's five letter-values and a categorical point are not a bounding box —
+so those two are placed by hand with the loupe.
 
 **Spider charts trace along their own axes.** Auto-extract ▸ **By colour** is the
 only mechanism offered there, and it does a different job: it walks each calibrated
@@ -156,15 +165,23 @@ next. A reading you placed by hand is never overwritten.
   spider that removes exactly that axis's reading and leaves the rest of the
   profile standing — the other five axes are separate measurements, not parts of
   one shape.
-- On a **Bar** or **Line (categorical X)** figure, the table has a **Category**
-  column: type each point's name from the figure's tick labels (Flax, Hemp, …) and
-  the exports carry it in a **Category** column instead of a placeholder. On a
-  grouped chart you only type
-  the set once — a point added to the next series takes the name of the **nearest
-  already-named bar**, so it lands on the right category however you click and
-  whatever you skip. Each name belongs to its own point, so any cell can be
-  retyped without shifting its neighbours. Where the app can't tell which category
-  you meant, it leaves the cell **blank** rather than guess a name.
+- On a **Bar** figure the table is **one row per category and one column per
+  series** — the same shape as the spider table below — so a grouped chart shows
+  every series' bars side by side instead of hiding all but the active one. Type
+  each category's name from the figure's tick labels (Flax, Hemp, …) once, in its
+  row, and every series bound to it shows the new name immediately; the exports
+  carry it in a **Category** column. A category with no bar in some series shows a
+  dash in that cell.
+- Names are **never invented.** An unnamed bar reads as a dash, not as "Bar 1" —
+  a placeholder in the Category column of an export is indistinguishable from a
+  name someone transcribed. On a grouped chart you only type the set once: a bar
+  added to the next series takes the name of the **nearest already-named bar**
+  along the category axis, so it lands on the right category however you click and
+  whatever you skip. Where the app can't tell which category you meant, it leaves
+  the cell **blank** rather than guess.
+- On a **Line (categorical X)** figure the same Category column exists, but the
+  names belong to individual *points* rather than to shared rows, since each point
+  is its own reading.
 - On a **Spider / Radar** figure the table is one row per axis and one column per
   series, and every cell is live:
   - **click a value** to type it, or **click a point's cell** to select that point
