@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, XY_AXES_CONFIG, POLAR_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, POLAR_AXES_CONFIG, MAP_AXES_CONFIG } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { PolarAxes } from '../../core/axes/polar.js';
+import { MapAxes } from '../../core/axes/map.js';
 import { Calibration } from '../../core/calibration.js';
 import { Dataset } from '../../core/dataset.js';
 
@@ -275,5 +276,82 @@ describe('Polar equal-radius guard — P1 and P2 must be at different radii (A3)
     session.loadCalibrated(axes, [new Dataset(2)]);
     expect(session.getCalibrationError()).toBeNull();
     expect(session.isCalibrated()).toBe(true);
+  });
+});
+
+/**
+ * ⚑ THE MAP SCALE — a length of zero measured everything as zero.
+ *
+ * Found in the same 2026-07-31 sweep as the log-axis defect above, and the
+ * more serious of the two because it needs no file at all: a user draws a
+ * scale bar, types `0` for its real-world length, and the calibration reports
+ * SUCCESS with no error while every distance and area reads exactly 0.
+ *
+ * `core/axes/map.ts` now refuses it, which finally lets MAP_AXES_CONFIG's own
+ * `if (!ok)` fire — but that message says "check the entered data values are
+ * valid numbers", and 0 is a valid number. Telling a user to fix what is not
+ * broken is a UX defect in its own right (tenet 7), so the requirement is
+ * stated by a `checkValues` that runs on BOTH doors.
+ */
+describe('the map scale states its own requirement, on both doors', () => {
+  function clickedMap(length: string): CalibrationSession<MapAxes> {
+    const session = new CalibrationSession<MapAxes>(MAP_AXES_CONFIG);
+    session.handleCalibrationClick(100, 100);
+    session.confirmCalibrationValues([]);
+    session.handleCalibrationClick(300, 100);
+    session.confirmCalibrationValues([length]);
+    return session;
+  }
+
+  it('⚑ names the ZERO requirement rather than calling a valid number invalid', () => {
+    const session = clickedMap('0');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/greater than zero/i);
+    // And it says WHY, because "greater than zero" alone reads as a rule
+    // rather than a consequence.
+    expect(session.getCalibrationError()).toMatch(/every measurement read 0/i);
+  });
+
+  it('refuses a negative length with the same words', () => {
+    const session = clickedMap('-5');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/greater than zero/i);
+  });
+
+  it('names a non-numeric length differently, because that is a different fix', () => {
+    const session = clickedMap('abc');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/must be a number/i);
+  });
+
+  it('accepts an ordinary length, including a fractional one', () => {
+    expect(clickedMap('10').runCalibration()).toBe(true);
+    expect(clickedMap('2.5').runCalibration()).toBe(true);
+  });
+
+  it('⚑ catches the same zero length in a LOADED project', () => {
+    // The model refuses it now, so `calibrate()` answers false — and the
+    // session guard is what turns that into words the user can act on.
+    const cal = new Calibration(2);
+    cal.addPoint(100, 100, '0', '0');
+    cal.addPoint(300, 100, '0', '0'); // the length rides in P2's dx
+    const axes = new MapAxes();
+    expect(axes.calibrate(cal, '0', 'mm', 'top-left', 500)).toBe(false);
+
+    const session = new CalibrationSession<MapAxes>(MAP_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toMatch(/greater than zero/i);
+  });
+
+  it('a healthy map project still loads clean', () => {
+    const cal = new Calibration(2);
+    cal.addPoint(100, 100, '0', '0');
+    cal.addPoint(300, 100, '10', '0');
+    const axes = new MapAxes();
+    expect(axes.calibrate(cal, '10', 'mm', 'top-left', 500)).toBe(true);
+
+    const session = new CalibrationSession<MapAxes>(MAP_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toBeNull();
   });
 });

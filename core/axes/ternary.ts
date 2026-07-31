@@ -39,6 +39,10 @@ export class TernaryAxes {
     const y1 = cp1.py;
 
     this.L = Math.sqrt((this.x0 - x1) * (this.x0 - x1) + (this.y0 - y1) * (this.y0 - y1));
+    // Every reading divides by L. Two corners on one pixel made it zero, every
+    // value read back null, and this still returned true -- which left
+    // TERNARY_AXES_CONFIG.buildAxes's own `if (!ok)` refusal unable to fire.
+    if (!(this.L > 0)) return false;
     this.phi0 = taninverse(-(y1 - this.y0), x1 - this.x0);
     this.root3 = Math.sqrt(3);
     this.isRange0to100 = range100;

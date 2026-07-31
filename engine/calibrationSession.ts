@@ -1394,6 +1394,30 @@ export const MAP_AXES_CONFIG: AxesTypeConfig<MapAxes> = {
       valueFields: [{ key: 'scaleLength', label: 'length', field: 'dx' }],
     },
   ],
+  /**
+   * The reference line's real-world length must be a POSITIVE number.
+   *
+   * ⚑ `core/axes/map.ts` now refuses zero, negative and non-numeric lengths
+   * itself, so `buildAxes`'s `if (!ok)` finally fires -- but its words are
+   * "check the entered data values are valid numbers", and a user who typed 0
+   * or -5 typed a perfectly valid number. Telling them to fix what is not
+   * broken is a UX defect (tenet 7), so the requirement is stated here instead.
+   *
+   * Declared on the config, not performed in buildAxes, for the usual reason:
+   * a loaded file never calls buildAxes. See BAR_AXES_CONFIG.checkValues.
+   */
+  checkValues(cal) {
+    const raw = String(cal.getPoint(1)?.dx ?? '').trim();
+    if (raw === '') return null; // an unfilled field is the step's own business
+    const length = parseFloat(raw);
+    if (!Number.isFinite(length)) {
+      return 'The reference length must be a number — enter the real-world length of the line you drew.';
+    }
+    if (length <= 0) {
+      return 'The reference length must be greater than zero — a scale of zero makes every measurement read 0.';
+    }
+    return null;
+  },
   buildAxes(cal, ctx) {
     const axes = new MapAxes();
     // scale_length isn't read from the Calibration point by MapAxes's own

@@ -36,10 +36,19 @@ export class MapAxes {
     if (cal.getCount() < 2) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
-    this.dist = Math.sqrt(
+    const dist = Math.sqrt(
       (cp0.px - cp1.px) * (cp0.px - cp1.px) + (cp0.py - cp1.py) * (cp0.py - cp1.py)
     );
-    this.scaleLength = parseFloat(String(scale_length));
+    const scaleLength = parseFloat(String(scale_length));
+    // Every reading here is `px * scaleLength / dist`, so neither factor may be
+    // zero and the length must be a real positive distance. Unguarded this
+    // returned true regardless: a reference length of 0 made EVERY measurement
+    // read exactly 0 with no error anywhere, and a non-numeric one made them
+    // all null. Both are reachable by typing, not only by loading a file.
+    if (!(dist > 0)) return false;
+    if (!Number.isFinite(scaleLength) || scaleLength <= 0) return false;
+    this.dist = dist;
+    this.scaleLength = scaleLength;
     this.scaleUnits = scale_units;
     this.originLocation = origin_location != null ? origin_location : 'top-left';
     this.imageHeight = parseFloat(String(image_height));

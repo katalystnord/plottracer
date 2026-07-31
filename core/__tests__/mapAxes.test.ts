@@ -104,3 +104,65 @@ describe('MapAxes.calibrate refuses too few calibration points (v2.0 audit)', ()
     expect(axes.calibrate(new Calibration(2), '100', 'm', 'top-left', 500)).toBe(false);
   });
 });
+
+/**
+ * ⚑ A SCALE THAT MEASURES NOTHING — refused, rather than reported as success.
+ *
+ * `processCalibration` divided by `dist` (the pixel length of the reference
+ * line) and multiplied by `scaleLength` (its real-world length), and returned
+ * true whatever those were. MAP_AXES_CONFIG.buildAxes even carries
+ * `if (!ok) return { error: 'Calibration failed — ...' }` — a refusal that
+ * could never fire, which is the "a check that did not run looks exactly like
+ * a check that passed" shape.
+ *
+ * The reachable case is not exotic. A user drawing a scale bar and typing 0
+ * for its length got a calibration that reported success, showed no error, and
+ * made EVERY distance and area read exactly 0 — a silently wrong number on the
+ * primary path, with nothing on screen to question. A non-numeric entry read
+ * null instead; coincident endpoints likewise.
+ */
+describe('a reference line that cannot set a scale is refused', () => {
+  function tryScale(p1: [number, number], p2: [number, number], length: number | string) {
+    const cal = new Calibration(2);
+    cal.addPoint(p1[0], p1[1], '0', '0');
+    cal.addPoint(p2[0], p2[1], '0', '0');
+    const axes = new MapAxes();
+    return { ok: axes.calibrate(cal, length, 'mm', 'top-left', 500), axes };
+  }
+
+  it('⚑ refuses a reference length of ZERO, which made every measurement read 0', () => {
+    expect(tryScale([100, 100], [300, 100], 0).ok).toBe(false);
+    expect(tryScale([100, 100], [300, 100], '0').ok).toBe(false);
+  });
+
+  it('refuses a negative reference length, which has no meaning as a distance', () => {
+    expect(tryScale([100, 100], [300, 100], -5).ok).toBe(false);
+  });
+
+  it('refuses a reference length that is not a number at all', () => {
+    expect(tryScale([100, 100], [300, 100], 'abc').ok).toBe(false);
+    expect(tryScale([100, 100], [300, 100], '').ok).toBe(false);
+  });
+
+  it('⚑ refuses COINCIDENT endpoints, which divide by a zero pixel distance', () => {
+    // The click path keeps the two apart (distinctPixelSteps), but a loaded
+    // project calls calibrate() directly.
+    expect(tryScale([100, 100], [100, 100], 10).ok).toBe(false);
+  });
+
+  it('accepts an ordinary scale and reads through it', () => {
+    const { ok, axes } = tryScale([100, 100], [300, 100], 10);
+    expect(ok).toBe(true);
+    // 200px is 10mm, so 400px along x is 20mm.
+    expect(axes.pixelToData(400, 0)[0]).toBeCloseTo(20, 9);
+  });
+
+  it('accepts a fractional length, which a scale bar often has', () => {
+    expect(tryScale([100, 100], [300, 100], '2.5').ok).toBe(true);
+  });
+
+  it('a refused calibration reports itself uncalibrated', () => {
+    const { axes } = tryScale([100, 100], [300, 100], 0);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+});

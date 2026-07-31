@@ -143,3 +143,34 @@ describe('TernaryAxes.calibrate refuses too few calibration points (v2.0 audit)'
     expect(axes.calibrate(new Calibration(3), false, true)).toBe(false);
   });
 });
+
+/**
+ * ⚑ COINCIDENT CORNERS — refused by the model, like map.ts's zero-length scale.
+ *
+ * `L` is the pixel distance between corners A and B, and every reading divides
+ * by it. Two corners on one pixel made L zero, every value read back null, and
+ * `calibrate()` returned true — so TERNARY_AXES_CONFIG.buildAxes's
+ * `if (!ok) return { error: ... }` was a refusal that could never fire.
+ *
+ * The click path keeps the corners apart (`distinctPixelSteps`); a loaded
+ * project calls `calibrate()` directly and did not.
+ */
+describe('a ternary diagram with no side length is refused', () => {
+  function tryCorners(a: [number, number], b: [number, number]) {
+    const cal = new Calibration(2);
+    cal.addPoint(a[0], a[1], '0', '0');
+    cal.addPoint(b[0], b[1], '0', '0');
+    const axes = new TernaryAxes();
+    return { ok: axes.calibrate(cal, true, true), axes };
+  }
+
+  it('refuses corners A and B on the same pixel', () => {
+    const { ok, axes } = tryCorners([100, 400], [100, 400]);
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('accepts two distinct corners', () => {
+    expect(tryCorners([100, 400], [400, 400]).ok).toBe(true);
+  });
+});
