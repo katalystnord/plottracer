@@ -3790,6 +3790,35 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     expect(await page.getByTestId('series-remove').count()).toBe(0);
   });
 
+  it('removing the active series clears the point selection -- a stale index must not act on the newly-active series', async () => {
+    // v2.0 pre-launch audit: unlike switching series (which explicitly clears
+    // selection), removing the active series never did. Series 1 gets its own
+    // point (auto-selected, index 0). Series 2 is added, made active, and gets
+    // its OWN point (also auto-selected, also index 0 -- the numeric
+    // coincidence that let this bug hide: a stale index still resolves to a
+    // REAL point after the fallback reactivates Series 1). Deleting the
+    // ACTIVE series (2) falls back to Series 1. Without the fix, the stale
+    // selection silently survives and a bare Delete keypress -- which the
+    // user never asked to act on Series 1 at all -- removes Series 1's own
+    // point.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175); // Series 1: point 0, auto-selected
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
+
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(100);
+    await clickAt(400, 100); // Series 2: point 0, auto-selected, Series 2 now active
+
+    await page.getByTestId('series-remove').click(); // removes the ACTIVE series (2)
+    await page.waitForTimeout(100);
+    expect(await page.locator('[data-testid^="series-option-"]').count()).toBe(1); // fell back to Series 1
+
+    await page.keyboard.press('Delete'); // nothing legitimately selected -> must be a no-op
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1); // Series 1's own point survives
+  });
+
   it('a saved and reopened project round-trips multiple series with their names, colors, and points', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

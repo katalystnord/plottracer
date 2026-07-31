@@ -4782,7 +4782,23 @@ export function Workspace() {
       ) {
         return;
       }
+      // v2.0 pre-launch audit: unlike handleSelectDataset, this never cleared
+      // the point selection. removeDataset can reassign which series is
+      // active (session.removeDataset's own fallback logic), so a stale
+      // activePointIndex/selectedPointIndices left pointing at the OLD
+      // active series' point silently acts on a point in the NEW active
+      // series instead -- the next Delete/Backspace or arrow-key nudge
+      // mutates data in a series the user never selected. Only clear when
+      // the removed series WAS the active one: removing a different series
+      // leaves the active one's own points untouched, so its selection is
+      // still valid and must not be disturbed (same care as
+      // switchActiveDataset's own no-op-preserve fix at the engine layer).
+      const removingActive = index === session.getActiveDatasetIndex();
       session.removeDataset(index);
+      if (removingActive) {
+        setActivePointIndex(null);
+        setSelectedPointIndices([]);
+      }
       commit();
     },
     [session, commit]
