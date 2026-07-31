@@ -61,5 +61,12 @@ export function runGeometry(dataset: Dataset, axes: AnyAxes, closed: boolean): R
     return { error: 'Need at least 2 points to compute geometry statistics.' };
   }
 
-  return { geometry: computeGeometry(points, closed) };
+  // computeGeometry now refuses the same case itself (v2.0 pre-launch audit)
+  // -- this check stays as the user-facing message; the null branch below is
+  // defense-in-depth for the same reason the guard was added to the model.
+  const geometry = computeGeometry(points, closed);
+  if (!geometry) {
+    return { error: 'Need at least 2 points to compute geometry statistics.' };
+  }
+  return { geometry };
 }

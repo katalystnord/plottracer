@@ -37,7 +37,7 @@ describe('geometry', () => {
   it('computes exact arc length and area for a 2-point straight line (3-4-5 triangle)', () => {
     // Verified live this session: a straight line from (0,0) to (3,4)
     // gives arc length exactly 5 and trapezoidal area exactly 6.
-    const result = computeGeometry([{ x: 0, y: 0 }, { x: 3, y: 4 }], false);
+    const result = computeGeometry([{ x: 0, y: 0 }, { x: 3, y: 4 }], false)!;
     expect(result.arcLength).toBeCloseTo(5, 6);
     expect(result.area).toBeCloseTo(6, 6);
     expect(result.perPoint[0]!.curvature).toBe(0);
@@ -53,7 +53,7 @@ describe('geometry', () => {
       const y = 0.3 * (x - 5) * (x - 5) + 1;
       return { x, y };
     });
-    const result = computeGeometry(points, false);
+    const result = computeGeometry(points, false)!;
     expect(result.arcLength).toBeCloseTo(18.84, 1);
     expect(result.area).toBeCloseTo(35, 0);
     expect(result.areaLabel).toBe('Area under curve');
@@ -70,18 +70,30 @@ describe('geometry', () => {
   it('switches to shoelace polygon area when closed=true', () => {
     // A right triangle (0,0)-(5,0)-(5,5) — closed vs open area should differ.
     const points = [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }];
-    const open = computeGeometry(points, false);
-    const closed = computeGeometry(points, true);
+    const open = computeGeometry(points, false)!;
+    const closed = computeGeometry(points, true)!;
     expect(closed.areaLabel).toBe('Enclosed area');
     expect(closed.area).not.toBeCloseTo(open.area, 1);
   });
 
   it('cumulative length is monotonically non-decreasing and ends at total arc length', () => {
     const points = [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }, { x: 3, y: 1 }];
-    const result = computeGeometry(points, false);
+    const result = computeGeometry(points, false)!;
     for (let i = 1; i < result.perPoint.length; i++) {
       expect(result.perPoint[i]!.cumulativeLength).toBeGreaterThanOrEqual(result.perPoint[i - 1]!.cumulativeLength);
     }
     expect(result.perPoint[result.perPoint.length - 1]!.cumulativeLength).toBeCloseTo(result.arcLength, 6);
+  });
+
+  it('refuses fewer than 2 points instead of computing through to a silent NaN', () => {
+    // v2.0 pre-launch audit: with a single point, evalSpline reads
+    // spline.values[i+1] out of bounds (undefined), and undefined*0 is NaN --
+    // silently, with arcLength/area/every curvature coming back NaN. The
+    // guard belongs HERE, not just in the one current caller
+    // (engine/geometryPanel.ts's runGeometry): a pure, exported function is
+    // the model, and the model has more than one entrance.
+    expect(computeGeometry([{ x: 1, y: 1 }], false)).toBeNull();
+    expect(computeGeometry([{ x: 1, y: 1 }], true)).toBeNull();
+    expect(computeGeometry([], false)).toBeNull();
   });
 });

@@ -101,7 +101,21 @@ export interface GeometryResult {
   maxCurvature: { value: number; index: number };
 }
 
-export function computeGeometry(points: Point2D[], closed: boolean): GeometryResult {
+/**
+ * Refuses fewer than 2 points -- v2.0 pre-launch audit. Arc length/area/
+ * curvature have no meaning for a single point or none, and the spline
+ * machinery below isn't merely "returns 0" for them: evalSpline reads
+ * spline.values[i+1] out of bounds (undefined), and undefined*0 is NaN --
+ * `area` for a single CLOSED point comes back NaN, and `maxCurvature` for
+ * zero points stays at its initial -Infinity sentinel, pointing at index 0
+ * of an EMPTY perPoint array. curvature happens to read back 0 rather than
+ * NaN only by the coincidence that `NaN > 1e-12` is false in JS, not by
+ * design. The guard belongs HERE, not just in the one current caller
+ * (engine/geometryPanel.ts's runGeometry) -- a pure, exported function is
+ * the model, and the model has more than one entrance.
+ */
+export function computeGeometry(points: Point2D[], closed: boolean): GeometryResult | null {
+  if (points.length < 2) return null;
   const n = points.length;
   const splineX = fitNaturalSpline(points.map((p) => p.x));
   const splineY = fitNaturalSpline(points.map((p) => p.y));
