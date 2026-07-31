@@ -79,4 +79,24 @@ describe('sectionsToOds', () => {
     expect(content).toContain('table:name="Fit"');
     expect(content).toContain('table:name="Fit (2)"');
   });
+
+  it('re-truncates to the 100-char cap after appending a dedup suffix (v2.0 audit)', () => {
+    // A title exactly at the 100-char cap that also collides: the FIRST
+    // occurrence is already 100 chars, so the suffix on the second one must
+    // shorten the base rather than exceed the cap -- the same re-truncation
+    // xlsxExport.ts's own uniqueSheetName already does for its 31-char cap.
+    const longTitle = 'F'.repeat(100);
+    const content = strFromU8(
+      unzipSync(sectionsToOds([
+        { title: longTitle, header: ['a'], rows: [] },
+        { title: longTitle, header: ['a'], rows: [] },
+      ]))['content.xml']!
+    );
+    const names = [...content.matchAll(/table:name="([^"]*)"/g)].map((m) => m[1]!);
+    expect(names).toHaveLength(2);
+    expect(names[0]).toBe(longTitle);
+    expect(names[1]).not.toBe(names[0]);
+    for (const name of names) expect(name.length).toBeLessThanOrEqual(100);
+    expect(names[1]).toMatch(/\(2\)$/);
+  });
 });

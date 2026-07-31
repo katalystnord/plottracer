@@ -43,7 +43,14 @@ function uniqueTableName(raw: string, used: Set<string>): string {
   const base = raw.replace(/['"\\/:*?[\]]/g, ' ').trim().slice(0, 100) || 'Sheet';
   let name = base;
   let n = 2;
-  while (used.has(name.toLowerCase())) name = `${base} (${n++})`;
+  // v2.0 pre-launch audit: re-truncate to the 100-char cap AFTER appending the
+  // suffix, the same way xlsxExport.ts's uniqueSheetName already does for its
+  // own (31-char) cap -- without this, a title near the cap that also
+  // collides could exceed it once " (2)" is appended.
+  while (used.has(name.toLowerCase())) {
+    const suffix = ` (${n++})`;
+    name = base.slice(0, 100 - suffix.length) + suffix;
+  }
   used.add(name.toLowerCase());
   return name;
 }
