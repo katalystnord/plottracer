@@ -276,3 +276,44 @@ describe('starting a round pre-calibrated', () => {
     expect(input.placed).toEqual({});
   });
 });
+
+/**
+ * ⚑ THE TWO BAR TRUTH SHAPES — a trap laid for whoever extends the Challenge.
+ *
+ * The shipped truth files describe bars in TWO different ways:
+ *
+ *   bar-tensile-strength    points are { category, value }
+ *   bar-floating-temperature points are { category, start, end }
+ *
+ * `truthBarValues` reads `p.value`, so it handles the first and silently
+ * yields `NaN` for the second — and a NaN flows straight into the scorer,
+ * which would mark a perfect trace as wrong with no error anywhere.
+ *
+ * It is not live today: only seven examples are in the Challenge pool and the
+ * floating one is not among them. But nothing stops it being added, and the
+ * failure would be silent. These cases make that addition fail HERE instead.
+ */
+describe('the bar truth shapes the Challenge can actually score', () => {
+  const FLOATING = truth('bar-floating-temperature.truth.json');
+
+  it('reads the value-shaped truth, which is what the pool ships', () => {
+    expect(truthBarValues(BAR).every((v) => Number.isFinite(v[0]))).toBe(true);
+  });
+
+  it('⚑ CANNOT yet score the interval-shaped truth — this is the guard, not a bug report', () => {
+    // A floating bar's datum is its span, and the truth records both ends.
+    // If this ever starts passing, `truthBarValues` has learned the second
+    // shape and the example may join the pool.
+    expect(FLOATING.series[0]!.points[0]).toHaveProperty('start');
+    expect(FLOATING.series[0]!.points[0]).not.toHaveProperty('value');
+    expect(truthBarValues(FLOATING).every((v) => Number.isFinite(v[0]))).toBe(false);
+  });
+
+  it('every truth file the Challenge pool imports is value-shaped', () => {
+    // The pool is the live surface; this asserts what it relies on.
+    for (const file of ['bar-tensile-strength.truth.json']) {
+      const t = truth(file);
+      expect(truthBarValues(t).every((v) => Number.isFinite(v[0]))).toBe(true);
+    }
+  });
+});
