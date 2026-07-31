@@ -6298,7 +6298,12 @@ export function Workspace() {
                     borderRadius: theme.border.radius.regular,
                     border: `1px solid ${theme.color.primary.main}`,
                     background: theme.color.primary.clicked,
-                    color: theme.color.background.primary,
+                    // v2.0 pre-launch audit: white text on this background is
+                    // ~2.46:1, failing WCAG AA (needs 4.5:1 at 13px bold --
+                    // the same contrast defect already fixed once for a
+                    // header button). Dark text on the same background is
+                    // ~5.14:1.
+                    color: theme.color.text.primary,
                     cursor: 'pointer',
                     fontWeight: 700,
                     fontSize: theme.font.size.regular,
@@ -7373,6 +7378,11 @@ export function Workspace() {
           onLinkDrag={handleLinkDrag}
           onLinkDragCancel={handleLinkDragCancel}
           cropMode={cropMode}
+          // v2.0 pre-launch audit: a stray click used to set a 0x0 pending
+          // rect here (no guard at all, unlike onRegionRect/onSelectRect's
+          // own, inconsistent ones) -- applyCrop then silently no-op'd with
+          // no message explaining why Apply did nothing. ImageCanvas.tsx's
+          // endDrag now applies one click-vs-drag guard for all three.
           onCropRect={(r) => setCropRect(r)}
           cropRect={cropRect}
           // Direct marquee (v1.2): the region drag is live whenever By-colour is
@@ -7380,11 +7390,10 @@ export function Workspace() {
           // colour). A bare click in this mode is already a no-op (see
           // handleImageClick), so an always-live drag clobbers nothing.
           regionMode={mode === 'color-trace' && eyedropper === null}
-          onRegionRect={(r) => {
-            // Ignore a click / tiny drag (a zero-area region would match nothing).
-            if (r.width < 3 || r.height < 3) return;
-            setColorTraceRegion(r);
-          }}
+          // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
+          // would match nothing) is now ImageCanvas.tsx's own job, consolidated
+          // with crop/select's identical guard -- see its endDrag comment.
+          onRegionRect={(r) => setColorTraceRegion(r)}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
           // Bar capture (v2.0): live whenever Add points is active on a plain Bar
           // series, except while the eyedropper is armed -- same exception
@@ -7392,12 +7401,10 @@ export function Workspace() {
           boxMode={mode === 'place-point' && config.id === 'bar' && eyedropper === null}
           onBoxRect={handleBoxRect}
           selectMode={mode === 'select' ? selectSubMode : null}
-          onSelectRect={(r) => {
-            // A tiny drag is a click, not a marquee -- handleImageClick already
-            // cleared the selection for that, so ignore a zero-area box here.
-            if (r.width < 3 && r.height < 3) return;
-            handleSelectRect(r);
-          }}
+          // v2.0 pre-launch audit: same consolidated guard as onRegionRect
+          // above -- a tiny drag is a click, and handleImageClick already
+          // cleared the selection for that.
+          onSelectRect={(r) => handleSelectRect(r)}
           onSelectLasso={handleSelectLasso}
           previewRotationDeg={previewAngle}
           onStatusChange={handleCanvasStatus}

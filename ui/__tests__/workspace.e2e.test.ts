@@ -5514,6 +5514,25 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     expect(await page.getByTestId('crop-apply').isDisabled()).toBe(false);
   });
 
+  it('a stray click while Crop is armed does not set a degenerate 0x0 crop rect (v2.0 audit)', async () => {
+    // Before this fix, onCropRect had no click-vs-drag guard at all (unlike
+    // onRegionRect/onSelectRect, which each had their own, inconsistent
+    // ones) -- a plain click set a 0x0 pending rect, and Apply would have
+    // silently no-op'd with no message explaining why.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-crop').click();
+    expect(await page.getByTestId('crop-apply').isDisabled()).toBe(true);
+
+    await clickAt(470, 120); // a plain click, not a drag
+    await page.waitForTimeout(150);
+
+    // Still no usable rect -- matching the pre-drag state, not "Crop to 0x0".
+    expect(await page.getByTestId('crop-bar').innerText()).not.toMatch(/Crop to/);
+    expect(await page.getByTestId('crop-apply').isDisabled()).toBe(true);
+  });
+
   it('deskews via the fine-angle slider and Auto-straighten (checkpoint 64)', async () => {
     await resetWorkspace('xy');
     // A deliberately TILTED x-axis: X1 at (100,250), X2 lower at (400,280) --

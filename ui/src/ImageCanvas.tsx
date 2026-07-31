@@ -1171,6 +1171,16 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // Finalize a crop selection (checkpoint 63): report the dragged rectangle
       // in image-pixel space; the card confirms Apply/Cancel.
       if (cropDragRef.current) {
+        // v2.0 pre-launch audit: every OTHER content interaction (a plain
+        // point-placement click, a completed link-drag, direct zoom/pan) sets
+        // this so a later ResizeObserver-driven reflow can't move an
+        // already-calibrated view out from under placed points (see this
+        // effect's own comment above). This gesture -- crop/region/select
+        // marquee/bar-box -- is just as much a content interaction (boxMode
+        // in particular COMMITS real data on completion), so it must arm the
+        // same latch or a reflow right after a deliberate capture could still
+        // silently re-fit the view.
+        userAdjustedRef.current = true;
         const startP = cropDragRef.current;
         cropDragRef.current = null;
         const canvas = canvasRef.current;
@@ -1181,8 +1191,20 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           const b = screenToImage(view, endP.x, endP.y);
           if (boxMode) {
             // Raw press->release order, NOT normalized -- see onBoxRect's own doc.
+            // No click-vs-drag guard here, unlike the branch below: a plain
+            // click IS a meaningful Bar gesture (one corner placed), handled
+            // by handleBoxRect's own isClick check -- see its comment.
             onBoxRect?.(a, b);
-          } else {
+          } else if (!isClick(startP.x, startP.y, endP.x, endP.y)) {
+            // v2.0 pre-launch audit: a zero-/near-zero-area rectangle means
+            // nothing for crop/region/select -- was three independent,
+            // inconsistent guards (onCropRect had NONE at all; onRegionRect
+            // and onSelectRect each reimplemented their own width/height
+            // threshold, one with the wrong boolean operator). Consolidated
+            // into the one click-vs-drag check the plain-click path already
+            // uses (isClick, engine/canvasView.ts), so all three modes agree
+            // on what "just a click" means.
+            //
             // Route the finished rectangle by mode: select marquee, region-
             // restrict (B1), or crop -- all three want a normalized box.
             const report = selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;

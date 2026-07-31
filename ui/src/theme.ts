@@ -49,7 +49,15 @@ export const theme = {
     text: {
       primary: '#333333',
       secondary: '#585858',
-      legend: '#aeaeae',
+      // v2.0 pre-launch audit: was #aeaeae, ~2.2:1 against the app's white/
+      // near-white chrome -- fails both the WCAG AA text floor (4.5:1) and
+      // the non-text UI-component floor (3:1, WCAG 1.4.11), and this token
+      // is used as real, load-bearing text throughout (field labels, hints,
+      // row-delete controls), not just decoration. #646464 keeps it visibly
+      // lighter than `secondary` (preserving the same three-tier hierarchy)
+      // while clearing 4.5:1 against every background this app actually
+      // uses it on (white, and the panel/canvas near-whites).
+      legend: '#646464',
     },
     primary: {
       main: '#167782',
