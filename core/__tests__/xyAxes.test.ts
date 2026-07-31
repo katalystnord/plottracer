@@ -254,3 +254,71 @@ describe('a log axis whose endpoints cannot be logged is refused', () => {
     expect(axes.isCalibrated()).toBe(false);
   });
 });
+
+/**
+ * ⚑ getBounds UNDOES THE NEGATIVE-DECADE REFLECTION — round-2 audit.
+ *
+ * For an axis calibrated −100..−1 the stored xmin/xmax hold log10(−x); the
+ * reflection is applied in `pixelToData` and was never undone here, so
+ * getBounds reported +100/+1. `calibrationCheck` then took Math.log(−100) =
+ * NaN, its finiteness filter rejected the box, and the Check-calibration
+ * overlay silently drew NOTHING on exactly the axis type it helps most.
+ * Readings themselves were always correct.
+ */
+describe('the bounds of a negative-decade log axis', () => {
+  it('⚑ come back negative, as the user typed them', () => {
+    const axes = calibrated(
+      [
+        [0, 99, '-100', '0'],
+        [99, 99, '-1', '0'],
+        [0, 99, '0', '1'],
+        [0, 0, '0', '10'],
+      ],
+      { logX: true }
+    );
+    const b = axes.getBounds();
+    expect(b.x1).toBeCloseTo(-100, 6);
+    expect(b.x2).toBeCloseTo(-1, 6);
+  });
+
+  it('agrees with what pixelToData reads at the same two pixels', () => {
+    // The invariant that makes the bounds usable at all: a bound is the value
+    // AT that calibration pixel.
+    const axes = calibrated(
+      [
+        [0, 99, '-100', '0'],
+        [99, 99, '-1', '0'],
+        [0, 99, '0', '1'],
+        [0, 0, '0', '10'],
+      ],
+      { logX: true }
+    );
+    expect(axes.getBounds().x1).toBeCloseTo(axes.pixelToData(0, 99)[0]!, 6);
+    expect(axes.getBounds().x2).toBeCloseTo(axes.pixelToData(99, 99)[0]!, 6);
+  });
+
+  it('still reports an ordinary positive log axis unchanged', () => {
+    const axes = calibrated(
+      [
+        [0, 99, '1', '0'],
+        [99, 99, '100', '0'],
+        [0, 99, '0', '1'],
+        [0, 0, '0', '10'],
+      ],
+      { logX: true }
+    );
+    expect(axes.getBounds().x1).toBeCloseTo(1, 6);
+    expect(axes.getBounds().x2).toBeCloseTo(100, 6);
+  });
+
+  it('leaves a linear axis alone', () => {
+    const axes = calibrated([
+      [0, 99, '-50', '0'],
+      [99, 99, '50', '0'],
+      [0, 99, '0', '0'],
+      [0, 0, '0', '10'],
+    ]);
+    expect(axes.getBounds().x1).toBeCloseTo(-50, 6);
+    expect(axes.getBounds().x2).toBeCloseTo(50, 6);
+  });
+});

@@ -60,7 +60,13 @@ export class MapAxes {
     this.scaleLength = scaleLength;
     this.scaleUnits = scale_units;
     this.originLocation = origin_location != null ? origin_location : 'top-left';
-    this.imageHeight = parseFloat(String(image_height));
+    // ⚑ The height is validated like the length: with a bottom-left origin
+    // every Y reading is `(imageHeight - py - 1) * scale / dist`, so a NaN
+    // here gives a plausible X beside a dead Y. Reachable from a hand-edited
+    // or truncated file via plotData's own parseInt. (Round-2 audit.)
+    const height = parseFloat(String(image_height));
+    if (!Number.isFinite(height)) return false;
+    this.imageHeight = height;
     return true;
   }
 

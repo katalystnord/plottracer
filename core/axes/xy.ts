@@ -161,11 +161,18 @@ export class XYAxes {
   }
 
   getBounds() {
+    // ⚑ Undo the negative-decade REFLECTION, the same way pixelToData does.
+    // For an axis calibrated -100..-1 the stored xmin/xmax hold log10(-x), so
+    // raising 10 to them gave +100/+1 -- and `calibrationCheck` then took
+    // Math.log(-100) = NaN and silently drew nothing, on exactly the axis type
+    // that check helps most. Readings were never affected. (Round-2 audit.)
+    const unlog = (v: number, isLog: boolean, negative: boolean): number =>
+      isLog ? (negative ? -Math.pow(10, v) : Math.pow(10, v)) : v;
     return {
-      x1: this.isLogScaleX ? Math.pow(10, this.xmin) : this.xmin,
-      x2: this.isLogScaleX ? Math.pow(10, this.xmax) : this.xmax,
-      y3: this.isLogScaleY ? Math.pow(10, this.ymin) : this.ymin,
-      y4: this.isLogScaleY ? Math.pow(10, this.ymax) : this.ymax,
+      x1: unlog(this.xmin, this.isLogScaleX, this.isLogScaleXNegative),
+      x2: unlog(this.xmax, this.isLogScaleX, this.isLogScaleXNegative),
+      y3: unlog(this.ymin, this.isLogScaleY, this.isLogScaleYNegative),
+      y4: unlog(this.ymax, this.isLogScaleY, this.isLogScaleYNegative),
     };
   }
 

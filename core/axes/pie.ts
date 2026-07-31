@@ -356,11 +356,15 @@ export class PieAxes {
   }
 
   getMetadata(): AxesMetadata {
-    return this.metadata;
+    // Deep-copied like every other axes class. Pie's total, sweep and tilt
+    // live IN this metadata and are read back out of it on load, so handing
+    // out the live object let a caller's edit change the axes and the
+    // serialized file together. (Round-2 audit.)
+    return JSON.parse(JSON.stringify(this.metadata));
   }
 
   setMetadata(obj: AxesMetadata): void {
-    this.metadata = obj;
+    this.metadata = JSON.parse(JSON.stringify(obj));
   }
 
   numCalibrationPointsRequired(): number {
