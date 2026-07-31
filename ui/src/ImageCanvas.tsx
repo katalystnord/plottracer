@@ -581,6 +581,15 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // provenance state stale and it was saved as if the image came from that PDF.
   const loadImageFile = useCallback(
     (file: File | Blob) => {
+      // ⚑ THE UNSAVED-WORK GUARD, at the DROP and PASTE entrances too. It used
+      // to run only on the file-dialog path below, while this shared body --
+      // reached by dropping a file on the canvas or pressing Ctrl+V -- called
+      // straight through and the document was reset with no prompt. That is
+      // the project's own recurring shape: a guard living at one entrance
+      // while the model has another. And these are not obscure doors: the
+      // app's own first-run tip advertises them ("or drag-and-drop / paste one
+      // onto the canvas"). (v2.0 audit, round 2.)
+      if (beforeOpenImage && !beforeOpenImage()) return;
       const name = file instanceof File ? file.name : undefined;
       void file.arrayBuffer().then((buf) => {
         const bytes = new Uint8Array(buf);
@@ -602,7 +611,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         onImageOpened?.(name);
       });
     },
-    [loadImageFromSrc, onPdfBytes, onImageOpened]
+    [loadImageFromSrc, onPdfBytes, onImageOpened, beforeOpenImage]
   );
 
   // Paste an image from the clipboard (Ctrl+V), anywhere in the window -- but
@@ -1278,6 +1287,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     // normal case; an error cap is placed on the figure, well inside it.)
     linkDragRef.current = null;
     onLinkDragCancel?.();
+    // ⚑ THE LASSO TOO. Left out, a Select-Lasso drag that leaves the stage --
+    // which is the ordinary way to lasso points near the plot edge, since the
+    // cursor passes over the rail, the sidebar or the window edge -- leaked
+    // the ref permanently. Four consequences, all persistent and none
+    // explained on screen: `onWheel` bails on `lassoRef.current`, so
+    // WHEEL-ZOOM DIES; the polygon keeps growing on every mouse move with no
+    // button held; the stale dashed loop stays drawn; and the next mouseup is
+    // consumed by the lasso branch, so THE NEXT PLACEMENT CLICK DOES NOTHING.
+    // (v2.0 audit, round 2.)
+    lassoRef.current = null;
+    setLassoCurrent(null);
   }, [onLinkDragCancel]);
 
   const onStageMouseLeave = useCallback(() => {

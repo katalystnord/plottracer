@@ -3476,7 +3476,11 @@ export function Workspace() {
     // identity instead of a hardcoded, collision-prone default. Strip path-
     // breaking characters from a figure name that came from the user.
     const safe = stem.replace(/[/\\]+/g, '_') || 'figures';
-    await window.electronAPI!.saveFile(
+    // ⚑ Returns the chosen path, or NULL when the user cancels the OS dialog.
+    // Callers use this to decide whether anything was actually persisted --
+    // marking the document clean on a cancel loses the work silently, with no
+    // file written and no prompt on the next close. (v2.0 audit, round 2.)
+    return await window.electronAPI!.saveFile(
       bytesToBase64(zip),
       `project_${safe}.zip`,
       [
@@ -3547,8 +3551,8 @@ export function Workspace() {
         return;
       }
       setProjectError(null);
-      await saveProjectZipBytes(zip, figs[activeFigureIndex]?.name ?? 'figures');
-      markClean();
+      const savedPath = await saveProjectZipBytes(zip, figs[activeFigureIndex]?.name ?? 'figures');
+      if (savedPath) markClean(); // only a real write clears the unsaved flag
       return;
     }
 
@@ -3580,8 +3584,8 @@ export function Workspace() {
     }
     setProjectError(null);
     const stem = (imageCanvasRef.current?.getImageFileName() ?? 'figure.png').replace(/\.[^.]+$/, '');
-    await saveProjectZipBytes(zip, stem);
-    markClean(); // persisted -> no longer unsaved
+    const savedPath = await saveProjectZipBytes(zip, stem);
+    if (savedPath) markClean(); // persisted -> no longer unsaved; a cancel is not a save
   }, [session, markClean, activeFigureIndex, saveProjectZipBytes]);
 
   /**
@@ -3666,7 +3670,7 @@ export function Workspace() {
    * and pushes its baked image to the canvas. Undo history resets to the restored
    * state (per-figure undo is a later refinement). */
   const restoreFigure = useCallback(
-    (rec: FigureRecord) => {
+    (rec: FigureRecord, fromPersistedSource = false) => {
       sessionRef.current = rec.session;
       setAxesTypeId(rec.axesTypeId);
       // A pending figure-rename belongs to the figure we're leaving.
@@ -3705,7 +3709,14 @@ export function Workspace() {
       history.reset(captureDoc(rec.imageDataURL)); // reset precedes the load; name the figure's own baked src
       imageLoadPendingRef.current = true; // audit M1: block a re-entrant switch from stashing this mid-load image
       imageCanvasRef.current?.loadImageFromSrc(rec.imageDataURL, rec.imageFileName);
-      markClean();
+      // ⚑ ONLY a genuine load matches its source. This function is also the
+      // body of a figure SWITCH, where nothing has been persisted -- the
+      // outgoing figure's work has merely been stashed in memory. Marking
+      // clean there let a whole multi-figure session close with no
+      // unsaved-work prompt and both figures discarded, because dirtyRef is
+      // re-armed in only two places and neither runs on a switch.
+      // (v2.0 audit, round 2.)
+      if (fromPersistedSource) markClean();
       bump();
     },
     [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setPending, setSourcePdf, applyPdfState]
@@ -4094,13 +4105,13 @@ export function Workspace() {
           // the jumper stays hidden and the design-§0 invariant holds (audit B-F6).
           figuresRef.current = [];
           setActiveFigureIndex(0);
-          restoreFigure(records[0]!);
+          restoreFigure(records[0]!, true); // opened from a file -> matches its source
         } else {
           figuresRef.current = records;
           setActiveFigureIndex(multi.activeFigure);
           // restoreFigure installs the active figure's session, image, measurements,
           // provenance and (retained) source, and resets undo/dirty (loaded == clean).
-          restoreFigure(records[multi.activeFigure]!);
+          restoreFigure(records[multi.activeFigure]!, true); // opened from a file
         }
         return;
       }
@@ -7358,7 +7369,17 @@ export function Workspace() {
           binGlyphs={binGlyphs}
           errorBarGlyphs={errorWhiskers}
           curveFitLine={curveFitOverlay}
-          onCurveFitClick={curveFitState && (mode === 'pan' || mode === 'select') ? openCurveFitPanel : undefined}
+          // ⚑ PAN ONLY. The fitted curve is drawn AFTER the data points and
+          // carries a 12px hit stroke, and Konva resolves hits from the last
+          // child drawn -- so in Select mode, where markers ARE listening, a
+          // curve fitted TO those points passes within a few px of nearly all
+          // of them and ate every point click: the panel opened instead of the
+          // point being selected, and a marquee could not even start on the
+          // curve. That is the "an overlay drawn where the user must click
+          // eats the press" trap this file has hit twice before. In Pan mode
+          // markers are non-listening, so there is no clash and the shortcut
+          // stays. (v2.0 audit, round 2.)
+          onCurveFitClick={curveFitState && mode === 'pan' ? openCurveFitPanel : undefined}
           geometryOverlay={geometryOverlay}
           challengeReveal={challengeReveal}
           calibrationCheckBox={calibrationCheckOverlay}
@@ -7377,14 +7398,14 @@ export function Workspace() {
           onLinkDragMove={handleLinkDragMove}
           onLinkDrag={handleLinkDrag}
           onLinkDragCancel={handleLinkDragCancel}
-          cropMode={cropMode}
+          cropMode={mode === 'image-edit' ? cropMode : false}
           // v2.0 pre-launch audit: a stray click used to set a 0x0 pending
           // rect here (no guard at all, unlike onRegionRect/onSelectRect's
           // own, inconsistent ones) -- applyCrop then silently no-op'd with
           // no message explaining why Apply did nothing. ImageCanvas.tsx's
           // endDrag now applies one click-vs-drag guard for all three.
           onCropRect={(r) => setCropRect(r)}
-          cropRect={cropRect}
+          cropRect={mode === 'image-edit' ? cropRect : null}
           // Direct marquee (v1.2): the region drag is live whenever By-colour is
           // active, EXCEPT while the eyedropper is armed (that click samples a
           // colour). A bare click in this mode is already a no-op (see
@@ -7406,7 +7427,15 @@ export function Workspace() {
           // cleared the selection for that.
           onSelectRect={(r) => handleSelectRect(r)}
           onSelectLasso={handleSelectLasso}
-          previewRotationDeg={previewAngle}
+          // ⚑ MODE-GATED, like regionRect/selectMode/boxMode above. Passed
+          // unconditionally, a deskew preview left behind by leaving
+          // Edit-image via a rail button or a digit hotkey kept the canvas
+          // CSS-rotated while `screenToImage` stayed a pure translate+scale
+          // with no rotation term -- so every click afterwards recorded a
+          // pixel several px from where the user clicked, silently, into the
+          // record. A fine deskew is subtle by definition, so nothing looked
+          // wrong. (v2.0 audit, round 2.)
+          previewRotationDeg={mode === 'image-edit' ? previewAngle : 0}
           onStatusChange={handleCanvasStatus}
           beforeOpenImage={confirmDiscardIfDirty}
           onImageOpened={handleImageOpened}

@@ -80,7 +80,15 @@ export function ExplodedSliceControl({ stage, edgesPlaced, onToggle }: Props) {
         <div
           data-testid="exploded-slice-guide"
           style={{
-            pointerEvents: 'auto',
+            // ⚑ CLICK-THROUGH. This panel is pure text -- a heading, the
+            // reason, and three steps -- and it appears exactly WHILE the user
+            // must land three clicks on the figure. Opaque to pointer events
+            // it swallowed presses in the bottom-right of the canvas, which is
+            // where the bundled exploded-pie example's own sector and its
+            // right-hand edge sit. Every rail fold-out card is click-through
+            // for precisely this reason (see ImageEditCard's `interactive`).
+            // Same trap, third occurrence. (v2.0 audit, round 2.)
+            pointerEvents: 'none',
             width: 268,
             padding: '12px 14px',
             background: theme.color.background.primary,
