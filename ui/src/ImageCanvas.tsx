@@ -1659,7 +1659,16 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         // instead of the Stage and gets silently swallowed
                         // instead of registering as the next image click.
                         listening={point.draggable ?? false}
-                        onClick={() => onMarkerClick?.(point.id)}
+                        // ⚑ Forward `shiftKey`. The caller's Select branch
+                        // implements Shift-toggle multi-select and says so in
+                        // its own comment, but this handler dropped the event
+                        // entirely, so `shiftKey` arrived undefined on every
+                        // DATA-point click and Shift always replaced the
+                        // selection. The calibration-handle branch above has
+                        // always forwarded it, which is exactly why this hid:
+                        // the mechanism worked, just never for the markers the
+                        // Select tool exists for. (v2.0 audit, round 2.)
+                        onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
                         onContextMenu={(e) => {
                           // A data point's own context menu -- stop the event
                           // reaching the stage's empty-canvas handler, and suppress

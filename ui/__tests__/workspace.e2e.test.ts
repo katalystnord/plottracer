@@ -3853,6 +3853,44 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1); // Series 1's own point survives
   });
 
+  it('⚑ Shift-clicking a DATA POINT adds it to the selection instead of replacing it', async () => {
+    // v2.0 pre-launch audit (round 2). `handleMarkerClick` implements
+    // Shift-toggle multi-select and SAYS so in its own comment -- "Shift
+    // toggles one in/out, a plain click makes it the sole selection" -- but
+    // ImageCanvas rendered data-point markers with
+    // `onClick={() => onMarkerClick?.(point.id)}`, dropping the event
+    // entirely, so `shiftKey` arrived undefined on every data-dot click. The
+    // calibration-handle branch two hundred lines above forwards it
+    // correctly, which is why this survived: the mechanism demonstrably
+    // worked, just never for the markers the Select tool is FOR.
+    //
+    // Asserted through Delete rather than through any selection styling: the
+    // count of points that actually go is the thing the user loses.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(200, 200);
+    await clickAt(250, 175);
+    await clickAt(300, 150);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(3);
+
+    await page.getByTestId('mode-select').click();
+    await page.waitForTimeout(100);
+
+    await refreshCanvasBox();
+    await page.mouse.click(canvasBox.x + 200, canvasBox.y + 200);
+    await page.waitForTimeout(100);
+    await page.keyboard.down('Shift');
+    await page.mouse.click(canvasBox.x + 250, canvasBox.y + 175);
+    await page.waitForTimeout(100);
+    await page.keyboard.up('Shift');
+
+    // Two points are selected, so Delete must remove BOTH. Without the fix
+    // the Shift-click replaced the selection and only one goes.
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
+  });
+
   it('a saved and reopened project round-trips multiple series with their names, colors, and points', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
