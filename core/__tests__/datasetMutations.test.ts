@@ -43,7 +43,6 @@ describe('Dataset — what a fresh one reports about itself', () => {
     expect(ds.getMetadata()).toEqual({});
     expect(ds.hasSlots()).toBe(false);
     expect(ds.getAllTuples()).toEqual([]);
-    expect(ds.getSelectedPixels()).toEqual([]);
   });
 
   it('starts with the default series colour, which the UI and every export read', () => {

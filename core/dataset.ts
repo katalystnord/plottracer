@@ -19,13 +19,11 @@ export interface Point2D {
   y: number;
 }
 
-type RectDirection = 'ne' | 'se' | 'sw' | 'nw';
 
 export class Dataset {
   private _dim: number | undefined;
   private _dataPoints: PixelPoint[] = [];
   private _connections: unknown[] = [];
-  private _selections: number[] = [];
   private _pixelMetadataCount = 0;
   private _pixelMetadataKeys: string[] = [];
   private _metadata: Record<string, unknown> = {};
@@ -230,79 +228,6 @@ export class Dataset {
 
   getCount(): number {
     return this._dataPoints.length;
-  }
-
-  selectPixel(index: number): void {
-    if (this._selections.indexOf(index) >= 0) {
-      return;
-    }
-    this._selections.push(index);
-  }
-
-  selectPixels(indexes: number[]): void {
-    for (let i = 0; i < indexes.length; i++) {
-      this.selectPixel(indexes[i]!);
-    }
-  }
-
-  unselectAll(): void {
-    this._selections = [];
-  }
-
-  selectPixelsInRectangle(p1: Point2D, p2: Point2D): void {
-    const tester: Record<RectDirection, (x: number, y: number) => boolean> = {
-      ne: (x, y) => x >= p1.x && x <= p2.x && y >= p1.y && y <= p2.y,
-      se: (x, y) => x >= p1.x && x <= p2.x && y <= p1.y && y >= p2.y,
-      sw: (x, y) => x <= p1.x && x >= p2.x && y <= p1.y && y >= p2.y,
-      nw: (x, y) => x <= p1.x && x >= p2.x && y >= p1.y && y <= p2.y,
-    };
-
-    const xDirection = p1.x - p2.x > 0 ? -1 : 1;
-    const yDirection = p1.y - p2.y > 0 ? 1 : -1;
-
-    let direction: RectDirection;
-    if (yDirection > 0) {
-      direction = xDirection > 0 ? 'se' : 'sw';
-    } else {
-      direction = xDirection > 0 ? 'ne' : 'nw';
-    }
-
-    for (let index = 0; index < this._dataPoints.length; index++) {
-      const dp = this._dataPoints[index]!;
-      if (tester[direction](dp.x, dp.y)) {
-        this.selectPixel(index);
-      }
-    }
-  }
-
-  selectNearestPixel(x: number, y: number, threshold?: number): number {
-    const minIndex = this.findNearestPixel(x, y, threshold);
-    if (minIndex >= 0) {
-      this.selectPixel(minIndex);
-    }
-    return minIndex;
-  }
-
-  selectNextPixel(): void {
-    for (let i = 0; i < this._selections.length; i++) {
-      this._selections[i] = (this._selections[i]! + 1) % this._dataPoints.length;
-    }
-  }
-
-  selectPreviousPixel(): void {
-    for (let i = 0; i < this._selections.length; i++) {
-      let newIndex = this._selections[i]!;
-      if (newIndex === 0) {
-        newIndex = this._dataPoints.length - 1;
-      } else {
-        newIndex = newIndex - 1;
-      }
-      this._selections[i] = newIndex;
-    }
-  }
-
-  getSelectedPixels(): number[] {
-    return this._selections;
   }
 
   getSlotNames(): string[] {

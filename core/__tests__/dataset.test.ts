@@ -167,13 +167,4 @@ describe('Dataset', () => {
       expect(ds.getAllPixels().map((p) => p.x)).toEqual([10, 20, 30]);
     }
   });
-
-  it('selectPixelsInRectangle selects points inside an inverted (SW) rectangle', () => {
-    const ds = new Dataset();
-    ds.addPixel(5, 5);
-    ds.addPixel(50, 50);
-    // p1 bottom-right-ish, p2 top-left-ish => "sw" direction per the original logic
-    ds.selectPixelsInRectangle({ x: 10, y: 0 }, { x: 0, y: 10 });
-    expect(ds.getSelectedPixels()).toEqual([0]);
-  });
 });

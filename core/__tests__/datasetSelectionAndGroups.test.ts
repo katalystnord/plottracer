@@ -2,13 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Dataset } from '../dataset.js';
 
 /**
- * `Dataset` — the selection model and the group/slot bookkeeping.
+ * `Dataset` — the group/slot bookkeeping.
  *
- * ⚑ NINE METHODS OF THE RECORD'S OWN CLASS HAD ZERO TEST REFERENCES ANYWHERE:
- * `selectPixels`, `unselectAll`, `selectNearestPixel`, `selectNextPixel`,
- * `selectPreviousPixel`, `getPointGroupsCount`, `getPixelIndexesInGroup`,
- * `removeSlotFromTuples`, `refreshTuplesAfterGroupAdd`, plus `clearAll`. Not weakly
- * tested — untouched. `dataset.ts` scored 53.71% with 136 uncovered mutants, and this
+ * ⚑ METHODS OF THE RECORD'S OWN CLASS HAD ZERO TEST REFERENCES ANYWHERE:
+ * `getPointGroupsCount`, `getPixelIndexesInGroup`, `removeSlotFromTuples`,
+ * `refreshTuplesAfterGroupAdd`, plus `clearAll`. Not weakly tested —
+ * untouched. `dataset.ts` scored 53.71% with 136 uncovered mutants, and this
  * is where most of them lived.
  *
  * It matters now because **v2.0 changes the record**, and the slot machinery below is
@@ -16,6 +15,13 @@ import { Dataset } from '../dataset.js';
  * that keep a tuple pointing at the pixels it means; when one of them is wrong the
  * result is not a crash, it is a reading silently attached to the wrong slot — the
  * shape of three separate defects already fixed this month.
+ *
+ * ⚑ This file also used to cover `Dataset`'s SELECTION api — nine methods
+ * inherited from upstream. They were deleted on 2026-07-31 as unreachable:
+ * the app tracks selection in React state (`selectedPointIndices`) and
+ * implements its own marquee in `Workspace.tsx`'s `handleSelectRect`, so
+ * nothing ever called them and `_selections` was never serialized. Tests
+ * existing for a thing does not make it live.
  */
 
 /** A dataset with `n` pixels at (10i, 20i), so index and position are readable. */
@@ -24,78 +30,6 @@ function withPixels(n: number): Dataset {
   for (let i = 0; i < n; i++) ds.addPixel(10 * i, 20 * i);
   return ds;
 }
-
-describe('selecting pixels', () => {
-  it('selects several at once and refuses to hold a duplicate', () => {
-    const ds = withPixels(5);
-    ds.selectPixels([1, 3, 1, 3]);
-    expect(ds.getSelectedPixels()).toEqual([1, 3]);
-  });
-
-  it('clears the whole selection', () => {
-    const ds = withPixels(5);
-    ds.selectPixels([0, 2, 4]);
-    ds.unselectAll();
-    expect(ds.getSelectedPixels()).toEqual([]);
-  });
-
-  it('selects the nearest pixel and reports which it was', () => {
-    const ds = withPixels(5);
-    // Nearest to (21, 41) is index 2 at (20, 40).
-    expect(ds.selectNearestPixel(21, 41)).toBe(2);
-    expect(ds.getSelectedPixels()).toEqual([2]);
-  });
-
-  it('selects NOTHING when the nearest pixel is beyond the threshold', () => {
-    // ⚑ The threshold is the difference between "click near a point to grab it" and
-    // "any click anywhere grabs the closest point on the figure". A mutant that
-    // ignored it would make every stray click select something.
-    const ds = withPixels(5);
-    expect(ds.selectNearestPixel(1000, 1000, 5)).toBe(-1);
-    expect(ds.getSelectedPixels()).toEqual([]);
-  });
-});
-
-describe('stepping the selection through the series (the Q/W keys)', () => {
-  it('moves every selected index forward by one', () => {
-    const ds = withPixels(5);
-    ds.selectPixels([0, 2]);
-    ds.selectNextPixel();
-    expect(ds.getSelectedPixels()).toEqual([1, 3]);
-  });
-
-  it('WRAPS forward off the end to the start', () => {
-    // ⚑ The modulo. Without it the selection walks off the end and indexes a pixel
-    // that does not exist — and stepping is a keyboard action a user will hold down.
-    const ds = withPixels(3);
-    ds.selectPixels([2]);
-    ds.selectNextPixel();
-    expect(ds.getSelectedPixels()).toEqual([0]);
-  });
-
-  it('moves every selected index back by one', () => {
-    const ds = withPixels(5);
-    ds.selectPixels([1, 3]);
-    ds.selectPreviousPixel();
-    expect(ds.getSelectedPixels()).toEqual([0, 2]);
-  });
-
-  it('WRAPS backward off the start to the end', () => {
-    // The explicit `if (newIndex === 0)` branch, which a naive `- 1` would get wrong
-    // in the other direction (JavaScript's % keeps the sign of the dividend).
-    const ds = withPixels(3);
-    ds.selectPixels([0]);
-    ds.selectPreviousPixel();
-    expect(ds.getSelectedPixels()).toEqual([2]);
-  });
-
-  it('returns to where it started after a full lap', () => {
-    const ds = withPixels(4);
-    ds.selectPixels([1]);
-    for (let i = 0; i < 4; i++) ds.selectNextPixel();
-    expect(ds.getSelectedPixels()).toEqual([1]);
-  });
-});
 
 describe('clearing the dataset', () => {
   it('empties EVERY field, not just the points', () => {
