@@ -75,6 +75,16 @@ export class InputParser {
     this.isValid = false;
     this.isDate = false;
     this.formatting = null;
+    // ⚑ isArray was the one flag NOT reset here (2026-07-31 mutation sweep).
+    // A single InputParser is deliberately reused across many values -- one
+    // `ip` walks every spoke in SpiderAxes.calibrate, and every one of the
+    // four fields in CircularChartRecorderAxes.calibrate -- so once any value
+    // parsed as an array, `isArray` stayed true for every value after it. No
+    // live defect (nothing in the product reads it yet), which is exactly why
+    // it survived: it is only observable from a test. Reset with its three
+    // siblings so the whole reported state describes THIS call and not a
+    // previous one.
+    this.isArray = false;
 
     if (input == null) {
       return null;
