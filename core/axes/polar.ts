@@ -1,10 +1,18 @@
 /**
- * Faithful TypeScript port of wpd-core's core/axes/polar.js.
+ * TypeScript port of wpd-core's core/axes/polar.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
+ *
+ * ⚑ NO LONGER BYTE-FAITHFUL -- one deliberate divergence, found by the v2.0
+ * pre-launch code review. Upstream reads r1/theta1/r2/theta2 with a bare
+ * `Number()` and processCalibration always returns true -- the checkpoint-81
+ * defect class, never ported here. `"abc"` for a radius gave `NaN`, baked
+ * into every subsequent reading, with calibrate() reporting success and
+ * nothing on screen wrong.
  */
 
 import { taninverse } from '../mathFunctions.js';
+import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 
@@ -40,9 +48,22 @@ export class PolarAxes {
     const x2 = cp2.px;
     const y2 = cp2.py;
 
-    this.r1 = Number(cp1.dx);
-    this.theta1 = Number(cp1.dy);
-    this.r2 = Number(cp2.dx);
+    const ip = new InputParser();
+    const r1Parsed = ip.parse(cp1.dx);
+    if (!ip.isValid || ip.isDate || typeof r1Parsed !== 'number') return false;
+    const theta1Parsed = ip.parse(cp1.dy);
+    if (!ip.isValid || ip.isDate || typeof theta1Parsed !== 'number') return false;
+    const r2Parsed = ip.parse(cp2.dx);
+    if (!ip.isValid || ip.isDate || typeof r2Parsed !== 'number') return false;
+    this.r1 = r1Parsed;
+    this.theta1 = theta1Parsed;
+    this.r2 = r2Parsed;
+    // theta2 is NOT gated like the three values above: POLAR_AXES_CONFIG's own
+    // config declares it optional and defaults a blank one to '0', because it
+    // is a dead computation (see _theta2r below) that no reading ever uses --
+    // refusing calibration over an invalid-but-inert value would be
+    // interpretation this field was never meant to carry. `Number()` (not
+    // InputParser) matches upstream faithfully for exactly this one field.
     const theta2 = Number(cp2.dy);
 
     this.isDegrees = is_degrees;

@@ -1286,6 +1286,26 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       ],
     },
   ],
+  // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
+  // refusal a click does (v2.0 pre-launch audit; same reasoning as Bar/CCR's
+  // own checkValues). theta2 is deliberately NOT checked -- it's optional and
+  // core/axes/polar.ts never reads it (see the class's own _theta2r comment).
+  checkValues(cal) {
+    const ip = new InputParser();
+    const r1 = ip.parse(cal.getPoint(1)?.dx ?? null);
+    if (!ip.isValid || ip.isDate || typeof r1 !== 'number') {
+      return 'P1’s r value must be a number.';
+    }
+    const theta1 = ip.parse(cal.getPoint(1)?.dy ?? null);
+    if (!ip.isValid || ip.isDate || typeof theta1 !== 'number') {
+      return 'P1’s θ value must be a number.';
+    }
+    const r2 = ip.parse(cal.getPoint(2)?.dx ?? null);
+    if (!ip.isValid || ip.isDate || typeof r2 !== 'number') {
+      return 'P2’s r value must be a number.';
+    }
+    return null;
+  },
   buildAxes(cal, ctx) {
     const axes = new PolarAxes();
     const ok = axes.calibrate(

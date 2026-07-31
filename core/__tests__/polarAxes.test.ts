@@ -124,3 +124,58 @@ describe('PolarAxes — what it does NOT provide', () => {
     expect(polar().dataToPixel(10, 90)).toEqual({ x: 0, y: 0 });
   });
 });
+
+/**
+ * v2.0 pre-launch audit: `calibrate()` performed NO input validation at all --
+ * r1/theta1/r2/theta2 went through a bare `Number()`, bypassing InputParser
+ * entirely, and processCalibration always returned true. `"abc"` for a radius
+ * gave `NaN`, baked into every subsequent reading, with calibrate() reporting
+ * success and nothing on screen wrong.
+ */
+describe('PolarAxes.calibrate refuses invalid input instead of succeeding silently', () => {
+  function calibrateWith(r1: string, theta1: string, r2: string, theta2 = '0'): { ok: boolean; axes: PolarAxes } {
+    const calib = new Calibration(2);
+    calib.addPoint(100, 100, '0', '0');
+    calib.addPoint(200, 100, r1, theta1);
+    calib.addPoint(300, 100, r2, theta2);
+    const axes = new PolarAxes();
+    const ok = axes.calibrate(calib, true, false, false);
+    return { ok, axes };
+  }
+
+  it('refuses a non-numeric radius', () => {
+    const { ok, axes } = calibrateWith('abc', '0', '20');
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a non-numeric angle', () => {
+    const { ok, axes } = calibrateWith('10', 'xyz', '20');
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a thousands separator -- the whole-string rule, like every other axes type', () => {
+    expect(calibrateWith('1,000', '0', '2000').ok).toBe(false);
+  });
+
+  it('refuses a date where a radius or angle is expected', () => {
+    expect(calibrateWith('2024/01/01', '0', '20').ok).toBe(false);
+  });
+
+  it('still calibrates and reads back correctly on healthy input', () => {
+    const { ok, axes } = calibrateWith('10', '0', '20');
+    expect(ok).toBe(true);
+    expect(axes.isCalibrated()).toBe(true);
+    expect(axes.pixelToData(200, 100)[0]).toBeCloseTo(10, 10);
+  });
+
+  it('does NOT refuse on an invalid/blank theta2 -- P2.theta2 is optional and never read', () => {
+    // Same value POLAR_AXES_CONFIG defaults a blank theta2 to on the click
+    // path; a garbage theta2 in a hand-edited file must not block loading a
+    // calibration whose actual math never reads it (see the _theta2r comment
+    // in polar.ts).
+    expect(calibrateWith('10', '0', '20', '0').ok).toBe(true);
+    expect(calibrateWith('10', '0', '20', 'not a number').ok).toBe(true);
+  });
+});
