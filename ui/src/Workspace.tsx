@@ -8146,6 +8146,19 @@ export function Workspace() {
                       const value = col.values[categoryIndex];
                       const tupleIndex = col.tupleIndices[categoryIndex];
                       const isActive = col.seriesIndex === activeDatasetIndex;
+                      // v2.0 pre-launch audit: a half-dragged bar (one corner
+                      // clicked, not dragged) has a tupleIndex but no computed
+                      // value yet -- computeSlotCursorFor only ever defaults
+                      // to the FIRST such half-filled tuple, so a second one
+                      // was unreachable until the first was completed, unlike
+                      // Spider's table which can aim at any of its own empty
+                      // slots directly. Same fix, scoped to the case it's
+                      // actually safe for (see setSlotCursor's own comment on
+                      // why Box Plot stays excluded).
+                      const aimTupleIndex = isActive && value == null && tupleIndex != null ? tupleIndex : null;
+                      const missingGroupIndex =
+                        aimTupleIndex != null ? session.getDataset().getTuple(aimTupleIndex).indexOf(null) : -1;
+                      const aimable = aimTupleIndex != null && missingGroupIndex > -1;
                       return (
                         <td
                           key={col.seriesIndex}
@@ -8153,17 +8166,31 @@ export function Workspace() {
                           // Clicking a cell of an INACTIVE series switches to it --
                           // the same reachability rule Spider's own cells follow,
                           // since deleting a bar (below) is offered on the active
-                          // series only.
+                          // series only. An ACTIVE cell with a half-filled bar aims
+                          // the next capture at its missing corner.
                           onClick={() => {
-                            if (!isActive) handleSelectDataset(col.seriesIndex);
+                            if (!isActive) {
+                              handleSelectDataset(col.seriesIndex);
+                              return;
+                            }
+                            if (aimable && aimTupleIndex != null) {
+                              session.setSlotCursor(aimTupleIndex, missingGroupIndex);
+                              bump();
+                            }
                           }}
-                          title={value == null ? `${col.seriesName} has no ${categoryName} bar` : undefined}
+                          title={
+                            aimable
+                              ? `Click to fill this bar's missing corner next`
+                              : value == null
+                              ? `${col.seriesName} has no ${categoryName} bar`
+                              : undefined
+                          }
                           style={{
                             textAlign: 'right',
                             paddingRight: 16,
                             paddingLeft: 10,
                             borderLeft: `1px solid ${theme.color.border.regular}`,
-                            cursor: isActive ? 'default' : 'pointer',
+                            cursor: isActive && !aimable ? 'default' : 'pointer',
                           }}
                         >
                           {value == null ? (

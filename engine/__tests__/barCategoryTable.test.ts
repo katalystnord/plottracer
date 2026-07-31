@@ -87,6 +87,44 @@ describe('getBarCategoryTable: single series', () => {
   });
 });
 
+describe('setSlotCursor: aiming at a specific half-filled bar (v2.0 audit)', () => {
+  it('lets Bar use it, unlike Box Plot -- reaches an EARLIER half-filled bar without disturbing a later one', () => {
+    // v2.0 pre-launch audit: nextSlot() only ever walks FORWARD from the
+    // cursor's current position (never back to an earlier gap), and any
+    // full recompute (computeSlotCursorFor) starts scanning from tuple 0 --
+    // so once a second bar is started, completing the FIRST one again
+    // without the table's aim was unreachable except by accident. Two
+    // separate half-filled bars, built via explicit aiming the way two
+    // interrupted drags would leave them:
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.addDataPoint(150, 500); // tuple 0, one corner only (Bar 1)
+    expect(session.setSlotCursor(null, 0)).toBe(true); // start a genuinely NEW tuple
+    session.addDataPoint(250, 500); // tuple 1, one corner only (Bar 2)
+    expect(session.getBarCategoryTable().columns[0]!.tupleIndices).toEqual([0, 1]);
+    expect(session.getBarCategoryTable().columns[0]!.values).toEqual([null, null]);
+
+    // The cursor now sits at tuple 1's own remaining slot (nextSlot() walked
+    // forward from where tuple 1 was just filled) -- completing tuple 0
+    // again requires aiming BACK at it directly, exactly what the Bar
+    // table's empty-cell click now does.
+    expect(session.setSlotCursor(0, 1)).toBe(true);
+    session.addDataPoint(150, 420); // fills tuple 0's missing corner directly
+
+    const table = session.getBarCategoryTable();
+    expect(table.columns[0]!.values[0]).not.toBeNull(); // tuple 0 completed
+    expect(table.columns[0]!.values[1]).toBeNull(); // tuple 1 untouched, still half-filled
+  });
+
+  it('still refuses for Box Plot -- a 5-slot object tuple built out of order would be left permanently half-made', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.applyBoxPlotGroups();
+    session.addDataPoint(150, 500); // Min only
+    expect(session.setSlotCursor(0, 3)).toBe(false); // "fill Q3 next" stays refused
+  });
+});
+
 describe('getBarCategoryTable: multiple series sharing the category axis', () => {
   it('a series with no bar for a category shows null, not a missing row', () => {
     // ⚑ prefillTupleCategoryLabel's donor search has no distance THRESHOLD -- it

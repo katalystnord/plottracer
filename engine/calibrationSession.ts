@@ -4386,16 +4386,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * with nothing on screen to say so. Re-taking a reading is delete-then-place,
    * two visible steps, not one silent one.
    *
-   * ⚑ ONLY WHERE SLOTS ARE INDEPENDENT (N x 1D). On a box plot, "fill Q3 next"
-   * would let a box be built out of order and left permanently half-made; that
-   * type's tuples are one object and its cursor walks them as one.
+   * ⚑ INDEPENDENT SLOTS (N x 1D, Spider), OR BAR'S OWN 2-SLOT OBJECT TUPLE.
+   * A 5-slot box plot is refused: "fill Q3 next" would let a box be built out
+   * of order and left permanently half-made, since that tuple's letter
+   * values only mean anything read as a whole. Bar's object tuple has just
+   * two members (its two dragged corners) with no such ordinal risk -- a
+   * capture normally fills both in one drag, but a plain click (not a drag)
+   * can leave one corner missing (BAR_AXES_CONFIG.derivedTupleValue's own
+   * "a half-dragged bar has no value yet" case), and with two or more
+   * missing categories the cursor can only default to the FIRST gap -- the
+   * same reachability problem this method exists to solve for Spider,
+   * v2.0 pre-launch audit. `isBarIntervalShape` is the same predicate this
+   * file already uses to gate Bar-2-slot-specific behaviour elsewhere.
    *
    * `tupleIndex` null aims at a NEW tuple, starting at `groupIndex`.
    */
   setSlotCursor(tupleIndex: number | null, groupIndex: number): boolean {
     const entry = this.activeEntry;
     const dataset = entry.dataset;
-    if (!dataset.hasSlots() || this.config.tupleMembers !== 'independent') return false;
+    if (!dataset.hasSlots()) return false;
+    if (this.config.tupleMembers !== 'independent' && !this.isBarIntervalShape(dataset)) return false;
     if (groupIndex < 0 || groupIndex >= dataset.getSlotNames().length) return false;
     if (tupleIndex !== null) {
       const tuple = dataset.getAllTuples()[tupleIndex];
