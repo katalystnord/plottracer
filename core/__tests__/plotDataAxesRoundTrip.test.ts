@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PlotData } from '../plotData.js';
+import { PlotData, type AnyAxes } from '../plotData.js';
 import { Dataset } from '../dataset.js';
 import { Calibration } from '../calibration.js';
 import { XYAxes } from '../axes/xy.js';
