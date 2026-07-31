@@ -74,4 +74,14 @@ describe('CircularChartRecorderAxes.calibrate refuses invalid input instead of s
     const axes = new CircularChartRecorderAxes();
     expect(axes.isCalibrated()).toBe(false);
   });
+
+  it('refuses fewer than 5 calibration points rather than indexing an out-of-range getPoint() into a crash (v2.0 audit)', () => {
+    const short = new Calibration(2);
+    short.addPoint(200, 150, '0', '0');
+    short.addPoint(150, 100, '', '');
+    const axes = new CircularChartRecorderAxes();
+    expect(axes.calibrate(short, '0', 'week', 'anticlockwise')).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+    expect(new CircularChartRecorderAxes().calibrate(new Calibration(2), '0', 'week', 'anticlockwise')).toBe(false);
+  });
 });

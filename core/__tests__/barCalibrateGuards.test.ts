@@ -98,4 +98,13 @@ describe('BarAxes.calibrate refuses a degenerate (zero-scale) calibration', () =
     const { ok } = calibrateBar('0', '100');
     expect(ok).toBe(true);
   });
+
+  it('refuses fewer than 2 calibration points rather than indexing an out-of-range getPoint() into a crash (v2.0 audit)', () => {
+    const short = new Calibration(2);
+    short.addPoint(100, 300, '0', '0');
+    const axes = new BarAxes();
+    expect(axes.calibrate(short, false, false)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+    expect(new BarAxes().calibrate(new Calibration(2), false, false)).toBe(false);
+  });
 });

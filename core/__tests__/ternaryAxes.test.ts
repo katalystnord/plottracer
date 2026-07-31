@@ -128,3 +128,18 @@ describe('TernaryAxes — what it does NOT provide', () => {
     expect(ternary().dataToPixel(0.5, 0.3, 0.2)).toEqual({ x: 0, y: 0 });
   });
 });
+
+describe('TernaryAxes.calibrate refuses too few calibration points (v2.0 audit)', () => {
+  it('refuses rather than indexing an out-of-range getPoint() into a crash', () => {
+    const calib = new Calibration(3);
+    calib.addPoint(0, 200, '', '');
+    const axes = new TernaryAxes();
+    expect(axes.calibrate(calib, false, true)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses zero points too', () => {
+    const axes = new TernaryAxes();
+    expect(axes.calibrate(new Calibration(3), false, true)).toBe(false);
+  });
+});

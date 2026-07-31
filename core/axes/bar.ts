@@ -65,6 +65,10 @@ export class BarAxes {
   calibrate(calibration: Calibration, isLog: boolean, isRotated: boolean): boolean {
     this.calibration = calibration;
     this._isCalibrated = false;
+    // v2.0 pre-launch audit: guard the count before indexing (see
+    // map.ts/ternary.ts/polar.ts/circularChartRecorder.ts's identical fix
+    // for the full reasoning).
+    if (calibration.getCount() < 2) return false;
     const cp1 = calibration.getPoint(0)!;
     const cp2 = calibration.getPoint(1)!;
 

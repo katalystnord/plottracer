@@ -28,6 +28,12 @@ export class MapAxes {
     origin_location: OriginLocation | null | undefined,
     image_height: number | string
   ): boolean {
+    // v2.0 pre-launch audit: guard the count before indexing, rather than
+    // relying on PlotData.deserialize's blanket try/catch to turn an
+    // out-of-range getPoint()! into a caught TypeError. A hand-edited or
+    // corrupted file with fewer than 2 calibration points is a real input to
+    // this entrance, not a hypothetical one.
+    if (cal.getCount() < 2) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
     this.dist = Math.sqrt(

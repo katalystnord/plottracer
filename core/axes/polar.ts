@@ -38,6 +38,9 @@ export class PolarAxes {
   private alpha0 = 0;
 
   private processCalibration(cal: Calibration, is_degrees: boolean, is_clockwise: boolean, is_log_r: boolean): boolean {
+    // v2.0 pre-launch audit: guard the count before indexing (see
+    // map.ts/ternary.ts's identical fix for the full reasoning).
+    if (cal.getCount() < 3) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
     const cp2 = cal.getPoint(2)!;

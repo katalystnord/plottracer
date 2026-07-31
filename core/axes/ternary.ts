@@ -23,6 +23,13 @@ export class TernaryAxes {
   private isOrientationNormal = true;
 
   private processCalibration(cal: Calibration, range100: boolean, is_normal: boolean): boolean {
+    // v2.0 pre-launch audit: guard the count before indexing (see map.ts's
+    // identical fix for the full reasoning). Only points 0/1 are actually
+    // read here despite numCalibrationPointsRequired() declaring 3 (corner C
+    // is collected but not used by this class's own math) -- guarding on
+    // what this method actually dereferences, not a stricter count nothing
+    // here enforces.
+    if (cal.getCount() < 2) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
 

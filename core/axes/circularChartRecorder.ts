@@ -56,6 +56,9 @@ export class CircularChartRecorderAxes {
 
   calibrate(calib: Calibration, startTimeInput: string, rotationTime: RotationTime, rotationDirection: RotationDirection): boolean {
     this._isCalibrated = false;
+    // v2.0 pre-launch audit: guard the count before indexing (see
+    // map.ts/ternary.ts/polar.ts's identical fix for the full reasoning).
+    if (calib.getCount() < 5) return false;
     const cp0 = calib.getPoint(0)!;
     const cp1 = calib.getPoint(1)!;
     const cp2 = calib.getPoint(2)!;

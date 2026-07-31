@@ -178,4 +178,14 @@ describe('PolarAxes.calibrate refuses invalid input instead of succeeding silent
     expect(calibrateWith('10', '0', '20', '0').ok).toBe(true);
     expect(calibrateWith('10', '0', '20', 'not a number').ok).toBe(true);
   });
+
+  it('refuses fewer than 3 calibration points rather than indexing an out-of-range getPoint() into a crash (v2.0 audit)', () => {
+    const short = new Calibration(2);
+    short.addPoint(100, 100, '0', '0');
+    short.addPoint(200, 100, '10', '0');
+    const axes = new PolarAxes();
+    expect(axes.calibrate(short, true, false, false)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+    expect(new PolarAxes().calibrate(new Calibration(2), true, false, false)).toBe(false);
+  });
 });

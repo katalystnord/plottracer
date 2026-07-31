@@ -85,3 +85,22 @@ describe('MapAxes — what it does NOT provide', () => {
     expect(axes.dataToPixel(100, 100)).toEqual({ x: 0, y: 0 });
   });
 });
+
+describe('MapAxes.calibrate refuses too few calibration points (v2.0 audit)', () => {
+  it('refuses rather than indexing an out-of-range getPoint() into a crash', () => {
+    // A hand-edited or corrupted file with fewer than 2 points for a Map
+    // axes used to hit `cal.getPoint(1)!` with nothing there, throwing a raw
+    // TypeError deep inside core/ (masked in practice only because
+    // PlotData.deserialize wraps the call in a blanket try/catch).
+    const calib = new Calibration(2);
+    calib.addPoint(10, 10, '', '');
+    const axes = new MapAxes();
+    expect(axes.calibrate(calib, '100', 'm', 'top-left', 500)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses zero points too', () => {
+    const axes = new MapAxes();
+    expect(axes.calibrate(new Calibration(2), '100', 'm', 'top-left', 500)).toBe(false);
+  });
+});
