@@ -258,3 +258,99 @@ describe('several sections in one document', () => {
     }
   });
 });
+
+/**
+ * ⚑⚑ WHAT A LABEL CAN DO TO THE FILE IT LANDS IN — round-2 audit.
+ *
+ * Series and category names are attacker-controlled: every importer takes them
+ * verbatim from someone else's file, and `seriesNames.ts` only trims and
+ * de-duplicates. Three separate holes came out of that:
+ *
+ *  - the delimited renderer wrote the section TITLE raw, the one
+ *    user-controlled string it never escaped, so a name with an embedded
+ *    newline injected a fabricated data row;
+ *  - no format neutralised a leading `=`/`+`/`-`/`@`, so a name became an
+ *    executable formula the moment the CSV was opened in a spreadsheet;
+ *  - `Infinity`/`NaN` reached MATLAB, Python and LaTeX as bare identifiers,
+ *    making the whole exported script unparseable — a case R's own writer had
+ *    recognised and the others had not.
+ */
+describe('a hostile label cannot restructure the file', () => {
+  it('⚑ collapses a newline in a section TITLE instead of injecting a row', () => {
+    const evil = 'evil,name\nrow2,9,9';
+    const out = renderTable([section(['x', 'y'], [[1, 2]], evil)], 'csv');
+    const lines = out.split('\n');
+    // Title, header, one data row — four lines would mean the injection worked.
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe('x,y');
+    expect(lines[2]).toBe('1,2');
+  });
+
+  it('carries a comma in a title through as-is — it labels a block, not a row', () => {
+    // Deliberately NOT quoted: the title line is a block label, and the defect
+    // was row INJECTION via a newline, not field-splitting on a comma. Pinned
+    // so the difference stays a decision rather than an accident.
+    expect(renderTable([section(['x'], [[1]], 'a,b')], 'csv').split('\n')[0]).toBe('a,b');
+  });
+});
+
+describe('a label is never handed to a spreadsheet as a formula', () => {
+  for (const lead of ['=', '+', '-', '@']) {
+    it(`neutralises a leading "${lead}" in a data cell`, () => {
+      const out = renderTable([section(['name'], [[`${lead}SUM(A1)`]])], 'csv');
+      expect(out).toContain(`'${lead}SUM(A1)`);
+    });
+  }
+
+  it('neutralises it in a HEADER cell too, where series names land', () => {
+    const out = renderTable([section(['=cmd|calc'], [[1]])], 'csv');
+    expect(out).toContain("'=cmd|calc");
+  });
+
+  it('⚑ leaves NUMBERS alone, including negative ones', () => {
+    // The prefix must not touch a number: -5 is data, not a formula, and
+    // quoting it would corrupt every negative value in the file.
+    const out = renderTable([section(['x'], [[-5], [3.5]])], 'csv');
+    expect(out).toContain('-5');
+    expect(out).not.toContain("'-5");
+  });
+
+  it('leaves an ordinary label untouched', () => {
+    expect(renderTable([section(['name'], [['Flax']])], 'csv')).toContain('Flax');
+    expect(renderTable([section(['name'], [['Flax']])], 'csv')).not.toContain("'Flax");
+  });
+});
+
+describe('a non-finite number does not break the exported script', () => {
+  it('⚑ MATLAB gets Inf/-Inf/NaN, not bare identifiers', () => {
+    const out = renderTable([section(['x'], [[Infinity], [-Infinity], [NaN]])], 'matlab');
+    expect(out).toContain('Inf');
+    expect(out).toContain('-Inf');
+    expect(out).toContain('NaN');
+    expect(out).not.toContain('Infinity');
+  });
+
+  it('⚑ Python gets float("inf"), which actually evaluates', () => {
+    const out = renderTable([section(['x'], [[Infinity], [NaN]])], 'python');
+    expect(out).toContain("float('inf')");
+    expect(out).toContain("float('nan')");
+    expect(out).not.toMatch(/(?<!float\(')Infinity/);
+  });
+
+  it('LaTeX renders infinity as maths rather than the JS spelling', () => {
+    const out = renderTable([section(['x'], [[Infinity]])], 'latex');
+    expect(out).toContain('\\infty');
+    expect(out).not.toContain('Infinity');
+  });
+
+  it('R keeps the spellings it already had', () => {
+    const out = renderTable([section(['x'], [[Infinity], [-Infinity], [NaN]])], 'r');
+    expect(out).toContain('c(Inf, -Inf, NaN)');
+  });
+
+  it('ordinary numbers are unchanged in every format', () => {
+    for (const f of ['csv', 'latex', 'matlab', 'python', 'r'] as const) {
+      expect(renderTable([section(['x'], [[42.5]])], f)).toContain('42.5');
+    }
+  });
+});

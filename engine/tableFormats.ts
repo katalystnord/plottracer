@@ -57,8 +57,28 @@ function commentSafe(value: Cell): string {
 // --- CSV / TSV -------------------------------------------------------------
 
 /** RFC-4180 minimal escaping against whichever delimiter is in use. */
+/**
+ * Cells a spreadsheet would execute rather than display.
+ *
+ * ⚑ A leading `=`, `+`, `-` or `@` makes Excel, LibreOffice and Sheets treat
+ * the cell as a FORMULA. Our labels are attacker-controlled — every importer
+ * takes series and category names verbatim from someone else's file — so a
+ * name like `=cmd|'/C calc'!A0` rides into the CSV as executable content.
+ *
+ * The fix is the standard one and it is lossless: prefix a single quote, which
+ * every spreadsheet strips on display and which a plain CSV reader sees as one
+ * extra character. NOT applied to numbers, which cannot be dangerous and would
+ * be corrupted by it — and not needed in .ods/.xlsx, where the writers declare
+ * a string type (odsExport's `office:value-type`, exceljs's plain string), so
+ * only the type-free text formats need it. (Round-2 audit.)
+ */
+function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
 function escapeDelimited(value: Cell, delimiter: string): string {
-  const s = String(value);
+  const raw = String(value);
+  const s = isNumeric(value) ? raw : neutralizeFormula(raw);
   if (s.includes(delimiter) || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replace(/"/g, '""')}"`;
   }
@@ -67,7 +87,13 @@ function escapeDelimited(value: Cell, delimiter: string): string {
 
 function sectionToDelimited(section: TableSection, delimiter: string): string {
   const lines: string[] = [];
-  if (section.title) lines.push(section.title);
+  // ⚑ The title is user-controlled and was the ONE unescaped string here --
+  // every other renderer routes it through `commentSafe` (latex/matlab/python/
+  // r), and the delimited one was missed. A series named with an embedded
+  // newline and comma (reachable verbatim from a foreign importer's dataset
+  // name, which nothing strips control characters from) injected a fabricated
+  // data row into the middle of the document. (Round-2 audit.)
+  if (section.title) lines.push(commentSafe(section.title));
   for (const row of [section.header, ...section.rows]) {
     lines.push(row.map((c) => escapeDelimited(c, delimiter)).join(delimiter));
   }
@@ -92,7 +118,7 @@ const LATEX_ESCAPES: Record<string, string> = {
   '^': '\\textasciicircum{}',
 };
 function escapeLatex(value: Cell): string {
-  if (isNumeric(value)) return String(value);
+  if (isNumeric(value)) return nonFinite(value, '$\\infty$', '$-\\infty$', 'NaN') ?? String(value);
   return value.replace(/[\\&%$#_{}~^]/g, (c) => LATEX_ESCAPES[c] ?? c);
 }
 
@@ -126,10 +152,22 @@ function varName(title: string | undefined, fallback: string): string {
   return /^[a-z]/.test(id) ? id : fallback;
 }
 
+/** MATLAB/Python/LaTeX spellings for the non-finite doubles. R has its own
+ *  (rScalar), which is where the case was first recognised — and then missed
+ *  everywhere else, so a single Infinity made the whole exported script
+ *  unparseable rather than merely odd. (Round-2 audit.) */
+function nonFinite(n: number, inf: string, negInf: string, nan: string): string | null {
+  if (Number.isNaN(n)) return nan;
+  if (n === Infinity) return inf;
+  if (n === -Infinity) return negInf;
+  return null;
+}
+
 function matlabScalar(c: Cell): string {
   // A newline can't live inside a MATLAB single-quoted string (it's a syntax
   // error, not an escape) -- collapse to a space (v0.8 audit #4).
-  return isNumeric(c) ? String(c) : `'${String(c).replace(/[\r\n]+/g, ' ').replace(/'/g, "''")}'`;
+  if (isNumeric(c)) return nonFinite(c, 'Inf', '-Inf', 'NaN') ?? String(c);
+  return `'${String(c).replace(/[\r\n]+/g, ' ').replace(/'/g, "''")}'`;
 }
 
 function sectionToMatlab(section: TableSection, index: number): string {
@@ -142,7 +180,12 @@ function sectionToMatlab(section: TableSection, index: number): string {
   if (allNumeric) {
     // Numeric matrix: header dropped (a matrix can't hold labels); a blank cell
     // becomes NaN so column positions stay aligned.
-    const rows = section.rows.map((r) => r.map((c) => (c === undefined || c === '' ? 'NaN' : String(c))).join(' '));
+    // ⚑ Through matlabScalar, not String(). This branch formatted its numbers
+    // itself and so missed the non-finite spellings the cell-array branch got
+    // -- a single Infinity made the whole .m file unparseable. (Round-2 audit.)
+    const rows = section.rows.map((r) =>
+      r.map((c) => (c === undefined || c === '' ? 'NaN' : matlabScalar(c))).join(' ')
+    );
     lines.push(`${name} = [`);
     lines.push(rows.map((r) => '    ' + r).join('\n'));
     lines.push('];');
@@ -160,9 +203,8 @@ function pythonScalar(c: Cell): string {
   if (c === undefined || c === '') return 'None';
   // Escape backslash first, then newlines (as \n / \r) and the quote, so an
   // embedded newline can't terminate the string literal (v0.8 audit #4).
-  return isNumeric(c)
-    ? String(c)
-    : `'${String(c).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/'/g, "\\'")}'`;
+  if (isNumeric(c)) return nonFinite(c, "float('inf')", "float('-inf')", "float('nan')") ?? String(c);
+  return `'${String(c).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/'/g, "\\'")}'`;
 }
 
 function sectionToPython(section: TableSection, index: number): string {
