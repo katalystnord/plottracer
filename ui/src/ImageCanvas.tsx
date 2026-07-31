@@ -954,8 +954,28 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    const cssWidth = container.clientWidth;
+    const cssHeight = container.clientHeight;
+    // v2.0 pre-launch audit: this canvas's backing store used to be sized in
+    // CSS pixels with no devicePixelRatio scaling, while Konva's overlay
+    // layer (the markers/handles drawn on top) auto-scales its own backing
+    // canvas to devicePixelRatio. On any HiDPI display -- the default on
+    // macOS, one of this app's three shipping platforms -- the browser
+    // upscales this low-res buffer with SMOOTH interpolation to fill the
+    // physical pixels, defeating `imageSmoothingEnabled = false` just below:
+    // nearest-neighbour scaling is exactly what a plot digitizer needs when
+    // zoomed in on pixel data, and a low-res backing store never gets the
+    // chance to apply it. The figure rendered visibly soft under the crisp
+    // Konva markers sitting on top of it -- a real precision loss for
+    // exactly the audience most likely to notice. `canvas.style.width/height`
+    // pin the on-screen (CSS) size so the element's LAYOUT footprint stays
+    // unchanged; only the backing buffer -- and the transform below, which
+    // must map CSS-pixel view coordinates to this now-larger buffer -- scale.
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -965,16 +985,36 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (image) {
-      ctx.setTransform(view.scale, 0, 0, view.scale, view.offsetX, view.offsetY);
+      ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.offsetX * dpr, view.offsetY * dpr);
       ctx.drawImage(image, 0, 0);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
-    setStageSize({ width: canvas.width, height: canvas.height });
+    // CSS-pixel size, NOT the (now devicePixelRatio-scaled) backing buffer --
+    // this feeds Konva's <Stage> width/height, which are CSS-pixel dimensions
+    // by contract (Konva scales its own backing canvas separately), and
+    // getViewImageRect's screenToImage calls, which expect CSS-pixel mouse
+    // coordinates (getBoundingClientRect() is always CSS pixels).
+    setStageSize({ width: cssWidth, height: cssHeight });
   }, [image, view]);
 
   const onWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+    // v2.0 pre-launch audit: the crop/region/select-marquee/lasso/bar-capture
+    // drag anchor is stored in RAW SCREEN pixels and only converted to image
+    // space at drag-end, using whatever `view` is current THEN -- unlike the
+    // error-bar link-drag, which converts to image space immediately at
+    // mousedown and so is immune to this. A wheel-zoom mid-drag changes
+    // `view` without re-projecting the stored anchor, so the reported
+    // rectangle/polygon silently no longer matches where the drag actually
+    // happened relative to the figure -- for boxMode (v2.0 Bar capture) a
+    // genuine silent-wrong-reading defect. Refusing the zoom while any of
+    // these gestures is in progress is simpler and more robust than
+    // re-deriving the coordinate model to stay live-correct through a zoom
+    // (tenet 10); completing or cancelling the drag first is the same
+    // one-gesture-at-a-time discipline `onStageMouseDown`'s own pan-vs-tool
+    // ordering already imposes.
+    if (cropDragRef.current || lassoRef.current || linkDragRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
