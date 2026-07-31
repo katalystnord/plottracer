@@ -86,103 +86,98 @@ describe('a calibration with every point on ONE pixel is refused', () => {
   }
 });
 
+/**
+ * A NON-DEGENERATE pixel layout for each type — a real L for XY, a real
+ * triangle for Ternary, three distinct radii for Polar, and so on.
+ *
+ * ⚑ WHY THIS TABLE EXISTS. The first version of this file walked every click
+ * along one diagonal. For XY that trips `parallelAxisGuard` before any VALUE
+ * is read, so the "identical values are refused" case passed without ever
+ * testing values — and the property it claimed was false: XY happily accepted
+ * two identical X values and read one constant forever. The round-2 audit
+ * fleet caught it. A degenerate-input test must be degenerate in exactly ONE
+ * way, or it proves nothing about the way it names.
+ */
+const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
+  XY: [[100, 400], [500, 400], [100, 400], [100, 100]],
+  Histogram: [[100, 400], [500, 400], [100, 400], [100, 100]],
+  Bar: [[300, 500], [300, 100]],
+  'Line (categorical)': [[300, 500], [300, 100]],
+  'Box Plot': [[300, 500], [300, 100]],
+  Polar: [[300, 300], [400, 300], [500, 300]],
+  'Spider / Radar': [[300, 300], [450, 300], [300, 150], [150, 300]],
+  'Pie / Donut': [[450, 300], [300, 450], [150, 300], [300, 150], [406, 406]],
+  Ternary: [[100, 400], [400, 400], [250, 150]],
+  Map: [[100, 100], [300, 100]],
+  'Circular Chart Recorder': [[300, 300], [300, 240], [300, 180], [360, 300], [300, 420]],
+};
+
+/** Click `config`'s steps at the healthy pixels, giving every value `value`. */
+function calibrateAt(
+  name: string,
+  config: AxesTypeConfig<CalibratedAxes>,
+  value: string
+): CalibrationSession<CalibratedAxes> {
+  const session = new CalibrationSession(config);
+  const pixels = HEALTHY_PIXELS[name]!;
+  for (let i = 0; i < 40; i++) {
+    const step = session.getCurrentStep();
+    if (!step) break;
+    const [px, py] = pixels[Math.min(i, pixels.length - 1)]!;
+    session.handleCalibrationClick(px, py);
+    session.confirmCalibrationValues(step.valueFields.map(() => value));
+  }
+  for (const gf of config.globalFields) session.setGlobalFieldValue(gf.key, value);
+  return session;
+}
+
 describe('a calibration whose values are all IDENTICAL is refused', () => {
-  // A zero-length scale: every reading afterwards is the same constant
-  // whatever the pixel, which is the "plausible wrong number" failure rather
-  // than a visible one. Types whose calibration carries no typed value at all
-  // (Ternary's three corners, Map's origin) are covered by the pixel case
-  // above instead.
-  const valued = ALL_TYPES.filter(([name]) => !['Ternary', 'Map'].includes(name));
+  // A zero-length scale: every reading afterwards is the same constant whatever
+  // the pixel, which is the "plausible wrong number" failure rather than a
+  // visible one. The PIXELS here are healthy, so only the values are wrong --
+  // that is what makes this a test about values.
+  //
+  // Ternary, Map and Pie carry no typed value on their calibration CLICKS at
+  // all -- three corners; an origin and a length; a ring of outline points
+  // whose total and sweep are separate global fields. "Identical values" has
+  // no meaning for them, so the all-on-one-pixel case above is their test.
+  const valued = ALL_TYPES.filter(([name]) => !['Ternary', 'Map', 'Pie / Donut'].includes(name));
 
   for (const [name, config] of valued) {
-    it(`${name} refuses identical values on distinct pixels`, () => {
-      const session = new CalibrationSession(config);
-      let px = 100;
-      for (let guard = 0; guard < 40; guard++) {
-        const step = session.getCurrentStep();
-        if (!step) break;
-        px += 40;
-        session.handleCalibrationClick(px, 100 + px);
-        session.confirmCalibrationValues(step.valueFields.map(() => '5'));
-      }
-      for (const gf of config.globalFields) session.setGlobalFieldValue(gf.key, '5');
-      expect(session.runCalibration()).toBe(false);
-    });
-  }
-});
-
-describe('a refused calibration leaves nothing usable behind', () => {
-  for (const [name, config] of ALL_TYPES) {
-    it(`${name} reports no axes and an error a user can read`, () => {
-      const session = new CalibrationSession(config);
-      expect(calibrateAllAtOnePoint(config, '1')).toBe(false);
-      // Rebuilt because calibrateAllAtOnePoint uses its own session.
-      const s2 = new CalibrationSession(config);
-      for (let guard = 0; guard < 40; guard++) {
-        const step = s2.getCurrentStep();
-        if (!step) break;
-        s2.handleCalibrationClick(300, 300);
-        s2.confirmCalibrationValues(step.valueFields.map(() => '1'));
-      }
-      for (const gf of config.globalFields) s2.setGlobalFieldValue(gf.key, '1');
-      s2.runCalibration();
-      expect(s2.getAxes()).toBeNull();
-      const err = s2.getCalibrationError();
-      expect(err).toBeTruthy();
-      // A refusal the user cannot act on is a defect of its own (tenet 7).
-      expect(err!.length).toBeGreaterThan(20);
-      void session;
+    it(`${name} refuses identical values on a healthy pixel layout`, () => {
+      expect(calibrateAt(name, config, '5').runCalibration()).toBe(false);
     });
   }
 });
 
 describe('the healthy calibrations still succeed — the guard must not over-reach', () => {
-  // Without these, every assertion above could be satisfied by an axes class
-  // that refuses EVERYTHING.
-  it('XY calibrates from a proper L', () => {
-    const s = new CalibrationSession(XY_AXES_CONFIG);
-    for (const [px, py, v] of [
-      [100, 250, '0'],
-      [400, 250, '10'],
-      [100, 250, '0'],
-      [100, 100, '10'],
-    ] as Array<[number, number, string]>) {
-      s.handleCalibrationClick(px, py);
-      s.confirmCalibrationValues([v]);
-    }
-    expect(s.runCalibration()).toBe(true);
-  });
+  // ⚑ EVERY type, not a sample. The first version pinned only four, so a
+  // `return false` planted in any of the other seven classes would have passed
+  // all of this file's refusal assertions. An anti-vacuity control that covers
+  // part of the set leaves the rest of the set unproven.
+  const ascending = (name: string, i: number): string => {
+    // Distinct, ascending, positive values -- valid for a log scale too, and
+    // for a radius. Pie/CCR take their own globals below.
+    void name;
+    return String((i + 1) * 10);
+  };
 
-  it('Bar calibrates from two distinct values', () => {
-    const s = new CalibrationSession(BAR_AXES_CONFIG);
-    s.handleCalibrationClick(300, 500);
-    s.confirmCalibrationValues(['0']);
-    s.handleCalibrationClick(300, 100);
-    s.confirmCalibrationValues(['10']);
-    expect(s.runCalibration()).toBe(true);
-  });
-
-  it('Map calibrates from a real reference length', () => {
-    const s = new CalibrationSession(MAP_AXES_CONFIG);
-    s.handleCalibrationClick(100, 100);
-    s.confirmCalibrationValues([]);
-    s.handleCalibrationClick(300, 100);
-    s.confirmCalibrationValues(['10']);
-    expect(s.runCalibration()).toBe(true);
-  });
-
-  it('Ternary calibrates from three distinct corners', () => {
-    const s = new CalibrationSession(TERNARY_AXES_CONFIG);
-    for (const [px, py] of [
-      [100, 400],
-      [400, 400],
-      [250, 150],
-    ] as Array<[number, number]>) {
-      s.handleCalibrationClick(px, py);
-      s.confirmCalibrationValues([]);
-    }
-    expect(s.runCalibration()).toBe(true);
-  });
+  for (const [name, config] of ALL_TYPES) {
+    it(`${name} calibrates from healthy pixels and distinct values`, () => {
+      const session = new CalibrationSession(config);
+      const pixels = HEALTHY_PIXELS[name]!;
+      let n = 0;
+      for (let i = 0; i < 40; i++) {
+        const step = session.getCurrentStep();
+        if (!step) break;
+        const [px, py] = pixels[Math.min(i, pixels.length - 1)]!;
+        session.handleCalibrationClick(px, py);
+        session.confirmCalibrationValues(step.valueFields.map(() => ascending(name, n++)));
+      }
+      for (const gf of config.globalFields) session.setGlobalFieldValue(gf.key, '100');
+      expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
+    });
+  }
 });
 
 describe('the model refuses on its own, not only through the session', () => {

@@ -162,6 +162,17 @@ export class PieAxes {
       const p = calibration.getPoint(i);
       if (p) pts.push([p.px, p.py]);
     }
+    // ⚑ THE TOTAL AND THE SWEEP BELONG TO THE FIGURE, NOT TO ITS PROJECTION.
+    // Assigned BEFORE the tilted branch, which returns early: left below it,
+    // a tilted pie kept the field initialisers (100 and 2π) and every sector
+    // was scaled by 100/total, with a tilted half-pie halving every value --
+    // and the slices still summed to the wrong total, so nothing on screen
+    // looked wrong. `derivedTupleValue` reads exactly these two fields, so
+    // this was wrong at CAPTURE time, not only across a round trip.
+    // (v2.0 pre-launch audit, round 2.)
+    this.defaultTotal = defaultTotal;
+    this.sweep = (sweepDegrees * Math.PI) / 180;
+
     if (tilted) {
       // ⚑ A TILTED OR 3D PIE. The figure is an AFFINE image of the circle, and an
       // affine map does not preserve angles — read one flat and a real 2:1 figure
@@ -202,8 +213,6 @@ export class PieAxes {
     this.bx = -this.ay;
     this.by = this.ax;
 
-    this.defaultTotal = defaultTotal;
-    this.sweep = (sweepDegrees * Math.PI) / 180;
     this._isCalibrated = true;
     return true;
   }

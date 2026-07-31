@@ -82,6 +82,17 @@ export class XYAxes {
     if (!ip.isValid || ip.isDate !== this.isYDate) return false;
     this.initialFormattingY = ip.formatting;
 
+    // ⚑ THE TWO VALUES ON EACH AXIS MUST DIFFER. Identical endpoints give the
+    // axis no range: every pixel reads back that one constant, calibrate()
+    // returns true and isCalibrated() agrees, and nothing on screen is wrong.
+    // This is the same rule bar.ts, polar.ts and circularChartRecorder.ts each
+    // gained on 2026-07-31 -- and XY, the most-used type (and Histogram, which
+    // shares this class), was missed by that sweep. Found by the round-2 audit
+    // fleet, which also showed the new class-wide test passed here for an
+    // unrelated reason. Reachable by typing the same tick value twice.
+    if (xmin === xmax) return false;
+    if (ymin === ymax) return false;
+
     this.isLogScaleX = isLogX;
     this.isLogScaleY = isLogY;
     this.noRotationFlag = noRotationCorrection;

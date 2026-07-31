@@ -234,3 +234,69 @@ describe('the tilted pie is why the affine inverse matters', () => {
     expect(naive.reduce((a, b) => a + b, 0)).toBeCloseTo(truth.total, 6);
   });
 });
+
+/**
+ * ⚑⚑ A TILTED PIE READS ITS OWN TOTAL AND SWEEP — v2.0 audit, round 2.
+ *
+ * `PieAxes.calibrate`'s tilted branch returned true BEFORE the two lines that
+ * assign `defaultTotal` and `sweep`, so a tilted or 3D pie kept the field
+ * initialisers (100 and 2π) and every sector was scaled by 100/total — a
+ * tilted half-pie halved every value. `derivedTupleValue` reads exactly those
+ * two fields, so this was wrong at CAPTURE time, not only across a round trip,
+ * and the slices still summed to the (wrong) total so nothing on screen looked
+ * wrong. ~12% of real pie figures in the corpus are 3D.
+ */
+describe('a tilted pie keeps the total and sweep it was given', () => {
+  /** Six points on an ellipse — enough for the five-parameter tilted fit. */
+  function tiltedPie(total: number, sweepDeg: number): PieAxes {
+    const cal = new Calibration(2);
+    for (const [x, y] of [
+      [450, 300],
+      [300, 400],
+      [150, 300],
+      [300, 200],
+      [406, 371],
+      [194, 229],
+    ] as Array<[number, number]>) {
+      cal.addPoint(x, y, '0', '0');
+    }
+    const axes = new PieAxes();
+    expect(axes.calibrate(cal, total, sweepDeg, true)).toBe(true);
+    return axes;
+  }
+
+  it('⚑ keeps a donut’s printed TOTAL rather than falling back to 100', () => {
+    // The documented primary use: "type the total printed in a donut's hole".
+    expect(tiltedPie(184, 360).getDefaultTotal()).toBe(184);
+  });
+
+  it('⚑ keeps a HALF pie’s sweep rather than assuming a full circle', () => {
+    // Assumed 360, every value in a half pie or a gauge is halved.
+    expect(tiltedPie(100, 180).getSweep()).toBeCloseTo(Math.PI, 9);
+  });
+
+  it('agrees with the FLAT path, which is the contract the tilted one broke', () => {
+    const cal = new Calibration(2);
+    for (const [x, y] of [
+      [450, 300],
+      [300, 450],
+      [150, 300],
+      [300, 150],
+    ] as Array<[number, number]>) {
+      cal.addPoint(x, y, '0', '0');
+    }
+    const flat = new PieAxes();
+    expect(flat.calibrate(cal, 184, 180, false)).toBe(true);
+    expect(tiltedPie(184, 180).getDefaultTotal()).toBe(flat.getDefaultTotal());
+    expect(tiltedPie(184, 180).getSweep()).toBeCloseTo(flat.getSweep(), 9);
+  });
+
+  it('still refuses a tilted calibration with too few points to fit an ellipse', () => {
+    // The guard must not have been traded away for the assignment.
+    const cal = new Calibration(2);
+    for (const [x, y] of [[450, 300], [300, 450], [150, 300]] as Array<[number, number]>) {
+      cal.addPoint(x, y, '0', '0');
+    }
+    expect(new PieAxes().calibrate(cal, 184, 180, true)).toBe(false);
+  });
+});

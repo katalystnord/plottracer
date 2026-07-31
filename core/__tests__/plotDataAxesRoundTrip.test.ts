@@ -429,3 +429,74 @@ describe('the reopened project keeps its own relationships', () => {
     expect(reopenedDs.getCount()).toBe(1);
   });
 });
+
+/**
+ * ⚑⚑ THE FIELDS THAT WERE SILENTLY LOST — v2.0 pre-launch audit, round 2.
+ *
+ * This file was written for exactly this failure class, and its Bar block
+ * pinned `isLog` and `isRotated` — the two fields that PREDATE v2.0 — and
+ * stopped. The two v2.0 added, `hasBaseline` and `baselineValue`, were written
+ * by nothing and read by nothing, so a saved Bar project reopened against
+ * BarAxes's defaults and the ONE number the whole bar model exists to produce
+ * silently changed. A floating bar recorded as 5 came back as 7.5.
+ *
+ * The lesson is about the test, not only the code: a round-trip test that
+ * enumerates the fields it knows about will keep passing for every field added
+ * afterwards. These assert the SETTINGS a reader depends on, per class.
+ */
+describe('every Bar setting survives the round trip, not just the pre-v2.0 ones', () => {
+  function roundTripBar(hasBaseline: boolean, baselineValue: number): BarAxes {
+    const cal = new Calibration(2);
+    cal.addPoint(300, 500, '0', '0');
+    cal.addPoint(300, 100, '0', '10');
+    const axes = new BarAxes();
+    expect(axes.calibrate(cal, false, false)).toBe(true);
+    axes.setBaseline(hasBaseline, baselineValue);
+
+    const out = new PlotData();
+    out.addAxes(axes as unknown as AnyAxes);
+    const back = new PlotData();
+    expect(back.deserialize(JSON.parse(JSON.stringify(out.serialize())))).not.toBe(false);
+    return back.getAxesColl()[0] as unknown as BarAxes;
+  }
+
+  it('⚑ carries hasBaseline=false — the FLOATING bar the two-corner drag exists for', () => {
+    // Lost, this reopens as a baseline-anchored bar and every value changes.
+    expect(roundTripBar(false, 0).hasDeclaredBaseline()).toBe(false);
+  });
+
+  it('carries hasBaseline=true', () => {
+    expect(roundTripBar(true, 0).hasDeclaredBaseline()).toBe(true);
+  });
+
+  it('⚑ carries a NON-ZERO baseline value', () => {
+    // A bar chart whose axis starts at 20 is ordinary; reopening it against a
+    // baseline of 0 shifts every reading by 20.
+    expect(roundTripBar(true, 20).getBaselineValue()).toBeCloseTo(20, 9);
+  });
+
+  it('carries a negative baseline', () => {
+    expect(roundTripBar(true, -5).getBaselineValue()).toBeCloseTo(-5, 9);
+  });
+
+  it('reads a file that predates these fields as the defaults it was always read with', () => {
+    // Backward tolerance: an older file simply has no such keys.
+    const out = new PlotData();
+    const cal = new Calibration(2);
+    cal.addPoint(300, 500, '0', '0');
+    cal.addPoint(300, 100, '0', '10');
+    const axes = new BarAxes();
+    axes.calibrate(cal, false, false);
+    out.addAxes(axes as unknown as AnyAxes);
+    const raw = JSON.parse(JSON.stringify(out.serialize())) as {
+      axesColl: Array<Record<string, unknown>>;
+    };
+    delete raw.axesColl[0]!.hasBaseline;
+    delete raw.axesColl[0]!.baselineValue;
+    const back = new PlotData();
+    back.deserialize(raw as never);
+    const restored = back.getAxesColl()[0] as unknown as BarAxes;
+    expect(restored.hasDeclaredBaseline()).toBe(true);
+    expect(restored.getBaselineValue()).toBe(0);
+  });
+});

@@ -81,6 +81,12 @@ export interface SerializedAxesData {
   noRotation?: boolean;
   isLog?: boolean;
   isRotated?: boolean;
+  /** Bar's declared baseline (v2.0). ⚑ Without these two the file loses the
+   * ONE number the whole bar model exists to produce: a reopened project fell
+   * back to BarAxes's defaults (true / 0), so a floating bar recorded as 5
+   * came back as 7.5 with nothing to say it had changed. */
+  hasBaseline?: boolean;
+  baselineValue?: number;
   isDegrees?: boolean;
   isClockwise?: boolean;
   isRange100?: boolean;
@@ -455,6 +461,14 @@ export class PlotData {
         } else if (axData.type === 'BarAxes') {
           axes = new BarAxes();
           axes.calibrate(calibration!, Boolean(axData.isLog), axData.isRotated == null ? false : axData.isRotated);
+          // Absent in any file written before v2.0's audit: fall back to the
+          // class defaults, which is what those files were read as anyway.
+          axes.setBaseline(
+            axData.hasBaseline == null ? true : Boolean(axData.hasBaseline),
+            typeof axData.baselineValue === 'number' && Number.isFinite(axData.baselineValue)
+              ? axData.baselineValue
+              : 0
+          );
         } else if (axData.type === 'PolarAxes') {
           axes = new PolarAxes();
           axes.calibrate(calibration!, Boolean(axData.isDegrees), Boolean(axData.isClockwise), Boolean(axData.isLog));
@@ -675,6 +689,8 @@ export class PlotData {
         axData.type = 'BarAxes';
         axData.isLog = axes.isLog();
         axData.isRotated = axes.isRotated();
+        axData.hasBaseline = axes.hasDeclaredBaseline();
+        axData.baselineValue = axes.getBaselineValue();
       } else if (axes instanceof PolarAxes) {
         axData.type = 'PolarAxes';
         axData.isDegrees = axes.isThetaDegrees();
