@@ -359,33 +359,18 @@ export class PlotData {
     let axes: AnyAxes | null = null;
     if (data.axesType === 'XYAxes') {
       axes = new XYAxes();
-      calibration!.labels = ['X1', 'X2', 'Y1', 'Y2'];
-      calibration!.labelPositions = ['N', 'N', 'E', 'E'];
-      calibration!.maxPointCount = 4;
       axes.calibrate(calibration!, Boolean(params.isLogX), Boolean(params.isLogY), false);
     } else if (data.axesType === 'BarAxes') {
       axes = new BarAxes();
-      calibration!.labels = ['P1', 'P2'];
-      calibration!.labelPositions = ['S', 'S'];
-      calibration!.maxPointCount = 2;
       axes.calibrate(calibration!, Boolean(params.isLog), false);
     } else if (data.axesType === 'PolarAxes') {
       axes = new PolarAxes();
-      calibration!.labels = ['Origin', 'P1', 'P2'];
-      calibration!.labelPositions = ['E', 'S', 'S'];
-      calibration!.maxPointCount = 3;
       axes.calibrate(calibration!, Boolean(params.isDegrees), Boolean(params.isClockwise), false);
     } else if (data.axesType === 'TernaryAxes') {
       axes = new TernaryAxes();
-      calibration!.labels = ['A', 'B', 'C'];
-      calibration!.labelPositions = ['S', 'S', 'E'];
-      calibration!.maxPointCount = 3;
       axes.calibrate(calibration!, Boolean(params.isRange100), Boolean(params.isNormalOrientation));
     } else if (data.axesType === 'MapAxes') {
       axes = new MapAxes();
-      calibration!.labels = ['P1', 'P2'];
-      calibration!.labelPositions = ['S', 'S'];
-      calibration!.maxPointCount = 2;
       axes.calibrate(calibration!, params.scaleLength as number, params.unitString as string, 'top-left', 0);
     } else if (data.axesType === 'ImageAxes') {
       axes = new ImageAxes();
@@ -466,64 +451,34 @@ export class PlotData {
         let axes: AnyAxes | null = null;
         if (axData.type === 'XYAxes') {
           axes = new XYAxes();
-          calibration!.labels = ['X1', 'X2', 'Y1', 'Y2'];
-          calibration!.labelPositions = ['N', 'N', 'E', 'E'];
-          calibration!.maxPointCount = 4;
           axes.calibrate(calibration!, Boolean(axData.isLogX), Boolean(axData.isLogY), Boolean(axData.noRotation));
         } else if (axData.type === 'BarAxes') {
           axes = new BarAxes();
-          calibration!.labels = ['P1', 'P2'];
-          calibration!.labelPositions = ['S', 'S'];
-          calibration!.maxPointCount = 2;
           axes.calibrate(calibration!, Boolean(axData.isLog), axData.isRotated == null ? false : axData.isRotated);
         } else if (axData.type === 'PolarAxes') {
           axes = new PolarAxes();
-          calibration!.labels = ['Origin', 'P1', 'P2'];
-          calibration!.labelPositions = ['E', 'S', 'S'];
-          calibration!.maxPointCount = 3;
           axes.calibrate(calibration!, Boolean(axData.isDegrees), Boolean(axData.isClockwise), Boolean(axData.isLog));
         } else if (axData.type === 'TernaryAxes') {
           axes = new TernaryAxes();
-          calibration!.labels = ['A', 'B', 'C'];
-          calibration!.labelPositions = ['S', 'S', 'E'];
-          calibration!.maxPointCount = 3;
           axes.calibrate(calibration!, Boolean(axData.isRange100), Boolean(axData.isNormalOrientation));
         } else if (axData.type === 'MapAxes') {
           axes = new MapAxes();
-          calibration!.labels = ['P1', 'P2'];
-          calibration!.labelPositions = ['S', 'S'];
-          calibration!.maxPointCount = 2;
           const originLocation = axData.originLocation != null ? axData.originLocation : 'top-left';
           const imageHeight = axData.imageHeight != null ? parseInt(String(axData.imageHeight), 10) : 0;
           axes.calibrate(calibration!, axData.scaleLength!, axData.unitString, originLocation, imageHeight);
         } else if (axData.type === 'SpiderAxes') {
           axes = new SpiderAxes();
-          // Labels are derived from the file, not a fixed list like every type
-          // above: the spoke count is whatever the figure had. The names come off
-          // the calibration points themselves, so a reloaded project shows the same
-          // axis names it was calibrated with.
-          calibration!.labels = ['Origin'];
-          calibration!.labelPositions = ['E'];
-          for (let spokeIdx = 1; spokeIdx < calibration!.getCount(); spokeIdx++) {
-            const dz = calibration!.getPoint(spokeIdx)!.dz;
-            calibration!.labels.push(dz == null || dz === '' ? `Axis ${spokeIdx}` : String(dz));
-            calibration!.labelPositions.push('S');
-          }
-          calibration!.maxPointCount = calibration!.getCount();
+          // The spoke count is whatever the figure had, and each spoke's own name
+          // rides in its calibration point's third slot (dz) -- which is why the
+          // Calibration above was built with 3 dimensions for this type. calibrate()
+          // reads both straight off the points; nothing needs deriving here.
           axes.calibrate(calibration!, Boolean(axData.isLog));
         } else if (axData.type === 'PieAxes') {
           axes = new PieAxes();
           // ⚑ The outline is variable-length, like a spider's spokes -- three points
-          // or more -- so the labels come from the FILE's own point count rather than
-          // a fixed list. A file written with six outline points must reopen with six,
-          // not be silently reduced to the first three.
-          calibration!.labels = [];
-          calibration!.labelPositions = [];
-          for (let i = 0; i < calibration!.getCount(); i++) {
-            calibration!.labels.push(`Outline ${i + 1}`);
-            calibration!.labelPositions.push('S');
-          }
-          calibration!.maxPointCount = calibration!.getCount();
+          // or more -- and calibrate() fits whatever the file holds, so a project
+          // written with six outline points reopens with six rather than being
+          // silently reduced to the first three.
           // The total and the sweep are GLOBAL -- properties of the whole figure, not
           // of any point -- so they ride in the axes metadata, which is the only
           // per-axes home the format has for a value with no pixel attached.
@@ -542,9 +497,6 @@ export class PlotData {
           axes = new ImageAxes();
         } else if (axData.type === 'CircularChartRecorderAxes') {
           axes = new CircularChartRecorderAxes();
-          calibration!.labels = ['(T0,R0)', '(T0,R1)', '(T0,R2)', '(T1,R2)', '(T2,R2)'];
-          calibration!.labelPositions = ['S', 'S', 'S', 'S', 'S'];
-          calibration!.maxPointCount = 5;
           axes.calibrate(
             calibration!,
             axData.startTime as string,
@@ -754,8 +706,18 @@ export class PlotData {
       } else if (axes instanceof PieAxes) {
         axData.type = 'PieAxes';
         // The total and the sweep have no pixel to ride on -- they are global to the
-        // figure -- so the axes metadata is their one home. Written through the shared
-        // metadata block below, which `setMetadata` above has already populated.
+        // figure -- so the axes metadata is their one home, written through the shared
+        // metadata block below and read back at `pieTotal`/`pieSweep`/`pieTilted` in
+        // _deserializeVersion4.
+        //
+        // ⚑ WHO PUTS THEM THERE IS NOT IN THIS FILE, and this comment used to imply
+        // it was ("`setMetadata` above has already populated" -- there is no such call
+        // above, in serialize or in PieAxes.calibrate). It is
+        // engine/calibrationSession.ts's PIE_AXES_CONFIG.buildAxes. PieAxes.calibrate
+        // keeps the total and sweep as plain FIELDS, which serialize never reads, so a
+        // PieAxes built through core/ alone writes no total and reopens at the reader's
+        // 100/360 defaults. Pinned deliberately in plotDataAxesRoundTrip.test.ts rather
+        // than left as folklore.
       } else if (axes instanceof SpiderAxes) {
         axData.type = 'SpiderAxes';
         // Everything else about a spider lives in the calibration points, one per

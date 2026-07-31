@@ -20,10 +20,6 @@ export class Calibration {
   private _dp: (number | string)[] = [];
   private _selections: number[] = [];
 
-  labels: string[] = [];
-  labelPositions: unknown[] = [];
-  maxPointCount = 0;
-
   constructor(dim?: number) {
     this._dim = dim;
     this._dimensions = dim == null ? 2 : dim;
