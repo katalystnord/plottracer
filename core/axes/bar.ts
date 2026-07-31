@@ -42,8 +42,6 @@ export interface Orientation {
 export class BarAxes {
   calibration: Calibration | null = null;
   name = 'Bar';
-  dataPointsHaveLabels = true;
-  dataPointsLabelPrefix = 'Bar';
 
   private _isCalibrated = false;
   private isLogScale = false;

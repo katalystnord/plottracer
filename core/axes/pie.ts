@@ -92,10 +92,6 @@ function normalizeAngle(a: number): number {
 export class PieAxes {
   calibration: Calibration | null = null;
   name = 'Pie';
-  /** A slice IS a category, exactly as a bar is — so the capture and the export
-   * treat them the same way (the `label` metadata, exported as `Category`). */
-  dataPointsHaveLabels = true;
-  dataPointsLabelPrefix = 'Slice';
 
   private _isCalibrated = false;
   private metadata: AxesMetadata = {};

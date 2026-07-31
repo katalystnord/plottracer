@@ -280,11 +280,13 @@ describe('what it declares itself to be', () => {
     expect(new BarAxes().getAxesLabels()).toEqual(['Category', 'Y']);
   });
 
-  it('names its per-point fallback prefix', () => {
-    const axes = new BarAxes();
-    expect(axes.dataPointsHaveLabels).toBe(true);
-    expect(axes.dataPointsLabelPrefix).toBe('Bar');
-    expect(axes.name).toBe('Bar');
+  it('names itself Bar', () => {
+    // dataPointsHaveLabels/dataPointsLabelPrefix used to live here too, but
+    // described a fallback-naming behaviour ("Bar0"/"Slice0") deliberately
+    // deleted in v2.0 (see calibrationSession.ts's own comment on
+    // autoLabelTuple) -- removed as vestigial fields nothing read any more,
+    // rather than left as a stale trap for a future "Bar<i>" regression.
+    expect(new BarAxes().name).toBe('Bar');
   });
 });
 
