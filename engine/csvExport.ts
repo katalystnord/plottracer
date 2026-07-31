@@ -183,10 +183,6 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
     ]),
   };
 }
-export function buildHistogramCSV(bins: readonly (HistogramBin | null)[], rounder: ValueRounder, sep: Delimiter = ','): string {
-  return renderTable([histogramSection(bins, rounder)], delimitedFormat(sep));
-}
-
 /** The Measure tool's recorded results (distance/angle/area/slope) -- a
  * separate collection from the series data, so exported as their own labelled
  * block appended after the data (see docs/competitor-data-panel-study.md §5).
@@ -205,9 +201,11 @@ export function buildHistogramCSV(bins: readonly (HistogramBin | null)[], rounde
  * data.
  *
  * Deliberately still absent, and logged rather than smuggled in here: WPD's
- * per-measurement `Label` column, and Area's `Perimeter` (`core/
- * connectedPoints.ts:183` has the math, unused). Both are real; both are a
- * capability change, not a value-contract change. */
+ * per-measurement `Label` column, and Area's `Perimeter`. Both are real; both
+ * are a capability change, not a value-contract change. (This once pointed at
+ * `core/connectedPoints.ts` for "the math, unused" — that unreachable
+ * getPerimeter was deleted in the 2026-07-31 dead-code sweep, so adding the
+ * column means writing the arithmetic, not wiring up something dormant.) */
 export interface MeasurementCsvRow {
   tool: string;
   value: number;
