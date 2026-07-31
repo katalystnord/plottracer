@@ -2049,6 +2049,25 @@ export const SERIES_COLOR_PALETTE: readonly [number, number, number][] = [
   [127, 127, 127],
 ];
 
+/**
+ * A slot cursor that the given dataset can actually honour.
+ *
+ * A restored cursor is only meaningful against the dataset it was captured
+ * with; anything pointing past the rebuilt tuple array is dropped back to
+ * "start a new tuple" rather than carried forward to throw on the next click.
+ */
+function validCursorFor(
+  dataset: Dataset,
+  cursor: SlotCursor | undefined
+): SlotCursor {
+  const fresh: SlotCursor = { tupleIndex: null, groupIndex: 0 };
+  if (!cursor) return fresh;
+  if (cursor.tupleIndex === null) return { ...cursor };
+  const tuples = dataset.getAllTuples();
+  if (cursor.tupleIndex < 0 || cursor.tupleIndex >= tuples.length) return fresh;
+  return { ...cursor };
+}
+
 export class CalibrationSession<A extends CalibratedAxes> {
   private placed: Record<string, PlacedCalibPoint> = {};
   private stepIndex = 0;
@@ -4579,15 +4598,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // already clears these three fields itself before calling in here, so this
     // is a no-op for that caller; it protects every OTHER caller of this shared
     // helper (e.g. discarding a stranded chain while arming a new explode).
-    if (this.pendingExplodedTuple !== null) {
-      if (this.pendingExplodedTuple === tupleIndex) {
-        this.explodedApexPending = false;
-        this.pendingExplodedTuple = null;
-        this.pendingApex = null;
-      } else if (this.pendingExplodedTuple > tupleIndex) {
-        this.pendingExplodedTuple -= 1;
-      }
-    }
+    this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
   }
 
   /** How many of the armed slice's edges are already placed (0-2); 0 when none is
@@ -5132,6 +5143,30 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * back -- mirrors DeleteDataPointTool's single-point removal path in
    * manualDetectionTools.js (not its whole-tuple-deletion popup, which this
    * checkpoint doesn't add). */
+  /**
+   * Fix up the pending exploded-slice state after a tuple has been spliced out.
+   *
+   * ⚑ ONE OMISSION, FOUR SITES. `pendingExplodedTuple` is a tuple INDEX into an
+   * array that four different methods splice: `removeTuple`, `discardTuple`,
+   * `removeLastPoint` and `removeDataPointAt`. The v2.0 audit fixed the first
+   * two and left the other two calling `dataset.removeTuple` directly, so
+   * deleting the last point of an in-progress exploded sector stranded the
+   * index -- and `addDataPoint` then wrote the DISCARDED apex onto whatever
+   * ordinary sector next landed at that index. Measured: a sector that should
+   * read 33.3 read 19.2, exported and saved, with nothing on screen wrong
+   * except a stuck "click its edges" prompt. (Round-2 audit.)
+   */
+  private fixPendingExplodedAfterTupleRemoval(removedIndex: number): void {
+    if (this.pendingExplodedTuple === null) return;
+    if (this.pendingExplodedTuple === removedIndex) {
+      this.explodedApexPending = false;
+      this.pendingExplodedTuple = null;
+      this.pendingApex = null;
+    } else if (this.pendingExplodedTuple > removedIndex) {
+      this.pendingExplodedTuple -= 1;
+    }
+  }
+
   removeLastPoint(): void {
     const dataset = this.activeEntry.dataset;
     const count = dataset.getCount();
@@ -5144,6 +5179,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       dataset.refreshTuplesAfterPixelRemoval(index);
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
+        this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
       }
       this.previousSlot();
     } else {
@@ -5170,6 +5206,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       dataset.refreshTuplesAfterPixelRemoval(index);
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
+        this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
       }
     } else {
       dataset.removePixelAtIndex(index);
@@ -5352,15 +5389,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // tuple shifts every later one down by one -- same array-splice this
     // method's own pixel removal already accounts for -- so the pending index
     // has to shift with it or it will point at the wrong tuple from here on.
-    if (this.pendingExplodedTuple !== null) {
-      if (this.pendingExplodedTuple === tupleIndex) {
-        this.explodedApexPending = false;
-        this.pendingExplodedTuple = null;
-        this.pendingApex = null;
-      } else if (this.pendingExplodedTuple > tupleIndex) {
-        this.pendingExplodedTuple -= 1;
-      }
-    }
+    this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
   }
 
   /** Whether sortByNearestNeighbour would do anything for the active series --
@@ -5665,9 +5694,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.repeatCount = repeating ? Math.max(repeating.min, snapshot.repeatCount) : 0;
     this.datasetEntries = datasets.map((dataset, i) => ({
       dataset,
-      slotCursor: snapshot.cursors[i]
-        ? { ...snapshot.cursors[i]! }
-        : { tupleIndex: null, groupIndex: 0 },
+      // ⚑ VALIDATE the cursor against the dataset just REBUILT, don't trust it.
+      // `PlotData.serialize` records tuples through their member pixels, so a
+      // tuple with NO pixels is not written at all -- and pie's apex click
+      // mints exactly that. Restoring a snapshot taken at that moment gave a
+      // cursor pointing at tuple 1 of a dataset that now has one tuple, and
+      // the next click threw straight out of the canvas handler:
+      // "Cannot read properties of undefined (reading 'includes')" in
+      // dataset.addToTupleAt. An uncaught throw needs no unusual input -- just
+      // Ctrl+Z at the wrong moment. (Round-2 audit.)
+      slotCursor: validCursorFor(dataset, snapshot.cursors[i]),
     }));
     this.placed = structuredClone(snapshot.placed);
     this.stepIndex = snapshot.stepIndex;
