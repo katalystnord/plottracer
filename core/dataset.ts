@@ -71,14 +71,20 @@ export class Dataset {
   }
 
   setPixelAt(index: number, pxi: number, pyi: number): void {
-    if (index < this._dataPoints.length) {
+    // ⚑ BOTH bounds -- the SAME defect removePixelAtIndex documents below, left
+    // in its two siblings when that one was fixed (2026-07-31 sweep). The upper
+    // test alone lets a NEGATIVE index through (`-1 < length` is true) and the
+    // next line dereferences `_dataPoints[-1]`, throwing a TypeError instead of
+    // doing nothing. A found bug is a search query, not a ticket closed.
+    if (index >= 0 && index < this._dataPoints.length) {
       this._dataPoints[index]!.x = pxi;
       this._dataPoints[index]!.y = pyi;
     }
   }
 
   setMetadataAt(index: number, mdata: PixelMetadata): void {
-    if (index < this._dataPoints.length) {
+    // Both bounds, for the same reason as setPixelAt above.
+    if (index >= 0 && index < this._dataPoints.length) {
       if (mdata != null) {
         if (this._dataPoints[index]!.metadata == null) {
           this._pixelMetadataCount++;
