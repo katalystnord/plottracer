@@ -166,10 +166,20 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
   }
   if (exportShape === 'tuples') {
+    // ⚑ EVERY series when the scope says all. This used to pass only the
+    // active one, so a grouped or stacked Bar chart -- v2.0's headline --
+    // exported ONE series to all nine formats while the shared table on
+    // screen showed them all, and the Active/All toggle was hidden for
+    // tuple shapes so nothing offered a way to get the rest. That is the
+    // same active-series-only defect `AxesTypeConfig.exportShape`'s own doc
+    // records as the v1.4 spider export bug. (Round-2 audit.)
+    const tupleSeries =
+      scope === 'all'
+        ? infos.map((info) => ({ name: info.name, rows: session.getTupleRows(info.index) }))
+        : [{ name: activeName, rows: session.getTupleRows() }];
     return buildTupleSeriesJSON(
-      activeName,
+      tupleSeries,
       session.getSlotNames(),
-      session.getTupleRows(),
       rounder,
       session.getConfig().derivedTupleValue?.label,
       measures
@@ -204,9 +214,20 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   if (exportShape === 'bins') {
     sections.push(histogramSection(session.getHistogramBins(), rounder));
   } else if (exportShape === 'tuples') {
-    sections.push(
-      tupleDataSection(session.getSlotNames(), session.getTupleRows(), rounder, session.getConfig().derivedTupleValue?.label)
-    );
+    // One titled block per series when the scope says all -- see buildExportJson's
+    // note. A single series keeps its untitled block, so existing files are
+    // byte-identical.
+    const derivedLabel = session.getConfig().derivedTupleValue?.label;
+    const slots = session.getSlotNames();
+    const infosForScope = scope === 'all' ? session.getDatasetInfos() : [];
+    if (infosForScope.length > 1) {
+      for (const info of infosForScope) {
+        const block = tupleDataSection(slots, session.getTupleRows(info.index), rounder, derivedLabel);
+        sections.push({ ...block, title: info.name });
+      }
+    } else {
+      sections.push(tupleDataSection(slots, session.getTupleRows(), rounder, derivedLabel));
+    }
   } else if (scope === 'all') {
     const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
       const rel = session.getErrorRelation(info.index);

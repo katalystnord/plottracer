@@ -252,3 +252,59 @@ describe('precision reaches the tuple and bin builders', () => {
     expect(JSON.stringify(full.rows)).not.toBe(JSON.stringify(auto.rows));
   });
 });
+
+/**
+ * ⚑⚑ A MULTI-SERIES BAR CHART EXPORTS EVERY SERIES — round-2 audit.
+ *
+ * `getTupleRows()` read the ACTIVE dataset only, and both the tuple section
+ * builder and the tuple JSON builder were fed it directly — so a grouped or
+ * stacked Bar chart, v2.0's headline, exported ONE series to all nine formats
+ * while the shared table on screen showed them all. The Active/All toggle was
+ * hidden for tuple shapes, so nothing on screen offered a way to get the rest.
+ *
+ * `AxesTypeConfig.exportShape`'s own doc records this exact behaviour as the
+ * v1.4 spider export DEFECT; v2.0 moved Bar into the same branch.
+ */
+describe('a grouped Bar chart exports all of its series', () => {
+  function twoSeriesBar(): CalibrationSession<CalibratedAxes> {
+    const s = barSession();
+    captureBar(s, 150, 300, 'Flax'); // series 1: 5
+    s.addDataset('Series 2');
+    captureBar(s, 160, 100, 'Flax'); // series 2: 10
+    return s;
+  }
+
+  it('⚑ writes one titled block per series in the section export', () => {
+    const sections = buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'all' }));
+    expect(sections).toHaveLength(2);
+    expect(sections.map((x) => x.title)).toEqual(['Series 1', 'Series 2']);
+    const values = sections.map((x) => Number(x.rows[0]![x.header.indexOf('Value')]));
+    expect(values[0]).toBeCloseTo(5, 6);
+    expect(values[1]).toBeCloseTo(10, 6);
+  });
+
+  it('⚑ writes one JSON series entry per series, each with its own name', () => {
+    const doc = JSON.parse(buildExportJson(inputFor(twoSeriesBar(), 'bar', { scope: 'all' })));
+    expect(doc.series).toHaveLength(2);
+    expect(doc.series.map((x: { name: string }) => x.name)).toEqual(['Series 1', 'Series 2']);
+    expect(doc.series[0].tuples[0].Value).toBeCloseTo(5, 6);
+    expect(doc.series[1].tuples[0].Value).toBeCloseTo(10, 6);
+  });
+
+  it('scope "active" still exports only the active series, untitled', () => {
+    // The old behaviour is still available and still the default for a
+    // single-series figure — this is a widening, not a change of meaning.
+    const sections = buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'active' }));
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.title).toBeUndefined();
+    expect(Number(sections[0]!.rows[0]![sections[0]!.header.indexOf('Value')])).toBeCloseTo(10, 6);
+  });
+
+  it('a single-series figure is byte-identical to before — no title appears', () => {
+    const s = barSession();
+    captureBar(s, 150, 300, 'Flax');
+    const sections = buildExportSections(inputFor(s, 'bar', { scope: 'all' }));
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.title).toBeUndefined();
+  });
+});

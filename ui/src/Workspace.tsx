@@ -7940,7 +7940,12 @@ export function Workspace() {
                   Hidden for Box Plot (its export is always the tuple table). */}
               {/* Offered exactly where the scope means something: a flat export
                   honours it, the tuple/bin/error-bar tables do not. */}
-              {session.getExportShape() === 'flat' && (
+              {/* ⚑ Tuple shapes get the toggle too (round-2 audit). Hidden for
+                  them, a grouped Bar chart exported one series to every format
+                  with nothing on screen offering the rest — while the v2.0
+                  shared table showed them all. Bins stay single-series: a
+                  histogram has one. */}
+              {(session.getExportShape() === 'flat' || session.getExportShape() === 'tuples') && (
                 <div data-testid="export-scope" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: theme.font.size.small, color: theme.color.text.legend }}>
                   Export:
                   {(['active', 'all'] as const).map((scope) => (

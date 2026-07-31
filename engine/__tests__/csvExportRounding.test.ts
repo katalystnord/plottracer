@@ -170,9 +170,8 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
   it('keys each slot by its group name and rounds it at dimension 0', () => {
     const doc = JSON.parse(
       buildTupleSeriesJSON(
-        'Slices',
+        [{ name: 'Slices', rows: [tuple(0, 'Flax', [view([12.4]), view([98.6])], null)] }],
         ['start', 'end'],
-        [tuple(0, 'Flax', [view([12.4]), view([98.6])], null)],
         dimRounder,
         undefined
       )
@@ -184,14 +183,14 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
     // The whole-app rule at the export door. A still-open pie boundary read as
     // 0 in a JSON file is a real angle, and nothing downstream can tell.
     const doc = JSON.parse(
-      buildTupleSeriesJSON('Slices', ['start', 'end'], [tuple(0, 'Flax', [view([30]), null], null)], dimRounder, undefined)
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view([30]), null], null)] }], ['start', 'end'], dimRounder, undefined)
     );
     expect(doc.series[0].tuples[0]).toEqual({ category: 'Flax', start: 30, end: null });
   });
 
   it('writes null for a placed pixel that has no data, e.g. before calibration', () => {
     const doc = JSON.parse(
-      buildTupleSeriesJSON('Slices', ['start'], [tuple(0, 'Flax', [view(null)], null)], dimRounder, undefined)
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view(null)], null)] }], ['start'], dimRounder, undefined)
     );
     expect(doc.series[0].tuples[0].start).toBeNull();
   });
@@ -202,14 +201,14 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
     // working dataToPixel, which pie does not have. This rounder mangles
     // anything it touches — so an untouched 42.375 proves it was not touched.
     const doc = JSON.parse(
-      buildTupleSeriesJSON('Slices', ['start'], [tuple(0, 'Flax', [view([30])], 42.375)], dimRounder, 'value')
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view([30])], 42.375)] }], ['start'], dimRounder, 'value')
     );
     expect(doc.series[0].tuples[0].value).toBe(42.375);
   });
 
   it('adds no derived key when the type declares no label', () => {
     const doc = JSON.parse(
-      buildTupleSeriesJSON('Slices', ['start'], [tuple(0, 'Flax', [view([30])], 42)], dimRounder, undefined)
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view([30])], 42)] }], ['start'], dimRounder, undefined)
     );
     expect(doc.series[0].tuples[0]).not.toHaveProperty('value');
   });
@@ -218,13 +217,7 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
     // An incomplete tuple has no derived value to state; the label is declared
     // for the series, so the key must be absent on THAT row alone.
     const doc = JSON.parse(
-      buildTupleSeriesJSON(
-        'Slices',
-        ['start'],
-        [tuple(0, 'Flax', [view([30])], 42), tuple(1, 'Hemp', [view([60])], null)],
-        dimRounder,
-        'value'
-      )
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view([30])], 42), tuple(1, 'Hemp', [view([60])], null)] }], ['start'], dimRounder, 'value')
     );
     expect(doc.series[0].tuples[0].value).toBe(42);
     expect(doc.series[0].tuples[1]).not.toHaveProperty('value');
@@ -232,16 +225,16 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
 
   it('keeps an unnamed category as an empty string, not as a missing key', () => {
     const doc = JSON.parse(
-      buildTupleSeriesJSON('Slices', ['start'], [tuple(0, '', [view([30])], null)], dimRounder, undefined)
+      buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, '', [view([30])], null)] }], ['start'], dimRounder, undefined)
     );
     expect(doc.series[0].tuples[0].category).toBe('');
   });
 
   it('carries measurements, and omits the key when there are none', () => {
-    const none = JSON.parse(buildTupleSeriesJSON('S', ['a'], [], dimRounder, undefined));
+    const none = JSON.parse(buildTupleSeriesJSON([{ name: 'S', rows: [] }], ['a'], dimRounder, undefined));
     expect(none).not.toHaveProperty('measurements');
     const some = JSON.parse(
-      buildTupleSeriesJSON('S', ['a'], [], dimRounder, undefined, [{ tool: 'Angle', value: 45, unit: '°' }])
+      buildTupleSeriesJSON([{ name: 'S', rows: [] }], ['a'], dimRounder, undefined, [{ tool: 'Angle', value: 45, unit: '°' }])
     );
     expect(some.measurements).toEqual([{ tool: 'Angle', value: 45, unit: '°' }]);
   });

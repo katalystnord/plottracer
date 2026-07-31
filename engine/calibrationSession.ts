@@ -3959,8 +3959,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * agreeing with the write as the tuple fills up. `setTupleLabel` keeps exactly one
    * label per tuple, so the scan can stop at the first it finds.
    */
-  getTupleLabel(tupleIndex: number): string {
-    const dataset = this.activeEntry.dataset;
+  getTupleLabel(tupleIndex: number, datasetIndex?: number): string {
+    const dataset = this.datasetAt(datasetIndex);
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple) return '';
     // v2.0: any bar-FAMILY tuple (Bar's interval, Box Plot's letter values)
@@ -4613,8 +4613,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** The apex a sector was measured about, or null for an ordinary slice sharing the
    * pie's fitted centre. Stored per-tuple, read back for every reading. */
-  getSectorApex(tupleIndex: number): { x: number; y: number } | null {
-    const dataset = this.activeEntry.dataset;
+  getSectorApex(tupleIndex: number, datasetIndex?: number): { x: number; y: number } | null {
+    const dataset = this.datasetAt(datasetIndex);
     const primaryIndex = dataset.getAllTuples()[tupleIndex]?.[0];
     if (primaryIndex === null || primaryIndex === undefined) return null;
     const meta = dataset.getPixel(primaryIndex).metadata as Record<string, unknown> | null | undefined;
@@ -4700,11 +4700,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
   }
 
+  /** The dataset at `index`, or the active one when no index is given. */
+  private datasetAt(index?: number): Dataset {
+    if (index === undefined) return this.activeEntry.dataset;
+    return (this.datasetEntries[index] ?? this.activeEntry).dataset;
+  }
+
   /** One row per tuple (category) in the active dataset, in group order --
    * the shape a Box Plot table needs instead of dataDim's flat per-point
    * list. */
-  getTupleRows(): TupleRow[] {
-    const dataset = this.activeEntry.dataset;
+  getTupleRows(datasetIndex?: number): TupleRow[] {
+    // ⚑ Defaults to the ACTIVE series, but takes an index so a multi-series
+    // export can reach the others. Without it every tuple-shaped type (Bar,
+    // Box Plot, Pie) exported exactly one series to all nine formats while the
+    // v2.0 shared table on screen showed them all -- see exportAssembly's
+    // scope handling. (Round-2 audit.)
+    const dataset = this.datasetAt(datasetIndex);
     const derive = this.config.derivedTupleValue;
     return dataset.getAllTuples().map((tuple, tupleIndex) => {
       const points = tuple.map((pixelIndex) => {
@@ -4714,7 +4725,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       });
       return {
         tupleIndex,
-        label: this.getTupleLabel(tupleIndex),
+        label: this.getTupleLabel(tupleIndex, datasetIndex),
         points,
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
@@ -4722,7 +4733,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         derived:
           derive && this.axes
             ? derive.compute(points, this.axes, {
-                apex: this.getSectorApex(tupleIndex),
+                apex: this.getSectorApex(tupleIndex, datasetIndex),
                 stackGroup: this.getDatasetStackGroup(this.activeDatasetIndex),
               })
             : null,

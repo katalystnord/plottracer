@@ -539,15 +539,14 @@ export function buildHistogramJSON(
  * `dataToPixel`, which most non-invertible axes -- pie included -- don't
  * have). */
 export function buildTupleSeriesJSON(
-  name: string,
+  series: readonly { name: string; rows: readonly TupleRow[] }[],
   pointGroupNames: readonly string[],
-  tupleRows: readonly TupleRow[],
   rounder: ValueRounder,
   derivedLabel: string | undefined,
   measurements: readonly MeasurementCsvRow[] = []
 ): string {
   const doc: Record<string, unknown> = {
-    series: [
+    series: series.map(({ name, rows: tupleRows }) => (
       {
         name,
         tuples: tupleRows.map((row) => {
@@ -565,8 +564,8 @@ export function buildTupleSeriesJSON(
           }
           return entry;
         }),
-      },
-    ],
+      }
+    )),
   };
   if (measurements.length > 0) {
     doc.measurements = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
