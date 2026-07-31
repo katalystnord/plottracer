@@ -4788,6 +4788,8 @@ export function Workspace() {
     [session, bump]
   );
 
+  // ⚑ See handleSelectDataset for the requirement this mirrors: per-series
+  // draft state must not leak into the series that takes its place.
   const handleRemoveDataset = useCallback(
     (index: number) => {
       // Confirm deleting a whole series, matching Reset/Remove-figure. Only asks
@@ -4818,6 +4820,14 @@ export function Workspace() {
       if (removingActive) {
         setActivePointIndex(null);
         setSelectedPointIndices([]);
+        // ⚑ The SAME per-series draft state handleSelectDataset clears, and for
+        // its stated reason: a half-typed name belongs to the series it was
+        // typed on, and the Closed-curve toggle must not leak into a series
+        // that has no geometry. Removing the active series is at least as much
+        // of a switch as selecting one. (Round-2 audit.)
+        setNameDraft(null);
+        setNameNotice(null);
+        setGeometryClosed(getGeometryState(session.getDataset())?.closed ?? false);
       }
       commit();
     },
@@ -5538,7 +5548,12 @@ export function Workspace() {
       }
       if (measureError) return `⚠ ${measureError}`;
       if (measureTool === 'slope') {
-        if (!axes || config.id !== 'xy') return 'Slope — calibrate an XY chart first, then click two points on the line.';
+        // ⚑ axesKind, not id. `handleMeasureClick` and the Measure card's own
+        // reference both gate on axesKind, so on a calibrated HISTOGRAM the
+        // slope tool works and the card agrees -- while this line told the
+        // user to "calibrate an XY chart first". The file's own rule:
+        // "Which AXES CLASS is this? -> axesKind, NEVER id." (Round-2 audit.)
+        if (!axes || config.axesKind !== 'xy') return 'Slope — calibrate an XY chart first, then click two points on the line.';
         return pendingMeasure.length === 1
           ? 'Slope — click the second point on the line.'
           : 'Slope — click the first point on the line.';
@@ -5716,7 +5731,14 @@ export function Workspace() {
     // names it again for Bar specifically, same as the generic fallback does.
     if (config.id === 'bar') return 'No points yet — drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.';
     if (config.axesKind === 'bar') return 'No points yet — pick Add points (3) from the tool rail and click the end of each bar.';
-    return 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
+    // ⚑ Only offer Auto-extract where the type HAS it. Pie declares
+    // autoExtractKind 'none', so its rail button is disabled and hotkey 4 is a
+    // no-op -- and this fallback still told a pie user to pick it. That is the
+    // exact contradiction the branch above was written to kill, at a new site.
+    // (Round-2 audit.)
+    return config.autoExtractKind === 'none'
+      ? 'No points yet — pick Add points (3) from the tool rail.'
+      : 'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.';
   })();
 
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;

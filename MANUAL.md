@@ -15,7 +15,7 @@ save, export); the right panel is your extracted data.
 **Open Image** (top bar), or drag an image onto the canvas, or paste from the
 clipboard (`Ctrl+V`). Supported: PNG, JPG, GIF, BMP, WebP, SVG, TIFF, and **PDF**
 (multi-page — you pick the page). Zoom with the scroll wheel (⌘/Ctrl+scroll on a
-trackpad); pan with the middle mouse button, `Space`+drag, or `Ctrl`+arrow keys;
+trackpad); pan with the middle mouse button or `Space`+drag;
 fit the view with `Ctrl+0`.
 
 ## 2. Choose the graph type and calibrate
@@ -24,11 +24,11 @@ Pick the graph type from the **card picker** in the top bar — each type shows 
 own icon, so a bar chart and a histogram are told apart by their shape rather than
 by reading two similar names. The types are **XY** (linear/log/date),
 **Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Ternary**, **Map**,
-**Circular chart recorder**, **Histogram**, **Box plot**, or **Line (categorical
+**Circular chart recorder**, **Histogram**, **Box plot**, or **Line** (categorical
 X)**.
 
 Error bars are not a graph type — they are **rail tool 6**, captured on top of
-whichever series they belong to (§9).
+whichever series they belong to.
 
 Open the **Calibration** card (top-center) and place the reference points it asks
 for — for XY that's two X points and two Y points.
@@ -135,7 +135,7 @@ its row shows a dash until you place the other.
 
 **Auto-extract ▸ By colour also works on Bar and Histogram**, for the same reason:
 a bar blob's own *bounding box* is its two ends, so nothing is averaged or
-centroided away. It is still greyed out for **Box plot** and **Line (categorical
+centroided away. It is still greyed out for **Box plot**, **Line** and **Pie / Donut** (categorical
 X)** — a box's five letter-values and a categorical point are not a bounding box —
 so those two are placed by hand with the loupe.
 
@@ -179,7 +179,7 @@ next. A reading you placed by hand is never overwritten.
   along the category axis, so it lands on the right category however you click and
   whatever you skip. Where the app can't tell which category you meant, it leaves
   the cell **blank** rather than guess.
-- On a **Line (categorical X)** figure the same Category column exists, but the
+- On a **Line** (categorical X) figure the same Category column exists, but the
   names belong to individual *points* rather than to shared rows, since each point
   is its own reading.
 - On a **Spider / Radar** figure the table is one row per axis and one column per
@@ -234,8 +234,8 @@ The card reports the equation, its coefficients, R² and RMS, and draws the fitt
 curve over the figure. **Degree** applies to the polynomial alone and disappears
 for the others.
 
-Some models cannot take some data — a logarithmic fit needs every x and y above
-zero — and PlotTracer says which requirement is unmet rather than returning a
+Some models cannot take some data — a logarithmic fit needs every x above
+zero, a power law the same, an exponential every y above zero — and PlotTracer says which requirement is unmet rather than returning a
 number it cannot stand behind. Use **Restrict** to fit over a chosen x range.
 
 **A fit that did not settle says so.** The nonlinear models are solved
