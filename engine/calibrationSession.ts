@@ -2835,43 +2835,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';
   }
 
-  /**
-   * Where the value axis's BASELINE sits in image pixels, for auto-extract to
-   * exclude before flood-filling — or null when this type has no such line.
-   *
-   * ⚑ WHY IT EXISTS, with a number. In a bar chart the bars stand ON the value
-   * axis, and on a greyscale or dark-inked figure that axis line matches the
-   * bars' own ink. Every bar then connects to every other through it and the
-   * flood returns ONE blob spanning the plot. Measured over all 192 bar figures
-   * of the ICPR corpus (3,234 real bars, 2026-07-31): clearing this one row
-   * takes monochrome-figure recall from 66.2% to 76.5% and overall recall from
-   * 76.9% to 80.8%.
-   *
-   * It is not a guess about where the axis is. The user has already told us, by
-   * calibrating the value axis; this reads that measurement back through
-   * `dataToPixel` and nothing else. Null whenever it cannot be measured —
-   * uncalibrated, no baseline declared, or an axes type that has none — so the
-   * caller simply does not exclude anything.
-   */
-  getAutoExtractBaseline(): { orientation: 'row' | 'column'; at: number } | null {
-    const axes = this.axes as unknown as {
-      isCalibrated?: () => boolean;
-      hasDeclaredBaseline?: () => boolean;
-      getBaselineValue?: () => number;
-      isRotated?: () => boolean;
-      dataToPixel?: (v: number) => { x: number; y: number };
-    } | null;
-    if (!axes?.isCalibrated?.() || !axes.hasDeclaredBaseline?.() || !axes.dataToPixel) return null;
-    const value = axes.getBaselineValue?.();
-    if (value == null || !Number.isFinite(value)) return null;
-    const p = axes.dataToPixel(value);
-    // A rotated chart's baseline is a COLUMN; an upright one's is a row.
-    const rotated = axes.isRotated?.() === true;
-    const at = rotated ? p.x : p.y;
-    if (!Number.isFinite(at)) return null;
-    return { orientation: rotated ? 'column' : 'row', at };
-  }
-
   getExportRows(
     datasetIndex: number,
     mode: PrecisionMode = 'auto'

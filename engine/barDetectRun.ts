@@ -21,7 +21,6 @@
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
-import { clearBand } from '../algorithms/barSplit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 
 export interface DetectedBarBox {
@@ -53,19 +52,10 @@ const MIN_MATCHED_PIXELS = 3;
  * clear message when nothing matches the colour, or when every blob was
  * filtered out, rather than silently adding no bars.
  *
- * ⚑ Bars of the IDENTICAL colour that touch flood into one blob and read as
- * one oversized bar. The Phase 9 survey (2026-07-31, all 192 bar figures of
- * the ICPR corpus, 3,234 real bars) priced that: 98.1% recall where bars do
- * not touch, 81.6% where they do.
- *
- *  - `baseline` clears the calibrated axis row before the flood, so bars that
- *    touch only THROUGH the drawn axis stop being one region. On a greyscale
- *    figure the axis matches the bars' own ink, and that single connection is
- *    what turns a whole plot into one blob. Opt-in: a caller that cannot
- *    measure where the axis is gets exactly the old behaviour.
- * A silhouette-based splitter for the blobs that remain was built and measured
- * against the same corpus and did NOT pay — the note at the foot of
- * algorithms/barSplit.ts records the numbers so it is not rebuilt blind.
+ * ⚑ Bars of the IDENTICAL colour that touch (no gap, no outline between
+ * them) flood into one blob and read as one oversized bar, same as any
+ * flood-fill-based mechanism — not solved here, tracked for the Phase 9
+ * survey pass against real figures rather than papered over with a guess.
  */
 export function runBarDetect(
   data: Uint8ClampedArray | Uint8Array,
@@ -75,29 +65,21 @@ export function runBarDetect(
   tolerance: number,
   mode: ColorFilterMode = 'foreground',
   region?: FilterRegion,
-  opts?: BlobDetectOptions & {
-    /** The calibrated axis line to clear before flooding. */
-    baseline?: { orientation: 'row' | 'column'; at: number; halfWidth?: number };
-  }
+  opts?: BlobDetectOptions
 ): BarDetectResult {
   const { mask, count } = colorFilter(data, width, height, target, tolerance, mode, region);
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the bar colour, or raise the tolerance.' };
   }
-  // Before the flood, not after: the point is to stop the bars ever becoming
-  // one region, which no later step can undo.
-  if (opts?.baseline) clearBand(mask, width, height, opts.baseline);
-
   const blobs = detectBlobs(mask, width, height, opts);
   if (blobs.length === 0) {
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }
-  const boxes = blobs.map((b) => ({
-    start: { x: b.bbox.minX, y: b.bbox.minY },
-    end: { x: b.bbox.maxX, y: b.bbox.maxY },
-  }));
   return {
-    boxes,
+    boxes: blobs.map((b) => ({
+      start: { x: b.bbox.minX, y: b.bbox.minY },
+      end: { x: b.bbox.maxX, y: b.bbox.maxY },
+    })),
     matched: count,
     blobs: blobs.length,
   };
