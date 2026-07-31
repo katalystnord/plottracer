@@ -14,8 +14,6 @@
  * needed here) belongs in a future ui/ or pageManager-equivalent layer.
  */
 
-import { taninverse } from './mathFunctions.js';
-
 export class ConnectedPoints {
   protected _connections: number[][] = [];
   protected _selectedConnectionIndex = -1;
@@ -134,74 +132,10 @@ export class AngleMeasurement extends ConnectedPoints {
   constructor() {
     super(3);
   }
-
-  getAngle(index: number): number | undefined {
-    if (index < this._connections.length && this._connectivity === 3) {
-      const conn = this._connections[index]!;
-      const ang1 = taninverse(-(conn[5]! - conn[3]!), conn[4]! - conn[2]!);
-      const ang2 = taninverse(-(conn[1]! - conn[3]!), conn[0]! - conn[2]!);
-      let ang = ang1 - ang2;
-      ang = (180.0 * ang) / Math.PI;
-      ang = ang < 0 ? ang + 360 : ang;
-      return ang;
-    }
-    return undefined;
-  }
 }
 
 export class AreaMeasurement extends ConnectedPoints {
   constructor() {
     super(-1); // connectivity can vary depending on the number of polygon points
-  }
-
-  getArea(index: number): number {
-    if (index < this._connections.length) {
-      const conn = this._connections[index]!;
-      if (conn.length >= 4) {
-        let totalArea = 0.0;
-        for (let pi = 0; pi < conn.length; pi += 2) {
-          const px1 = conn[pi]!;
-          const py1 = conn[pi + 1]!;
-          let px2: number;
-          let py2: number;
-          if (pi <= conn.length - 4) {
-            px2 = conn[pi + 2]!;
-            py2 = conn[pi + 3]!;
-          } else {
-            px2 = conn[0]!;
-            py2 = conn[1]!;
-          }
-          totalArea += px1 * py2 - px2 * py1;
-        }
-        totalArea /= 2.0;
-        return totalArea;
-      }
-    }
-    return 0;
-  }
-
-  getPerimeter(index: number): number | undefined {
-    if (index < this._connections.length) {
-      const conn = this._connections[index]!;
-      let totalDist = 0.0;
-      let px_prev = 0.0;
-      let py_prev = 0.0;
-      for (let pi = 0; pi < conn.length; pi += 2) {
-        const px = conn[pi]!;
-        const py = conn[pi + 1]!;
-        if (pi >= 2) {
-          totalDist += Math.sqrt((px - px_prev) * (px - px_prev) + (py - py_prev) * (py - py_prev));
-        }
-        if (pi === conn.length - 2 && pi >= 4) {
-          const px0 = conn[0]!;
-          const py0 = conn[1]!;
-          totalDist += Math.sqrt((px - px0) * (px - px0) + (py - py0) * (py - py0));
-        }
-        px_prev = px;
-        py_prev = py;
-      }
-      return totalDist;
-    }
-    return undefined;
   }
 }
