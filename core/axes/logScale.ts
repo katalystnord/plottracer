@@ -32,9 +32,15 @@
  * be positive" would refuse a real figure.
  */
 export function logEndpointsUsable(a: number | null | undefined, b: number | null | undefined): boolean {
-  if (typeof a !== 'number' || typeof b !== 'number') return false;
+  // ⚑ `Number.isFinite`, not `typeof === 'number'`. NaN and Infinity are both
+  // numbers and both slipped through the first version of this guard, written
+  // the same morning: two NaNs "share a sign" (neither is > 0, so the
+  // comparison is false === false), and Infinity is a perfectly positive
+  // number with no finite logarithm. `1e999` parses to Infinity, so this is
+  // reachable by typing, not only by a hand-edited file.
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
   if (a === 0 || b === 0) return false;
-  return a > 0 === b > 0;
+  return (a as number) > 0 === (b as number) > 0;
 }
 
 /**
@@ -45,5 +51,6 @@ export function logPositiveEndpointsUsable(
   a: number | null | undefined,
   b: number | null | undefined
 ): boolean {
-  return typeof a === 'number' && typeof b === 'number' && a > 0 && b > 0;
+  // Finite, for the same reason as above: `Infinity > 0` is true.
+  return Number.isFinite(a) && Number.isFinite(b) && (a as number) > 0 && (b as number) > 0;
 }
