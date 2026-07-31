@@ -208,11 +208,18 @@ describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated 
     expect(p.y).toBeNaN();
   });
 
-  it('returns NaN, not {0,0}, for a degenerate calibration (both references given the same value)', () => {
-    const axes = bar([100, 300], [100, 100], '50', '50');
-    const p = axes.dataToPixel(50);
-    expect(p.x).toBeNaN();
-    expect(p.y).toBeNaN();
+  it('a same-value calibration is refused by calibrate() itself (v2.0 audit), not merely tolerated by dataToPixel', () => {
+    // Was: calibrate() accepted p1===p2 and dataToPixel's own denom===0 guard
+    // caught the fallout. barCalibrateGuards.test.ts now covers the refusal;
+    // dataToPixel's guard stays as defense-in-depth for any future caller
+    // that reaches this state some other way, so it's still exercised via
+    // the uncalibrated-axes case above rather than through calibrate().
+    const cal = new Calibration(2);
+    cal.addPoint(100, 300, '0', '50');
+    cal.addPoint(100, 100, '0', '50');
+    const axes = new BarAxes();
+    expect(axes.calibrate(cal, false, false)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
   });
 });
 

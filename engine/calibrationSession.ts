@@ -1007,6 +1007,33 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
  * for a floating/offset bar's direction — see derivedTupleValue below. */
 export const BAR_INTERVAL_SLOTS = ['Bar start', 'Bar end'] as const;
 
+/**
+ * Shared by every config that calibrates a `BarAxes` (Bar, Categorical Line,
+ * Box Plot): the file-load-visible mirror of the identical-value /
+ * non-positive-log-endpoint refusal `core/axes/bar.ts`'s calibrate() now
+ * applies (v2.0 pre-launch audit). See BAR_AXES_CONFIG.checkValues for why
+ * this has to be declared, not just performed inside calibrate() -- a loaded
+ * file calls calibrate() directly and never inspects its return value, so
+ * without this a bad file opened clean while every bar silently read back
+ * one constant value.
+ */
+function barCalibrationValueCheck(
+  cal: Calibration,
+  options: Readonly<Record<string, string>>
+): string | null {
+  const p1 = parseFloat(String(cal.getPoint(0)?.dy ?? ''));
+  const p2 = parseFloat(String(cal.getPoint(1)?.dy ?? ''));
+  if (Number.isFinite(p1) && Number.isFinite(p2)) {
+    if (p1 === p2) {
+      return 'The two calibration points have the same value — they must be different, or the calibration has no scale.';
+    }
+    if (optionBool(options, 'isLog') && (!(p1 > 0) || !(p2 > 0))) {
+      return 'A log value scale cannot pass through zero or go negative — enter positive values (e.g. 1 and 100).';
+    }
+  }
+  return null;
+}
+
 export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   label: 'Bar',
@@ -1073,14 +1100,14 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
   // refusal a click does (same reasoning as pie's checkValues above it).
-  checkValues(_cal, options) {
+  checkValues(cal, options) {
     if (optionBool(options, 'hasBaseline')) {
       const baseline = parseFloat(options['baselineValue'] ?? '');
       if (!Number.isFinite(baseline)) {
         return 'The baseline value must be a number (0 for an ordinary zero-based bar chart).';
       }
     }
-    return null;
+    return barCalibrationValueCheck(cal, options);
   },
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
@@ -1129,6 +1156,10 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
     { key: 'v2', label: 'V2', color: '#5fb4e0', prompt: 'Click a second, different known value on the Y axis', valueFields: [{ key: 'v2', label: 'value', field: 'dy' }] },
   ],
+  // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
+  checkValues(cal, options) {
+    return barCalibrationValueCheck(cal, options);
+  },
   buildAxes(cal, ctx) {
     // isRotated is false: the value axis is vertical (Y), the category axis
     // horizontal -- the opposite orientation to a "horizontal bars" chart.
@@ -1193,6 +1224,10 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   ],
   extractOptions(axes) {
     return { isLog: String(axes.isLog()), isRotated: String(axes.isRotated()) };
+  },
+  // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
+  checkValues(cal, options) {
+    return barCalibrationValueCheck(cal, options);
   },
   buildAxes(cal, ctx) {
     const axes = new BarAxes();

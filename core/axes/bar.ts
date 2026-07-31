@@ -100,6 +100,19 @@ export class BarAxes {
     if (!ip.isValid || ip.isDate || typeof v1 !== 'number') return false;
     const v2 = ip.parse(cp2.dy);
     if (!ip.isValid || ip.isDate || typeof v2 !== 'number') return false;
+    // ⚑ v2.0 pre-launch audit: SpiderAxes.calibrate() has always refused these
+    // two degenerate cases (centre === known value; non-positive on a log
+    // axis) and BarAxes never got the same guards. Both left calibrate()
+    // reporting success: identical values are a ZERO-SCALE calibration, so
+    // every subsequent bar reads back as that one constant -- a silently
+    // plausible wrong number, not a crash. A non-positive log endpoint sends
+    // Math.log() to -Infinity/NaN, baked into p1/p2 with nothing on screen
+    // wrong. Refusing here also feeds BAR_AXES_CONFIG.checkValues's mirrored
+    // check on the file-load door -- see that config for why the same refusal
+    // has to be declared twice.
+    if (v1 === v2) return false;
+    if (isLog && (!(v1 > 0) || !(v2 > 0))) return false;
+
     this.p1 = v1;
     this.p2 = v2;
 

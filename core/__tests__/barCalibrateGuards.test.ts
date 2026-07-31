@@ -60,3 +60,42 @@ describe('BarAxes.calibrate refuses what it used to accept silently', () => {
     expect(axes.pixelToData(100, 200)[0]).toBeCloseTo(Math.pow(10, 1.5), 4);
   });
 });
+
+/**
+ * v2.0 pre-launch audit: BarAxes.calibrate() had neither of the two guards its
+ * sibling SpiderAxes has always had (core/axes/spider.ts's own `calibrate`,
+ * "centre === known value" / "non-positive on a log axis"). Two live findings:
+ *
+ * A) identical values at both calibration points is a ZERO-SCALE calibration --
+ *    every subsequent bar reads back as that one constant value, with
+ *    calibrate() still reporting success and nothing on screen wrong.
+ * B) a non-positive endpoint on a log-scale bar axis sends Math.log() to
+ *    -Infinity/NaN, baked into p1/p2 silently, again with calibrate() still
+ *    returning true.
+ */
+describe('BarAxes.calibrate refuses a degenerate (zero-scale) calibration', () => {
+  it('refuses two calibration points with the same value', () => {
+    const { ok, axes } = calibrateBar('5', '5');
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a non-positive endpoint on a log-scale axis (zero)', () => {
+    const { ok, axes } = calibrateBar('0', '100', true);
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a negative endpoint on a log-scale axis', () => {
+    const { ok, axes } = calibrateBar('-1', '100', true);
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('does not refuse identical values on the pixel axis, only on the value axis', () => {
+    // Sanity check the new guard is keyed on the parsed VALUE (dy), not on
+    // anything pixel-related -- distinctPixelSteps already owns that case.
+    const { ok } = calibrateBar('0', '100');
+    expect(ok).toBe(true);
+  });
+});
