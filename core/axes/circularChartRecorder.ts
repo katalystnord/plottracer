@@ -91,6 +91,11 @@ export class CircularChartRecorderAxes {
     if (!ip.isValid || ip.isDate || typeof r0Parsed !== 'number') return false;
     const r2Parsed = ip.parse(cp2.dy);
     if (!ip.isValid || ip.isDate || typeof r2Parsed !== 'number') return false;
+    // ⚑ Same rule as polar's and bar's: two identical declared radii give the
+    // radial scale no range, and every reading afterwards comes back null with
+    // calibrate() reporting success. Found 2026-07-31 by
+    // engine/__tests__/everyAxesTypeRefuses.test.ts asking every type at once.
+    if (r0Parsed === r2Parsed) return false;
     const r0 = r0Parsed;
     const r2 = r2Parsed;
 

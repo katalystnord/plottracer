@@ -372,12 +372,20 @@ describe('polar theta units (v1.5 gate blocker)', () => {
     makeDig({
       type: 'Polar',
       thetaUnits,
-      // Centre, then TWO points at a known radius -- what a polar calibration
-      // needs -- with theta in the file's own units.
+      // Centre, then two radial points at DIFFERENT radii -- 100px out at
+      // r=10 and 200px out at r=20, so 100px is 10 radial units.
+      //
+      // ⚑ This fixture used to put both points at r=10 AND at the same pixel
+      // distance from the centre, which is doubly degenerate: our PolarAxes
+      // derives the radial scale from (r2-r1) over (dist20-dist10), so both
+      // were zero and every reading came back NaN. It went unnoticed because
+      // no test asserted a polar VALUE from an imported .dig -- only the
+      // notes and the refusals. Corrected 2026-07-31 when
+      // everyAxesTypeRefuses.test.ts made PolarAxes refuse r1 === r2.
       axisPoints: [
         { sx: 100, sy: 100, gx: 0, gy: 0 },
         { sx: 200, sy: 100, gx: theta, gy: 10 },
-        { sx: 100, sy: 200, gx: theta * 2, gy: 10 },
+        { sx: 300, sy: 100, gx: theta * 2, gy: 20 },
       ],
       curves: [{ name: 'Curve1', pts: [[200, 100] as [number, number]] }],
     });

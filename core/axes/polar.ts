@@ -59,6 +59,17 @@ export class PolarAxes {
     if (!ip.isValid || ip.isDate || typeof theta1Parsed !== 'number') return false;
     const r2Parsed = ip.parse(cp2.dx);
     if (!ip.isValid || ip.isDate || typeof r2Parsed !== 'number') return false;
+    // ⚑ The two declared radii must DIFFER, or the radial scale has no range:
+    // the pixel distance between p1 and p2 maps to a value difference of zero,
+    // so every point in the figure reads back that one constant radius however
+    // far from the origin it sits -- with calibrate() reporting success and
+    // nothing on screen wrong. Exactly the defect `core/axes/bar.ts` carries
+    // the same guard for; found on 2026-07-31 by asking every axes type the
+    // same question at once (engine/__tests__/everyAxesTypeRefuses.test.ts).
+    //
+    // The config's `radialDistinctGuard` checks the two PIXELS are at distinct
+    // radii, which is a different question and does not catch this.
+    if (r1Parsed === r2Parsed) return false;
     this.r1 = r1Parsed;
     this.theta1 = theta1Parsed;
     this.r2 = r2Parsed;

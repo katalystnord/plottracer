@@ -233,3 +233,70 @@ describe('log scales come through the reconstruction', () => {
     expect('error' in fig).toBe(true);
   });
 });
+
+/**
+ * ⚑ AN IMPORTED POLAR FIGURE MUST READ, not merely open.
+ *
+ * The 2026-07-31 audit found that no test anywhere asserted a VALUE read back
+ * from an imported polar `.dig` — only the notes, the unit conversion and the
+ * refusals. The fixture behind those tests was doubly degenerate (both radial
+ * points at the same declared radius AND the same pixel distance from the
+ * centre), so `dist20 - dist10` and `r2 - r1` were both zero and every reading
+ * was NaN. Everything stayed green, because nothing looked.
+ *
+ * This is the missing assertion. It is the project's own rule restated: a test
+ * that checks the SHAPE of an import proves the file parsed, not that the
+ * numbers are right.
+ */
+describe('an imported polar figure reads real values', () => {
+  function polarDig(thetaDeg: number): Uint8Array {
+    // Centre (100,100); 100px out is r=10, 200px out is r=20.
+    const pts = [
+      { sx: 100, sy: 100, gx: 0, gy: 0 },
+      { sx: 200, sy: 100, gx: thetaDeg, gy: 10 },
+      { sx: 300, sy: 100, gx: thetaDeg * 2, gy: 20 },
+    ];
+    const axisXml = pts
+      .map(
+        (p) =>
+          `<Point IsAxisPoint="True" IsXOnly="False">` +
+          `<PositionScreen X="${p.sx}" Y="${p.sy}"/><PositionGraph X="${p.gx}" Y="${p.gy}"/></Point>`
+      )
+      .join('');
+    const body =
+      `<Coords Type="0" TypeString="Polar" ScaleXThetaString="Linear" ScaleYRadiusString="Linear" ` +
+      `UnitsThetaString="Degrees (DDD.DDDDD)"/>` +
+      `<Curve CurveName="Axes"><CurvePoints>${axisXml}</CurvePoints></Curve>` +
+      `<CurvesGraphs><Curve CurveName="Curve1"><CurvePoints>` +
+      // 150px east of the centre — halfway between the two calibration radii.
+      `<Point><PositionScreen X="250" Y="100"/></Point>` +
+      `</CurvePoints></Curve></CurvesGraphs>`;
+    return enc(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n` +
+        `<Document VersionNumber="11.0"><CoordSystem>${body}</CoordSystem></Document>`
+    );
+  }
+
+  it('⚑ reads the RADIUS off the two calibration radii, not as a constant', () => {
+    // 150px out, between r=10 at 100px and r=20 at 200px, is r=15. A
+    // degenerate calibration returns the same number everywhere instead.
+    const project = readEngaugeProject(polarDig(0));
+    if ('error' in project) throw new Error(project.error);
+    const fig = importEngaugeFigure(project);
+    if ('error' in fig) throw new Error(fig.error);
+    const px = fig.datasets[0]!.getPixel(0);
+    const [r] = (fig.axes as unknown as { pixelToData(a: number, b: number): number[] }).pixelToData(px.x, px.y);
+    expect(r).toBeCloseTo(15, 6);
+  });
+
+  it('refuses a polar file whose two radial points declare the SAME radius', () => {
+    // Our model derives the radial scale from the difference; with none there
+    // is no scale, and opening it would read one constant everywhere.
+    const flat = polarDig(45)
+      .reduce((s, b) => s + String.fromCharCode(b), '')
+      .replace('X="300" Y="100"/><PositionGraph X="90" Y="20"', 'X="300" Y="100"/><PositionGraph X="90" Y="10"');
+    const project = readEngaugeProject(enc(flat));
+    if ('error' in project) throw new Error(project.error);
+    expect('error' in importEngaugeFigure(project)).toBe(true);
+  });
+});
