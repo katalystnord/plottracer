@@ -394,7 +394,10 @@ function screenToImage(view: { scale: number; offsetX: number; offsetY: number }
 // series shorter than this row) are filtered, so for a single active series
 // row 0 is [x, y] (or [value] for Bar, [a,b,c] for Ternary, ...). Values are
 // Intl-formatted (pixel columns are gone), so compared with toBeCloseTo.
-async function rowValues(rowIndex = 0): Promise<number[]> {
+// The raw cell text, before the numeric parse -- needed for a date-calibrated
+// column (e.g. CCR's Time), which the table formats as a date STRING
+// (Workspace.tsx's dateFmt branch), not a raw number.
+async function rowCells(rowIndex = 0): Promise<string[]> {
   const cells = await page
     .getByTestId('points-table')
     .locator('tbody tr')
@@ -404,8 +407,10 @@ async function rowValues(rowIndex = 0): Promise<number[]> {
   return cells
     .slice(1)
     .map((c) => c.trim())
-    .filter((c) => c !== '')
-    .map(Number);
+    .filter((c) => c !== '');
+}
+async function rowValues(rowIndex = 0): Promise<number[]> {
+  return (await rowCells(rowIndex)).map(Number);
 }
 async function expectRow(expected: number[], rowIndex = 0, digits = 2): Promise<void> {
   const actual = await rowValues(rowIndex);
@@ -1330,14 +1335,14 @@ describe('Workspace: Circular Chart Recorder axes', () => {
   // live-recalibration plumbing only.
   async function calibrateCCRStandard() {
     await clickAt(200, 200); // (T0,R0)
-    await confirmValues(['2024-01-01 00:00', '1']);
+    await confirmValues(['2024/01/01 00:00', '1']);
     await clickAt(400, 200); // (T0,R1) -- click-only
     await clickAt(300, 100); // (T0,R2)
     await confirmValue('10');
     await clickAt(200, 400); // (T1,R2) -- click-only
     await clickAt(400, 400); // (T2,R2) -- click-only
     await page.locator('[data-testid="global-field-startTime"]').click({ timeout: 5000 });
-    await page.keyboard.type('2024-01-01 00:00');
+    await page.keyboard.type('2024/01/01 00:00');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
@@ -1347,7 +1352,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     expect(await textOf('tips-bar')).toMatch(/1\/5 — \(T0,R0\)/);
 
     await clickAt(200, 200); // (T0,R0): 2 values
-    await confirmValues(['2024-01-01 00:00', '1']);
+    await confirmValues(['2024/01/01 00:00', '1']);
     expect(await textOf('tips-bar')).toMatch(/2\/5 — \(T0,R1\)/);
 
     await clickAt(400, 200); // (T0,R1): click-only, advances immediately
@@ -1373,7 +1378,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     expect(await textOf('calibration-error')).toMatch(/Chart Start Time/);
 
     await page.locator('[data-testid="global-field-startTime"]').click();
-    await page.keyboard.type('2024-01-01 00:00');
+    await page.keyboard.type('2024/01/01 00:00');
     await page.getByTestId('run-calibration').click();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
@@ -1381,10 +1386,14 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // shared-handle clicks in the XY describe block above) and chosen to
     // keep the pen/chart law-of-cosines term inside acos's valid domain.
     await clickAt(300, 320);
-    const data = await rowValues();
-    expect(data).toHaveLength(2);
-    expect(Number.isFinite(data[0])).toBe(true); // time
-    expect(Number.isFinite(data[1])).toBe(true); // magnitude
+    const cells = await rowCells();
+    expect(cells).toHaveLength(2);
+    // Time is date-calibrated (T0 was typed as a real date), so the table
+    // shows a formatted date STRING (Workspace.tsx's dateFmt branch), not a
+    // raw number -- a valid Date can be reconstructed from it.
+    expect(cells[0]).not.toBe('');
+    expect(Number.isNaN(new Date(cells[0]!).getTime())).toBe(false); // time
+    expect(Number.isFinite(Number(cells[1]))).toBe(true); // magnitude
   });
 
   it('dragging the (T0,R1) handle changes the time reading but not the radius (r never depends on it)', async () => {
@@ -1392,7 +1401,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await calibrateCCRStandard();
 
     await clickAt(300, 320);
-    const before = await rowValues();
+    const before = await rowCells();
 
     // (T0,R1) only feeds the pen circle (time/angle), never the chart
     // circle's radial interpolation -- core/axes/circularChartRecorder.ts's
@@ -1406,9 +1415,11 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
     await dragMarker(400, 200, 420, 220);
 
-    const after = await rowValues();
-    expect(after[1]).toBeCloseTo(before[1]!, 6); // r unchanged
-    expect(after[0]).not.toBeCloseTo(before[0]!, 3); // time changed
+    const after = await rowCells();
+    expect(Number(after[1])).toBeCloseTo(Number(before[1]), 6); // r unchanged
+    // Time is date-calibrated (see the test above), so it's a formatted date
+    // STRING here too -- compare the strings, not a NaN Number() of them.
+    expect(after[0]).not.toBe(before[0]);
   });
 });
 

@@ -1,7 +1,17 @@
 /**
- * Faithful TypeScript port of wpd-core's core/axes/circularChartRecorder.js.
+ * TypeScript port of wpd-core's core/axes/circularChartRecorder.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
+ *
+ * ⚑ NO LONGER BYTE-FAITHFUL -- one deliberate divergence, found by the v2.0
+ * pre-launch code review. Upstream reads R0/R2 with a bare `Number()`, never
+ * checks `InputParser.isValid` for the time fields, and ends with an
+ * unconditional `return true` -- the same checkpoint-81 defect class already
+ * fixed on XY/Bar/Ternary/Map, just never ported to this class. `"abc"` for
+ * R0 gave `NaN`, and a blank Chart Start Time silently became the Unix epoch
+ * via `new Date(null)`, both with calibrate() reporting success and nothing
+ * on screen wrong. `isCalibrated()` was also hardcoded `return false` always,
+ * independent of whether calibrate() had even been called.
  */
 
 import { taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts } from '../mathFunctions.js';
@@ -38,11 +48,14 @@ export class CircularChartRecorderAxes {
   rotationDirection: RotationDirection = 'anticlockwise';
   rotationTime: RotationTime = 'week';
 
+  private _isCalibrated = false;
+
   isCalibrated(): boolean {
-    return false;
+    return this._isCalibrated;
   }
 
   calibrate(calib: Calibration, startTimeInput: string, rotationTime: RotationTime, rotationDirection: RotationDirection): boolean {
+    this._isCalibrated = false;
     const cp0 = calib.getPoint(0)!;
     const cp1 = calib.getPoint(1)!;
     const cp2 = calib.getPoint(2)!;
@@ -51,12 +64,16 @@ export class CircularChartRecorderAxes {
 
     const ip = new InputParser();
     const t0 = cp0.dx;
-    this.time0 = ip.parse(t0) as number;
+    const time0 = ip.parse(t0);
+    if (!ip.isValid || typeof time0 !== 'number') return false;
+    this.time0 = time0;
     if (ip.isDate) {
       this.timeFormat = ip.formatting;
     }
     const date0 = new Date(this.time0);
-    this.tStart = ip.parse(startTimeInput) as number;
+    const tStart = ip.parse(startTimeInput);
+    if (!ip.isValid || typeof tStart !== 'number') return false;
+    this.tStart = tStart;
     const dateEnd = new Date(this.tStart);
 
     if (rotationTime === 'week') {
@@ -67,8 +84,12 @@ export class CircularChartRecorderAxes {
       this.tEnd = parseFloat(String(dateEnd.setHours(dateEnd.getHours() + 24)));
     }
 
-    const r0 = Number(cp0.dy);
-    const r2 = Number(cp2.dy);
+    const r0Parsed = ip.parse(cp0.dy);
+    if (!ip.isValid || ip.isDate || typeof r0Parsed !== 'number') return false;
+    const r2Parsed = ip.parse(cp2.dy);
+    if (!ip.isValid || ip.isDate || typeof r2Parsed !== 'number') return false;
+    const r0 = r0Parsed;
+    const r2 = r2Parsed;
 
     const penArcPts: [[number, number], [number, number], [number, number]] = [
       [cp0.px, cp0.py],
@@ -103,6 +124,7 @@ export class CircularChartRecorderAxes {
     this.rotationTime = rotationTime;
     this.calibration = calib;
 
+    this._isCalibrated = true;
     return true;
   }
 

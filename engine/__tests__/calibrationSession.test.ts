@@ -1384,7 +1384,7 @@ describe('CalibrationSession (Map axes)', () => {
 // file's own header comment and CLAUDE.md's checkpoint 20 notes for why.
 function calibrateStandardCCR(session: CalibrationSession<CircularChartRecorderAxes>) {
   expect(session.handleCalibrationClick(200, 200)).toBe('awaiting-value'); // (T0,R0)
-  expect(session.confirmCalibrationValues(['2024-01-01 00:00', '1'])).toBe(true);
+  expect(session.confirmCalibrationValues(['2024/01/01 00:00', '1'])).toBe(true);
   expect(session.handleCalibrationClick(400, 200)).toBe('point-placed'); // (T0,R1)
   expect(session.handleCalibrationClick(300, 100)).toBe('awaiting-value'); // (T0,R2)
   expect(session.confirmCalibrationValues(['10'])).toBe(true);
@@ -1413,7 +1413,7 @@ describe('CalibrationSession (Circular Chart Recorder axes)', () => {
   it('runs calibration once the global field is filled, reading back a known radial value exactly', () => {
     const session = new CalibrationSession(CIRCULAR_CHART_RECORDER_AXES_CONFIG);
     calibrateStandardCCR(session);
-    session.setGlobalFieldValue('startTime', '2024-01-01 00:00');
+    session.setGlobalFieldValue('startTime', '2024/01/01 00:00');
     expect(session.runCalibration()).toBe(true);
     expect(session.isCalibrated()).toBe(true);
     expect(session.getCalibrationError()).toBeNull();

@@ -36,13 +36,13 @@ describe('getTableValueLabels — table headers match the file', () => {
     // The exact 5-step CCR calibration the engine's own suite uses.
     const s = new CalibrationSession(CIRCULAR_CHART_RECORDER_AXES_CONFIG);
     expect(s.handleCalibrationClick(200, 200)).toBe('awaiting-value');
-    expect(s.confirmCalibrationValues(['2024-01-01 00:00', '1'])).toBe(true);
+    expect(s.confirmCalibrationValues(['2024/01/01 00:00', '1'])).toBe(true);
     expect(s.handleCalibrationClick(400, 200)).toBe('point-placed');
     expect(s.handleCalibrationClick(300, 100)).toBe('awaiting-value');
     expect(s.confirmCalibrationValues(['10'])).toBe(true);
     expect(s.handleCalibrationClick(200, 400)).toBe('point-placed');
     expect(s.handleCalibrationClick(400, 400)).toBe('point-placed');
-    s.setGlobalFieldValue('startTime', '2024-01-01 00:00'); // CCR's Chart Start Time
+    s.setGlobalFieldValue('startTime', '2024/01/01 00:00'); // CCR's Chart Start Time
     expect(s.runCalibration()).toBe(true);
 
     // The whole point of the fix: table == file, and NOT the old diverged labels.

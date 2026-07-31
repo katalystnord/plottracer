@@ -181,6 +181,7 @@
  */
 
 import { Calibration } from '../core/calibration.js';
+import { InputParser } from '../core/inputParser.js';
 import { Dataset } from '../core/dataset.js';
 import { Color } from '../core/color.js';
 import { XYAxes } from '../core/axes/xy.js';
@@ -1460,6 +1461,32 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
       valueFields: [],
     },
   ],
+  // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
+  // refusal a click does (v2.0 pre-launch audit; same reasoning as Bar's own
+  // checkValues). plotData.deserialize calls axes.calibrate() directly and
+  // never inspects its return value, so a file with an invalid R0/R2 or a
+  // blank/malformed Chart Start Time would otherwise open clean while every
+  // reading was silently wrong (or, for the blank start time, epoch-relative).
+  checkValues(cal, options, globalValues) {
+    const ip = new InputParser();
+    const t0 = ip.parse(cal.getPoint(0)?.dx ?? null);
+    if (!ip.isValid || typeof t0 !== 'number') {
+      return 'The first point’s Time value must be a number or a date.';
+    }
+    const startTime = ip.parse(globalValues['startTime'] ?? '');
+    if (!ip.isValid || typeof startTime !== 'number') {
+      return 'Chart Start Time must be a number or a date.';
+    }
+    const r0 = ip.parse(cal.getPoint(0)?.dy ?? null);
+    if (!ip.isValid || ip.isDate || typeof r0 !== 'number') {
+      return 'The first point’s Value (R0) must be a number.';
+    }
+    const r2 = ip.parse(cal.getPoint(2)?.dy ?? null);
+    if (!ip.isValid || ip.isDate || typeof r2 !== 'number') {
+      return 'The third point’s Value (R2) must be a number.';
+    }
+    return null;
+  },
   buildAxes(cal, ctx) {
     const axes = new CircularChartRecorderAxes();
     const startTime = ctx.globalValues['startTime'] ?? '';
