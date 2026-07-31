@@ -78,6 +78,21 @@ export function Loupe({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // ⚑ DPR-SCALE THE BACKING STORE, for the same reason ImageCanvas does.
+    // A CSS-resolution buffer gets SMOOTHLY upscaled by the browser to fill
+    // physical pixels, which defeats `imageSmoothingEnabled = false` — and
+    // nearest-neighbour is exactly what a plot digitizer needs. The loupe is
+    // the one surface whose entire job is pixel precision, and it was the one
+    // still soft on a HiDPI display. (Round-2 audit.)
+    const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
+    if (canvas.width !== SIZE * dpr || canvas.height !== SIZE * dpr) {
+      canvas.width = SIZE * dpr;
+      canvas.height = SIZE * dpr;
+    }
+    canvas.style.width = `${SIZE}px`;
+    canvas.style.height = `${SIZE}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, SIZE, SIZE);
 
@@ -192,7 +207,9 @@ export function Loupe({
         zIndex: 1150,
       }}
     >
-      <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ display: 'block' }} />
+      {/* Sized in the effect above: the backing store is DPR-scaled while the
+          CSS box stays SIZE, so the magnifier renders at device resolution. */}
+      <canvas ref={canvasRef} style={{ display: 'block', width: SIZE, height: SIZE }} />
     </div>
   );
 }

@@ -39,13 +39,23 @@ import type { LoadedDocument } from './pagedDocument.js';
 pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
 
 /** Target ~3000px on the page's longest side (checkpoint 99, up from 2000).
- * Clamped: never below 1.5× (a huge page stays sane) nor above 6× (a small /
- * figure-only PDF shouldn't blow up memory). For a standard ~800pt page this
+ * Clamped: never below 1× nor above 6× (a small / figure-only PDF shouldn't
+ * blow up memory).
+ *
+ * ⚑ THE FLOOR USED TO BE 1.5x AND ITS COMMENT HAD THE EFFECT BACKWARDS
+ * ("a huge page stays sane"). `Math.max` makes a floor bind only when the
+ * target asks for LESS — i.e. only on pages longer than 2000pt — so it never
+ * protected a huge page, it inflated one. An A0 poster (2384x3370pt, routine
+ * for conference figures) asked for 0.89x and was forced to 1.5x: 3576x5055 =
+ * 18 Mpx, held simultaneously as a canvas, a base64 PNG, a decoded image and
+ * an ImageData, about 220 MB resident for one page and 1.7x more than the
+ * resolution target itself requested. At 1x the same page lands near the
+ * target instead. (Round-2 audit.) For a standard ~800pt page this
  * gives ~3.7×, so the target governs and MAX rarely binds; MAX only caps small
  * pages that would otherwise scale past it. A 3000px-longest page is ~6–9M
  * pixels — a few MB as a PNG, which is what the baked image / project carries. */
 const TARGET_LONGEST_PX = 3000;
-const MIN_SCALE = 1.5;
+const MIN_SCALE = 1;
 const MAX_SCALE = 6;
 
 // PDF detection lives in engine/pdfDetect.ts (isPdfBytes) -- kept out of this
