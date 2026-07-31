@@ -1868,11 +1868,20 @@ export function Workspace() {
       const currentSrc = imageCanvasRef.current?.getImageDataURL() ?? null;
       if (snapshot.imageSrc && snapshot.imageSrc !== currentSrc) {
         imageCanvasRef.current?.loadImageFromSrc(snapshot.imageSrc, imageCanvasRef.current?.getImageFileName() ?? undefined);
+        // v2.0 pre-launch audit: every FORWARD image-changing path (crop/
+        // rotate/flip/deskew) already clears the By-colour trace region here
+        // (audit C, 2026-07-22) because it's stored in raw pixel coordinates
+        // that are meaningless against a different image -- restoreDoc, the
+        // one function ALL undo/redo goes through across an image edit, was
+        // the one entrance that didn't. Undo/redo back across an edit left a
+        // stale region that silently searched the wrong pixel space on the
+        // next By-colour trace.
+        setColorTraceRegion(null);
       }
       syncAfterRestore();
       bump();
     },
-    [applyMeasurements, applyMeasureScale, applyProvenance, setPending, syncAfterRestore, bump]
+    [applyMeasurements, applyMeasureScale, applyProvenance, setPending, setColorTraceRegion, syncAfterRestore, bump]
   );
   const undo = useCallback(() => {
     const snapshot = history.undo();

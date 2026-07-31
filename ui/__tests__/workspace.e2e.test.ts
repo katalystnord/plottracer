@@ -3598,6 +3598,40 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     expect(await previewCount()).toBeLessThan(wholeCount);
   });
 
+  it('undo/redo across an image edit clears a By-colour region drawn AFTER the edit (v2.0 audit)', async () => {
+    // Every FORWARD image-changing path (rotate/flip/crop/deskew) already
+    // clears the trace region -- it's stored in raw pixel coordinates,
+    // meaningless against a different image. restoreDoc (the one function
+    // ALL undo/redo goes through) was the one entrance that didn't: rotate
+    // the image (region auto-clears, confirmed below) -> draw a NEW region
+    // in the POST-rotate pixel space -> undo the rotate back to the
+    // PRE-rotate image. Without the fix the stale region survives and would
+    // silently search the wrong pixel space on the next trace.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-rotate-cw').click();
+    await page.waitForTimeout(400);
+
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-region-clear').click(); // start from "no region"
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0);
+
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + 480, canvasBox.y + 160);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + 620, canvasBox.y + 320, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1); // region set, post-rotate space
+
+    await page.keyboard.press('Control+z'); // undo the rotate -> pre-rotate image
+    await page.waitForTimeout(400);
+    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0); // stale region must not survive
+    expect(await page.getByTestId('color-trace-region-hint').isVisible()).toBe(true);
+  });
+
   // v1.2: the trace eyedropper still samples despite the region marquee now being
   // always-live in By-colour -- the gate excludes the armed eyedropper, so its
   // click is consumed as a colour sample, not swallowed by a region drag. (Also
