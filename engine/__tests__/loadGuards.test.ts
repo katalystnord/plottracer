@@ -15,22 +15,47 @@ import { Dataset } from '../../core/dataset.js';
  * is the door that was unguarded.
  *
  * The premise worth restating, because it is the whole reason the guards exist
- * (calibrationSession.ts:341): **every axes class reports success on degenerate
+ * (calibrationSession.ts:341): **an axes class reports success on degenerate
  * input.** `calibrate()` returning true proves nothing. Each test below asserts
  * that first, so a future reader can see the guard is load-bearing rather than
  * belt-and-braces.
+ *
+ * ⚑ UPDATED 2026-07-31: that premise is now NARROWER, and deliberately so. The
+ * LOG cases are refused by the model itself — `core/axes/xy.ts` and
+ * `polar.ts` were fed `Math.log(0)`/`Math.log(negative)` and returned true
+ * anyway, which the StarryDigitizer importer trusted. So `calibrate()` now
+ * answers `false` for those, and the helper below says which answer each case
+ * expects rather than assuming one.
+ *
+ * ⚑ It changes NOTHING about this file's subject. `loadCalibrated` builds its
+ * state from the axes instance it is handed and never consults
+ * `axes.isCalibrated()`, so a refused log project still opens with its points
+ * intact and the reason on screen — which is the whole "surface, don't refuse"
+ * decision below. And every OTHER degenerate shape here (coincident points,
+ * collinear axes, equal radii) still gets `true` out of `calibrate()`, so the
+ * session guards remain exactly as load-bearing as they were.
  */
 
-/** Build an XYAxes exactly as the load path does: calibrate() directly, no session. */
-function loadedXY(points: Array<[number, number, string, string]>, isLogY = false): XYAxes {
+/**
+ * Build an XYAxes exactly as the load path does: calibrate() directly, no session.
+ *
+ * `expectCalibrateOk` states the premise each case rests on, rather than
+ * assuming one for all of them: `false` for a log scale the model now refuses
+ * outright, `true` for every other degenerate shape — where `calibrate()` is
+ * still perfectly happy with input the click path rejects, which is what makes
+ * the session's own guard load-bearing.
+ */
+function loadedXY(
+  points: Array<[number, number, string, string]>,
+  isLogY = false,
+  expectCalibrateOk = true
+): XYAxes {
   const cal = new Calibration(2);
   for (const [px, py, dx, dy] of points) cal.addPoint(px, py, dx, dy);
   const axes = new XYAxes();
   // (calib, isLogX, isLogY, noRotationCorrection). noRotationCorrection=false
   // matches checkpoint 68's default — WPD applies tilt correction, and so do we.
-  const ok = axes.calibrate(cal, false, isLogY, false);
-  // The premise: the axes is perfectly happy with input the click path refuses.
-  expect(ok).toBe(true);
+  expect(axes.calibrate(cal, false, isLogY, false)).toBe(expectCalibrateOk);
   return axes;
 }
 
@@ -45,7 +70,8 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
         [100, 300, '0', '0'],
         [100, 0, '0', '1000'],
       ],
-      true
+      true,
+      false // the model refuses a log axis through zero (2026-07-31)
     );
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [new Dataset(2)]);
@@ -80,7 +106,8 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
         [100, 300, '0', '0'],
         [100, 0, '0', '1000'],
       ],
-      true
+      true,
+      false // the model refuses a log axis through zero (2026-07-31)
     );
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [dataset]);
@@ -106,7 +133,8 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
         [100, 300, '0', '0'],
         [100, 0, '0', '1000'],
       ],
-      true
+      true,
+      false // the model refuses a log axis through zero (2026-07-31)
     );
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [new Dataset(2)]);
@@ -166,7 +194,8 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
         [100, 300, '0', '0'],
         [100, 0, '0', '1000'],
       ],
-      true
+      true,
+      false // the model refuses a log axis through zero (2026-07-31)
     );
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [new Dataset(2)]);
@@ -185,7 +214,8 @@ describe('A3 — the load path runs the same refusals as the click path', () => 
         [100, 300, '0', '-5'],
         [100, 0, '0', '1000'],
       ],
-      true
+      true,
+      false // the model refuses a sign-mixed log axis too (2026-07-31)
     );
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.loadCalibrated(axes, [new Dataset(2)]);

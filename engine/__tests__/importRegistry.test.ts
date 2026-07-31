@@ -5,7 +5,7 @@
  * project files are copied into this tree.
  */
 import { describe, it, expect } from 'vitest';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8 } from 'fflate';
 import {
   identifyProject,
   unsupportedFileMessage,
@@ -283,5 +283,221 @@ describe('StarryDigitizer: an absent considerGraphTilt (v1.5 gate)', () => {
     const absent = readAt(tilted({}));
     const explicitTrue = readAt(tilted({ considerGraphTilt: true }));
     expect(Math.abs(absent[1]! - explicitTrue[1]!)).toBeGreaterThan(1e-6);
+  });
+});
+
+/**
+ * The StarryDigitizer reader's PER-FIELD guards.
+ *
+ * ⚑ WHY THIS BLOCK EXISTS. `starryImport.ts` scored 55.94% with 61 mutants
+ * unnoticed, clustered in exactly the places the tests above step over: the
+ * four-way calibration-point check, the per-coordinate type and finiteness
+ * guards, dataset selection by axis set, and the image lookup.
+ *
+ * A foreign file is the one input we do not control the shape of. Tenet 6
+ * puts all interoperability at the FILE level, which means this reader is
+ * where another tool's model is translated into ours — and the translation
+ * must refuse loudly rather than produce a figure whose numbers are quietly
+ * wrong. Each guard below is the difference between those two outcomes.
+ */
+describe('StarryDigitizer: refusing an axis point it cannot read', () => {
+  const withAxis = (over: Record<string, unknown>) =>
+    importStarryProject(makeStarry({ axisSets: [starryAxisSet(1, 'A', over) as unknown] }));
+
+  for (const which of ['x1', 'x2', 'y1', 'y2']) {
+    it(`refuses when ${which} is missing entirely`, () => {
+      // All FOUR are checked. Any one dropped from the condition lets a
+      // calibration through with a garbage point, and the scale is then wrong
+      // for every value in the file.
+      const r = withAxis({ [which]: undefined });
+      expect('error' in r && r.error).toMatch(/incomplete/i);
+    });
+
+    it(`refuses when ${which} has no coordinate`, () => {
+      const r = withAxis({ [which]: { name: which, value: 5 } });
+      expect('error' in r && r.error).toMatch(/incomplete/i);
+    });
+  }
+
+  it('⚑ refuses a coordinate that is present but not a NUMBER', () => {
+    // Their file is JSON, so a string "100" is what a hand-edited or
+    // differently-versioned file plausibly holds. Coerced it would calibrate;
+    // refused it says so.
+    expect(
+      'error' in withAxis({ x1: { name: 'x1', value: 0, coord: { xPx: '100', yPx: 500 } } })
+    ).toBe(true);
+    expect(
+      'error' in withAxis({ x1: { name: 'x1', value: 0, coord: { xPx: 100, yPx: null } } })
+    ).toBe(true);
+  });
+
+  it('refuses an axis VALUE that is not a number', () => {
+    expect('error' in withAxis({ y2: { name: 'y2', value: '1', coord: { xPx: 100, yPx: 100 } } })).toBe(true);
+  });
+
+  it('⚑ refuses NaN and Infinity, which ARE numbers and would calibrate', () => {
+    // `typeof` alone passes both. NaN would make every derived value NaN;
+    // Infinity would make the scale zero. Neither is visible as an error
+    // anywhere downstream.
+    expect('error' in withAxis({ x2: { name: 'x2', value: Infinity, coord: { xPx: 600, yPx: 500 } } })).toBe(true);
+    expect('error' in withAxis({ x2: { name: 'x2', value: 10, coord: { xPx: NaN, yPx: 500 } } })).toBe(true);
+  });
+
+  it('names the LOG scale specifically when a log calibration is what failed', () => {
+    // Two different refusals share one code path; the log one has to name the
+    // requirement, because "greater than zero" is the whole fix.
+    const bad = starryAxisSet(1, 'Log', {
+      y1: { name: 'y1', value: 0, coord: { xPx: 100, yPx: 500 } },
+      y2: { name: 'y2', value: 100, coord: { xPx: 100, yPx: 100 } },
+      yIsLogScale: true,
+    });
+    const r = importStarryProject(makeStarry({ axisSets: [bad as unknown] }));
+    expect('error' in r && r.error).toMatch(/log/i);
+    expect('error' in r && r.error).toMatch(/greater than zero/i);
+  });
+});
+
+describe('StarryDigitizer: which datasets come across', () => {
+  const twoSets = [starryAxisSet(1, 'First'), starryAxisSet(2, 'Second')];
+
+  it('⚑ takes only the datasets bound to the axis set it opened', () => {
+    // Carrying the others would place their points against a calibration that
+    // is not theirs — the same numbers, silently read off the wrong scale.
+    const r = importStarryProject(
+      makeStarry({
+        axisSets: twoSets,
+        activeAxisSetId: 2,
+        datasets: [
+          { id: 1, name: 'On first', axisSetId: 1, points: [{ id: 1, xPx: 350, yPx: 300 }] },
+          { id: 2, name: 'On second', axisSetId: 2, points: [{ id: 2, xPx: 350, yPx: 300 }] },
+        ],
+      })
+    );
+    if ('error' in r) throw new Error(r.error);
+    expect(r.datasets.map((d) => d.name)).toEqual(['On second']);
+  });
+
+  it('⚑ falls back to UNBOUND datasets only when none is bound to this set', () => {
+    // Older files of theirs carry no axisSetId at all. The fallback must not
+    // fire when bound datasets exist, or an unbound leftover joins them.
+    const unbound = { id: 3, name: 'Unbound', points: [{ id: 3, xPx: 350, yPx: 300 }] };
+    const withBound = importStarryProject(
+      makeStarry({
+        axisSets: twoSets,
+        activeAxisSetId: 1,
+        datasets: [{ id: 1, name: 'Bound', axisSetId: 1, points: [{ id: 1, xPx: 350, yPx: 300 }] }, unbound],
+      })
+    );
+    if ('error' in withBound) throw new Error(withBound.error);
+    expect(withBound.datasets.map((d) => d.name)).toEqual(['Bound']);
+
+    const withoutBound = importStarryProject(
+      makeStarry({ axisSets: twoSets, activeAxisSetId: 2, datasets: [unbound] })
+    );
+    if ('error' in withoutBound) throw new Error(withoutBound.error);
+    expect(withoutBound.datasets.map((d) => d.name)).toEqual(['Unbound']);
+  });
+
+  it('always opens with at least one series, even when the file carries none', () => {
+    const r = importStarryProject(makeStarry({ datasets: [] }));
+    if ('error' in r) throw new Error(r.error);
+    expect(r.datasets).toHaveLength(1);
+    expect(r.datasets[0]!.name).toBe('Data');
+    expect(r.datasets[0]!.getCount()).toBe(0);
+  });
+
+  it('gives a series with a blank or missing name a usable one', () => {
+    const r = importStarryProject(
+      makeStarry({
+        datasets: [
+          { id: 1, name: '', axisSetId: 1, points: [] },
+          { id: 2, name: 7, axisSetId: 1, points: [] },
+        ],
+      })
+    );
+    if ('error' in r) throw new Error(r.error);
+    expect(r.datasets.map((d) => d.name)).toEqual(['Data', 'Data']);
+  });
+
+  it('⚑ SKIPS a point whose pixels it cannot read, rather than placing it at 0,0', () => {
+    // A dropped point is a visible gap the user can fill; a point silently
+    // parked at the origin is a wrong datum that looks placed.
+    const r = importStarryProject(
+      makeStarry({
+        datasets: [
+          {
+            id: 1,
+            name: 'D',
+            axisSetId: 1,
+            points: [
+              { id: 1, xPx: 350, yPx: 300 },
+              { id: 2, xPx: '350', yPx: 300 },
+              { id: 3, xPx: NaN, yPx: 300 },
+              { id: 4, xPx: 350 },
+              { id: 5, xPx: 400, yPx: 320 },
+            ],
+          },
+        ],
+      })
+    );
+    if ('error' in r) throw new Error(r.error);
+    expect(r.datasets[0]!.getCount()).toBe(2);
+    expect(r.datasets[0]!.getPixel(1)).toMatchObject({ x: 400, y: 320 });
+  });
+
+  it('handles a series with no points array at all', () => {
+    const r = importStarryProject(makeStarry({ datasets: [{ id: 1, name: 'D', axisSetId: 1 }] }));
+    if ('error' in r) throw new Error(r.error);
+    expect(r.datasets[0]!.getCount()).toBe(0);
+  });
+});
+
+describe('StarryDigitizer: finding the image', () => {
+  function starryWithImage(entryName: string, bytes: Uint8Array = PNG): Uint8Array {
+    const inner = unzipSync(makeStarry({ withImage: false }));
+    return zipSync({ ...inner, [entryName]: bytes });
+  }
+
+  it('accepts the entry names their own reader accepts, with the right mime', () => {
+    // Their writer emits image.png; their reader also takes jpg/jpeg, so we
+    // take exactly the set they do — no more, so an unexpected entry is
+    // reported rather than guessed at.
+    for (const [name, mime] of [
+      ['image.png', 'image/png'],
+      ['image.jpg', 'image/jpeg'],
+      ['image.jpeg', 'image/jpeg'],
+    ] as const) {
+      const r = importStarryProject(starryWithImage(name));
+      if ('error' in r) throw new Error(r.error);
+      expect(r.imageDataURL?.startsWith(`data:${mime};base64,`)).toBe(true);
+    }
+  });
+
+  it('⚑ treats a zero-length entry as no image, and says so', () => {
+    // An empty entry would otherwise become "data:image/png;base64," — a data
+    // URL that resolves to nothing, giving a blank canvas with no note.
+    const r = importStarryProject(starryWithImage('image.png', new Uint8Array(0)));
+    if ('error' in r) throw new Error(r.error);
+    expect(r.imageDataURL).toBeNull();
+    expect(r.notes.join(' ')).toMatch(/image could not be read/i);
+  });
+
+  it('does not accept an entry under some other name', () => {
+    const r = importStarryProject(starryWithImage('figure.png'));
+    if ('error' in r) throw new Error(r.error);
+    expect(r.imageDataURL).toBeNull();
+  });
+
+  it('⚑ encodes an image larger than one btoa chunk without losing bytes', () => {
+    // The chunking exists because spreading a multi-megabyte array into
+    // String.fromCharCode overflows the call stack. An off-by-one in the
+    // stride corrupts the picture rather than throwing.
+    const big = new Uint8Array(0x8000 + 777);
+    for (let i = 0; i < big.length; i++) big[i] = (i * 31 + 7) & 0xff;
+    const r = importStarryProject(starryWithImage('image.png', big));
+    if ('error' in r) throw new Error(r.error);
+    const b64 = r.imageDataURL!.split(',')[1]!;
+    const decoded = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    expect(decoded).toEqual(big);
   });
 });

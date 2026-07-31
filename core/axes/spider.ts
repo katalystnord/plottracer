@@ -40,6 +40,7 @@
 import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
+import { logPositiveEndpointsUsable } from './logScale.js';
 
 /** One calibrated spoke: a 1-D scale running from the shared origin outwards. */
 export interface Spoke {
@@ -136,7 +137,7 @@ export class SpiderAxes {
       const centreValue = ip.parse(cp.dy);
       if (!ip.isValid || ip.isDate || typeof centreValue !== 'number') return false;
       if (knownValue === centreValue) return false;
-      if (isLog && (!(knownValue > 0) || !(centreValue > 0))) return false;
+      if (isLog && !logPositiveEndpointsUsable(knownValue, centreValue)) return false;
 
       spokes.push({
         // A name is transcription, not measurement, so an unnamed spoke is left

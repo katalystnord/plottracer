@@ -15,6 +15,7 @@ import { taninverse } from '../mathFunctions.js';
 import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
+import { logPositiveEndpointsUsable } from './logScale.js';
 
 export class PolarAxes {
   calibration: Calibration | null = null;
@@ -86,6 +87,11 @@ export class PolarAxes {
     let r1 = this.r1;
     let r2 = this.r2;
     if (is_log_r) {
+      // A radius has no negative branch here, so both known radii must be
+      // strictly positive: Math.log(0) is -Infinity and Math.log(negative) is
+      // NaN, and either would be baked into dist10/dist12 while this method
+      // still returned true. See core/axes/logScale.ts.
+      if (!logPositiveEndpointsUsable(r1, r2)) return false;
       this.isLog = true;
       r1 = Math.log(r1) / Math.log(10);
       r2 = Math.log(r2) / Math.log(10);

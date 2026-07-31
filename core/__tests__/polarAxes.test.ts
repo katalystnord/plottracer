@@ -189,3 +189,49 @@ describe('PolarAxes.calibrate refuses invalid input instead of succeeding silent
     expect(new PolarAxes().calibrate(new Calibration(2), true, false, false)).toBe(false);
   });
 });
+
+/**
+ * ⚑ A LOG RADIUS that cannot be logged — refused by the MODEL.
+ *
+ * Same defect as the one found in `core/axes/xy.ts` while writing importer
+ * tests: `Math.log(0)` is −Infinity and `Math.log(negative)` is NaN, both were
+ * baked into dist10/dist12, and `calibrate()` returned true regardless.
+ *
+ * Polar differs from XY in one way that matters: it has no negative branch at
+ * all, because a radius is a distance. So its rule is the stricter one —
+ * strictly positive, not merely "same sign". See `core/axes/logScale.ts`,
+ * which holds both rules in one place so they cannot drift apart.
+ */
+describe('a log radial scale needs positive radii', () => {
+  function tryLogR(r1: string, r2: string): boolean {
+    const calib = new Calibration(2);
+    calib.addPoint(100, 100, '0', '0'); // centre
+    calib.addPoint(200, 100, r1, '0');
+    calib.addPoint(300, 100, r2, '0');
+    return new PolarAxes().calibrate(calib, true, false, true);
+  }
+
+  it('refuses a radius of zero, at either point', () => {
+    expect(tryLogR('0', '100')).toBe(false);
+    expect(tryLogR('10', '0')).toBe(false);
+  });
+
+  it('⚑ refuses a NEGATIVE radius, which XY would have allowed as a decade', () => {
+    // The two rules genuinely differ, and this is where. An all-negative pair
+    // is a legitimate XY axis; it is not a radius.
+    expect(tryLogR('-10', '-100')).toBe(false);
+    expect(tryLogR('-10', '100')).toBe(false);
+  });
+
+  it('accepts an ordinary positive log radial scale', () => {
+    expect(tryLogR('10', '100')).toBe(true);
+  });
+
+  it('leaves a LINEAR radial scale through zero alone', () => {
+    const calib = new Calibration(2);
+    calib.addPoint(100, 100, '0', '0');
+    calib.addPoint(200, 100, '0', '0');
+    calib.addPoint(300, 100, '20', '0');
+    expect(new PolarAxes().calibrate(calib, true, false, false)).toBe(true);
+  });
+});

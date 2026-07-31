@@ -32,6 +32,7 @@ import { taninverse } from '../mathFunctions.js';
 import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
+import { logPositiveEndpointsUsable } from './logScale.js';
 
 export interface Orientation {
   axes: 'X' | 'Y';
@@ -113,7 +114,7 @@ export class BarAxes {
     // check on the file-load door -- see that config for why the same refusal
     // has to be declared twice.
     if (v1 === v2) return false;
-    if (isLog && (!(v1 > 0) || !(v2 > 0))) return false;
+    if (isLog && !logPositiveEndpointsUsable(v1, v2)) return false;
 
     this.p1 = v1;
     this.p2 = v2;

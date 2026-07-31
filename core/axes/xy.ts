@@ -9,6 +9,7 @@ import { InputParser } from '../inputParser.js';
 import * as dateConverter from '../dateConversion.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
+import { logEndpointsUsable } from './logScale.js';
 
 export class XYAxes {
   calibration: Calibration | null = null;
@@ -84,6 +85,15 @@ export class XYAxes {
     this.isLogScaleX = isLogX;
     this.isLogScaleY = isLogY;
     this.noRotationFlag = noRotationCorrection;
+
+    // A log endpoint at zero or a pair of MIXED sign has no logarithm: the
+    // branches below would produce -Infinity or NaN, poison the transform
+    // matrix, and still return true -- isCalibrated() saying yes while every
+    // reading comes back null. An all-negative pair is legitimate (WPD's own
+    // negative-decade axis) and is handled by the first branch, so the test is
+    // "not zero, and not a mix", never "must be positive".
+    if (isLogX && !logEndpointsUsable(xmin, xmax)) return false;
+    if (isLogY && !logEndpointsUsable(ymin, ymax)) return false;
 
     if (this.isLogScaleX === true) {
       if (xmin! < 0 && xmax! < 0) {

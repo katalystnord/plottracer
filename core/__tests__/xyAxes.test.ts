@@ -172,3 +172,85 @@ describe('XYAxes — log scales (WPD)', () => {
     expect(data[1]).toBeCloseTo(2 ** -3, 10);
   });
 });
+
+/**
+ * ⚑ THE LOG AXIS THAT CANNOT EXIST — refused by the MODEL, not only by the UI.
+ *
+ * `Math.log(0)` is −Infinity and `Math.log(negative)` is NaN, and
+ * `processCalibration` fed both straight into the transform matrix and then
+ * returned true regardless: `isCalibrated()` said yes while every reading came
+ * back null.
+ *
+ * The interactive path already refused this (calibrationSession's
+ * `logScaleGuards`), and its comment named the defect exactly — "every value
+ * reads back NaN while calibrate() still reports success (core/axes/xy.ts:88)".
+ * But the model has MORE THAN ONE ENTRANCE: `core/plotData.ts` calls
+ * `calibrate()` when loading a project and never inspects the result, and the
+ * StarryDigitizer/Engauge importers call it directly too. Everything that
+ * arrives by file therefore walked past the guard.
+ *
+ * Found while writing importer tests: a StarryDigitizer project with a log
+ * axis calibrated at zero imported "successfully".
+ */
+describe('a log axis whose endpoints cannot be logged is refused', () => {
+  const box = (x1: string, x2: string, y1: string, y2: string) =>
+    [
+      [0, 99, x1, '0'],
+      [99, 99, x2, '0'],
+      [0, 99, '0', y1],
+      [0, 0, '0', y2],
+    ] as const;
+
+  function tryCalibrate(pts: readonly (readonly [number, number, string, string])[], opts: { logX?: boolean; logY?: boolean }) {
+    const calib = new Calibration(2);
+    for (const [px, py, dx, dy] of pts) calib.addPoint(px, py, dx, dy);
+    const axes = new XYAxes();
+    return { ok: axes.calibrate(calib, opts.logX ?? false, opts.logY ?? false, false), axes };
+  }
+
+  it('refuses a log X axis with a zero endpoint', () => {
+    const { ok, axes } = tryCalibrate(box('0', '100', '0', '10'), { logX: true });
+    expect(ok).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a log Y axis with a zero endpoint', () => {
+    const { ok } = tryCalibrate(box('0', '10', '0', '100'), { logY: true });
+    expect(ok).toBe(false);
+  });
+
+  it('⚑ refuses endpoints of MIXED sign, which log10 turns into NaN', () => {
+    // The all-negative case below is legitimate and must stay legitimate; it
+    // is the MIX that has no logarithm. A guard written as "both must be
+    // positive" would break the negative decade axis WPD supports.
+    expect(tryCalibrate(box('-1', '100', '0', '10'), { logX: true }).ok).toBe(false);
+    expect(tryCalibrate(box('1', '-100', '0', '10'), { logX: true }).ok).toBe(false);
+  });
+
+  it('still accepts an all-NEGATIVE log axis, which WPD supports', () => {
+    const { ok, axes } = tryCalibrate(box('-100', '-1', '0', '10'), { logX: true });
+    expect(ok).toBe(true);
+    // −100 at the left edge and −1 at the right: the midpoint is −10.
+    expect(axes.pixelToData(49.5, 99)[0]).toBeCloseTo(-10, 6);
+  });
+
+  it('still accepts an ordinary positive log axis', () => {
+    const { ok, axes } = tryCalibrate(box('1', '100', '0', '10'), { logX: true });
+    expect(ok).toBe(true);
+    expect(axes.pixelToData(49.5, 99)[0]).toBeCloseTo(10, 6);
+  });
+
+  it('leaves a LINEAR axis through zero completely alone', () => {
+    // The commonest calibration there is. The guard must be conditional on the
+    // log flag, or it refuses almost every real figure.
+    expect(tryCalibrate(box('0', '100', '-50', '50'), {}).ok).toBe(true);
+  });
+
+  it('⚑ a refused calibration reads NOTHING, rather than reading NaN', () => {
+    // The point of returning false: `isCalibrated()` is what every caller
+    // consults before showing a number, so an honest false is what keeps the
+    // NaN off the screen and out of the export.
+    const { axes } = tryCalibrate(box('0', '100', '0', '10'), { logX: true });
+    expect(axes.isCalibrated()).toBe(false);
+  });
+});
