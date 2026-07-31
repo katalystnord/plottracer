@@ -52,7 +52,8 @@ export interface FitModel {
    * LM somewhere arbitrary.
    */
   initialGuess(points: readonly Point2D[]): number[] | null;
-  /** Plain-words statement of what the model needs, used in the refusal. */
+  /** Plain-words statement of what the model needs, used in the refusal when
+   * `initialGuess` returns null. */
   requires: string;
   /**
    * Can the model be EVALUATED at this point at all?
@@ -67,6 +68,17 @@ export interface FitModel {
    * Omitted where the model is defined everywhere.
    */
   domain?: (p: Point2D) => boolean;
+  /**
+   * Plain-words statement for a DOMAIN refusal specifically, when it differs
+   * from `requires` (v2.0 pre-launch audit). Power law's domain only checks
+   * x > 0 -- a point with x > 0 but y <= 0 passes the domain gate and DOES
+   * reach the actual least-squares fit (only `initialGuess`'s own, stricter
+   * x>0&&y>0 filter excludes it from seeding). `requires`'s "every x AND y"
+   * wording is accurate for an initialGuess refusal but overstates the
+   * domain gate's real, narrower requirement -- so a domain failure shows
+   * this instead when set. Defaults to `requires` for every model whose
+   * domain and initialGuess agree (i.e. every model but power today). */
+  domainRequires?: string;
   /** Written out with the fitted numbers. */
   formatEquation(params: readonly number[]): string;
 }
@@ -121,6 +133,7 @@ export const FIT_MODELS: readonly FitModel[] = [
     paramNames: ['a', 'b'],
     evaluate: (p, x) => p[0]! * Math.pow(x, p[1]!),
     requires: 'every x and y value to be greater than zero',
+    domainRequires: 'every x value to be greater than zero',
     domain: (p) => p.x > 0,
     // ln y = ln a + b·ln x.
     initialGuess: (pts) => {
@@ -413,8 +426,11 @@ export function fitModel(
   }
   // Domain first: a point the model cannot be evaluated at makes every residual
   // non-finite, and refusing with the REASON beats "could not be fitted".
+  // domainRequires (falling back to requires) states what THIS gate actually
+  // checks -- see the field's own doc for why that can differ from what
+  // initialGuess needs (power law's own case).
   if (model.domain && !points.every((p) => model.domain!(p))) {
-    return { error: `${model.label} needs ${model.requires}.` };
+    return { error: `${model.label} needs ${model.domainRequires ?? model.requires}.` };
   }
   const start = model.initialGuess(points);
   if (!start) {

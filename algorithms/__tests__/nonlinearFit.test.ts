@@ -140,6 +140,29 @@ describe('refuses rather than fitting a subset behind the user’s back', () => 
     expect('error' in r && r.error).toMatch(/greater than zero/i);
   });
 
+  it('a power-law DOMAIN refusal names only x, not y (v2.0 audit)', () => {
+    // domain only checks x > 0 -- a point with x > 0 but y <= 0 passes this
+    // gate and reaches the actual fit unfiltered (only initialGuess's own
+    // stricter x>0&&y>0 filter excludes it from seeding). The old shared
+    // `requires` string said "every x AND y value", overstating what this
+    // specific refusal actually enforces.
+    const pts = [{ x: -1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 3 }];
+    const r = fitOf('power', pts);
+    expect('error' in r).toBe(true);
+    const message = 'error' in r ? r.error : '';
+    expect(message).toMatch(/every x value to be greater than zero/i);
+    expect(message).not.toMatch(/\by\b/i);
+  });
+
+  it('a power-law fit tolerates y <= 0 once x > 0 everywhere and the guess can seed', () => {
+    // The domain gate never re-filters by y once it passes -- confirms the
+    // negative-y points genuinely reach the real fit, not just that the
+    // message is accurate about it.
+    const pts = [{ x: 1, y: 4 }, { x: 2, y: 2 }, { x: 3, y: -1 }, { x: 4, y: -3 }];
+    const r = fitOf('power', pts);
+    expect('error' in r).toBe(false);
+  });
+
   it('⚑ names the requirement when only SOME points are outside the domain', () => {
     // The case that exposed the need for a domain check separate from the
     // initial guess: x = 1,2,3 are fine so the guess succeeds, but x = 0 makes
