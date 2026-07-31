@@ -480,6 +480,163 @@ describe('what the exploded control can say and do', () => {
 });
 
 /**
+ * v2.0 pre-launch audit, second pass: the snapshot-completeness recipe's own
+ * hardening (reset/restoreState/loadCalibrated, above) covered three
+ * entrances but not every public mutator of the tuple array a pending
+ * exploded apex is pinned to. Three more, found the same way: `removeTuple`,
+ * `clearPoints`, `setActiveDataset` -- each can leave `pendingExplodedTuple`
+ * stale, and unlike the undo/reset/load cases, this one is a LIVE-INTERACTION
+ * defect (no undo involved) that silently reattaches a discarded apex to an
+ * unrelated, ordinary sector's VALUE. Confirmed reachable via the exact
+ * documented repro before the fix.
+ */
+describe('a pending exploded apex does not survive the tuple array changing under it (v2.0)', () => {
+  it('removeTuple on the pending tuple itself cancels the capture, not just the tuple', () => {
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex; creates the pending (empty) tuple 0
+    expect(session.getExplodedStage()).toBe('edges');
+    expect(session.getDataset().getTupleCount()).toBe(1);
+
+    session.removeTuple(0); // the trash icon, before either edge is placed
+    expect(session.getExplodedStage()).toBe('off');
+    expect(session.getDataset().getTupleCount()).toBe(0);
+
+    // THE ACTUAL DEFECT: capture an ordinary sector next. Its new tuple lands
+    // at the same index (0) the discarded one held. Without the fix, the
+    // stale pendingExplodedTuple/pendingApex would silently attach the
+    // DISCARDED apex to this unrelated sector's value.
+    clickBoundaries(session, [-90, 0]);
+    expect(session.getSectorApex(0)).toBeNull();
+  });
+
+  it('removeTuple of an EARLIER tuple shifts the pending index instead of orphaning it', () => {
+    const session = calibratedPie();
+    // Three complete ordinary sectors (0,1,2), plus a stranded chain-opened
+    // tuple (3) -- exactly the shape "an exploded slice after an ordinary
+    // one" above already covers being discarded on arming.
+    clickBoundaries(session, [-90, 0, 90, 180]);
+    expect(session.getDataset().getTupleCount()).toBe(4);
+
+    const apex = { x: CX + 40, y: CY + 40 };
+    session.setNextSectorExploded(true); // discards the stranded tuple 3
+    session.addDataPoint(apex.x, apex.y); // apex; pending tuple lands back at index 3
+    expect(session.getDataset().getTupleCount()).toBe(4);
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.removeTuple(0); // delete an EARLIER, unrelated complete sector -- shifts 3 -> 2
+    expect(session.getDataset().getTupleCount()).toBe(3);
+    expect(session.getExplodedStage()).toBe('edges'); // still armed, not cancelled
+
+    // Finish the exploded slice's two edges, apex-relative (its own frame,
+    // not the pie's centre -- see "takes the apex first" above).
+    session.addDataPoint(apex.x + 120, apex.y);
+    session.addDataPoint(apex.x, apex.y + 120);
+
+    // The apex must have followed the shift to the tuple's new index (2), not
+    // stayed pinned to the old index (3, now a different or absent tuple).
+    const stored = session.getSectorApex(2);
+    expect(stored).not.toBeNull();
+    expect(stored!.x).toBeCloseTo(apex.x, 6);
+    expect(stored!.y).toBeCloseTo(apex.y, 6);
+  });
+
+  it('clearPoints cancels a pending apex pinned to the dataset it just emptied', () => {
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.clearPoints();
+    expect(session.getExplodedStage()).toBe('off');
+    expect(session.getDataset().getTupleCount()).toBe(0);
+
+    clickBoundaries(session, [-90, 0]);
+    expect(session.getSectorApex(0)).toBeNull();
+  });
+
+  it('setActiveDataset cancels a pending apex armed on the dataset just switched away from', () => {
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex, armed on dataset 0
+    expect(session.getExplodedStage()).toBe('edges');
+
+    const second = session.addDataset(); // switches active to the new, second dataset
+    expect(second).toBe(1);
+    expect(session.getExplodedStage()).toBe('off');
+
+    // The SECOND dataset's own tuple 0 (an ordinary sector) must not inherit
+    // dataset 0's discarded, unrelated apex.
+    clickBoundaries(session, [-90, 0]);
+    expect(session.getSectorApex(0)).toBeNull();
+
+    // And switching back to dataset 0 leaves its own half-open tuple exactly
+    // as the explode left it -- still armed to be cancelled explicitly, not
+    // silently mutated by the switch.
+    session.setActiveDataset(0);
+    expect(session.getDataset().getTupleCount()).toBe(1);
+    expect(session.getDataset().getAllTuples()[0]!.every((v) => v === null)).toBe(true);
+  });
+
+  it('re-selecting the ALREADY-active dataset does not cancel an in-progress capture', () => {
+    // A no-op switch (e.g. re-clicking the current series tab) must not be
+    // indistinguishable from actually switching away.
+    const session = calibratedPie();
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.setActiveDataset(0); // already active -- must be inert
+    expect(session.getExplodedStage()).toBe('edges');
+  });
+
+  it('removeDataset of the ACTIVE dataset (not through Workspace.tsx) also cancels the pending apex', () => {
+    // Found beyond the three originally-identified entrances: addDataset and
+    // removeDataset both write activeDatasetIndex directly too. This is the
+    // engine-level session method (distinct from ui/Workspace.tsx's own
+    // handleRemoveDataset selection-clearing fix, a separate defect in a
+    // separate layer -- this one is about the PENDING CAPTURE, not the
+    // point-selection UI state).
+    const session = calibratedPie();
+    session.addDataset(); // dataset 1, now active
+    session.setActiveDataset(0);
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex, armed on dataset 0
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.removeDataset(0); // removes the ACTIVE dataset itself
+    expect(session.getExplodedStage()).toBe('off');
+
+    // Whatever series is now active must not inherit the discarded apex.
+    clickBoundaries(session, [-90, 0]);
+    expect(session.getSectorApex(0)).toBeNull();
+  });
+
+  it('removeDataset of a DIFFERENT, INACTIVE dataset leaves an in-progress capture on the active one untouched', () => {
+    // The over-eager version of the fix (clearing on ANY removeDataset call)
+    // would itself be a new regression: deleting an unrelated series must not
+    // cancel work in progress on the one actually being captured.
+    const session = calibratedPie();
+    session.addDataset(); // dataset 1, now active
+    session.setActiveDataset(0); // back to dataset 0
+
+    session.setNextSectorExploded(true);
+    session.addDataPoint(CX + 30, CY + 30); // apex, armed on the ACTIVE dataset 0
+    expect(session.getExplodedStage()).toBe('edges');
+
+    session.removeDataset(1); // a different, inactive dataset -- must not disturb dataset 0
+    expect(session.getExplodedStage()).toBe('edges');
+
+    // And the apex still lands correctly once the edges are placed.
+    session.addDataPoint(CX + 30 + 120, CY + 30);
+    session.addDataPoint(CX + 30, CY + 30 + 120);
+    const stored = session.getSectorApex(0);
+    expect(stored).not.toBeNull();
+    expect(stored!.x).toBeCloseTo(CX + 30, 6);
+  });
+});
+
+/**
  * Closing the ring.
  *
  * David, driving the app: *"When I come to the end of the ring, I naturally want to

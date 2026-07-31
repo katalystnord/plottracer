@@ -2461,7 +2461,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const targetName = target.dataset.name;
     const placed = this.addCapTo(base, role, targetName, cap);
     if (placed) {
-      this.activeDatasetIndex = opts.targetIndex;
+      this.switchActiveDataset(opts.targetIndex);
       return placed;
     }
 
@@ -2472,7 +2472,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // it, or the next Place-Point click silently lands on an error-cap series with
     // nothing on screen saying so (a real trap; the point you added a cap to and
     // the target are always the same series). Restore it.
-    this.activeDatasetIndex = opts.targetIndex;
+    this.switchActiveDataset(opts.targetIndex);
     return mirror;
   }
 
@@ -3062,11 +3062,37 @@ export class CalibrationSession<A extends CalibratedAxes> {
     };
   }
 
+  /**
+   * The one place `activeDatasetIndex` is written for an actual SWITCH (as
+   * opposed to a snapshot restore, which legitimately brings back consistent
+   * state for whatever was active then). v2.0 pre-launch audit: an
+   * in-progress exploded-slice apex capture is a tuple INDEX with no dataset
+   * identity of its own -- it only ever meant "the tuple at this index in
+   * whichever dataset is active." Switching the active dataset breaks that
+   * meaning: `addDataPoint`'s own consumer of this state reads the CURRENTLY
+   * active dataset's tuple at this index, so leaving it set would let a
+   * discarded/unrelated apex silently attach to a tuple in the dataset just
+   * switched TO. Found initially at `setActiveDataset`/`addDataset` calling
+   * it directly-but-inconsistently; centralized here rather than re-adding
+   * the same three-line clear at every switch site and risking a future one
+   * being missed the way `addDataset` originally was. Same "more than one
+   * entrance" class as reset()/restoreState()/loadCalibrated()'s own clears.
+   */
+  private switchActiveDataset(index: number): void {
+    // A no-op "switch" to the dataset already active must not cancel an
+    // in-progress capture on it -- e.g. re-clicking the current series tab.
+    if (index === this.activeDatasetIndex) return;
+    this.activeDatasetIndex = index;
+    this.explodedApexPending = false;
+    this.pendingExplodedTuple = null;
+    this.pendingApex = null;
+  }
+
   /** Switches which dataset new points/slot actions apply to.
    * No-op for an out-of-range index. */
   setActiveDataset(index: number): void {
     if (index < 0 || index >= this.datasetEntries.length) return;
-    this.activeDatasetIndex = index;
+    this.switchActiveDataset(index);
   }
 
   /** Adds a new, empty dataset/series and makes it active. Returns its
@@ -3078,7 +3104,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addDataset(name?: string): number {
     const entry = this.buildDatasetEntry(this.freeDatasetName(name), this.datasetEntries.length);
     this.datasetEntries.push(entry);
-    this.activeDatasetIndex = this.datasetEntries.length - 1;
+    this.switchActiveDataset(this.datasetEntries.length - 1);
     return this.activeDatasetIndex;
   }
 
@@ -3129,6 +3155,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.datasetEntries.length <= 1) return;
     if (index < 0 || index >= this.datasetEntries.length) return;
     const removedName = this.datasetEntries[index]!.dataset.name;
+    const removingActive = index === this.activeDatasetIndex;
     this.datasetEntries.splice(index, 1);
     // Nothing may keep pointing at a series that is gone (engine/errorRelation.ts).
     clearErrorRelationsTo(this.getDatasets(), removedName);
@@ -3136,6 +3163,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
       this.activeDatasetIndex = this.datasetEntries.length - 1;
     } else if (this.activeDatasetIndex > index) {
       this.activeDatasetIndex -= 1;
+    }
+    // v2.0 pre-launch audit: removing the ACTIVE dataset destroys whatever
+    // tuple array a pending exploded-slice apex was pinned to -- see
+    // switchActiveDataset's own comment. Removing a DIFFERENT dataset leaves
+    // the active one's identity (and any pending capture on it) untouched
+    // even though its numeric index may shift above, so this must fire only
+    // when the removed dataset WAS the active one.
+    if (removingActive) {
+      this.explodedApexPending = false;
+      this.pendingExplodedTuple = null;
+      this.pendingApex = null;
     }
   }
 
@@ -4502,6 +4540,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
       entry.slotCursor.tupleIndex = null;
       entry.slotCursor.groupIndex = 0;
     }
+    // v2.0 pre-launch audit: same shift-or-clear this needs wherever the tuple
+    // array is spliced -- see removeTuple's own comment. `cancelExplodedSector`
+    // already clears these three fields itself before calling in here, so this
+    // is a no-op for that caller; it protects every OTHER caller of this shared
+    // helper (e.g. discarding a stranded chain while arming a new explode).
+    if (this.pendingExplodedTuple !== null) {
+      if (this.pendingExplodedTuple === tupleIndex) {
+        this.explodedApexPending = false;
+        this.pendingExplodedTuple = null;
+        this.pendingApex = null;
+      } else if (this.pendingExplodedTuple > tupleIndex) {
+        this.pendingExplodedTuple -= 1;
+      }
+    }
   }
 
   /** How many of the armed slice's edges are already placed (0-2); 0 when none is
@@ -5257,6 +5309,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // Removing a tuple shifts every later tuple's position, so recompute where
     // the next Place Point click files -- the same reset the load path uses.
     this.activeEntry.slotCursor = this.computeSlotCursorFor(dataset);
+    // v2.0 pre-launch audit: a pending exploded-slice apex is pinned to a
+    // tuple INDEX (see setActiveDataset's own comment on this state). Deleting
+    // the pinned tuple itself must cancel the in-progress capture, not leave a
+    // stale index that later silently reattaches this discarded apex to
+    // whatever tuple next lands at the same index (`addDataPoint`'s consumer
+    // of this state has no way to tell the difference). Deleting an EARLIER
+    // tuple shifts every later one down by one -- same array-splice this
+    // method's own pixel removal already accounts for -- so the pending index
+    // has to shift with it or it will point at the wrong tuple from here on.
+    if (this.pendingExplodedTuple !== null) {
+      if (this.pendingExplodedTuple === tupleIndex) {
+        this.explodedApexPending = false;
+        this.pendingExplodedTuple = null;
+        this.pendingApex = null;
+      } else if (this.pendingExplodedTuple > tupleIndex) {
+        this.pendingExplodedTuple -= 1;
+      }
+    }
   }
 
   /** Whether sortByNearestNeighbour would do anything for the active series --
@@ -5444,6 +5514,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (derived && derived.length > 0) fresh.setSlotNames([...derived]);
     entry.dataset = fresh;
     entry.slotCursor = { tupleIndex: null, groupIndex: 0 };
+    // v2.0 pre-launch audit: the fresh dataset above has no tuples, so a
+    // pending exploded-slice apex pinned to a tuple INDEX in the discarded
+    // dataset is now pointing at nothing -- left set, it would silently
+    // reattach to whatever tuple the next capture creates at that same
+    // index. Same clear reset()/restoreState()/loadCalibrated() already
+    // apply, extended to this entrance too.
+    this.explodedApexPending = false;
+    this.pendingExplodedTuple = null;
+    this.pendingApex = null;
   }
 
   reset(): void {
