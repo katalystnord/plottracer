@@ -80,5 +80,52 @@ describe('histogram bins', () => {
     it('returns an empty list for no tuples', () => {
       expect(binsFromCorners([])).toEqual([]);
     });
+
+    /**
+     * ⚑ THE HALF-CAPTURED BIN, which nothing had ever exercised: the 2026-07-31
+     * mutation run found the `a == null || b == null` guard replaceable by
+     * `false` with the whole suite still green. That guard is the entire reason
+     * a bin whose second corner isn't placed yet keeps its own index instead of
+     * vanishing -- the contract the doc comment states and the table and export
+     * both depend on (a partial row shows; the export skips it). Without it the
+     * mapper reads `.x` off null and throws, so these cases are what stand
+     * between an in-progress capture and a crash.
+     */
+    it('yields null AT ITS OWN INDEX for a tuple whose second corner is not placed yet', () => {
+      const bins = binsFromCorners([
+        [{ x: 0, y: 5 }, { x: 10, y: 5 }],
+        [{ x: 20, y: 3 }, null],
+        [{ x: 30, y: 7 }, { x: 40, y: 7 }],
+      ]);
+      expect(bins).toHaveLength(3); // the gap is KEPT, not compacted away
+      expect(bins[1]).toBeNull();
+      // ...and its neighbours are unshifted, which is what "own index" buys.
+      expect(bins[0]).toMatchObject({ binStart: 0, binEnd: 10 });
+      expect(bins[2]).toMatchObject({ binStart: 30, binEnd: 40 });
+    });
+
+    it('yields null for a missing FIRST corner and for a wholly empty tuple', () => {
+      expect(binsFromCorners([[null, { x: 10, y: 5 }]])).toEqual([null]);
+      expect(binsFromCorners([[null, null]])).toEqual([null]);
+      expect(binsFromCorners([[]])).toEqual([null]);
+    });
+  });
+});
+
+/**
+ * ⚑ ONE SURVIVING MUTANT IS LEFT DELIBERATELY, and this records why so the next
+ * audit doesn't spend time on it: in `binFromCorners`, `a.x <= b.x` mutates to
+ * `a.x < b.x` and survives. It is EQUIVALENT, not a gap. The two differ only
+ * when `a.x === b.x` (a zero-width bin), and there the swap is unobservable:
+ * `binStart` and `binEnd` both read the same x whichever corner is called
+ * "left", and `value` averages the two y's, which is commutative. No input can
+ * distinguish them, so no test can kill it.
+ */
+describe('a zero-width bin reads the same either way (documenting the equivalent mutant)', () => {
+  it('gives identical bins for both click orders when the corners share an x', () => {
+    const p: BinCorner = { x: 12, y: 4 };
+    const q: BinCorner = { x: 12, y: 6 };
+    expect(binFromCorners(p, q)).toEqual({ binStart: 12, binEnd: 12, value: 5 });
+    expect(binFromCorners(q, p)).toEqual(binFromCorners(p, q));
   });
 });
