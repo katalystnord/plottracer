@@ -19,6 +19,17 @@
  * Clearing the calibrated baseline row is not a guess about where the axis is.
  * The user has already told us, by calibrating the value axis; this uses that
  * measurement and nothing else.
+ *
+ * ⚑ THE TRADE, measured rather than assumed. Across the corpus the band gains
+ * 147 bars and loses 21; of the 21, six are bars only a few pixels tall that
+ * the cleared rows erase outright. That is 0.2% of the corpus against a net
+ * +126, so the band ships — but the loss is REAL and is recorded here rather
+ * than rounded away. It is also the milder failure of the two: a bar that
+ * does not appear is a visible gap the user fills in, whereas the merge it
+ * prevents produces one oversized bar carrying a WRONG number. If this is
+ * revisited, the idea worth testing is clearing only pixels with nothing
+ * masked above them — a bare axis line has empty space above it, a bar's
+ * bottom row does not.
  */
 
 export function clearBand(
