@@ -20,9 +20,14 @@ const { registerIpcHandlers } = require('./electron-ipc.cjs')
 const { buildMenu } = require('./electron-menu.cjs')
 const { attachCloseGuard } = require('./electron-close-guard.cjs')
 
-// seccomp/GPU workarounds -- needed on this Linux dev environment, harmless
-// elsewhere (same as electron-main.cjs).
-app.commandLine.appendSwitch('no-sandbox')
+// no-sandbox is a Linux seccomp/GPU workaround. Gated to Linux (v2.0 audit,
+// matching electron-main.cjs's own fix) so a macOS/Windows contributor
+// running `npm run ui:electron` or the e2e suite locally keeps their OS
+// renderer sandbox -- this file's own comment claiming "harmless elsewhere"
+// was the same overclaim electron-main.cjs's had before it was gated.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox')
+}
 app.commandLine.appendSwitch('disable-gpu')
 
 
