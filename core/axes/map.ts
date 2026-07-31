@@ -5,6 +5,7 @@
  */
 
 import type { Calibration } from '../calibration.js';
+import { InputParser } from '../inputParser.js';
 import type { AxesMetadata } from './types.js';
 
 export type OriginLocation = 'top-left' | 'bottom-left';
@@ -39,7 +40,15 @@ export class MapAxes {
     const dist = Math.sqrt(
       (cp0.px - cp1.px) * (cp0.px - cp1.px) + (cp0.py - cp1.py) * (cp0.py - cp1.py)
     );
-    const scaleLength = parseFloat(String(scale_length));
+    // ⚑ InputParser, not parseFloat. `core/inputParser.ts`'s own doc-table
+    // lists "1,000" -> 1 -> "Every value 1000x wrong" as the reason
+    // parseWholeNumber exists, and the map scale length was the last
+    // calibration value in the app still bypassing it -- so a user typing a
+    // thousands separator, or "5 km", got a silent order-of-magnitude error on
+    // the primary map path. (Round-2 audit.)
+    const ip = new InputParser();
+    const parsedLength = ip.parse(String(scale_length));
+    const scaleLength = ip.isValid && !ip.isDate && typeof parsedLength === 'number' ? parsedLength : NaN;
     // Every reading here is `px * scaleLength / dist`, so neither factor may be
     // zero and the length must be a real positive distance. Unguarded this
     // returned true regardless: a reference length of 0 made EVERY measurement

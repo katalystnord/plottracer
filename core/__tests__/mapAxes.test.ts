@@ -166,3 +166,64 @@ describe('a reference line that cannot set a scale is refused', () => {
     expect(axes.isCalibrated()).toBe(false);
   });
 });
+
+/**
+ * ⚑ THE SCALE LENGTH GOES THROUGH InputParser — round-2 audit.
+ *
+ * It was the last calibration value in the app still using `parseFloat` — a
+ * PREFIX parser. `core/inputParser.ts`'s own doc-table records what that
+ * costs: `"1,000"` became `1`, i.e. *"Every value 1000x wrong"*, and `"5 kg"`
+ * became `5`. The app-wide fix was to parse the WHOLE string with `Number()`
+ * and refuse anything that is not entirely a number; map's scale length never
+ * got it, so it kept the prefix behaviour on the primary map path, reachable
+ * by typing.
+ *
+ * Refusing is the right answer, not silently interpreting: a length the user
+ * wrote with a separator is a length the app should ask them to re-enter, not
+ * one it should guess at.
+ */
+describe('the reference length is parsed the way every other value is', () => {
+  function readX(length: string): number | null {
+    const cal = new Calibration(2);
+    cal.addPoint(100, 100, '0', '0');
+    cal.addPoint(300, 100, '0', '0'); // 200 px
+    const axes = new MapAxes();
+    if (!axes.calibrate(cal, length, 'm', 'top-left', 500)) return null;
+    return axes.pixelToData(400, 0)[0]!; // 400 px = 2x the reference
+  }
+
+  it('⚑ REFUSES a thousands separator rather than reading its first group', () => {
+    // The defect: `parseFloat("1,000")` is 1, so a scale bar labelled 1,000 m
+    // calibrated at 1 m and every distance came out 1000x too small, silently.
+    // Now refused, exactly as the same input is refused on every other axis.
+    expect(readX('1,000')).toBeNull();
+  });
+
+  it('⚑ REFUSES a unit suffix, which parseFloat would have swallowed', () => {
+    expect(readX('5 km')).toBeNull();
+    expect(readX('5%')).toBeNull();
+  });
+
+  it('accepts scientific notation, which IS entirely a number', () => {
+    expect(readX('1e3')).toBeCloseTo(2000, 6);
+  });
+
+  it('reads a plain number unchanged', () => {
+    expect(readX('10')).toBeCloseTo(20, 6);
+  });
+
+  it('reads a decimal unchanged', () => {
+    expect(readX('2.5')).toBeCloseTo(5, 6);
+  });
+
+  it('still refuses what it refused before — zero, negative, empty, non-numeric', () => {
+    expect(readX('0')).toBeNull();
+    expect(readX('-5')).toBeNull();
+    expect(readX('')).toBeNull();
+    expect(readX('abc')).toBeNull();
+  });
+
+  it('⚑ refuses a DATE, which is not a length however well it parses', () => {
+    expect(readX('2024/01/01')).toBeNull();
+  });
+});

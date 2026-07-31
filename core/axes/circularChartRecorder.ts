@@ -113,6 +113,29 @@ export class CircularChartRecorderAxes {
     ];
     const chartCircle = getCircleFrom3Pts(chartArcPts);
 
+    // ⚑ THREE COLLINEAR CLICKS DESCRIBE NO CIRCLE. Both arcs are fitted from
+    // exactly three points, and the prompts invite a straight line -- "a point
+    // on the pen's time axis", "a second point on the same time axis", "a
+    // third point on the same time axis". Unguarded, the fit returned nulls,
+    // calibrate() returned true anyway, and readings came back NaN beside
+    // plausible finite numbers. (Round-2 audit.)
+    if (
+      !Number.isFinite(penCircle.x0) ||
+      !Number.isFinite(penCircle.y0) ||
+      !Number.isFinite(penCircle.radius) ||
+      !(penCircle.radius > 0)
+    ) {
+      return false;
+    }
+    if (
+      !Number.isFinite(chartCircle.x0) ||
+      !Number.isFinite(chartCircle.y0) ||
+      !Number.isFinite(chartCircle.radius) ||
+      !(chartCircle.radius > 0)
+    ) {
+      return false;
+    }
+
     this.thetac0 =
       (taninverse(penCircle.y0 - chartCircle.y0, penCircle.x0 - chartCircle.x0) * 180.0) / Math.PI;
 

@@ -391,3 +391,68 @@ describe('CircularChartRecorderAxes — the reading, against hand-derived ground
     expect(chart().thetaStartOffset).toBeCloseTo(0, 9);
   });
 });
+
+/**
+ * ⚑ THREE COLLINEAR CLICKS DESCRIBE NO CIRCLE — round-2 audit.
+ *
+ * Both arcs are fitted from exactly three points, and the prompts invite a
+ * straight line: "a point on the pen's time axis", "a second point on the same
+ * time axis", "a third point on the same time axis". Unguarded, the fit
+ * returned nulls, `calibrate()` returned true anyway, and readings came back
+ * NaN beside plausible finite numbers.
+ */
+describe('a chart recorder needs two real ARCS, not two straight lines', () => {
+  function calibrateWith(pts: Array<[number, number]>): boolean {
+    const cal = new Calibration(2);
+    // Only three of the five clicks carry a typed value: (T0,R0) takes the
+    // chart's time-0 and R0, and (T0,R2) takes R2. The other two are pixels
+    // on the chart circle only.
+    const values: Array<[string, string]> = [
+      ['2024/01/01', '0'],
+      ['', ''],
+      ['', '100'],
+      ['', ''],
+      ['', ''],
+    ];
+    pts.forEach(([px, py], i) => cal.addPoint(px, py, values[i]![0], values[i]![1]));
+    const axes = new CircularChartRecorderAxes();
+    return axes.calibrate(cal, '2024/01/01', 'week', 'anticlockwise');
+  }
+
+  it('⚑ refuses a COLLINEAR pen arc rather than reading NaN', () => {
+    // All three of the pen's points on one vertical line.
+    expect(
+      calibrateWith([
+        [300, 300],
+        [300, 240],
+        [300, 180],
+        [300, 50],
+        [550, 300],
+      ])
+    ).toBe(false);
+  });
+
+  it('refuses a collinear CHART arc too', () => {
+    expect(
+      calibrateWith([
+        [250, 300],
+        [150, 200],
+        [50, 300],
+        [150, 300],
+        [250, 300],
+      ])
+    ).toBe(false);
+  });
+
+  it('accepts two genuinely curved arcs — the guard must not refuse a real chart', () => {
+    expect(
+      calibrateWith([
+        [250, 300],
+        [150, 200],
+        [50, 300],
+        [300, 50],
+        [550, 300],
+      ])
+    ).toBe(true);
+  });
+});

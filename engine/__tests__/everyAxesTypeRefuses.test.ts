@@ -109,7 +109,12 @@ const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   'Pie / Donut': [[450, 300], [300, 450], [150, 300], [300, 150], [406, 406]],
   Ternary: [[100, 400], [400, 400], [250, 150]],
   Map: [[100, 100], [300, 100]],
-  'Circular Chart Recorder': [[300, 300], [300, 240], [300, 180], [360, 300], [300, 420]],
+  // Two genuinely CURVED arcs: the pen arc on a circle centred (150,300) r=100,
+  // then the chart arc on one centred (300,300) r=250, sharing t0r2.
+  // ⚑ The first version put all five on one vertical line, which is collinear
+  // -- so it was a degenerate fixture masquerading as the healthy control, and
+  // it went red the moment CCR learned to refuse a collinear arc.
+  'Circular Chart Recorder': [[250, 300], [150, 200], [50, 300], [300, 50], [550, 300]],
 };
 
 /** Click `config`'s steps at the healthy pixels, giving every value `value`. */
