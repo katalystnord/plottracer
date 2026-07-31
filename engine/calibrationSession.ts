@@ -3420,6 +3420,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.calibrationError = cal
       ? checkGuards(this.config as unknown as AxesTypeConfig<CalibratedAxes>, cal, this.optionValues, this.globalValues, this.getSteps())
       : null;
+    // ⚑ THE AXES CLASS'S OWN VERDICT, which the file door was throwing away.
+    // `core/plotData.ts` calls `calibrate()` and pushes the axes whatever it
+    // answers, so a project whose calibration value is unparseable -- a
+    // hand-edited file, a truncated one, a foreign importer's output -- opened
+    // with NO error and read 0 for every point, while the click path refused
+    // the identical input by name. `checkGuards` covers log-through-zero,
+    // coincident pixels and collinearity; it deliberately leaves parseability
+    // "to the parser", and on this entrance nobody was listening to the
+    // parser. Surfaced rather than refused, matching the decision the rest of
+    // this method documents: the user sees their points AND the reason.
+    // (Round-2 audit.)
+    const axesSelfCheck = axes as unknown as { isCalibrated?: () => boolean } | null;
+    if (!this.calibrationError && axesSelfCheck?.isCalibrated?.() === false) {
+      this.calibrationError =
+        'This project\u2019s calibration could not be read \u2014 check the calibration values, then press Calibrate to redo it.';
+    }
     this.axes = axes;
     const finalDatasets = datasets.length > 0 ? datasets : [new Dataset(this.config.dataDim)];
     // De-duplicate on load, don't refuse. A project can arrive violating the

@@ -111,7 +111,14 @@ export function readWpdArchive(bytes: Uint8Array): WpdResult<WpdArchive> {
   const images = entries
     .filter((e) => e.type === 'file' && !e.name.endsWith('.json'))
     .map((e) => ({
-      name: e.name.replace(new RegExp(`^${projectName}/`), ''),
+      // ⚑ A PLAIN PREFIX STRIP, not a regex. `projectName` comes straight
+      // from the archive's own entry names, so a folder called `Fig 3 (rev 2)`
+      // -- an entirely ordinary name -- built `/^Fig 3 (rev 2)\//`, which
+      // either THREW (unterminated group, breaking this function's own
+      // {error} contract and leaving Open Project silently doing nothing,
+      // since no caller wraps it) or silently matched nothing and left the
+      // folder prefix on every bundled image name. (Round-2 audit.)
+      name: e.name.startsWith(`${projectName}/`) ? e.name.slice(projectName.length + 1) : e.name,
       bytes: e.data,
       mime: mimeFor(e.name),
     }));

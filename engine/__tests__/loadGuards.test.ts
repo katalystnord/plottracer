@@ -355,3 +355,64 @@ describe('the map scale states its own requirement, on both doors', () => {
     expect(session.getCalibrationError()).toBeNull();
   });
 });
+
+/**
+ * ⚑ THE AXES CLASS'S OWN VERDICT, on the file door — round-2 audit.
+ *
+ * `core/plotData.ts` calls `calibrate()` when loading and pushes the axes
+ * whatever it answers. So a project whose calibration value is unparseable —
+ * hand-edited, truncated, or written by a foreign importer — opened with NO
+ * error at all and read 0 for every point, while the click path refused the
+ * identical input by name.
+ *
+ * `checkGuards` covers log-through-zero, coincident pixels and collinearity,
+ * and deliberately leaves parseability "to the parser" (its own comment says
+ * so) — and on this entrance nobody was listening to the parser.
+ */
+describe('a file whose calibration the model could not read says so', () => {
+  it('⚑ surfaces an error for an unparseable calibration value', () => {
+    const cal = new Calibration(2);
+    cal.addPoint(100, 300, '0', '0');
+    cal.addPoint(400, 300, 'abc', '0'); // not a number
+    cal.addPoint(100, 300, '0', '0');
+    cal.addPoint(100, 0, '0', '10');
+    const axes = new XYAxes();
+    // The model refuses it -- this is the answer the file door discarded.
+    expect(axes.calibrate(cal, false, false, false)).toBe(false);
+
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toBeTruthy();
+    expect(session.getCalibrationError()).toMatch(/calibration/i);
+  });
+
+  it('⚑ still SURFACES rather than refuses — the points come with it', () => {
+    // Same decision the rest of this file documents: refusing to open would
+    // strand data the previous version wrote.
+    const cal = new Calibration(2);
+    cal.addPoint(100, 300, '0', '0');
+    cal.addPoint(400, 300, 'abc', '0');
+    cal.addPoint(100, 300, '0', '0');
+    cal.addPoint(100, 0, '0', '10');
+    const axes = new XYAxes();
+    axes.calibrate(cal, false, false, false);
+    const dataset = new Dataset(2);
+    dataset.addPixel(200, 200);
+    dataset.addPixel(250, 180);
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [dataset]);
+    expect(session.getDataPoints()).toHaveLength(2);
+  });
+
+  it('a healthy project still loads with no error — the guard adds no false positive', () => {
+    const axes = loadedXY([
+      [100, 300, '0', '0'],
+      [400, 300, '10', '0'],
+      [100, 300, '0', '0'],
+      [100, 0, '0', '10'],
+    ]);
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toBeNull();
+  });
+});

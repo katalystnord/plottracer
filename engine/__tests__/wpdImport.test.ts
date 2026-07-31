@@ -142,3 +142,44 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
     });
   });
 });
+
+/**
+ * ⚑ A PROJECT FOLDER NAME IS NOT A REGEX — round-2 audit.
+ *
+ * The image-name strip built `new RegExp('^' + projectName + '/')` from a name
+ * taken straight out of the archive. An entirely ordinary folder like
+ * `Fig 3 (rev 2)` therefore either THREW — breaking this function's own
+ * `{error}` contract, and since no caller wraps it, leaving Open Project
+ * silently doing nothing — or, for a name whose metacharacters happened to
+ * form a valid pattern, matched nothing and left the prefix on every image.
+ */
+describe('a project folder name with regex metacharacters', () => {
+  /** A WPD .tar whose project folder is named `folder`. */
+  function tarNamed(folder: string): Uint8Array {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-wpdmeta-'));
+    const proj = path.join(dir, folder);
+    fs.mkdirSync(proj);
+    fs.copyFileSync(path.join(REPO, 'engine/__tests__/fixtures/wpd/wpd4.json'), path.join(proj, 'wpd.json'));
+    fs.writeFileSync(path.join(proj, 'info.json'), '{"version":[4,0],"json":"wpd.json","images":["figure.png"]}');
+    fs.copyFileSync(path.join(REPO, 'samples/errorbar-tensile-cure.png'), path.join(proj, 'figure.png'));
+    execFileSync('tar', ['-cf', 'p.tar', `${folder}/`], { cwd: dir });
+    return new Uint8Array(fs.readFileSync(path.join(dir, 'p.tar')));
+  }
+
+  it('⚑ does not throw — an unterminated group broke the {error} contract', () => {
+    expect(() => readWpdArchive(tarNamed('a(b'))).not.toThrow();
+  });
+
+  it('⚑ still strips the prefix from bundled image names', () => {
+    // The benign half of the same defect: `Fig 3 (rev 2)` builds a VALID
+    // regex that matches nothing, so every image kept its folder prefix and
+    // a lookup by name found nothing.
+    const arc = ok(readWpdArchive(tarNamed('Fig 3 (rev 2)')));
+    expect(arc.images.map((i) => i.name)).toEqual(['figure.png']);
+  });
+
+  it('still strips an ordinary prefix', () => {
+    const arc = ok(readWpdArchive(tarNamed('project')));
+    expect(arc.images.map((i) => i.name)).toEqual(['figure.png']);
+  });
+});

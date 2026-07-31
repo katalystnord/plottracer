@@ -243,10 +243,16 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   } else {
     const info = session.getDatasetInfos().find((i) => i.index === activeIndex);
     sections.push(flatDataSection(seriesRows(activeIndex), exportFields));
-    const f = fitFor(session, activeIndex, info?.name ?? 'Series');
+    // ⚑ Blank, not 'Series'. The v2.0 audit removed this fabricated fallback
+    // from the JSON path and left it here, one function below -- and this is
+    // the assembly every NON-JSON format renders through, so the invented name
+    // rode into the CSV/ODS/XLSX curve-fit and geometry blocks and into the
+    // sheet title. Same defect, same file, missed by grep because the earlier
+    // fix searched for 'Series 1'. (Round-2 audit.)
+    const f = fitFor(session, activeIndex, info?.name ?? '');
     if (f) fits.push(f);
     const g = geometryFor(session, axes, configId, activeIndex);
-    if (g) geometries.push({ series: info?.name ?? 'Series', result: g });
+    if (g) geometries.push({ series: info?.name ?? '', result: g });
   }
   if (measures.length > 0) sections.push(measurementsSection(measures));
   // Curve fits as their own SEPARATE blocks (David): a summary of every fit,
