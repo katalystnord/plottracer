@@ -3200,6 +3200,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const removedName = this.datasetEntries[index]!.dataset.name;
     const removingActive = index === this.activeDatasetIndex;
     this.datasetEntries.splice(index, 1);
+    // A removed series takes its bars with it, so any category only IT owned
+    // is now an orphan -- see pruneOrphanedCategories for what a ghost row
+    // costs the user.
+    this.pruneOrphanedCategories();
     // Nothing may keep pointing at a series that is gone (engine/errorRelation.ts).
     clearErrorRelationsTo(this.getDatasets(), removedName);
     if (this.activeDatasetIndex >= this.datasetEntries.length) {
@@ -5183,6 +5187,66 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * read 33.3 read 19.2, exported and saved, with nothing on screen wrong
    * except a stuck "click its edges" prompt. (Round-2 audit.)
    */
+  /**
+   * Drop categories no tuple owns any more, shifting the rest down.
+   *
+   * ⚑ WHY IT EXISTS. Every new bar reserves a fresh category slot
+   * (`reserveEmptyCategorySlot`), and NOTHING gave one back: deleting a bar,
+   * a point, or a whole series left the category behind. The shared v2.0 Bar
+   * table draws its rows from the CategoryAxis, not from the tuples, so each
+   * deleted bar left a dead row with a null value and no tuple — and the
+   * per-cell delete only renders where a value exists, so the ghost row had
+   * **no delete affordance on any cell**. It rode into the saved file and
+   * reloaded. Adding a replacement bar minted `Category 3` rather than reusing
+   * the freed slot, and retyping the freed NAME hit `setTupleLabel`'s
+   * sole-owner branch and renamed in place, leaving TWO identically named rows
+   * — after which `getCategoryIndex` resolved that name to the invisible one.
+   *
+   * `CategoryAxis.removeCategory` had existed since v2.0 with zero callers;
+   * its own doc says the wiring layer must check every bound dataset first,
+   * and that layer was never written. This is it. Removing an index shifts
+   * every later one, so the stored `categoryIndex` metadata is renumbered in
+   * the same pass — which is exactly why it could not be a bare call.
+   * (Round-2 audit.)
+   */
+  private pruneOrphanedCategories(): void {
+    if (this.categoryAxis.getCategories().length === 0) return;
+    // Which indexes does any tuple, in any series, still point at?
+    const owned = new Set<number>();
+    for (const entry of this.datasetEntries) {
+      if (!this.usesCategoryAxis(entry.dataset)) continue;
+      for (const tuple of entry.dataset.getAllTuples()) {
+        for (const pixelIndex of tuple) {
+          if (pixelIndex === null) continue;
+          const raw = entry.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
+          const idx = typeof raw === 'number' ? raw : Number(raw);
+          if (Number.isInteger(idx) && idx >= 0) owned.add(idx);
+        }
+      }
+    }
+    const total = this.categoryAxis.getCategories().length;
+    const orphans: number[] = [];
+    for (let i = 0; i < total; i++) if (!owned.has(i)) orphans.push(i);
+    if (orphans.length === 0) return;
+
+    // Highest first, so the indexes still to be removed stay valid.
+    for (const orphan of [...orphans].reverse()) {
+      if (!this.categoryAxis.removeCategory(orphan)) continue;
+      for (const entry of this.datasetEntries) {
+        if (!this.usesCategoryAxis(entry.dataset)) continue;
+        const dataset = entry.dataset;
+        for (let p = 0; p < dataset.getCount(); p++) {
+          const existing = dataset.getPixel(p).metadata ?? {};
+          const raw = existing['categoryIndex'];
+          const idx = typeof raw === 'number' ? raw : Number(raw);
+          if (Number.isInteger(idx) && idx > orphan) {
+            dataset.setMetadataAt(p, { ...existing, categoryIndex: idx - 1 });
+          }
+        }
+      }
+    }
+  }
+
   private fixPendingExplodedAfterTupleRemoval(removedIndex: number): void {
     if (this.pendingExplodedTuple === null) return;
     if (this.pendingExplodedTuple === removedIndex) {
@@ -5207,6 +5271,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
         this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
+        this.pruneOrphanedCategories();
       }
       this.previousSlot();
     } else {
@@ -5234,6 +5299,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
         this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
+        this.pruneOrphanedCategories();
       }
     } else {
       dataset.removePixelAtIndex(index);
@@ -5417,6 +5483,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // method's own pixel removal already accounts for -- so the pending index
     // has to shift with it or it will point at the wrong tuple from here on.
     this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
+    this.pruneOrphanedCategories();
   }
 
   /** Whether sortByNearestNeighbour would do anything for the active series --
