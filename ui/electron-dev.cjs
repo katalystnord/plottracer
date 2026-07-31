@@ -54,6 +54,13 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'electron-preload.cjs'),
       contextIsolation: true,
+      // Explicit, matching electron-main.cjs's own webPreferences exactly
+      // (v2.0 audit) -- Electron's current defaults already match these, so
+      // this was safe in practice, but an implicit default is one Electron
+      // version bump away from silently changing; self-documenting parity
+      // with the production entry point is the point, not a behaviour change.
+      nodeIntegration: false,
+      sandbox: true,
     },
   })
 
