@@ -156,7 +156,12 @@ export function buildExportJson(input: ExportAssemblyInput): string {
   // fixing it properly means getHistogramBins(datasetIndex)/
   // getTupleRows(datasetIndex).
   const exportShape = session.getExportShape();
-  const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? 'Series 1';
+  // v2.0 pre-launch audit: was a fabricated 'Series 1' fallback for the
+  // (should-never-happen) case of no active dataset -- the same
+  // invented-name shape as the Bar0/Slice0 defect fixed elsewhere. If this
+  // invariant is ever violated, blank is the honest answer, not a name that
+  // could be confused for a real series someone captured.
+  const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? '';
   if (exportShape === 'bins') {
     return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
   }

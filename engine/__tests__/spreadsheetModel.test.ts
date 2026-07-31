@@ -86,6 +86,20 @@ describe('the series model', () => {
     expect(series[1]!.roles).toHaveLength(2);
     expect(series[0]!.labels.length).toBeGreaterThanOrEqual(0);
   });
+
+  it('leaves the name BLANK, not a fabricated "Series N", if the two views ever disagree (v2.0 audit)', () => {
+    // allDatasetsData and datasetInfos are read separately (this file's own
+    // header comment) specifically so the component doesn't have to ask the
+    // session twice -- which means they COULD disagree. A fabricated name is
+    // the same invented-name shape as the Bar0/Slice0 defect fixed elsewhere;
+    // an empty datasetInfos here (as if the two views desynced) must not make
+    // buildSpreadsheetSeries invent a name nobody gave this series.
+    const s = sessionWith(1);
+    const sess = s as unknown as CalibrationSession<CalibratedAxes>;
+    const series = buildSpreadsheetSeries(s.getAllDatasetsData(), [], sess);
+    expect(series).toHaveLength(1);
+    expect(series[0]!.name).toBe('');
+  });
 });
 
 describe('the Category column condition', () => {

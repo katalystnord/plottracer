@@ -71,7 +71,14 @@ export function buildSpreadsheetSeries(
 ): SpreadsheetSeries[] {
   return allDatasetsData.map((d) => ({
     index: d.index,
-    name: datasetInfos.find((i) => i.index === d.index)?.name ?? `Series ${d.index + 1}`,
+    // v2.0 pre-launch audit: was a fabricated `Series ${d.index + 1}` fallback
+    // when the two views disagree -- the same invented-name shape as the
+    // Bar0/Slice0 defect fixed elsewhere in this codebase, just triggered by
+    // a desync instead of an unnamed capture. A name nobody gave the series
+    // is not this component's to invent (tenet 9); if the two views can ever
+    // actually disagree, blank is the honest answer, matching how every
+    // other unnamed-thing in this app renders.
+    name: datasetInfos.find((i) => i.index === d.index)?.name ?? '',
     color: d.color,
     active: d.active,
     values: d.points.map((p) => p.data),
