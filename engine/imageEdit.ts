@@ -79,8 +79,22 @@ export function rotateImageByAngle(src: Uint8ClampedArray, w: number, h: number,
   const phi = (deg * Math.PI) / 180;
   const cos = Math.cos(phi);
   const sin = Math.sin(phi);
-  const nw = Math.max(1, Math.ceil(Math.abs(w * cos) + Math.abs(h * sin)));
-  const nh = Math.max(1, Math.ceil(Math.abs(w * sin) + Math.abs(h * cos)));
+  // ⚑ CEIL A ROUNDING ERROR AND YOU LOSE THE OUTER RING (fixed 2026-07-31).
+  // At 180 degrees cos is -1 and sin is 1.22e-16, so |w*cos| + |h*sin| for a
+  // 5x5 image is 5.0000000000000006 -- and `Math.ceil` of that is SIX. The
+  // canvas then grows a pixel in each direction, which shifts its centre by
+  // half a pixel, so the source no longer tiles the destination: the inverse
+  // map sends the outermost row AND column outside the source, and a 5x5
+  // rotated 180 degrees came back as a 4x4 image padded with blanks. Real
+  // data loss, silent, and it applies to 180/270 (and any angle whose exact
+  // bounding box is a whole number).
+  //
+  // Subtracting a sub-pixel epsilon before the ceil absorbs the float noise
+  // while leaving every genuine fraction alone: 5.0000000000000006 -> 5, but
+  // a real 5.0000001 still ceils to 6, and 45 degrees still grows by root two.
+  const CEIL_EPS = 1e-9;
+  const nw = Math.max(1, Math.ceil(Math.abs(w * cos) + Math.abs(h * sin) - CEIL_EPS));
+  const nh = Math.max(1, Math.ceil(Math.abs(w * sin) + Math.abs(h * cos) - CEIL_EPS));
   const cx = w / 2;
   const cy = h / 2;
   const ncx = nw / 2;
@@ -95,16 +109,32 @@ export function rotateImageByAngle(src: Uint8ClampedArray, w: number, h: number,
       const sx = ux * cos + uy * sin + cx - 0.5;
       const sy = -ux * sin + uy * cos + cy - 0.5;
       const d = (Y * nw + X) * 4;
-      if (sx < 0 || sx > w - 1 || sy < 0 || sy > h - 1) {
+      // ⚑ TOLERANCE, not an exact bounds test (2026-07-31). cos(pi/2) is
+      // 6.12e-17, not 0, so at a right angle an EDGE pixel's inverse-mapped
+      // coordinate lands a rounding error outside [0, w-1] -- measured at
+      // -1.5e-16 -- and an exact `< 0` test threw that pixel away as
+      // out-of-source, blanking the outermost row or column of a 90/180/270
+      // deskew. Found by cross-checking this general path against the integer
+      // rotate-cw op, which disagreed on exactly one corner pixel. EDGE_EPS is
+      // far below a pixel, so a genuinely outside sample is still refused (and
+      // still transparent); only float noise is absorbed. The clamp then keeps
+      // the bilinear taps in range, which is what makes accepting the sample
+      // safe.
+      const EDGE_EPS = 1e-6;
+      if (sx < -EDGE_EPS || sx > w - 1 + EDGE_EPS || sy < -EDGE_EPS || sy > h - 1 + EDGE_EPS) {
         dst[d] = dst[d + 1] = dst[d + 2] = dst[d + 3] = 0;
         continue;
       }
-      const x0 = Math.floor(sx);
-      const y0 = Math.floor(sy);
+      const sxc = Math.min(w - 1, Math.max(0, sx));
+      const syc = Math.min(h - 1, Math.max(0, sy));
+      const x0 = Math.floor(sxc);
+      const y0 = Math.floor(syc);
       const x1 = Math.min(w - 1, x0 + 1);
       const y1 = Math.min(h - 1, y0 + 1);
-      const fx = sx - x0;
-      const fy = sy - y0;
+      // From the CLAMPED coordinates, so a sample absorbed by EDGE_EPS above
+      // gets a weight of exactly 0 rather than a tiny negative one.
+      const fx = sxc - x0;
+      const fy = syc - y0;
       for (let c = 0; c < 4; c++) {
         const p00 = src[(y0 * w + x0) * 4 + c]!;
         const p10 = src[(y0 * w + x1) * 4 + c]!;
