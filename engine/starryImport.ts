@@ -39,7 +39,8 @@
  * the way an Engauge three-point system does.
  */
 
-import { unzipSync, strFromU8 } from 'fflate';
+import { strFromU8 } from 'fflate';
+import { unzipBounded, unzipEntry } from './zipRead.js';
 import { Calibration } from '../core/calibration.js';
 import { Dataset } from '../core/dataset.js';
 import { XYAxes } from '../core/axes/xy.js';
@@ -86,8 +87,10 @@ interface StarryProjectJson {
  */
 export function isStarryProject(bytes: Uint8Array): boolean {
   try {
-    const files = unzipSync(bytes);
-    const entry = files[PROJECT_ENTRY];
+    // ⚑ ONE ENTRY. A sniffer runs on every candidate file, including ones that
+    // turn out to belong to nobody -- so it must not inflate a stranger's whole
+    // archive to answer "is this mine". See engine/zipRead.ts.
+    const entry = unzipEntry(bytes, PROJECT_ENTRY);
     if (!entry) return false;
     const json = JSON.parse(strFromU8(entry)) as Record<string, unknown>;
     if (json['plotTracerProject'] === 1) return false; // ours, not theirs
@@ -151,9 +154,11 @@ function axisPoint(a: StarryAxis | undefined): { px: number; py: number; value: 
 export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedStarryFigure> {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes);
-  } catch {
-    return { error: 'Could not open this project — the archive is unreadable.' };
+    files = unzipBounded(bytes);
+  } catch (err) {
+    return { error: err instanceof Error && err.name === 'ZipTooLargeError'
+      ? err.message
+      : 'Could not open this project — the archive is unreadable.' };
   }
   const entry = files[PROJECT_ENTRY];
   if (!entry) return { error: 'This is not a StarryDigitizer project (no project.json inside it).' };

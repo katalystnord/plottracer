@@ -3628,7 +3628,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // index. Found by the v1.4 release audit; `addSpiderTracePoints` already
         // documented the same trap and avoided it the same way.
         let newTupleIndex: number | null;
-        if (this.config.tupleMembers === 'independent') {
+        // ⚑ THE PREDICATE HERE MUST MATCH `setSlotCursor`'S. That method was
+        // loosened for Bar's 2-slot object tuple (v2.0 pre-launch audit) so a
+        // half-dragged bar's missing corner could be aimed at directly -- but
+        // this branch, the one that decides WHICH SLOT a click lands in when the
+        // tuple does not exist yet, was left keyed on `independent` alone. A
+        // cursor aimed at a NEW Bar tuple's slot 1 would therefore have its
+        // click filed into slot 0 by `addTuple`, recording a bar's top corner as
+        // its bottom one: a silently wrong reading, and the exact defect the
+        // v1.4 spider audit already fixed for independent slots (see the note
+        // above). No caller reaches it today -- the Bar table only ever aims at
+        // an EXISTING tuple, and `nextSlot` resets groupIndex to 0 when it
+        // hands back a new one -- which is precisely why it belongs in the
+        // model: this is the third time a guard has sat in the session while
+        // the model had another entrance.
+        if (this.config.tupleMembers === 'independent' || this.isBarIntervalShape(dataset)) {
           newTupleIndex = dataset.getAllTuples().length;
           dataset.addEmptyTupleAt(newTupleIndex);
           dataset.addToTupleAt(newTupleIndex, groupIndex, index);

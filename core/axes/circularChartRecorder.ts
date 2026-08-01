@@ -41,6 +41,9 @@ export class CircularChartRecorderAxes {
   thetac0 = 0;
   thetaStartOffset = 0;
   timeFormat: string | null = null;
+  /** The Chart Start Time exactly as entered -- see getStartTime for why the
+   *  string is kept rather than re-derived from tStart and a format. */
+  private startTimeInput: string | null = null;
   time0 = 0;
   timeMax = 0;
   tStart: number | null = null;
@@ -77,6 +80,7 @@ export class CircularChartRecorderAxes {
     const tStart = ip.parse(startTimeInput);
     if (!ip.isValid || typeof tStart !== 'number') return false;
     this.tStart = tStart;
+    this.startTimeInput = startTimeInput;
     const dateEnd = new Date(this.tStart);
 
     if (rotationTime === 'week') {
@@ -193,6 +197,14 @@ export class CircularChartRecorderAxes {
 
   pixelToLiveString(pxi: number, pyi: number): string {
     const dataVal = this.pixelToData(pxi, pyi);
+    // ⚑ THE REFUSAL HERE IS DELIBERATE, AND IT IS NOT THE SAME BUG AS
+    // getStartTime's -- checked, because the two look identical from a distance.
+    // `timeMax`/`tEnd` are derived with Date arithmetic (`setDate(+7)`), so a
+    // rotation always spans 604,800,000 "units" whether or not the time axis was
+    // entered as dates. With a format, that number renders as the date it is.
+    // WITHOUT one, it is a bare millisecond count and NOT the numeric scale the
+    // user typed -- so printing it would state a time the figure never showed.
+    // Refusing is right; only the round-trip in getStartTime was broken.
     if (this.timeFormat == null) {
       return 'calibration error!';
     }
@@ -200,11 +212,29 @@ export class CircularChartRecorderAxes {
     return timeStr + ', ' + dataVal[1]!.toExponential(4);
   }
 
+  /**
+   * The Chart Start Time, as the user gave it.
+   *
+   * ⚑ THIS RETURNS THE INPUT, NOT A RE-RENDERING OF IT, and that is the fix for
+   * a project that could not be reopened. It used to format `tStart` back into a
+   * string using `timeFormat` — a format captured from a DIFFERENT field (the
+   * first calibration point's own value). Two things fell out of that:
+   *
+   *   1. A CCR calibrated with plain NUMBERS has no date format at all, so this
+   *      returned null, `plotData` serialized `startTime: null`, and reopening
+   *      called `calibrate(..., null, ...)`, which fails at InputParser. The
+   *      project came back UNCALIBRATED — every reading gone — with the figure
+   *      and the points still on screen.
+   *   2. Even with a date format, it was the WRONG field's format: a dated first
+   *      point with a numeric start time re-rendered that number as a date, and
+   *      the reopened file then parsed a different value than was typed.
+   *
+   * Storing what was measured rather than re-deriving it is tenets 9 and 10 in
+   * one line: the string the user entered round-trips exactly, for dates and
+   * numbers alike, and no format has to be guessed to make it work.
+   */
   getStartTime(): string | null {
-    if (this.timeFormat == null || this.tStart == null) {
-      return null;
-    }
-    return dateConverter.formatDateNumber(this.tStart, this.timeFormat);
+    return this.startTimeInput;
   }
 
   getRotationTime(): RotationTime {

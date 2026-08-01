@@ -196,13 +196,20 @@ describe('CircularChartRecorderAxes — the contract it exposes', () => {
     expect(started).toContain('2024');
   });
 
-  it('has NO start time to report when it was calibrated from plain numbers', () => {
-    // No date anywhere means no format to render one with; a fabricated
-    // timestamp here would be exactly the invention tenet 9 forbids.
+  it('reports the start time it was GIVEN when calibrated from plain numbers', () => {
+    // ⚑ THIS TEST USED TO ASSERT `getStartTime()` IS NULL HERE, with the
+    // reasoning "no date anywhere means no format to render one with; a
+    // fabricated timestamp would be the invention tenet 9 forbids". The premise
+    // was sound and the conclusion was the defect: returning the string the user
+    // actually TYPED is the opposite of a fabrication -- it is the recorded
+    // value, unrendered. Returning null meant the writer stored
+    // `startTime: null` and the reader handed that to `calibrate`, which refuses
+    // it, so a numeric chart recorder reopened uncalibrated with every reading
+    // gone. See plotDataAxesRoundTrip.test.ts for the round trip itself.
     const { axes, ok } = calibrateCcr('0', '100', '0');
     expect(ok).toBe(true);
-    expect(axes.getTimeFormat()).toBeNull();
-    expect(axes.getStartTime()).toBeNull();
+    expect(axes.getTimeFormat()).toBeNull(); // still no DATE format -- unchanged
+    expect(axes.getStartTime()).toBe('0');
   });
 
   it('asks for five calibration clicks and reports two data dimensions', () => {

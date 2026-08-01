@@ -100,3 +100,48 @@ describe('sectionsToOds', () => {
     expect(names[1]).toMatch(/\(2\)$/);
   });
 });
+
+/**
+ * ⚑ XML 1.0 FORBIDS most control characters OUTRIGHT -- they cannot be escaped,
+ * only removed. §2.2 admits only #x9, #xA, #xD and #x20..#xD7FF (plus the higher
+ * planes). A \u0001 in a series name is therefore not a cosmetic problem: it makes
+ * `content.xml` un-parseable, so a conformant reader rejects the WHOLE workbook
+ * rather than one cell. And names are attacker-controlled -- every importer takes
+ * them verbatim from someone else's project file (see tableFormats' own
+ * identifier tests) -- so this is reachable without the user typing anything.
+ */
+describe('sectionsToOds and characters XML cannot carry', () => {
+  // Everything XML 1.0 forbids below U+0020, plus DEL and the C1 block.
+  // Matching control characters IS the job here. The no-control-regex rule
+  // exists to catch them written into a pattern by accident; this is the exact
+  // set XML 1.0 §2.2 excludes from its Char set.
+  // eslint-disable-next-line no-control-regex
+  const ILLEGAL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
+
+  it('emits no XML-illegal control character, wherever the name came from', () => {
+    const nasty = 'Trial\u0000A\u0001 \u001fB\u0007';
+    const files = unzipSync(
+      sectionsToOds([{ title: nasty, header: ['x', nasty], rows: [[nasty, 1]] }])
+    );
+    const xml = strFromU8(files['content.xml']!);
+    expect(xml).not.toMatch(ILLEGAL);
+  });
+
+  it('KEEPS tab, newline and carriage return, which XML does allow', () => {
+    const files = unzipSync(sectionsToOds([{ header: ['x'], rows: [['a\tb\nc\rd']] }]));
+    const xml = strFromU8(files['content.xml']!);
+    // Stripping these as well would silently destroy legitimate text. The rule
+    // has to remove exactly what the spec forbids and nothing more.
+    expect(xml).toContain('a\tb\nc\rd');
+  });
+
+  it('still renders the readable part of a name that carried one', () => {
+    const files = unzipSync(
+      sectionsToOds([{ title: 'Se\u0001ries', header: ['x'], rows: [[1]] }])
+    );
+    const xml = strFromU8(files['content.xml']!);
+    // Dropped, not replaced by a substitute glyph: a name is a label the user
+    // typed, and inventing a character in it would be a different kind of lie.
+    expect(xml).toContain('Series');
+  });
+});

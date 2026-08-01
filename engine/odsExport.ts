@@ -27,9 +27,43 @@ import type { Cell, TableSection } from './tableFormats.js';
 
 const MIMETYPE = 'application/vnd.oasis.opendocument.spreadsheet';
 
+/**
+ * Characters XML 1.0 cannot carry AT ALL.
+ *
+ * ⚑ THESE CANNOT BE ESCAPED, ONLY REMOVED. §2.2 defines the legal Char set as
+ * #x9 | #xA | #xD | #x20-#xD7FF | #xE000-#xFFFD | #x10000-#x10FFFF -- so a
+ * control character is not merely awkward to encode, it is outside the grammar.
+ * `&#x1;` is just as illegal as the raw byte. A conformant reader therefore
+ * rejects the ENTIRE workbook, not the one cell that carried it.
+ *
+ * This is reachable without the user typing anything: every importer takes
+ * series and category names verbatim out of somebody else's project file, and
+ * seriesNames.ts only trims and de-duplicates them (the same reasoning that put
+ * the escaping and formula-injection rules into tableFormats.ts).
+ *
+ * Tab, newline and carriage return are deliberately NOT in this set -- they are
+ * legal XML text, and stripping them would silently damage names that legitimately
+ * contain them.
+ */
+// Matching control characters IS the job here. The no-control-regex rule
+// exists to catch them written into a pattern by accident; this is the exact
+// set XML 1.0 §2.2 excludes from its Char set.
+// eslint-disable-next-line no-control-regex
+const XML_ILLEGAL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\ufffe\uffff]/g;
+
+/**
+ * Drop what XML cannot represent. Dropped, not substituted: a name is a label a
+ * person chose, and quietly inventing a visible character inside it would be a
+ * different kind of wrong answer -- the same reason a blank cell stays blank
+ * rather than becoming 0.
+ */
+function xmlSafe(text: string): string {
+  return text.replace(XML_ILLEGAL, '');
+}
+
 /** XML text escaping. Ampersand first, or the other replacements get mangled. */
 function xml(text: string): string {
-  return text
+  return xmlSafe(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -40,7 +74,11 @@ function xml(text: string): string {
  * then de-duplicate with a suffix, mirroring the XLSX writer's rule so the same
  * export has the same tab names in both formats. */
 function uniqueTableName(raw: string, used: Set<string>): string {
-  const base = raw.replace(/['"\\/:*?[\]]/g, ' ').trim().slice(0, 100) || 'Sheet';
+  // ⚑ Strip the un-representable characters BEFORE de-duplicating, not just on
+  // the way out through xml(). Two titles differing only by a control character
+  // are one name once written, so de-duplicating on the raw string would let
+  // both through as "distinct" and emit the same table:name twice.
+  const base = xmlSafe(raw).replace(/['"\\/:*?[\]]/g, ' ').trim().slice(0, 100) || 'Sheet';
   let name = base;
   let n = 2;
   // v2.0 pre-launch audit: re-truncate to the 100-char cap AFTER appending the

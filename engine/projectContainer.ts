@@ -32,7 +32,8 @@
  * (design blocker #3): a JSON project starts with `{`, not the zip magic.
  */
 
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { zipSync, strToU8, strFromU8 } from 'fflate';
+import { unzipBounded, unzipEntry } from './zipRead.js';
 import {
   deserializeProject,
   deserializeMultiFigureProject,
@@ -203,9 +204,12 @@ export function serializeProjectZip(file: ProjectFile): ProjectResult<Uint8Array
 export function deserializeProjectZip(bytes: Uint8Array): ProjectResult<DeserializedProject> {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes);
-  } catch {
-    return { error: 'Could not open project — the archive is unreadable.' };
+    // Bounded: an archive is something a user was SENT. See engine/zipRead.ts.
+    files = unzipBounded(bytes);
+  } catch (err) {
+    return { error: err instanceof Error && err.name === 'ZipTooLargeError'
+      ? err.message
+      : 'Could not open project — the archive is unreadable.' };
   }
   const jsonBytes = files[PROJECT_ENTRY];
   if (!jsonBytes) return { error: 'Not a PlotTracer project archive (no project.json).' };
@@ -287,9 +291,11 @@ export function serializeMultiFigureZip(file: MultiFigureProjectFile): ProjectRe
 export function deserializeMultiFigureZip(bytes: Uint8Array): ProjectResult<DeserializedMultiFigureProject> {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes);
-  } catch {
-    return { error: 'Could not open project — the archive is unreadable.' };
+    files = unzipBounded(bytes);
+  } catch (err) {
+    return { error: err instanceof Error && err.name === 'ZipTooLargeError'
+      ? err.message
+      : 'Could not open project — the archive is unreadable.' };
   }
   const jsonBytes = files[PROJECT_ENTRY];
   if (!jsonBytes) return { error: 'Not a PlotTracer project archive (no project.json).' };
@@ -327,8 +333,11 @@ export function deserializeMultiFigureZip(bytes: Uint8Array): ProjectResult<Dese
  * -- deserialize will then surface the real error. */
 export function isMultiFigureContainer(bytes: Uint8Array): boolean {
   try {
-    const files = unzipSync(bytes);
-    const jsonBytes = files[PROJECT_ENTRY];
+    // ⚑ ONE ENTRY, not the whole archive. This runs on EVERY zip a user tries to
+    // open, before anything has established the file is even ours -- so
+    // inflating a stranger's entire archive just to peek at project.json was the
+    // most exposed path in the app.
+    const jsonBytes = unzipEntry(bytes, PROJECT_ENTRY);
     if (!jsonBytes) return false;
     return isMultiFigureProject(JSON.parse(strFromU8(jsonBytes)));
   } catch {

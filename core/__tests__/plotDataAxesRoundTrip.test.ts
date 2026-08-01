@@ -273,6 +273,60 @@ describe('Circular Chart Recorder axes survive a save and reopen', () => {
     const quarterWeekMs = (7 * 24 * 3600 * 1000) / 4;
     expect(axes.pixelToData(0, 250)[0]! - axes.tStart!).toBeCloseTo(quarterWeekMs, 3);
   });
+
+  /**
+   * ⚑⚑ A CCR CALIBRATED WITH PLAIN NUMBERS COULD NOT BE REOPENED AT ALL.
+   *
+   * Nothing requires a chart recorder's time axis to be dates — `buildAxes`
+   * accepts any number, and such a chart calibrates, traces and exports
+   * correctly. But `getStartTime` used to re-render `tStart` through
+   * `timeFormat`, and a numeric time sets no format, so it returned NULL. The
+   * writer then stored `startTime: null`, and the reader handed that null
+   * straight to `calibrate`, where InputParser refuses it.
+   *
+   * The result was a project that reopened UNCALIBRATED — figure there, points
+   * there, every reading gone — and, since the round-2 audit made the load door
+   * honour `calibrate()`'s verdict, it now does so visibly rather than silently.
+   * Either way the user's work is unreadable, which is a tenet-1 failure.
+   */
+  function numericCcr(): CircularChartRecorderAxes {
+    return reopen<CircularChartRecorderAxes>((plot) => {
+      const cal = new Calibration(2);
+      cal.addPoint(200, 150, '0', '0'); // time axis in plain numbers, not dates
+      cal.addPoint(150, 100, '', '');
+      cal.addPoint(100, 150, '', '100');
+      cal.addPoint(0, 250, '', '');
+      cal.addPoint(0, 50, '', '');
+      const a = new CircularChartRecorderAxes();
+      a.name = 'CCR numeric';
+      expect(a.calibrate(cal, '0', 'week', 'anticlockwise')).toBe(true);
+      plot.addAxes(a);
+    }).axes;
+  }
+
+  it('reopens a NUMERIC (non-date) time axis still calibrated', () => {
+    const axes = numericCcr();
+    expect(axes.isCalibrated()).toBe(true);
+    expect(axes.getStartTime()).toBe('0');
+  });
+
+  it('round-trips the start time as the STRING that was entered', () => {
+    // Not re-derived from tStart plus a format borrowed from another field --
+    // that is what produced both the null above and, for a dated first point
+    // with a numeric start time, a value that changed on reopen.
+    expect(ccr('week', 'anticlockwise').getStartTime()).toBe('2024/01/01 00:00');
+  });
+
+  it('still REFUSES the live readout it cannot honestly format', () => {
+    // ⚑ Deliberately unchanged, and checked rather than assumed: this looks like
+    // the same defect as the round-trip above and is not. `timeMax`/`tEnd` come
+    // from Date arithmetic, so a rotation spans 604,800,000 units whether or not
+    // the axis was entered as dates -- meaning a numeric CCR's time reading is a
+    // bare millisecond count, NOT the scale the user typed. Printing it would
+    // state a time the figure never showed. Pinned here so the round-trip fix
+    // cannot later be "completed" by making this print a number.
+    expect(numericCcr().pixelToLiveString(0, 250)).toBe('calibration error!');
+  });
 });
 
 describe('Spider axes survive a save and reopen', () => {

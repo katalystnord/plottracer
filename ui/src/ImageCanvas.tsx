@@ -777,33 +777,56 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // mouse position to recenter on the way wheel-zoom does. No-ops with no
   // image loaded -- nothing to zoom -- rather than silently changing an
   // otherwise-invisible view state.
+  /**
+   * Is a drag in progress whose anchor is stored in RAW SCREEN pixels?
+   *
+   * ⚑ ZOOMING MID-DRAG SILENTLY MOVES THE ANSWER. The crop / region /
+   * select-marquee / lasso / bar-capture anchor is kept in screen coordinates
+   * and only converted to image space at drag-END, using whatever `view` is
+   * current then. Change `view` in between and the stored anchor is never
+   * re-projected, so the rectangle recorded is not the one the user drew — for
+   * boxMode (v2.0 Bar capture) that is a wrong READING, not a cosmetic glitch.
+   *
+   * ⚑ `onWheel` has refused this since the v2.0 pre-launch audit, but the
+   * refusal lived inline in `onWheel` alone — while the SAME view change is
+   * reachable from the zoom buttons, the zoom slider, and the Ctrl +/-/0/1
+   * menu accelerators. The keyboard ones are reachable with the mouse button
+   * still held, which is exactly the situation the guard exists for. Shared
+   * here so the file's own "there is one zoom code path" rule covers the
+   * refusal too, instead of one path being right and four being wrong.
+   */
+  const gestureInProgress = useCallback(
+    () => cropDragRef.current != null || lassoRef.current != null || linkDragRef.current != null,
+    []
+  );
+
   const zoomIn = useCallback(() => {
     const container = containerRef.current;
-    if (!container || !image) return;
+    if (!container || !image || gestureInProgress()) return;
     userAdjustedRef.current = true;
     setView((prev) => zoomByFactor(prev, container.clientWidth / 2, container.clientHeight / 2, 1.25));
-  }, [image]);
+  }, [image, gestureInProgress]);
 
   const zoomOut = useCallback(() => {
     const container = containerRef.current;
-    if (!container || !image) return;
+    if (!container || !image || gestureInProgress()) return;
     userAdjustedRef.current = true;
     setView((prev) => zoomByFactor(prev, container.clientWidth / 2, container.clientHeight / 2, 0.8));
-  }, [image]);
+  }, [image, gestureInProgress]);
 
   const zoomFit = useCallback(() => {
     const container = containerRef.current;
-    if (!container || !image) return;
+    if (!container || !image || gestureInProgress()) return;
     userAdjustedRef.current = false; // an explicit re-fit re-enables auto-fit-on-resize
     setView(fitToContainer(image.width, image.height, container.clientWidth, container.clientHeight));
-  }, [image]);
+  }, [image, gestureInProgress]);
 
   const zoom100 = useCallback(() => {
     const container = containerRef.current;
-    if (!container || !image) return;
+    if (!container || !image || gestureInProgress()) return;
     userAdjustedRef.current = true;
     setView((prev) => zoomByFactor(prev, container.clientWidth / 2, container.clientHeight / 2, 1 / prev.scale));
-  }, [image]);
+  }, [image, gestureInProgress]);
 
   // Checkpoint 37 (zoom Slider, see CLAUDE.md): zoom to an *absolute* scale,
   // recentering on the container's own center like the discrete zoom
@@ -812,10 +835,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // zoom code path, not a second one to drift from the buttons/menu.
   const zoomTo = useCallback((scale: number) => {
     const container = containerRef.current;
-    if (!container || !image) return;
+    if (!container || !image || gestureInProgress()) return;
     userAdjustedRef.current = true;
     setView((prev) => zoomByFactor(prev, container.clientWidth / 2, container.clientHeight / 2, scale / prev.scale));
-  }, [image]);
+  }, [image, gestureInProgress]);
 
   // Checkpoint 93: a WYSIWYG PNG of the two on-screen layers composited. The
   // base canvas is at CSS resolution; the Konva overlay's native canvas may be
@@ -1023,7 +1046,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     // (tenet 10); completing or cancelling the drag first is the same
     // one-gesture-at-a-time discipline `onStageMouseDown`'s own pan-vs-tool
     // ordering already imposes.
-    if (cropDragRef.current || lassoRef.current || linkDragRef.current) return;
+    if (gestureInProgress()) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -1031,7 +1054,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     const mouseY = e.evt.clientY - rect.top;
     userAdjustedRef.current = true;
     setView((prev) => zoomAt(prev, mouseX, mouseY, e.evt.deltaY));
-  }, []);
+  }, [gestureInProgress]);
 
   const onStageMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
