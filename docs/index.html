@@ -789,9 +789,13 @@
           rather than connected regions and is unaffected.
         </li>
         <li>
-          <b>Greyscale.</b> Extraction keyed on colour has less to work with when a
-          figure is monochrome: about 10 points on bars and 37 on lines in [1]. Manual
-          capture is the route for those figures.
+          <b>Greyscale.</b> About 10 points on bars and 37 on lines in [1]. Not for
+          the reason we first assumed: monochrome figures do carry the signal &mdash;
+          across 101 greyscale bar figures the number of distinct grey shades matches
+          the number of series 81% of the time. The loss is that a third of the gaps
+          between adjacent shades are narrower than the colour tolerance, so two
+          series match as one. Normalising a figure's contrast before matching
+          recovers part of it, and is being worked on.
         </li>
         <li>
           <b>Adjacent same-coloured bars.</b> Bars of one colour with no gap merge into a
