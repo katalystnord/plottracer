@@ -742,12 +742,12 @@
       <h2>We tested it against two public benchmarks, and published the misses.</h2>
       <p>
         Not our own samples. Two third-party corpora from the
-        <b>CHART-Infographics</b> competition series — <b>1,208 annotated charts</b>
-        scored with the competition's own metric, using PlotTracer's own shipped
-        extraction code. (Both corpora also contain box plots, which PlotTracer
-        captures by hand but does not auto-extract; they are excluded rather than
-        counted as failures, and saying so is part of the number.) Every result
-        below is reproducible, and the misses are on this page beside the hits.
+        <b>CHART-Infographics</b> competition series, scored with the competition's
+        own metric, using PlotTracer's own shipped extraction code. (Both corpora
+        also contain box plots, which PlotTracer captures by hand but does not
+        auto-extract; they are excluded rather than counted as failures, and
+        saying so is part of the number.) Every result below is reproducible, and
+        the misses are on this page beside the hits.
       </p>
     </div>
 
@@ -766,9 +766,9 @@
         <table class="ev">
           <thead><tr><th>Chart type</th><th>Found</th><th>Colour</th><th>Greyscale</th></tr></thead>
           <tbody>
-            <tr><td>Scatter <span class="sub">52 figs &middot; 2,410 points</span></td><td class="n">87.8%</td><td class="sub">87.0%</td><td class="sub">89.6%</td></tr>
-            <tr><td>Bar <span class="sub">192 figs &middot; 3,234 bars</span></td><td class="n">76.1%</td><td class="sub">82.2%</td><td class="sub">66.6%</td></tr>
-            <tr><td>Line <span class="sub">156 figs &middot; 14,265 points</span></td><td class="n">72.5%</td><td class="sub">77.5%</td><td class="sub">41.8%</td></tr>
+            <tr><td>Scatter <span class="sub">103 figs &middot; 5,409 points</span></td><td class="n">91.3%</td><td class="sub">90.4%</td><td class="sub">93.0%</td></tr>
+            <tr><td>Bar <span class="sub">384 figs &middot; 6,494 bars</span></td><td class="n">76.1%</td><td class="sub">79.6%</td><td class="sub">70.1%</td></tr>
+            <tr><td>Line <span class="sub">312 figs &middot; 29,688 points</span></td><td class="n">69.3%</td><td class="sub">76.1%</td><td class="sub">39.0%</td></tr>
           </tbody>
         </table>
         </div>
@@ -795,8 +795,16 @@
         </div>
       </div>
     </div>
+<p class="ev-stamp">
+      <b>The bar number reproduces on data it has never seen.</b>
+      PMC ships two disjoint data-extraction splits, and scoring them separately
+      gives 76.1% on 3,234 bars and 76.0% on a different 3,260
+      &mdash; a tenth of a point apart, on figures with no overlap. Line and
+      scatter move by about six points between the two, which is the honest
+      width of those estimates.
+    </p>
     <p class="ev-stamp">
-      1,208 charts scored against PlotTracer
+      1,607 charts scored against PlotTracer
       <span class="data">2.0.0-rc1</span>, measured
       2026-08-01, at the app's own defaults
       (tolerance 60, minimum blob diameter
@@ -823,9 +831,10 @@
         </li>
         <li>
           <b>Same-coloured bars that touch flood together</b> and read as one oversized
-          bar. On colour figures that is the difference between <b>94%</b> recall when
-          the bars are separated and <b>76%</b> when they touch. That one is not a
-          scope boundary — it is ours to fix, and it is the next thing we are fixing.
+          bar. Across 384 real bar figures that is the difference between
+          <b>82.2%</b> recall when the bars are separated and <b>71.1%</b> when they
+          touch — and on colour figures alone, <b>89.2%</b> against <b>73.6%</b>.
+          That one is not a scope boundary; it is ours.
         </li>
         <li>
           <b>Dense scatter over-detects on real figures and under-detects on synthetic

@@ -104,6 +104,14 @@ const block = `${START}
     <div class="ev-tables">
 ${results.corpora.map(corpusCard).join('\n\n')}
     </div>
+${results.replication ? `<p class="ev-stamp">
+      <b>The bar number reproduces on data it has never seen.</b>
+      PMC ships two disjoint data-extraction splits, and scoring them separately
+      gives ${results.replication.filter((r) => r.family === 'bar').map((r) => `${pct(r.splitA.pct)} on ${n(r.splitA.total)} bars and ${pct(r.splitB.pct)} on a different ${n(r.splitB.total)}`).join('')}
+      &mdash; a tenth of a point apart, on figures with no overlap. Line and
+      scatter move by about six points between the two, which is the honest
+      width of those estimates.
+    </p>` : ''}
     <p class="ev-stamp">
       ${n(totalFigures)} charts scored against PlotTracer
       <span class="data">${esc(results.appVersion)}</span>, measured
