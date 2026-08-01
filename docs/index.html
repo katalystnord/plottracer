@@ -222,13 +222,33 @@
 
   /* ---- evidence band (v2.0): measured, not asserted ---- */
   .evidence { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .ev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; margin-top: 34px; }
-  .ev-stat { border: 1px solid var(--line); border-radius: 13px; padding: 22px 20px; background: var(--bg); }
-  .ev-num { font-family: var(--mono); font-size: clamp(1.9rem, 4vw, 2.5rem); font-weight: 700; color: var(--teal); line-height: 1; }
-  .ev-lab { margin-top: 10px; font-weight: 650; font-size: 0.98rem; }
-  .ev-sub { margin-top: 6px; color: var(--ink-soft); font-size: 0.9rem; line-height: 1.5; }
   .ev-note { margin-top: 28px; color: var(--ink-soft); font-size: 0.95rem; max-width: 46em; }
   .ev-note code { font-family: var(--mono); font-size: 0.88em; }
+  /* ⛑ These panels sit ON the .evidence band, which is --card. They are inset
+     with --paper, NOT the `var(--bg)` the first version of this band used --
+     there is no --bg variable on this page, so that declaration was invalid and
+     the panels were falling back to transparent. It only looked right because
+     the band behind them happens to be white in the light scheme. */
+  .ev-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 34px; }
+  .ev-card { border: 1px solid var(--line); border-radius: 13px; background: var(--paper); padding: 20px 20px 8px; }
+  .ev-card h3 { font-size: 1.02rem; margin: 0; letter-spacing: -0.01em; }
+  /* ⛑ --ink-soft, not --ink-faint: faint on --paper is 2.91:1 in the light
+     scheme, which fails WCAG AA for text this size. Soft is 5.61:1. */
+  .ev-card .ev-cite { margin: 6px 0 14px; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.5; }
+  .ev-card .ev-cite a { color: var(--teal); }
+  .ev-scroll { overflow-x: auto; }
+  table.ev { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  table.ev th, table.ev td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.ev th { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 650; }
+  table.ev td.n { font-family: var(--mono); font-weight: 700; color: var(--teal); }
+  table.ev td .sub, table.ev td.sub { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); font-weight: 400; }
+  table.ev td .sub { display: block; }
+  .ev-fail { margin-top: 34px; border-left: 3px solid var(--teal); padding-left: 18px; max-width: 52em; }
+  .ev-fail h3 { font-size: 1.05rem; margin: 0 0 10px; }
+  .ev-fail li { color: var(--ink-soft); font-size: 0.95rem; line-height: 1.6; margin-bottom: 9px; }
+  .ev-invite { margin-top: 38px; border: 1px solid var(--teal); border-radius: 13px; padding: 24px 26px; background: var(--paper); }
+  .ev-invite h3 { margin: 0 0 10px; font-size: 1.12rem; letter-spacing: -0.01em; }
+  .ev-invite p { color: var(--ink-soft); font-size: 0.96rem; line-height: 1.65; max-width: 52em; }
 
   /* ---- download ---- */
   .download { text-align: center; }
@@ -717,42 +737,129 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Measured</span>
-      <h2>We tested it against real published figures.</h2>
+      <h2>We tested it against two public benchmarks, and published the misses.</h2>
       <p>
-        Not our own samples — the <b>ICPR 2022 CHART-Infographics</b> benchmark:
-        bar charts from open-access papers, with values verified by hand by the
-        people who built the dataset. Here is what PlotTracer got, including
-        where it falls short.
+        Not our own samples. Two third-party corpora from the
+        <b>CHART-Infographics</b> competition series — <b>1,208 annotated charts</b>
+        scored with the competition's own metric, using PlotTracer's own shipped
+        extraction code. (Both corpora also contain box plots, which PlotTracer
+        captures by hand but does not auto-extract; they are excluded rather than
+        counted as failures, and saying so is part of the number.) Every result
+        below is reproducible, and the misses are on this page beside the hits.
       </p>
     </div>
 
-    <div class="ev-grid">
-      <div class="ev-stat">
-        <div class="ev-num">31<span style="font-size:0.5em;color:var(--ink-soft)">/32</span></div>
-        <div class="ev-lab">Exact by hand</div>
-        <div class="ev-sub">Figures traced with the drag-box, read back to the benchmark's own value. Including a log axis and two genuinely stacked charts.</div>
+    <div class="ev-tables">
+      <div class="ev-card">
+        <h3>Real published figures</h3>
+        <p class="ev-cite">
+          UB-UNITEC PMC — charts from open-access PubMed Central papers.
+          Davila, Xu, Ahmed, Mendoza, Setlur &amp; Govindaraju,
+          “ICPR 2022: Challenge on Harvesting Raw Tables from Infographics,”
+          <i>ICPR</i> 2022, 4995–5001.
+          <a href="https://doi.org/10.1109/ICPR56361.2022.9956289">doi:10.1109/ICPR56361.2022.9956289</a>
+        </p>
+        <div class="ev-scroll">
+        <table class="ev">
+          <thead><tr><th>Chart type</th><th>Found</th><th>Colour</th><th>Greyscale</th></tr></thead>
+          <tbody>
+            <tr><td>Bar <span class="sub">192 figs · 3,234 bars</span></td><td class="n">76.1%</td><td class="sub">82.2%</td><td class="sub">66.6%</td></tr>
+            <tr><td>Line <span class="sub">156 figs · 14,265 pts</span></td><td class="n">72.5%</td><td class="sub">77.5%</td><td class="sub">41.8%</td></tr>
+            <tr><td>Scatter <span class="sub">52 figs · 2,410 pts</span></td><td class="n">87.8%</td><td class="sub">87.0%</td><td class="sub">89.6%</td></tr>
+          </tbody>
+        </table>
+        </div>
       </div>
-      <div class="ev-stat">
-        <div class="ev-num">3,234</div>
-        <div class="ev-lab">Bars measured</div>
-        <div class="ev-sub">Every bar figure in the split — 192 of them — not a flattering sample.</div>
-      </div>
-      <div class="ev-stat">
-        <div class="ev-num">98%</div>
-        <div class="ev-lab">Found automatically</div>
-        <div class="ev-sub">On colour figures whose bars don't touch. Across all 192, including greyscale and touching bars, 81%.</div>
+
+      <div class="ev-card">
+        <h3>Generated figures</h3>
+        <p class="ev-cite">
+          Adobe CHART-Synthetic — matplotlib-generated from real data.
+          Davila, Kota, Setlur, Govindaraju, Tensmeyer, Shekhar &amp; Chaudhry,
+          “ICDAR 2019 Competition on Harvesting Raw Tables from Infographics,”
+          <i>ICDAR</i> 2019, 1594–1599.
+          <a href="https://doi.org/10.1109/ICDAR.2019.00203">doi:10.1109/ICDAR.2019.00203</a>
+        </p>
+        <div class="ev-scroll">
+        <table class="ev">
+          <thead><tr><th>Chart type</th><th>Found</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>Line <span class="sub">200 figs · 2,236 pts</span></td><td class="n">92.0%</td><td class="sub">clean render</td></tr>
+            <tr><td>Bar <span class="sub">498 figs · 6,739 bars</span></td><td class="n">35.3%</td><td class="sub">hatched fills</td></tr>
+            <tr><td>Scatter <span class="sub">110 figs · 11,996 pts</span></td><td class="n">32.1%</td><td class="sub">dense overlap</td></tr>
+          </tbody>
+        </table>
+        </div>
       </div>
     </div>
 
+    <div class="ev-fail">
+      <h3>Where it fails, and why</h3>
+      <ul>
+        <li>
+          <b>Hatched bars break automatic detection — that is the whole 35%.</b>
+          Scanning across one 967-pixel synthetic bar finds its fill colour running in
+          28-pixel stretches separated by black hatch lines: <b>147 interruptions in a
+          single bar</b>. Colour detection sees 34 fragments instead of one bar. Real
+          published figures hatch far less often, which is the entire distance between
+          76% and 35%. Line tracing is untouched by it, at 92%.
+        </li>
+        <li>
+          <b>Greyscale costs about 16 points on bars and 36 on lines.</b> Extraction
+          keyed on colour has nothing to key on when everything is black. That is a
+          scope boundary, not a bug — and it is why the manual drag-box exists.
+        </li>
+        <li>
+          <b>Same-coloured bars that touch flood together</b> and read as one oversized
+          bar. On colour figures that is the difference between <b>94%</b> recall when
+          the bars are separated and <b>76%</b> when they touch. That one is not a
+          scope boundary — it is ours to fix, and it is the next thing we are fixing.
+        </li>
+        <li>
+          <b>Dense scatter over-detects on real figures and under-detects on synthetic
+          ones</b> — the same overlap problem from both ends. On real figures about
+          half the strays are other ink inside the plot area: grid lines, error bars,
+          trend lines.
+        </li>
+      </ul>
+    </div>
+
     <p class="ev-note">
-      The one figure that didn't match is worth stating plainly: its bar
-      <em>lengths</em> encode a percentage while a printed number beside each bar
-      encodes a raw count, and the benchmark's answer is the printed number.
-      PlotTracer read the lengths correctly. Reading the text would need OCR,
-      which it does not have and does not fake — so it is counted as a miss.
-      Where automatic detection stops, the drag-box does not: manual capture was
-      exact on every one of these figures.
+      <b>What the benchmark measures, stated plainly.</b> These corpora score fully
+      automatic recognition; PlotTracer is human-in-the-loop. So the harness supplies
+      exactly the two things a person supplies — the plot box, and a click on each
+      colour visible in the figure — and nothing else. Everything after that is the
+      app's own shipped code at its own default settings. Scoring is in image space
+      with the competition's own tolerance of 5% of the smaller image dimension.
+      Where automatic detection stops, manual capture does not: on a 32-figure
+      hand-traced subset the drag-box read <b>31 of 32</b> exactly, the exception
+      being a figure whose ground truth is a printed number rather than the bar's
+      own length — which would need OCR, and PlotTracer does not fake what it
+      cannot measure.
     </p>
+
+    <div class="ev-invite">
+      <h3>An open invitation to every other digitiser</h3>
+      <p>
+        We think a field this old should have comparable numbers in it, and it does
+        not. So the harness is public, it is short, and it will call whatever
+        extraction code you point it at. The corpora are public and citable. The
+        metric is the competition's, not ours.
+      </p>
+      <p>
+        <b>Run it and publish your table.</b> Two requests, both self-serving in the
+        same direction: report per chart type rather than one aggregate — a single
+        number hides a tool that is excellent at one thing and punishes a tool that
+        honestly declines a case it cannot measure — and state where your
+        human/program line falls, because a number without that line drawn is not
+        comparable to anything. If we have got something wrong, a metric that
+        flatters us or a bug in the harness, open an issue: three harness bugs were
+        found and fixed while producing the table above, and there may be a fourth.
+      </p>
+      <p style="margin-top:14px;">
+        <a class="btn btn-primary" href="https://github.com/katalystnord/plottracer-benchmarks">Benchmark harness on GitHub</a>
+      </p>
+    </div>
   </div>
 </section>
 
