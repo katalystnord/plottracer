@@ -812,10 +812,13 @@
       supplies the two inputs a person supplies &mdash; the plot box, and one colour pick
       per visible colour &mdash; and nothing else; everything after that is the
       application's own shipped code at its default settings. Scoring is in image space at
-      the competition's tolerance of 5% of the smaller image dimension. On a 32-figure
-      subset traced by hand rather than automatically, manual capture returned the
-      corpus value exactly on 31; the exception is a figure whose ground truth is a
-      printed number rather than the bar's length, which would require OCR.
+      the competition's tolerance of 5% of the smaller image dimension.
+      <b>Manual capture is measured separately</b>, in data space: driving the
+      application's own capture session across 262 bar figures from [1], with the
+      calibration recovered from each figure's own tick labels, 83.8% of 4,074 bars
+      read within 1% of the corpus value and 80.5% of figures had every bar within
+      that. 119 figures are excluded because their ground truth carries no two
+      numeric tick labels to calibrate from.
       The harness and the exact image lists are at
       <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>.
     </p>
