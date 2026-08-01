@@ -9073,7 +9073,7 @@ export function Workspace() {
           </div>
         </div>
       )}
-      {helpOverlayOpen && <HelpOverlay onClose={() => setHelpOverlayOpen(false)} />}
+      {helpOverlayOpen && <HelpOverlay onClose={() => setHelpOverlayOpen(false)} manualUrl={MANUAL_URL} />}
       {gamePhase && (
         <ChallengeOverlay
           phase={gamePhase}

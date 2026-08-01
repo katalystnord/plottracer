@@ -9,6 +9,11 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+// ⚑ This project's OWN recurring defect shapes, as rules. Every one names a bug
+// that reached master at least once -- see tools/eslint-rules/index.mjs for the
+// commit each was earned by. This is the "Semgrep with our own rules" item from
+// the audit plan, implemented in the engine already in the build.
+import { plottracer } from './tools/eslint-rules/index.mjs';
 
 export default tseslint.config(
   {
@@ -32,8 +37,13 @@ export default tseslint.config(
     // which is exactly correct there, not a lint violation.
     files: ['core/**/*.ts', 'algorithms/**/*.ts', 'engine/**/*.ts', 'ui/src/**/*.{ts,tsx}', 'ui/__tests__/**/*.ts'],
     extends: [...tseslint.configs.recommended],
+    plugins: { plottracer },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'plottracer/no-fabricated-label': 'error',
+      'plottracer/no-dynamic-regexp': 'error',
+      'plottracer/no-raw-number-parse': 'error',
+      'plottracer/calibrate-must-refuse': 'error',
     },
   },
   {

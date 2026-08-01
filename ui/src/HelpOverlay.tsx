@@ -16,12 +16,12 @@
  * stable part, so a card about the workflow cannot drift; a card that
  * duplicated the manual would.
  *
- * ⚑ NO MANUAL LINK HERE, DELIBERATELY. A draft put "Read the full manual" in
- * this card's footer and David cut it: *"In the overlay?"* He is right — this is
- * the card you flash open in the middle of a calibration, and "go and read the
- * manual" is the opposite of in-the-moment. Documentation is a LOOK-IT-UP
- * action and belongs in the Help card, which is where you already go to find
- * things. Keeping the two apart is what lets this one stay small.
+ * ⚑ THE MANUAL IS A BUTTON IN THE FOOTER, not a link in the prose. A first
+ * draft put "Read the full manual" inline in the footer sentence and David cut
+ * it — *"In the overlay?"* — then asked for it back as a button, bottom right.
+ * The distinction is real and worth keeping: a link buried mid-sentence
+ * interrupts a card you are scanning, while a button parked in the corner is
+ * out of the reading path until you want it. Same content, opposite behaviour.
  *
  * ⚑ REACHABLE TWO WAYS, DELIBERATELY. F1 opens it, and so does a button in the
  * Help card. The button is not a convenience — a key is the only route means a
@@ -51,6 +51,8 @@ import {
 
 export interface HelpOverlayProps {
   onClose: () => void;
+  /** The manual's address. Passed in so there is one place it is written down. */
+  manualUrl: string;
 }
 
 /** The six steps, in the order they actually happen. */
@@ -223,7 +225,7 @@ function KeyList({ rows }: { rows: Array<[string, string]> }): React.ReactElemen
   );
 }
 
-export function HelpOverlay({ onClose }: HelpOverlayProps): React.ReactElement {
+export function HelpOverlay({ onClose, manualUrl }: HelpOverlayProps): React.ReactElement {
   // Esc closes, like every other overlay here. Captured on the window so it
   // works regardless of what has focus inside the card.
   React.useEffect(() => {
@@ -299,18 +301,45 @@ export function HelpOverlay({ onClose }: HelpOverlayProps): React.ReactElement {
           </div>
         </div>
 
-        <p
+        <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
             margin: '14px 0 0',
             paddingTop: 10,
             borderTop: `1px solid ${theme.color.border.regular}`,
-            fontSize: 11.5,
-            lineHeight: 1.5,
-            color: theme.color.text.legend,
           }}
         >
-          <b>F1</b> reopens this card. Hold <b>Alt</b> for key tips on the buttons.
-        </p>
+          <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: theme.color.text.legend }}>
+            <b>F1</b> reopens this card. Hold <b>Alt</b> for key tips on the buttons.
+          </p>
+          {/* ⚑ Same button as the Help card's, deliberately — one affordance
+              for one action, so it is recognisable in both places. window.open
+              is enough: electron-main.cjs's setWindowOpenHandler routes http(s)
+              to shell.openExternal and denies the window, so no IPC surface. */}
+          <button
+            type="button"
+            data-testid="help-overlay-manual"
+            onClick={() => window.open(manualUrl, '_blank', 'noreferrer')}
+            title="Open the full manual in your browser — every chart type, every export format, and what each tool refuses"
+            style={{
+              flex: '0 0 auto',
+              padding: '6px 12px',
+              borderRadius: theme.border.radius.regular,
+              border: `1px solid ${theme.color.border.regular}`,
+              background: theme.color.background.panel,
+              color: theme.color.text.primary,
+              cursor: 'pointer',
+              fontWeight: 650,
+              fontSize: theme.font.size.regular,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Manual ↗
+          </button>
+        </div>
       </div>
     </div>
   );

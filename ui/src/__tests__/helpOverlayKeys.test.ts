@@ -158,13 +158,25 @@ describe('the card stays a card', () => {
     expect(visible).not.toMatch(/v\d+\.\d+/);
   });
 
-  it('does NOT offer the manual — that is a look-it-up action, not an in-the-moment one', () => {
-    // David cut a "Read the full manual" link from this card's footer: the card
-    // you flash open mid-calibration is the wrong place to be sent away to read
-    // something. The manual lives in the Help card instead, as a real link.
-    const visible = overlay.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    expect(visible).not.toMatch(/manual/i);
+  it('offers the manual as a corner BUTTON, never as a link inside the prose', () => {
+    // ⚑ Both halves matter, and the distinction is the reason this assertion
+    // exists rather than a plain "has a manual link". A first draft put "Read
+    // the full manual" INLINE in the footer sentence; David cut it, then asked
+    // for it back as a button in the corner. A link mid-sentence interrupts a
+    // card you are scanning; a button parked in the corner stays out of the
+    // reading path until wanted. Same content, opposite behaviour -- so the
+    // test pins the FORM, not just the presence.
+    expect(overlay).toContain('data-testid="help-overlay-manual"');
+    expect(overlay).toContain("window.open(manualUrl");
+    // The footer sentence itself must stay clean of it.
+    const footerAt = overlay.indexOf('reopens this card');
+    const sentence = overlay.slice(footerAt - 200, footerAt + 200);
+    expect(sentence).not.toMatch(/<a\s/);
+  });
+
+  it('the Help card offers the same button, so the action looks the same in both places', () => {
     expect(workspace).toContain('data-testid="manual-link"');
+    expect(workspace).toContain("window.open(MANUAL_URL");
   });
 
   it('the Help card OPENS the manual rather than printing its address', () => {
