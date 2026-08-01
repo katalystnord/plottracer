@@ -7,6 +7,12 @@
     "jsx": "react-jsx",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // Kept in step with the root tsconfig -- both were measured at zero errors
+    // before being enabled. ui/ compiles core+algorithms+engine too, so a flag
+    // set in only one of the two files would be enforced inconsistently.
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,

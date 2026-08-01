@@ -7,6 +7,16 @@
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // Three second opinions from the compiler already in the build, each
+    // verified to cost ZERO errors before being turned on (2026-08-01).
+    // `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature`
+    // were measured too and are NOT on: 8 and 63 errors respectively. The
+    // first is worth doing -- it enforces this project's own "an absent key
+    // means does-not-apply" rule at the type level -- but it is a change to
+    // 8 real call sites, not a flag flip.
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
