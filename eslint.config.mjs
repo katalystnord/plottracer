@@ -40,7 +40,6 @@ export default tseslint.config(
     plugins: { plottracer },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      'plottracer/no-fabricated-label': 'error',
       'plottracer/no-dynamic-regexp': 'error',
       'plottracer/no-raw-number-parse': 'error',
       'plottracer/calibrate-must-refuse': 'error',

@@ -20,60 +20,24 @@
  */
 
 /** ─────────────────────────────────────────────────────────────────────────
- *  1. A fabricated name written into the record.
+ *  ⛔ REMOVED: `no-fabricated-label`.
  *
- *  Found FOUR separate times in one day (2026-07-30): `autoLabelTuple`
- *  inventing "Bar0", the same generalised to Pie's "Slice0", and — found only
- *  by grepping for the literal string, because nothing calls anything else —
- *  `core/exportValues.ts`'s independent port of the same upstream default. Two
- *  more in `spreadsheetModel.ts`/`exportAssembly.ts` inventing "Series N" when
- *  their own cross-checks disagreed.
+ *  It flagged `?? 'Bar0'` / `` `Series ${n}` `` — the defect found FOUR times on
+ *  2026-07-30. Written and run, it produced 15 hits and EVERY ONE was a false
+ *  positive: `Group ${i}` and `Category ${i}` are on-screen labels for a slot
+ *  the user has not named, `Point ${n} selected` is a tips-bar sentence, and
+ *  `Series ${n}` is a real default name the user can rename.
  *
- *  A placeholder that LOOKS like a transcribed value is worse than a blank: the
- *  reader cannot tell it was never measured. Blank is the honest answer.
+ *  ⚑ The real defect was narrower than the pattern: a name written INTO THE
+ *  RECORD as though someone had transcribed it. Nothing in the syntax
+ *  distinguishes that from a label drawn on screen — the difference is where the
+ *  string goes, several calls away.
+ *
+ *  ⚑ So it is deleted rather than kept with disables. A rule that fires on
+ *  correct code gets silenced, and a silenced rule is worse than no rule: it
+ *  looks like coverage. The lesson stays where it works — grep the literal
+ *  string when one instance is found (feedback_sweep_and_self_audit).
  *  ───────────────────────────────────────────────────────────────────────── */
-const noFabricatedLabel = {
-  meta: {
-    type: 'problem',
-    docs: { description: 'A default label must not look like a value someone typed.' },
-    schema: [],
-    messages: {
-      fabricated:
-        'Fabricated label "{{value}}". A name nobody typed must be BLANK, not a placeholder that reads as transcribed ' +
-        '(this defect shipped four times: Bar0, Slice0, exportValues, Series N).',
-    },
-  },
-  create(context) {
-    // "Bar0", "Slice1", "Series 3" — a capitalised word touching a digit.
-    const SHAPE = /^(Bar|Slice|Series|Category|Point|Axis|Group)\s*\d*$/;
-    function check(node, raw) {
-      if (typeof raw === 'string' && SHAPE.test(raw) && /\d/.test(raw)) {
-        context.report({ node, messageId: 'fabricated', data: { value: raw } });
-      }
-    }
-    return {
-      // `x ?? 'Bar0'` and `x || 'Series 1'` — the fallback position specifically.
-      'LogicalExpression[operator="??"] > Literal:last-child'(node) {
-        check(node, node.value);
-      },
-      'LogicalExpression[operator="||"] > Literal:last-child'(node) {
-        check(node, node.value);
-      },
-      // `'Bar' + i` / `` `Bar${i}` `` — building one rather than defaulting to it.
-      'BinaryExpression[operator="+"] > Literal:first-child'(node) {
-        if (typeof node.value === 'string' && /^(Bar|Slice|Series|Category|Point|Axis|Group)\s*$/.test(node.value)) {
-          context.report({ node, messageId: 'fabricated', data: { value: node.value + '<n>' } });
-        }
-      },
-      TemplateLiteral(node) {
-        const head = node.quasis[0]?.value?.raw ?? '';
-        if (node.expressions.length > 0 && /^(Bar|Slice|Series|Category|Point|Axis|Group)\s*$/.test(head)) {
-          context.report({ node, messageId: 'fabricated', data: { value: head + '${...}' } });
-        }
-      },
-    };
-  },
-};
 
 /** ─────────────────────────────────────────────────────────────────────────
  *  2. A RegExp built from a runtime string.
@@ -135,10 +99,20 @@ const noRawNumberParse = {
   create(context) {
     const file = context.filename ?? context.getFilename();
     if (!/core\/axes\//.test(file)) return {};
+    const src = context.sourceCode ?? context.getSourceCode();
     return {
       CallExpression(node) {
         const name = node.callee.type === 'Identifier' ? node.callee.name : null;
-        if (name === 'parseFloat' || name === 'parseInt') {
+        if (name !== 'parseFloat' && name !== 'parseInt') return;
+        const arg = node.arguments[0];
+        if (!arg) return;
+        // ⚑ ONLY VALUES THE USER OR A FILE DECLARED — `cp.dx`, `cp.dy`,
+        // `globalValues[...]`, `meta[...]`. A first draft flagged every
+        // parseFloat in the directory and hit `parseFloat(String(pxi))`, which
+        // parses a PIXEL: already a number, nothing to misread, no InputParser
+        // involved. Those are the coordinates, not the calibration.
+        const text = src.getText(arg);
+        if (/\.d[xyz]\b|globalValues|metadata|meta\[/.test(text)) {
           context.report({ node, messageId: 'raw', data: { fn: name } });
         }
       },
@@ -168,17 +142,28 @@ const calibrateMustRefuse = {
     },
   },
   create(context) {
-    function check(node, name) {
-      if (name !== 'calibrate') return;
-      const src = context.sourceCode ?? context.getSourceCode();
-      const body = src.getText(node);
-      if (!/return\s+false/.test(body)) {
-        context.report({ node, messageId: 'cannotFail' });
-      }
-    }
+    // ⚑ THE CHECK IS ON THE WHOLE CLASS, not the method. XYAxes.calibrate is
+    // three lines that DELEGATE to processCalibration, where the nine refusals
+    // live; reading only the method body called it dead and was wrong. What
+    // matters is whether the calibration PATH can refuse at all, and the class
+    // is the unit that owns that path.
     return {
-      MethodDefinition(node) {
-        if (node.key.type === 'Identifier') check(node.value, node.key.name);
+      ClassBody(node) {
+        const cal = node.body.find(
+          (m) => m.type === 'MethodDefinition' && m.key.type === 'Identifier' && m.key.name === 'calibrate'
+        );
+        if (!cal) return;
+        // ⚑ A calibrate() THAT TAKES NO INPUT has nothing to refuse, and that is
+        // a real category rather than an exception carved out for one class:
+        // ImageAxes maps a pixel to itself (pixelToData returns [px, py]), so
+        // there are no declared values, no scale and no geometry that could be
+        // degenerate. Keyed on the signature, not the class name, so any future
+        // identity axes is covered and any axes that DOES take input is not.
+        if (cal.value.params.length === 0) return;
+        const src = context.sourceCode ?? context.getSourceCode();
+        if (!/return\s+false/.test(src.getText(node))) {
+          context.report({ node: cal, messageId: 'cannotFail' });
+        }
       },
     };
   },
@@ -186,7 +171,6 @@ const calibrateMustRefuse = {
 
 export const plottracer = {
   rules: {
-    'no-fabricated-label': noFabricatedLabel,
     'no-dynamic-regexp': noDynamicRegexp,
     'no-raw-number-parse': noRawNumberParse,
     'calibrate-must-refuse': calibrateMustRefuse,

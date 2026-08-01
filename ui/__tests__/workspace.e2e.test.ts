@@ -7806,3 +7806,87 @@ describe('pie charts (v1.6)', () => {
     });
   });
 });
+
+/**
+ * The F1 "How to use PlotTracer" card (v2.0).
+ *
+ * ⚑⚑ WHY THIS EXISTS SEPARATELY FROM helpOverlayKeys.test.ts. That file asserts
+ * the card's key table against Workspace.tsx's own source — it proves the two
+ * agree, and nothing more. It cannot tell whether pressing F1 opens anything,
+ * whether the button is wired, or whether the card can be dismissed. Source
+ * agreeing with source is the failure mode this project keeps getting caught
+ * by, so the key actually gets pressed here.
+ */
+describe('Workspace: the F1 help card', () => {
+  /** Present-and-visible, in this suite's own idiom (vitest expect, not
+   *  Playwright's — the locator matchers are not available here). */
+  const cardCount = () => page.getByTestId('help-overlay').count();
+
+  it('opens on F1 and closes on Escape', async () => {
+    await resetWorkspace('xy');
+    expect(await cardCount()).toBe(0);
+
+    await page.keyboard.press('F1');
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(1);
+    expect(await page.getByTestId('help-overlay').isVisible()).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(0);
+  });
+
+  it('opens from the Help card too — the route a first-time user can SEE', async () => {
+    // ⚑ The button is the load-bearing half. A key nobody has been told about
+    // is a capability that does not exist for a first-time user; F1 is the
+    // shortcut for the second time onwards.
+    await resetWorkspace('xy');
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('open-help-overlay').click();
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(1);
+
+    await page.getByTestId('help-overlay-close').click();
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(0);
+  });
+
+  it('closes on a backdrop click but NOT on a click inside the card', async () => {
+    await resetWorkspace('xy');
+    await page.keyboard.press('F1');
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(1);
+
+    // Inside first: a card that dismissed on its own content would be unusable.
+    await page.getByTestId('help-overlay').click({ position: { x: 20, y: 20 } });
+    expect(await cardCount()).toBe(1);
+
+    // The backdrop is the full-screen parent; click its far corner.
+    await page.getByTestId('help-overlay-backdrop').click({ position: { x: 4, y: 4 } });
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(0);
+  });
+
+  it('shows the workflow, the tools and their rail icons', async () => {
+    await resetWorkspace('xy');
+    await page.keyboard.press('F1');
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(1);
+    const card = page.getByTestId('help-overlay');
+
+    const text = (await card.textContent()) ?? '';
+    expect(text).toContain('The workflow');
+    expect(text).toContain('Auto-extract');
+    expect(text).toContain('Geometry');
+    // ⚑ The icons are the POINT of the tools list, not decoration: the rail is
+    // icons with NO labels, so a text-only card names something the user still
+    // cannot find. Ten tools, ten glyphs.
+    expect(await card.locator('svg').count()).toBeGreaterThanOrEqual(10);
+  });
+
+  it('offers the manual without navigating the app away', async () => {
+    // ⚑ electron-main.cjs's window-open handler routes http(s) to the system
+    // browser and DENIES the window. Had that regressed to an in-app
+    // navigation, the whole renderer would be replaced by GitHub -- so the
+    // assertion is that the app is still here afterwards.
+    await resetWorkspace('xy');
+    await page.keyboard.press('F1');
+    await expect.poll(cardCount, { timeout: 5000 }).toBe(1);
+    await page.getByTestId('help-overlay-manual').click();
+    expect(await cardCount()).toBe(1);
+    expect(await page.getByTestId('mode-pan').count()).toBe(1);
+  });
+});
