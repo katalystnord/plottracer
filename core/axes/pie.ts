@@ -170,6 +170,34 @@ export class PieAxes {
     // looked wrong. `derivedTupleValue` reads exactly these two fields, so
     // this was wrong at CAPTURE time, not only across a round trip.
     // (v2.0 pre-launch audit, round 2.)
+    // ⚑⚑ A TOTAL OR SWEEP THAT CANNOT PRODUCE A READING IS REFUSED — the fifth
+    // instance of this project's "calibrate() that cannot fail" shape, and the
+    // first found by a tool rather than by hand (a type-aware `no-base-to-string`
+    // pass, 2026-08-01).
+    //
+    // `plotData.ts` reads these two out of a PROJECT FILE as
+    // `parseFloat(String(meta['pieTotal'] ?? '100'))`. A file whose metadata
+    // holds anything that is not a string stringifies to "[object Object]" and
+    // parseFloat returns NaN — measured, not inferred: the axes came back with
+    // `defaultTotal: NaN` and `isCalibrated: true`, so the project reopened
+    // looking fine with every sector reading NaN.
+    //
+    // ZERO is the same defect wearing a different face. `value = (angle / sweep)
+    // x total`, so a zero total makes every slice read exactly 0 — a plausible
+    // number, no error, nothing on screen wrong. That is the map scale-length
+    // bug verbatim. A zero sweep divides by zero.
+    //
+    // ⚑ THE RULE IS THE SESSION'S OWN, COPIED RATHER THAN INVENTED.
+    // `PIE_AXES_CONFIG.checkValues` already refuses a non-positive total ("a
+    // sector is a fraction of a whole, so a pie cannot show a negative
+    // quantity") and a sweep outside (0, 360]. My first draft of this guard
+    // allowed a negative total on the grounds that `valuePerPixel` takes its
+    // magnitude — which would have made the class and the session disagree about
+    // the same figure. Read the existing guard's reasoning before adding one
+    // beside it.
+    if (!Number.isFinite(defaultTotal) || defaultTotal <= 0) return false;
+    if (!Number.isFinite(sweepDegrees) || sweepDegrees <= 0 || sweepDegrees > 360) return false;
+
     this.defaultTotal = defaultTotal;
     this.sweep = (sweepDegrees * Math.PI) / 180;
 

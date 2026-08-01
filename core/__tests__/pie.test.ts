@@ -262,3 +262,66 @@ describe('snapping a TILTED pie', () => {
     expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(5);
   });
 });
+
+/**
+ * ⚑⚑ THE FIFTH INSTANCE OF "calibrate() CANNOT FAIL" — found 2026-08-01 by a
+ * type-aware lint pass, not by hand.
+ *
+ * `no-base-to-string` flagged `parseFloat(String(meta['pieTotal'] ?? '100'))` in
+ * plotData.ts's read path: the metadata comes out of a PROJECT FILE, so a value
+ * that is not a string stringifies to "[object Object]" and parseFloat returns
+ * NaN. `calibrate` then stored it and reported success — measured, not inferred:
+ * `defaultTotal: NaN` with `isCalibrated: true`, and every sector reading NaN.
+ *
+ * A total of ZERO is the same defect with a different face: `value = angle/sweep
+ * x total` makes every slice read exactly 0, which is the map scale-length bug
+ * verbatim (see project_calibrate_cannot_fail_defect). A sweep of zero divides
+ * by zero.
+ *
+ * Guarded in the CLASS rather than at the read site, because the model has more
+ * than one entrance — the interactive path and the file path both land here.
+ */
+describe('a total or sweep that cannot produce a reading is REFUSED', () => {
+  function calibrateWith(total: number, sweepDegrees = 360): PieAxes {
+    const cal = new Calibration(2);
+    for (const a of [90, 210, 330]) {
+      const r = (a * Math.PI) / 180;
+      cal.addPoint(100 + 50 * Math.cos(r), 100 + 50 * Math.sin(r), '', '');
+    }
+    const axes = new PieAxes();
+    axes.calibrate(cal, total, sweepDegrees);
+    return axes;
+  }
+
+  it('refuses a NaN total — the shape a hostile or corrupt project file produces', () => {
+    const axes = calibrateWith(NaN);
+    expect(axes.isCalibrated()).toBe(false);
+  });
+
+  it('refuses an infinite total', () => {
+    expect(calibrateWith(Infinity).isCalibrated()).toBe(false);
+  });
+
+  it('refuses a ZERO total — every slice would read exactly 0, with nothing wrong on screen', () => {
+    expect(calibrateWith(0).isCalibrated()).toBe(false);
+  });
+
+  it('refuses a zero or NaN sweep — the divisor of every reading', () => {
+    expect(calibrateWith(100, 0).isCalibrated()).toBe(false);
+    expect(calibrateWith(100, NaN).isCalibrated()).toBe(false);
+  });
+
+  it('refuses a NEGATIVE total and an over-full sweep, matching the session rule', () => {
+    // ⚑ Not invented here: PIE_AXES_CONFIG.checkValues already refuses both,
+    // because a sector is a fraction of a whole. The class and the session must
+    // not disagree about the same figure -- that is the whole reason the guard
+    // belongs in the model rather than only at one door.
+    expect(calibrateWith(-100, 360).isCalibrated()).toBe(false);
+    expect(calibrateWith(100, 540).isCalibrated()).toBe(false);
+  });
+
+  it('still accepts the ordinary pie, so the refusal cannot over-reach', () => {
+    expect(calibrateWith(100, 360).isCalibrated()).toBe(true);
+    expect(calibrateWith(184, 180).isCalibrated()).toBe(true);
+  });
+});

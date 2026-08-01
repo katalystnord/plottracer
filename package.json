@@ -19,7 +19,8 @@
     "ui:start": "npm run ui:build && node ui/electron-start.cjs",
     "ui:dist:linux": "npm run ui:build && electron-builder --linux --config build/electron-builder-ui.yml",
     "ui:dist:mac": "npm run ui:build && electron-builder --mac --config build/electron-builder-ui.yml",
-    "ui:dist:win": "npm run ui:build && electron-builder --win --config build/electron-builder-ui.yml"
+    "ui:dist:win": "npm run ui:build && electron-builder --win --config build/electron-builder-ui.yml",
+    "benchmarks:update": "node scripts/update-benchmark-table.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

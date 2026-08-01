@@ -52,8 +52,15 @@ function loadedPie(total: string, sweep: string): PieAxes {
     cal.addPoint(x, y, '', '');
   }
   const axes = new PieAxes();
-  // The premise: the axes is perfectly happy with input the click path refuses.
-  expect(axes.calibrate(cal, parseFloat(total), parseFloat(sweep))).toBe(true);
+  // ⚑ THIS HELPER'S PREMISE USED TO BE THE DEFECT. It asserted `.toBe(true)`
+  // with the note "the axes is perfectly happy with input the click path
+  // refuses" -- i.e. it pinned the class's permissiveness as a fact, and it was
+  // the reason a corrupt project file could reopen "calibrated" with every
+  // sector reading NaN. PieAxes now applies the SAME rule as the session
+  // (2026-08-01), so the class's own verdict is no longer asserted here; what
+  // these tests exist to check is that the SESSION reports the refusal on the
+  // file entrance, which it still must whether or not the class caught it first.
+  axes.calibrate(cal, parseFloat(total), parseFloat(sweep));
   return axes;
 }
 
