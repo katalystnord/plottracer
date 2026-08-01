@@ -202,6 +202,7 @@ import {
 import { theme, glassSurface } from './theme.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
+import { HelpOverlay } from './HelpOverlay.js';
 
 /**
  * The digitizing workspace: pick an axes type, load an image, calibrate,
@@ -747,6 +748,17 @@ const CheckGlyph = () => (
 // name here still names what the FIGURE is (an example whose point is a
 // feature you can't tell apart from any other pie is not an example --
 // CLAUDE.md's keystone), just not how to operate the tool.
+/**
+ * Where the manual lives.
+ *
+ * ⚑ RESTORED 2026-08-01 after `459291a` -- a commit about PIE CONTROLS -- deleted
+ * it and the Help-card line that printed it as collateral in an unrelated edit.
+ * The app then shipped v1.6.0 and v2.0.0-rc1 with no route to its own
+ * documentation at all. It now lives in the F1 card as a REAL link, which is
+ * where the deferred design always said Documentation would end up.
+ */
+const MANUAL_URL = 'https://github.com/katalystnord/plottracer/blob/master/MANUAL.md';
+
 const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; icon?: string; pdf?: boolean }[] = [
   { id: 'xy', name: 'Stress–strain curve', src: xySample, axes: 'xy' },
   { id: 'xy-multi', name: 'Multiseries — 4 curves', src: xyMultiSample, axes: 'xy' },
@@ -1286,6 +1298,10 @@ export function Workspace() {
   // beside it are for figures whose series ARE'NT distinguished by colour (line
   // style, markers), where eyedropping would give two series one colour.
   const [eyedropper, setEyedropper] = useState<null | 'grid' | 'series' | 'trace'>(null);
+  // F1 / the Help card's own button both open this. See HelpOverlay.tsx for why
+  // it is reachable two ways rather than one.
+  const [helpOverlayOpen, setHelpOverlayOpen] = useState(false);
+
   // --- Trace Challenge (v1.2 game). `gamePhase` null = not playing; it's
   // orthogonal to `mode` (a round runs in place-point mode). Round setup +
   // scoring live in the callbacks below; the UI is ./ChallengeOverlay.tsx. ---
@@ -4362,9 +4378,19 @@ export function Workspace() {
       // FloatingPanel's own anchor state -- pressing the key does exactly what pressing
       // the button does, which is the honest meaning of a shortcut and keeps one code
       // path for opening the panel.
+      // ⚑ F1 OPENS THE "HOW TO USE" CARD, not the Help dropdown (David, v2.0:
+      // "something you can call up with F1... things to help you directly in
+      // the moment"). It used to click the Help trigger, which was right when
+      // that dropdown was the only help surface -- but the dropdown holds
+      // examples and attribution, and neither is what you want mid-calibration.
+      //
+      // The Help dropdown loses its key and keeps its BUTTON, which is a
+      // labelled, visible control in the top bar, so nothing became
+      // undiscoverable. The overlay is reachable from that same dropdown, so
+      // the key is a shortcut to something you can also find by looking.
       if (e.key === 'F1') {
         e.preventDefault();
-        document.querySelector<HTMLElement>('[data-testid="help-trigger"]')?.click();
+        setHelpOverlayOpen(true);
         return;
       }
       // Alt-modified combos are left alone -- Alt belongs to the key-tips now.
@@ -6251,6 +6277,37 @@ export function Workspace() {
           <FloatingPanel label="Help" icon={<HelpIcon />} hideLabel testId="help" shortcut="F1">
             {(close) => (
               <>
+                {/* ⚑ FIRST IN THE CARD, above the examples and the Challenge.
+                    This is the one entry here a stuck user needs; the examples
+                    are for exploring and the Challenge is a game. It is also
+                    what makes F1 discoverable at all -- a key with no visible
+                    route is a capability a first-time user never learns
+                    exists. */}
+                <button
+                  type="button"
+                  data-testid="open-help-overlay"
+                  onClick={() => {
+                    close();
+                    setHelpOverlayOpen(true);
+                  }}
+                  title="The workflow and the keys, on one card"
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '7px 9px',
+                    marginBottom: 10,
+                    background: theme.color.background.panel,
+                    border: `1px solid ${theme.color.border.regular}`,
+                    borderRadius: theme.border.radius.regular,
+                    color: theme.color.text.primary,
+                    cursor: 'pointer',
+                    fontWeight: 650,
+                    fontSize: theme.font.size.regular,
+                  }}
+                >
+                  How to use PlotTracer
+                  <span style={{ float: 'right', color: theme.color.text.legend, fontWeight: 400 }}>F1</span>
+                </button>
                 <div
                   style={{
                     fontSize: theme.font.size.small,
@@ -6317,34 +6374,77 @@ export function Workspace() {
                   })}
                 </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
-                <button
-                  type="button"
-                  data-testid="challenge-start"
-                  onClick={() => {
-                    close();
-                    startChallenge();
-                  }}
-                  style={{
-                    width: '100%',
-                    textAlign: 'center',
-                    padding: '8px 10px',
-                    borderRadius: theme.border.radius.regular,
-                    border: `1px solid ${theme.color.primary.main}`,
-                    background: theme.color.primary.clicked,
-                    // v2.0 pre-launch audit: white text on this background is
-                    // ~2.46:1, failing WCAG AA (needs 4.5:1 at 13px bold --
-                    // the same contrast defect already fixed once for a
-                    // header button). Dark text on the same background is
-                    // ~5.14:1.
-                    color: theme.color.text.primary,
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                    fontSize: theme.font.size.regular,
-                  }}
-                  title="Race the clock tracing 5 pre-calibrated example figures — scored against their true values"
-                >
-                  🎯 Take The Trace Challenge
-                </button>
+                {/* ⚑⚑ A BUTTON, NOT AN ADDRESS. v1.6 printed the manual's URL as
+                    plain selectable text; David overturned that 2026-08-01 --
+                    "that was not a good semantic, because the users could not
+                    simply click it" -- and then asked for it as a small button
+                    beside the Challenge rather than a link above it. A string
+                    that looks like a link and does nothing is the worst of both.
+
+                    ⚑ It needs NO new IPC surface. electron-main.cjs's
+                    setWindowOpenHandler already routes http(s) to
+                    shell.openExternal and denies the window, so window.open is
+                    enough. Nor does it fail SILENTLY offline: the browser opens
+                    and says it cannot reach the page, which is an ordinary
+                    outcome a user understands -- the objection the plain-text
+                    version was built on.
+
+                    ⚑ The pair sits on one row because they are the same KIND of
+                    thing: the two places you leave this card for. Challenge
+                    keeps the width; Manual takes only what it needs. */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                  <button
+                    type="button"
+                    data-testid="challenge-start"
+                    onClick={() => {
+                      close();
+                      startChallenge();
+                    }}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '8px 10px',
+                      borderRadius: theme.border.radius.regular,
+                      border: `1px solid ${theme.color.primary.main}`,
+                      background: theme.color.primary.clicked,
+                      // v2.0 pre-launch audit: white text on this background is
+                      // ~2.46:1, failing WCAG AA (needs 4.5:1 at 13px bold --
+                      // the same contrast defect already fixed once for a
+                      // header button). Dark text on the same background is
+                      // ~5.14:1.
+                      color: theme.color.text.primary,
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: theme.font.size.regular,
+                    }}
+                    title="Race the clock tracing 5 pre-calibrated example figures — scored against their true values"
+                  >
+                    🎯 Take The Trace Challenge
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="manual-link"
+                    onClick={() => {
+                      close();
+                      window.open(MANUAL_URL, '_blank', 'noreferrer');
+                    }}
+                    style={{
+                      flex: '0 0 auto',
+                      padding: '8px 12px',
+                      borderRadius: theme.border.radius.regular,
+                      border: `1px solid ${theme.color.border.regular}`,
+                      background: theme.color.background.panel,
+                      color: theme.color.text.primary,
+                      cursor: 'pointer',
+                      fontWeight: 650,
+                      fontSize: theme.font.size.regular,
+                      whiteSpace: 'nowrap',
+                    }}
+                    title="Open the full manual in your browser — every chart type, every export format, and what each tool refuses"
+                  >
+                    Manual ↗
+                  </button>
+                </div>
                 <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
                 {/* ⚑ NO maxWidth. This carried `maxWidth: 260` from when the help card
                     was a narrow column, and stayed after the example list grew labels
@@ -8973,6 +9073,7 @@ export function Workspace() {
           </div>
         </div>
       )}
+      {helpOverlayOpen && <HelpOverlay onClose={() => setHelpOverlayOpen(false)} />}
       {gamePhase && (
         <ChallengeOverlay
           phase={gamePhase}

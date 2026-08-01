@@ -603,7 +603,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.46 6.6A6.6 6.6 0 1 0 16.4 15.06L10.2 12.8Z"/><path d="M12.47 11.74L14.73 5.54A6.6 6.6 0 0 1 18.67 14Z"/></svg>
         <h3>Pie, donut &amp; exploded slices</h3>
-        <p>Calibrated from the rim, so the centre is fitted rather than clicked — which is what makes a donut readable at all. A pulled-out wedge is measured about <em>its own</em> tip, and a tilted 3D pie is read in the fitted ellipse's frame. Read the naive way, both are wrong by several points of share while still summing to 100.</p>
+        <p>Calibrated from the rim, so the centre is fitted rather than clicked — which is what makes a donut readable at all. A pulled-out wedge is measured about <em>its own</em> tip.</p>
       </div>
 
       <div class="feature">
@@ -627,7 +627,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V4"/><path d="M3 20h18"/><rect x="6.5" y="9" width="4" height="11"/><rect x="13.5" y="6" width="4" height="14"/><path d="M6.5 9h4M13.5 6h4" stroke-width="2.6"/></svg>
         <h3>Bars are measured end to end</h3>
-        <p>A bar's value is its <em>extent</em>, not a point on it — so you drag corner to corner and both ends are recorded. Nothing is averaged or centroided away. Grouped, stacked and floating bars all work the same way, a bar below the baseline reads negative, and auto-extract by colour uses each blob's own bounding box. The category table is one row per name and one column per series, so a grouped figure shows every series at once — and an unnamed bar stays a dash, never an invented placeholder.</p>
+        <p>A bar's value is its <em>extent</em>, not a point on it: drag corner to corner and both ends are recorded, nothing averaged away. Grouped, stacked and floating alike.</p>
       </div>
 
       <div class="feature">
@@ -651,7 +651,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M5 17c4-2 7-9 15-11"/><g fill="currentColor" stroke="none"><circle cx="6.5" cy="16" r="1"/><circle cx="10" cy="12.5" r="1"/><circle cx="14" cy="9.6" r="1"/><circle cx="18" cy="7.6" r="1"/></g></svg>
         <h3>Curve fit &amp; geometry</h3>
-        <p>Polynomial, exponential, power, logarithmic, Gaussian or logistic — equation, coefficients, R² — plus arc length, area and curvature. A fit that did not settle says so, on screen and in the file. Fits export as their own block, never mixed into the record.</p>
+        <p>Polynomial, exponential, power, logarithmic, Gaussian or logistic, plus arc length, area and curvature. A fit that did not settle says so — on screen and in the file.</p>
       </div>
 
       <div class="feature">
@@ -825,7 +825,7 @@
           76% and 35%. Line tracing is untouched by it, at 92%.
         </li>
         <li>
-          <b>Greyscale costs about 16 points on bars and 36 on lines.</b> Extraction
+          <b>Greyscale costs about 10 points on bars and 37 on lines.</b> Extraction
           keyed on colour has nothing to key on when everything is black. That is a
           scope boundary, not a bug — and it is why the manual drag-box exists.
         </li>
