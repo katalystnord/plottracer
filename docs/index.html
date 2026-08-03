@@ -762,7 +762,10 @@
       Share of elements recovered within the competition's tolerance, scored in image space
       by automatic extraction. PlotTracer <span class="data">2.0.0-rc1</span> at its
       default settings (tolerance 60, minimum blob diameter
-      3), measured 2026-08-01.
+      3), measured 2026-08-01. Named as the build measured rather than
+      relabelled to the current release: no file on the extraction path has
+      changed since, so these numbers still describe 2.0.0 — but the run was on
+      rc1, and saying 2.0.0 would claim a measurement we did not take.
     </p>
     <ol class="ev-refs">
       <li><span class="ev-refnum">[1]</span> K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, &ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001. doi:<a href="https://doi.org/10.1109/ICPR56361.2022.9956289">10.1109/ICPR56361.2022.9956289</a><span class="ev-refnote"> Charts from open-access PubMed Central papers. 799 figures scored.</span></li>
@@ -774,9 +777,16 @@
       <!-- ⚑ "Current", deliberately. These are measurements of one build on one
            day, not properties of the problem — and several are actively being
            worked on. "Limitations" alone reads as permanent. It does NOT promise
-           a fix for each: greyscale in particular is close to a scope boundary,
-           since colour-keyed extraction has nothing to key on, and the bullet
-           says so by pointing at manual capture instead. -->
+           a fix for each.
+           ⚑⚑ This comment USED to say greyscale was "close to a scope boundary,
+           since colour-keyed extraction has nothing to key on". That was
+           inherited, repeated, and never measured — and it is FALSE: 81% of
+           greyscale figures carry as many distinct shades as they have series,
+           so the signal is there and our ruler was too coarse for it. The
+           visible bullet was corrected on 2026-08-01; this comment was not, and
+           went on telling the next editor to preserve the refuted claim. Fixed
+           2026-08-03. Grade the comments against the measurements too, not just
+           the prose a reader sees. -->
       <h3>Current limitations</h3>
       <ul>
         <li>
@@ -852,7 +862,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v2.0.0-rc2</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v2.0.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 

@@ -238,6 +238,14 @@ Some models cannot take some data — a logarithmic fit needs every x above
 zero, a power law the same, an exponential every y above zero — and PlotTracer says which requirement is unmet rather than returning a
 number it cannot stand behind. Use **Restrict** to fit over a chosen x range.
 
+A high-degree polynomial over very large x values is refused for the same
+reason. Fitting raises x to twice the degree, so a degree-9 fit over values
+around 10¹⁷ overflows before any arithmetic is done, and no coefficients exist
+to report. PlotTracer names the degree and the magnitude and suggests the two
+things you can change — a lower degree, or x values shifted closer to zero —
+rather than drawing a flat line through zero and calling it a fit. Ordinary
+figure ranges and date axes are nowhere near this.
+
 **A fit that did not settle says so.** The nonlinear models are solved
 iteratively, and a solver that runs out of iterations still returns *something*.
 When that happens the card says the curve is where the solver stopped rather than
