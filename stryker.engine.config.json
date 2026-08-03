@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing WITH engine/ included -- `npm run mutation:engine`. The default config (stryker.config.json) covers core/ and algorithms/ only, because those run in a couple of minutes and are the ones worth re-running often. This one adds engine/, which roughly triples the mutant count (13,469 across the whole codebase, ~75 minutes at concurrency 6 on the 2026-07-31 full run) -- too slow to be the default, but it is the ONLY way to measure engine/calibrationSession.ts, which at 5,800+ lines is the largest module in the project and holds the biggest single pile of unnoticed mutants. Run it before and after any substantial engine/ change. ⚑ To scope to one file or one line range instead of the whole module -- which takes under a minute and is cheap enough to use as a normal per-feature check -- pass --mutate: `npm run mutation:engine -- --mutate 'engine/calibrationSession.ts'` or `--mutate 'engine/calibrationSession.ts:2650-2680'`. Stryker reports a mutant as No coverage when NO test reaches it at all; those clusters are where the value is, not the survivors. ⚠️ A LINE RANGE GOES STALE the moment anything is inserted above it, and it fails SILENTLY — it measures whatever code now occupies those lines and reports a perfectly plausible score for it. Measured 2026-08-03: errorCapDragLine scored 88.46% at :2650-2680, then 40.91% at the same range after ~28 lines were added earlier in the file, because the range had slid onto unrelated code. Always `grep -n` the function name first and derive the range from that, and treat an unexpected score as a stale range until you have checked.",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "reporters": ["html", "clear-text", "progress"],
+  "htmlReporter": { "fileName": "reports/mutation-engine/index.html" },
+  "coverageAnalysis": "perTest",
+  "mutate": ["core/**/*.ts", "algorithms/**/*.ts", "engine/**/*.ts", "!**/__tests__/**", "!**/*.d.ts"],
+  "timeoutMS": 20000,
+  "concurrency": 4,
+  "disableTypeChecks": true
+}
