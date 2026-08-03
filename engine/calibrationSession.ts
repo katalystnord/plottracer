@@ -209,6 +209,7 @@ import {
   capFreeDirection,
   constrainCap,
   errorSeriesBase,
+  freeAxisFor,
   errorSeriesName,
   mirrorCap,
   nearestPixel,
@@ -793,6 +794,50 @@ export class CalibrationSession<A extends CalibratedAxes> {
       ({ dataset, role }) => ({ role, caps: toData(dataset) })
     );
     return resolveErrorBars(toData(entry.dataset), caps);
+  }
+
+  /**
+   * For an ERROR-CAP series, each cap's signed offset from the datum it
+   * resolves to — the ± the figure is actually communicating.
+   *
+   * ⚑ This is what a reader wants and what a plotting library takes. Asked what
+   * numbers you would need to REDRAW the figure, the answer is x, y, −Δ and +Δ:
+   * matplotlib's `yerr` and Excel's error bars are deltas outright, and
+   * ggplot's ymin/ymax are one subtraction away. What none of them take is the
+   * cap's own x, which is the datum's x by construction (David, 2026-08-03).
+   *
+   * ⚑ A delta is SUBTRACTION, not inference. Both ends were measured off the
+   * pixels, so computing their difference assumes nothing — unlike halving one
+   * cap into a symmetric ±, which would invent the other side. The absolute
+   * positions stay the record; this is derived at read time, the same split
+   * bar and pie already make with `derivedTupleValue`.
+   *
+   * Signed by ROLE, not by magnitude: an `upper`/`right` cap reads positive and
+   * a `lower`/`left` cap negative, so the two columns of an asymmetric bar can
+   * be read apart at a glance. Resolution uses `matchCapToDatum`, the same rule
+   * the whisker glyph draws with, so the table cannot disagree with the canvas.
+   *
+   * `null` for a cap that resolves to no datum, and `[]` for a series that is
+   * not an error series at all — never 0, which would read as "measured, and
+   * equal".
+   */
+  getErrorCapDeltas(index: number): (number | null)[] {
+    const entry = this.datasetEntries[index];
+    if (!entry || !this.axes) return [];
+    const relation = getErrorRelation(entry.dataset);
+    if (!relation) return [];
+    const parent = this.datasetEntries.find((e) => e.dataset.name === relation.of);
+    if (!parent) return [];
+    const parentData = this.dataValuesOf(parent.dataset);
+    const along = freeAxisFor(relation.role);
+    return entry.dataset.getAllPixels().map((p) => {
+      const cap = this.dataOf(p);
+      const di = matchCapToDatum(parentData, cap, relation.role);
+      const datum = di > -1 ? parentData[di] : undefined;
+      if (!datum) return null;
+      const delta = along === 'y' ? cap.y - datum.y : cap.x - datum.x;
+      return Number.isFinite(delta) ? delta : null;
+    });
   }
 
   /**

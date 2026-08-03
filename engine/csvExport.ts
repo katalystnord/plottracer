@@ -225,6 +225,17 @@ export interface SeriesForCSV {
   rows: readonly ExportRow[];
   /** Set when this series records error for another (checkpoint 77). */
   relation?: ErrorRelation;
+  /** For an error-cap series: each row's signed offset from its datum, exported
+   * BESIDE the absolute cap position rather than instead of it.
+   *
+   * ⚑ Both, deliberately. The absolutes are what was measured off the pixels, so
+   * they stay the record; the deltas are what a plotting library takes, and
+   * making the reader subtract our own two columns to get them is work we can
+   * do once. matplotlib's `yerr` and Excel want deltas; ggplot's ymin/ymax want
+   * the absolutes. Carrying both means neither has to do arithmetic on the
+   * record (David, 2026-08-03: "if I was going to MAKE these plots from
+   * numerical values, what are the numbers that I need?"). */
+  deltas?: readonly (number | null)[];
   /** A curve fit over this series (v0.8), if one was run. Exported SEPARATELY
    * from `points` -- its own JSON key / its own CSV block -- so the derived fit
    * never contaminates the record (David; tenet 9). */
@@ -307,10 +318,16 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
   // interpolation-assisted while the others were placed by hand, so only that
   // one grows a role column (`<series> role`, beside its own value columns).
   const roleCols = series.map((s) => hasRoles(s.rows));
+  // Same per-series rule as roles above: only an error-cap series grows a delta
+  // column, beside its own value columns. ⚑ Spelled "delta", not the Unicode
+  // sign the on-screen table uses -- a CSV header lands in other people's
+  // parsers, and an ASCII header cannot arrive mojibaked.
+  const deltaCols = series.map((s) => (s.deltas?.length ?? 0) > 0);
   const header: (string | number)[] = ['#'];
   series.forEach((s, si) => {
     for (const label of fields) header.push(`${seriesColumnPrefix(s)} ${label}`);
     if (roleCols[si]) header.push(`${seriesColumnPrefix(s)} role`);
+    if (deltaCols[si]) header.push(`${seriesColumnPrefix(s)} delta`);
   });
   const maxRows = series.reduce((max, s) => Math.max(max, s.rows.length), 0);
   const rows: (string | number)[][] = [];
@@ -320,6 +337,9 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
       const r = s.rows[i];
       for (let d = 0; d < fields.length; d++) row.push(r?.values[d] ?? '');
       if (roleCols[si]) row.push(r?.role ?? '');
+      // Blank, never 0, for a cap that resolves to no datum -- 0 would read as
+      // "measured, and equal to the datum".
+      if (deltaCols[si]) row.push(s.deltas?.[i] ?? '');
     });
     rows.push(row);
   }

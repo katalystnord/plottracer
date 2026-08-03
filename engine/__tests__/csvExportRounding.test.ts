@@ -399,3 +399,61 @@ describe('the measurements block', () => {
     expect(s.rows).toEqual([]);
   });
 });
+
+describe('an error-cap series exports its DELTA beside its absolute position', () => {
+  // ⚑ BOTH, deliberately. The absolute cap position is what was measured off
+  // the pixels, so it stays the record; the delta is what a plotting library
+  // takes. Asked what numbers you would need to REDRAW the figure, the answer
+  // is x, y, -delta, +delta — matplotlib's `yerr` and Excel want deltas,
+  // ggplot's ymin/ymax want the absolutes, and carrying both means neither
+  // reader has to do arithmetic on someone else's record.
+  const datum = { name: 'Sample A', rows: [{ values: [1, 10] as (number | string)[] }] };
+  const upper = {
+    name: 'SD upper',
+    rows: [{ values: [1, 12] as (number | string)[] }],
+    relation: { role: 'upper' as const, of: 'Sample A' },
+    deltas: [2],
+  };
+  const lower = {
+    name: 'SD lower',
+    rows: [{ values: [1, 7] as (number | string)[] }],
+    relation: { role: 'lower' as const, of: 'Sample A' },
+    deltas: [-3],
+  };
+
+  it('adds a delta column only to the error series, not to the datum', () => {
+    const s = allSeriesSection([datum, upper, lower] as never, ['X', 'Y']);
+    expect(s.header).toContain('SD upper delta');
+    expect(s.header).toContain('SD lower delta');
+    expect(s.header).not.toContain('Sample A delta');
+  });
+
+  it('keeps the absolute cap position AND the delta, never one instead of the other', () => {
+    const s = allSeriesSection([datum, upper, lower] as never, ['X', 'Y']);
+    expect(s.header).toContain('SD upper Y'); // the measured position survives
+    expect(s.rows[0]).toContain(12); // ...and its value
+    expect(s.rows[0]).toContain(2); // ...beside the derived delta
+  });
+
+  it('signs by role, so an asymmetric bar reads apart in the file', () => {
+    const s = allSeriesSection([datum, upper, lower] as never, ['X', 'Y']);
+    expect(s.rows[0]).toContain(2);
+    expect(s.rows[0]).toContain(-3);
+  });
+
+  it('⚑ spells the header ASCII, not the on-screen Δ', () => {
+    // A CSV header lands in other people's parsers; an ASCII one cannot arrive
+    // mojibaked. The table on screen is free to use the sign.
+    const s = allSeriesSection([upper] as never, ['X', 'Y']);
+    expect(s.header.join(' ')).not.toMatch(/Δ/);
+    expect(s.header.join(' ')).toMatch(/delta/);
+  });
+
+  it('writes BLANK, never 0, for a cap that resolves to no datum', () => {
+    // 0 would read as "measured, and equal to the datum".
+    const orphan = { ...upper, deltas: [null] };
+    const s = allSeriesSection([orphan] as never, ['X', 'Y']);
+    expect(s.rows[0]).toContain('');
+    expect(s.rows[0]).not.toContain(0);
+  });
+});

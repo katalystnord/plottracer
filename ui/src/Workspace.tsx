@@ -8528,11 +8528,22 @@ export function Workspace() {
                       // export actually appended Category last -- screen and file
                       // disagreed on order until David caught it (2026-07-26). Both
                       // are now Position, Category, Value.
+                      // ⚑ An ERROR-CAP series gets ONE column, not X/Y. Its x is the
+                      // datum's x by construction (the cap is axis-locked to its own
+                      // bar), so printing x per cap repeats the same number down three
+                      // columns, and the cap's absolute y is not what anyone reads --
+                      // asked what you would need to REDRAW the figure, the answer is
+                      // x, y, -delta, +delta (David, 2026-08-03). matplotlib's yerr and
+                      // Excel's error bars take deltas outright; ggplot's ymin/ymax are
+                      // one subtraction away. None of them take the cap's x.
+                      const isErrorCap = s.deltas.length > 0;
                       return [
                         ...(showCategoryColumn ? [headCell(`${s.index}-cat`, 'Category', true)] : []),
-                        ...tableValueLabels.map((label, d) =>
-                          headCell(`${s.index}-${d}`, label, d === 0 && !showCategoryColumn)
-                        ),
+                        ...(isErrorCap
+                          ? [headCell(`${s.index}-delta`, 'Δ', !showCategoryColumn)]
+                          : tableValueLabels.map((label, d) =>
+                              headCell(`${s.index}-${d}`, label, d === 0 && !showCategoryColumn)
+                            )),
                       ];
                     })}
                   </tr>
@@ -8615,6 +8626,26 @@ export function Workspace() {
                           // anchors -- which ARE editable, and which the curve follows.
                           const derived = isDerivedAt(s.roles, i);
                           const editable = isCellEditable(config.axesKind, s.active, derived);
+                          const isErrorCap = s.deltas.length > 0;
+                          if (isErrorCap) {
+                            const delta = s.deltas[i];
+                            return [
+                              ...(categoryCell ? [categoryCell] : []),
+                              <td
+                                key={`${s.index}-delta`}
+                                data-testid={`delta-cell-${s.index}-${i}`}
+                                style={{
+                                  padding: '1px 8px',
+                                  borderLeft: !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
+                                  fontVariantNumeric: 'tabular-nums',
+                                }}
+                              >
+                                {/* Blank, never 0, for a cap that resolves to no datum:
+                                    0 would read as "measured, and equal to the datum". */}
+                                {delta == null ? '' : `${delta > 0 ? '+' : ''}${fmtValue(delta)}`}
+                              </td>,
+                            ];
+                          }
                           return [
                             ...(categoryCell ? [categoryCell] : []),
                             ...tableValueLabels.map((_label, d) => {

@@ -48,6 +48,12 @@ export interface SpreadsheetSeries {
   values: (number[] | null)[];
   roles: (PointRole | null)[];
   labels: string[];
+  /** For an ERROR-CAP series: each row's signed offset from the datum it
+   * resolves to. Empty for every other series, which is what the table keys on
+   * to show a single Δ column instead of X/Y — the cap's own x is the datum's x
+   * by construction, so printing it is three columns of one number. See
+   * CalibrationSession.getErrorCapDeltas. */
+  deltas: (number | null)[];
 }
 
 /** A single column under one series' heading. `category` is the independent
@@ -84,6 +90,7 @@ export function buildSpreadsheetSeries(
     values: d.points.map((p) => p.data),
     roles: session.getDataPointRolesFor(d.index),
     labels: session.getPointLabels(d.index),
+    deltas: session.getErrorCapDeltas(d.index),
   }));
 }
 

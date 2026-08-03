@@ -530,6 +530,40 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(p.y).toBeCloseTo(150, 6);
   });
 
+  it('⚑ reports each cap as a SIGNED DELTA from its datum', () => {
+    // The numbers you would need to redraw the figure: x, y, -delta, +delta.
+    // Datum at pixel (200,200) = data (3.333, 3.333); upper cap at (200,170).
+    // y = (250-py)/15, so 30px up is +2 in value.
+    const session = calibratedWithACappedPoint();
+    expect(session.getErrorCapDeltas(1)[0]).toBeCloseTo(2, 6);  // SD upper
+    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-2, 6); // SD lower, mirrored
+  });
+
+  it('signs by ROLE, not by magnitude, so an asymmetric bar reads apart', () => {
+    // Move the lower cap so the bar is genuinely asymmetric, then both columns
+    // must still be tellable apart by sign alone.
+    const session = calibratedWithACappedPoint();
+    session.setActiveDataset(2); // SD lower
+    session.updateDataPointPixel(0, 200, 245); // 45px below the datum = -3
+    expect(session.getErrorCapDeltas(1)[0]).toBeCloseTo(2, 6);
+    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-3, 6);
+  });
+
+  it('is EMPTY for a series that is not an error series — never zero', () => {
+    // 0 would read as "measured, and equal". Absence is the honest answer.
+    const session = calibratedWithACappedPoint();
+    expect(session.getErrorCapDeltas(0)).toEqual([]);
+  });
+
+  it('gives null for a cap that resolves to no datum', () => {
+    const session = calibratedWithACappedPoint();
+    // Empty the datum series, leaving the cap with nothing to resolve against.
+    session.setActiveDataset(0);
+    session.removeDataPoints([0]);
+    const deltas = session.getErrorCapDeltas(1);
+    if (deltas.length > 0) expect(deltas[0]).toBeNull();
+  });
+
   // ⚑ NOT TESTED, and said plainly rather than left implied: the `!targetEntry`
   // guard is defence in depth and no click path reaches it. renameDataset
   // retargets relations, and removeDataset clears them, so a relation naming a

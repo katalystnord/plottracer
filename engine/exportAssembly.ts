@@ -138,6 +138,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       // An error series exports as an ordinary series carrying its relation
       // (checkpoint 77) -- which is what it is. Omitted for everything else.
       ...(rel ? { relation: rel } : {}),
+      ...(rel ? { deltas: session.getErrorCapDeltas(info.index) } : {}),
       ...(fit ? { fit } : {}),
       ...(geom ? { geometry: geom } : {}),
     };
@@ -232,7 +233,11 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   } else if (scope === 'all') {
     const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
       const rel = session.getErrorRelation(info.index);
-      return { name: info.name, rows: seriesRows(info.index), ...(rel ? { relation: rel } : {}) };
+      return {
+        name: info.name,
+        rows: seriesRows(info.index),
+        ...(rel ? { relation: rel, deltas: session.getErrorCapDeltas(info.index) } : {}),
+      };
     });
     sections.push(allSeriesSection(seriesList, exportFields));
     for (const info of session.getDatasetInfos()) {
