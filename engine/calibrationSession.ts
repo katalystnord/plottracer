@@ -1067,13 +1067,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const targetEntry = this.datasetEntries.find((e) => e.dataset.name === relation.of);
     if (!targetEntry) return null;
 
-    // The cap's own datum, found the same way resolveErrorBars finds it, so the
-    // drag locks to the line the resolution will actually use.
-    const datum = nearestPixel(targetEntry.dataset.getAllPixels(), cap, Infinity);
+    // The cap's own datum, found by `matchCapToDatum` -- THE one rule, so the
+    // drag locks to the line the record will actually resolve against.
+    //
+    // ⚑⚑ This said "found the same way resolveErrorBars finds it" while being a
+    // THIRD implementation: `nearestPixel`, i.e. EUCLIDEAN distance in PIXEL
+    // space. The record matches on the cap's INVARIANT axis (x for upper/lower,
+    // y for left/right) in DATA space, because that is the axis a cap does not
+    // move along and therefore the only one that identifies it.
+    //
+    // The two disagree exactly when a whisker is longer than the gap to the
+    // next point -- ordinary on a decaying curve with wide error at its left-hand
+    // end. A cap 100px below its own datum but 58px from the neighbour claimed
+    // the neighbour, and constrainCap then projected it onto THAT datum's
+    // vertical: the cap jumped sideways onto the bar next to it, and the delta
+    // was re-parented with it, so the number moved to the wrong data point too.
+    // Reported by David 2026-08-04, driving the asymmetric error-bar example.
+    //
+    // This is finding A6 recurring in a caller written after it (2026-08-03).
+    // algorithms/errorBar.ts exports matchCapToDatum for precisely this reason:
+    // "a check computed differently from the thing it checks is not a check."
+    const targetData = this.dataValuesOf(targetEntry.dataset);
+    const datumIndex = matchCapToDatum(targetData, this.dataOf(cap), relation.role);
+    if (datumIndex < 0) return null;
+    const datum = targetEntry.dataset.getPixel(datumIndex);
     if (!datum) return null;
-    const direction = capFreeDirection(this.axes, datum.point, relation.role);
+    const origin = { x: datum.x, y: datum.y };
+    const direction = capFreeDirection(this.axes, origin, relation.role);
     if (!direction) return null;
-    return { origin: datum.point, direction };
+    return { origin, direction };
   }
 
   /** Find-or-create `${base} ${role}` related to `targetName`, and put a cap in

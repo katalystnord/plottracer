@@ -520,6 +520,73 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(cap.y).toBeCloseTo(150, 6); // free to slide along the bar
   });
 
+  // ⚑⚑ THE CAP THAT JUMPED TO THE BAR NEXT TO IT (David, 2026-08-04, by driving
+  // the app on the asymmetric error-bar example).
+  //
+  // Every test above this point uses ONE data point, so "which datum is this
+  // cap's datum?" had only one possible answer and the question was never
+  // really asked. With a second point it is answerable two different ways, and
+  // errorCapDragLine was answering it a THIRD way -- `nearestPixel`, Euclidean,
+  // in pixel space -- while the record (`matchCapToDatum`) matches on the
+  // cap's INVARIANT axis. That is precisely finding A6 recurring in a new
+  // caller: algorithms/errorBar.ts exports matchCapToDatum for the express
+  // reason that "the rendering must ask the same question the record does".
+  //
+  // A long whisker is closer to the NEXT datum than to its own whenever the
+  // neighbour is nearer than the error is large -- ordinary on a decaying curve
+  // with wide error at the left, which is the figure David was tracing. The
+  // drag then locked the cap to the neighbour's vertical and it jumped sideways
+  // onto the next bar.
+  function calibratedWithNeighbouringBars() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.renameDataset(0, 'Sample A');
+    session.addDataPoint(200, 120); // datum A
+    session.addDataPoint(250, 190); // datum B -- right of A, and BELOW it
+    // A carries a LARGE error (±100px), B a small one: the shape of a decaying
+    // curve with wide error at its left-hand end.
+    expect(
+      session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 120 }, capPixel: { x: 200, y: 20 }, baseName: 'SD' })
+    ).toBeNull();
+    expect(
+      session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 250, y: 190 }, capPixel: { x: 250, y: 170 }, baseName: 'SD' })
+    ).toBeNull();
+    // A's lower cap is at (200,220): 100px from its own datum A, but only
+    // hypot(50,30) = 58px from datum B. Euclidean-nearest picks the WRONG one.
+    return session;
+  }
+
+  it('⚑ resolves a cap to its OWN datum, not whichever datum is nearest as the crow flies', () => {
+    const session = calibratedWithNeighbouringBars();
+    const line = session.errorCapDragLine(2, 0)!; // SD lower, A's cap
+    expect(line).not.toBeNull();
+    expect(line.origin.x).toBeCloseTo(200, 6); // datum A, not datum B's 250
+    expect(line.origin.y).toBeCloseTo(120, 6);
+  });
+
+  it('⚑ a cap adjusted along its bar does not JUMP to the bar next to it', () => {
+    // The symptom exactly as reported: grab the lower cap, drag it straight
+    // down the bar it belongs to, and it snaps sideways onto the neighbour.
+    const session = calibratedWithNeighbouringBars();
+    session.setActiveDataset(2); // SD lower -- the cap series
+    session.updateDataPointPixel(0, 200, 240);
+
+    const cap = session.getDatasets()[2]!.getAllPixels()[0]!;
+    expect(cap.x).toBeCloseTo(200, 6); // stays on A's bar; 250 is the defect
+    expect(cap.y).toBeCloseTo(240, 6);
+  });
+
+  it('⚑ the drag lock and the recorded delta resolve the SAME datum', () => {
+    // The invariant behind both tests above, stated once: a cap constrained
+    // against one datum and reported against another is a whisker whose drawing
+    // contradicts its own number.
+    const session = calibratedWithNeighbouringBars();
+    session.setActiveDataset(2);
+    session.updateDataPointPixel(0, 200, 240);
+    // 120px below datum A; y = (250-py)/15, so 120px = 8 units, signed by role.
+    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-8, 6);
+  });
+
   it('an ordinary point is still free to move in both axes', () => {
     // The lock must not over-reach onto points that are not caps.
     const session = calibratedWithACappedPoint();
