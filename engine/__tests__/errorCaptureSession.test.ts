@@ -379,3 +379,131 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // data points untouched
   });
 });
+
+describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
+  // ⚑ Before this block the whole method was UNREACHED: a scoped Stryker run
+  // (2026-08-03) put 26 no-coverage mutants in it, the largest such cluster in
+  // calibrationSession.ts. It is what keeps captureErrorCap's invariant holding
+  // while the user adjusts a cap afterwards -- and error-cap dragging is the
+  // area that produced the v1.3 release blocker, where a fix silently took
+  // every cap out of the hit graph while three on-screen strings still promised
+  // the drag. A method with no test cannot notice that happening again.
+
+  function calibratedWithACappedPoint() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.renameDataset(0, 'Sample A');
+    session.addDataPoint(200, 200); // data (3.333, 3.333)
+    expect(
+      session.captureErrorCap({
+        targetIndex: 0,
+        datumPixel: { x: 200, y: 200 },
+        capPixel: { x: 200, y: 170 },
+        baseName: 'SD',
+      })
+    ).toBeNull();
+    // getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower
+    return session;
+  }
+
+  it('locks an upper cap to the vertical through its own datum', () => {
+    const session = calibratedWithACappedPoint();
+    const line = session.errorCapDragLine(1, 0);
+    expect(line).not.toBeNull();
+    // Origin is the DATUM, not the cap: the cap slides along the bar, and the
+    // bar is anchored at the point it belongs to.
+    expect(line!.origin.x).toBeCloseTo(200, 6);
+    expect(line!.origin.y).toBeCloseTo(200, 6);
+    // y = (250-py)/15, so stepping the value UP moves the pixel UP the screen.
+    expect(line!.direction.x).toBeCloseTo(0, 6);
+    expect(line!.direction.y).toBeCloseTo(-1, 6);
+  });
+
+  it('gives the lower cap the SAME line, so both caps slide along one bar', () => {
+    const session = calibratedWithACappedPoint();
+    const upper = session.errorCapDragLine(1, 0)!;
+    const lower = session.errorCapDragLine(2, 0)!;
+    expect(lower.origin.x).toBeCloseTo(upper.origin.x, 6);
+    expect(lower.origin.y).toBeCloseTo(upper.origin.y, 6);
+    // Same axis. (Direction is a ray; the lower cap sits on the far side of the
+    // datum, and constrainCap projects onto the line either way.)
+    expect(Math.abs(lower.direction.x)).toBeCloseTo(0, 6);
+    expect(Math.abs(lower.direction.y)).toBeCloseTo(1, 6);
+  });
+
+  it('returns a UNIT direction, so ui/ can scale it without renormalising', () => {
+    const session = calibratedWithACappedPoint();
+    const { direction } = session.errorCapDragLine(1, 0)!;
+    expect(Math.hypot(direction.x, direction.y)).toBeCloseTo(1, 9);
+  });
+
+  it('leaves an ordinary data point unconstrained', () => {
+    // Sample A carries no error relation, so it is not a cap and must drag
+    // freely. Null here means "unconstrained", never "disabled".
+    const session = calibratedWithACappedPoint();
+    expect(session.errorCapDragLine(0, 0)).toBeNull();
+  });
+
+  it('refuses an out-of-range dataset index rather than throwing', () => {
+    const session = calibratedWithACappedPoint();
+    expect(session.errorCapDragLine(99, 0)).toBeNull();
+    expect(session.errorCapDragLine(-1, 0)).toBeNull();
+  });
+
+  it('refuses an out-of-range point index rather than throwing', () => {
+    const session = calibratedWithACappedPoint();
+    expect(session.errorCapDragLine(1, 99)).toBeNull();
+    expect(session.errorCapDragLine(1, -1)).toBeNull();
+  });
+
+  it('stops constraining a cap once its datum series is removed', () => {
+    // removeDataset calls clearErrorRelationsTo, so the cap stops being a cap.
+    // Asserted through the public gesture rather than by reaching in, because
+    // this is the sequence a user can actually perform.
+    const session = calibratedWithACappedPoint();
+    expect(session.errorCapDragLine(1, 0)).not.toBeNull();
+    session.removeDataset(0); // remove 'Sample A'
+    // Indices shift down by one: SD upper is now 0.
+    expect(session.errorCapDragLine(0, 0)).toBeNull();
+  });
+
+  it('leaves a cap on a BAR chart unconstrained rather than disabling it', () => {
+    // Bar's pixelToData returns [value] -- one dimension, so the axes cannot
+    // say which way the value axis runs and capFreeDirection returns null.
+    // ⚑ That null must degrade to "drag freely", never to "cannot drag". An
+    // earlier draft of capFreeDirection probed in order to GATE the feature and
+    // would have refused error bars on bar charts outright; this test pins the
+    // difference, which is invisible from the return value alone (both are null
+    // -- what matters is that captureErrorCap still worked).
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    const steps: Array<[number, number, string[]]> = [
+      [100, 250, ['0']],
+      [100, 100, ['10']],
+    ];
+    for (const [px, py, values] of steps) {
+      expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
+      expect(session.confirmCalibrationValues(values)).toBe(true);
+    }
+    expect(session.runCalibration()).toBe(true);
+    session.renameDataset(0, 'Bar A');
+    session.addDataPoint(150, 180);
+    expect(
+      session.captureErrorCap({
+        targetIndex: 0,
+        datumPixel: { x: 150, y: 180 },
+        capPixel: { x: 150, y: 150 },
+        baseName: 'SD',
+      })
+    ).toBeNull();
+
+    // The cap EXISTS and is a real cap -- it simply has no axis-lock.
+    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1);
+    expect(session.errorCapDragLine(1, 0)).toBeNull();
+  });
+
+  // ⚑ NOT TESTED, and said plainly rather than left implied: the `!targetEntry`
+  // guard is defence in depth and no click path reaches it. renameDataset
+  // retargets relations, and removeDataset clears them, so a relation naming a
+  // series that does not exist cannot be produced interactively -- only by a
+  // loaded file. Same honesty as liveSpokeStepKey's own `!this.axes` note.
+});
