@@ -83,7 +83,15 @@ const THREE = () => calibratedSpider(['Strength', 'Weight', 'Cost'], ['100', '10
 /** A drawn line has WIDTH, and the reading is its outer edge, so an expectation is
  * "within a few percent of THAT axis's range" — never an exact number. Stated per
  * axis on purpose: a tolerance in absolute units would be meaningless on a figure
- * whose axes run to 5 and to 1000. */
+ * whose axes run to 5 and to 1000.
+ *
+ * ⚠️ THIS FILE CANNOT SEE THE REAL BIAS, and the tolerance below should not be
+ * read as evidence that it is small. `drawSeries` strokes lines between vertices
+ * and draws NO MARKERS, while the bundled PNG this stands for draws a marker at
+ * every vertex — and the marker, not the stroke, is what the outer-edge reading
+ * lands on (see SpokeRun.atPx). Measured through the real figure the over-read is
+ * ~4.8px, about one marker radius; measured here it is ~1px, half a stroke. The
+ * fixture is an easier figure than the example it represents. */
 function expectValue(actual: number | null | undefined, expected: number, range: number, fraction = 0.05): void {
   expect(actual == null).toBe(false);
   expect(Math.abs(actual! - expected)).toBeLessThanOrEqual(range * fraction);
@@ -380,9 +388,10 @@ describe('the bundled example, traced end to end', () => {
         const expected = series.points[i]!.value;
         const range = truth.axes[i]!.max - truth.axes[i]!.centre;
         expect(reading.reason, `${series.name} / ${truth.axes[i]!.name}`).toBeNull();
-        // Within 2% of that axis's OWN range. The reading is the outer edge of a
-        // drawn line, so it sits half a stroke width out — bounded and the same on
-        // every axis. A reading taken off a NEIGHBOURING axis, off a shared scale,
+        // Within 2% of that axis's OWN range. The reading is the outer edge of the
+        // ink, so it sits out by half a stroke HERE — and by a whole marker radius
+        // on the real figure, which this synthetic one does not draw (see the note
+        // on expectValue above). Bounded and the same on every axis either way. A reading taken off a NEIGHBOURING axis, off a shared scale,
         // or from the middle of the ink misses by far more than this on a figure
         // whose ranges run from 5 to 120.
         expect(

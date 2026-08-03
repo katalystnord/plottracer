@@ -40,10 +40,30 @@ export interface SpokeRun {
    * own ground truth (engine/__tests__/spiderTraceRun.test.ts).
    *
    * The outer end is right for a filled shape, and for a STROKED outline it over-
-   * reads by half the line's width — bounded, identical on every axis, and far
-   * smaller than the midpoint's error at a sharp vertex, where the two edges hug the
-   * ray and drag the midpoint inward without limit. `fromPx`/`toPx` ride along, so a
-   * caller that knows better about a particular figure can still say so.
+   * reads — bounded, identical on every axis, and far smaller than the midpoint's
+   * error at a sharp vertex, where the two edges hug the ray and drag the midpoint
+   * inward without limit. `fromPx`/`toPx` ride along, so a caller that knows better
+   * about a particular figure can still say so.
+   *
+   * ⚑⚑ HOW FAR IT OVER-READS WAS WRONG HERE until 2026-08-03. This said "by half
+   * the line's width", reasoning about a stroke — but a radar chart draws a MARKER
+   * at each vertex, and the vertex is exactly where the ray crossing is measured.
+   * The run therefore ends at the marker's OUTER EDGE, so the over-read is one
+   * MARKER RADIUS, not half a stroke.
+   *
+   * Measured on the bundled example (David auto-extracted it and the readings ran
+   * uniformly high): over-read **4.77 px** against a marker radius of **4.86 px**
+   * (markersize 7 at dpi 100) and a half-stroke of **1.0 px** — the stated bound
+   * was out by ~5x. The signature is decisive: the error is constant in PIXELS,
+   * not proportional to the reading. Across six axes of six different ranges it
+   * clusters inside 0.61 points as a fraction of each axis's full radius, while
+   * scattering over 5.23 points as a fraction of the reading — which rules out a
+   * calibration-scale error and leaves the geometry.
+   *
+   * ⚑ NOT FIXED, deliberately: choosing the marker's CENTRE over the shape's EDGE
+   * means telling a filled shape from a stroked-with-markers one, which is a design
+   * question rather than a patch. Logged for v2.1. What is fixed is this comment,
+   * which was telling the next reader the bias is a pixel when it is five.
    */
   atPx: number;
 }
