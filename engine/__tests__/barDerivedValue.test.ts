@@ -141,17 +141,27 @@ describe("a bar's value — the sign convention", () => {
     expect(barValue(s, 150, 500, 300)).toBeCloseTo(3, 6);
   });
 
-  it('⚑ a FLOATING bar (no baseline) takes its direction from the drag order', () => {
-    // With no baseline there is no reference to sign against, so the recorded
-    // click order carries the meaning -- and reversing the drag reverses the
-    // sign. A tornado chart or a temperature range depends on this.
+  it('⚑ a FLOATING bar (no baseline) reads as an unsigned SPAN, like a stacked one', () => {
+    // ⚑⚑ REVERSED 2026-08-03. This test used to be named "takes its direction
+    // from the drag order" and asserted -5 for the reversed drag -- a defect
+    // asserted as its own premise.
+    //
+    // ⚑ And the contradiction was sitting in plain sight: the STACKED test
+    // directly below asserts "same span, drag reversed" for exactly the same
+    // question. Two adjacent tests held opposite principles, each internally
+    // consistent, which is why neither looked wrong.
+    //
+    // With no baseline there is no reference to sign against, so the value is
+    // the bar's own span -- a magnitude. The old sign recorded the USER'S
+    // HAND, not the figure: two people capturing the identical bar got +5 and
+    // -5, and the natural top-left-downward gesture produced the negative.
     const up = calibratedBar();
     up.setOption('hasBaseline', 'false');
     expect(barValue(up, 150, 400, 200)).toBeCloseTo(5, 6);
 
     const down = calibratedBar();
     down.setOption('hasBaseline', 'false');
-    expect(barValue(down, 150, 200, 400)).toBeCloseTo(-5, 6);
+    expect(barValue(down, 150, 200, 400)).toBeCloseTo(5, 6); // same span, drag reversed
   });
 
   it('⚑ a STACKED segment reads as an unsigned SPAN, bypassing the baseline entirely', () => {

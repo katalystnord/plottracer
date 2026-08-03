@@ -933,10 +933,35 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
         return far - baseline;
       }
       // Floating/offset bar (no declared baseline): there is no reference to
-      // sign against, so the recorded DRAG DIRECTION carries the meaning
-      // instead -- same principle as pie preserving its boundary-walk
-      // direction rather than normalising it away.
-      return v2 - v1;
+      // sign against, so the value is the bar's own SPAN -- a magnitude, the
+      // same answer the stacked branch above reaches for the same reason.
+      //
+      // ⚑⚑ REVERSED 2026-08-03 (David). This used to return `v2 - v1`, letting
+      // the DRAG DIRECTION carry a sign: corner-to-corner up positive, down
+      // negative. Three things were wrong with it.
+      //
+      // 1. **The sign recorded the user's hand, not the figure.** Two people
+      //    capturing the identical bar got +12 and -12. That is the defect
+      //    shape already written down for the spider off-ray distance: ask
+      //    *whose property is this?* before storing a field. A span is a
+      //    magnitude -- a bar from -10 to -5 spans 5, not -5; its POSITION is
+      //    negative, its EXTENT is not.
+      // 2. **The justification was a false analogy.** It read "same principle
+      //    as pie preserving its boundary-walk direction". In a pie, direction
+      //    changes WHICH SECTOR is meant -- A->B and B->A are different
+      //    regions, so direction is a property of the figure. Two opposite
+      //    corners define the SAME rectangle either way; there is nothing for
+      //    the order to distinguish.
+      // 3. **It was invisible, and it fired on the default gesture.** Nothing
+      //    on screen said click order meant anything -- it appeared in the
+      //    v2.0.0 release notes and nowhere else -- while dragging top-left
+      //    downward, which is the natural motion, produced the negative.
+      //
+      // If a figure ever genuinely needs directional floating bars (a waterfall
+      // being the only candidate found), that is a DECLARATION the user makes
+      // visibly, the way the baseline is declared -- never a meaning inferred
+      // from the order two corners happened to be clicked.
+      return Math.abs(v2 - v1);
     },
   },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same

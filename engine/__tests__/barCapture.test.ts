@@ -113,19 +113,52 @@ describe('a floating bar (no declared baseline)', () => {
     return session;
   }
 
-  it('signs the value by DRAG ORDER, not by distance to any reference', () => {
+  it('reports the SPAN, a magnitude, not a baseline-relative reading', () => {
     // A temperature-range-style bar: drag from the lower value to the higher.
     const session = floatingBar();
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // end - start
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
   });
 
-  it('reverses sign when the drag direction reverses -- direction IS the recorded information', () => {
+  it('⚑ gives the SAME value whichever corner is clicked first', () => {
+    // ⚑⚑ THE INVARIANT, and it replaces two tests that asserted the opposite.
+    // Until 2026-08-03 this returned `v2 - v1`, so drag order carried a sign
+    // and the old tests were named "signs the value by DRAG ORDER" and
+    // "direction IS the recorded information" -- a defect asserted as its own
+    // premise, the third instance of that shape in this project.
+    //
+    // The sign was a property of the USER'S HAND, not of the figure: two
+    // people capturing the identical bar got +3 and -3. A span is a magnitude
+    // (a bar from -10 to -5 spans 5, not -5 -- its POSITION is negative, its
+    // EXTENT is not), and the rule was invisible besides, while firing on the
+    // natural top-left-downward gesture.
+    const upward = floatingBar();
+    upward.addDataPoint(150, 420); // value 2
+    upward.addDataPoint(150, 300); // value 5
+
+    const downward = floatingBar();
+    downward.addDataPoint(150, 300); // value 5 -- the same bar, opposite order
+    downward.addDataPoint(150, 420); // value 2
+
+    expect(downward.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
+    expect(downward.getTupleRows()[0]!.derived).toBeCloseTo(
+      upward.getTupleRows()[0]!.derived!,
+      9
+    );
+  });
+
+  it('never reports a negative span, even for a bar entirely below zero', () => {
+    // Position negative, extent positive. The old rule could return -3 here
+    // purely from click order, which reads as a measurement the figure never
+    // made.
+    // The fixture maps py 300 -> 5 and py 700 -> -5, so py 780 is -7.
     const session = floatingBar();
-    session.addDataPoint(150, 300); // value 5
-    session.addDataPoint(150, 420); // value 2
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(-3, 9);
+    session.addDataPoint(150, 700); // value -5
+    session.addDataPoint(150, 780); // value -7
+    const derived = session.getTupleRows()[0]!.derived!;
+    expect(derived).toBeGreaterThan(0);
+    expect(derived).toBeCloseTo(2, 9);
   });
 
   it('correctly signs a bar that straddles zero, with no special-casing needed', () => {
