@@ -8483,7 +8483,12 @@ export function Workspace() {
                     {spreadsheetSeries.map((s) => (
                       <th
                         key={s.index}
-                        colSpan={config.dataDim + (showCategoryColumn ? 1 : 0)}
+                        // ⚑ An error-cap series renders ONE column (its Δ), not dataDim.
+                        // Hardcoding dataDim here spanned the name across two columns
+                        // while the body filled one, skewing every column to its right
+                        // (David spotted it on screen 2026-08-03 — the e2e asserts values
+                        // and counts, not alignment, so nothing else could have).
+                        colSpan={(s.deltas.length > 0 ? 1 : config.dataDim) + (showCategoryColumn ? 1 : 0)}
                         data-testid={`series-col-${s.index}`}
                         style={{
                           position: 'sticky',
