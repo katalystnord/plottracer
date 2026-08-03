@@ -501,6 +501,35 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(session.errorCapDragLine(1, 0)).toBeNull();
   });
 
+  it('⚑ adjusting a cap afterwards keeps it ON the bar', () => {
+    // THE INVARIANT captureErrorCap ESTABLISHES, HELD THROUGH A LATER MOVE.
+    // Placing a cap axis-locks it (capFreeDirection + constrainCap). Adjusting
+    // it later goes through updateDataPointPixel -- where drag, arrow-nudge and
+    // value-edit all converge -- and until 2026-08-03 nothing re-applied the
+    // lock there. A sideways drag drifted the cap off its datum, giving a
+    // slanted whisker and a recorded X the figure never showed.
+    //
+    // Same rule, same place, as the spider snap directly above it in that
+    // method: a point that belongs to an axis stays on it however it is moved.
+    const session = calibratedWithACappedPoint();
+    session.setActiveDataset(1); // SD upper -- the cap series
+    session.updateDataPointPixel(0, 260, 150); // dragged UP and sideways
+
+    const cap = session.getDatasets()[1]!.getAllPixels()[0]!;
+    expect(cap.x).toBeCloseTo(200, 6); // the sideways part is discarded
+    expect(cap.y).toBeCloseTo(150, 6); // free to slide along the bar
+  });
+
+  it('an ordinary point is still free to move in both axes', () => {
+    // The lock must not over-reach onto points that are not caps.
+    const session = calibratedWithACappedPoint();
+    session.setActiveDataset(0); // Sample A -- the data series
+    session.updateDataPointPixel(0, 260, 150);
+    const p = session.getDatasets()[0]!.getAllPixels()[0]!;
+    expect(p.x).toBeCloseTo(260, 6);
+    expect(p.y).toBeCloseTo(150, 6);
+  });
+
   // ⚑ NOT TESTED, and said plainly rather than left implied: the `!targetEntry`
   // guard is defence in depth and no click path reaches it. renameDataset
   // retargets relations, and removeDataset clears them, so a relation naming a

@@ -3982,7 +3982,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // not correspond to its own exported value. The spoke comes from the point's
     // own tuple slot, so a drag can never move it onto a different axis: changing
     // which axis a reading belongs to is a delete-and-re-place, not a nudge.
-    const snapped = this.snapToSpoke(px, py, this.spokeIndexOfPoint(index));
+    // An ERROR CAP stays ON the bar its datum anchors, however it is moved --
+    // exactly the spider rule below, for the same reason. captureErrorCap
+    // axis-locks the cap when it is first dragged out (capFreeDirection +
+    // constrainCap), and until 2026-08-03 nothing re-applied that lock when the
+    // user adjusted the cap AFTERWARDS -- which the error-bars card explicitly
+    // tells them to do ("pick its series under Recorded below, then drag the
+    // cap"). A sideways drag drifted the cap off its datum: a slanted whisker,
+    // and a recorded X the figure never showed.
+    //
+    // ⚑ errorCapDragLine was written for precisely this call and had NO caller
+    // at all -- its own comment asserted "ui/ uses this to axis-lock a cap's
+    // drag, so the invariant captureErrorCap establishes keeps holding". It did
+    // not. The guard belongs here rather than in ui/, because this is where
+    // drag, arrow-nudge and value-edit converge; putting it in the drag handler
+    // is the v1.3 mistake the derived-sample guard above already records.
+    const capLine = this.errorCapDragLine(this.activeDatasetIndex, index);
+    const onBar = capLine ? constrainCap(capLine.origin, { x: px, y: py }, capLine.direction) : { x: px, y: py };
+    const snapped = this.snapToSpoke(onBar.x, onBar.y, this.spokeIndexOfPoint(index));
     dataset.setPixelAt(index, snapped.x, snapped.y);
     if (role === 'anchor') this.rebuildInterpolation();
   }
