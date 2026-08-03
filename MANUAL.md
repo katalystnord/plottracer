@@ -211,13 +211,63 @@ next. A reading you placed by hand is never overwritten.
   a fresh figure. Flip between figures with the ◀ ▶ arrows by the calibration card;
   each keeps its own image, calibration, series, and graph type.
 
-## 7. Measure (optional)
+## 7. Error bars (optional)
+
+Error bars are **not a graph type** — they are rail tool `6`, captured on top of
+whichever series they belong to.
+
+**Set up.** Open the tool and fill two fields:
+
+- **Error for** — the series the bars belong to. It needs at least one point
+  already; an error bar hangs off a data point.
+- **Name** — what this uncertainty is called on the figure: `SD`, `95% CI`,
+  `SEM`. The card shows what it becomes — two new series, **SD upper** and
+  **SD lower**. That name is the only meaning PlotTracer records; it never
+  decides what your bars represent.
+
+**Capture.** Drag from a data point out to its cap.
+
+- The **start** of the drag snaps onto a point you already placed, so the bar is
+  anchored to a real reading rather than to wherever you pressed.
+- The **cap** end is never snapped. That end *is* the measurement.
+- Drag up or down and the pair records as `upper` / `lower`; drag left or right
+  and it records as `left` / `right`, for horizontal uncertainty.
+
+**⚑ The second cap starts as a mirror, and a mirror is not a measurement.** One
+drag places a cap on both sides: the one you dragged, and its reflection through
+the datum as a *starting position*. On a symmetric figure that is already right.
+On an asymmetric one it is reporting a symmetry the figure never drew, and you
+have to move it.
+
+**To move a cap where the figure actually draws it:** pick its series under
+**Recorded** in the card, then drag that cap. A cap slides only **along its own
+bar** — the sideways part of the drag is discarded — so adjusting one can never
+tilt the whisker off its datum, however you drag.
+
+Two bundled examples make the difference visible. *Error bars — tensile strength
+± SD* is symmetric, so every mirrored cap happens to land correctly. *Error bars
+— asymmetric 95% CI* is lopsided at every point, which is the case a mirror
+cannot do for you.
+
+**More than one kind on the same point.** Capture a second bar under a different
+name and both are kept. An `SD` bar and a `95% CI` bar on the same datum are
+separate pairs; deleting one leaves the other standing.
+
+**Deleting.** Deleting a cap removes the whole bar it belongs to — that cap and
+its opposite number — and leaves the data point. Deleting the data point takes
+its error bars with it.
+
+**Export.** The caps leave as their own series, under the names you gave them,
+as **absolute positions** rather than as ± deltas. A delta is arithmetic anyone
+can redo; the positions are what was measured off the figure.
+
+## 8. Measure (optional)
 
 The **ruler** tool (`7`) opens a Measure card: **distance, angle, area, slope** —
 in the chart's own units, or a scale you set from any known length on the image.
 Measurements are a separate collection from your series data.
 
-## 8. Analyse (optional)
+## 9. Analyse (optional)
 
 Open **Curve fit** from the tool rail to fit a model through a traced series.
 
@@ -256,7 +306,7 @@ polynomial is solved directly and has nothing to converge, so it reads `n/a`.
 The fit is always a **separate block** from the record — the traced points are
 never overwritten by the model drawn through them.
 
-## 9. Export
+## 10. Export
 
 **Export** (top bar) → **CSV, TSV, JSON, OpenDocument (ODS), Excel (XLSX), LaTeX,
 MATLAB, Python, R**,
