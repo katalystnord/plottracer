@@ -10,13 +10,18 @@
  *   - which series/rows/values the table shows, and how many rows a RAGGED
  *     multi-series table has;
  *   - whether the Category column exists at all;
- *   - **what order a series' columns come in** (Category leads the values);
+*   - which cells the user may type into, and which are spline-derived.
  *   - which cells the user may type into, and which are spline-derived.
  *
  * ⚑ WHY THESE FOUR. Every one of them has produced a real defect:
- *   - Column ORDER: the screen led with Category while the categorical EXPORT
- *     appended it last — screen and file disagreed until David caught it
- *     (2026-07-26). Both are now Position, Category, Value.
+ *   - ⚑ Column ORDER USED TO LIVE HERE, in `seriesColumns`, after the screen led
+ *     with Category while the categorical EXPORT appended it last (David caught
+ *     it 2026-07-26). That function was DELETED 2026-08-03: it had zero callers
+ *     — the table builds its columns inline and never adopted it — so the drift
+ *     it was written to prevent was never actually prevented, while the function
+ *     sitting here tested and green read as though it were. Re-introduce it WIRED
+ *     when the v2.1 Workspace split restructures the table; an uninstalled
+ *     contract is worse than none, because it looks like cover.
  *   - EDITABILITY: a spline-derived sample is regenerated from its anchors, so
  *     an edit looked like it took and was silently wiped (v0.6 audit).
  *   - DERIVED rows: selecting one made it the nudge/Del target, so a read-only
@@ -56,12 +61,6 @@ export interface SpreadsheetSeries {
   deltas: (number | null)[];
 }
 
-/** A single column under one series' heading. `category` is the independent
- * variable (a NAME); `value` columns are the dependent ones, one per data
- * dimension, carrying the date format when that column is date-calibrated. */
-export type SpreadsheetColumn =
-  | { kind: 'category'; label: string }
-  | { kind: 'value'; label: string; dim: number; dateFormat: string | null };
 
 /**
  * Build every series' spreadsheet row data.
@@ -110,30 +109,6 @@ export function spreadsheetMaxRows(series: readonly SpreadsheetSeries[]): number
  */
 export function showsCategoryColumn(axesKind: string, hasSlots: boolean): boolean {
   return axesKind === 'bar' && !hasSlots;
-}
-
-/**
- * One series' columns, IN ORDER.
- *
- * ⚑ Category leads: an independent variable comes before the dependent one, and
- * this order is the screen's half of the contract the categorical export also
- * keeps (Position, Category, Value). They disagreed once; keeping the order in
- * one function is what stops them drifting apart again.
- */
-export function seriesColumns(
-  showCategory: boolean,
-  valueLabels: readonly string[],
-  dateFormats: readonly (string | null)[] = []
-): SpreadsheetColumn[] {
-  return [
-    ...(showCategory ? [{ kind: 'category' as const, label: 'Category' }] : []),
-    ...valueLabels.map((label, dim) => ({
-      kind: 'value' as const,
-      label,
-      dim,
-      dateFormat: dateFormats[dim] ?? null,
-    })),
-  ];
 }
 
 /** A spline-derived sample has no independent existence — the next anchor move

@@ -12,7 +12,6 @@ import {
   buildSpreadsheetSeries,
   spreadsheetMaxRows,
   showsCategoryColumn,
-  seriesColumns,
   isDerivedAt,
   isCellEditable,
 } from '../spreadsheetModel.js';
@@ -117,37 +116,6 @@ describe('the Category column condition', () => {
     expect(showsCategoryColumn('xy', false)).toBe(false);
     expect(showsCategoryColumn('xy', true)).toBe(false);
     expect(showsCategoryColumn('polar', false)).toBe(false);
-  });
-});
-
-describe('column ORDER — the rule the screen and the file once disagreed on', () => {
-  it('puts Category FIRST, before every value column', () => {
-    const cols = seriesColumns(true, ['X', 'Y']);
-    expect(cols.map((c) => c.kind)).toEqual(['category', 'value', 'value']);
-    expect(cols[0]!.label).toBe('Category');
-    // ⚑ The independent variable leads. Appending Category last is exactly the
-    // defect David caught in the categorical export (2026-07-26).
-    expect(cols.map((c) => c.label)).toEqual(['Category', 'X', 'Y']);
-  });
-
-  it('omits the category column entirely when it does not apply', () => {
-    const cols = seriesColumns(false, ['X', 'Y']);
-    expect(cols.map((c) => c.kind)).toEqual(['value', 'value']);
-    expect(cols.map((c) => c.label)).toEqual(['X', 'Y']);
-  });
-
-  it('keeps each value column bound to its own DIM and date format', () => {
-    // The dim must survive the category offset, or a date format would be
-    // applied to the wrong column once Category is prepended.
-    const cols = seriesColumns(true, ['Date', 'Value'], ['%Y-%m-%d', null]);
-    const values = cols.filter((c) => c.kind === 'value');
-    expect(values.map((c) => (c.kind === 'value' ? c.dim : -1))).toEqual([0, 1]);
-    expect(values.map((c) => (c.kind === 'value' ? c.dateFormat : 'x'))).toEqual(['%Y-%m-%d', null]);
-  });
-
-  it('reads no date format where none was given', () => {
-    const cols = seriesColumns(false, ['X', 'Y']);
-    expect(cols.every((c) => c.kind === 'value' && c.dateFormat === null)).toBe(true);
   });
 });
 
