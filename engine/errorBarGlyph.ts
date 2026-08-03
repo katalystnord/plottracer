@@ -15,9 +15,18 @@
 
 import type { GlyphSegment, Point2D } from './histogramGlyph.js';
 
-/** Half-length of the whisker end caps, in image pixels. The old app's own
- * constant (`overrides.js:902`). */
-const CAP_HALF = 8;
+/** Half-length of the whisker end caps, in image pixels.
+ *
+ * ⚑ WAS 8 — the old app's own constant (`overrides.js:902`), inherited without
+ * being looked at on our own canvas. At 8 the tick spans 16px, while the datum
+ * it sits beside draws as a ring of radius 7 (14px across) plus crosshair arms:
+ * the cap and the marker were nearly the same width, so the end of the whisker
+ * disappeared into the data point rather than reading as a cap (David,
+ * 2026-08-03, driving the app). A cap has to be legible AGAINST the marker,
+ * which is the one thing the inherited number was never chosen for.
+ *
+ * Exported so the test can pin that relationship rather than the digit. */
+export const CAP_HALF = 13;
 
 /**
  * The bar between two whisker ends, plus a cap at each end.

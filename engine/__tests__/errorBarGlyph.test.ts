@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeWhiskerGlyph } from '../errorBarGlyph.js';
+import { computeWhiskerGlyph, CAP_HALF } from '../errorBarGlyph.js';
 
 // ⚑ This file used to test computeErrorBarGlyph -- the RETIRED tuple model's
 // two-ended bar -- and nothing else. That function was reachable only through the
@@ -7,6 +7,22 @@ import { computeWhiskerGlyph } from '../errorBarGlyph.js';
 // over code no user could run, while the whisker glyph the LIVE error tool
 // actually draws had no test at all. Inverted here.
 describe('whisker glyph (checkpoint 79) -- what the live error tool draws', () => {
+  it('⚑ draws a tick WIDER than the datum marker it sits beside', () => {
+    // The cap's job is to be legible AGAINST the data point, and the datum
+    // draws as a ring of radius 7 (see ui/src/ImageCanvas.tsx) with crosshair
+    // arms. The inherited constant was 8, spanning 16px against a 14px marker,
+    // so the whisker's end vanished into the circle. This pins the RELATIONSHIP
+    // rather than the digit -- the number may be tuned, but a cap narrower than
+    // the marker is the defect, not a preference.
+    const DATUM_MARKER_RADIUS = 7;
+    expect(CAP_HALF).toBeGreaterThan(DATUM_MARKER_RADIUS);
+
+    const segs = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
+    const tick = segs[1]!;
+    const width = Math.hypot(tick.to.x - tick.from.x, tick.to.y - tick.from.y);
+    expect(width).toBeGreaterThan(DATUM_MARKER_RADIUS * 2);
+  });
+
   it('draws the bar out to the cap, then a tick across the CAP end only', () => {
     const segs = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
     // Two segments, not three: the datum end already draws its own data dot, and
