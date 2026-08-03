@@ -474,6 +474,58 @@ def gen_errorbar():
     })
 
 
+def gen_errorbar_asymmetric():
+    """Time to failure vs. applied stress with ASYMMETRIC 95% CIs — the case the
+    symmetric ± SD example above cannot show.
+
+    ⚑ The asymmetry is not decoration. Time-to-failure is log-normally
+    distributed, so its confidence interval is genuinely lopsided: the upper arm
+    is longer than the lower one, every point. A tool that mirrors one cap
+    through the datum reports a symmetry this figure never drew — which is
+    exactly the defect the error-cap workflow exists to avoid, and there was no
+    bundled figure that could demonstrate it (David, 2026-08-03).
+
+    Truth = each point's value and its absolute upper/lower cap, the same schema
+    as errorbar-tensile-cure (deltas are derived, never stored)."""
+    name = "errorbar-failure-time-asymmetric"
+    # ⚑ The decay is deliberately gentle. A true failure-time curve drops by two
+    # orders of magnitude, which would leave the last three intervals a few
+    # pixels tall -- unplaceable, so the example could not be USED to practise
+    # the thing it exists to teach. Every interval here is wide enough to put a
+    # cap on, and the log-normal asymmetry (lower ~0.74y, upper ~1.44y) is
+    # preserved at every point.
+    x = np.array([50, 75, 100, 125, 150, 175, 200], dtype=float)      # stress (MPa)
+    y = np.array([820, 610, 440, 310, 205, 130, 78], dtype=float)     # median time to failure (h)
+    lo = np.array([610, 455, 330, 232, 152, 95, 56], dtype=float)     # 95% CI lower bound
+    hi = np.array([1180, 880, 630, 442, 292, 186, 113], dtype=float)  # 95% CI upper bound
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    # yerr as a 2xN array is what makes the caps asymmetric: row 0 is the drop to
+    # the lower bound, row 1 the rise to the upper.
+    ax.errorbar(x, y, yerr=[y - lo, hi - y], fmt="o", color=NAVY, ecolor=NAVY,
+                elinewidth=1.6, capsize=5, markersize=6)
+    ax.set_xlim(25, 225)
+    ax.set_ylim(0, 1300)
+    ax.set_xlabel("Applied stress (MPa)", fontsize=13)
+    ax.set_ylabel("Time to failure (h)", fontsize=13)
+    ax.set_title("Time to failure vs. applied stress (95% CI)", fontsize=15)
+    ax.grid(True, color="#dddddd", linewidth=0.8)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png",
+                   "note": "Synthetic ground truth — value + absolute upper/lower cap per point. "
+                           "Every interval is ASYMMETRIC: the upper arm is longer than the lower."},
+        "graphType": "xy",
+        "axes": {"x": {"label": "Applied stress (MPa)", "min": 25, "max": 225},
+                 "y": {"label": "Time to failure (h)", "min": 0, "max": 1300}},
+        "series": [{"name": "time to failure", "points": [
+            {"x": float(a), "y": float(b), "yUpper": float(u), "yLower": float(l)}
+            for a, b, l, u in zip(x, y, lo, hi)]}],
+    })
+
+
 def gen_boxplot():
     """Tensile strength distribution by fibre type, as box plots drawn from
     KNOWN five-number summaries (ax.bxp takes precomputed stats -> the truth is
@@ -1260,6 +1312,7 @@ if __name__ == "__main__":
     gen_categorical()
     gen_stress_strain()
     gen_errorbar()
+    gen_errorbar_asymmetric()
     gen_boxplot()
     gen_polar()
     gen_ccr()

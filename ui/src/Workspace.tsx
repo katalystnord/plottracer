@@ -109,6 +109,7 @@ import scatterSample from '../../samples/scatter-crosslink-modulus.png';
 import dashedReleaseSample from '../../samples/xy-dashed-release.png';
 import histogramSample from '../../samples/histogram-pore-size.png';
 import errorBarSample from '../../samples/errorbar-tensile-cure.png';
+import errorBarAsymSample from '../../samples/errorbar-failure-time-asymmetric.png';
 import barSample from '../../samples/bar-tensile-strength.png';
 import barGroupedSample from '../../samples/bar-grouped-viability.png';
 import barStackedSample from '../../samples/bar-stacked-cost.png';
@@ -786,6 +787,12 @@ const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; 
   // BLANK. `icon: 'errorbars'` overrides the shared XY glyph so this row
   // doesn't look identical to every other XY example.
   { id: 'errorbar', name: 'Error bars — tensile strength ± SD', src: errorBarSample, axes: 'xy', icon: 'errorbars' },
+  // ⚑ The pair matters. The ± SD figure above is SYMMETRIC, so a mirrored
+  // cap happens to land right and the workflow's one real trap stays
+  // hidden. This one is asymmetric at every point (time-to-failure is
+  // log-normal, so its CI genuinely is), which is the only way to see that
+  // an untouched lower cap reports a symmetry the figure never drew.
+  { id: 'errorbar-asym', name: 'Error bars — asymmetric 95% CI', src: errorBarAsymSample, axes: 'xy', icon: 'errorbars' },
   { id: 'histogram', name: 'Pore size distribution', src: histogramSample, axes: 'histogram' },
   { id: 'bar', name: 'Tensile strength', src: barSample, axes: 'bar' },
   // Three more bar examples (v2.0, David: "some more bar graph test cases"),

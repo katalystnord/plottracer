@@ -1,0 +1,68 @@
+{
+  "source": {
+    "imagePath": "errorbar-failure-time-asymmetric.png",
+    "note": "Synthetic ground truth \u2014 value + absolute upper/lower cap per point. Every interval is ASYMMETRIC: the upper arm is longer than the lower."
+  },
+  "graphType": "xy",
+  "axes": {
+    "x": {
+      "label": "Applied stress (MPa)",
+      "min": 25,
+      "max": 225
+    },
+    "y": {
+      "label": "Time to failure (h)",
+      "min": 0,
+      "max": 1300
+    }
+  },
+  "series": [
+    {
+      "name": "time to failure",
+      "points": [
+        {
+          "x": 50.0,
+          "y": 820.0,
+          "yUpper": 1180.0,
+          "yLower": 610.0
+        },
+        {
+          "x": 75.0,
+          "y": 610.0,
+          "yUpper": 880.0,
+          "yLower": 455.0
+        },
+        {
+          "x": 100.0,
+          "y": 440.0,
+          "yUpper": 630.0,
+          "yLower": 330.0
+        },
+        {
+          "x": 125.0,
+          "y": 310.0,
+          "yUpper": 442.0,
+          "yLower": 232.0
+        },
+        {
+          "x": 150.0,
+          "y": 205.0,
+          "yUpper": 292.0,
+          "yLower": 152.0
+        },
+        {
+          "x": 175.0,
+          "y": 130.0,
+          "yUpper": 186.0,
+          "yLower": 95.0
+        },
+        {
+          "x": 200.0,
+          "y": 78.0,
+          "yUpper": 113.0,
+          "yLower": 56.0
+        }
+      ]
+    }
+  ]
+}

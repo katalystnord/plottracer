@@ -4894,10 +4894,17 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // (v2.0, 2026-07-30): grouped, stacked and floating are each a distinct
     // capture shape, not a variation on the plain single-series case.
     //
+    // ⚑ And error bars got a SECOND one (2026-08-03): the ± SD figure is
+    // symmetric, so a mirrored lower cap happens to land right and the
+    // workflow's one real trap never shows. The asymmetric 95% CI figure is the
+    // only way to see that an untouched cap reports a symmetry the figure never
+    // drew. Same reasoning as the pies -- one example can show a capability
+    // "works" while leaving the case it exists for untried.
+    //
     // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
     // without its Help entry is invisible, which is how a graph type ends up with
     // no way in for anyone who did not build it.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(22);
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(23);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
