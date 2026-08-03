@@ -350,7 +350,10 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // file before v2.0), the same fallback loadCalibrated itself applies.
     categoryAxis: plotData.getCategoryAxisColl()[0] ?? new CategoryAxis(),
     imageDataURL: data.image.dataURL,
-    imageFileName: data.image.fileName,
+    // Absent rather than explicitly undefined, matching readStamp below and
+    // the writer at `image:` above -- a file with no remembered name has no
+    // key, it does not have a key holding nothing.
+    ...(data.image.fileName === undefined ? {} : { imageFileName: data.image.fileName }),
     measurements: Array.isArray(data.measurements) ? data.measurements : [],
     measureScale: data.measureScale ?? null,
     // Accept only well-formed parts; a hand-edited or pre-95 file with missing

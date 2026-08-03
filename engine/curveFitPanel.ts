@@ -122,7 +122,11 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
         model: modelId,
         degree: options.degree,
         coefficients: outcome.params,
-        rSquared: outcome.rSquared,
+        // Spread-when-defined, not `rSquared: undefined`. R² is ABSENT for a
+        // series with no spread rather than being some value -- writing the key
+        // with an undefined in it is a different claim, and the one that
+        // shipped as "R² = 1.00000" in v1.5.0.
+        ...(outcome.rSquared === undefined ? {} : { rSquared: outcome.rSquared }),
         rms: outcome.rms,
         converged: outcome.converged,
       },
@@ -143,7 +147,7 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
       model: 'polynomial',
       degree: options.degree,
       coefficients,
-      rSquared: stats.rSquared,
+      ...(stats.rSquared === undefined ? {} : { rSquared: stats.rSquared }),
       rms: stats.rms,
     },
   };

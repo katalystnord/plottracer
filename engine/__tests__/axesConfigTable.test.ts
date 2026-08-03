@@ -316,6 +316,38 @@ describe('the config table — how many clicks each type asks for', () => {
     }
   });
 
+  // ⚑ Histogram and Box Plot BORROW their calibration and guards from XY and
+  // Bar respectively, by REFERENCE, so the shared arrays cannot drift apart --
+  // that is stated in both config comments and was previously six plain
+  // `key: DONOR.key` lines each. They now go through `borrowFrom`, which skips
+  // keys the donor omits (needed once exactOptionalPropertyTypes was turned on:
+  // `key: DONOR.key` writes a key HOLDING undefined, and this object is read as
+  // a table where absent and present-but-undefined are different answers).
+  //
+  // These assertions pin the borrow itself. Nothing else would notice a future
+  // edit that dropped a key from the list -- the config would simply lose a
+  // guard, silently, which is the failure mode this whole file exists to catch.
+  it('Histogram borrows XY calibration and guards by reference', () => {
+    expect(HISTOGRAM_AXES_CONFIG.logScaleGuards).toBe(XY_AXES_CONFIG.logScaleGuards);
+    expect(HISTOGRAM_AXES_CONFIG.distinctPixelSteps).toBe(XY_AXES_CONFIG.distinctPixelSteps);
+    expect(HISTOGRAM_AXES_CONFIG.parallelAxisGuard).toBe(XY_AXES_CONFIG.parallelAxisGuard);
+    expect(HISTOGRAM_AXES_CONFIG.fixedSteps).toBe(XY_AXES_CONFIG.fixedSteps);
+    expect(HISTOGRAM_AXES_CONFIG.options).toBe(XY_AXES_CONFIG.options);
+    expect(HISTOGRAM_AXES_CONFIG.extractOptions).toBe(XY_AXES_CONFIG.extractOptions);
+  });
+
+  it('Box Plot borrows Bar the same way — but NOT its options', () => {
+    expect(BOX_PLOT_AXES_CONFIG.logScaleGuards).toBe(BAR_AXES_CONFIG.logScaleGuards);
+    expect(BOX_PLOT_AXES_CONFIG.distinctPixelSteps).toBe(BAR_AXES_CONFIG.distinctPixelSteps);
+    expect(BOX_PLOT_AXES_CONFIG.fixedSteps).toBe(BAR_AXES_CONFIG.fixedSteps);
+    // ⚑ v2.0 Phase 6: sharing Bar's `options` array leaked its
+    // hasBaseline/baselineValue controls into every Box Plot session, where
+    // buildAxes never reads them — controls that DID NOTHING. Box Plot owns its
+    // array now, and this assertion is what stops the sharing coming back.
+    expect(BOX_PLOT_AXES_CONFIG.options).not.toBe(BAR_AXES_CONFIG.options);
+    expect(BOX_PLOT_AXES_CONFIG.options?.map((o) => o.key)).not.toContain('hasBaseline');
+  });
+
   it('only Pie and CCR collect a value with no click attached to it', () => {
     // globalFields are the fields entered once, outside the click walk. Any
     // OTHER type growing one silently changes its calibration flow.

@@ -394,7 +394,9 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
     isLogX,
     isLogY,
     thetaInDegrees,
-    thetaNote,
+    // No note is the ABSENCE of a note. `if (project.thetaNote)` downstream
+    // reads a missing key identically, so nothing changes but the claim.
+    ...(thetaNote === undefined ? {} : { thetaNote }),
     imageDataURL,
     imageSize,
     axisPoints,

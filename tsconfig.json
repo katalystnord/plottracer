@@ -7,16 +7,25 @@
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    // Three second opinions from the compiler already in the build, each
+    // Second opinions from the compiler that are already in the build, each
     // verified to cost ZERO errors before being turned on (2026-08-01).
-    // `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature`
-    // were measured too and are NOT on: 8 and 63 errors respectively. The
-    // first is worth doing -- it enforces this project's own "an absent key
-    // means does-not-apply" rule at the type level -- but it is a change to
-    // 8 real call sites, not a flag flip.
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "useUnknownInCatchVariables": true,
+    // ⚑⚑ This one is not a style flag -- it makes THIS PROJECT'S OWN central
+    // rule the compiler's job: an ABSENT key means "does not apply", and is a
+    // different claim from a key holding undefined. That distinction has
+    // already cost a shipped release (v1.5.0 reported "R² = 1.00000" for a
+    // flat series, where R² is undefined rather than 1) and is why exports
+    // write a blank cell and JSON omits the key entirely.
+    // Turned on 2026-08-03 after fixing the 8 measured call sites it flagged;
+    // see `borrowFrom` in engine/calibrationSession.ts for the one that needed
+    // more than a spread.
+    "exactOptionalPropertyTypes": true,
+    // MEASURED and deliberately NOT on:
+    //   ui/ under exactOptionalPropertyTypes  45 errors -- a separate job, and
+    //     the rule is about the RECORD, which lives in core/algorithms/engine.
+    //   noPropertyAccessFromIndexSignature    63 errors -- style, not a claim.
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,

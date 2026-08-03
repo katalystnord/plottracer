@@ -446,7 +446,9 @@ export function fitModel(
   }
   return {
     params: result.params,
-    rSquared: stats.rSquared,
+    // Absent, not undefined: R² has no value at zero variance, and the key
+    // being missing is the claim we mean to make.
+    ...(stats.rSquared === undefined ? {} : { rSquared: stats.rSquared }),
     rms: stats.rms,
     converged: result.converged,
     iterations: result.iterations,

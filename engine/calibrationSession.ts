@@ -878,6 +878,34 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   extractGlobalValues?(axes: A): Record<string, string>;
 }
 
+/**
+ * Copy the keys a donor config ACTUALLY DECLARES, skipping the ones it omits.
+ *
+ * Histogram borrows XY's calibration and guards, and Box Plot borrows Bar's,
+ * so the shared arrays cannot drift apart -- that reuse is deliberate and
+ * predates this helper. But every borrowable field is OPTIONAL, so the plain
+ * form `logScaleGuards: XY_AXES_CONFIG.logScaleGuards` writes a key **holding
+ * undefined** whenever the donor omits it.
+ *
+ * ⚑ That is not the same as omitting the key, and this object is read as a
+ * TABLE (see `engine/__tests__/axesConfigTable.test.ts`, which walks every
+ * guard->step and choice->default reference). A guard naming a step that does
+ * not exist does not fail -- `findIndex` returns -1, `getPoint(-1)` returns
+ * null, and the check silently passes everything. "Absent" and "present but
+ * undefined" therefore have to stay distinguishable, which is exactly what
+ * `exactOptionalPropertyTypes` enforces at the type level.
+ */
+function borrowFrom<T extends object, K extends keyof T>(
+  donor: T,
+  keys: readonly K[]
+): Partial<Pick<T, K>> {
+  const out: Partial<Pick<T, K>> = {};
+  for (const key of keys) {
+    if (donor[key] !== undefined) out[key] = donor[key];
+  }
+  return out;
+}
+
 export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'xy',
   label: 'XY',
@@ -971,13 +999,18 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   defaultSlots: HISTOGRAM_SLOTS,
   tupleNoun: 'bin',
   // Same axes, same steps, same options -> same guards. Sharing the arrays
-  // rather than re-declaring keeps them from drifting apart.
-  logScaleGuards: XY_AXES_CONFIG.logScaleGuards,
-  distinctPixelSteps: XY_AXES_CONFIG.distinctPixelSteps,
-  parallelAxisGuard: XY_AXES_CONFIG.parallelAxisGuard,
+  // rather than re-declaring keeps them from drifting apart. See borrowFrom
+  // for why this is a spread and not six `key: XY_AXES_CONFIG.key` lines.
+  // `fixedSteps` is REQUIRED on the config, so it is always there to copy
+  // plainly; borrowFrom carries only the genuinely optional keys.
   fixedSteps: XY_AXES_CONFIG.fixedSteps,
-  options: XY_AXES_CONFIG.options,
-  extractOptions: XY_AXES_CONFIG.extractOptions,
+  ...borrowFrom(XY_AXES_CONFIG, [
+    'logScaleGuards',
+    'distinctPixelSteps',
+    'parallelAxisGuard',
+    'options',
+    'extractOptions',
+  ]),
   // v2.0 Phase 6: reuses algorithms/histogram.ts's OWN corner-averaging (not
   // a re-derivation) so the on-screen tuple table and CSV/JSON export (which
   // read `derived`, see engine/csvExport.ts's tupleDataSection) finally
@@ -1203,10 +1236,10 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   defaultSlots: BOX_PLOT_SLOTS,
   tupleNoun: 'box',
   // Shares Bar's calibration and guards -- reusing the arrays keeps them from
-  // drifting apart, as Histogram does with XY.
-  logScaleGuards: BAR_AXES_CONFIG.logScaleGuards,
-  distinctPixelSteps: BAR_AXES_CONFIG.distinctPixelSteps,
+  // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
+  // list; see the comment immediately below for why sharing it was a bug.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps']),
   // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
   // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
   // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and
