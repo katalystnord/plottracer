@@ -2243,3 +2243,386 @@ describe('what a graph type declares it CAN DO (v1.5)', () => {
     expect(CATEGORICAL_LINE_CONFIG.autoExtractKind).toBe('none');
   });
 });
+
+describe('transformAllPixels — the whole document tracks an edited image', () => {
+  // ⚑ This method had NO test file at all: a scoped mutation run (2026-08-03)
+  // put 10 no-coverage mutants in it. It is what carries calibration handles,
+  // a half-placed pending click, and every series' points through a coordinate
+  // map when the image is rotated, flipped or cropped. Nothing noticing a
+  // change here means an image edit could silently move the data off the
+  // figure -- and imageEdit.ts's own two rotation bugs (2026-07-31) show this
+  // is not a hypothetical area.
+
+  /** A calibrated session with two named series carrying points. */
+  function twoSeriesCalibrated() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    expect(session.runCalibration()).toBe(true);
+    session.renameDataset(0, 'A');
+    session.addDataPoint(200, 200); // data (3.333, 3.333)
+    session.addDataPoint(250, 175);
+    const second = session.addDataset('B');
+    session.setActiveDataset(second);
+    session.addDataPoint(310, 130);
+    return session;
+  }
+
+  const dataOf = (s: ReturnType<typeof twoSeriesCalibrated>, ds: number, i: number) => {
+    const p = s.getDatasets()[ds]!.getAllPixels()[i]!;
+    const axes = s.getAxes()!;
+    const v = axes.pixelToData(p.x, p.y);
+    return { x: v[0]!, y: v[1]! };
+  };
+
+  it('⚑ moves every pixel yet PRESERVES every data value — the whole point', () => {
+    // The invariant the doc comment claims: the handles move with the image, so
+    // recalibration lands on the same numbers. Asserting the invariant rather
+    // than the coordinates catches errors no single-point check can, because
+    // pixels and values have to disagree in exactly the compensating way.
+    const session = twoSeriesCalibrated();
+    const before = [dataOf(session, 0, 0), dataOf(session, 0, 1), dataOf(session, 1, 0)];
+    const pixelsBefore = session.getDatasets()[0]!.getAllPixels().map((p) => ({ ...p }));
+
+    // A horizontal flip about x = 500 — the image edit, applied to the document.
+    session.transformAllPixels((px, py) => ({ x: 500 - px, y: py }));
+
+    const after = [dataOf(session, 0, 0), dataOf(session, 0, 1), dataOf(session, 1, 0)];
+    after.forEach((a, i) => {
+      expect(a.x).toBeCloseTo(before[i]!.x, 6);
+      expect(a.y).toBeCloseTo(before[i]!.y, 6);
+    });
+    // ...and the pixels really did move, so the test above is not vacuous.
+    const pixelsAfter = session.getDatasets()[0]!.getAllPixels();
+    expect(pixelsAfter[0]!.x).toBeCloseTo(500 - pixelsBefore[0]!.x, 6);
+    expect(pixelsAfter[0]!.x).not.toBeCloseTo(pixelsBefore[0]!.x, 3);
+  });
+
+  it('carries EVERY series, not just the active one', () => {
+    // Series B is active; A must move too. A loop that stopped at the active
+    // entry would leave half the document behind the image.
+    const session = twoSeriesCalibrated();
+    const aBefore = session.getDatasets()[0]!.getAllPixels().map((p) => ({ ...p }));
+    const bBefore = session.getDatasets()[1]!.getAllPixels().map((p) => ({ ...p }));
+
+    session.transformAllPixels((px, py) => ({ x: px + 40, y: py - 25 }));
+
+    session.getDatasets()[0]!.getAllPixels().forEach((p, i) => {
+      expect(p.x).toBeCloseTo(aBefore[i]!.x + 40, 6);
+      expect(p.y).toBeCloseTo(aBefore[i]!.y - 25, 6);
+    });
+    session.getDatasets()[1]!.getAllPixels().forEach((p, i) => {
+      expect(p.x).toBeCloseTo(bBefore[i]!.x + 40, 6);
+      expect(p.y).toBeCloseTo(bBefore[i]!.y - 25, 6);
+    });
+  });
+
+  it('moves the calibration handles themselves, values intact', () => {
+    const session = twoSeriesCalibrated();
+    const before = structuredClone(session.getPlacedPoints());
+    expect(Object.keys(before).length).toBeGreaterThan(0);
+
+    session.transformAllPixels((px, py) => ({ x: px + 11, y: py + 7 }));
+
+    const after = session.getPlacedPoints();
+    expect(Object.keys(after).sort()).toEqual(Object.keys(before).sort());
+    for (const key of Object.keys(before)) {
+      expect(after[key]!.px).toBeCloseTo(before[key]!.px + 11, 6);
+      expect(after[key]!.py).toBeCloseTo(before[key]!.py + 7, 6);
+      // A handle is a pixel AND the value the user typed for it. Moving the
+      // image must not disturb the second.
+      expect(after[key]!.values).toEqual(before[key]!.values);
+    }
+  });
+
+  it('carries a HALF-PLACED calibration click through the edit too', () => {
+    // Rotating the image mid-calibration, with one handle clicked and its value
+    // not yet confirmed. The pending pixel is separate state from `placed`, so
+    // a transform that forgot it would drop the click back onto the old spot.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    expect(session.handleCalibrationClick(120, 240)).toBe('awaiting-value');
+    session.transformAllPixels((px, py) => ({ x: px * 2, y: py * 2 }));
+    expect(session.getPendingPixel()).toEqual({ px: 240, py: 480 });
+  });
+
+  it('works part-way through calibration, before there are any axes', () => {
+    // Cropping happens before calibrating just as often as after. ⚑ There can
+    // be no DATA points yet -- addDataPoint returns 'ignored' without axes, so
+    // asserting that they move would assert something unreachable -- but the
+    // handles placed so far must still travel, and with no axes there is
+    // nothing to re-run.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    expect(session.handleCalibrationClick(100, 250)).toBe('awaiting-value');
+    expect(session.confirmCalibrationValues(['0'])).toBe(true);
+    expect(session.addDataPoint(60, 70)).toBe('ignored');
+    expect(session.getAxes()).toBeNull();
+
+    const before = structuredClone(session.getPlacedPoints());
+    expect(() => session.transformAllPixels((px, py) => ({ x: px + 5, y: py + 5 }))).not.toThrow();
+
+    const after = session.getPlacedPoints();
+    for (const key of Object.keys(before)) {
+      expect(after[key]!.px).toBeCloseTo(before[key]!.px + 5, 6);
+      expect(after[key]!.py).toBeCloseTo(before[key]!.py + 5, 6);
+    }
+  });
+});
+
+describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar / Pie)', () => {
+  // ⚑ `checkValues` is where the "calibrate() cannot fail" family lives: five
+  // separate instances have shipped where a class returned true on input that
+  // made every reading null or 0. These entries are DECLARED rather than
+  // performed inside buildAxes precisely so plotData.deserialize -- which calls
+  // axes.calibrate() and never inspects its return value -- meets the same
+  // refusal a click does. A scoped mutation run (2026-08-03) found the CCR (9),
+  // Polar (6) and Pie (4) entries had NO test reaching them at all, so nothing
+  // would have noticed a refusal being deleted.
+  //
+  // ⚑ Each type-check half is probed with an ARRAY, not with garbage. The
+  // guards read `!ip.isValid || typeof v !== 'number'`, and garbage makes BOTH
+  // halves true -- which cannot distinguish `||` from `&&`, so an operator
+  // mutant survives. `'[1,2]'` parses VALIDLY to a number[], so only the second
+  // half is true and the mutant dies.
+
+  describe('Circular Chart Recorder', () => {
+    function ccrReadyToCalibrate(t0 = '2024/01/01 00:00', r0 = '1', r2 = '10') {
+      const session = new CalibrationSession(CIRCULAR_CHART_RECORDER_AXES_CONFIG);
+      expect(session.handleCalibrationClick(200, 200)).toBe('awaiting-value');
+      expect(session.confirmCalibrationValues([t0, r0])).toBe(true);
+      expect(session.handleCalibrationClick(400, 200)).toBe('point-placed');
+      expect(session.handleCalibrationClick(300, 100)).toBe('awaiting-value');
+      expect(session.confirmCalibrationValues([r2])).toBe(true);
+      expect(session.handleCalibrationClick(200, 400)).toBe('point-placed');
+      expect(session.handleCalibrationClick(400, 400)).toBe('point-placed');
+      session.setGlobalFieldValue('startTime', '2024/01/01 00:00');
+      return session;
+    }
+
+    it('the happy path really does calibrate — so the refusals below mean something', () => {
+      const session = ccrReadyToCalibrate();
+      expect(session.runCalibration()).toBe(true);
+      expect(session.getCalibrationError()).toBeNull();
+      expect(session.isCalibrated()).toBe(true);
+    });
+
+    it('refuses a first-point Time that is not a number or a date, and names it', () => {
+      const session = ccrReadyToCalibrate('not a time at all');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/Time value must be a number or a date/);
+      expect(session.isCalibrated()).toBe(false);
+    });
+
+    it('refuses a first-point Time that parses validly but is not a number', () => {
+      const session = ccrReadyToCalibrate('[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/Time value must be a number or a date/);
+    });
+
+    it('refuses a Chart Start Time that parses validly but is not a number', () => {
+      const session = ccrReadyToCalibrate();
+      session.setGlobalFieldValue('startTime', '[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/Chart Start Time/);
+    });
+
+    it('refuses an R0 that is a DATE — a radius is not a moment', () => {
+      // ⚑ R0/R2 reject `isDate` as well as non-numbers, which the Time field
+      // deliberately accepts. That asymmetry is the whole point of separate
+      // guards, and only a date input can tell the two apart.
+      const session = ccrReadyToCalibrate('2024/01/01 00:00', '2024/03/04');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/R0/);
+    });
+
+    it('refuses an R0 that parses validly but is not a number', () => {
+      const session = ccrReadyToCalibrate('2024/01/01 00:00', '[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/R0/);
+    });
+
+    it('refuses an R2 that is a DATE', () => {
+      const session = ccrReadyToCalibrate('2024/01/01 00:00', '1', '2024/03/04');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/R2/);
+    });
+
+    it('refuses an R2 that parses validly but is not a number', () => {
+      const session = ccrReadyToCalibrate('2024/01/01 00:00', '1', '[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/R2/);
+    });
+
+    it('names the FIRST thing wrong, not a generic failure', () => {
+      // Everything invalid at once: the message must still point at the Time
+      // field, so the user fixes one named thing rather than hunting.
+      const session = ccrReadyToCalibrate('rubbish', 'rubbish', 'rubbish');
+      session.setGlobalFieldValue('startTime', 'rubbish');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/Time value/);
+    });
+  });
+
+  describe('Polar', () => {
+    function polarReadyToCalibrate(r1 = '6', theta1 = '0', r2 = '12', theta2 = '') {
+      const session = new CalibrationSession(POLAR_AXES_CONFIG);
+      expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin
+      expect(session.handleCalibrationClick(500, 400)).toBe('awaiting-value'); // P1
+      expect(session.confirmCalibrationValues([r1, theta1])).toBe(true);
+      expect(session.handleCalibrationClick(600, 400)).toBe('awaiting-value'); // P2
+      expect(session.confirmCalibrationValues([r2, theta2])).toBe(true);
+      return session;
+    }
+
+    it('the happy path calibrates, with θ2 left blank', () => {
+      const session = polarReadyToCalibrate();
+      expect(session.runCalibration()).toBe(true);
+      expect(session.getCalibrationError()).toBeNull();
+    });
+
+    it("refuses P1's r when it is not a number, and names P1's r", () => {
+      const session = polarReadyToCalibrate('not a radius');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/P1.*r value/);
+    });
+
+    it("refuses P1's r when it parses validly but is not a number", () => {
+      const session = polarReadyToCalibrate('[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/P1.*r value/);
+    });
+
+    it("refuses P1's r when it is a DATE — a radius is not a moment", () => {
+      const session = polarReadyToCalibrate('2024/03/04');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/P1.*r value/);
+    });
+
+    it("refuses P1's θ when it is a date, naming θ rather than r", () => {
+      const session = polarReadyToCalibrate('6', '2024/03/04');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/θ value/);
+    });
+
+    it("refuses P1's θ when it parses validly but is not a number", () => {
+      const session = polarReadyToCalibrate('6', '[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/θ value/);
+    });
+
+    it("refuses P2's r when it is a date", () => {
+      const session = polarReadyToCalibrate('6', '0', '2024/03/04');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/P2.*r value/);
+    });
+
+    it("refuses P2's r when it parses validly but is not a number", () => {
+      const session = polarReadyToCalibrate('6', '0', '[1,2]');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/P2.*r value/);
+    });
+
+    it('⚑ does NOT refuse a junk θ2 — it is optional and the class never reads it', () => {
+      // The config comment says theta2 is deliberately unchecked. A guard added
+      // there would reject a file the app itself can produce (θ2 blank), so this
+      // asserts the ABSENCE of a refusal, which no other test would notice.
+      const session = polarReadyToCalibrate('6', '0', '12', 'total rubbish');
+      expect(session.runCalibration()).toBe(true);
+      expect(session.getCalibrationError()).toBeNull();
+    });
+  });
+});
+
+describe('removeDataPoints — deleting several at once, and what a selection MEANS', () => {
+  // ⚑ A scoped mutation run (2026-08-03) left 15 no-coverage mutants here. The
+  // ones that matter are the DESCENDING SORTS: removal shifts every later
+  // index, so deleting high-index-first is what makes a multi-point delete
+  // land on the points the user actually selected. Nothing tested that, and an
+  // arithmetic mutant flipping `b - a` to `a - b` is silent data loss --
+  // the wrong points vanish and the count is still right.
+
+  it('⚑ deletes exactly the SELECTED points when several are removed at once', () => {
+    // Four points; remove the first and third. Deleting ascending would remove
+    // index 0, then index 2 OF THE SHIFTED SERIES -- originally the fourth --
+    // leaving the wrong pair behind with an identical count.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    expect(session.runCalibration()).toBe(true);
+    for (const px of [130, 160, 190, 220]) session.addDataPoint(px, 200);
+    expect(session.getDataPoints()).toHaveLength(4);
+
+    session.removeDataPoints([0, 2]);
+
+    const left = session.getDatasets()[0]!.getAllPixels();
+    expect(left).toHaveLength(2);
+    expect(left.map((p) => p.x)).toEqual([160, 220]); // the 2nd and 4th
+  });
+
+  it('treats a repeated index as one deletion, not two', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    expect(session.runCalibration()).toBe(true);
+    for (const px of [130, 160, 190]) session.addDataPoint(px, 200);
+
+    session.removeDataPoints([1, 1, 1]);
+
+    expect(session.getDatasets()[0]!.getAllPixels().map((p) => p.x)).toEqual([130, 190]);
+  });
+
+  it('deleting every point at once empties the series without disturbing its identity', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    expect(session.runCalibration()).toBe(true);
+    session.renameDataset(0, 'Sample A');
+    for (const px of [130, 160, 190]) session.addDataPoint(px, 200);
+
+    session.removeDataPoints([0, 1, 2]);
+
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(0);
+    expect(session.getDatasets()[0]!.name).toBe('Sample A');
+  });
+
+  it('⚑ on a BOX PLOT, deleting one member deletes its whole box', () => {
+    // 1.5D: the five letter-values are one reading. Removing a single member
+    // would leave a partial box, which is not half the data but nonsense.
+    const session = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // box 0
+    for (const py of [480, 440, 400, 360, 320]) session.addDataPoint(300, py); // box 1
+    expect(session.getTupleRows()).toHaveLength(2);
+
+    session.removeDataPoints([2]); // one member of box 0 (its Median)
+
+    expect(session.getTupleRows()).toHaveLength(1);
+    expect(session.getDataPoints()).toHaveLength(5);
+    // Box 1 is what survived — its Min is py 480 -> (500-480)/400*10 = 0.5.
+    expect(session.getTupleRows()[0]!.points[0]!.data![0]).toBeCloseTo(0.5, 6);
+  });
+
+  it('⚑ selecting members of TWO boxes removes both boxes, high index first', () => {
+    // The descending sort again, at tuple level: removing tuple 0 first would
+    // re-index tuple 1 down and the second removal would hit nothing (or the
+    // wrong row).
+    const session = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
+    calibrateStandardBar(session);
+    session.runCalibration();
+    for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py);
+    for (const py of [480, 440, 400, 360, 320]) session.addDataPoint(300, py);
+    for (const py of [470, 430, 390, 350, 310]) session.addDataPoint(300, py);
+    expect(session.getTupleRows()).toHaveLength(3);
+
+    session.removeDataPoints([1, 12]); // a member of box 0 and a member of box 2
+
+    expect(session.getTupleRows()).toHaveLength(1);
+    // Box 1 is the survivor: Min from py 480 -> 0.5.
+    expect(session.getTupleRows()[0]!.points[0]!.data![0]).toBeCloseTo(0.5, 6);
+  });
+
+  it('ignores an out-of-range index instead of throwing', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    expect(session.runCalibration()).toBe(true);
+    session.addDataPoint(130, 200);
+    expect(() => session.removeDataPoints([99, -1])).not.toThrow();
+    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1);
+  });
+});

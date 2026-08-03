@@ -781,3 +781,139 @@ describe('the captured sector VALUE now reaches export (v2.0 groundwork)', () =>
     expect(parsed.series[0].tuples.map((t: { Value: number }) => t.Value)).toEqual(expected);
   });
 });
+
+describe('checkValues — the refusals a LOADED pie file must meet too', () => {
+  // ⚑ Declared on the config rather than performed inside buildAxes, so that
+  // plotData.deserialize -- which calls axes.calibrate() and never inspects its
+  // return value -- meets the same refusal a click does. The config's own
+  // comment records that this was written in buildAxes FIRST and the load-path
+  // test caught it immediately: a total of -50 opened clean with every value
+  // silently negative.
+  //
+  // A scoped mutation run (2026-08-03) found this entry had NO test reaching
+  // it: 4 no-coverage mutants in checkValues and 5 in buildAxes. Nothing would
+  // have noticed any of these refusals being deleted.
+
+  /** Outline clicks only — globals set per test so each refusal can be reached. */
+  function pieAwaitingGlobals(points = [90, 210, 330]) {
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    for (const a of points) session.handleCalibrationClick(...at(a));
+    return session;
+  }
+
+  it('refuses a NEGATIVE total — a sector is a fraction of a whole', () => {
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '-50');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/total must be a positive number/);
+    expect(session.isCalibrated()).toBe(false);
+  });
+
+  it('refuses a ZERO total — every slice would read as an infinite share', () => {
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '0');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/total must be a positive number/);
+  });
+
+  it('refuses a total that is not a number at all', () => {
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', 'one hundred');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/total must be a positive number/);
+  });
+
+  it('refuses a sweep above 360 — a pie cannot turn more than once', () => {
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '100');
+    session.setGlobalFieldValue('sweep', '540');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/sweep must be between 0 and 360/);
+  });
+
+  it('refuses a zero or negative sweep', () => {
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '100');
+    session.setGlobalFieldValue('sweep', '0');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/sweep must be between 0 and 360/);
+  });
+
+  it('ACCEPTS exactly 360 and exactly a half pie — the boundary is inclusive', () => {
+    // The guard is `sweep > 360`, not `>=`. Asserting the accepted edge is what
+    // stops a later tightening from rejecting an ordinary whole circle.
+    for (const sweep of ['360', '180']) {
+      const session = pieAwaitingGlobals();
+      session.setGlobalFieldValue('total', '100');
+      session.setGlobalFieldValue('sweep', sweep);
+      expect(session.runCalibration(), `sweep ${sweep}`).toBe(true);
+      expect(session.getCalibrationError()).toBeNull();
+    }
+  });
+
+  it('⚑ a TILTED pie refuses fewer than five outline points, naming the ellipse', () => {
+    // Five is not "more accurate" than three here -- an ellipse has five degrees
+    // of freedom, so four points describe NO answer rather than a rough one.
+    // ⚑ The outline is a REPEATING step that starts at three; a fourth click is
+    // 'ignored' until the user adds a slot. So four points is a state the app
+    // can genuinely be in, and it is the one the refusal is about.
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    for (const a of [90, 180, 270]) session.handleCalibrationClick(...at(a));
+    expect(session.addRepeat()).toBe(true);
+    expect(session.handleCalibrationClick(...at(0))).toBe('point-placed');
+    expect(Object.keys(session.getPlacedPoints())).toHaveLength(4);
+    session.setOption('isTilted', 'true');
+    session.setGlobalFieldValue('total', '100');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/five outline points/);
+  });
+
+  it('an UNtilted pie is content with three — the refusal is scoped to tilt', () => {
+    // Guards against the five-point rule being applied to every pie, which would
+    // reject the ordinary circular case the app is mostly used for.
+    const session = pieAwaitingGlobals([90, 210, 330]);
+    session.setGlobalFieldValue('total', '100');
+    expect(session.runCalibration()).toBe(true);
+  });
+
+  it('buildAxes refuses collinear outline points, and says a circle needs three', () => {
+    // Past checkValues (total/sweep fine, three points) but the geometry itself
+    // cannot produce a circle. A different failure from the value checks, with
+    // its own message.
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    for (const x of [100, 200, 300]) session.handleCalibrationClick(x, 200);
+    session.setGlobalFieldValue('total', '100');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/circle/);
+  });
+
+  it('the tilted geometry failure says TOP FACE, not the same circle message', () => {
+    // ⚑ The two buildAxes failures are worded differently on purpose: a 3D pie's
+    // top face is a full ellipse, and tracing the outer silhouette instead is
+    // the mistake this message exists to name. One shared message would lose it.
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    for (const x of [100, 150, 200]) session.handleCalibrationClick(x, 200);
+    for (const x of [250, 300]) {
+      expect(session.addRepeat()).toBe(true);
+      expect(session.handleCalibrationClick(x, 200)).toBe('point-placed');
+    }
+    expect(Object.keys(session.getPlacedPoints())).toHaveLength(5);
+    session.setOption('isTilted', 'true');
+    session.setGlobalFieldValue('total', '100');
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/TOP FACE/);
+  });
+
+  it('stores the total and sweep as the STRINGS the user typed', () => {
+    // They have no pixel to ride on, so the axes metadata is their only home in
+    // the file. Re-formatting them would make the file say something the user
+    // did not say -- "100.0" for a typed "100".
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '250');
+    session.setGlobalFieldValue('sweep', '180');
+    expect(session.runCalibration()).toBe(true);
+    const meta = session.getAxes()!.getMetadata();
+    expect(meta['pieTotal']).toBe('250');
+    expect(meta['pieSweep']).toBe('180');
+  });
+});
