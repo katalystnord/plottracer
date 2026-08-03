@@ -20,6 +20,15 @@ export const CURVE_FIT_MAX_DEGREE = 9;
  * Solve A*x = b via Gaussian elimination with partial pivoting.
  * Throws on a singular (or near-singular) matrix rather than guessing at
  * a reduced-order fit.
+ *
+ * ⚑ The near-singular test is `Math.abs(pivot) < 1e-10`, and **every
+ * comparison against NaN is false**, so that test alone cannot see a matrix
+ * that has already overflowed to Infinity/NaN — it would wave the worst input
+ * through and return an all-NaN solution. The non-finite check below is
+ * therefore separate from, not folded into, the singularity check: they are
+ * different failures and they need different words. See the "overflowed fit"
+ * tests in curveFit.test.ts for why returning NaN is unacceptable (the
+ * metadata clone rewrites it as null, and null arithmetic draws a flat line).
  */
 export function solveLinearSystem(A: number[][], b: number[]): number[] {
   const n = b.length;
@@ -29,6 +38,11 @@ export function solveLinearSystem(A: number[][], b: number[]): number[] {
     let pivotRow = col;
     for (let r = col + 1; r < n; r++) {
       if (Math.abs(M[r]![col]!) > Math.abs(M[pivotRow]![col]!)) pivotRow = r;
+    }
+    if (!Number.isFinite(M[pivotRow]![col]!)) {
+      throw new Error(
+        'The system holds values too large to solve — they overflowed to infinity, so no solution can be computed.',
+      );
     }
     if (Math.abs(M[pivotRow]![col]!) < 1e-10) {
       throw new Error('Singular matrix — not enough distinct points for this degree.');
@@ -49,6 +63,11 @@ export function solveLinearSystem(A: number[][], b: number[]): number[] {
     let sum = M[i]![n]!;
     for (let j = i + 1; j < n; j++) sum -= M[i]![j]! * x[j]!;
     x[i] = sum / M[i]![i]!;
+  }
+  if (!x.every((v) => Number.isFinite(v))) {
+    throw new Error(
+      'The system holds values too large to solve — the solution overflowed and is not a number.',
+    );
   }
   return x;
 }
@@ -71,6 +90,17 @@ export function fitPolynomial(points: Point2D[], degree: number): number[] {
       for (let c = 0; c < n; c++) XtX[r]![c] = XtX[r]![c]! + powers[r + c]!;
     }
   });
+  // The normal equations raise x to the power 2*degree, so a large x and a high
+  // degree overflow to Infinity long before anything else complains. Caught here
+  // rather than in the solver because only this function knows the two things
+  // the user can actually change: the degree, and how far x sits from zero.
+  // Naming the point count instead — which is what the singularity refusal below
+  // would say — would send them to fix something that is not broken.
+  if (!XtX.every((row) => row.every((v) => Number.isFinite(v))) || !Xty.every((v) => Number.isFinite(v))) {
+    throw new Error(
+      `These x values are too large for a degree ${String(degree)} fit: raising them to the power ${String(2 * degree)} overflows to infinity, so no coefficients can be computed. Use a lower degree, or rescale the x values closer to zero.`,
+    );
+  }
   return solveLinearSystem(XtX, Xty);
 }
 

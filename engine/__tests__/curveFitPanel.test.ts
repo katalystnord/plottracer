@@ -107,6 +107,44 @@ describe('getCurveFitState / setCurveFitState', () => {
     setCurveFitState(dataset, null);
     expect(getCurveFitState(dataset)).toBeNull();
   });
+
+  // ⚑ WHY the solver must refuse a non-finite fit rather than return one.
+  // The store is `Dataset.setMetadata`, which deep-clones through
+  // `JSON.parse(JSON.stringify(...))` -- and that rewrites NaN as **null**.
+  // `coefficients` is declared `number[]`, so nothing downstream expects a
+  // null, and `null * x === 0` in JS: the evaluator would quietly return a
+  // flat line through y = 0 and draw it on the figure as the answer. The NaN
+  // is not merely stored, it is LAUNDERED into a plausible number.
+  //
+  // This test characterises the storage layer, so if the clone is ever
+  // replaced (structuredClone preserves NaN) the reasoning behind
+  // curveFit.ts's overflow refusal is still on record and still checked.
+  it('the metadata clone rewrites a non-finite coefficient as null', () => {
+    const session = buildCalibratedSessionWithLine();
+    const dataset = session.getDataset();
+    const broken: CurveFitState = {
+      degree: 1,
+      restrict: false,
+      xMin: null,
+      xMax: null,
+      coefficients: [Number.NaN, Number.NaN],
+      rSquared: 1,
+      rms: 0,
+      n: 4,
+      fitXMin: 0,
+      fitXMax: 3,
+    };
+    setCurveFitState(dataset, broken);
+
+    const readBack = getCurveFitState(dataset);
+    expect(readBack).not.toBeNull();
+    // NaN went in; null comes out -- not a number, and not NaN either.
+    expect(readBack!.coefficients).toEqual([null, null]);
+    // And null arithmetic turns it into a clean, entirely fictional zero.
+    const asNumbers = readBack!.coefficients;
+    expect(asNumbers[0]! * 5).toBe(0);
+    expect(Number.isNaN(asNumbers[0]!)).toBe(false);
+  });
 });
 
 describe('sampleCurveFitLine', () => {

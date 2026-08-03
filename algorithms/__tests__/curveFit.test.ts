@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { fitPolynomial, evaluatePolynomial, computeFitStats, formatPolynomial } from '../curveFit.js';
+import {
+  fitPolynomial,
+  evaluatePolynomial,
+  computeFitStats,
+  formatPolynomial,
+  solveLinearSystem,
+} from '../curveFit.js';
 
 describe('curveFit', () => {
   // Same exact 8-point parabola y = 0.3*(x-5)^2 + 1 verified live in the
@@ -55,5 +61,88 @@ describe('R² on a series with no spread (v1.5.1)', () => {
     const sloped = [1, 2, 3, 4].map((x) => ({ x, y: 2 * x + 1 }));
     const stats = computeFitStats(sloped, fitPolynomial(sloped, 1));
     expect(stats.rSquared).toBeGreaterThan(0.99);
+  });
+});
+
+describe('a fit that overflowed must refuse, not return a curve', () => {
+  // The normal equations raise x to the 2*degree power. Past a magnitude that
+  // depends on the degree, XtX overflows to Infinity, the elimination turns
+  // that into NaN -- and the singular-matrix guard CANNOT SEE IT, because
+  // `Math.abs(NaN) < 1e-10` is false. NaN comparisons are always false, so the
+  // one refusal standing between the user and a meaningless curve is skipped by
+  // exactly the input that most needs it.
+  //
+  // Why it must refuse rather than hand back NaN: a dataset's curve fit is
+  // stored in its metadata, and `Dataset.setMetadata` deep-clones through
+  // `JSON.parse(JSON.stringify(...))`, which rewrites NaN as **null**. Reload
+  // the project and `evaluatePolynomial` does arithmetic on nulls, where
+  // `null * x === 0` -- so the failure is laundered into a clean flat line
+  // through y = 0, drawn on the figure as if it were the answer.
+  // See feedback: "a drawn curve is read as an answer".
+
+  const bigX = Array.from({ length: 15 }, (_, i) => ({
+    x: 1e18 + i * 1e17,
+    y: i * 3 + 1,
+  }));
+
+  it('never returns a non-finite coefficient', () => {
+    let coefficients: number[] | null = null;
+    try {
+      coefficients = fitPolynomial(bigX, 9);
+    } catch {
+      // Refusing is the correct outcome.
+    }
+    if (coefficients !== null) {
+      expect(coefficients.every((c) => Number.isFinite(c))).toBe(true);
+    }
+  });
+
+  it('refuses a degree-9 fit over x ~1e18 instead of returning NaN', () => {
+    expect(() => fitPolynomial(bigX, 9)).toThrow();
+  });
+
+  it('does not blame the point count — that would send the user to fix the wrong thing', () => {
+    // 15 well-separated distinct points is plenty for degree 9. Reporting
+    // "not enough distinct points" here is a wrong diagnosis, the same
+    // tenet-7 defect as the map axes' `checkValues` message.
+    expect(() => fitPolynomial(bigX, 9)).not.toThrow(/not enough distinct points/);
+  });
+
+  it('names the magnitude as the requirement, so the user can act on it', () => {
+    expect(() => fitPolynomial(bigX, 9)).toThrow(/too large|overflow|magnitude|rescale/i);
+  });
+
+  it('still fits the same shape once the x values are shifted near zero', () => {
+    // The refusal must not be over-reach: the data is fittable, the
+    // MAGNITUDE is the problem, and the message says so.
+    const shifted = bigX.map((p, i) => ({ x: i, y: p.y }));
+    const coefficients = fitPolynomial(shifted, 9);
+    expect(coefficients.every((c) => Number.isFinite(c))).toBe(true);
+  });
+
+  it('solveLinearSystem refuses a non-finite system rather than solving it', () => {
+    // The model has more than one entrance: the solver is exported, so the
+    // guard belongs here too and not only in fitPolynomial.
+    expect(() =>
+      solveLinearSystem(
+        [
+          [Number.POSITIVE_INFINITY, 1],
+          [1, 1],
+        ],
+        [1, 2],
+      ),
+    ).toThrow();
+  });
+
+  it('ordinary and date axes are unaffected', () => {
+    // The refusal must not fire on real figures. An epoch-millisecond date
+    // axis (~1.7e12) is the largest ordinary case this app produces.
+    const dates = Array.from({ length: 15 }, (_, i) => ({
+      x: 1.7e12 + i * 1e10,
+      y: Math.sin(i) * 10 + 50,
+    }));
+    expect(fitPolynomial(dates, 9).every((c) => Number.isFinite(c))).toBe(true);
+    const ordinary = Array.from({ length: 15 }, (_, i) => ({ x: i * 7, y: i * i }));
+    expect(fitPolynomial(ordinary, 5).every((c) => Number.isFinite(c))).toBe(true);
   });
 });
