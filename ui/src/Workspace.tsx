@@ -93,8 +93,9 @@ import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
 import { fmtNum, fmtValue } from './format.js';
-import { TupleDeleteButton } from './panels/TupleDeleteButton.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
+import { TupleTable } from './panels/TupleTable.js';
+import { BarTable } from './panels/BarTable.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
@@ -6930,189 +6931,30 @@ export function Workspace() {
               </tbody>
             </table>
           ) : config.id === 'bar' && axes ? (
-            /* Bar (v2.0): `# | Category | Series 1 | Series 2 | …` — one row per
-               CATEGORY, one column per series, exactly mirroring Spider's own
-               table above (David: "we need to store them, series by series, as
-               columns. Like this"). Replaces the per-series switching table
-               (below, still used by Box Plot / Pie) that hid every other
-               series' bars the moment you switched the active one. */
-            <>
-            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-                  {barTable.columns.map((col) => (
-                    <th
-                      key={col.seriesIndex}
-                      data-testid={`bar-col-${col.seriesIndex}`}
-                      style={{
-                        textAlign: 'right',
-                        paddingRight: 16,
-                        borderLeft: `1px solid ${theme.color.border.regular}`,
-                        paddingLeft: 10,
-                        fontWeight: 600,
-                        color: col.seriesIndex === activeDatasetIndex ? theme.color.primary.main : theme.color.text.primary,
-                      }}
-                    >
-                      {col.seriesName}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {barTable.categoryNames.map((categoryName, categoryIndex) => (
-                  <tr key={categoryIndex}>
-                    <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{categoryIndex + 1}</td>
-                    <td style={{ paddingRight: 16 }}>
-                      {renderEditableCategoryName(categoryIndex, barTable.categoryRawNames[categoryIndex] ?? '')}
-                    </td>
-                    {barTable.columns.map((col) => {
-                      const value = col.values[categoryIndex];
-                      const tupleIndex = col.tupleIndices[categoryIndex];
-                      const isActive = col.seriesIndex === activeDatasetIndex;
-                      // v2.0 pre-launch audit: a half-dragged bar (one corner
-                      // clicked, not dragged) has a tupleIndex but no computed
-                      // value yet -- computeSlotCursorFor only ever defaults
-                      // to the FIRST such half-filled tuple, so a second one
-                      // was unreachable until the first was completed, unlike
-                      // Spider's table which can aim at any of its own empty
-                      // slots directly. Same fix, scoped to the case it's
-                      // actually safe for (see setSlotCursor's own comment on
-                      // why Box Plot stays excluded).
-                      const aimTupleIndex = isActive && value == null && tupleIndex != null ? tupleIndex : null;
-                      const missingGroupIndex =
-                        aimTupleIndex != null ? session.getDataset().getTuple(aimTupleIndex).indexOf(null) : -1;
-                      const aimable = aimTupleIndex != null && missingGroupIndex > -1;
-                      return (
-                        <td
-                          key={col.seriesIndex}
-                          data-testid={`bar-cell-${col.seriesIndex}-${categoryIndex}`}
-                          // Clicking a cell of an INACTIVE series switches to it --
-                          // the same reachability rule Spider's own cells follow,
-                          // since deleting a bar (below) is offered on the active
-                          // series only. An ACTIVE cell with a half-filled bar aims
-                          // the next capture at its missing corner.
-                          onClick={() => {
-                            if (!isActive) {
-                              handleSelectDataset(col.seriesIndex);
-                              return;
-                            }
-                            if (aimable && aimTupleIndex != null) {
-                              session.setSlotCursor(aimTupleIndex, missingGroupIndex);
-                              bump();
-                            }
-                          }}
-                          title={
-                            aimable
-                              ? `Click to fill this bar's missing corner next`
-                              : value == null
-                              ? `${col.seriesName} has no ${categoryName} bar`
-                              : undefined
-                          }
-                          style={{
-                            textAlign: 'right',
-                            paddingRight: 16,
-                            paddingLeft: 10,
-                            borderLeft: `1px solid ${theme.color.border.regular}`,
-                            cursor: isActive && !aimable ? 'default' : 'pointer',
-                          }}
-                        >
-                          {value == null ? (
-                            <span style={{ color: theme.color.text.legend }}>—</span>
-                          ) : (
-                            <>
-                              {/* `tuple-derived-N`, not just this cell's own bar-cell-S-C
-                                  testid: the ACTIVE series' Nth tuple (capture order),
-                                  same identifier the generic hasSlots table (Pie/Box
-                                  Plot) has always used for its one-series-at-a-time
-                                  Value column -- kept so e2e's shared derivedValue()
-                                  helper reads either table the same way. Active-series
-                                  only, since that's the one whose tupleIndex this is. */}
-                              <span data-testid={isActive && tupleIndex != null ? `tuple-derived-${tupleIndex}` : undefined}>
-                                {fmtValue(value)}
-                              </span>
-                              {isActive && tupleIndex != null && (
-                                <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={removeTuple} />
-                              )}
-                            </>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {barTable.categoryNames.length === 0 && (
-              <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
-                {noPointsHint}
-              </div>
-            )}
-            </>
+            <BarTable
+              table={barTable}
+              activeSeriesIndex={activeDatasetIndex}
+              tupleNoun={tupleNoun}
+              onSelectSeries={handleSelectDataset}
+              missingSlotIndexOf={(tupleIndex) => session.getDataset().getTuple(tupleIndex).indexOf(null)}
+              onAimSlot={(tupleIndex, slotIndex) => {
+                session.setSlotCursor(tupleIndex, slotIndex);
+                bump();
+              }}
+              onRemoveTuple={removeTuple}
+              renderCategoryName={renderEditableCategoryName}
+              noPointsHint={noPointsHint}
+            />
           ) : hasSlots ? (
-            <>
-            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>#</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-                  {derivedTupleColumn ? (
-                    <th style={{ textAlign: 'left', paddingRight: 16 }}>{derivedTupleColumn.label}</th>
-                  ) : (
-                    pointGroupNames.map((name) => (
-                      <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
-                        {name}
-                      </th>
-                    ))
-                  )}
-                  <th aria-hidden />
-                </tr>
-              </thead>
-              <tbody>
-                {tupleRows.map((row) => (
-                  <tr key={row.tupleIndex}>
-                    <td style={{ paddingRight: 16 }}>{row.tupleIndex + 1}</td>
-                    <td style={{ paddingRight: 16 }}>{renderEditableTupleLabel(row.tupleIndex, row.label)}</td>
-                    {/* ⚑ One DERIVED column where the type's datum is the tuple
-                        rather than its members (pie): a slice's two boundaries are
-                        angles and neither is the number anyone wants -- the value is
-                        the difference between them. Every other tuple type keeps its
-                        per-slot columns, because a box plot's Min/Q1/Median really
-                        are five separate readings. */}
-                    {derivedTupleColumn ? (
-                      <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
-                        {row.derived === null ? '—' : fmtValue(row.derived)}
-                      </td>
-                    ) : (
-                      row.points.map((point, gi) => (
-                        <td key={gi} style={{ paddingRight: 16 }}>
-                          {point && point.data ? fmtValue(point.data[0]!) : '—'}
-                        </td>
-                      ))
-                    )}
-                    <td>
-                      <TupleDeleteButton tupleIndex={row.tupleIndex} noun={tupleNoun} onDelete={removeTuple} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* ⚑ v2.0: the empty-state hint the flat table already had (below) was
-                missing here entirely -- every slotted type (Box Plot, Pie, Spider,
-                and now Bar, once it became tuple-shaped) silently lost its
-                "no points yet" guidance the moment its table stopped being the flat
-                spreadsheet, and nothing on screen told a first-run user what to do.
-                Found because a plain Bar chart used to show this and a real e2e
-                test caught the empty screen it left behind -- same `noPointsHint`
-                text (already written generically per mode/graph-type), same
-                testid, just rendered for the other table shape too. */}
-            {tupleRows.length === 0 && (
-              <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
-                {noPointsHint}
-              </div>
-            )}
-            </>
+            <TupleTable
+              rows={tupleRows}
+              slotNames={pointGroupNames}
+              derivedColumn={derivedTupleColumn}
+              tupleNoun={tupleNoun}
+              onRemoveTuple={removeTuple}
+              renderLabel={renderEditableTupleLabel}
+              noPointsHint={noPointsHint}
+            />
           ) : (
             // The adaptive multi-series spreadsheet (checkpoint 57): every series
             // side by side, one column set per series (this graph type's value
