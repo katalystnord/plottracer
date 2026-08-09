@@ -39,6 +39,8 @@ const workspace = readFileSync(path.join(UI_SRC, 'Workspace.tsx'), 'utf8');
  * without anyone remembering to add it here.
  */
 const PANELS = path.join(UI_SRC, 'panels');
+/** The Help dropdown's own markup, since the v2.1 split moved it out of Workspace. */
+const helpCard = readFileSync(path.join(PANELS, 'HelpMenu.tsx'), 'utf8');
 const railMarkup =
   workspace +
   readdirSync(PANELS)
@@ -120,8 +122,8 @@ describe('the card is reachable both ways, which is the keystone requirement', (
     // If this ever fails because someone removed the button "since F1 does it",
     // that is the regression: a first-time user cannot press a key they have
     // never been told about.
-    expect(workspace).toContain('data-testid="open-help-overlay"');
-    expect(workspace).toContain('How to use PlotTracer');
+    expect(helpCard).toContain('data-testid="open-help-overlay"');
+    expect(helpCard).toContain('How to use PlotTracer');
   });
 });
 
@@ -200,17 +202,17 @@ describe('the card stays a card', () => {
   });
 
   it('the Help card offers the same button, so the action looks the same in both places', () => {
-    expect(workspace).toContain('data-testid="manual-link"');
-    expect(workspace).toContain("window.open(MANUAL_URL");
+    expect(helpCard).toContain('data-testid="manual-link"');
+    expect(helpCard).toContain("window.open(MANUAL_URL");
   });
 
   it('the Help card OPENS the manual rather than printing its address', () => {
     // The v1.6 behaviour -- the bare URL rendered as plain selectable text --
     // is the defect being fixed ("the users could not simply click it"). If it
     // ever comes back as inert text, this catches it.
-    const at = workspace.indexOf('data-testid="manual-link"');
+    const at = helpCard.indexOf('data-testid="manual-link"');
     expect(at).toBeGreaterThan(-1);
-    const button = workspace.slice(at, at + 400);
+    const button = helpCard.slice(at, at + 400);
     expect(button).toContain("window.open(MANUAL_URL");
   });
 
@@ -218,12 +220,12 @@ describe('the card stays a card', () => {
     // David's placement call. They are the two places you LEAVE the card for,
     // so they share a row; the Challenge keeps the width and Manual takes only
     // what it needs.
-    const challengeAt = workspace.indexOf('data-testid="challenge-start"');
-    const manualAt = workspace.indexOf('data-testid="manual-link"');
+    const challengeAt = helpCard.indexOf('data-testid="challenge-start"');
+    const manualAt = helpCard.indexOf('data-testid="manual-link"');
     expect(challengeAt).toBeGreaterThan(-1);
     expect(manualAt).toBeGreaterThan(challengeAt);
     // Same flex row: no divider or paragraph between them.
-    const between = workspace.slice(challengeAt, manualAt);
+    const between = helpCard.slice(challengeAt, manualAt);
     expect(between).not.toContain('height: 1, background');
   });
 

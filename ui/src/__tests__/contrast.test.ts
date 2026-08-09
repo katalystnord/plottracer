@@ -44,12 +44,19 @@ describe('WCAG AA contrast (4.5:1 for normal text, 3:1 for large/UI components)'
     expect(contrastRatio(theme.color.text.primary, theme.color.primary.clicked)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('Workspace.tsx\'s challenge-start button actually uses text.primary, not background.primary (white)', () => {
-    // The two tests above only check the THEME MATH -- they'd pass even if
-    // Workspace.tsx still wired the button to white text on this same
-    // background. Read the real source to confirm the wiring itself changed,
-    // not just that a hypothetical dark-on-teal pair would have been fine.
-    const workspacePath = fileURLToPath(new URL('../Workspace.tsx', import.meta.url));
+  it('the challenge-start button actually uses text.primary, not background.primary (white)', () => {
+    // The two tests above only check the THEME MATH -- they'd pass even if the
+    // button were still wired to white text on this same background. Read the
+    // real source to confirm the wiring itself changed, not just that a
+    // hypothetical dark-on-teal pair would have been fine.
+    // ⚑ v2.1: the button moved to panels/HelpMenu.tsx with the Help card, and
+    // this test caught the move -- but only because of the two POSITIVE
+    // assertions. Pointed at a file without the markup, `indexOf` returns -1
+    // twice and `slice(-1, -1)` is the empty string: the `toContain` pair fails
+    // loudly, while the `not.toContain` below passes vacuously. A version of
+    // this test written only in the negative would have gone silent the moment
+    // the button moved, and reported nothing ever since.
+    const workspacePath = fileURLToPath(new URL('../panels/HelpMenu.tsx', import.meta.url));
     const source = readFileSync(workspacePath, 'utf8');
     const buttonBlock = source.slice(
       source.indexOf('data-testid="challenge-start"'),
