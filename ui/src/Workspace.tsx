@@ -86,10 +86,13 @@ import {
   ErrorBarsIcon,
   GRAPH_TYPE_ICONS,
 } from './icons.js';
-import { MeasureCard, measureIcons, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
+import { MeasureCard, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
 import { ChallengeOverlay, type ChallengePhase } from './ChallengeOverlay.js';
+import { MeasurementsCard } from './panels/MeasurementsCard.js';
+import { CurveFitCard } from './panels/CurveFitCard.js';
+import { GeometryCard } from './panels/GeometryCard.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
 import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
@@ -199,7 +202,6 @@ import {
   getCurveFitState,
   setCurveFitState as saveCurveFitState,
   sampleCurveFitLine,
-  formatCurveFitEquation,
   type CurveFitModelId,
 } from '../../engine/curveFitPanel.js';
 import { runGeometry, getGeometryState, setGeometryState } from '../../engine/geometryPanel.js';
@@ -8122,154 +8124,29 @@ export function Workspace() {
           live in the output panel (bound with the series data, copyable, exported
           as their own block). Shown while measuring OR whenever any exist, with the
           reference frame in effect (chart calibration vs a real-world Set-scale). */}
-      {(mode === 'measure' || measurementViews.length > 0) && (
-        <SidebarSection>
-          <SidebarHeading>Measurements</SidebarHeading>
-          <div data-testid="measurements-panel" style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: theme.font.size.small }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: theme.color.text.secondary }}>
-              <span data-testid="measure-ref">
-                {measureReference.kind === 'chart' && <>Ref: <b>chart axes</b>{measureReference.units ? ` (${measureReference.units})` : ''}</>}
-                {measureReference.kind === 'scale' && <>Scale: <b>{measureReference.perPx}</b></>}
-                {measureReference.kind === 'degrees' && <>Measured in <b>degrees</b></>}
-                {measureReference.kind === 'none' && <span style={{ color: theme.color.text.legend }}>Pixels (set a scale or calibrate)</span>}
-              </span>
-              {measurementViews.length > 0 && (
-                <button
-                  type="button"
-                  data-testid="measure-copy-all"
-                  title="Copy all as text"
-                  onClick={copyAllMeasurements}
-                  style={{ marginLeft: 'auto', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: theme.color.primary.main, textDecoration: 'underline', fontSize: theme.font.size.small }}
-                >
-                  Copy all
-                </button>
-              )}
-            </div>
-            {measurementViews.length === 0 ? (
-              <span style={{ color: theme.color.text.legend }}>No measurements yet.</span>
-            ) : (
-              measurementViews.map((m) => (
-                <div
-                  key={m.id}
-                  data-testid={`measure-row-${m.id}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: `1px solid ${theme.color.background.canvas}` }}
-                >
-                  <span style={{ display: 'inline-flex', flex: '0 0 auto', color: theme.color.icon.active }}>{measureIcons[m.tool]}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <b>{m.value}</b>
-                    {m.note && <span style={{ color: theme.color.text.legend }}> · {m.note}</span>}
-                  </span>
-                  <button type="button" title="Copy value" onClick={() => copyMeasurement(m)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: theme.color.text.legend }}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="5" y="5" width="8" height="8" rx="1.5" /><path d="M3 11 V3.5 A1.5 1.5 0 0 1 4.5 2 H11" /></svg>
-                  </button>
-                  <button type="button" title="Delete" onClick={() => deleteMeasurement(m.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: theme.color.text.legend }}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 4 L12 12 M12 4 L4 12" /></svg>
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </SidebarSection>
-      )}
+      {/* The three OUTPUT cards (v1.1 step 2): results live in the sidebar, so
+          each rail fold-out holds INPUTS only. Their own files under panels/ --
+          they were the three sections self-contained enough to move without
+          turning into prop lists longer than the markup they replace. */}
+      <MeasurementsCard
+        visible={mode === 'measure' || measurementViews.length > 0}
+        views={measurementViews}
+        reference={measureReference}
+        onCopyAll={copyAllMeasurements}
+        onCopy={copyMeasurement}
+        onDelete={deleteMeasurement}
+      />
 
-      {/* Curve fit OUTPUT (v1.1 step 2): the fit result moved here from the Curve
-          Fit fold-out (inputs only). Bound to the active series; already stored on
-          the dataset + exported as its own derived block. */}
-      {curveFitState && (
-        <SidebarSection>
-          <SidebarHeading>Curve fit</SidebarHeading>
-          <div data-testid="curve-fit-output" style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: theme.font.size.small }}>
-            <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
-            <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatCurveFitEquation(curveFitState)}</code>
-            <span style={{ fontVariantNumeric: 'tabular-nums', color: theme.color.text.secondary }}>
-              R² = {curveFitState.rSquared === undefined ? '—' : curveFitState.rSquared.toFixed(5)} · RMS = {curveFitState.rms.toPrecision(5)} · n = {curveFitState.n}
-            </span>
-            {/* ⚑ R² is undefined when the series is flat: it is the fraction of the
-                data's variation that the model accounts for, and a flat series has
-                none. This used to read 1.00000 -- a written-in default where the
-                formula divides by zero -- so a flat baseline looked like a PERFECT
-                fit, sometimes beside the red "did not settle" below. Say why it is
-                blank rather than leaving a dash to be puzzled over. */}
-            {curveFitState.rSquared === undefined && (
-              <span data-testid="curve-fit-no-r2" style={{ color: theme.color.text.secondary }}>
-                R² needs variation to measure against, and every value in this series is the same — so it has none here. Read the RMS instead: it is in the data's own units.
-              </span>
-            )}
-            {/* ⚑ A nonlinear solver can run out of iterations and still leave a
-                drawn curve behind, and a drawn curve is read as an answer. When
-                it did not settle, SAY so beside the numbers rather than let the
-                line speak for itself. Absent for a polynomial, which is solved
-                directly and has nothing to converge. */}
-            {curveFitState.converged === false && (
-              <span data-testid="curve-fit-not-converged" style={{ color: theme.color.error }}>
-                This fit did not settle — the curve is where the solver stopped, not a result. Try another model or a restricted x-range.
-              </span>
-            )}
-          </div>
-        </SidebarSection>
-      )}
+      <CurveFitCard state={curveFitState} seriesName={activeInfo?.name ?? 'Series'} />
 
-      {/* Geometry OUTPUT (v1.1 step 2 + 4): the derived stats moved here from the
-          fold-out (inputs only). Summary always; the big per-point table is
-          collapsed. Recomputes live as the series is edited; if it can't (points
-          deleted below 2) the stale/broken state shows here AND in the tips bar. */}
-      {geometryState && (
-        <SidebarSection>
-          <SidebarHeading>Geometry</SidebarHeading>
-          <div data-testid="geometry-output" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: theme.font.size.small }}>
-            <span style={{ color: theme.color.text.secondary }}>{activeInfo?.name ?? 'Series'}</span>
-            {geometryResult ? (
-              <>
-                <div data-testid="geometry-summary" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                  Arc length = {geometryResult.arcLength.toPrecision(6)}
-                  <br />
-                  {geometryResult.areaLabel} = {geometryResult.area.toPrecision(6)}
-                  <br />
-                  Max curvature = {geometryResult.maxCurvature.value.toPrecision(6)} at point {geometryResult.maxCurvature.index + 1}
-                </div>
-                <button
-                  type="button"
-                  data-testid="geometry-table-toggle"
-                  onClick={() => setGeometryTableOpen((v) => !v)}
-                  style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: theme.color.primary.main, textDecoration: 'underline', fontSize: theme.font.size.small }}
-                >
-                  {geometryTableOpen ? 'Hide per-point table' : `Per-point table (${geometryResult.perPoint.length})`}
-                </button>
-                {geometryTableOpen && (
-                  <div style={{ maxHeight: 220, overflow: 'auto' }}>
-                    <table data-testid="geometry-table" style={{ borderCollapse: 'collapse', fontSize: theme.font.size.small, fontVariantNumeric: 'tabular-nums' }}>
-                      <thead>
-                        <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
-                          <th style={{ paddingRight: 10 }}>#</th>
-                          <th style={{ paddingRight: 10 }}>x</th>
-                          <th style={{ paddingRight: 10 }}>y</th>
-                          <th style={{ paddingRight: 10 }}>len</th>
-                          <th>κ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {geometryResult.perPoint.map((p, i) => (
-                          <tr key={i}>
-                            <td style={{ paddingRight: 10 }}>{i + 1}</td>
-                            <td style={{ paddingRight: 10 }}>{p.x.toPrecision(5)}</td>
-                            <td style={{ paddingRight: 10 }}>{p.y.toPrecision(5)}</td>
-                            <td style={{ paddingRight: 10 }}>{p.cumulativeLength.toPrecision(5)}</td>
-                            <td>{p.curvature.toPrecision(5)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            ) : (
-              <span data-testid="geometry-stale" style={{ color: theme.color.error }}>
-                ⚠ Can’t compute — {geometryError}
-              </span>
-            )}
-          </div>
-        </SidebarSection>
-      )}
+      <GeometryCard
+        enabled={geometryState !== null}
+        result={geometryResult}
+        error={geometryError}
+        seriesName={activeInfo?.name ?? 'Series'}
+        tableOpen={geometryTableOpen}
+        onToggleTable={() => setGeometryTableOpen((v) => !v)}
+      />
       </RightSidebar>
 
       {/* Full-width status bar (checkpoint 47/50). Left: the one constant place
