@@ -22,6 +22,7 @@ import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../engine/toolMode.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
+import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
@@ -1998,301 +1999,144 @@ export function Workspace() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      // Inside a text field, let the browser's own text undo/redo and typed
-      // digits win -- both the numbered tool shortcuts and app-level undo are
-      // suppressed here, deliberately (a rename field's own Ctrl+Z should undo
-      // typing, not roll back the whole digitization).
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      // Undo/redo (checkpoint 38): Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or
-      // Ctrl/Cmd+Y for redo -- the exact bindings Ketcher's own undo action
-      // uses (see the reference survey in CLAUDE.md's checkpoint 38 notes).
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
-        e.preventDefault();
-        redo();
-        return;
-      }
-      // Any OTHER primary-modified key (Ctrl/Cmd + anything except the undo/redo
-      // handled above) belongs to the native menu accelerators, NOT to the
-      // renderer tool/nav shortcuts below -- so bail here. This is what makes
-      // KEYBOARD ZOOM work: the View menu already binds CmdOrCtrl+Equal/-/0/1 to
-      // menu:zoom-in/out/fit/100 (electron-menu.cjs), wired to the canvas in
-      // ImageCanvas (onMenuEvent). A renderer copy of those bindings would
-      // DOUBLE-fire (menu accelerator + this keydown) and, worse, the modified
-      // digit would fall through to the bare-digit tool chain below (Ctrl+1 ->
-      // Calibrate, Ctrl+3 -> delete a point). Guarding here fixes both.
-      if (primaryMod(e)) return;
-      // Enter = accept/confirm the current step's primary action (David, mouse+
-      // keyboard theme). Value-in-a-box Enter is handled by each input's own
-      // onKeyDown (and this global handler already returned above when a text
-      // field has focus) -- this branch is the "highlighted box": the primary
-      // button of whatever step is on screen. Precedence is innermost-first.
-      if (e.key === 'Enter') {
-        // A drawn crop rectangle awaiting its "Apply" bar.
-        if (cropRect) {
-          e.preventDefault();
-          applyCrop();
-          return;
+      const resolved = resolveKeyDown(
+        {
+          key: e.key,
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          targetIsTextField: !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable),
+        },
+        {
+          mode,
+          measureTool,
+          figureCaptured,
+          canvasHasImage,
+          isCalibrated: axes !== null,
+          hasCropRect: cropRect !== null,
+          cropMode,
+          ctxMenuOpen: ctxMenu !== null,
+          settingScale,
+          pendingMeasureCount: pendingMeasure.length,
+          selectedPointCount: selectedPointIndices.length,
+          activePointIndex,
+          activeHandleKey,
+          hasActiveMeasure: activeMeasure != null,
+          canvasScale,
+          // Suppliers: only Q/W and the `6` key need these, and building them
+          // on every keydown would walk every point of a dense trace once per
+          // keystroke typed into a rename field. See KeyboardState's own note.
+          dataPointRoles: () => session.getDataPointRoles(),
+          autoExtractKind: session.getConfig().autoExtractKind,
+          hasAnyPoints: () => session.getDatasetInfos().some((d) => d.pointCount > 0),
         }
-        // An in-progress Area polygon: Enter finishes it (its own "Finish" button).
-        if (mode === 'measure' && measureTool === 'area') {
-          finishArea();
-          return;
-        }
-        // A fully-placed-but-not-yet-run calibration: Enter is the "Calibrate"
-        // button. Triggered through the button itself (like the 7/8 fly-outs
-        // below) rather than calling runCalibration directly -- runCalibration is
-        // declared later in the component, so a direct reference here would be a
-        // temporal-dead-zone crash in this effect's dependency list. The button
-        // is only in the DOM when a run is actually available (!isCalibrating &&
-        // !axes), so this can only ever advance a ready calibration.
-        if (figureCaptured && !axes) {
-          const btn = document.querySelector('[data-testid="run-calibration"]') as HTMLElement | null;
-          if (btn) {
-            e.preventDefault();
-            btn.click();
-          }
-          return;
-        }
-        return;
-      }
-      // Esc = back out of the current step (David), innermost-first. Each branch
-      // undoes exactly one layer of in-progress state, so repeated Esc walks back
-      // out: pending gesture -> selection -> (nothing). It never discards recorded
-      // data -- only abandons half-made input or clears a selection. (Open MUI
-      // popovers/menus close on Escape via their own onClose before this runs.)
-      if (e.key === 'Escape') {
-        // The canvas quick menu is open: close it and stop (MUI also closes it on
-        // Escape, but handle it here so Esc doesn't ALSO clear a selection).
-        if (ctxMenu !== null) {
-          e.preventDefault();
-          setCtxMenu(null);
-          return;
-        }
-        // A crop being drawn/awaiting-Apply: cancel it (unarms crop mode too).
-        if (cropMode || cropRect) {
-          e.preventDefault();
-          cancelCrop();
-          return;
-        }
-        // A half-made measurement or an armed Set-scale: abandon the pending clicks.
-        if (settingScale || pendingMeasure.length > 0) {
-          e.preventDefault();
+      );
+      if (!resolved) return;
+      const { action, preventDefault } = resolved;
+      // `'if-present'` branches preventDefault themselves, once they know their
+      // target exists -- the one thing the pure resolver cannot see.
+      if (preventDefault === true) e.preventDefault();
+
+      switch (action.type) {
+        case 'undo': undo(); return;
+        case 'redo': redo(); return;
+        case 'apply-crop': applyCrop(); return;
+        case 'finish-area': finishArea(); return;
+        case 'cancel-crop': cancelCrop(); return;
+        case 'close-context-menu': setCtxMenu(null); return;
+        case 'abandon-pending-measure':
           setPending([]);
           setSettingScale(false);
           setScaleDraftPx(null);
           setMeasureError(null);
           return;
-        }
-        // Otherwise clear whatever single thing is selected. Only one of these is
-        // ever set at a time (each self-clears on mode change), so order is moot.
-        // The Select tool's marquee selection is a set, cleared the same way.
-        if (mode === 'select' && selectedPointIndices.length > 0) {
+        case 'clear-marquee': setSelectedPointIndices([]); return;
+        case 'clear-active-point': setActivePointIndex(null); return;
+        case 'clear-active-handle': setActiveHandleKey(null); return;
+        case 'clear-active-measure': setActiveMeasure(null); return;
+        case 'nudge-handle': {
+          const h = session.getPlacedPoints()[action.handleKey];
+          if (!h) return;
           e.preventDefault();
-          setSelectedPointIndices([]);
-          return;
-        }
-        if (activePointIndex != null) {
-          e.preventDefault();
-          setActivePointIndex(null);
-          return;
-        }
-        if (activeHandleKey != null) {
-          e.preventDefault();
-          setActiveHandleKey(null);
-          return;
-        }
-        if (activeMeasure != null) {
-          e.preventDefault();
-          setActiveMeasure(null);
-          return;
-        }
-        return;
-      }
-      // Keyboard CALIBRATION-HANDLE adjustment (checkpoint 127): nudge the selected
-      // handle with the arrows, same zoom-scaled step + keyup-coalesced undo as the
-      // data-point nudge below. updateCalibPointPixel re-runs calibration live, so
-      // every data value updates as the handle moves -- the reason handle precision
-      // matters more than any single point's (tenet 1). Checked before the
-      // data-point branch since the two selections are mutually exclusive.
-      if (
-        activeHandleKey != null &&
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')
-      ) {
-        const h = session.getPlacedPoints()[activeHandleKey];
-        if (h) {
-          e.preventDefault();
-          const step = (e.shiftKey ? 5 : 0.5) / (canvasScale || 1);
-          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
-          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-          session.updateCalibPointPixel(activeHandleKey, h.px + dx, h.py + dy);
+          session.updateCalibPointPixel(action.handleKey, h.px + action.dx, h.py + action.dy);
           nudgePendingRef.current = true;
           bump();
+          return;
         }
-        return;
-      }
-      // Keyboard MEASUREMENT-VERTEX adjustment (checkpoint 128): nudge the selected
-      // measurement point; its value re-derives from the pixels (ckpt 82), so the
-      // card and on-canvas label update live. Same zoom-scaled step + keyup-
-      // coalesced undo. The label anchor follows the points' centroid so it stays
-      // attached to the measurement as a vertex moves.
-      if (
-        activeMeasure != null &&
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')
-      ) {
-        e.preventDefault();
-        const step = (e.shiftKey ? 5 : 0.5) / (canvasScale || 1);
-        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
-        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-        applyMeasurements(
-          measurementsRef.current.map((m) => {
-            if (m.id !== activeMeasure.id) return m;
-            const points = m.overlay.points.map((p, i) => (i === activeMeasure.vertex ? { x: p.x + dx, y: p.y + dy } : p));
-            const labelAt = {
-              x: points.reduce((s, p) => s + p.x, 0) / points.length,
-              y: points.reduce((s, p) => s + p.y, 0) / points.length,
-            };
-            return { ...m, overlay: { ...m.overlay, points, labelAt } };
-          })
-        );
-        nudgePendingRef.current = true;
-        return;
-      }
-      // Data-point arrow-nudge and Del are gated to the modes where you actually
-      // EDIT data points -- Place Point and Interpolate -- and only there does the
-      // tips bar advertise them. Without this gate a data-point selection lingering
-      // from Place Point would be silently nudged/deleted by arrows/Del while the
-      // user is in Measure/Calibrate/etc. aiming at something else (a silent
-      // wrong-target edit; the calibration-handle and measurement selections each
-      // already self-clear on mode change, and this is the same discipline for the
-      // data-point selection). Release-gate audit finding, v0.6.0.
-      // The Select tool acts on the whole marquee SELECTION (David 2026-07-21):
-      // arrows nudge every selected point together, Del removes them all as ONE
-      // undo step, Esc clears the selection. Gated on select mode + a non-empty
-      // selection, so a stale selection never acts from another mode.
-      if (mode === 'select' && selectedPointIndices.length > 0) {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-          e.preventDefault();
-          const step = (e.shiftKey ? 5 : 0.5) / (canvasScale || 1);
-          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
-          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        case 'nudge-measure': {
+          if (!activeMeasure) return;
+          // The label anchor follows the points' centroid so it stays attached
+          // to the measurement as a vertex moves.
+          applyMeasurements(
+            measurementsRef.current.map((m) => {
+              if (m.id !== activeMeasure.id) return m;
+              const points = m.overlay.points.map((p, i) =>
+                i === activeMeasure.vertex ? { x: p.x + action.dx, y: p.y + action.dy } : p
+              );
+              const labelAt = {
+                x: points.reduce((s, p) => s + p.x, 0) / points.length,
+                y: points.reduce((s, p) => s + p.y, 0) / points.length,
+              };
+              return { ...m, overlay: { ...m.overlay, points, labelAt } };
+            })
+          );
+          nudgePendingRef.current = true;
+          return;
+        }
+        case 'nudge-selection': {
           const pts = session.getDataPoints();
           for (const i of selectedPointIndices) {
             const p = pts[i];
-            if (p) session.updateDataPointPixel(i, p.px + dx, p.py + dy);
+            if (p) session.updateDataPointPixel(i, p.px + action.dx, p.py + action.dy);
           }
           nudgePendingRef.current = true;
           bump();
           return;
         }
-        if (e.key === 'Delete' || e.key === 'Backspace') {
+        case 'nudge-point': {
+          const p = session.getDataPoints()[action.index];
+          if (!p) return;
           e.preventDefault();
+          session.updateDataPointPixel(action.index, p.px + action.dx, p.py + action.dy);
+          nudgePendingRef.current = true;
+          bump();
+          return;
+        }
+        case 'delete-selection':
           session.removeDataPoints(selectedPointIndices);
           setSelectedPointIndices([]);
           setActivePointIndex(null);
           commit();
           return;
+        case 'delete-point': removeActivePoint(); return;
+        case 'delete-measurement':
+          if (!activeMeasure) return;
+          applyMeasurements(measurementsRef.current.filter((m) => m.id !== activeMeasure.id));
+          setActiveMeasure(null);
+          commit();
+          return;
+        case 'select-point':
+          setActivePointIndex(action.index);
+          setPickedPointIndex(action.index);
+          return;
+        case 'set-mode': setMode(action.mode); return;
+        case 'select-tool': setMode('select'); setSelectFoldoutOpen(false); return;
+        case 'toggle-image-edit': toggleImageEdit(); return;
+        case 'toggle-auto-extract': toggleAutoExtract(); return;
+        case 'toggle-error-bars': toggleErrorBars(); return;
+        case 'toggle-measure': toggleMeasure(); return;
+        case 'click': {
+          const btn = document.querySelector(action.selector) as HTMLElement | null;
+          if (!btn) return;
+          if (preventDefault === 'if-present') e.preventDefault();
+          btn.click();
+          return;
         }
-        // (Escape clears the marquee selection in the main Escape ladder above.)
+        case 'consume': return;
       }
-      const dataPointEditing = mode === 'place-point' || mode === 'interpolate';
-      // Keyboard point adjustment -- the precision path WPD leans on. Nudge the
-      // SELECTED data point with the arrow keys; the step is scaled to zoom so one
-      // press is ~0.5 SCREEN px at any magnification (WPD's 0.5/zoomRatio), Shift
-      // for a coarse 10x. We move the PIXEL and let the value derive (tenet 9),
-      // through the very method a drag uses. Commit is deferred to keyup so a
-      // burst -- or a held key auto-repeating -- collapses to ONE undo step.
-      if (
-        dataPointEditing &&
-        activePointIndex != null &&
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')
-      ) {
-        const p = session.getDataPoints()[activePointIndex];
-        if (p) {
-          e.preventDefault();
-          const step = (e.shiftKey ? 5 : 0.5) / (canvasScale || 1);
-          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
-          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-          session.updateDataPointPixel(activePointIndex, p.px + dx, p.py + dy);
-          nudgePendingRef.current = true;
-          bump();
-        }
-        return;
-      }
-      // Delete the selected point -- only when one is EXPLICITLY selected AND in a
-      // data-editing mode, so a stray Backspace never silently peels off a point
-      // while you are aiming at a measurement or a calibration handle.
-      if (dataPointEditing && (e.key === 'Delete' || e.key === 'Backspace') && activePointIndex != null) {
-        e.preventDefault();
-        removeActivePoint();
-        return;
-      }
-      // Del also removes the active *measurement* -- the on-canvas "line" (David:
-      // "remove currently active point or line"). Gated on the measure mode + an
-      // explicit active selection, the same discipline as the point delete above,
-      // so a stale selection from another mode is never silently removed. The
-      // active-measure selection self-clears on mode change (ckpt 128), so this
-      // can only ever target the measurement the user is actually pointing at.
-      if (mode === 'measure' && activeMeasure != null && (e.key === 'Delete' || e.key === 'Backspace')) {
-        e.preventDefault();
-        applyMeasurements(measurementsRef.current.filter((m) => m.id !== activeMeasure.id));
-        setActiveMeasure(null);
-        commit();
-        return;
-      }
-      // Q / W walk the active selection between points -- previous (Q), next (W) --
-      // so a point placed earlier is reachable by keyboard, not only by clicking.
-      // Derived interpolation samples are skipped (you never nudge those), so on an
-      // interpolation-assist curve this steps anchor-to-anchor; in Interpolate mode
-      // a click ADDS a new anchor, so Q/W is the only way to re-select an existing
-      // one to nudge or delete it. Wraps around. Ignored with no points to walk.
-      if (axes && (e.key === 'q' || e.key === 'Q' || e.key === 'w' || e.key === 'W')) {
-        const roles = session.getDataPointRoles();
-        const selectable: number[] = [];
-        for (let i = 0; i < roles.length; i++) if (roles[i] !== 'interpolated') selectable.push(i);
-        if (selectable.length === 0) return;
-        e.preventDefault();
-        const dir = e.key === 'w' || e.key === 'W' ? 1 : -1;
-        const cur = activePointIndex != null ? selectable.indexOf(activePointIndex) : -1;
-        const nextPos =
-          cur === -1 ? (dir === 1 ? 0 : selectable.length - 1) : (cur + dir + selectable.length) % selectable.length;
-        setActivePointIndex(selectable[nextPos]!);
-        setPickedPointIndex(selectable[nextPos]!);
-        return;
-      }
-      // Digit hotkeys mirror the rail order (v0.8, 0-based). Each guard matches
-      // its button's `disabled` so a key can't do what the greyed button can't.
-      // Hotkeys 0-9 run straight down the rail (2026-07-22 redesign): 0 Pan ·
-      // 1 Calibrate · 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error
-      // bars · 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9)
-      // are fly-out panels: open them by triggering their rail button (skipped
-      // when disabled). Clear-all (top bar) and the Eraser have NO key -- both
-      // destructive, kept out of the 0-9 run.
-      if (e.key === '0') setMode('pan');
-      else if (e.key === '1' && figureCaptured) setMode('calibrate');
-      else if (e.key === '2' && canvasHasImage) toggleImageEdit();
-      else if (e.key === '3' && axes) setMode('place-point');
-      else if (e.key === '4' && axes && (session.getConfig().autoExtractKind ?? 'curve') !== 'none') toggleAutoExtract();
-      // Hotkey 5 activates Select with the current sub-mode but does NOT open the
-      // picker (that's the rail button / its arrow); reset so a stale-open card
-      // from an earlier session can't re-appear (v1.1 #6).
-      else if (e.key === '5' && axes) { setMode('select'); setSelectFoldoutOpen(false); }
-      else if (e.key === '6' && session.getDatasetInfos().some((d) => d.pointCount > 0)) toggleErrorBars();
-      else if (e.key === '7' && figureCaptured) toggleMeasure();
-      else if (e.key === '8') (document.querySelector('[data-testid="curve-fit-trigger"]:not([disabled])') as HTMLElement | null)?.click();
-      else if (e.key === '9') (document.querySelector('[data-testid="geometry-trigger"]:not([disabled])') as HTMLElement | null)?.click();
     }
-    // Commit the nudge once, on release -- one undo step per gesture, not per event.
     function onKeyUp(e: KeyboardEvent) {
-      if (
-        nudgePendingRef.current &&
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')
-      ) {
+      if (isNudgeRelease(e.key, nudgePendingRef.current)) {
         nudgePendingRef.current = false;
         commit();
       }

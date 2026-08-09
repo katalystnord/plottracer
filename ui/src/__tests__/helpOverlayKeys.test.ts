@@ -18,11 +18,21 @@ import path from 'node:path';
  *
  * ⚑ Deliberately asserts the SOURCE rather than importing the tables. Importing
  * them would prove the card agrees with itself.
+ *
+ * ⚑ v2.1: the global key ladder moved to `engine/keyboardActions.ts` (the
+ * Workspace split), so each claim is now asserted against the file that OWNS
+ * it rather than against one concatenated blob. That is stricter, and it
+ * caught something: "Enter accepts and Escape backs out" went on passing after
+ * the move, because those literals also appear in the panels' own per-input
+ * onKeyDown handlers. Pointed at the ladder, it tests the binding it names.
  */
 
 const UI_SRC = path.join(import.meta.dirname, '..');
+const ENGINE = path.join(UI_SRC, '..', '..', 'engine');
 const overlay = readFileSync(path.join(UI_SRC, 'HelpOverlay.tsx'), 'utf8');
 const workspace = readFileSync(path.join(UI_SRC, 'Workspace.tsx'), 'utf8');
+/** The global keydown ladder — where every shortcut the card lists is decided. */
+const keyboard = readFileSync(path.join(ENGINE, 'keyboardActions.ts'), 'utf8');
 
 /** Pull the rows out of one of the card's tables, as [key, description]. The
  *  TOOLS table carries a third member (its icon) which this ignores. */
@@ -33,7 +43,7 @@ function tableRows(name: string): Array<[string, string]> {
   return [...overlay.slice(start, end).matchAll(/\['([^']*)',\s*'([^']*)'/g)].map((m) => [m[1]!, m[2]!]);
 }
 
-describe('the tool digits the card promises are the digits Workspace handles', () => {
+describe('the tool digits the card promises are the digits the ladder handles', () => {
   const rows = tableRows('TOOLS');
 
   it('lists ten tools, 0 through 9', () => {
@@ -41,24 +51,24 @@ describe('the tool digits the card promises are the digits Workspace handles', (
   });
 
   for (const [digit] of tableRows('TOOLS')) {
-    it(`Workspace.tsx really handles the '${digit}' key`, () => {
-      // The tool switcher is a chain of `e.key === 'N'` tests. If a digit is
+    it(`resolveDigit really handles the '${digit}' key`, () => {
+      // The tool switcher is a chain of `key === 'N'` tests. If a digit is
       // renumbered or dropped, the card's row survives and this does not.
-      expect(workspace).toContain(`e.key === '${digit}'`);
+      expect(keyboard).toContain(`key === '${digit}'`);
     });
   }
 });
 
 describe('the editing and document keys exist in the handlers', () => {
   it('Q and W step between points', () => {
-    expect(workspace).toMatch(/e\.key === 'q'/);
-    expect(workspace).toMatch(/e\.key === 'w'/);
+    expect(keyboard).toMatch(/e\.key === 'q'/);
+    expect(keyboard).toMatch(/e\.key === 'w'/);
   });
 
   it('Shift really is the COARSE nudge, not the fine one', () => {
     // The card says "Shift + arrows — nudge coarsely". Reversed, the card would
     // still read plausibly while telling the user the opposite of the truth.
-    expect(workspace).toMatch(/e\.shiftKey \? 5 : 0\.5/);
+    expect(keyboard).toMatch(/shiftKey \? 5 : 0\.5/);
   });
 
   it('Ctrl+Shift+Z is redo, which is what the card claims', () => {
@@ -66,16 +76,17 @@ describe('the editing and document keys exist in the handlers', () => {
     // deliberately: it is the pairing people expect beside Ctrl+Z, and the card
     // is a reminder rather than an exhaustive list. Pinned so that stays a
     // choice rather than becoming an omission nobody noticed.
-    expect(workspace).toMatch(/if \(e\.shiftKey\) redo\(\);/);
+    expect(keyboard).toMatch(/e\.shiftKey \? \{ type: 'redo' \} : \{ type: 'undo' \}/);
   });
 
   it('Delete removes the active point', () => {
-    expect(workspace).toMatch(/e\.key === 'Delete'/);
+    expect(keyboard).toMatch(/key === 'Delete'/);
+    expect(keyboard).toMatch(/type: 'delete-point'/);
   });
 
   it('Enter accepts and Escape backs out', () => {
-    expect(workspace).toMatch(/e\.key === 'Enter'/);
-    expect(workspace).toMatch(/e\.key === 'Escape'/);
+    expect(keyboard).toMatch(/e\.key === 'Enter'/);
+    expect(keyboard).toMatch(/e\.key === 'Escape'/);
   });
 
   it('the four zoom accelerators exist', () => {
