@@ -96,6 +96,7 @@ import { fmtNum, fmtValue } from './format.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
 import { BarTable } from './panels/BarTable.js';
+import { SpiderTable } from './panels/SpiderTable.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
@@ -6795,141 +6796,27 @@ export function Workspace() {
               onRemoveTuple={removeTuple}
             />
           ) : config.axesKind === 'spider' && axes ? (
-            /* Spider (v1.4): `# | Category | Series 1 | Series 2 | …` — one row per
-               AXIS, one column per series.
-
-               ⚑ The slot table this replaces showed the ACTIVE series only,
-               so adding a second series made the first one's readings disappear off
-               the screen. Every ungrouped type already shows all series at once, so
-               that table was the outlier — caught by driving the app, not by a test.
-               Rows-as-axes is also how radar data is normally published, and it
-               stays compact as series are added rather than growing sideways by a
-               whole block of axis columns each time.
-
-               The alignment is REAL: row k is axis k for every series, because each
-               series has exactly one slot per axis by construction. The same layout
-               LIED for error bars, where the pairing was never stored. */
-            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-                  {spiderTable.columns.map((col) => (
-                    <th
-                      key={`${col.seriesIndex}-${col.profileIndex}`}
-                      data-testid={`spider-col-${col.seriesIndex}-${col.profileIndex}`}
-                      style={{
-                        textAlign: 'right',
-                        paddingRight: 16,
-                        borderLeft: `1px solid ${theme.color.border.regular}`,
-                        paddingLeft: 10,
-                        fontWeight: 600,
-                        color: col.seriesIndex === activeDatasetIndex ? theme.color.primary.main : theme.color.text.primary,
-                      }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {spiderTable.axisNames.map((axisName, axisIndex) => (
-                  <tr key={axisName + String(axisIndex)}>
-                    <td style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>{axisIndex + 1}</td>
-                    <td style={{ paddingRight: 16 }}>
-                      {renderEditableAxisName(axisIndex, spiderTable.axisRawNames[axisIndex] ?? '')}
-                    </td>
-                    {spiderTable.columns.map((col) => {
-                      const value = col.values[axisIndex];
-                      const pointIndex = col.pointIndices[axisIndex];
-                      return (
-                        <td
-                          key={`${col.seriesIndex}-${col.profileIndex}`}
-                          data-testid={`spider-cell-${col.seriesIndex}-${axisIndex}`}
-                          // ⚑ Clicking a cell SELECTS that point, switching the
-                          // active series if it belongs to another one. Points of an
-                          // inactive series are deliberately inert on the canvas (so
-                          // a click can never land on the wrong series), which left
-                          // the table as the only possible route to them — and it
-                          // wasn't wired, so they could not be reached at all.
-                          onClick={() => {
-                            if (col.seriesIndex !== activeDatasetIndex) handleSelectDataset(col.seriesIndex);
-                            // ⚑ An EMPTY cell aims the capture cursor at that slot
-                            // (David: "Can I make an empty slot active again, so
-                            // that I can re-add a point that is missing?"). The
-                            // cursor otherwise walks to the FIRST gap, which cannot
-                            // reach the second one until the first is filled — and
-                            // gaps are normal here: the axis-aware trace leaves one
-                            // wherever it refused a ray. Clicking the dash is how
-                            // that refusal list becomes a worklist.
-                            if (pointIndex == null) {
-                              session.setSlotCursor(
-                                col.profileIndex < session.getDataset().getAllTuples().length ? col.profileIndex : null,
-                                axisIndex
-                              );
-                              setActivePointIndex(null);
-                              bump();
-                              return;
-                            }
-                            setActivePointIndex(pointIndex);
-                            setPickedPointIndex(pointIndex);
-                            bump();
-                          }}
-                          title={
-                            pointIndex == null
-                              ? `Click to fill ${axisName} next`
-                              : 'Click to select this point'
-                          }
-                          style={{
-                            textAlign: 'right',
-                            paddingRight: 16,
-                            paddingLeft: 10,
-                            borderLeft: `1px solid ${theme.color.border.regular}`,
-                            cursor: 'pointer',
-                            background:
-                              pointIndex != null &&
-                              pointIndex === activePointIndex &&
-                              col.seriesIndex === activeDatasetIndex
-                                ? theme.color.background.canvas
-                                // ⚑ The slot the NEXT click fills is marked here too,
-                                // not only in the "Next point fills" line: this is the
-                                // table you are reading when you notice a gap, so it is
-                                // where the answer to "which one am I about to fill?"
-                                // has to be visible.
-                                : pointIndex == null &&
-                                  col.seriesIndex === activeDatasetIndex &&
-                                  axisIndex === currentGroupIndex &&
-                                  (currentTupleIndex === null
-                                    ? col.profileIndex >= session.getDataset().getAllTuples().length
-                                    : col.profileIndex === currentTupleIndex)
-                                ? theme.color.background.canvas
-                                : undefined,
-                          }}
-                        >
-                          {/* An axis this series has not reached reads as a dash, not
-                              a zero — nothing was measured there.
-
-                              ⚑ Typing is offered on the ACTIVE series only, the same
-                              rule the XY table follows — and it has to be, because the
-                              editor is keyed by (point index, axis) and point indices
-                              are per-series, so two columns would otherwise open an
-                              editor on the same keystroke. One click on another
-                              column makes it active (above); its cells then read as
-                              editable. */}
-                          {value == null || pointIndex == null ? (
-                            <span style={{ color: theme.color.text.legend }}>—</span>
-                          ) : col.seriesIndex === activeDatasetIndex ? (
-                            renderEditableSpiderValue(col.seriesIndex, pointIndex, axisIndex, value)
-                          ) : (
-                            fmtValue(value)
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SpiderTable
+              table={spiderTable}
+              activeSeriesIndex={activeDatasetIndex}
+              activePointIndex={activePointIndex}
+              cursorAxisIndex={currentGroupIndex}
+              cursorTupleIndex={currentTupleIndex}
+              tupleCount={session.getDataset().getAllTuples().length}
+              onSelectSeries={handleSelectDataset}
+              onSelectPoint={(pointIndex) => {
+                setActivePointIndex(pointIndex);
+                setPickedPointIndex(pointIndex);
+                bump();
+              }}
+              onAimSlot={(tupleIndex, axisIndex) => {
+                session.setSlotCursor(tupleIndex, axisIndex);
+                setActivePointIndex(null);
+                bump();
+              }}
+              renderAxisName={renderEditableAxisName}
+              renderValue={renderEditableSpiderValue}
+            />
           ) : config.id === 'bar' && axes ? (
             <BarTable
               table={barTable}
