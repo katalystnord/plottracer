@@ -21,10 +21,10 @@ import {
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../engine/toolMode.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
+import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
-import { polylineRuns } from '../../engine/seriesLine.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Popover, Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
@@ -594,12 +594,6 @@ function rgbToHex([r, g, b]: readonly [number, number, number]): string {
  *  (checkpoint 132): the other points draw no dot at all -- the line carries the
  *  shape -- but the selected one stays a visible, grabbable dot so you can still
  *  pick a point off the curve. See engine/seriesLine.ts for the curve/scatter rule. */
-const SELECTED_DOT_RADIUS = 3.5;
-/** Adapt a series' {px,py} points to the {x,y} the pure polylineRuns expects. */
-function runsForPoints(pts: readonly { px: number; py: number }[]): { x: number; y: number }[][] {
-  return polylineRuns(pts.map((p) => ({ x: p.px, y: p.py })));
-}
-
 /** The per-row delete control on the grouped-type tables (checkpoint 129) --
  * removes a whole Box Plot box / Histogram bin. Kept as a small component so the
  * histogram and box-plot tables share one styling/labelling; the noun (box/bin)
@@ -5149,185 +5143,60 @@ export function Workspace() {
     return list;
   }, [measurements, measurementViews, pendingMeasure, mode, errorDrag]);
 
-  const markers = useMemo<CanvasMarker[]>(() => {
-    const result: CanvasMarker[] = [];
-    // ⚑ The point every label on a RADIAL figure should lean away from. A pie's
-    // outline handles and its sector boundaries all sit on the rim, and a spider's
-    // readings all sit on rays out of the origin -- so with the historical fixed
-    // up-and-right offset every label leans the same way, into the ink, and lands on
-    // the neighbouring marker's label and on the figure's own text ("Outline 2" over
-    // "PBS"). Pushed outward instead, they fan into the white space that is guaranteed
-    // to be there, because the rim IS the edge of the drawing.
-    //
-    // Only where a real centre exists. There is no honest one on an XY plot -- the
-    // middle of the axes is not a place labels should flee -- so those keep the fixed
-    // offset they have always had.
-    const labelAway =
-      config.axesKind === 'pie' && axes
-        ? (axes as unknown as { getCentre(): { x: number; y: number } }).getCentre()
-        : config.axesKind === 'spider' && axes
-          ? (axes as unknown as { getOrigin(): { x: number; y: number } }).getOrigin()
-          : undefined;
-    // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
-    // nothing if only its author knows it is possible -- that is the "shortcut-only
-    // path" the keystone rule names as a failure. So while closing is available the
-    // first boundary says so on the figure itself, in the place the click has to go,
-    // and stops saying it the moment it stops being true.
-    const closingIndex = (() => {
-      if (config.axesKind !== 'pie' || !axes) return null;
-      const first = dataPoints[0];
-      if (!first) return null;
-      return session.ringClosingPixel(first.px, first.py) === 0 ? 0 : null;
-    })();
-    for (const step of steps) {
-      const point = placedPoints[step.key];
-      if (point) {
-        result.push({
-          id: step.key,
-          x: point.px,
-          y: point.py,
-          // ⚑ Spider labels the handle with its VALUE alone. The generic
-          // "<step>=<values>" form rendered as "Axis 5=80, Biodegradation" — six of
-          // those sprawled across the plot, repeating axis names the FIGURE already
-          // prints and burying the one thing the handle asserts, which is where that
-          // value sits. Caught on screen; no test can see a label being cluttered.
-          label:
-            config.axesKind === 'spider' && point.values.length > 0
-              ? String(point.values[0])
-              : point.values.length > 0
-                ? `${step.label}=${point.values.join(', ')}`
-                : step.label,
-          color: step.color,
-          kind: 'calibration',
-          labelAway,
-          // Selected for keyboard nudge (checkpoint 127) -- highlighted so you can
-          // see which handle the arrow keys will move.
-          selected: activeHandleKey === step.key,
-          // Interactive *only* in Calibrate mode. Mid-walk (axes === null) a
-          // click that lands exactly on an already-placed handle (e.g. X1 and
-          // Y1 sharing the same origin pixel, a common real calibration
-          // pattern) must still register as the *next* step's click, not start
-          // a drag. Once calibrated, the handles stay inert in Place Point mode
-          // too -- otherwise a handle sitting on the origin swallows the click
-          // meant to drop a *data point* right there (a real reported bug); you
-          // switch to Calibrate to nudge a handle, to Place Point to add data.
-          draggable: axes !== null && mode === 'calibrate',
-        });
-      }
-    }
-    if (pendingPixel) {
-      result.push({ id: 'pending', x: pendingPixel.px, y: pendingPixel.py, label: '?', color: theme.color.overlay.pendingMarkerFill });
-    }
-    // Every *other* dataset's points render first (so the active one's own
-    // points, pushed last below, layer on top) as non-interactive, unlabeled
-    // dots in that series' own color -- visible for context, never draggable
-    // or clickable, so a click/drag can never land on the wrong series by
-    // accident. Checkpoint 30, see this file's header comment.
-    allDatasetsData.forEach((ds) => {
-      if (ds.active) return;
-      // A dense series is drawn as a connecting line (checkpoint 131/132): the
-      // line carries the shape, so its per-point dots are dropped entirely --
-      // even tiny ones mush into a furry band, and an inactive series has no
-      // selection to preserve. Sparse series keep their normal dots.
-      if (runsForPoints(ds.points).length > 0) return;
-      const color = `rgb(${ds.color[0]}, ${ds.color[1]}, ${ds.color[2]})`;
-      ds.points.forEach((point, i) => {
-        result.push({ id: `inactive-point-${ds.index}-${i}`, x: point.px, y: point.py, label: '', color, draggable: false });
-      });
-    });
-    const activeColorRGB = datasetInfos.find((d) => d.active)?.color;
-    const activeColor = activeColorRGB ? `rgb(${activeColorRGB[0]}, ${activeColorRGB[1]}, ${activeColorRGB[2]})` : theme.color.error;
-    const activeDense = runsForPoints(dataPoints).length > 0;
-    // In Error-bars mode the markers that must be inert are exactly the ones a
-    // link drag can START from -- and `errorLinkSnap` answers only for points of
-    // the TARGET series. Scoping it that way is what keeps a CAP correctable:
-    // select a cap series under Recorded and its own markers stay draggable, the
-    // contract ImageCanvas documents ("how caps stay freely adjustable"). A
-    // blanket `mode !== 'error-bars'` also froze the caps, so the only way to
-    // move a cap was to leave the tool -- and the lower cap is MIRRORED by the
-    // app, so an uncorrectable cap means exporting a symmetry the figure never
-    // showed. Caught by the v1.3 release-gate audit.
-    const isErrorLinkAnchorSeries = mode === 'error-bars' && activeDatasetIndex === errorTargetIndex;
-    dataPoints.forEach((point, i) => {
-      // Interpolation-assist (checkpoint 120): anchors are the RECORD, drawn big
-      // and labelled; the derived samples between them are small unlabelled dots,
-      // and not hand-draggable (a drag would just be wiped on the next rebuild).
-      const role = dataPointRoles[i];
-      const isInterp = role === 'interpolated';
-      const isAnchor = role === 'anchor';
-      // In the Select tool, every marquee-selected point is highlighted; otherwise
-      // it's the single active point (Place Point's selection).
-      const selected = mode === 'select' ? selectedPointIndices.includes(i) : i === activePointIndex;
-      // On a dense connected plain series the LINE carries the shape (checkpoint
-      // 131/132): draw NO per-point dot -- even tiny ones mush into a furry band
-      // -- except the SELECTED one, kept visible and grabbable so you can still
-      // pick a point off the curve (click a table row to select it). Anchors and
-      // interpolation samples always draw (they aren't the furry-band case).
-      const plainDense = activeDense && !isInterp && !isAnchor;
-      if (plainDense && !selected) return;
-      result.push({
-        id: `point-${i}`,
-        x: point.px,
-        y: point.py,
-        label: isInterp ? '' : i === closingIndex ? `${i + 1} — click to close the ring` : String(i + 1),
-        color: activeColor,
-        labelAway,
-        // Inert in Measure mode (v1.1): a measurement click must pass THROUGH a
-        // data marker to place the vertex (and snap to it), never get eaten by the
-        // marker's own select/drag -- which used to let a measure click grab and
-        // move a data point. Also inert in Pan.
-        //
-        // ⚑ And inert in Error-bars, for the same reason, found the same way --
-        // by driving the app. The cap gesture BEGINS by pressing a datum ("drag
-        // from a data point out to its error cap"), and the stage handler
-        // deliberately pre-empts the landed-on-a-marker bail so that press starts
-        // the link. But Konva's built-in drag fires off the marker's OWN
-        // mousedown, so the same press did both: it recorded the cap AND hauled
-        // the datum along to wherever the drag ended -- i.e. onto the cap. Silent,
-        // and it corrupts a point the user had already placed correctly. The
-        // datum is the anchor a cap hangs off; capturing the cap must not move it.
-        // Scoped to the TARGET series only -- see isErrorLinkAnchorSeries above.
-        // ⚑ NOT DRAGGABLE WHILE IT IS THE CLOSING TARGET. To close the ring you must
-        // click the first boundary -- which has a marker drawn on it, and a draggable
-        // marker takes the press for its own drag/select, so the click that closes the
-        // ring was the one click the figure ignored. Exactly the trap the error-bar
-        // link drag hit, and the fix is the mechanism this file already documents:
-        // a non-draggable marker leaves Konva's hit graph entirely, so the press
-        // reaches the stage and registers as the next image click. Only while closing
-        // is actually on offer, so the point stays correctable the rest of the time.
-        draggable:
-          i !== closingIndex &&
-          mode !== 'pan' &&
-          mode !== 'measure' &&
-          !isErrorLinkAnchorSeries &&
-          !isInterp,
-        selected,
-        radius: isAnchor ? 6.5 : isInterp ? 2.5 : plainDense ? SELECTED_DOT_RADIUS : undefined,
-      });
-    });
-    return result;
-  }, [session, steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex]);
+  // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
+  // nothing if only its author knows it is possible -- that is the "shortcut-only
+  // path" the keystone rule names as a failure. So while closing is available the
+  // first boundary says so on the figure itself, in the place the click has to go,
+  // and stops saying it the moment it stops being true.
+  const ringClosingIndex = useMemo(() => {
+    if (config.axesKind !== 'pie' || !axes) return null;
+    const first = dataPoints[0];
+    if (!first) return null;
+    return session.ringClosingPixel(first.px, first.py) === 0 ? 0 : null;
+  }, [session, config.axesKind, axes, dataPoints]);
 
-  // Connecting polylines drawn beneath the markers (checkpoint 131) -- the fix for
-  // a dense auto-trace rendering as a furry band of overlapping dots. Skipped
-  // entirely for grouped types (Box Plot / Histogram get glyphs, not a curve) and
-  // for sparse/scatter series (polylineRuns returns no runs). Inactive series
-  // first so the active one's line layers on top, matching the marker order.
-  const seriesLines = useMemo<SeriesLine[]>(() => {
-    if (hasSlots) return [];
-    const lines: SeriesLine[] = [];
-    allDatasetsData.forEach((ds) => {
-      if (ds.active) return;
-      const runs = runsForPoints(ds.points);
-      if (runs.length) lines.push({ color: `rgb(${ds.color[0]}, ${ds.color[1]}, ${ds.color[2]})`, runs });
-    });
-    const activeRuns = runsForPoints(dataPoints);
-    if (activeRuns.length) {
-      const c = datasetInfos.find((d) => d.active)?.color;
-      lines.push({ color: c ? `rgb(${c[0]}, ${c[1]}, ${c[2]})` : theme.color.error, runs: activeRuns });
-    }
-    return lines;
-  }, [hasSlots, allDatasetsData, dataPoints, datasetInfos]);
+  const labelAway = useMemo(
+    () => radialLabelCentre(config.axesKind, axes),
+    [config.axesKind, axes]
+  );
+
+  const markers = useMemo<CanvasMarker[]>(
+    () =>
+      buildCanvasMarkers({
+        steps,
+        placedPoints,
+        pendingPixel,
+        pendingPixelColor: theme.color.overlay.pendingMarkerFill,
+        dataPoints,
+        dataPointRoles,
+        allDatasetsData,
+        datasetInfos,
+        fallbackColor: theme.color.error,
+        axesKind: config.axesKind,
+        isCalibrated: axes !== null,
+        labelAway,
+        ringClosingIndex,
+        mode,
+        activeHandleKey,
+        activePointIndex,
+        selectedPointIndices,
+        activeDatasetIndex,
+        errorTargetIndex,
+      }),
+    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
+  );
+
+  const seriesLines = useMemo<SeriesLine[]>(
+    () =>
+      buildSeriesLines({
+        hasSlots,
+        allDatasetsData,
+        dataPoints,
+        datasetInfos,
+        fallbackColor: theme.color.error,
+      }),
+    [hasSlots, allDatasetsData, dataPoints, datasetInfos]
+  );
 
   // Drop a stale calibration-handle selection (checkpoint 127): the nudge only
   // makes sense in Calibrate mode on a handle that still exists, so clear it when

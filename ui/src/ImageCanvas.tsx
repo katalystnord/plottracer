@@ -166,50 +166,13 @@ function labelPlacement(
   };
 }
 
-export interface CanvasMarker {
-  /** Stable identity passed back to onMarkerDragEnd — not a React key concern. */
-  id: string;
-  x: number;
-  y: number;
-  label: string;
-  color: string;
-  draggable?: boolean;
-  /** The selected/"active" data point (checkpoint 58) — drawn with a highlight
-   * ring so it stands out on the canvas as the one the trash button will delete. */
-  selected?: boolean;
-  /** A calibration handle renders as a crosshair reticle rather than a filled
-   * dot (checkpoint 59), so axis references read as distinct from data points. */
-  kind?: 'calibration' | 'data';
-  /**
-   * A point in IMAGE coordinates to push this marker's label AWAY from.
-   *
-   * ⚑ Every label is otherwise drawn up-and-to-the-right at a fixed offset, which is
-   * fine on a scatter and wrong on anything radial: a pie's outline handles and its
-   * boundary points all sit ON the rim, so their labels all lean the same way and land
-   * on each other, on the slice percentages, and on the figure's own category names
-   * ("Outline 2" over "PBS" -- David, by screenshot). Given the fitted centre, each
-   * label instead leans outward into the white space that is always there, because the
-   * rim is by definition the edge of the ink.
-   *
-   * Purely presentational: it moves TEXT, never the marker, so nothing measured moves.
-   */
-  labelAway?: { x: number; y: number };
-  /** Override the data-dot radius (checkpoint 120): interpolation-assist draws
-   * anchors big and derived samples small. Defaults to 5. */
-  radius?: number;
-}
-
-/** A series drawn as connected polyline(s) under its markers (checkpoint 131) --
- * so a dense traced curve reads as a clean line instead of a furry band of
- * overlapping dots. Image-pixel space, converted at render. `runs` is a list of
- * contiguous point-runs (broken where consecutive points are far apart), so a
- * curve with a genuine gap doesn't get a spurious segment bridged across it; a
- * scatter produces no runs and stays dots. Non-interactive, drawn beneath the
- * markers. See Workspace's seriesLines memo for how the runs are formed. */
-export interface SeriesLine {
-  color: string;
-  runs: { x: number; y: number }[][];
-}
+/* ⚑ `CanvasMarker` and `SeriesLine` now live in `engine/canvasOverlays.ts`, with
+ * the code that DECIDES them (v2.1, the Workspace split). They are pure data
+ * shapes -- what to draw, never how -- so they belong beside the decision, not
+ * beside the renderer. Re-exported here so every existing import site is
+ * unchanged. */
+import type { CanvasMarker, SeriesLine } from '../../engine/canvasOverlays.js';
+export type { CanvasMarker, SeriesLine };
 
 /** An on-canvas measurement drawing (checkpoint: measure). Geometry is in
  * image-pixel space, like every other overlay here; converted to screen space
