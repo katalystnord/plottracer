@@ -91,6 +91,10 @@ import { GeometryFlyout } from './panels/GeometryFlyout.js';
 import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
+import { EditableValue, EditableName } from './panels/EditableCell.js';
+import { fmtNum, fmtValue } from './format.js';
+import { TupleDeleteButton } from './panels/TupleDeleteButton.js';
+import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
@@ -524,10 +528,6 @@ interface FigureRecord {
 }
 
 /** ~4 significant figures, trailing zeros trimmed. */
-function fmtNum(n: number): string {
-  if (!Number.isFinite(n)) return '∞';
-  return String(Number(n.toPrecision(4)));
-}
 
 /** The RecordedMeasurement <-> SerializedMeasurement mapping, shared by the
  * single- and multi-figure save/open paths (checkpoint 115): a measurement's
@@ -553,20 +553,6 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
 /** Data-spreadsheet value formatter (checkpoint 57) -- Intl.NumberFormat, the
  * legibility win from the competitor study (plotdigitizer dumps raw 15-digit
  * floats). Up to 6 significant figures, trailing zeros trimmed, no grouping. */
-const VALUE_FMT = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6, useGrouping: false });
-/** For extreme magnitudes, plain decimal is an unreadable wall of zeros: a point
- * sitting on the calibration origin derives (via pixelToData float arithmetic) to
- * ~2e-15, not exactly 0, and printed as "0.00000000000000222045". Switch to
- * scientific notation only at the extremes, so the normal range -- including small
- * log-axis values like 0.0012 -- stays plain decimal. Pure presentation; the
- * record is untouched (tenet 9), and export rounds to pixel resolution separately. */
-const VALUE_FMT_SCI = new Intl.NumberFormat('en-US', { notation: 'scientific', maximumSignificantDigits: 6 });
-function fmtValue(n: number): string {
-  if (!Number.isFinite(n)) return '—';
-  const a = Math.abs(n);
-  if (a !== 0 && (a < 1e-4 || a >= 1e9)) return VALUE_FMT_SCI.format(n);
-  return VALUE_FMT.format(n);
-}
 
 /** [r,g,b] -> "#rrggbb", for the series list's colour swatches + hex field
  * (checkpoint 89; hex is what the field and swatch keys use). Canvas markers
@@ -580,41 +566,6 @@ function rgbToHex([r, g, b]: readonly [number, number, number]): string {
  *  (checkpoint 132): the other points draw no dot at all -- the line carries the
  *  shape -- but the selected one stays a visible, grabbable dot so you can still
  *  pick a point off the curve. See engine/seriesLine.ts for the curve/scatter rule. */
-/** The per-row delete control on the grouped-type tables (checkpoint 129) --
- * removes a whole Box Plot box / Histogram bin. Kept as a small component so the
- * histogram and box-plot tables share one styling/labelling; the noun (box/bin)
- * comes from the config's tupleNoun, so the title reads "Delete bin 3" on a
- * histogram and "Delete box 3" on a box plot. */
-function TupleDeleteButton({
-  tupleIndex,
-  noun,
-  onDelete,
-}: {
-  tupleIndex: number;
-  noun: string;
-  onDelete: (tupleIndex: number) => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={`tuple-remove-${tupleIndex}`}
-      title={`Delete ${noun} ${tupleIndex + 1}`}
-      aria-label={`Delete ${noun} ${tupleIndex + 1}`}
-      onClick={() => onDelete(tupleIndex)}
-      style={{
-        fontSize: theme.font.size.small,
-        lineHeight: 1,
-        padding: '2px 6px',
-        cursor: 'pointer',
-        color: theme.color.text.legend,
-        background: 'none',
-        border: 'none',
-      }}
-    >
-      ✕
-    </button>
-  );
-}
 
 // Typed explicitly as AxesTypeConfig<CalibratedAxes>[] (not inferred via
 // `as const`) so .find() below returns a single covariant type instead of
@@ -4806,31 +4757,20 @@ export function Workspace() {
   // commitDataPointEdit.
   const renderEditableValue = (index: number, axis: number, value: number) => {
     const suffix = axis === 0 ? 'x' : 'y';
-    if (editingCell?.index === index && editingCell.axis === axis) {
-      return (
-        <input
-          data-testid={`data-edit-${suffix}-${index}`}
-          autoFocus
-          value={editingCell.value}
-          onChange={(e) => setEditingCell({ index, axis, value: e.target.value })}
-          onBlur={commitDataPointEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitDataPointEdit();
-            else if (e.key === 'Escape') setEditingCell(null);
-          }}
-          style={{ width: 56 }}
-        />
-      );
-    }
     return (
-      <span
-        data-testid={`data-value-${suffix}-${index}`}
-        onClick={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
+      <EditableValue
+        editing={editingCell?.index === index && editingCell.axis === axis}
+        editValue={editingCell?.value ?? ''}
+        display={fmtValue(value)}
+        testIdEdit={`data-edit-${suffix}-${index}`}
+        testIdValue={`data-value-${suffix}-${index}`}
         title="Click to edit — moves the point on the canvas"
-        style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
-      >
-        {fmtValue(value)}
-      </span>
+        width={56}
+        onStartEdit={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
+        onChange={(v) => setEditingCell({ index, axis, value: v })}
+        onCommit={commitDataPointEdit}
+        onCancel={() => setEditingCell(null)}
+      />
     );
   };
 
@@ -4847,34 +4787,22 @@ export function Workspace() {
   // (`seriesIndex` names the cell for the tests, matching the enclosing
   // `spider-cell-<series>-<axis>`; the EDIT itself is keyed by point index, which is
   // per-series, which is why only the active series renders this.)
-  const renderEditableSpiderValue = (seriesIndex: number, pointIndex: number, axisIndex: number, value: number) => {
-    if (editingCell?.index === pointIndex && editingCell.axis === axisIndex) {
-      return (
-        <input
-          data-testid={`spider-edit-${seriesIndex}-${axisIndex}`}
-          autoFocus
-          value={editingCell.value}
-          onChange={(e) => setEditingCell({ index: pointIndex, axis: axisIndex, value: e.target.value })}
-          onBlur={commitDataPointEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitDataPointEdit();
-            else if (e.key === 'Escape') setEditingCell(null);
-          }}
-          style={{ width: 64, textAlign: 'right' }}
-        />
-      );
-    }
-    return (
-      <span
-        data-testid={`spider-value-${seriesIndex}-${axisIndex}`}
-        onClick={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
-        title="Click to edit — moves the point along its own axis"
-        style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
-      >
-        {fmtValue(value)}
-      </span>
-    );
-  };
+  const renderEditableSpiderValue = (seriesIndex: number, pointIndex: number, axisIndex: number, value: number) => (
+    <EditableValue
+      editing={editingCell?.index === pointIndex && editingCell.axis === axisIndex}
+      editValue={editingCell?.value ?? ''}
+      display={fmtValue(value)}
+      testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
+      testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
+      title="Click to edit — moves the point along its own axis"
+      width={64}
+      align="right"
+      onStartEdit={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
+      onChange={(v) => setEditingCell({ index: pointIndex, axis: axisIndex, value: v })}
+      onCommit={commitDataPointEdit}
+      onCancel={() => setEditingCell(null)}
+    />
+  );
 
   // One click-to-edit name field, shared by every "name this row" column in the
   // app: plain text at rest (a dash when unnamed), an input only while it's the
@@ -4902,35 +4830,21 @@ export function Workspace() {
     title: string,
     width: number
   ) {
-    if (editingIndex === index) {
-      return (
-        <input
-          data-testid={testId}
-          autoFocus
-          value={rawName}
-          placeholder={placeholder}
-          onChange={(e) => onChange(index, e.target.value)}
-          onBlur={() => {
-            setEditingIndex(null);
-            commitPendingEdit();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
-          }}
-          onClick={(e) => e.stopPropagation()}
-          style={{ width, fontSize: 12.5 }}
-        />
-      );
-    }
     return (
-      <span
-        data-testid={testId}
-        onClick={() => setEditingIndex(index)}
+      <EditableName
+        editing={editingIndex === index}
+        name={rawName}
+        testId={testId}
+        placeholder={placeholder}
         title={title}
-        style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
-      >
-        {rawName === '' ? <span style={{ color: theme.color.text.legend }}>—</span> : rawName}
-      </span>
+        width={width}
+        onStartEdit={() => setEditingIndex(index)}
+        onChange={(name) => onChange(index, name)}
+        onFinish={() => {
+          setEditingIndex(null);
+          commitPendingEdit();
+        }}
+      />
     );
   }
 
@@ -6873,44 +6787,12 @@ export function Workspace() {
               )}
             </div>
           {isHistogram ? (
-            // Bins, not the corner clicks that produced them -- the same call
-            // buildHistogramCSV makes for export, so what's on screen is what
-            // lands in the file. No Category column: a bin is identified by its
-            // interval, unlike a Box Plot tuple which needs a name.
-            <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>#</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Bin start</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16 }}>Bin end</th>
-                  <th style={{ textAlign: 'left', paddingRight: 16, color: theme.color.primary.main }}>Value</th>
-                  <th aria-hidden />
-                </tr>
-              </thead>
-              <tbody>
-                {tupleRows.map((row) => {
-                  const bin = histogramBins[row.tupleIndex] ?? null;
-                  return (
-                    <tr key={row.tupleIndex} data-testid={`bin-row-${row.tupleIndex}`}>
-                      <td style={{ paddingRight: 16 }}>{row.tupleIndex + 1}</td>
-                      {/* A half-captured bin reads as "—" rather than showing its
-                          one placed corner: which edge a lone click is isn't known
-                          until the second corner decides the ordering, so naming it
-                          "Bin start" would be a guess. The group-cursor line above
-                          says which corner is next. */}
-                      <td style={{ paddingRight: 16 }}>{bin ? fmtValue(bin.binStart) : '—'}</td>
-                      <td style={{ paddingRight: 16 }}>{bin ? fmtValue(bin.binEnd) : '—'}</td>
-                      <td style={{ paddingRight: 16, color: theme.color.primary.main }}>
-                        {bin ? fmtValue(bin.value) : '—'}
-                      </td>
-                      <td>
-                        <TupleDeleteButton tupleIndex={row.tupleIndex} noun={tupleNoun} onDelete={removeTuple} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <HistogramBinsTable
+              rows={tupleRows}
+              bins={histogramBins}
+              tupleNoun={tupleNoun}
+              onRemoveTuple={removeTuple}
+            />
           ) : config.axesKind === 'spider' && axes ? (
             /* Spider (v1.4): `# | Category | Series 1 | Series 2 | …` — one row per
                AXIS, one column per series.
