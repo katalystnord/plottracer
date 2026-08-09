@@ -25,6 +25,14 @@ import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../e
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
+import { exportBaseName as baseNameForExport, EXPORT_FILTER_NAMES } from '../../engine/exportNaming.js';
+import {
+  colorTraceRefusal,
+  spiderTraceReport,
+  barTraceReport,
+  blobTraceReport,
+  curveTraceReport,
+} from '../../engine/colorTraceReport.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
@@ -2271,12 +2279,10 @@ export function Workspace() {
   // extracting `figure3.png` gets `figure3.csv`, not a generic `data.csv`. The
   // PDF source name and the active figure name are fallbacks (a PDF page, or a
   // pasted image with no filename, still gets a sensible base).
-  const exportBaseName = useCallback((): string => {
-    const raw = imageNameRef.current || provenanceRef.current.source?.name || null;
-    if (!raw) return 'data';
-    const base = raw.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '').trim();
-    return base || 'data';
-  }, []);
+  const exportBaseName = useCallback(
+    (): string => baseNameForExport(imageNameRef.current, provenanceRef.current.source?.name),
+    []
+  );
 
   // --- PDF loading (checkpoint 96, see ui/src/pdfRender.ts) ---------------------
   // A PDF can't be decoded by <img>, so ImageCanvas hands us its bytes; we render
@@ -4028,11 +4034,8 @@ export function Workspace() {
         return;
       }
 
-      const filterNames: Record<'json' | TableFormat, string> = {
-        json: 'JSON', csv: 'CSV', tsv: 'TSV', latex: 'LaTeX', matlab: 'MATLAB', python: 'Python', r: 'R',
-      };
       await window.electronAPI.saveFile(content, `${exportBaseName()}.${ext}`, [
-        { name: filterNames[format], extensions: [ext] },
+        { name: EXPORT_FILTER_NAMES[format], extensions: [ext] },
         { name: 'All Files', extensions: ['*'] },
       ]);
       markClean(); // data exported -> treat as no longer unsaved
@@ -4280,22 +4283,17 @@ export function Workspace() {
   // bulk trace). 'curve' reduces the colour mask one-point-per-column; 'scatter'
   // reduces it one-point-per-marker (blob centroid) -- same filter, same preview.
   const handleColorTrace = useCallback(() => {
-    if (!session.getAxes()) {
-      setColorTraceInfo('Calibrate the axes first — traced points need a coordinate system.');
+    const refusal = colorTraceRefusal({
+      isCalibrated: session.getAxes() !== null,
+      autoExtractKind: config.autoExtractKind,
+      hasSlots: session.hasSlots(),
+      hasImage: !!imageCanvasRef.current?.getImageData(),
+    });
+    if (refusal) {
+      setColorTraceInfo(refusal);
       return;
     }
-    if (
-      (config.autoExtractKind ?? 'curve') === 'none' ||
-      (session.hasSlots() && config.autoExtractKind !== 'along-axes' && config.autoExtractKind !== 'bounding-box')
-    ) {
-      setColorTraceInfo('Auto-extract adds ordinary points; it does not apply to a Box Plot / Error Bar series.');
-      return;
-    }
-    const imageData = imageCanvasRef.current?.getImageData();
-    if (!imageData) {
-      setColorTraceInfo('No image loaded.');
-      return;
-    }
+    const imageData = imageCanvasRef.current!.getImageData()!;
     const { data, width, height } = imageData;
     const target = hexToRGB(colorTraceColor);
     // ⚑ THE SERIES ADOPTS THE COLOUR IT WAS TRACED FROM (David, 2026-07-27). The
@@ -4308,13 +4306,6 @@ export function Workspace() {
     // Display only. Nothing about the record moves (tenet 9), it rides the same
     // commit as the trace, and one Ctrl+Z takes it back with the points.
     const adoptTracedColour = () => session.setDatasetColor(session.getActiveDatasetIndex(), target);
-    // Warn on an over-broad match: the colour likely grabbed the grid/axes/text,
-    // not just the series (the live preview overlay shows exactly what — ckpt 121).
-    const overBroad = (matched: number) => {
-      const pct = (matched / (width * height)) * 100;
-      const warn = pct > 25 ? ' — that is a lot of the image; if it grabbed the grid/axes, lower the tolerance or run Grid Removal first.' : '';
-      return { pct, warn };
-    };
     // ⚑ THE SPIDER TRACE, and why it is offered where the bar one is refused. Every
     // other mechanism here is a curve tool: it reduces the mask by column or by
     // blob, which on a filled bar returns the MIDDLE of a shape whose value is its
@@ -4339,34 +4330,8 @@ export function Workspace() {
         setColorTraceInfo(result.error);
         return;
       }
-      const offered = result.readings.filter((r) => r.point != null).length;
       const placed = session.addSpiderTracePoints(result.readings.map((r) => r.point));
-      const named = (list: typeof result.readings) =>
-        list.map((r) => r.name || `Axis ${r.index + 1}`).join(', ');
-      const ambiguous = result.readings.filter((r) => r.reason === 'ambiguous');
-      const missing = result.readings.filter((r) => r.reason === 'none-found');
-      const parts = [
-        `Read ${placed} of ${result.readings.length} ${result.readings.length === 1 ? 'axis' : 'axes'}.`,
-      ];
-      // Say what was NOT done, by name. A count alone leaves the user hunting for
-      // which rows are still empty -- and the whole design here is that a refusal is
-      // information, not a failure.
-      if (ambiguous.length)
-        parts.push(`${named(ambiguous)}: the colour crosses that ray more than once, so nothing was recorded — place ${ambiguous.length === 1 ? 'it' : 'them'} yourself.`);
-      if (missing.length) parts.push(`Nothing of that colour crosses ${named(missing)}.`);
-      // ⚑ Clipped is NOT "nothing found" — the colour was still there when the
-      // search stopped, so the crossing is beyond the axis's labelled range and the
-      // reading would have been the search window's own limit. Say which, and say
-      // what to check, because the usual cause is a known point calibrated on an
-      // inner ring rather than the axis's end.
-      const clipped = result.readings.filter((r) => r.reason === 'clipped');
-      if (clipped.length)
-        parts.push(`${named(clipped)}: the colour runs past the end of that axis, so nothing was recorded — check the axis's known point, or place ${clipped.length === 1 ? 'it' : 'them'} yourself.`);
-      if (offered > placed)
-        parts.push(`${offered - placed} ${offered - placed === 1 ? 'axis' : 'axes'} already had a point and ${offered - placed === 1 ? 'was' : 'were'} left alone.`);
-      const { pct, warn } = overBroad(result.matched);
-      parts.push(`${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
-      setColorTraceInfo(parts.join(' '));
+      setColorTraceInfo(spiderTraceReport({ readings: result.readings, placed, matched: result.matched, width, height }));
       if (placed > 0) {
         adoptTracedColour();
         commit();
@@ -4392,10 +4357,7 @@ export function Workspace() {
       }
       const added = session.addBarDetectBoxes(result.boxes);
       adoptTracedColour();
-      const { pct, warn } = overBroad(result.matched);
-      setColorTraceInfo(
-        `Placed ${added} ${noun}${added === 1 ? '' : 's'} (one box per detected ${noun}) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
-      );
+      setColorTraceInfo(barTraceReport(added, noun, result.matched, width, height));
       commit();
       return;
     }
@@ -4407,10 +4369,7 @@ export function Workspace() {
       }
       session.addSegmentFillPoints(result.points);
       adoptTracedColour();
-      const { pct, warn } = overBroad(result.matched);
-      setColorTraceInfo(
-        `Placed ${result.blobs} point${result.blobs === 1 ? '' : 's'} (one per marker) from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`
-      );
+      setColorTraceInfo(blobTraceReport(result.blobs, result.matched, width, height));
       commit();
       return;
     }
@@ -4421,8 +4380,7 @@ export function Workspace() {
     }
     session.addSegmentFillPoints(result.points);
     adoptTracedColour();
-    const { pct, warn } = overBroad(result.matched);
-    setColorTraceInfo(`Traced ${result.points.length} points from ${result.matched.toLocaleString()} matching pixels (${pct.toFixed(1)}% of the image).${warn}`);
+    setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
   }, [session, config.autoExtractKind, config.tupleNoun, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
 
