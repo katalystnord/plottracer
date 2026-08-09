@@ -56,6 +56,23 @@ describe('getBarCategoryTable: single series', () => {
     expect(col.tupleIndices).toEqual([0, 1]);
   });
 
+  it('⚑ naming ONE bar leaves the other blank — two unnamed bars are separate slots', () => {
+    // The capture path reserves each tuple its own CategoryAxis index via
+    // addCategory(''), NOT setTupleLabel(i, ''), which would reuse an existing
+    // category by matching its NAME — collapsing two still-unnamed bars onto
+    // one shared '' slot, so naming either would rename BOTH. Nothing looks
+    // wrong until a user types the second name and watches the first change.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.addDataPoint(150, 500);
+    session.addDataPoint(150, 300);
+    session.addDataPoint(250, 500);
+    session.addDataPoint(250, 420);
+
+    expect(session.renameCategory(0, 'Flax')).toBe(true);
+    expect(session.getBarCategoryTable().categoryRawNames).toEqual(['Flax', '']);
+  });
+
   it('reflects a renamed category immediately, in RAW form (not re-wrapped)', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
