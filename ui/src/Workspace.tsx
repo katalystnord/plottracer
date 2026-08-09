@@ -12,7 +12,6 @@ import {
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
   SPIDER_AXES_CONFIG,
   PIE_AXES_CONFIG,
-  SERIES_COLOR_PALETTE,
   calibrationCompatible,
   type AxesTypeConfig,
   type CalibratedAxes,
@@ -37,7 +36,7 @@ import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
-import { Popover, Menu, MenuItem, Divider } from '@mui/material';
+import { Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
 import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
 import {
@@ -74,7 +73,6 @@ import {
   SaveIcon,
   CameraIcon,
   ChevronDownIcon,
-  EyedropperIcon,
   MeasureIcon,
   ImageEditIcon,
   ErrorBarsIcon,
@@ -99,6 +97,7 @@ import { BarTable } from './panels/BarTable.js';
 import { SpiderTable } from './panels/SpiderTable.js';
 import { SpreadsheetTable } from './panels/SpreadsheetTable.js';
 import { AutoExtractCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/AutoExtractCard.js';
+import { SeriesPanel } from './panels/SeriesPanel.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
@@ -6222,210 +6221,32 @@ export function Workspace() {
         </p>
       )}
 
-      <SidebarSection>
-        <SidebarHeading>Series</SidebarHeading>
-        {/* A dropdown to pick the active series (scales to many series, unlike
-            the old chip row), with the active series' own controls beside it:
-            recolor, rename, delete. New points/actions apply to the active
-            series; the spreadsheet below shows every series at once. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <select
-            data-testid="series-select"
-            value={activeDatasetIndex}
-            onChange={(e) => handleSelectDataset(Number(e.target.value))}
-            style={{
-              flex: '1 1 120px',
-              minWidth: 120,
-              height: 30,
-              fontSize: theme.font.size.regular,
-              fontFamily: theme.font.family,
-              color: theme.color.text.primary,
-              background: theme.color.background.primary,
-              border: `1px solid ${theme.color.border.regular}`,
-              borderRadius: theme.border.radius.regular,
-              padding: '0 6px',
-            }}
-          >
-            {datasetInfos.map((info) => (
-              <option key={info.index} value={info.index} data-testid={`series-option-${info.index}`}>
-                {info.name} ({info.pointCount})
-              </option>
-            ))}
-          </select>
-          <button type="button" data-testid="add-series" onClick={handleAddDataset} disabled={!axes} title="Add a new series">
-            + Add
-          </button>
-        </div>
-        {activeInfo && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* Series-colour picker (checkpoint 91). A single swatch button
-                showing the current colour -- the compact one-square footprint
-                the old native <input type="color"> had, so the NAME field keeps
-                its width -- opening a Popover with the full crash-free control:
-                palette swatches, the image eyedropper, and a hex field. (Ckpts
-                89/90 built those controls native-dialog-free; ckpt 91 just stops
-                them crowding out the name.) */}
-            <button
-              type="button"
-              data-testid="series-color-button"
-              title="Series colour"
-              onClick={(e) => setColorAnchor(e.currentTarget)}
-              style={{
-                width: 22,
-                height: 22,
-                flex: '0 0 auto',
-                padding: 0,
-                borderRadius: 4,
-                background: rgbToHex(activeInfo.color),
-                cursor: 'pointer',
-                border: `1px solid rgba(0,0,0,0.25)`,
-              }}
-            />
-            <Popover
-              open={Boolean(colorAnchor)}
-              anchorEl={colorAnchor}
-              onClose={() => setColorAnchor(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            >
-              <div data-testid="series-color-menu" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, width: 176 }}>
-                <div data-testid="series-swatches" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 3 }}>
-                  {SERIES_COLOR_PALETTE.map((rgb) => {
-                    const hex = rgbToHex(rgb);
-                    const selected = rgbToHex(activeInfo.color).toLowerCase() === hex.toLowerCase();
-                    return (
-                      <button
-                        key={hex}
-                        type="button"
-                        data-testid={`series-swatch-${hex.slice(1)}`}
-                        title={hex}
-                        onClick={() => handleSetDatasetColor(activeDatasetIndex, hex)}
-                        style={{
-                          width: 18,
-                          height: 18,
-                          padding: 0,
-                          borderRadius: 3,
-                          background: hex,
-                          cursor: 'pointer',
-                          border: selected ? `2px solid ${theme.color.text.primary}` : '1px solid rgba(0,0,0,0.2)',
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    // Uncontrolled + keyed so a swatch click or a series switch
-                    // remounts it with the new colour; only a full #rrggbb applies,
-                    // so typing one out works without the native picker.
-                    key={`${activeDatasetIndex}-${rgbToHex(activeInfo.color)}`}
-                    type="text"
-                    data-testid="series-color"
-                    title="Series colour (hex, e.g. #1f77b4)"
-                    defaultValue={rgbToHex(activeInfo.color)}
-                    onChange={(e) => {
-                      const v = e.target.value.trim();
-                      if (/^#[0-9a-fA-F]{6}$/.test(v)) handleSetDatasetColor(activeDatasetIndex, v);
-                    }}
-                    onBlur={commitPendingEdit}
-                    style={{ width: 84, fontSize: theme.font.size.small, fontFamily: 'monospace' }}
-                  />
-                  {/* Eyedropper: take the colour the FIGURE draws this series in
-                      (checkpoint 90) -- the safe on-canvas sampler, never the OS
-                      screen-picker that crashed. Closes the popover so the canvas
-                      click that follows lands on the image, not the backdrop. */}
-                  <button
-                    type="button"
-                    data-testid="series-eyedropper"
-                    title={canvasHasImage ? 'Take this series’ colour from the image' : 'Open an image first'}
-                    disabled={!canvasHasImage}
-                    onClick={() => {
-                      setColorAnchor(null);
-                      setEyedropper('series');
-                    }}
-                    style={{
-                      width: 26,
-                      height: 26,
-                      flex: '0 0 auto',
-                      cursor: canvasHasImage ? 'pointer' : 'default',
-                      opacity: canvasHasImage ? 1 : 0.4,
-                      border: `1px solid ${theme.color.border.regular}`,
-                      borderRadius: 4,
-                      background: theme.color.background.primary,
-                      color: theme.color.text.primary,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {/* The same pipette as the two Auto-extract pickers (David,
-                        2026-07-27). It wore a ⌖ reticle, which is what Place Point
-                        means on the rail -- so the one glyph said "aim a point" in
-                        one place and "sample a colour" in another. */}
-                    <EyedropperIcon />
-                  </button>
-                </div>
-                <span style={{ fontSize: theme.font.size.small, color: theme.color.text.legend, lineHeight: 1.3 }}>
-                  Swatch or hex for a distinct colour; the pipette takes it from the figure.
-                </span>
-              </div>
-            </Popover>
-            <input
-              data-testid="series-name"
-              title="Rename series"
-              value={nameDraft ?? activeInfo.name}
-              onChange={(e) => handleRenameDraft(activeDatasetIndex, e.target.value)}
-              onBlur={(e) => handleCommitRename(activeDatasetIndex, e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur(); // commit, same as looking away
-              }}
-              aria-invalid={nameDraft !== null && nameNotice !== null}
-              style={{ flex: '1 1 auto', minWidth: 80 }}
-            />
-            {datasetInfos.length > 1 && (
-              <button
-                type="button"
-                data-testid="series-remove"
-                title="Delete this series"
-                onClick={() => handleRemoveDataset(activeDatasetIndex)}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        )}
-        {/* Stacked bars (v2.0, Phase 5): the only UI a stack needs is naming
-            which group a series belongs to -- capture itself is the same
-            drag-box every other bar uses (BAR_AXES_CONFIG), one segment per
-            series. Same group name on two or more series = one visual stack;
-            blank = not stacked. Bar-only: a stack is specifically an ordered
-            sequence of bar segments, and no other graph type has that shape. */}
-        {activeInfo && config.id === 'bar' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-            <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
-              Stack group:
-            </label>
-            <input
-              id="series-stack-group"
-              data-testid="series-stack-group"
-              title="Group this series with others into one stacked bar -- same name, same stack. Blank = not stacked."
-              placeholder="none"
-              value={session.getDatasetStackGroup(activeDatasetIndex) ?? ''}
-              onChange={(e) => {
-                session.setDatasetStackGroup(activeDatasetIndex, e.target.value.trim() || null);
-                pendingEditRef.current = true;
-                bump();
-              }}
-              onBlur={commitPendingEdit}
-              style={{ width: 90, fontSize: theme.font.size.small }}
-            />
-          </div>
-        )}
-        {nameNotice && (
-          <p data-testid="series-name-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
-            {nameNotice}
-          </p>
-        )}
-      </SidebarSection>
+      <SeriesPanel
+        infos={datasetInfos}
+        activeInfo={activeInfo}
+        activeIndex={activeDatasetIndex}
+        isBar={config.id === 'bar'}
+        nameDraft={nameDraft}
+        nameNotice={nameNotice}
+        colorAnchor={colorAnchor}
+        onColorAnchorChange={setColorAnchor}
+        stackGroupOf={(index) => session.getDatasetStackGroup(index)}
+        onSetStackGroup={(index, group) => {
+          session.setDatasetStackGroup(index, group);
+          pendingEditRef.current = true;
+          bump();
+        }}
+        onAdd={handleAddDataset}
+        onSelect={handleSelectDataset}
+        onRemove={handleRemoveDataset}
+        onRenameDraft={handleRenameDraft}
+        onCommitRename={handleCommitRename}
+        onSetColor={handleSetDatasetColor}
+        canAddSeries={!!axes}
+        canvasHasImage={canvasHasImage}
+        onCommitPendingEdit={commitPendingEdit}
+        onArmEyedropper={setEyedropper}
+      />
 
 
 
