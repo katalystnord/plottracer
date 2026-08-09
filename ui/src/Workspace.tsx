@@ -23,6 +23,8 @@ import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../en
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
+import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
+import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
 import { History } from '../../engine/history.js';
 import { datasetNameError, uniqueDatasetName } from '../../engine/seriesNames.js';
 import { ImageCanvas, type CanvasMarker, type ImageCanvasHandle, type MeasureOverlay, type SeriesLine, type SelectGesture } from './ImageCanvas.js';
@@ -2543,107 +2545,46 @@ export function Workspace() {
   // reports a real length via the Set-scale reference (or pixels if none is set).
   const handleMeasureClick = useCallback(
     (px: number, py: number) => {
-      // Snap the measurement vertex to a nearby active-series DATA point (v1.1):
-      // "measure from one identified point" -- if the click lands within ~12
-      // screen px of a plotted point, anchor exactly on it. Threshold is in image
-      // pixels (the click's space), so divide the screen tolerance by the zoom.
-      const snapThresh = 12 / Math.max(canvasScale, 1e-4);
-      let sx = px;
-      let sy = py;
-      let bestD = snapThresh;
-      for (const p of session.getDataPoints()) {
-        const d = Math.hypot(p.px - px, p.py - py);
-        if (d < bestD) {
-          bestD = d;
-          sx = p.px;
-          sy = p.py;
-        }
-      }
-      px = sx;
-      py = sy;
-      const pts = [...pendingMeasureRef.current, { x: px, y: py }];
-      const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-      const nextId = () => `meas-${(measureIdRef.current += 1)}`;
-
-      // Set-scale: two clicks a known real distance apart -> the value+unit form.
-      if (settingScale) {
-        if (pts.length < 2) {
-          setPending(pts);
+      const snapped = snapToNearestPoint(px, py, session.getDataPoints(), canvasScale);
+      const result = resolveMeasureClick({
+        point: snapped,
+        pending: pendingMeasureRef.current,
+        settingScale,
+        tool: measureTool,
+        slopeReady: !!axes && config.axesKind === 'xy',
+        toData: axes ? (x, y) => axes.pixelToData(x, y) : null,
+      });
+      switch (result.kind) {
+        case 'refuse':
+          setMeasureError(result.message);
+          return;
+        case 'collect':
+          if (!settingScale) setMeasureError(null);
+          setPending(result.points);
+          return;
+        case 'scale-draft':
+          setPending(result.points);
+          setScaleDraftPx(result.distancePx);
+          return;
+        case 'record': {
+          setMeasureError(null);
+          const id = `meas-${(measureIdRef.current += 1)}`;
+          // `label` is a placeholder: the canvas label is DERIVED at render (see
+          // the measureOverlays memo), so a later re-calibration updates it.
+          // ⚑ fmtNum already returns '∞' for a non-finite number, so the old
+          // `finite ? fmtNum(slope) : '∞'` ternary was a second copy of that rule.
+          const overlay: MeasureOverlay = {
+            id,
+            points: result.points,
+            label: result.slope !== undefined ? fmtNum(result.slope) : '',
+            labelAt: result.labelAt,
+          };
+          applyMeasurements([{ id, tool: result.tool, overlay }, ...measurementsRef.current]);
+          setPending([]);
+          commit();
           return;
         }
-        const a = pts[0]!;
-        const b = pts[1]!;
-        setPending(pts); // keep both dots visible beneath the form
-        setScaleDraftPx(Math.hypot(b.x - a.x, b.y - a.y));
-        return;
       }
-
-      if (measureTool === 'slope') {
-        if (!axes || config.axesKind !== 'xy') {
-          setMeasureError('Calibrate an XY chart first to measure a slope.');
-          return;
-        }
-        setMeasureError(null);
-        if (pts.length < 2) {
-          setPending(pts);
-          return;
-        }
-        const a = pts[0]!;
-        const b = pts[1]!;
-        const d1 = axes.pixelToData(a.x, a.y);
-        const d2 = axes.pixelToData(b.x, b.y);
-        const dx = d2[0]! - d1[0]!;
-        const dy = d2[1]! - d1[1]!;
-        const slope = dy / dx;
-        const finite = Number.isFinite(slope);
-        const id = nextId();
-        // `label` is a placeholder: the canvas label is DERIVED at render
-        // (see the measureOverlays memo), so a later re-calibration updates it.
-        const overlay: MeasureOverlay = { id, points: pts, label: finite ? fmtNum(slope) : '∞', labelAt: mid(a, b) };
-        applyMeasurements([{ id, tool: 'slope', overlay }, ...measurementsRef.current]);
-        setPending([]);
-        commit();
-        return;
-      }
-
-      if (measureTool === 'distance') {
-        setMeasureError(null);
-        if (pts.length < 2) {
-          setPending(pts);
-          return;
-        }
-        const a = pts[0]!;
-        const b = pts[1]!;
-        const id = nextId();
-        const overlay: MeasureOverlay = { id, points: pts, label: '', labelAt: mid(a, b) };
-        applyMeasurements([{ id, tool: 'distance', overlay }, ...measurementsRef.current]);
-        setPending([]);
-        commit();
-        return;
-      }
-
-      if (measureTool === 'angle') {
-        setMeasureError(null);
-        if (pts.length < 3) {
-          setPending(pts);
-          return;
-        }
-        // Clicks arrive vertex-first; the record stores [arm, vertex, arm], the
-        // order both the canvas and measurementValue() read.
-        const v = pts[0]!;
-        const a = pts[1]!;
-        const b = pts[2]!;
-        const id = nextId();
-        const overlay: MeasureOverlay = { id, points: [a, v, b], label: '', labelAt: v };
-        applyMeasurements([{ id, tool: 'angle', overlay }, ...measurementsRef.current]);
-        setPending([]);
-        commit();
-        return;
-      }
-
-      // Area: accumulate polygon vertices; the card's Finish button / Enter closes it.
-      setMeasureError(null);
-      setPending(pts);
     },
     [axes, config.axesKind, measureTool, settingScale, setPending, applyMeasurements, commit, canvasScale, session]
   );
@@ -2716,147 +2657,119 @@ export function Workspace() {
 
   const handleImageClick = useCallback(
     (px: number, py: number) => {
-      // Eyedropper intercepts the click before any tool action -- px/py are
-      // native image-pixel coords (same space Segment Fill uses), so they index
-      // straight into getImageData(). One sampler, routed by target (ckpt 90).
-      if (eyedropper) {
-        const imageData = imageCanvasRef.current?.getImageData();
-        if (imageData) {
-          const x = Math.max(0, Math.min(imageData.width - 1, Math.round(px)));
-          const y = Math.max(0, Math.min(imageData.height - 1, Math.round(py)));
-          const o = (y * imageData.width + x) * 4;
-          const rgb = [imageData.data[o]!, imageData.data[o + 1]!, imageData.data[o + 2]!] as [number, number, number];
-          if (eyedropper === 'grid') {
-            setGridRemovalColor(rgbToHex(rgb));
-          } else if (eyedropper === 'trace') {
-            setColorTraceColor(rgbToHex(rgb)); // the curve colour to auto-trace (ckpt 118)
-            setColorTraceInfo(null);
-          } else {
-            // Session directly, and the active index read FROM the session (the
-            // memo'd activeDatasetIndex is defined later -> TDZ if used in this
-            // callback's deps). commit(): an eyedrop click has no blur to trigger
-            // the pending-edit commit, and it should be undoable.
-            session.setDatasetColor(session.getActiveDatasetIndex(), rgb);
-            commit();
+      const route = routeCanvasClick({ eyedropper, mode, figureCaptured });
+      switch (route.kind) {
+        case 'sample-colour': {
+          // px/py are native image-pixel coords (same space Segment Fill uses),
+          // so they index straight into getImageData().
+          const imageData = imageCanvasRef.current?.getImageData();
+          if (imageData) {
+            const x = Math.max(0, Math.min(imageData.width - 1, Math.round(px)));
+            const y = Math.max(0, Math.min(imageData.height - 1, Math.round(py)));
+            const o = (y * imageData.width + x) * 4;
+            const rgb = [imageData.data[o]!, imageData.data[o + 1]!, imageData.data[o + 2]!] as [number, number, number];
+            if (route.target === 'grid') {
+              setGridRemovalColor(rgbToHex(rgb));
+            } else if (route.target === 'trace') {
+              setColorTraceColor(rgbToHex(rgb)); // the curve colour to auto-trace (ckpt 118)
+              setColorTraceInfo(null);
+            } else {
+              // Session directly, and the active index read FROM the session (the
+              // memo'd activeDatasetIndex is defined later -> TDZ if used in this
+              // callback's deps). commit(): an eyedrop click has no blur to trigger
+              // the pending-edit commit, and it should be undoable.
+              session.setDatasetColor(session.getActiveDatasetIndex(), rgb);
+              commit();
+            }
           }
-        }
-        setEyedropper(null);
-        return;
-      }
-      if (mode === 'pan') return;
-      // Error bars are captured by dragging, not clicking (checkpoint 79). An
-      // explicit branch, because place-point is this router's FALLTHROUGH -- a
-      // stray click here would otherwise silently drop a data point into the
-      // active series while the user was aiming at a cap.
-      if (mode === 'error-bars') return;
-      // Auto-extract ▸ By colour traces via the Trace button, NOT a canvas click
-      // (v0.8). Same fallthrough hazard as error-bars: a stray click on the curve
-      // -- natural, since the sibling Flood-fill mechanism DOES trace by clicking
-      // the curve -- would otherwise fabricate a raw data point in the active
-      // series, poisoning the record invisibly until export (tenet 1/9). The
-      // eyedropper path above (setEyedropper('trace')) already returned, so this
-      // only guards a bare click while "By colour" is active.
-      if (mode === 'color-trace') return;
-      // Select tool (David 2026-07-21): NEVER adds a point. This is a DEFENSIVE
-      // no-add guard, the same shape as the color-trace guard above -- it stops a
-      // rail-wired mode from ever falling through to addDataPoint (the v0.8
-      // color-trace bug). In practice a select-mode press is intercepted by the
-      // marquee drag in ImageCanvas, so onImageClick rarely fires here; when it
-      // does (or ever would), we clear rather than place. The USER-facing clear
-      // paths are Esc and an empty-space marquee (both advertised in the tips bar);
-      // single-select is a marker click (handleMarkerClick), range a drag
-      // (handleSelectRect).
-      if (mode === 'select') {
-        setSelectedPointIndices([]);
-        setActivePointIndex(null);
-        return;
-      }
-      // Eraser removes a point on a MARKER click (handleMarkerClick); a bare
-      // canvas click must not fall through to addDataPoint (same no-add guard
-      // shape as select/color-trace above).
-      if (mode === 'eraser') return;
-      if (mode === 'image-edit') return; // image-edit tools are card buttons, not canvas clicks
-      if (mode === 'measure') {
-        handleMeasureClick(px, py);
-        return;
-      }
-      if (mode === 'calibrate') {
-        // Capture is mandatory step 1 (checkpoint 103): you cannot place an axis
-        // point until the figure-of-record is established, so autosave always has
-        // a stable figure and it can't shift mid-work (David). The Capture button
-        // is on the calibration card ("Capture figure first", v0.8).
-        if (!figureCaptured) {
-          setProjectError('Capture the figure first — frame the whole figure in the window, then press “Capture figure”. What you see is what you capture.');
+          setEyedropper(null);
           return;
         }
-        const result = session.handleCalibrationClick(px, py);
-        if (result === 'awaiting-value') {
-          const step = session.getCurrentStep();
-          // Seed from each field's declared default (v1.4: Spider's centre value,
-          // 0). ⚑ `defaultValue` was declared on the field and read by NOTHING --
-          // the config's own comment promised a prefilled 0 that never appeared, so
-          // the value had to be typed every time. A default only exists once
-          // something fills it in.
-          setDataValueInputs(step ? step.valueFields.map((f) => f.defaultValue ?? '') : []);
-          bump(); // a pending pixel, not a finalized point -- commit on confirm
-        } else if (result === 'point-placed') {
-          commit(); // value-less step (e.g. Polar's origin) is placed outright
-        } else {
-          bump();
-        }
-        return;
-      }
-      if (mode === 'segment-fill') {
-        const imageData = imageCanvasRef.current?.getImageData();
-        if (!imageData) {
-          setSegmentFillError('No image loaded.');
+        case 'ignore':
+          return;
+        case 'clear-selection':
+          setSelectedPointIndices([]);
+          setActivePointIndex(null);
+          return;
+        case 'measure':
+          handleMeasureClick(px, py);
+          return;
+        case 'capture-first':
+          setProjectError(route.message);
+          return;
+        case 'calibrate': {
+          const result = session.handleCalibrationClick(px, py);
+          if (result === 'awaiting-value') {
+            const step = session.getCurrentStep();
+            // Seed from each field's declared default (v1.4: Spider's centre value,
+            // 0). ⚑ `defaultValue` was declared on the field and read by NOTHING --
+            // the config's own comment promised a prefilled 0 that never appeared, so
+            // the value had to be typed every time. A default only exists once
+            // something fills it in.
+            setDataValueInputs(step ? step.valueFields.map((f) => f.defaultValue ?? '') : []);
+            bump(); // a pending pixel, not a finalized point -- commit on confirm
+          } else if (result === 'point-placed') {
+            commit(); // value-less step (e.g. Polar's origin) is placed outright
+          } else {
+            bump();
+          }
           return;
         }
-        const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold);
-        if ('error' in result) {
-          setSegmentFillError(result.error);
+        case 'segment-fill': {
+          const imageData = imageCanvasRef.current?.getImageData();
+          if (!imageData) {
+            setSegmentFillError('No image loaded.');
+            return;
+          }
+          const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold);
+          if ('error' in result) {
+            setSegmentFillError(result.error);
+            return;
+          }
+          setSegmentFillError(null);
+          session.addSegmentFillPoints(result.points);
+          commit();
           return;
         }
-        setSegmentFillError(null);
-        session.addSegmentFillPoints(result.points);
-        commit();
-        return;
+        case 'interpolate': {
+          // Interpolation-assist (checkpoint 120): each click drops an anchor and
+          // the curve between the anchors redraws live (session.rebuildInterpolation).
+          session.addAnchorPoint(px, py);
+          // Select the anchor we just placed. The series is now stored in CURVE order
+          // (anchors interleaved with the fill), so the newest anchor is no longer the
+          // "last anchor" index -- find it by its exact clicked pixel instead.
+          const pts = session.getDataPoints();
+          const idx = pts.findIndex((p) => p.px === px && p.py === py);
+          setActivePointIndex(idx >= 0 ? idx : null);
+          commit();
+          return;
+        }
+        case 'add-point': {
+          // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
+          // the axis the cursor is filling, which is what makes the dot land on the ray
+          // -- and which erases the offset this check reads. Afterwards there is
+          // nothing left to notice, so it has to happen here. Null for every other
+          // graph type, and for a click already nearest the axis it is filling.
+          const notice = session.previewSpiderCapture(px, py);
+          setCaptureNotice(notice ? { ...notice, mode, seriesIndex: session.getActiveDatasetIndex() } : null);
+          session.addDataPoint(px, py);
+          // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
+          // curve, so the newest is no longer the last index -- find it by its clicked
+          // pixel, the same way the interpolation-anchor branch above does. A snapped
+          // spider point is NOT at the clicked pixel, and falls through to the
+          // last-index fallback, which is correct: the grouped path always appends.
+          const placed = session.getDataPoints();
+          const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
+          setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
+          // Placing a point selects it, but the user did not PICK it to look at -- they
+          // are stepping round the chart, and the guidance they need is the next slot.
+          // Cleared explicitly rather than left alone: with points deleted, the new
+          // index can coincide with a previously picked one.
+          setPickedPointIndex(null);
+          commit();
+          return;
+        }
       }
-      if (mode === 'interpolate') {
-        // Interpolation-assist (checkpoint 120): each click drops an anchor and
-        // the curve between the anchors redraws live (session.rebuildInterpolation).
-        session.addAnchorPoint(px, py);
-        // Select the anchor we just placed. The series is now stored in CURVE order
-        // (anchors interleaved with the fill), so the newest anchor is no longer the
-        // "last anchor" index -- find it by its exact clicked pixel instead.
-        const pts = session.getDataPoints();
-        const idx = pts.findIndex((p) => p.px === px && p.py === py);
-        setActivePointIndex(idx >= 0 ? idx : null);
-        commit();
-        return;
-      }
-      // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
-      // the axis the cursor is filling, which is what makes the dot land on the ray
-      // -- and which erases the offset this check reads. Afterwards there is
-      // nothing left to notice, so it has to happen here. Null for every other
-      // graph type, and for a click already nearest the axis it is filling.
-      const notice = session.previewSpiderCapture(px, py);
-      setCaptureNotice(notice ? { ...notice, mode, seriesIndex: session.getActiveDatasetIndex() } : null);
-      session.addDataPoint(px, py);
-      // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
-      // curve, so the newest is no longer the last index -- find it by its clicked
-      // pixel, the same way the interpolation-anchor branch above does. A snapped
-      // spider point is NOT at the clicked pixel, and falls through to the
-      // last-index fallback, which is correct: the grouped path always appends.
-      const placed = session.getDataPoints();
-      const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
-      setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
-      // Placing a point selects it, but the user did not PICK it to look at -- they
-      // are stepping round the chart, and the guidance they need is the next slot.
-      // Cleared explicitly rather than left alone: with points deleted, the new
-      // index can coincide with a previously picked one.
-      setPickedPointIndex(null);
-      commit();
     },
     [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured]
   );
