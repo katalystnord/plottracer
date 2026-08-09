@@ -27,3 +27,11 @@ export function fmtValue(n: number): string {
   if (a !== 0 && (a < 1e-4 || a >= 1e9)) return VALUE_FMT_SCI.format(n);
   return VALUE_FMT.format(n);
 }
+
+/** [r,g,b] -> "#rrggbb", for the series list's colour swatches + hex field
+ * (checkpoint 89; hex is what the field and swatch keys use). Canvas markers
+ * don't need this: Konva's fill/stroke accept a plain "rgb(r,g,b)" string
+ * directly. */
+export function rgbToHex([r, g, b]: readonly [number, number, number]): string {
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}

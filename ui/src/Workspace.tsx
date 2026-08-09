@@ -92,11 +92,12 @@ import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
-import { fmtNum, fmtValue } from './format.js';
+import { fmtNum, fmtValue, rgbToHex } from './format.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
 import { BarTable } from './panels/BarTable.js';
 import { SpiderTable } from './panels/SpiderTable.js';
+import { SpreadsheetTable } from './panels/SpreadsheetTable.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
@@ -165,11 +166,9 @@ import {
   spreadsheetMaxRows as spreadsheetMaxRowCount,
   showsCategoryColumn,
   isDerivedAt,
-  isCellEditable,
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
-import { formatDateNumber } from '../../core/dateConversion.js';
 import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
@@ -556,13 +555,6 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  * legibility win from the competitor study (plotdigitizer dumps raw 15-digit
  * floats). Up to 6 significant figures, trailing zeros trimmed, no grouping. */
 
-/** [r,g,b] -> "#rrggbb", for the series list's colour swatches + hex field
- * (checkpoint 89; hex is what the field and swatch keys use). Canvas markers
- * don't need this: Konva's fill/stroke accept a plain "rgb(r,g,b)" string
- * directly. */
-function rgbToHex([r, g, b]: readonly [number, number, number]): string {
-  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-}
 
 /** Marker radius (screen px) for the SELECTED point on a dense connected series
  *  (checkpoint 132): the other points draw no dot at all -- the line carries the
@@ -6843,241 +6835,29 @@ export function Workspace() {
               noPointsHint={noPointsHint}
             />
           ) : (
-            // The adaptive multi-series spreadsheet (checkpoint 57): every series
-            // side by side, one column set per series (this graph type's value
-            // dims -- XY: X,Y; Bar: value; Polar: r,θ; Ternary: A,B,C; CCR:
-            // t,value). Rows are ragged (row i = the i-th point of each series,
-            // blank where a series is shorter). Pixel columns dropped by design.
-            // Scrolls both ways for many series / many points; the # column and
-            // header rows stay pinned. The active XY series' cells stay
-            // click-to-edit (moves the point on canvas); other cells are read-only.
-            <div
-              data-testid="data-spreadsheet"
-              style={{ maxHeight: 360, overflow: 'auto', border: `1px solid ${theme.color.border.regular}`, borderRadius: 6 }}
-            >
-              <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                <thead>
-                  <tr>
-                    <th
-                      rowSpan={2}
-                      style={{ position: 'sticky', left: 0, top: 0, zIndex: 3, background: theme.color.background.panel, textAlign: 'right', padding: '3px 8px', color: theme.color.text.legend }}
-                    >
-                      #
-                    </th>
-                    {spreadsheetSeries.map((s) => (
-                      <th
-                        key={s.index}
-                        // ⚑ An error-cap series renders ONE column (its Δ), not dataDim.
-                        // Hardcoding dataDim here spanned the name across two columns
-                        // while the body filled one, skewing every column to its right
-                        // (David spotted it on screen 2026-08-03 — the e2e asserts values
-                        // and counts, not alignment, so nothing else could have).
-                        colSpan={(s.deltas.length > 0 ? 1 : config.dataDim) + (showCategoryColumn ? 1 : 0)}
-                        data-testid={`series-col-${s.index}`}
-                        style={{
-                          position: 'sticky',
-                          top: 0,
-                          zIndex: 1,
-                          background: theme.color.background.panel,
-                          textAlign: 'left',
-                          padding: '3px 8px',
-                          borderLeft: `1px solid ${theme.color.border.regular}`,
-                          fontWeight: 600,
-                          color: s.active ? theme.color.primary.main : theme.color.text.primary,
-                        }}
-                      >
-                        <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: rgbToHex(s.color), marginRight: 5, verticalAlign: 'middle' }} />
-                        {s.name}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {spreadsheetSeries.map((s) => {
-                      const headCell = (key: string, label: string, first: boolean) => (
-                        <th
-                          key={key}
-                          style={{
-                            position: 'sticky',
-                            top: 24,
-                            zIndex: 1,
-                            background: theme.color.background.panel,
-                            textAlign: 'left',
-                            padding: '2px 8px',
-                            color: theme.color.text.legend,
-                            fontWeight: 500,
-                            borderLeft: first ? `1px solid ${theme.color.border.regular}` : 'none',
-                          }}
-                        >
-                          {label}
-                        </th>
-                      );
-                      // Category leads the series' columns: an independent variable
-                      // comes before the dependent one. ⚑ This claimed to match "the
-                      // export's own Label-first convention" while the CATEGORICAL
-                      // export actually appended Category last -- screen and file
-                      // disagreed on order until David caught it (2026-07-26). Both
-                      // are now Position, Category, Value.
-                      // ⚑ An ERROR-CAP series gets ONE column, not X/Y. Its x is the
-                      // datum's x by construction (the cap is axis-locked to its own
-                      // bar), so printing x per cap repeats the same number down three
-                      // columns, and the cap's absolute y is not what anyone reads --
-                      // asked what you would need to REDRAW the figure, the answer is
-                      // x, y, -delta, +delta (David, 2026-08-03). matplotlib's yerr and
-                      // Excel's error bars take deltas outright; ggplot's ymin/ymax are
-                      // one subtraction away. None of them take the cap's x.
-                      const isErrorCap = s.deltas.length > 0;
-                      return [
-                        ...(showCategoryColumn ? [headCell(`${s.index}-cat`, 'Category', true)] : []),
-                        ...(isErrorCap
-                          ? [headCell(`${s.index}-delta`, 'Δ', !showCategoryColumn)]
-                          : tableValueLabels.map((label, d) =>
-                              headCell(`${s.index}-${d}`, label, d === 0 && !showCategoryColumn)
-                            )),
-                      ];
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: spreadsheetMaxRows }, (_, i) => {
-                    // In Select mode the row must mirror the MARQUEE selection (the
-                    // set Del acts on), not activePointIndex (which the marquee forces
-                    // to null); a row-click joins that set. Everywhere else the row
-                    // tracks the single active point (the canvas-click counterpart).
-                    const isActive = mode === 'select' ? selectedPointIndices.includes(i) : i === activePointIndex;
-                    const rowBg = isActive ? '#dff0f2' : undefined; // opaque light teal for the selected point's row
-                    // A ragged multi-series table can render rows past the ACTIVE
-                    // series' point count; in Select mode only a real active-series
-                    // point is selectable (the marquee only ever holds those too).
-                    // ⚑ A DERIVED row is not selectable. Selecting it made it the
-                    // nudge/Del target, so an italic read-only row could still be
-                    // moved with an arrow key or deleted -- the v1.3 gate's way
-                    // around the read-only cells. A derived sample has no
-                    // independent existence: the next anchor move rebuilds it.
-                    const isDerivedRow = isDerivedAt(dataPointRoles, i);
-                    const selectRow = () => {
-                      // ⚑ CLEAR rather than ignore. Merely refusing the selection left
-                      // the PREVIOUS one active, so the arrow keys then nudged a point
-                      // the user was no longer looking at -- and moving an anchor
-                      // rebuilds the fill, so the derived row they clicked shifted
-                      // anyway. Same class as the v0.6 audit's lingering-selection
-                      // nudge. Caught by this test's own first run.
-                      if (isDerivedRow) {
-                        setActivePointIndex(null);
-                        setSelectedPointIndices([]);
-                        return;
-                      }
-                      if (mode === 'select') {
-                        if (i < dataPoints.length) setSelectedPointIndices([i]);
-                        return;
-                      }
-                      setActivePointIndex(i);
-                      setPickedPointIndex(i);
-                    };
-                    return (
-                      <tr key={i} data-testid={`point-row-${i}`} aria-selected={isActive} onClick={selectRow} style={{ cursor: 'pointer', background: rowBg }}>
-                        <td style={{ position: 'sticky', left: 0, background: rowBg ?? theme.color.background.primary, textAlign: 'right', padding: '1px 8px', color: theme.color.text.legend }}>
-                          {i + 1}
-                        </td>
-                        {spreadsheetSeries.map((s) => {
-                          const data = s.values[i];
-                          // The category cell: a text input on the ACTIVE series
-                          // (the same "you edit the series you're working on" rule
-                          // the value cells follow), plain text elsewhere so a
-                          // grouped chart still shows every series' names.
-                          const categoryCell = showCategoryColumn ? (
-                            <td
-                              key={`${s.index}-cat`}
-                              style={{ padding: '1px 8px', borderLeft: `1px solid ${theme.color.border.regular}` }}
-                            >
-                              {i < s.values.length ? (
-                                s.active ? (
-                                  <input
-                                    data-testid={`category-${s.index}-${i}`}
-                                    value={s.labels[i] ?? ''}
-                                    placeholder="name…"
-                                    onChange={(e) => setPointLabel(i, e.target.value)}
-                                    onBlur={commitPendingEdit}
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{ width: 90, fontSize: 12.5 }}
-                                  />
-                                ) : (
-                                  <span data-testid={`category-${s.index}-${i}`}>{s.labels[i] ?? ''}</span>
-                                )
-                              ) : (
-                                ''
-                              )}
-                            </td>
-                          ) : null;
-                          // A spline-DERIVED sample is not the user's number to type over:
-                          // the next rebuild regenerates it from the anchors, so an edit
-                          // here looked like it took and was silently wiped (v0.6 audit).
-                          // It reads muted + italic and refuses the edit, pointing at the
-                          // anchors -- which ARE editable, and which the curve follows.
-                          const derived = isDerivedAt(s.roles, i);
-                          const editable = isCellEditable(config.axesKind, s.active, derived);
-                          const isErrorCap = s.deltas.length > 0;
-                          if (isErrorCap) {
-                            const delta = s.deltas[i];
-                            return [
-                              ...(categoryCell ? [categoryCell] : []),
-                              <td
-                                key={`${s.index}-delta`}
-                                data-testid={`delta-cell-${s.index}-${i}`}
-                                style={{
-                                  padding: '1px 8px',
-                                  borderLeft: !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
-                                  fontVariantNumeric: 'tabular-nums',
-                                }}
-                              >
-                                {/* Blank, never 0, for a cap that resolves to no datum:
-                                    0 would read as "measured, and equal to the datum". */}
-                                {delta == null ? '' : `${delta > 0 ? '+' : ''}${fmtValue(delta)}`}
-                              </td>,
-                            ];
-                          }
-                          return [
-                            ...(categoryCell ? [categoryCell] : []),
-                            ...tableValueLabels.map((_label, d) => {
-                              const dateFmt = tableDateFormats[d];
-                              return (
-                                <td
-                                  key={`${s.index}-${d}`}
-                                  data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
-                                  title={derived ? 'Derived by the spline from your guide points — move an anchor to change it' : undefined}
-                                  style={{
-                                    padding: '1px 8px',
-                                    borderLeft: d === 0 && !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
-                                    fontVariantNumeric: 'tabular-nums',
-                                    ...(derived ? { color: theme.color.text.legend, fontStyle: 'italic' } : {}),
-                                  }}
-                                >
-                                  {data
-                                    ? dateFmt != null
-                                      ? // Date-calibrated column: show the formatted date, like the
-                                        // export (not editable inline -- move the point on canvas).
-                                        formatDateNumber(data[d]!, dateFmt)
-                                      : editable
-                                      ? renderEditableValue(i, d, data[d]!)
-                                      : fmtValue(data[d]!)
-                                    : ''}
-                                </td>
-                              );
-                            }),
-                          ];
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {/* Empty-state message lives outside <tbody> so a "no data points"
-                  check can still count tbody rows (== points placed). */}
-              {spreadsheetMaxRows === 0 && (
-                <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
-                  {noPointsHint}
-                </div>
-              )}
-            </div>
+            <SpreadsheetTable
+              series={spreadsheetSeries}
+              maxRows={spreadsheetMaxRows}
+              dataDim={config.dataDim}
+              axesKind={config.axesKind}
+              showCategoryColumn={showCategoryColumn}
+              valueLabels={tableValueLabels}
+              dateFormats={tableDateFormats}
+              mode={mode}
+              activePointIndex={activePointIndex}
+              selectedPointIndices={selectedPointIndices}
+              activeSeriesPointCount={dataPoints.length}
+              dataPointRoles={dataPointRoles}
+              onSelectPoint={(index) => {
+                setActivePointIndex(index);
+                if (index !== null) setPickedPointIndex(index);
+              }}
+              onSelectMarquee={setSelectedPointIndices}
+              onSetPointLabel={setPointLabel}
+              onCommitPendingEdit={commitPendingEdit}
+              renderValue={renderEditableValue}
+              noPointsHint={noPointsHint}
+            />
           )}
           {/* What the italic cells MEAN, on screen rather than in a tooltip: a reader
               who never placed a guide point still has to be able to tell which of
