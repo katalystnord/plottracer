@@ -74,10 +74,7 @@ import {
   ImageIcon,
   SaveIcon,
   ExportIcon,
-  GridRemovalIcon,
   CameraIcon,
-  CurveFitIcon,
-  GeometryIcon,
   HelpIcon,
   ChevronDownIcon,
   EyedropperIcon,
@@ -93,6 +90,9 @@ import { ChallengeOverlay, type ChallengePhase } from './ChallengeOverlay.js';
 import { MeasurementsCard } from './panels/MeasurementsCard.js';
 import { CurveFitCard } from './panels/CurveFitCard.js';
 import { GeometryCard } from './panels/GeometryCard.js';
+import { GridRemovalPanel } from './panels/GridRemovalPanel.js';
+import { GeometryFlyout } from './panels/GeometryFlyout.js';
+import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
 import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
@@ -205,8 +205,6 @@ import {
   type CurveFitModelId,
 } from '../../engine/curveFitPanel.js';
 import { runGeometry, getGeometryState, setGeometryState } from '../../engine/geometryPanel.js';
-import { CURVE_FIT_MAX_DEGREE } from '../../algorithms/curveFit.js';
-import { FIT_MODELS } from '../../algorithms/nonlinearFit.js';
 import { pointInPolygon } from '../../algorithms/geometry.js';
 import { removeGridLinesOp, hexToRGB } from '../../algorithms/gridRemoval.js';
 import type { AnyAxes } from '../../core/plotData.js';
@@ -5192,142 +5190,47 @@ export function Workspace() {
   // same convention as Add points (#3) and the Auto-extract mechanisms (#5).
   // Hiding them until calibrated (the old behaviour) made interpolate look like
   // it appeared "before" its sibling curve tools; now all three show together.
-  const curveFitFlyout =
-    config.supportsCurveFit ? (
-      <FloatingPanel placement="rail" label="Curve Fit" icon={<CurveFitIcon />} testId="curve-fit" shortcut="8" disabled={!axes} onOpenChange={closeDockedCardsOnFlyout}>
-        {/* Single input row (v1.1 step 2): Degree · Restrict · Fit · Clear. The
-            x-range inputs drop in below only while Restrict is on; the RESULT
-            (equation, R², RMS, n) lives in the output panel's Curve fit section. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* The SHAPE comes first, because it decides whether Degree means
-              anything. Each option carries its own form (y = a·e^(b·x)) so the
-              list can be READ rather than recognised — but the closed control is
-              width-capped, because a <select> sizes itself to its widest option
-              and an un-capped one made this fold-out wide enough to cover the
-              figure it sits over. The chosen form is repeated below the row, so
-              nothing is hidden by that cap. */}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            Model
-            <select
-              data-testid="curve-fit-model"
-              value={curveFitModel}
-              onChange={(e) => setCurveFitModel(e.target.value as CurveFitModelId)}
-              style={{ maxWidth: 120 }}
-            >
-              <option value="polynomial">Polynomial</option>
-              {FIT_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label} — {m.form}
-                </option>
-              ))}
-            </select>
-          </label>
-          {/* Degree belongs to the polynomial alone. Showing it greyed for the
-              others would imply it still applies to them. */}
-          {curveFitModel === 'polynomial' && (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              Degree
-              <select
-                data-testid="curve-fit-degree"
-                value={curveFitDegree}
-                onChange={(e) => setCurveFitDegree(Number(e.target.value))}
-              >
-                {Array.from({ length: CURVE_FIT_MAX_DEGREE }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <input
-              type="checkbox"
-              data-testid="curve-fit-restrict"
-              checked={curveFitRestrict}
-              onChange={(e) => setCurveFitRestrict(e.target.checked)}
-            />
-            Restrict
-          </label>
-          <button type="button" data-testid="curve-fit-run" onClick={handleRunCurveFit}>
-            Fit
-          </button>
-          <button type="button" data-testid="curve-fit-clear" onClick={handleClearCurveFit} disabled={!curveFitState}>
-            Clear
-          </button>
-        </div>
-        {/* The chosen model's form, spelled out. The select above is width-capped
-            so the card cannot cover the figure, and this is what makes that cap
-            cost nothing: the form is on screen either way. */}
-        {curveFitModel !== 'polynomial' && (
-          <div
-            data-testid="curve-fit-model-form"
-            style={{ marginTop: 4, fontSize: theme.font.size.small, color: theme.color.text.secondary }}
-          >
-            {FIT_MODELS.find((m) => m.id === curveFitModel)?.form}
-          </div>
-        )}
-        {curveFitRestrict && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-            X min
-            <input
-              type="number"
-              data-testid="curve-fit-xmin"
-              value={curveFitXMinInput}
-              onChange={(e) => setCurveFitXMinInput(e.target.value)}
-              style={{ width: 70 }}
-            />
-            X max
-            <input
-              type="number"
-              data-testid="curve-fit-xmax"
-              value={curveFitXMaxInput}
-              onChange={(e) => setCurveFitXMaxInput(e.target.value)}
-              style={{ width: 70 }}
-            />
-          </div>
-        )}
-        {curveFitError && (
-          <p data-testid="curve-fit-error" style={{ color: theme.color.error, marginBottom: 0 }}>
-            {curveFitError}
-          </p>
-        )}
-      </FloatingPanel>
-    ) : null;
+  const curveFitFlyout = (
+    <CurveFitFlyout
+      visible={!!config.supportsCurveFit}
+      disabled={!axes}
+      model={curveFitModel}
+      onModelChange={setCurveFitModel}
+      degree={curveFitDegree}
+      onDegreeChange={setCurveFitDegree}
+      restrict={curveFitRestrict}
+      onRestrictChange={setCurveFitRestrict}
+      xMin={curveFitXMinInput}
+      onXMinChange={setCurveFitXMinInput}
+      xMax={curveFitXMaxInput}
+      onXMaxChange={setCurveFitXMaxInput}
+      error={curveFitError}
+      hasFit={curveFitState !== null}
+      onRun={handleRunCurveFit}
+      onClear={handleClearCurveFit}
+      onOpenChange={closeDockedCardsOnFlyout}
+    />
+  );
 
-  const geometryFlyout =
-    config.id === 'xy' ? (
-      <FloatingPanel placement="rail" label="Geometry" icon={<GeometryIcon />} testId="geometry" shortcut="9" disabled={!axes} onOpenChange={closeDockedCardsOnFlyout}>
-        {/* Single input row (v1.1 step 2): Closed curve · Compute · Clear. The
-            RESULT (arc length, area, curvature + per-point table) lives in the
-            output panel's Geometry section; it recomputes as the series is edited. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <input
-              type="checkbox"
-              data-testid="geometry-closed"
-              checked={geometryState ? geometryState.closed : geometryClosed}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setGeometryClosed(v);
-                // If geometry is already on, re-derive live with the new setting.
-                if (geometryState) {
-                  setGeometryState(session.getDataset(), { closed: v });
-                  commit();
-                }
-              }}
-            />
-            Closed curve
-          </label>
-          <button type="button" data-testid="geometry-run" onClick={handleRunGeometry}>
-            Compute
-          </button>
-          <button type="button" data-testid="geometry-clear" onClick={handleClearGeometry} disabled={!geometryState}>
-            Clear
-          </button>
-        </div>
-      </FloatingPanel>
-    ) : null;
+  const geometryFlyout = (
+    <GeometryFlyout
+      visible={config.id === 'xy'}
+      disabled={!axes}
+      closed={geometryState ? geometryState.closed : geometryClosed}
+      onClosedChange={(v) => {
+        setGeometryClosed(v);
+        // If geometry is already on, re-derive live with the new setting.
+        if (geometryState) {
+          setGeometryState(session.getDataset(), { closed: v });
+          commit();
+        }
+      }}
+      active={geometryState !== null}
+      onRun={handleRunGeometry}
+      onClear={handleClearGeometry}
+      onOpenChange={closeDockedCardsOnFlyout}
+    />
+  );
 
   return (
     // Key-tips are published to the whole tree so every IconButton -- the rail's tools
@@ -5551,70 +5454,15 @@ export function Workspace() {
             always available (image prep); Curve Fit and Geometry are XY-only +
             calibrated. */}
         <TopBarGroup>
-        <FloatingPanel label="Grid Removal" icon={<GridRemovalIcon />} testId="grid-removal">
-          {(close) => (
-            <>
-              <p style={{ marginTop: 0, color: theme.color.text.secondary }}>
-                Whites-out gridline-colored pixels so auto-tracing (Segment Fill) follows the
-                data, not the grid. Pick the grid color, then Remove.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span>Grid color:</span>
-                <span
-                  data-testid="grid-removal-swatch"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 4,
-                    border: `1px solid ${theme.color.border.regular}`,
-                    background: gridRemovalColor,
-                    flex: '0 0 auto',
-                  }}
-                />
-                <input
-                  type="text"
-                  data-testid="grid-removal-color"
-                  value={gridRemovalColor}
-                  onChange={(e) => setGridRemovalColor(e.target.value)}
-                  spellCheck={false}
-                  style={{ width: 84 }}
-                />
-                <button
-                  type="button"
-                  data-testid="grid-removal-eyedropper"
-                  onClick={() => {
-                    close();
-                    setEyedropper('grid');
-                  }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                >
-                  <EyedropperIcon />
-                  Pick from image
-                </button>
-              </div>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span>Tolerance:</span>
-                <input
-                  type="number"
-                  data-testid="grid-removal-tolerance"
-                  min={1}
-                  max={255}
-                  value={gridRemovalTolerance}
-                  onChange={(e) => setGridRemovalTolerance(Math.max(1, Math.min(255, Number(e.target.value) || 1)))}
-                  style={{ width: 60 }}
-                />
-                <button type="button" data-testid="grid-removal-run" onClick={handleRemoveGridLines}>
-                  Remove grid lines
-                </button>
-              </p>
-              {gridRemovalError && (
-                <p data-testid="grid-removal-error" style={{ color: theme.color.error }}>
-                  {gridRemovalError}
-                </p>
-              )}
-            </>
-          )}
-        </FloatingPanel>
+        <GridRemovalPanel
+          color={gridRemovalColor}
+          onColorChange={setGridRemovalColor}
+          tolerance={gridRemovalTolerance}
+          onToleranceChange={setGridRemovalTolerance}
+          error={gridRemovalError}
+          onRun={handleRemoveGridLines}
+          onPickFromImage={() => setEyedropper('grid')}
+        />
 
         {/* Curve Fit + Geometry moved to the LEFT RAIL (v0.8) -- with these two
             here, four analysis panels overflowed the top bar into two lanes at

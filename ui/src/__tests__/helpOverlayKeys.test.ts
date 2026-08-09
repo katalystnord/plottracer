@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -31,6 +31,20 @@ const UI_SRC = path.join(import.meta.dirname, '..');
 const ENGINE = path.join(UI_SRC, '..', '..', 'engine');
 const overlay = readFileSync(path.join(UI_SRC, 'HelpOverlay.tsx'), 'utf8');
 const workspace = readFileSync(path.join(UI_SRC, 'Workspace.tsx'), 'utf8');
+/**
+ * Workspace.tsx PLUS the panels it renders — the rail's markup is spread across
+ * both since the v2.1 split, so a card claiming to show "the rail's own glyph"
+ * has to be checked against wherever that glyph is actually used. Reading the
+ * directory rather than listing files means a panel added later is covered
+ * without anyone remembering to add it here.
+ */
+const PANELS = path.join(UI_SRC, 'panels');
+const railMarkup =
+  workspace +
+  readdirSync(PANELS)
+    .filter((f) => f.endsWith('.tsx'))
+    .map((f) => readFileSync(path.join(PANELS, f), 'utf8'))
+    .join('\n');
 /** The global keydown ladder — where every shortcut the card lists is decided. */
 const keyboard = readFileSync(path.join(ENGINE, 'keyboardActions.ts'), 'utf8');
 
@@ -140,8 +154,8 @@ describe('the tool rows show the rail’s OWN glyphs', () => {
   for (const icon of RAIL_ICONS) {
     it(`${icon} is the glyph the rail itself uses`, () => {
       // If a tool's rail icon is swapped and the card is not, this fails --
-      // which is the whole reason to assert against Workspace.tsx.
-      expect(workspace).toContain(icon);
+      // which is the whole reason to assert against the rail's own source.
+      expect(railMarkup).toContain(icon);
     });
   }
 
