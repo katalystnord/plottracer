@@ -647,7 +647,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }): boolean {
     this.placed = structuredClone(inputs.placed);
     this.stepIndex = this.getSteps().length;
-    this.globalValues = { ...inputs.globalValues };
+    // ⚑ DEFAULTS FIRST, then the caller's values on top -- exactly what the two
+    // lines below already do for options, and what `reset()` and the constructor
+    // do for globals. This was the THIRD entrance to the same state and the only
+    // one that started from empty: adopting a pie's calibration wiped its `total`
+    // and `sweep` prefills, `buildAxes` got no whole to read slices against, and
+    // the adoption simply returned false with a calibration card that had every
+    // point placed. Found by driving a Trace Challenge pie round (v2.1, #17).
+    this.globalValues = {};
+    for (const gf of this.config.globalFields) {
+      if (gf.defaultValue !== undefined) this.globalValues[gf.key] = gf.defaultValue;
+    }
+    for (const [k, v] of Object.entries(inputs.globalValues)) this.globalValues[k] = v;
     const validKeys = new Set((this.config.options ?? []).map((o) => o.key));
     this.optionValues = defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>);
     for (const [k, v] of Object.entries(inputs.optionValues)) {

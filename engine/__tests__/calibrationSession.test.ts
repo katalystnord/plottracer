@@ -12,6 +12,7 @@ import {
   TERNARY_AXES_CONFIG,
   MAP_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+  PIE_AXES_CONFIG,
 } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
@@ -2624,5 +2625,53 @@ describe('removeDataPoints — deleting several at once, and what a selection ME
     session.addDataPoint(130, 200);
     expect(() => session.removeDataPoints([99, -1])).not.toThrow();
     expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1);
+  });
+});
+
+describe('adoptCalibration and the config’s own defaults', () => {
+  /**
+   * ⚑ THE THIRD ENTRANCE TO THE SAME STATE. The constructor seeds
+   * `globalValues` from the config's `globalFields` defaults, and `reset()`
+   * does it again with a comment saying why — "a prefilled global (the pie's
+   * total and sweep) must survive a reset the same way it survives a fresh
+   * session". `adoptCalibration` did neither: it assigned the caller's map
+   * outright, so adopting a calibration that named no globals wiped the pie's
+   * `total: 100` and `sweep: 360` prefills.
+   *
+   * ⚑ AND THE FAILURE IS SILENT IN THE WORST WAY. Nothing throws — the guard
+   * for a blank global simply refuses, `adoptCalibration` returns false, and
+   * every calibration point is still sitting placed on the figure. The card
+   * shows a full calibration that did not happen.
+   *
+   * The options branch two lines below always did this correctly (defaults,
+   * then the caller's values on top). The globals branch is now its mirror.
+   */
+  it('⚑ keeps a prefilled global when the adopted calibration names none', () => {
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    expect(session.getGlobalFieldValues().total).toBe('100');
+    // Four rim points, roughly a circle of radius 100 about (200, 200).
+    const placed: Record<string, { px: number; py: number; values: string[] }> = {};
+    [[300, 200], [200, 300], [100, 200], [200, 100]].forEach(([px, py], i) => {
+      placed[`outline${i + 1}`] = { px: px!, py: py!, values: [] };
+    });
+    while (session.getRepeatCount() < 4) session.addRepeat();
+
+    expect(session.adoptCalibration({ placed, optionValues: {}, globalValues: {} })).toBe(true);
+    expect(session.getGlobalFieldValues().total).toBe('100');
+    expect(session.getGlobalFieldValues().sweep).toBe('360');
+    expect(session.isCalibrated()).toBe(true);
+  });
+
+  it('lets an adopted value OVERRIDE the default, which is the point of passing one', () => {
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    const placed: Record<string, { px: number; py: number; values: string[] }> = {};
+    [[300, 200], [200, 300], [100, 200], [200, 100]].forEach(([px, py], i) => {
+      placed[`outline${i + 1}`] = { px: px!, py: py!, values: [] };
+    });
+    while (session.getRepeatCount() < 4) session.addRepeat();
+    session.adoptCalibration({ placed, optionValues: {}, globalValues: { total: '2500' } });
+    expect(session.getGlobalFieldValues().total).toBe('2500');
+    // ...and the one it did NOT name still stands.
+    expect(session.getGlobalFieldValues().sweep).toBe('360');
   });
 });
