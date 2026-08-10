@@ -871,6 +871,79 @@ describe('Workspace: Bar axes', () => {
     await calibrateXYStandard();
     expect(await page.getByTestId('series-stack-group').count()).toBe(0);
   });
+
+  // ---- v2.1 CATEGORY TICKS -------------------------------------------------
+  // ⚑ The only instrument that can see this at all. The geometry, the fold-out's
+  // state machine and the drawn overlay are all unit-tested in engine/, but
+  // whether the control is REACHABLE -- rendered, clickable, and routing canvas
+  // clicks to edge placement instead of dropping a data point -- exists only
+  // here. A user who cannot find it has no feature.
+
+  it('offers category ticks on the calibration card once the axes exist, and not before', async () => {
+    await resetWorkspace('bar');
+    // Not during the walk: the fold-out must never look like a calibration step.
+    expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
+    await calibrateBarStandard();
+    await page.getByTestId('calib-fold').click(); // the card auto-folds on calibrate
+    await page.waitForTimeout(100);
+    expect(await textOf('category-ticks-toggle')).toBe('Mark category ticks?');
+  });
+
+  it('is absent on a graph type with no categories', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(100);
+    expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
+  });
+
+  it('⚑ marks the axis in ONE click, reusing the value origin, and draws the ticks', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(100);
+    await page.getByTestId('category-ticks-toggle').click();
+    await page.waitForTimeout(100);
+
+    // P1 is already the first edge, so the prompt asks for one click, not two.
+    expect(await textOf('category-ticks-prompt')).toContain('Click where the categories end');
+
+    // ⚑ This click must NOT drop a data point -- it places the far edge.
+    await clickAt(600, 400);
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('category-ticks-prompt').count()).toBe(0);
+    expect(await textOf('category-ticks-toggle')).toContain('Category ticks');
+
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(150);
+    expect(await textOf('category-ticks-toggle')).toBe('Category ticks \u2014 4 categories');
+
+    // Both conventions are visible without opening anything, and centred is preset.
+    expect(await page.getByTestId('category-convention-centred').isChecked()).toBe(true);
+    expect(await page.getByTestId('category-convention-edge').isChecked()).toBe(false);
+
+    // The declared categories are rows in the table before any bar is captured.
+    expect(await page.getByTestId('category-count').inputValue()).toBe('4');
+  });
+
+  it('removes the ticks again, leaving the calibration untouched', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(100);
+    await page.getByTestId('category-ticks-toggle').click();
+    await clickAt(600, 400);
+    await page.waitForTimeout(150);
+    await page.getByTestId('category-count').fill('3');
+    await page.waitForTimeout(150);
+
+    await page.getByTestId('category-remove-ticks').click();
+    await page.waitForTimeout(150);
+    expect(await textOf('category-ticks-toggle')).toBe('Mark category ticks?');
+    // The value calibration is untouched -- ticks never gated it and removing
+    // them must not disturb it.
+    expect(await page.getByTestId('run-calibration').count()).toBe(0);
+  });
 });
 
 describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {

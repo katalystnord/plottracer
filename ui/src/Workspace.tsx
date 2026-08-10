@@ -22,6 +22,17 @@ import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../engine/toolMode.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
+import {
+  CATEGORY_PANEL_HINT,
+  CONVENTION_LABELS,
+  categoryAxisGlyphs,
+  categoryPanelSummary,
+  categoryPanelView,
+  categoryTickIndexFromId,
+  categoryTickMarkers,
+  isMarkingCategoryAxis,
+} from '../../engine/categoryTickOverlay.js';
+import type { TickConvention } from '../../core/categoryAxis.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
@@ -1015,6 +1026,13 @@ export function Workspace() {
   // axis crossing) -- the overwhelmingly common case. When ticked, placing X1
   // auto-reuses that pixel for Y1 so you never place or reuse it by hand.
   const [commonOrigin, setCommonOrigin] = useState(true);
+  // v2.1 category ticks. `categoryFirstEdge` holds the first click of a two-click
+  // axis marking -- gesture state, not document state, so it lives here rather
+  // than in the session: there is nothing to undo about half a gesture.
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
+  const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
+  const [categoryCountInput, setCategoryCountInput] = useState('');
+  const [categorySeriesInput, setCategorySeriesInput] = useState('');
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -1136,6 +1154,28 @@ export function Workspace() {
   const currentStep = session.getCurrentStep();
   const pendingPixel = session.getPendingPixel();
   const axes = session.getAxes();
+  // v2.1: the fold-out's state machine and the drawn axis both live in
+  // engine/categoryTickOverlay.ts, so their branching is mutation-testable
+  // rather than reachable only through a 20-minute Electron run.
+  // `version` is a dependency for the same reason the memo block further down
+  // documents: it is the only signal React has that the ref-held session
+  // mutated, and dropping it would freeze the fold-out on its first render.
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const categoryPanel = useMemo(
+    () =>
+      categoryPanelView({
+        supported: session.supportsCategoryTicks(),
+        isCalibrated: axes !== null,
+        open: categoryPanelOpen,
+        hasGeometry: session.getCategoryAxis().hasGeometry(),
+        seedPixel: session.categoryTickOriginPixel(),
+        edgesPlaced: categoryFirstEdge ? 1 : 0,
+        hasAdjustments: session.getCategoryAxis().hasAdjustments(),
+      }),
+    [session, version, axes, categoryPanelOpen, categoryFirstEdge]
+  );
+  /* eslint-enable react-hooks/exhaustive-deps */
+
   const isCalibrating = currentStep !== null;
 
   // --- Measure tool state (checkpoint: measure) ------------------------------
@@ -2460,6 +2500,24 @@ export function Workspace() {
 
   const handleImageClick = useCallback(
     (px: number, py: number) => {
+      // v2.1: while the fold-out is asking for the category axis, a click places
+      // an edge and nothing else -- checked BEFORE the ordinary routing, so a
+      // marking click cannot also drop a data point.
+      if (isMarkingCategoryAxis(categoryPanel)) {
+        const seed = session.categoryTickOriginPixel();
+        const first =
+          categoryFirstEdge ?? (categoryPanel.canReuseSeed && seed ? { x: seed.px, y: seed.py } : null);
+        if (!first) {
+          setCategoryFirstEdge({ x: px, y: py });
+          return;
+        }
+        if (session.markCategoryAxis(first, { x: px, y: py })) {
+          setCategoryFirstEdge(null);
+          setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
+          commit();
+        }
+        return;
+      }
       const route = routeCanvasClick({ eyedropper, mode, figureCaptured });
       switch (route.kind) {
         case 'sample-colour': {
@@ -2574,7 +2632,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, categoryPanel, categoryFirstEdge]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -2803,6 +2861,14 @@ export function Workspace() {
 
   const handleMarkerDragEnd = useCallback(
     (id: string, x: number, y: number) => {
+      const tickIndex = categoryTickIndexFromId(id);
+      if (tickIndex !== null) {
+        // The model clamps it between its neighbours, so a tick can never cross
+        // another and silently reassign two categories.
+        session.moveCategoryTick(tickIndex, { x, y });
+        commit();
+        return;
+      }
       if (id.startsWith('point-')) {
         session.updateDataPointPixel(Number(id.slice('point-'.length)), x, y);
       } else {
@@ -4443,6 +4509,12 @@ export function Workspace() {
     padding: '6px 8px',
   };
   const binGlyphs = useMemo(() => session.getHistogramBinGlyphs(), [session, version]);
+  const categoryOverlay = useMemo(() => {
+    const ca = session.getCategoryAxis();
+    return { edges: ca.getAxisEdges(), tickPoints: ca.getTickPoints() };
+  }, [session, version]);
+  const categoryGlyphs = useMemo(() => categoryAxisGlyphs(categoryOverlay), [categoryOverlay]);
+  const categoryMarkers = useMemo(() => categoryTickMarkers(categoryOverlay), [categoryOverlay]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -4701,6 +4773,18 @@ export function Workspace() {
         errorTargetIndex,
       }),
     [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
+  );
+
+  // v2.1: the category axis and its ticks draw through the SAME two props the
+  // rest of the overlay uses -- segments for the marks, markers for the drag
+  // handles -- so ImageCanvas needed no new render path for any of this.
+  const allMarkers = useMemo<CanvasMarker[]>(
+    () => (categoryMarkers.length > 0 ? [...markers, ...categoryMarkers] : markers),
+    [markers, categoryMarkers]
+  );
+  const allBinGlyphs = useMemo(
+    () => (categoryGlyphs.length > 0 ? [...binGlyphs, ...categoryGlyphs] : binGlyphs),
+    [binGlyphs, categoryGlyphs]
   );
 
   const seriesLines = useMemo<SeriesLine[]>(
@@ -5434,6 +5518,130 @@ export function Workspace() {
               Common origin — X1 &amp; Y1 are the same point
             </label>
           )}
+          {/* v2.1 CATEGORY TICKS. A fold-out on the calibration card, not a step
+              in the walk: a bar chart still calibrates in two clicks, a
+              single-series chart never needs any of this, and nobody has to know
+              the feature exists to find it -- the summary line is on screen the
+              moment the axes are calibrated. Every branch below comes from
+              `categoryPanelView`, which is pure and unit-tested. */}
+          {categoryPanel.phase !== 'unavailable' && (
+            <div
+              data-testid="category-ticks-panel"
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
+            >
+              <button
+                type="button"
+                data-testid="category-ticks-toggle"
+                onClick={() => setCategoryPanelOpen((open) => !open)}
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  font: 'inherit',
+                  color: theme.color.text.secondary,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                {categoryPanelSummary(
+                  session.getCategoryAxis().hasGeometry(),
+                  session.getCategoryAxis().getCategoryCount()
+                )}
+              </button>
+              {categoryPanelOpen && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 10 }}>
+                  <div style={{ color: theme.color.text.legend }}>{CATEGORY_PANEL_HINT}</div>
+                  {categoryPanel.prompt && (
+                    <div data-testid="category-ticks-prompt" style={{ color: theme.color.text.primary }}>
+                      {categoryPanel.prompt}
+                    </div>
+                  )}
+                  {categoryPanel.phase === 'declaring' && (
+                    <>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        Categories
+                        <input
+                          type="number"
+                          min={1}
+                          data-testid="category-count"
+                          value={categoryCountInput}
+                          onChange={(e) => {
+                            setCategoryCountInput(e.target.value);
+                            const n = Number(e.target.value);
+                            if (Number.isInteger(n) && n >= 1 && session.setCategoryCount(n)) commit();
+                          }}
+                          style={{ width: 56 }}
+                        />
+                      </label>
+                      {/* Two RADIOS, not a select: both readings have to be visible
+                          without a click, because the user is being asked which one
+                          their figure prints -- and flipping it moves the marks on
+                          screen, which is the whole answer. */}
+                      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', gap: 10 }}>
+                        <legend style={{ padding: 0, float: 'left', width: '100%' }}>Ticks are</legend>
+                        {(['centred', 'edge'] as TickConvention[]).map((c) => (
+                          <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                            <input
+                              type="radio"
+                              name="category-convention"
+                              data-testid={`category-convention-${c}`}
+                              checked={session.getCategoryAxis().getConvention() === c}
+                              onChange={() => {
+                                if (session.setCategoryTickConvention(c)) commit();
+                              }}
+                            />
+                            {CONVENTION_LABELS[c]}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        Series (optional)
+                        <input
+                          type="number"
+                          min={1}
+                          data-testid="category-series-count"
+                          value={categorySeriesInput}
+                          onChange={(e) => setCategorySeriesInput(e.target.value)}
+                          style={{ width: 56 }}
+                        />
+                      </label>
+                      {categoryPanel.regenerateWarning && (
+                        <div data-testid="category-regenerate-warning" style={{ color: theme.color.error }}>
+                          {categoryPanel.regenerateWarning}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          data-testid="category-replace-axis"
+                          onClick={() => {
+                            session.clearCategoryAxisGeometry();
+                            setCategoryFirstEdge(null);
+                            commit();
+                          }}
+                        >
+                          Re-place axis
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="category-remove-ticks"
+                          onClick={() => {
+                            session.clearCategoryAxisGeometry();
+                            setCategoryFirstEdge(null);
+                            setCategoryPanelOpen(false);
+                            commit();
+                          }}
+                        >
+                          Remove ticks
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {/* Per-axes calibration options (checkpoint 68) — log scales,
               orientations, units. WPD has always offered these; we hardcoded
               them to literals across 6 of 7 axes types, which the parity
@@ -5957,11 +6165,11 @@ export function Workspace() {
         </LeftRail>
         <ImageCanvas
           ref={imageCanvasRef}
-          points={markers}
+          points={allMarkers}
           seriesLines={seriesLines}
           calibrationPreview={calibPreview}
           boxPlotGlyphs={boxPlotGlyphs}
-          binGlyphs={binGlyphs}
+          binGlyphs={allBinGlyphs}
           errorBarGlyphs={errorWhiskers}
           curveFitLine={curveFitOverlay}
           // ⚑ PAN ONLY. The fitted curve is drawn AFTER the data points and
@@ -6014,7 +6222,17 @@ export function Workspace() {
           // Bar capture (v2.0): live whenever Add points is active on a plain Bar
           // series, except while the eyedropper is armed -- same exception
           // regionMode makes above, same reason (that click samples a colour).
-          boxMode={mode === 'place-point' && config.id === 'bar' && eyedropper === null}
+          boxMode={
+            // ⚑ Bar capture is a DRAG-BOX, so in boxMode a plain click is one
+            // CORNER of a bar and never reaches onImageClick at all. While the
+            // fold-out is asking for a category-axis edge, that click has to BE
+            // the edge -- so box capture stands down for exactly that moment.
+            // Caught by the e2e; no unit test could have seen it.
+            mode === 'place-point' &&
+            config.id === 'bar' &&
+            eyedropper === null &&
+            !isMarkingCategoryAxis(categoryPanel)
+          }
           onBoxRect={handleBoxRect}
           selectMode={mode === 'select' ? selectSubMode : null}
           // v2.0 pre-launch audit: same consolidated guard as onRegionRect
