@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { CalibrationSession } from '../calibrationSession.js';
-import { SPIDER_AXES_CONFIG, PIE_AXES_CONFIG } from '../axesTypeConfigs.js';
+import { SPIDER_AXES_CONFIG, PIE_AXES_CONFIG, BAR_AXES_CONFIG } from '../axesTypeConfigs.js';
 import {
   calibrationInputsFromAnchors,
+  truthBarValues,
+  derivedTupleItems,
+  valueToPy,
   truthSpiderPoints,
   spiderUserPoints,
   spiderAxisRanges,
@@ -324,5 +327,91 @@ describe('the exploded-pie round', () => {
 
     const score = scoreOrderedRound(items, truthItems, truthValueRange(EXPLODED), 0);
     expect(score.penaltySeconds).toBeGreaterThan(0);
+  });
+});
+
+
+/**
+ * A BAR ROUND, PLAYED THE WAY THE APP ACTUALLY RECORDS A BAR (v2.1 audit).
+ *
+ * ⚑ THE GAP THIS FILE WAS MISSING. Spider, pie, histogram and box all had an
+ * end-to-end round test; bar did not — and bar is the family with SIX of the
+ * pool's rounds. Since the v2.0 bar model a bar is a two-slot INTERVAL captured
+ * as a drag-box, and `handleBoxRect` records TWO pixels per bar. The round
+ * scorer was still reading raw dataset pixels, one per click, so a perfect trace
+ * of six bars handed twelve numbers to a scorer expecting six and paired them
+ * against the wrong truth entries — about 193 seconds of penalty on a flawless
+ * run, and the round was only "correct" if the player single-clicked, which
+ * leaves every bar half-captured and exports no value at all.
+ */
+const barRaw = JSON.parse(readFileSync('samples/bar-tensile-strength.truth.json', 'utf8')) as ChallengeTruth;
+
+/** What `handleBoxRect` does for one dragged bar: two points, both corners. */
+function dragBar(session: CalibrationSession<never>, x: number, yTop: number, yBase: number): void {
+  session.addDataPoint(x, yTop);
+  session.addDataPoint(x, yBase);
+}
+
+describe('a bar round, end to end', () => {
+  it('⚑ a bar DRAGGED corner to corner scores as a perfect trace', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    expect(adoptRound(session as unknown as CalibrationSession<never>, barRaw)).toBe(true);
+
+    // The baseline pixel row is p1's own (the truth calibrates value 0 there on
+    // this figure); each bar is dragged from its top down to it.
+    const truthVals = truthBarValues(barRaw).map((v) => v[0]!);
+    truthVals.forEach((v, i) => {
+      const top = valueToPy(barRaw.calibration, v);
+      const base = valueToPy(barRaw.calibration, 0);
+      dragBar(session as unknown as CalibrationSession<never>, 100 + i * 50, top, base);
+    });
+
+    const items = derivedTupleItems(session.getTupleRows(), 'left-to-right');
+    expect(items).toHaveLength(truthVals.length);
+    items.forEach((v, i) => expect(v[0]!).toBeCloseTo(truthVals[i]!, 1));
+
+    const score = scoreOrderedRound(items, truthBarValues(barRaw), truthValueRange(barRaw), 0);
+    expect(score.breakdown.extras).toBe(0);
+    expect(score.breakdown.misses).toBe(0);
+    expect(score.penaltySeconds).toBeLessThan(1);
+  });
+
+  it('⚑ and the OLD per-pixel reading scored that same perfect trace as a disaster', () => {
+    // The defect kept as evidence rather than as a sentence in a commit message.
+    // Reading one item per PIXEL yields two per bar; `scoreOrderedRound` pairs by
+    // position, so every truth value after the first meets a bar corner instead
+    // of a bar, and the surplus corners are charged as extras on top.
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    adoptRound(session as unknown as CalibrationSession<never>, barRaw);
+    const truthVals = truthBarValues(barRaw).map((v) => v[0]!);
+    truthVals.forEach((v, i) => {
+      dragBar(
+        session as unknown as CalibrationSession<never>,
+        100 + i * 50,
+        valueToPy(barRaw.calibration, v),
+        valueToPy(barRaw.calibration, 0)
+      );
+    });
+
+    const perPixel = session
+      .getAllDatasetsData()[0]!
+      .points.filter((p) => p.data)
+      .slice()
+      .sort((a, b) => a.px - b.px)
+      .map((p) => [p.data![0]!]);
+    expect(perPixel).toHaveLength(truthVals.length * 2); // two corners per bar
+
+    const bad = scoreOrderedRound(perPixel, truthBarValues(barRaw), truthValueRange(barRaw), 0);
+    expect(bad.breakdown.extras).toBe(truthVals.length);
+    expect(bad.penaltySeconds).toBeGreaterThan(100); // ~193s on a flawless run
+
+    // ...and the fix is not merely "different": it is the figure's own numbers.
+    const good = scoreOrderedRound(
+      derivedTupleItems(session.getTupleRows(), 'left-to-right'),
+      truthBarValues(barRaw),
+      truthValueRange(barRaw),
+      0
+    );
+    expect(good.penaltySeconds).toBeLessThan(1);
   });
 });

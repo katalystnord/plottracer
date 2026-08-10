@@ -413,7 +413,38 @@ describe('the category TICK geometry round-trips (v2.1)', () => {
       edges: [{ x: 100, y: 500 }, { x: 600, y: 500 }],
       convention: 'centred',
       ticks: [0.125, 0.375, 0.625, 0.875],
+      // `withGeometry` calls setCategoryCount, so the declaration is real.
+      countDeclared: true,
     });
+  });
+
+  it('⚑⚑ a count the user never DECLARED is not written, and does not come back', () => {
+    // THE DEFECT (v2.1 audit, found by two independent reviewers). This flag is
+    // what `categoriesFollowBands()` gates on: declared, and a bar's category is
+    // derived from its band; not declared, and it is read from the index stored
+    // at capture. It was not serialized at all -- the load door guessed it back
+    // as "there are categories, so a count was declared", which is a DIFFERENT
+    // fact, because categories also appear one at a time on the un-ticked path.
+    // The reachable state "axis marked, no count typed, bars captured" therefore
+    // reopened in band mode and every row silently reordered.
+    const { plot, ds } = simpleProject();
+    const ca = new CategoryAxis();
+    ca.name = 'Categories';
+    plot.addCategoryAxis(ca);
+    plot.setCategoryAxisForDataset(ds, ca);
+    ca.setAxisEdges({ x: 100, y: 500 }, { x: 600, y: 500 });
+    // Categories exist, but from the un-ticked path -- nobody declared a count.
+    ca.addCategory('Flax');
+    ca.addCategory('Jute');
+    expect(ca.hasDeclaredCount()).toBe(false);
+
+    expect(plot.serialize().categoryAxisColl![0]!.geometry).not.toHaveProperty('countDeclared');
+    expect(reopen(plot).hasDeclaredCount()).toBe(false);
+  });
+
+  it('⚑ and a count the user DID declare survives — the fix must not over-reach', () => {
+    const { plot } = withGeometry();
+    expect(reopen(plot).hasDeclaredCount()).toBe(true);
   });
 
   it('reads back an axis that answers exactly as the one that was saved', () => {

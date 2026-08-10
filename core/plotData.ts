@@ -160,6 +160,21 @@ export interface SerializedCategoryGeometry {
   /** Present only when the user dragged a tick, so a reopened project still
    * knows to warn before regenerating discards their adjustments. */
   adjusted?: boolean;
+  /**
+   * Whether the user actually DECLARED a category count.
+   *
+   * ⚑ STORED, NEVER INFERRED. This is the flag `categoriesFollowBands()` gates
+   * on — declared, and a bar's category is derived from the band it falls in;
+   * not declared, and it is read from the index stored at capture. The load
+   * door used to guess it back as `getCategoryCount() > 0`, which is a
+   * different fact: categories also come into existence one at a time on the
+   * UN-ticked path (`reserveEmptyCategorySlot`). So "axis marked, no count
+   * typed, some bars captured" — reachable by opening the fold-out and pressing
+   * Done — round-tripped into band mode, and EVERY ROW SILENTLY REORDERED. One
+   * Ctrl+Z was enough to trigger it. Found by two independent reviewers,
+   * v2.1 audit.
+   */
+  countDeclared?: boolean;
 }
 
 export interface SerializedMeasurementData {
@@ -577,9 +592,16 @@ export class PlotData {
         if (geo && ca.setAxisEdges(geo.edges?.[0] as never, geo.edges?.[1] as never)) {
           ca.setConvention(geo.convention);
           ca.restoreTickParams(geo.ticks ?? [], geo.adjusted === true);
-          // Geometry only reaches a file through the panel, which cannot be left
-          // without a count -- so a saved axis with categories had one declared.
-          if (ca.getCategoryCount() > 0) ca.markCountDeclared();
+          // ⚑ READ, not inferred. See SerializedCategoryGeometry.countDeclared.
+          //
+          // ⚑ AND THE FALLBACK IS `false`, which is the SAFE side. A file
+          // written before this field existed has no way to say, and treating
+          // an unknown as "declared" is what caused the reordering: a stored
+          // index is what the user actually captured against, so honouring it
+          // can only be conservative. The bars stay where they were put; the
+          // user can declare the count again in one keystroke if they want
+          // bands, and that keystroke is visible.
+          if (geo.countDeclared === true) ca.markCountDeclared();
         }
         this.addCategoryAxis(ca);
       }
@@ -822,6 +844,7 @@ export class PlotData {
                   convention: ca.getConvention(),
                   ticks: [...ca.getTickParams()],
                   ...(ca.hasAdjustments() ? { adjusted: true } : {}),
+                  ...(ca.hasDeclaredCount() ? { countDeclared: true } : {}),
                 },
               }
             : {}),

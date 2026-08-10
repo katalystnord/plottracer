@@ -777,6 +777,39 @@ describe('⚑ the load door enforces SPACING, not merely order (review #4)', () 
     expect(ax.restoreTickParams([0.5, 0.5 + 2e-6])).toBe(true);
   });
 
+  it('⚑⚑ …including a tick dragged against its NEIGHBOUR, where the clamp rounds DOWN', () => {
+    // The case the test above misses, and the reason this one exists. Clamping
+    // tick 0 against the axis START lands on `0 + EPS`, which is exactly
+    // representable and can never trip the guard. Clamping a tick against its
+    // NEIGHBOUR lands on `prev + EPS`, and at most tick positions that
+    // subtracts back to 9.999999999732445e-7 -- BELOW EPS. Comparing against
+    // EPS exactly then rejects the set the drag has just made, regenerates it,
+    // and clears `adjusted`, so the user's work vanishes with no warning -- on
+    // every reopen and on every rotate or crop.
+    // 72 of the centred tick positions for N = 2..24 round down this way;
+    // N = 4's tick 1, at 0.375, is one of them.
+    const EPS = 1e-6;
+    const ax = withAxis(4);
+    const neighbour = ax.getTickParams()[1]!;
+    expect(neighbour).toBeCloseTo(0.375, 12);
+    expect(neighbour + EPS - neighbour).toBeLessThan(EPS); // the premise, measured not assumed
+
+    ax.moveTick(2, { x: 100, y: 500 }); // drag tick 2 hard onto tick 1
+    const dragged = [...ax.getTickParams()];
+    expect(dragged[2]! - dragged[1]!).toBeLessThan(EPS); // what a real drag leaves
+
+    expect(ax.restoreTickParams(dragged, true)).toBe(true);
+    expect(ax.getTickParams()).toEqual(dragged);
+    expect(ax.hasAdjustments()).toBe(true);
+  });
+
+  it('⚑ and the slack is ONE ULP, not a licence — a genuinely collapsed pair is still refused', () => {
+    // The loosened comparison must not become "any increasing set will do", or
+    // the tick reordering it exists to prevent walks straight back in.
+    const ax = withAxis(3);
+    expect(ax.restoreTickParams([0.25, 0.25 + 1e-12, 0.75])).toBe(false);
+  });
+
   it('still accepts an ordinary well-spread set', () => {
     const ax = withAxis(4);
     expect(ax.restoreTickParams([0.1, 0.4, 0.6, 0.9])).toBe(true);

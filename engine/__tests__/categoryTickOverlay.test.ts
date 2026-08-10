@@ -157,7 +157,7 @@ describe('what the fold-out asks for', () => {
     const v = panel({ seedPixel: { px: 100, py: 500 } });
     expect(v.canReuseSeed).toBe(true);
     expect(v.prompt).toBe(
-      'Click where the categories end. The value origin is already the start — drag it later if that is wrong.'
+      'Click where the categories end. P1 (the amber handle) is being reused as the start — press Re-place axis if that is wrong.'
     );
   });
 
@@ -194,7 +194,7 @@ describe('the regenerate warning', () => {
     // warnings, which is worse than not warning at all.
     expect(panel({ hasGeometry: true, hasAdjustments: false }).regenerateWarning).toBeNull();
     expect(panel({ hasGeometry: true, hasAdjustments: true }).regenerateWarning).toBe(
-      'Changing the count or the tick style rebuilds the ticks evenly, discarding the ones you moved.'
+      'Changing the count or the tick style, or re-placing the axis, rebuilds the ticks evenly and discards the ones you moved.'
     );
   });
 

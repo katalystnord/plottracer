@@ -256,6 +256,46 @@ export function spiderUserPoints(
   return pts;
 }
 
+/**
+ * One reading per TUPLE — the shape both bar and pie rounds score.
+ *
+ * ⚑ WHY THIS IS NOT "one reading per POINT". Since the v2.0 bar model a bar is a
+ * two-slot INTERVAL captured as a drag-box, so the dataset holds TWO pixels per
+ * bar and the value is `derivedTupleValue`, not either corner. The round scorer
+ * read raw dataset points instead — one item per click — so a perfect drag of
+ * six bars handed twelve numbers to a scorer expecting six, paired them against
+ * the wrong truth entries and charged about 193 seconds on a flawless run. The
+ * round only scored "correctly" if the player SINGLE-CLICKED each bar, which
+ * leaves every tuple half-filled and exports no value at all (v2.1 audit).
+ *
+ * `order`:
+ * - `'left-to-right'` for bar — there is no x calibration, so pixel order along
+ *   the category axis IS the identity, exactly as the export's rank column is.
+ * - `'capture'` for pie — a slice's identity is its position in the walk around
+ *   the circle, which is the order it was captured in. Sorting a pie by pixel
+ *   would scramble it.
+ *
+ * A tuple with no derived value (half-captured) is DROPPED rather than sent as a
+ * zero, so it counts as a miss instead of a wrong answer.
+ */
+export interface ChallengeTupleRow {
+  readonly points: readonly ({ readonly px: number } | null)[];
+  readonly derived: number | null;
+}
+export function derivedTupleItems(
+  rows: readonly ChallengeTupleRow[],
+  order: 'left-to-right' | 'capture'
+): number[][] {
+  const kept = rows.flatMap((row) => {
+    if (row.derived === null || !Number.isFinite(row.derived)) return [];
+    const placed = row.points.filter((p): p is { readonly px: number } => p !== null);
+    const px = placed.length > 0 ? placed.reduce((sum, p) => sum + p.px, 0) / placed.length : 0;
+    return [{ px, value: row.derived }];
+  });
+  if (order === 'left-to-right') kept.sort((a, b) => a.px - b.px);
+  return kept.map((k) => [k.value]);
+}
+
 /** Pie truth as one-value vectors per slice, in the figure's own slice order
  * (the round's instruction names where that order starts). */
 export function truthPieValues(truth: ChallengeTruth): number[][] {

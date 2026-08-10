@@ -130,6 +130,7 @@ import {
   spiderAxisRanges,
   spiderPointAt,
   truthPieValues,
+  derivedTupleItems,
   singleAnchor,
   truthBoxValues,
   valueToPy,
@@ -2361,19 +2362,15 @@ export function Workspace() {
       // The slice's value is DERIVED from its two boundaries, so the tuple's own
       // `derived` is the reading -- neither member is the number being scored.
       // Order is capture order, which the instruction pins to 12 o'clock.
-      const items = session
-        .getTupleRows()
-        .flatMap((row) => (row.derived === null ? [] : [[row.derived]]));
+      const items = derivedTupleItems(session.getTupleRows(), 'capture');
       score = scoreOrderedRound(items, truthPieValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
     } else if (ex.family === 'bar') {
-      // One value per bar, ranked left-to-right (no x calibration -> order is identity).
-      const items =
-        session
-          .getAllDatasetsData()[0]
-          ?.points.filter((p) => p.data)
-          .slice()
-          .sort((a, b) => a.px - b.px)
-          .map((p) => [p.data![0]!]) ?? [];
+      // ⚑ One value per TUPLE, ranked left-to-right -- not one per PIXEL. A bar
+      // is a two-slot interval captured as a drag-box, so the dataset holds two
+      // corners per bar and the reading is the tuple's derived value. Reading
+      // pixels charged ~193 seconds on a flawless six-bar trace and only scored
+      // "right" for a player who single-clicked, which captures no bar at all.
+      const items = derivedTupleItems(session.getTupleRows(), 'left-to-right');
       score = scoreOrderedRound(items, truthBarValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
     } else {
       // box: complete 5-point tuples only (Min,Q1,Median,Q3,Max order), ranked by px.

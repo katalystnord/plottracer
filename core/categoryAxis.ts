@@ -409,12 +409,23 @@ export class CategoryAxis {
     // assignment after that wrong. A guard the click path keeps and the file
     // door does not is the "model has more than one entrance" class this
     // codebase keeps rediscovering.
-    // ⚑ EPS, not 2*EPS, and the boundary test is what caught the difference:
-    // `moveTick` clamps to `prev + EPS`, so the least ADJACENT spacing a drag
-    // can leave is EPS. (The 2*EPS figure is the window between i-1 and i+1,
-    // which follows from it.) A stricter rule here would have refused sets the
-    // click path itself produces.
-    const MIN_GAP = TICK_EPS;
+    // ⚑ EPS, not 2*EPS: `moveTick` clamps to `prev + EPS`, so the least
+    // ADJACENT spacing a drag can leave is EPS. (The 2*EPS figure is the window
+    // between i-1 and i+1, which follows from it.) A stricter rule here refuses
+    // sets the click path itself produces.
+    //
+    // ⚑⚑ AND THE COMPARISON IS SLACKENED BY ONE ULP, because "clamps to
+    // prev + EPS" is not true in floating point. `(0.25 + 1e-6) - 0.25` is
+    // 9.999999999732445e-7 -- BELOW EPS -- and it rounds down like that at 78
+    // of the 299 tick positions generated for N = 2..24. Comparing against EPS
+    // exactly therefore rejected tick sets the drag had just produced, and
+    // because a rejected set is REGENERATED and `_adjusted` reset, the user's
+    // drag vanished with no warning -- on every project reopen AND on every
+    // rotate or crop, since `transformAllPixels` round-trips through this same
+    // door. The first version of this guard had exactly that defect, and the
+    // test written to prove it did not aimed at tick 0 against the axis edge,
+    // where `0 + 1e-6` is exactly representable and cannot fail (v2.1 audit).
+    const MIN_GAP = TICK_EPS * (1 - 1e-9);
     const usable =
       Array.isArray(params) &&
       params.length === expected &&

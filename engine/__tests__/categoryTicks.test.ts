@@ -197,6 +197,118 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(ca.getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 600, y: 500 }]);
   });
 
+  it('⚑⚑ "Remove ticks" keeps every bar\'s category when NOTHING is renumbered', () => {
+    // THE DEFECT (v2.1 audit) -- in the fix for review #7, one commit old.
+    // Under bands a bar's category is derived and never stored, so after
+    // `clearGeometry` the pixel carries nothing. The write-back skipped indexes
+    // that did not shift and returned early when no category was dropped, so
+    // the common case wrote NOTHING: three bars still on the canvas, three
+    // blank rows, no message.
+    const s = withTicks(3);
+    const xs = [200, 350, 500];
+    for (const x of xs) {
+      s.addDataPoint(x, 300);
+      s.addDataPoint(x, 500);
+    }
+    const before = s.getBarCategoryTable().columns[0]?.values.slice();
+    expect(before?.filter((v) => v !== null)).toHaveLength(3);
+
+    expect(s.removeCategoryTicks()).toBe(true);
+
+    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+    expect(s.getBarCategoryTable().columns[0]?.values).toEqual(before);
+  });
+
+  it('⚑ and a SINGLE bar in band 0 survives it too — the identity mapping', () => {
+    // keep = [true,false,false]: nothing is renumbered for the survivor, which
+    // is exactly the path that used to write nothing at all.
+    const s = withTicks(3);
+    s.addDataPoint(200, 300);
+    s.addDataPoint(200, 500);
+    expect(s.removeCategoryTicks()).toBe(true);
+    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(1);
+  });
+
+  it('⚑⚑ deleting ONE bar under bands does not wipe every category', () => {
+    // THE DEFECT (v2.1 audit). `pruneOrphanedCategories` asked which categories
+    // are still owned by reading `metadata.categoryIndex` -- the STORED-INDEX
+    // door. Under bands capture stores no such index by design, so `owned` came
+    // back empty, all four categories were classified orphans, and deleting one
+    // row emptied the table while three bars stayed on the canvas.
+    const s = withTicks(4);
+    const xs = [150, 275, 400, 525];
+    for (const x of xs) {
+      s.addDataPoint(x, 300);
+      s.addDataPoint(x, 500);
+    }
+    expect(s.getCategoryAxis().getCategories()).toHaveLength(4);
+    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(4);
+
+    s.removeTuple(0);
+
+    // Three bars remain, so three readings must remain -- and the DECLARED count
+    // must not have moved underneath them, because the count is the user's
+    // statement about the figure, not a tally of what is captured. An empty
+    // category is exactly the state this feature exists to record.
+    expect(s.getCategoryAxis().getCategories()).toHaveLength(4);
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
+    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(3);
+  });
+
+  it('⚑ and the sweep still runs where it belongs — the UN-ticked path', () => {
+    // The guard must not switch the sweep off everywhere. Without ticks a
+    // category exists only because a bar reserved it, so removing that bar
+    // genuinely does leave an orphan, and the old behaviour is correct.
+    const s = calibratedBar();
+    s.addDataPoint(150, 300);
+    s.addDataPoint(150, 500);
+    s.addDataPoint(400, 350);
+    s.addDataPoint(400, 500);
+    expect(s.getCategoryAxis().getCategories()).toHaveLength(2);
+    s.removeTuple(0);
+    expect(s.getCategoryAxis().getCategories()).toHaveLength(1);
+  });
+
+  it('⚑⚑ UNDO does not INVENT a declared count — the rows must not reorder', () => {
+    // THE DEFECT, found by two independent reviewers (v2.1 audit).
+    //
+    // `_countDeclared` was not serialized; the load door guessed it back as
+    // "there are categories, so a count was declared". But categories also come
+    // into existence one at a time on the UN-ticked path, so the reachable state
+    // "axis marked, no count typed, bars captured" round-tripped into BAND mode
+    // -- and every bar's category flipped from the index it was captured under
+    // to whichever band it happens to sit in. One Ctrl+Z was the whole trigger,
+    // and nothing on screen said anything had changed.
+    const s = calibratedBar();
+    s.markCategoryAxis(A, B);
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false); // the panel's Done needs no count
+
+    // Two bars captured RIGHT to LEFT, so band order and capture order disagree.
+    s.addDataPoint(520, 300);
+    s.addDataPoint(520, 500);
+    s.addDataPoint(180, 400);
+    s.addDataPoint(180, 500);
+    const before = s.getBarCategoryTable().columns[0]?.values.slice();
+    expect(before).toHaveLength(2);
+
+    const snap = s.captureState();
+    s.restoreState(snap);
+
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false);
+    expect(s.getBarCategoryTable().columns[0]?.values).toEqual(before);
+  });
+
+  it('⚑ but a count the user DID declare survives the same round trip', () => {
+    // The guard must not over-reach: storing the flag has to keep band mode for
+    // anyone who actually asked for it, or the fix trades one silent flip for
+    // the opposite one.
+    const s = withTicks(3);
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
+    const snap = s.captureState();
+    s.restoreState(snap);
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
+  });
+
   it('undo of an unmarked session restores an unmarked one, not a stale axis', () => {
     const s = calibratedBar();
     const blank = s.captureState();

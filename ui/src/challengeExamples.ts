@@ -216,7 +216,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   spider: {
     family: 'spider',
     grade: 'easy',
-    instruction: 'Place one point on each axis of the Chitosan film profile — the shaded outline.',
+    instruction: 'Place one point on each axis of the Chitosan film profile — see the legend for its colour.',
     truth: spiderChallengeTruth,
   },
   // ⚑ Graded MEDIUM on 6 clicks, against bar's EASY on 12. What is being asked
@@ -245,7 +245,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'pie-exploded': {
     family: 'pie',
     grade: 'hard',
-    instruction: 'Click each slice boundary on the rim — start at the top (12 o’clock) and work clockwise.',
+    instruction: 'Click each slice boundary — start at the top (12 o’clock) and work clockwise.',
     truth: pieExplodedChallengeTruth,
   },
 };

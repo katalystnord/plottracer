@@ -3012,19 +3012,30 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const used = new Set<number>();
     for (const perTuple of assigned.values()) for (const idx of perTuple.values()) used.add(idx);
     const keep = names.map((name, i) => name !== '' || used.has(i));
-    if (keep.every(Boolean)) return true;
 
     const newIndex = new Map<number, number>();
     let next = 0;
     keep.forEach((k, i) => {
       if (k) newIndex.set(i, next++);
     });
-    // Rewrite the bound tuples first, then shorten the list.
+
+    // ⚑ WRITE EVERY TUPLE BACK, not just the ones whose index MOVED.
+    //
+    // This is the whole reason the picture is taken above. While the axis was
+    // marked, a bar's category was DERIVED from its band and deliberately not
+    // stored -- so after `clearGeometry` there is nothing on the pixel at all.
+    // Skipping an unchanged index (`mapped === oldIdx`), or returning early
+    // when nothing needed renumbering (`keep.every(Boolean)`), therefore wrote
+    // nothing and left every band-captured bar with no category: three bars on
+    // the canvas, three empty rows in the table, no message. An identity
+    // mapping is not a no-op here -- it is the first time the value is
+    // materialised (v2.1 audit; the original fix's own tests only covered
+    // bands whose index shifted, which is the one path that did write).
     for (const entry of this.datasetEntries) {
       const perTuple = assigned.get(entry.dataset)!;
       for (const [tupleIndex, oldIdx] of perTuple) {
         const mapped = newIndex.get(oldIdx);
-        if (mapped === undefined || mapped === oldIdx) continue;
+        if (mapped === undefined) continue; // its category is being dropped
         this.writeTupleCategoryIndex(entry.dataset, tupleIndex, mapped);
       }
     }
@@ -3950,7 +3961,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   private pruneOrphanedCategories(): void {
     if (this.categoryAxis.getCategories().length === 0) return;
+    // ⚑⚑ UNDER BANDS THERE ARE NO ORPHANS TO SWEEP, and sweeping is destructive.
+    //
+    // This whole routine reads `metadata.categoryIndex` -- the stored-index
+    // door -- and band-mode capture deliberately stores no such index. Left
+    // unguarded it therefore saw NOTHING owned, called every category an orphan,
+    // and deleting one bar's row emptied the table while the other bars sat on
+    // the canvas.
+    //
+    // ⚑ AND THE OBVIOUS REPAIR -- ask `categoryIndexOfTuple`, which knows both
+    // regimes -- IS STILL WRONG, which is why it is not what this does. Removing
+    // a category changes the COUNT, the count regenerates the ticks, and the new
+    // bands re-home every remaining bar; deleting one row of four then silently
+    // moved two survivors into one band and dropped a real reading. The count is
+    // the user's DECLARATION about the figure, not a tally of what is captured,
+    // and an empty category is the very state this feature exists to record.
+    // So under bands: leave it alone (v2.1 audit).
+    if (this.categoriesFollowBands()) return;
     // Which indexes does any tuple, in any series, still point at?
+    //
     const owned = new Set<number>();
     for (const entry of this.datasetEntries) {
       if (!this.usesCategoryAxis(entry.dataset)) continue;

@@ -211,7 +211,7 @@ export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView 
     // axis" alone leaves the user guessing whether one point or two is wanted —
     // and the answer differs depending on whether P1 can stand in for the first.
     const prompt = canReuseSeed
-      ? 'Click where the categories end. The value origin is already the start — drag it later if that is wrong.'
+      ? 'Click where the categories end. P1 (the amber handle) is being reused as the start — press Re-place axis if that is wrong.'
       : edgesPlaced === 0
         ? 'Click where the categories start, then where they end.'
         : 'Now click where the categories end.';
@@ -223,7 +223,7 @@ export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView 
     // Only ever shown when there is something to lose. A warning that appears
     // when nothing would be discarded teaches the user to ignore it.
     regenerateWarning: hasAdjustments
-      ? 'Changing the count or the tick style rebuilds the ticks evenly, discarding the ones you moved.'
+      ? 'Changing the count or the tick style, or re-placing the axis, rebuilds the ticks evenly and discards the ones you moved.'
       : null,
     canReuseSeed: false,
   };
