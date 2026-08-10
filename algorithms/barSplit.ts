@@ -172,54 +172,45 @@ export function reconcileWithExpected(
 }
 
 /**
- * Read the per-column ink extents of a run out of a colour-filter mask.
+ * Read the per-column ink extents of a run from the blob's OWN pixels.
  *
- * The pixel-scanning half, kept beside the decision half rather than inside it,
- * so `splitRunAtDividers` stays a pure function over numbers and can be tested
- * without inventing an image.
+ * ⚑ FROM MEMBERSHIP, NOT FROM A BOUNDING BOX, and the difference is a real
+ * defect this replaced (code review, 2026-08-10). Scanning the colour mask
+ * inside a blob's bbox also reads any OTHER same-coloured ink in that rectangle:
+ * a legend swatch, a speck the diameter filter rejected, a second disconnected
+ * bar. Where such contamination covers half a band's columns the median stops
+ * protecting and the piece's value is silently wrong -- exactly what this module
+ * exists to prevent. A bbox is a rectangle; a blob is a set.
  *
  * `categoryAxis` says which way the categories run: `'x'` for an upright bar
- * chart (bars side by side across the image), `'y'` once "Horizontal bars" is
- * on. The value is then measured along the other one, which is why the returned
- * `min`/`max` are just "the two ends" and never "top" and "bottom" — a bar below
- * its baseline has them the other way round, and the caller measures both ends
- * exactly as it does for a hand-dragged box.
+ * chart, `'y'` once the bars are horizontal. The value is measured along the
+ * other one, which is why the returned `min`/`max` are just "the two ends" and
+ * never "top" and "bottom" -- a bar below its baseline has them the other way
+ * round, and the caller measures both ends exactly as it does for a hand-dragged
+ * box.
  *
- * Scans only within `bbox`, so it costs the run's own area rather than the
- * image's.
+ * Costs one pass over the blob's own pixels rather than over its bbox's area.
  */
-export function runColumnsFromMask(
-  mask: Uint8Array,
+export function runColumnsFromMembers(
+  members: Int32Array | readonly number[],
   width: number,
-  height: number,
-  bbox: { minX: number; minY: number; maxX: number; maxY: number },
   categoryAxis: 'x' | 'y'
 ): RunColumn[] {
-  const x0 = Math.max(0, Math.floor(bbox.minX));
-  const y0 = Math.max(0, Math.floor(bbox.minY));
-  const x1 = Math.min(width - 1, Math.ceil(bbox.maxX));
-  const y1 = Math.min(height - 1, Math.ceil(bbox.maxY));
-  const columns: RunColumn[] = [];
   const alongX = categoryAxis === 'x';
-  const outerFrom = alongX ? x0 : y0;
-  const outerTo = alongX ? x1 : y1;
-  const innerFrom = alongX ? y0 : x0;
-  const innerTo = alongX ? y1 : x1;
-
-  for (let outer = outerFrom; outer <= outerTo; outer++) {
-    let min = Infinity;
-    let max = -Infinity;
-    for (let inner = innerFrom; inner <= innerTo; inner++) {
-      const idx = alongX ? inner * width + outer : outer * width + inner;
-      if (mask[idx]) {
-        if (inner < min) min = inner;
-        if (inner > max) max = inner;
-      }
+  const byColumn = new Map<number, { min: number; max: number }>();
+  for (const p of members) {
+    const px = p % width;
+    const py = (p - px) / width;
+    const at = alongX ? px : py;
+    const across = alongX ? py : px;
+    const seen = byColumn.get(at);
+    if (!seen) byColumn.set(at, { min: across, max: across });
+    else {
+      if (across < seen.min) seen.min = across;
+      if (across > seen.max) seen.max = across;
     }
-    // A column with no ink is not a column of zero height -- it is not part of
-    // the run at all, and recording it as one would put a zero-value bar into
-    // the median of whichever band it landed in.
-    if (min !== Infinity) columns.push({ at: outer, min, max });
   }
-  return columns;
+  return [...byColumn.entries()]
+    .map(([at, e]) => ({ at, min: e.min, max: e.max }))
+    .sort((a, b) => a.at - b.at);
 }

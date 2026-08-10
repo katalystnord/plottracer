@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   reconcileWithExpected,
-  runColumnsFromMask,
+  runColumnsFromMembers,
   splitRunAtDividers,
   type RunColumn,
 } from '../barSplit.js';
@@ -180,57 +180,61 @@ describe('reconciling against the declared count', () => {
   });
 });
 
-describe('reading the columns out of a mask', () => {
-  /** A `w`x`h` mask with a filled rect, 1 = ink. */
-  function maskWith(w: number, h: number, rects: [number, number, number, number][]): Uint8Array {
-    const m = new Uint8Array(w * h);
-    for (const [x0, y0, x1, y1] of rects) {
-      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) m[y * w + x] = 1;
-    }
-    return m;
+describe('reading the columns out of the blob’s OWN pixels', () => {
+  /** Pixel indices of a filled rect in a `w`-wide image. */
+  function rect(w: number, x0: number, y0: number, x1: number, y1: number): number[] {
+    const out: number[] = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out.push(y * w + x);
+    return out;
   }
 
   it('finds each column’s two ink ends for an upright chart', () => {
     // Two touching bars: x 2..5 tall (y 3..9), x 6..9 short (y 6..9).
-    const mask = maskWith(12, 12, [[2, 3, 5, 9], [6, 6, 9, 9]]);
-    const cols = runColumnsFromMask(mask, 12, 12, { minX: 0, minY: 0, maxX: 11, maxY: 11 }, 'x');
+    const members = [...rect(12, 2, 3, 5, 9), ...rect(12, 6, 6, 9, 9)];
+    const cols = runColumnsFromMembers(members, 12, 'x');
     expect(cols).toHaveLength(8);
     expect(cols[0]).toEqual({ at: 2, min: 3, max: 9 });
     expect(cols[4]).toEqual({ at: 6, min: 6, max: 9 });
   });
 
   it('scans the other way once the bars are horizontal', () => {
-    const mask = maskWith(12, 12, [[3, 2, 9, 5]]);
-    const cols = runColumnsFromMask(mask, 12, 12, { minX: 0, minY: 0, maxX: 11, maxY: 11 }, 'y');
+    const cols = runColumnsFromMembers(rect(12, 3, 2, 9, 5), 12, 'y');
     expect(cols).toHaveLength(4); // rows 2..5
     expect(cols[0]).toEqual({ at: 2, min: 3, max: 9 });
   });
 
-  it('⚑ omits a column with no ink rather than recording it as zero height', () => {
-    // A gap column recorded as an extent would put a phantom reading into
-    // whichever band it fell in.
-    const mask = maskWith(10, 10, [[1, 4, 2, 8], [5, 4, 6, 8]]);
-    const cols = runColumnsFromMask(mask, 10, 10, { minX: 0, minY: 0, maxX: 9, maxY: 9 }, 'x');
+  it('⚑ READS NOTHING that is not the blob’s own — the whole point of the change', () => {
+    // A legend swatch sits in the same colour, inside the run's bounding box,
+    // and used to be measured as part of it. It is not in the blob's membership,
+    // so it contributes nothing.
+    const bar = rect(20, 2, 10, 5, 18);
+    const swatchInsideTheBbox = rect(20, 3, 1, 4, 2);
+    const cols = runColumnsFromMembers(bar, 20, 'x');
+    expect(cols.every((c) => c.min >= 10)).toBe(true);
+    // ...and the contamination really was inside the box that used to be scanned.
+    expect(Math.min(...swatchInsideTheBbox.map((p) => Math.floor(p / 20)))).toBeLessThan(10);
+  });
+
+  it('has no gap columns to omit — a blob only contains ink', () => {
+    // Two disconnected rects would be two BLOBS; within one, every column of the
+    // membership has ink by construction, so there is nothing to filter.
+    const cols = runColumnsFromMembers([...rect(10, 1, 4, 2, 8), ...rect(10, 5, 4, 6, 8)], 10, 'x');
     expect(cols.map((c) => c.at)).toEqual([1, 2, 5, 6]);
   });
 
-  it('scans only inside the run’s own box', () => {
-    const mask = maskWith(12, 12, [[0, 0, 11, 11]]);
-    const cols = runColumnsFromMask(mask, 12, 12, { minX: 4, minY: 4, maxX: 6, maxY: 6 }, 'x');
-    expect(cols.map((c) => c.at)).toEqual([4, 5, 6]);
-    expect(cols[0]).toEqual({ at: 4, min: 4, max: 6 });
+  it('returns the columns in order however the pixels arrive', () => {
+    const shuffled = [...rect(10, 1, 2, 3, 4)].reverse();
+    expect(runColumnsFromMembers(shuffled, 10, 'x').map((c) => c.at)).toEqual([1, 2, 3]);
   });
 
-  it('clamps a box that runs off the image instead of reading past the end', () => {
-    const mask = maskWith(6, 6, [[0, 0, 5, 5]]);
-    const cols = runColumnsFromMask(mask, 6, 6, { minX: -4, minY: -4, maxX: 99, maxY: 99 }, 'x');
-    expect(cols).toHaveLength(6);
-    expect(cols[5]).toEqual({ at: 5, min: 0, max: 5 });
+  it('finds nothing in an empty membership, and does not throw', () => {
+    expect(runColumnsFromMembers([], 3, 'x')).toEqual([]);
+    expect(runColumnsFromMembers(new Int32Array(0), 3, 'y')).toEqual([]);
   });
 
-  it('finds nothing in an empty mask, and does not throw', () => {
-    const mask = new Uint8Array(9);
-    expect(runColumnsFromMask(mask, 3, 3, { minX: 0, minY: 0, maxX: 2, maxY: 2 }, 'x')).toEqual([]);
+  it('takes a typed array, which is what the detector hands over', () => {
+    const cols = runColumnsFromMembers(Int32Array.from(rect(8, 1, 1, 2, 3)), 8, 'x');
+    expect(cols).toEqual([{ at: 1, min: 1, max: 3 }, { at: 2, min: 1, max: 3 }]);
   });
 });
 
@@ -246,7 +250,9 @@ describe('end to end: a merged run of three touching bars', () => {
         for (let y = tops[b]!; y <= 20; y++) mask[y * w + x] = 1;
       }
     }
-    const cols = runColumnsFromMask(mask, w, h, { minX: 0, minY: 0, maxX: 35, maxY: 23 }, 'x');
+    const members: number[] = [];
+    for (let i = 0; i < mask.length; i++) if (mask[i]) members.push(i);
+    const cols = runColumnsFromMembers(members, w, 'x');
     const report = splitRunAtDividers(cols, [0, 12, 24, 36]);
     expect(report.pieces.map((p) => p.min)).toEqual(tops);
     expect(report.pieces.map((p) => p.max)).toEqual([20, 20, 20]);

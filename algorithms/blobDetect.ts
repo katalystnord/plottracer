@@ -38,9 +38,25 @@ export interface Blob {
    * detector never tracked this; nothing upstream to port, and free during
    * the same flood that already visits every member pixel once. */
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  /** The blob's OWN pixel indices, present only when `trackMembership` is set.
+   *
+   * ⚑ A bounding box is not a membership test, and treating it as one was a real
+   * defect (code review, 2026-08-10): re-measuring a merged bar run from the
+   * colour mask inside a blob's bbox also picks up any OTHER same-coloured ink in
+   * that rectangle -- a legend swatch, a speck the diameter filter rejected, a
+   * second disconnected bar. Where that contamination covers half a band's
+   * columns the median stops protecting and the piece's value is silently wrong,
+   * which is the exact failure the splitter was written to prevent.
+   *
+   * Free to collect: the flood already visits every member pixel once. Opt-in
+   * because the curve/marker callers never need it and it costs the blob's area
+   * in memory. */
+  members?: Int32Array;
 }
 
 export interface BlobDetectOptions {
+  /** Record each accepted blob's own pixel indices — see `Blob.members`. */
+  trackMembership?: boolean;
   /** Reject blobs whose equivalent diameter is below this (px). Default 0 (keep
    * all) — a small value drops single-pixel noise and antialiasing edges. */
   minDiameter?: number;
@@ -65,6 +81,7 @@ export function detectBlobs(
 ): Blob[] {
   const minDia = opts.minDiameter ?? 0;
   const maxDia = opts.maxDiameter ?? Infinity;
+  const track = opts.trackMembership === true;
   const visited = new Uint8Array(width * height);
   const blobs: Blob[] = [];
   const stack: number[] = [];
@@ -85,8 +102,10 @@ export function detectBlobs(
       let minY = Infinity;
       let maxX = -Infinity;
       let maxY = -Infinity;
+      const members: number[] = [];
       while (stack.length > 0) {
         const p = stack.pop()!;
+        if (track) members.push(p);
         const px = p % width;
         const py = (p - px) / width;
         sumX += px;
@@ -120,6 +139,7 @@ export function detectBlobs(
           area,
           diameter,
           bbox: { minX, minY, maxX: maxX + 1, maxY: maxY + 1 },
+          ...(track ? { members: Int32Array.from(members) } : {}),
         });
       }
     }

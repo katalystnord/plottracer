@@ -23,7 +23,7 @@ import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '
 import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import {
   reconcileWithExpected,
-  runColumnsFromMask,
+  runColumnsFromMembers,
   splitRunAtDividers,
   type ExpectationReport,
 } from '../algorithms/barSplit.js';
@@ -95,7 +95,11 @@ export function runBarDetect(
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the bar colour, or raise the tolerance.' };
   }
-  const blobs = detectBlobs(mask, width, height, opts);
+  // Membership is only worth its memory when a run might actually be cut.
+  const blobs = detectBlobs(mask, width, height, {
+    ...opts,
+    ...(categories && categories.dividers.length >= 2 ? { trackMembership: true } : {}),
+  });
   if (blobs.length === 0) {
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }
@@ -119,7 +123,14 @@ export function runBarDetect(
   const boxes: DetectedBarBox[] = [];
   for (const blob of blobs) {
     const span = along(blob.bbox);
-    const crossed = dividers.filter((d) => d > span.lo && d < span.hi);
+    // ⚑ INTERIOR dividers only. The first and last entries are the axis EDGES,
+    // and the model says the outermost bands are UNBOUNDED -- everything left of
+    // the first divider is category 0. Cutting at an edge sliced a run that
+    // extended past where the user clicked "categories end", producing a sliver
+    // piece beyond the last band which then band-clamped onto the last category
+    // and evicted the real bar's row (code review, 2026-08-10).
+    const interior = dividers.slice(1, -1);
+    const crossed = interior.filter((d) => d > span.lo && d < span.hi);
     if (crossed.length === 0) {
       // Wholly inside one band: nothing to cut, and re-measuring it would only
       // risk moving a reading that was already right.
@@ -129,7 +140,7 @@ export function runBarDetect(
       });
       continue;
     }
-    const columns = runColumnsFromMask(mask, width, height, blob.bbox, categoryAxis);
+    const columns = runColumnsFromMembers(blob.members ?? [], width, categoryAxis);
     const cuts = [span.lo, ...crossed, span.hi];
     const report = splitRunAtDividers(columns, cuts);
     for (const piece of report.pieces) {

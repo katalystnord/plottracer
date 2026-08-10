@@ -650,3 +650,91 @@ describe('⚑ the split REPORT is surfaced, and points at the right category', (
     expect(d).toEqual([...d].sort((a, b) => a - b));
   });
 });
+
+describe('⚑ the run is cut at INTERIOR dividers only (review #3)', () => {
+  const W = 80;
+  const H = 30;
+  const BLUE: [number, number, number] = [20, 60, 140];
+
+  it('a run reaching past "categories end" is not sliced at the edge', () => {
+    // The outermost bands are UNBOUNDED -- everything right of the last interior
+    // divider is the last category. Cutting at the edge produced a sliver piece
+    // beyond the last band, which then clamped onto that category and evicted
+    // the real bar's row.
+    const img = figureWith(W, H, [[0, 4, 19, 25], [20, 14, 45, 25]]);
+    const r = runBarDetect(img, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40], // the axis was marked as ending at x=40
+      categoryAxis: 'x',
+      expected: 2,
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    // Two bars, not three: nothing was sliced at x=40 where the ink runs on.
+    expect(r.boxes).toHaveLength(2);
+    expect(r.boxes[1]!.end.x).toBeGreaterThan(40); // the piece keeps its real end
+    expect(r.expectation).toMatchObject({ complete: true, emptyBands: [] });
+  });
+
+  it('a bar starting left of the marked span is not sliced at the first edge either', () => {
+    const img = figureWith(W, H, [[2, 6, 30, 25], [40, 12, 60, 25]]);
+    const r = runBarDetect(img, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [10, 35, 70], // the span starts at x=10, the ink starts at x=2
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    expect(r.boxes).toHaveLength(2);
+    expect(r.boxes[0]!.start.x).toBeLessThan(10);
+  });
+
+  it('still cuts a run that crosses a real interior divider', () => {
+    const img = figureWith(W, H, [[0, 4, 39, 25]]); // one blob spanning two bands
+    const r = runBarDetect(img, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40],
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    expect(r.blobs).toBe(1);
+    expect(r.boxes).toHaveLength(2);
+  });
+});
+
+describe('⚑ the split measures the blob, not its bounding box (review #8)', () => {
+  const W = 80;
+  const H = 40;
+  const BLUE: [number, number, number] = [20, 60, 140];
+
+  it('same-coloured ink INSIDE the run’s box, over most of a band, does not move the reading', () => {
+    // Two touching bars form one merged run whose bbox is x 0..39, y 10..35.
+    // A disconnected strip of the same colour sits INSIDE that box, spanning 13
+    // of band 0's 20 columns -- a MAJORITY, which is the only case the median
+    // cannot absorb. Measuring from the mask inside the bbox would have taken
+    // the strip's top as the short bar's; measuring from the blob's own pixels
+    // cannot see it at all.
+    const img = figureWith(W, H, [
+      [0, 20, 19, 35], // short bar, its own top at y=20
+      [20, 10, 39, 35], // taller bar, touching it
+      [0, 12, 12, 14], // the strip: inside the run's bbox, not part of it
+    ]);
+    const r = runBarDetect(img, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40],
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    // The strip is its own blob, so it also produces a box -- what matters is
+    // that the SHORT BAR's piece kept its own top rather than the strip's.
+    const shortBar = r.boxes.filter((b) => b.end.x <= 20 && b.end.y > 30);
+    expect(shortBar).toHaveLength(1);
+    expect(shortBar[0]!.start.y).toBe(20);
+  });
+
+  it('the strip really is inside the merged run’s bounding box', () => {
+    // Guards the fixture itself: if the contamination sat outside the box, the
+    // test above would pass without proving anything. An earlier draft did
+    // exactly that.
+    const runBox = { minY: 10, maxY: 35, minX: 0, maxX: 39 };
+    const strip = { y0: 12, y1: 14, x0: 0, x1: 12 };
+    expect(strip.y0).toBeGreaterThan(runBox.minY);
+    expect(strip.y1).toBeLessThan(runBox.maxY);
+    expect(strip.x1).toBeLessThanOrEqual(runBox.maxX);
+    expect(strip.x1 - strip.x0 + 1).toBeGreaterThan(20 / 2); // a MAJORITY of band 0
+  });
+});
