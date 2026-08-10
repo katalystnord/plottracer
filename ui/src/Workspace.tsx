@@ -115,7 +115,7 @@ import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
 import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
 import {
-  drawRounds,
+  drawGradedRounds,
   calibrationInputsFromAnchors,
   truthAxisRanges,
   truthValueRange,
@@ -2245,7 +2245,7 @@ export function Workspace() {
         const meta = CHALLENGE_META[id];
         const ex = EXAMPLES.find((e) => e.id === id);
         return meta && ex
-          ? [{ id, name: ex.name, family: meta.family, instruction: meta.instruction, truth: meta.truth, axesConfigId: ex.axes, imageSrc: ex.src }]
+          ? [{ id, name: ex.name, family: meta.family, grade: meta.grade, instruction: meta.instruction, truth: meta.truth, axesConfigId: ex.axes, imageSrc: ex.src }]
           : [];
       }),
     []
@@ -2286,7 +2286,11 @@ export function Workspace() {
 
   const startChallenge = useCallback(() => {
     if (!confirmDiscardIfDirty()) return;
-    const rounds = drawRounds(challengePool, 5);
+    // ⚑ WEIGHTED, not uniform (David, 2026-08-10): two easy, one medium, one
+    // hard. The pool spans a factor of ten in clicks -- 61 for the stress-strain
+    // curve against 6 for a spider -- and the scoring currency is TIME, so a
+    // uniform draw made one playthrough's score incomparable with another's.
+    const rounds = drawGradedRounds(challengePool, (r) => r.grade);
     if (rounds.length === 0) return;
     setRoundQueue(rounds);
     setRoundIndex(0);

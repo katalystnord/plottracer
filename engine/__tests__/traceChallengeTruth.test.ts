@@ -11,6 +11,9 @@ import {
   calibrationInputsFromAnchors,
   type ChallengeTruth,
   type ChallengeCalibration,
+  drawGradedRounds,
+  DEFAULT_GRADE_PLAN,
+  type ChallengeGrade,
 } from '../traceChallenge.js';
 
 /**
@@ -315,5 +318,80 @@ describe('the bar truth shapes the Challenge can actually score', () => {
       const t = truth(file);
       expect(truthBarValues(t).every((v) => Number.isFinite(v[0]))).toBe(true);
     }
+  });
+});
+
+describe('the WEIGHTED round draw (v2.1)', () => {
+  type R = { id: string; grade: ChallengeGrade };
+  const pool: R[] = [
+    { id: 'e1', grade: 'easy' }, { id: 'e2', grade: 'easy' }, { id: 'e3', grade: 'easy' },
+    { id: 'm1', grade: 'medium' }, { id: 'm2', grade: 'medium' },
+    { id: 'h1', grade: 'hard' }, { id: 'h2', grade: 'hard' },
+  ];
+  const gradeOf = (r: R) => r.grade;
+  /** A deterministic rng, so a draw is reproducible. */
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const counts = (rs: R[]) => ({
+    easy: rs.filter((r) => r.grade === 'easy').length,
+    medium: rs.filter((r) => r.grade === 'medium').length,
+    hard: rs.filter((r) => r.grade === 'hard').length,
+  });
+
+  it('⚑ gives every game the same SHAPE: two easy, one medium, one hard', () => {
+    // The reason the draw is weighted at all: the pool spans a factor of ten in
+    // clicks and the scoring currency is time, so a uniform draw made one
+    // playthrough's score incomparable with another's.
+    for (let s = 1; s <= 25; s++) {
+      const rs = drawGradedRounds(pool, gradeOf, DEFAULT_GRADE_PLAN, seeded(s));
+      expect(rs).toHaveLength(4);
+      expect(counts(rs), `seed ${s}`).toEqual({ easy: 2, medium: 1, hard: 1 });
+    }
+  });
+
+  it('never repeats a round inside one game', () => {
+    for (let s = 1; s <= 25; s++) {
+      const ids = drawGradedRounds(pool, gradeOf, DEFAULT_GRADE_PLAN, seeded(s)).map((r) => r.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  it('varies which rounds come up across games', () => {
+    const seen = new Set<string>();
+    for (let s = 1; s <= 30; s++) {
+      for (const r of drawGradedRounds(pool, gradeOf, DEFAULT_GRADE_PLAN, seeded(s))) seen.add(r.id);
+    }
+    expect(seen.size).toBeGreaterThan(4); // not the same four every time
+  });
+
+  it('⚑ TOPS UP a lopsided pool rather than handing back a short game', () => {
+    // A three-round game would read as a bug to the player. The shortfall is
+    // filled from whatever is left.
+    const thin: R[] = [
+      { id: 'e1', grade: 'easy' }, { id: 'e2', grade: 'easy' },
+      { id: 'e3', grade: 'easy' }, { id: 'e4', grade: 'easy' },
+    ];
+    const rs = drawGradedRounds(thin, gradeOf, DEFAULT_GRADE_PLAN, seeded(7));
+    expect(rs).toHaveLength(4);
+    expect(new Set(rs.map((r) => r.id)).size).toBe(4);
+  });
+
+  it('cannot hand back more rounds than the pool holds', () => {
+    const two: R[] = [{ id: 'e1', grade: 'easy' }, { id: 'h1', grade: 'hard' }];
+    expect(drawGradedRounds(two, gradeOf, DEFAULT_GRADE_PLAN, seeded(3))).toHaveLength(2);
+    expect(drawGradedRounds([], gradeOf, DEFAULT_GRADE_PLAN, seeded(3))).toEqual([]);
+  });
+
+  it('is reproducible for a given seed, so a game can be replayed exactly', () => {
+    const a = drawGradedRounds(pool, gradeOf, DEFAULT_GRADE_PLAN, seeded(42)).map((r) => r.id);
+    const b = drawGradedRounds(pool, gradeOf, DEFAULT_GRADE_PLAN, seeded(42)).map((r) => r.id);
+    expect(a).toEqual(b);
+  });
+
+  it('honours a different plan', () => {
+    const rs = drawGradedRounds(pool, gradeOf, { easy: 1, medium: 2, hard: 0 }, seeded(9));
+    expect(counts(rs)).toEqual({ easy: 1, medium: 2, hard: 0 });
   });
 });

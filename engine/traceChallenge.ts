@@ -56,6 +56,7 @@ export interface ChallengeExample {
   id: string;
   name: string;
   family: ChallengeFamily;
+  grade: ChallengeGrade;
   instruction: string;
   truth: ChallengeTruth;
   axesConfigId: string;
@@ -149,6 +150,67 @@ export function valueToPy(cal: ChallengeCalibration, value: number): number {
  * `min(target, pool.length)`. `rng` is injectable so tests are deterministic;
  * the app passes `Math.random`.
  */
+/**
+ * How much WORK a round is, graded (v2.1).
+ *
+ * ⚑ WHY THE GAME NEEDS THIS. The scoring currency is TIME, and the pool spans a
+ * factor of ten in clicks — 61 for the stress–strain curve against 6 for a
+ * spider. Drawn uniformly, one playthrough could be three long curves and
+ * another three short bar charts, and their scores would not be comparable. The
+ * grade is a property of the ROUND, so the draw can hold the shape of a game
+ * constant even as the pool grows.
+ *
+ * Graded by clicks a perfect run needs, adjusted for how much has to be held in
+ * mind: a box plot is 25 clicks but five NAMED slots per box, which is harder
+ * than a 26-click scatter where every click is the same kind of thing.
+ */
+export type ChallengeGrade = 'easy' | 'medium' | 'hard';
+
+/** How many rounds of each grade one game is made of. */
+export interface GradePlan {
+  easy: number;
+  medium: number;
+  hard: number;
+}
+
+/** The shape of a game: two easy, one medium, one hard (David, 2026-08-10). */
+export const DEFAULT_GRADE_PLAN: GradePlan = { easy: 2, medium: 1, hard: 1 };
+
+/**
+ * Draw one game's rounds, `plan` many of each grade, without repeats.
+ *
+ * ⚑ A grade with too few members TOPS UP from whatever is left rather than
+ * returning a short game — a player is owed four rounds even if the pool is
+ * lopsided, and a silently three-round game would read as a bug. The top-up is
+ * deterministic in the shuffled order, so a seeded rng still reproduces a game
+ * exactly.
+ */
+export function drawGradedRounds<T>(
+  pool: readonly T[],
+  gradeOf: (item: T) => ChallengeGrade,
+  plan: GradePlan = DEFAULT_GRADE_PLAN,
+  rng: () => number = Math.random
+): T[] {
+  const shuffled = drawRounds(pool, pool.length, rng);
+  const picked: T[] = [];
+  for (const grade of ['easy', 'medium', 'hard'] as const) {
+    let taken = 0;
+    for (const item of shuffled) {
+      if (taken >= plan[grade]) break;
+      if (gradeOf(item) === grade && !picked.includes(item)) {
+        picked.push(item);
+        taken++;
+      }
+    }
+  }
+  const target = plan.easy + plan.medium + plan.hard;
+  for (const item of shuffled) {
+    if (picked.length >= target) break;
+    if (!picked.includes(item)) picked.push(item);
+  }
+  return picked.slice(0, target);
+}
+
 export function drawRounds<T>(pool: readonly T[], target: number, rng: () => number = Math.random): T[] {
   const a = [...pool];
   for (let i = a.length - 1; i > 0; i--) {
