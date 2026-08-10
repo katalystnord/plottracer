@@ -180,6 +180,19 @@ export class CategoryAxis {
    * rather than silently reverting the user's corrections. */
   private _adjusted = false;
 
+  /**
+   * Whether the user has DECLARED how many categories there are.
+   *
+   * ⚑ NOT the same as `getCategoryCount() > 0`, and reading one for the other was
+   * a real defect (code review, 2026-08-10). Categories also come into existence
+   * one at a time as bars are captured on the un-ticked path, so a session with a
+   * marked axis and no declared count would flip from the old path to the band
+   * path THE MOMENT THE FIRST BAR reserved a slot — the first bar filed one way
+   * and every later bar the other. "How many exist" and "how many were declared"
+   * are different facts and have to be stored as such.
+   */
+  private _countDeclared = false;
+
   /** Appends a new category and returns its index. */
   addCategory(name: string): number {
     this._categories.push(name);
@@ -301,6 +314,7 @@ export class CategoryAxis {
     this._edges = null;
     this._tickParams = [];
     this._adjusted = false;
+    this._countDeclared = false;
   }
 
   getConvention(): TickConvention {
@@ -333,6 +347,7 @@ export class CategoryAxis {
     // `undefined` where every consumer expects the empty string of an unnamed
     // category. This shape cannot produce one.
     this._categories = Array.from({ length: count }, (_, i) => this._categories[i] ?? '');
+    this._countDeclared = true;
     this.regenerateTicks();
     return true;
   }
@@ -420,6 +435,19 @@ export class CategoryAxis {
 
   hasAdjustments(): boolean {
     return this._adjusted;
+  }
+
+  /** Whether a category COUNT has been declared — the thing that turns a marked
+   * axis into usable bands. See `_countDeclared`. */
+  hasDeclaredCount(): boolean {
+    return this._countDeclared;
+  }
+
+  /** Restoring a loaded file's declared-count flag. Geometry in a project file
+   * only ever gets there through the panel, which cannot leave without a count,
+   * so a stored geometry with categories means one was declared. */
+  markCountDeclared(): void {
+    this._countDeclared = true;
   }
 
   /**

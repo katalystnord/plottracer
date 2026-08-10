@@ -531,3 +531,66 @@ describe('the divider handover holds up against the awkward cases', () => {
     expect(d.dividers).toEqual([100, 225, 350, 475, 600]);
   });
 });
+
+describe('⚑ the two ways a bar could vanish from the table (code review, 2026-08-10)', () => {
+  it('⚑ HIGH: an axis marked with NO count must not swallow every bar', () => {
+    // markCategoryAxis succeeds while the category list is still empty, and the
+    // fold-out's Done button lets the user leave in exactly that state. Bands
+    // then "answered" for every bar while there were no categories to answer
+    // WITH: capture appended none, and the table iterates the category list for
+    // its rows -- so every captured bar existed on the canvas and in the record
+    // with NO ROW AT ALL.
+    const s = calibratedBar();
+    expect(s.markCategoryAxis(A, B)).toBe(true);
+    expect(s.getCategoryAxis().getCategoryCount()).toBe(0); // no count declared
+    barAt(s, 150);
+    barAt(s, 350);
+    expect(s.getDataset().getTupleCount()).toBe(2); // the bars are recorded...
+    const table = s.getBarCategoryTable();
+    expect(table.categoryNames.length).toBeGreaterThan(0); // ...and they have rows
+    expect(table.columns[0]!.values.filter((v) => v !== null)).toHaveLength(2);
+  });
+
+  it('an axis with no count behaves exactly as an unmarked one', () => {
+    const s = calibratedBar();
+    s.markCategoryAxis(A, B);
+    barAt(s, 150);
+    s.setTupleLabel(0, 'Flax');
+    expect(s.getTupleLabel(0)).toBe('Flax'); // the ordinary prefill path still runs
+  });
+
+  it('⚑ HIGH: two bars of one series in ONE band — the first keeps its row, the rest are REPORTED', () => {
+    // This was last-wins, so the second bar silently evicted the first one's
+    // row. The outer bands are unbounded, so a stray bar or a mis-declared count
+    // was enough, and the table came back looking complete with a real reading
+    // missing. One cell cannot show two bars -- but the omission must not be
+    // silent.
+    const s = withTicks(2); // bands 100..350, 350..600
+    barAt(s, 150, 300); // band 0
+    barAt(s, 200, 400); // band 0 as well
+    barAt(s, 500, 350); // band 1
+    const table = s.getBarCategoryTable();
+    expect(s.getDataset().getTupleCount()).toBe(3);
+    expect(table.columns[0]!.tupleIndices).toEqual([0, 2]); // FIRST kept, not last
+    expect(table.crowded).toEqual([{ seriesIndex: 0, categoryIndex: 0, tupleIndex: 1 }]);
+  });
+
+  it('reports nothing crowded in an ordinary figure', () => {
+    const s = withTicks(3);
+    barAt(s, 150);
+    barAt(s, 350);
+    barAt(s, 550);
+    expect(s.getBarCategoryTable().crowded).toEqual([]);
+  });
+
+  it('names the series a crowded bar belongs to, not just the category', () => {
+    const s = withTicks(2);
+    barAt(s, 150);
+    s.addDataset('Series 2');
+    barAt(s, 160);
+    barAt(s, 170);
+    const crowded = s.getBarCategoryTable().crowded;
+    expect(crowded).toHaveLength(1);
+    expect(crowded[0]!.seriesIndex).toBe(1);
+  });
+});

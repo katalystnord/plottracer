@@ -2700,7 +2700,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * only recomputed.
    */
   private categoriesFollowBands(): boolean {
-    return this.supportsCategoryTicks() && this.categoryAxis.hasGeometry();
+    // ⚑ A COUNT IS REQUIRED, not just an axis, and leaving it out was a real
+    // defect (code review, 2026-08-10). `markCategoryAxis` succeeds while the
+    // category list is still empty, and the fold-out's Done button lets the user
+    // leave in exactly that state. Bands then "answered" for every bar while
+    // there were no categories to answer WITH: capture stopped appending one,
+    // and getBarCategoryTable iterates the category list for its rows -- so every
+    // captured bar existed on the canvas and in the record with no row at all.
+    // A table that looks complete and is not is the precise failure this whole
+    // feature was built to remove.
+    //
+    // With no count declared there are no bands, so this reads exactly as an
+    // unmarked session and the ordinary prefill path runs.
+    return (
+      this.supportsCategoryTicks() &&
+      this.categoryAxis.hasGeometry() &&
+      this.categoryAxis.hasDeclaredCount()
+    );
   }
 
   /** The category a tuple belongs to: its BAND while the axis is marked, the
@@ -3454,9 +3470,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
        * against another series' dataset, so this is per-column, not global. */
       tupleIndices: (number | null)[];
     }[];
+    /** Bars that could not be shown because another bar of the same series
+     * already fills that category's cell. Empty in every ordinary figure.
+     *
+     * ⚑ EXISTS SO NOTHING IS DROPPED WITHOUT A TRACE. One cell holds one bar, so
+     * a second one landing in the same category cannot be displayed -- but a
+     * table that quietly omits a real reading is the failure this feature was
+     * built to remove, so the omission is handed back to be surfaced. */
+    crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
     if (!this.axes || !this.isBarIntervalShape(this.activeEntry.dataset)) {
-      return { categoryNames: [], categoryRawNames: [], columns: [] };
+      return { categoryNames: [], categoryRawNames: [], columns: [], crowded: [] };
     }
     const axes = this.axes;
     const categories = this.categoryAxis.getCategories();
@@ -3464,6 +3488,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const categoryNames = categories.map((name, i) => (name === '' ? `Category ${i + 1}` : name));
     const derive = this.config.derivedTupleValue;
 
+    const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
     const columns = this.datasetEntries.map((entry, seriesIndex) => {
       const dataset = entry.dataset;
       const tuples = dataset.getAllTuples();
@@ -3471,7 +3496,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const tupleForCategory = new Map<number, number>();
       tuples.forEach((_tuple, tupleIndex) => {
         const idx = this.categoryIndexOfTuple(dataset, tupleIndex);
-        if (idx !== null) tupleForCategory.set(idx, tupleIndex);
+        if (idx === null) return;
+        // ⚑ FIRST WINS, and the loser is REPORTED (code review, 2026-08-10).
+        // This was `set(idx, tupleIndex)` -- last-wins -- so a second bar of the
+        // same series landing in one category silently evicted the first one's
+        // row. The outer bands are unbounded, so a stray bar, a mis-declared
+        // count, or a bar outside the marked span was enough to do it, and the
+        // table came back looking complete with a real reading missing.
+        //
+        // One cell cannot show two bars, so the table keeps the first (capture
+        // order, deterministic) and hands the rest back in `crowded` for the UI
+        // to surface. Dropping is survivable; dropping SILENTLY is not.
+        if (tupleForCategory.has(idx)) {
+          crowded.push({ seriesIndex, categoryIndex: idx, tupleIndex });
+          return;
+        }
+        tupleForCategory.set(idx, tupleIndex);
       });
       const values: (number | null)[] = [];
       const tupleIndices: (number | null)[] = [];
@@ -3495,7 +3535,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       });
       return { seriesIndex, seriesName: dataset.name, values, tupleIndices };
     });
-    return { categoryNames, categoryRawNames, columns };
+    return { categoryNames, categoryRawNames, columns, crowded };
   }
 
   /** Renames a category directly by its canonical CategoryAxis index — the

@@ -577,6 +577,9 @@ export class PlotData {
         if (geo && ca.setAxisEdges(geo.edges?.[0] as never, geo.edges?.[1] as never)) {
           ca.setConvention(geo.convention);
           ca.restoreTickParams(geo.ticks ?? [], geo.adjusted === true);
+          // Geometry only reaches a file through the panel, which cannot be left
+          // without a count -- so a saved axis with categories had one declared.
+          if (ca.getCategoryCount() > 0) ca.markCountDeclared();
         }
         this.addCategoryAxis(ca);
       }
