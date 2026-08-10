@@ -130,7 +130,7 @@ describe('marking the axis and declaring the categories', () => {
     expect(s.categoryBandAt(550, 300)).toBe(3);
   });
 
-  it('clearing the marks keeps the category names', () => {
+  it('RE-PLACING the axis keeps every category — the user is fixing the axis, not abandoning them', () => {
     const s = withTicks(3);
     s.getCategoryAxis().renameCategory(0, 'Flax');
     expect(s.clearCategoryAxisGeometry()).toBe(true);
@@ -736,5 +736,59 @@ describe('⚑ the split measures the blob, not its bounding box (review #8)', ()
     expect(strip.y1).toBeLessThan(runBox.maxY);
     expect(strip.x1).toBeLessThanOrEqual(runBox.maxX);
     expect(strip.x1 - strip.x0 + 1).toBeGreaterThan(20 / 2); // a MAJORITY of band 0
+  });
+});
+
+describe('⚑ "Remove ticks" takes back what the declaration created (review #7)', () => {
+  it('leaves no phantom rows behind', () => {
+    // Declaring 3 categories appends three empty ones. Dropping only the
+    // geometry left all three as rows with no way to delete them, and the next
+    // bar captured then appended a FOURTH.
+    const s = withTicks(3);
+    expect(s.removeCategoryTicks()).toBe(true);
+    expect(s.getCategoryAxis().getCategories()).toEqual([]);
+    barAt(s, 150);
+    expect(s.getBarCategoryTable().categoryNames).toHaveLength(1); // one bar, one row
+  });
+
+  it('⚑ keeps a category the user NAMED', () => {
+    const s = withTicks(3);
+    s.getCategoryAxis().renameCategory(1, 'Hemp');
+    s.removeCategoryTicks();
+    expect(s.getCategoryAxis().getCategories()).toEqual(['Hemp']);
+  });
+
+  it('⚑ keeps a category that has a BAR in it, and the bar keeps pointing at it', () => {
+    // The index shifts when earlier categories are dropped, so the bound tuple
+    // has to be remapped in the same operation -- which CategoryAxis's own
+    // comment says is the wiring layer's job.
+    const s = withTicks(4);
+    barAt(s, 550); // band 3, the last one
+    s.setTupleLabel(0, 'Jute');
+    expect(s.getCategoryAxis().getCategories()).toEqual(['', '', '', 'Jute']);
+    s.removeCategoryTicks();
+    expect(s.getCategoryAxis().getCategories()).toEqual(['Jute']);
+    expect(s.getTupleLabel(0)).toBe('Jute'); // still points at it after the shift
+  });
+
+  it('keeps an UNNAMED category that has a bar in it', () => {
+    const s = withTicks(3);
+    barAt(s, 350); // band 1, never named
+    s.removeCategoryTicks();
+    expect(s.getCategoryAxis().getCategoryCount()).toBe(1);
+    expect(s.getBarCategoryTable().columns[0]!.values.filter((v) => v !== null)).toHaveLength(1);
+  });
+
+  it('remaps several survivors at once, in order', () => {
+    const s = withTicks(5);
+    s.getCategoryAxis().renameCategory(1, 'B');
+    s.getCategoryAxis().renameCategory(3, 'D');
+    s.removeCategoryTicks();
+    expect(s.getCategoryAxis().getCategories()).toEqual(['B', 'D']);
+  });
+
+  it('does nothing on a type with no categories', () => {
+    const s = new CalibrationSession<CalibratedAxes>(SPIDER_AXES_CONFIG as never);
+    expect(s.removeCategoryTicks()).toBe(false);
   });
 });

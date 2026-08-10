@@ -5729,7 +5729,9 @@ export function Workspace() {
                           type="button"
                           data-testid="category-remove-ticks"
                           onClick={() => {
-                            session.clearCategoryAxisGeometry();
+                            // Takes back the empty categories the declaration
+                            // created; keeps any that were named or have a bar.
+                            session.removeCategoryTicks();
                             setCategoryFirstEdge(null);
                             setCategoryPanelOpen(false);
                             commit();

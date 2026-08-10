@@ -2953,12 +2953,94 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.categoryAxis.moveTick(index, point);
   }
 
-  /** Drop the marks, keeping the category NAMES — working without ticks is a
-   * supported way to use the tool, not a broken state. */
+  /** Drop the marks, keeping every category — for RE-PLACING the axis, where the
+   * user is fixing where it runs, not abandoning the categories they named. */
   clearCategoryAxisGeometry(): boolean {
     if (!this.supportsCategoryTicks()) return false;
     this.categoryAxis.clearGeometry();
     return true;
+  }
+
+  /**
+   * Remove the ticks AND the empty categories declaring them created.
+   *
+   * ⚑ WHY THIS IS SEPARATE FROM `clearCategoryAxisGeometry`. Declaring "5
+   * categories" appends five empty ones; dropping only the geometry left all
+   * five behind as phantom rows with no way to delete them, and the next bar
+   * captured then appended a SIXTH (code review, 2026-08-10). "Remove ticks"
+   * means "I did not want this declaration", so it takes back what the
+   * declaration created — and nothing else.
+   *
+   * ⚑ A category is kept if it is NAMED or if any bar is filed under it. Only
+   * the untouched leftovers go, so nothing a user typed or captured is lost to a
+   * cleanup.
+   *
+   * ⚑ Removing a category shifts every later index, and `CategoryAxis` says in
+   * its own comment that remapping bound tuples is the WIRING layer's job, in
+   * the same operation. This is that operation: the stored `categoryIndex` on
+   * every dataset is rewritten before the names are dropped, so no tuple is left
+   * pointing at a category that moved.
+   */
+  removeCategoryTicks(): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    // Read the assignments BEFORE the geometry goes: while it is still marked
+    // they are derived from bands, and afterwards they come from the stored
+    // index. Taking the picture first is what keeps the two consistent.
+    const assigned = new Map<Dataset, Map<number, number>>();
+    for (const entry of this.datasetEntries) {
+      const perTuple = new Map<number, number>();
+      entry.dataset.getAllTuples().forEach((_t, tupleIndex) => {
+        const idx = this.categoryIndexOfTuple(entry.dataset, tupleIndex);
+        if (idx !== null) perTuple.set(tupleIndex, idx);
+      });
+      assigned.set(entry.dataset, perTuple);
+    }
+    this.categoryAxis.clearGeometry();
+
+    const names = [...this.categoryAxis.getCategories()];
+    const used = new Set<number>();
+    for (const perTuple of assigned.values()) for (const idx of perTuple.values()) used.add(idx);
+    const keep = names.map((name, i) => name !== '' || used.has(i));
+    if (keep.every(Boolean)) return true;
+
+    const newIndex = new Map<number, number>();
+    let next = 0;
+    keep.forEach((k, i) => {
+      if (k) newIndex.set(i, next++);
+    });
+    // Rewrite the bound tuples first, then shorten the list.
+    for (const entry of this.datasetEntries) {
+      const perTuple = assigned.get(entry.dataset)!;
+      for (const [tupleIndex, oldIdx] of perTuple) {
+        const mapped = newIndex.get(oldIdx);
+        if (mapped === undefined || mapped === oldIdx) continue;
+        this.writeTupleCategoryIndex(entry.dataset, tupleIndex, mapped);
+      }
+    }
+    for (let i = names.length - 1; i >= 0; i--) {
+      if (!keep[i]) this.categoryAxis.removeCategory(i);
+    }
+    return true;
+  }
+
+  /** Store a tuple's category index on its primary pixel, stripping it from the
+   * others — the same write shape setTupleLabel and the prefill both use. */
+  private writeTupleCategoryIndex(dataset: Dataset, tupleIndex: number, categoryIndex: number): void {
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return;
+    const pixels = tuple.filter((v): v is number => v !== null && v !== undefined);
+    const target = pixels[0];
+    if (target === undefined) return;
+    for (const pixelIndex of pixels) {
+      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
+      if (pixelIndex === target) {
+        dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex });
+      } else if ('categoryIndex' in existing) {
+        const { categoryIndex: _dropped, ...rest } = existing;
+        dataset.setMetadataAt(pixelIndex, rest);
+      }
+    }
+    this.registerCategoryIndexMetadataKey(dataset);
   }
 
   /**
