@@ -742,3 +742,43 @@ describe('restoreTickParams — the LOAD door enforces what the click path does'
     expect(ax.getTickParams()).toEqual([0.2, 0.7]);
   });
 });
+
+describe('⚑ the load door enforces SPACING, not merely order (review #4)', () => {
+  it('rejects ticks packed closer than a drag could ever leave them', () => {
+    // `moveTick` says the window between two neighbours is never empty, and
+    // guarantees it by leaving EPS on each side. The load path used to check
+    // only "strictly increasing", so a hand-edited file could get in under a
+    // weaker rule than the click path keeps.
+    const ax = withAxis(4);
+    expect(ax.restoreTickParams([0.5, 0.5 + 1e-12, 0.5 + 2e-12, 0.9])).toBe(false);
+    expect(ax.getTickParams()).toEqual(generateTickParams('centred', 4)); // regenerated
+  });
+
+  it('⚑ and that is what kept dragging from REORDERING the ticks', () => {
+    // The consequence, asserted rather than described: with sub-EPS neighbours
+    // accepted, dragging the middle tick clamped it BELOW its predecessor --
+    // ticks out of order, dividers non-monotonic, every later band wrong.
+    const ax = withAxis(4);
+    ax.restoreTickParams([0.5, 0.5 + 1e-12, 0.5 + 2e-12, 0.9]); // refused, regenerated
+    ax.moveTick(1, { x: 0, y: 500 });
+    const params = ax.getTickParams();
+    expect([...params]).toEqual([...params].sort((a, b) => a - b));
+    expect(ax.getDividerParams()).toEqual([...ax.getDividerParams()].sort((a, b) => a - b));
+  });
+
+  it('⚑ accepts the spacing a DRAG itself produces — the guard must not out-strict the click path', () => {
+    // moveTick clamps to `prev + EPS`, so the least adjacent spacing it can
+    // leave is EPS (1e-6). A first draft used 2*EPS here and would have refused
+    // a file the app had just written itself.
+    const ax = withAxis(2);
+    ax.moveTick(0, { x: 100, y: 500 }); // clamped hard against the axis start
+    const dragged = [...ax.getTickParams()];
+    expect(ax.restoreTickParams(dragged)).toBe(true);
+    expect(ax.restoreTickParams([0.5, 0.5 + 2e-6])).toBe(true);
+  });
+
+  it('still accepts an ordinary well-spread set', () => {
+    const ax = withAxis(4);
+    expect(ax.restoreTickParams([0.1, 0.4, 0.6, 0.9])).toBe(true);
+  });
+});

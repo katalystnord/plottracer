@@ -35,6 +35,16 @@
  */
 export type TickConvention = 'centred' | 'edge';
 
+/** The least separation two ticks may have, as a parameter along the axis —
+ * sub-pixel on any real figure.
+ *
+ * ⚑ Shared by the drag and the LOAD door on purpose. `moveTick` leaves this much
+ * on each side of a tick, which is what makes its "the window is never empty"
+ * invariant true; a file that got in under a weaker rule broke it, so both
+ * entrances now measure against the same constant rather than each carrying
+ * their own idea of "close enough". */
+const TICK_EPS = 1e-6;
+
 /** A pixel position in image coordinates. */
 export interface CategoryAxisPoint {
   readonly x: number;
@@ -390,10 +400,31 @@ export class CategoryAxis {
   restoreTickParams(params: readonly number[], adjusted = false): boolean {
     if (!this._edges) return false;
     const expected = tickCountFor(this._convention, this._categories.length);
+    // ⚑ SPACED, not merely increasing (code review, 2026-08-10). `moveTick`'s
+    // comment states that the window between two neighbours is never empty, and
+    // the interactive path guarantees it by leaving EPS on each side. The load
+    // path did not: a hand-edited file with ticks 1e-12 apart passed
+    // "strictly increasing", and then dragging the middle one clamped it BELOW
+    // its predecessor -- ticks reordered, dividers non-monotonic, and every band
+    // assignment after that wrong. A guard the click path keeps and the file
+    // door does not is the "model has more than one entrance" class this
+    // codebase keeps rediscovering.
+    // ⚑ EPS, not 2*EPS, and the boundary test is what caught the difference:
+    // `moveTick` clamps to `prev + EPS`, so the least ADJACENT spacing a drag
+    // can leave is EPS. (The 2*EPS figure is the window between i-1 and i+1,
+    // which follows from it.) A stricter rule here would have refused sets the
+    // click path itself produces.
+    const MIN_GAP = TICK_EPS;
     const usable =
       Array.isArray(params) &&
       params.length === expected &&
-      params.every((t, i) => Number.isFinite(t) && t > 0 && t < 1 && (i === 0 || t > params[i - 1]!));
+      params.every(
+        (t, i) =>
+          Number.isFinite(t) &&
+          t > 0 &&
+          t < 1 &&
+          (i === 0 || t - params[i - 1]! >= MIN_GAP)
+      );
     if (!usable) {
       this.regenerateTicks();
       return false;
@@ -470,9 +501,8 @@ export class CategoryAxis {
     // to Infinity. Without this the tick would be set to NaN and `moveTick`
     // would return true, reporting a move it did not make.
     if (!Number.isFinite(t)) return false;
-    const EPS = 1e-6;
-    const lower = (index === 0 ? 0 : this._tickParams[index - 1]!) + EPS;
-    const upper = (index === this._tickParams.length - 1 ? 1 : this._tickParams[index + 1]!) - EPS;
+    const lower = (index === 0 ? 0 : this._tickParams[index - 1]!) + TICK_EPS;
+    const upper = (index === this._tickParams.length - 1 ? 1 : this._tickParams[index + 1]!) - TICK_EPS;
     // ⚑ No `upper < lower` branch. Every drag already leaves EPS between a tick
     // and each neighbour, so ticks i-1 and i+1 are never closer than 2*EPS and
     // the window is never empty. Writing the branch anyway would be a refusal
