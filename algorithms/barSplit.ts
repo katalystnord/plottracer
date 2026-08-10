@@ -161,7 +161,12 @@ export function reconcileWithExpected(
   return {
     expected,
     found,
-    complete: found === expected,
+    // ⚑ COMPLETE MEANS "every declared category got a bar", not "the counts
+    // match" (code review, 2026-08-10). Counting alone reads TRUE when two bars
+    // land in one band and another is empty -- the totals agree while a category
+    // has nothing in it, which is the exact shape of answer this is here to
+    // prevent. The empty list is the question the user actually has.
+    complete: report.emptyBands.length === 0,
     emptyBands: [...report.emptyBands],
   };
 }

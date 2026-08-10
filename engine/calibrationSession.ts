@@ -2973,7 +2973,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * "Horizontal bars" option: the two are independent declarations today and
    * asking the geometry is the one that cannot disagree with what was drawn.
    */
-  categoryDividersForDetect(): { dividers: number[]; categoryAxis: 'x' | 'y' } | null {
+  categoryDividersForDetect(): {
+    dividers: number[];
+    categoryAxis: 'x' | 'y';
+    /** True when the axis was marked in DECREASING image coordinate — right to
+     * left, or bottom to top, which is the natural direction for a horizontal
+     * bar chart.
+     *
+     * ⚑ WHY THE CALLER NEEDS THIS. The dividers are sorted into image order
+     * because the splitter requires ascending input, and that sort DESTROYS the
+     * category order: band 0 is then the LAST category, not the first. Nothing
+     * was wrong while the split's report went unread, but naming a category from
+     * a band index without this would have named the wrong one -- the reviewer
+     * caught it as latent, one commit before the report was wired up. */
+    reversed: boolean;
+  } | null {
     if (!this.supportsCategoryTicks()) return null;
     const edges = this.categoryAxis.getAxisEdges();
     if (!edges) return null;
@@ -2981,8 +2995,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const axis: 'x' | 'y' = horizontal ? 'x' : 'y';
     const points = this.categoryAxis.getDividerPoints();
     if (points.length < 2) return null;
-    const dividers = points.map((p) => (axis === 'x' ? p.x : p.y)).sort((a, b) => a - b);
-    return { dividers, categoryAxis: axis };
+    const along = points.map((p) => (axis === 'x' ? p.x : p.y));
+    const reversed = along[along.length - 1]! < along[0]!;
+    return { dividers: [...along].sort((a, b) => a - b), categoryAxis: axis, reversed };
+  }
+
+  /** Which category a SPLIT BAND index refers to. The splitter works in image
+   * order; the categories run along the axis as the user marked it. */
+  categoryIndexOfBand(bandIndex: number, reversed: boolean): number {
+    const last = this.categoryAxis.getCategoryCount() - 1;
+    return reversed ? last - bandIndex : bandIndex;
   }
 
   /** Which category a pixel falls under, or null when no axis is marked. This

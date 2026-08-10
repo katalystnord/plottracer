@@ -41,6 +41,7 @@ import {
   colorTraceRefusal,
   spiderTraceReport,
   barTraceReport,
+  categoryMissReport,
   blobTraceReport,
   curveTraceReport,
 } from '../../engine/colorTraceReport.js';
@@ -4227,14 +4228,31 @@ export function Workspace() {
       // marked. Null when nothing is declared, which is exactly the pre-v2.1
       // call -- the un-ticked path is unchanged.
       const declared = session.categoryDividersForDetect();
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { ...declared, expected: session.getCategoryAxis().getCategoryCount() } : undefined);
+      // ⚑ `expected` only when a count was actually DECLARED. Passing the plain
+      // category count made it 0 on an axis marked without one, and "0 expected"
+      // is not a claim anybody made.
+      const declaredCount = session.getCategoryAxis().hasDeclaredCount()
+        ? session.getCategoryAxis().getCategoryCount()
+        : undefined;
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;
       }
       const added = session.addBarDetectBoxes(result.boxes);
       adoptTracedColour();
-      setColorTraceInfo(barTraceReport(added, noun, result.matched, width, height));
+      // ⚑ Name the categories that came back empty. The split reports them by
+      // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
+      // category the user declared, which is the axis's own order and runs the
+      // other way whenever the axis was marked right-to-left or bottom-to-top.
+      const missing = (result.expectation?.emptyBands ?? []).map((band) => {
+        const idx = session.categoryIndexOfBand(band, declared?.reversed ?? false);
+        const name = session.getCategoryAxis().getCategories()[idx];
+        return name && name.length > 0 ? name : `Category ${idx + 1}`;
+      });
+      setColorTraceInfo(
+        barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
+      );
       commit();
       return;
     }

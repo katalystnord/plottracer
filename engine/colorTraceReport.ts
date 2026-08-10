@@ -134,6 +134,26 @@ export function barTraceReport(added: number, noun: string, matched: number, wid
   return `Placed ${added} ${noun}${added === 1 ? '' : 's'} (one box per detected ${noun}) from ${matchedTail(matched, width, height)}`;
 }
 
+/**
+ * What the declared categories say is MISSING after a bar trace (v2.1).
+ *
+ * ⚑ THIS IS THE REASON THE EXPECTATION REPORT EXISTS. Without it the trace says
+ * "Placed 4 bars" and stops -- a table quietly one row short reads exactly like
+ * a finished one, which is the failure the whole category-tick feature was built
+ * to remove. Naming the categories is the difference between a short answer and
+ * a short answer you can see.
+ *
+ * Empty string when every declared category got a bar, so the caller can append
+ * it unconditionally.
+ */
+export function categoryMissReport(missingNames: readonly string[]): string {
+  if (missingNames.length === 0) return '';
+  const names = missingNames.join(', ');
+  return missingNames.length === 1
+    ? ` — no bar found for ${names}.`
+    : ` — no bar found for ${missingNames.length} categories: ${names}.`;
+}
+
 /** Blob detection: one point per marker. */
 export function blobTraceReport(blobs: number, matched: number, width: number, height: number): string {
   return `Placed ${blobs} point${blobs === 1 ? '' : 's'} (one per marker) from ${matchedTail(matched, width, height)}`;

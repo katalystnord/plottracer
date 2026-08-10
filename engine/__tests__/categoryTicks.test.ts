@@ -13,6 +13,8 @@ import {
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { CalibratedAxes } from '../axesTypeConfigs.js';
 import { runBarDetect } from '../barDetectRun.js';
+import { categoryMissReport } from '../colorTraceReport.js';
+import { reconcileWithExpected } from '../../algorithms/barSplit.js';
 
 /**
  * CATEGORY TICKS, wired into the session (v2.1).
@@ -483,6 +485,7 @@ describe('the dividers the DETECTOR is handed', () => {
     expect(s.categoryDividersForDetect()).toEqual({
       dividers: [100, 225, 350, 475, 600],
       categoryAxis: 'x',
+      reversed: false,
     });
   });
 
@@ -592,5 +595,58 @@ describe('⚑ the two ways a bar could vanish from the table (code review, 2026-
     const crowded = s.getBarCategoryTable().crowded;
     expect(crowded).toHaveLength(1);
     expect(crowded[0]!.seriesIndex).toBe(1);
+  });
+});
+
+describe('⚑ the split REPORT is surfaced, and points at the right category', () => {
+  it('says nothing when every declared category got a bar', () => {
+    expect(categoryMissReport([])).toBe('');
+  });
+
+  it('names the one that came up empty', () => {
+    expect(categoryMissReport(['Lactose'])).toBe(' — no bar found for Lactose.');
+  });
+
+  it('counts them when there is more than one', () => {
+    expect(categoryMissReport(['Lactose', 'Maltose'])).toBe(
+      ' — no bar found for 2 categories: Lactose, Maltose.'
+    );
+  });
+
+  it('⚑ complete means EVERY CATEGORY GOT A BAR, not that the totals agree', () => {
+    // Counting alone reads true when two bars land in one band and another is
+    // empty: the totals match while a category has nothing in it.
+    const twoInOneBand = { pieces: [{}, {}, {}], emptyBands: [1] };
+    expect(reconcileWithExpected(twoInOneBand, 3)).toMatchObject({
+      expected: 3,
+      found: 3,
+      complete: false,
+      emptyBands: [1],
+    });
+  });
+
+  it('⚑ maps a split BAND back to the category the user declared', () => {
+    // The splitter works in image order; the categories run along the axis as it
+    // was marked. Those are opposite whenever the axis runs right-to-left.
+    const s = withTicks(4);
+    expect(s.categoryDividersForDetect()!.reversed).toBe(false);
+    expect(s.categoryIndexOfBand(0, false)).toBe(0);
+    expect(s.categoryIndexOfBand(3, false)).toBe(3);
+
+    const back = calibratedBar();
+    back.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 }); // right to left
+    back.setCategoryCount(4);
+    expect(back.categoryDividersForDetect()!.reversed).toBe(true);
+    // Band 0 is the LEFTMOST in image order, which is the LAST category here.
+    expect(back.categoryIndexOfBand(0, true)).toBe(3);
+    expect(back.categoryIndexOfBand(3, true)).toBe(0);
+  });
+
+  it('the dividers stay ascending either way — the splitter requires it', () => {
+    const back = calibratedBar();
+    back.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 });
+    back.setCategoryCount(3);
+    const d = back.categoryDividersForDetect()!.dividers;
+    expect(d).toEqual([...d].sort((a, b) => a - b));
   });
 });
