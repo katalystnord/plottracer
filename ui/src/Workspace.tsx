@@ -13,6 +13,7 @@ import {
   SPIDER_AXES_CONFIG,
   PIE_AXES_CONFIG,
   calibrationCompatible,
+  commonOriginReuse,
   type AxesTypeConfig,
   type CalibratedAxes,
   type SessionSnapshot,
@@ -2732,20 +2733,25 @@ export function Workspace() {
 
   const confirmDataValue = useCallback(() => {
     if (session.confirmCalibrationValues(dataValueInputs)) {
-      // Common origin (XY): as soon as the walk reaches Y1, auto-reuse X1's
-      // pixel (the shared origin) and pre-fill Y1's value with 0, so the user
-      // never places or reuses it by hand -- they just confirm.
-      const next = session.getCurrentStep();
-      const placed = session.getPlacedPoints();
-      if (commonOrigin && config.supportsCommonOrigin && next?.key === 'y1' && placed['x1'] && !placed['y1']) {
-        session.reuseStepPixel('x1');
-        setDataValueInputs(['0']);
+      // Common origin: on arriving at the reusing step, take the shared corner's
+      // pixel and prefill its value, so the user never places or reuses it by
+      // hand -- they just confirm. Which steps those are is the TYPE's to
+      // declare (config.commonOrigin), not this file's to name.
+      const reuse = commonOriginReuse(
+        config,
+        commonOrigin,
+        session.getCurrentStep()?.key,
+        session.getPlacedPoints()
+      );
+      if (reuse) {
+        session.reuseStepPixel(reuse.from);
+        setDataValueInputs(reuse.prefill);
       } else {
         setDataValueInputs([]);
       }
       commit();
     }
-  }, [session, dataValueInputs, commit, commonOrigin, config.supportsCommonOrigin]);
+  }, [session, dataValueInputs, commit, commonOrigin, config]);
 
   const runCalibration = useCallback(() => {
     if (session.runCalibration()) {
@@ -5417,7 +5423,7 @@ export function Workspace() {
               </span>
             </div>
           )}
-          {figureCaptured && calibExpanded && config.supportsCommonOrigin && !axes && (
+          {figureCaptured && calibExpanded && config.commonOrigin && !axes && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: theme.color.text.secondary, cursor: 'pointer' }}>
               <input
                 type="checkbox"

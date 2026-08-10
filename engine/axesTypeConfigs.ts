@@ -419,6 +419,34 @@ export function calibrationCompatible(
   return a.fixedSteps.every((step, i) => step.key === b.fixedSteps[i]!.key);
 }
 
+/**
+ * Should the walk auto-reuse the shared-origin pixel at this moment?
+ *
+ * Answers the whole question in one place: the type declares a shared corner,
+ * the user has left the option on, the walk has just arrived at the reusing
+ * step, the donor is placed and the target is not. Returns what to do, or null.
+ *
+ * ⚑ Every one of those conditions used to sit inline in `Workspace.tsx` with
+ * the step keys written as literals, which is why the capability was declared
+ * and the geometry was not. Pure, so it can be mutation-tested; `ui/` cannot.
+ *
+ * ⚑ `placed[to]` is checked so this cannot re-fire and overwrite a pixel the
+ * user has already put down by hand -- reuse is an offer on arrival, not a rule
+ * that keeps reasserting itself.
+ */
+export function commonOriginReuse(
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin'>,
+  enabled: boolean,
+  nextStepKey: string | undefined,
+  placed: Readonly<Record<string, unknown>>
+): { from: string; prefill: string[] } | null {
+  const shared = config.commonOrigin;
+  if (!enabled || !shared) return null;
+  if (nextStepKey !== shared.to) return null;
+  if (!placed[shared.from] || placed[shared.to]) return null;
+  return { from: shared.from, prefill: [...(shared.prefill ?? [])] };
+}
+
 /** Axes-metadata key recording which *graph type* built an axes instance.
  *
  * A graph type and an axes class are not the same thing: Histogram is XY
@@ -607,15 +635,31 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *      An `id` check there silently excludes the second type on that class.
    * And what a graph type CAN DO belongs in a declared capability like the one
    * above, not inferred from any of the three. */
-  /** True when this type's calibration walks x1 -> x2 -> y1 -> y2, so ui/ can
-   * offer "Common origin" (confirming X2 auto-reuses X1's pixel for Y1, the
-   * usual axes-cross-at-one-corner case -- checkpoint 50).
+  /** Two calibration steps that share one physical pixel, so ui/ can offer
+   * "Common origin": reaching `to` auto-reuses `from`'s pixel and prefills its
+   * values, the usual axes-cross-at-one-corner case (checkpoint 50).
    *
    * A declared capability rather than a `config.id === 'xy'` check, because
    * that check is exactly the graph-type/axes-class conflation checkpoint 66
    * removes: Histogram calibrates identically to XY and wants this too, and
-   * asking "is it XY?" would silently answer no. */
-  supportsCommonOrigin?: boolean;
+   * asking "is it XY?" would silently answer no.
+   *
+   * ⚑ v2.1: the STEP KEYS are declared too. They used to be a `next?.key ===
+   * 'y1'` literal in Workspace.tsx while only the capability was declared --
+   * half a declaration, and the half that was hardcoded is the half that
+   * breaks on a type whose steps are named differently. Bar's are `p1`/`p2`
+   * and categorical Line's are `v1`/`v2`, so any second user of this would
+   * have needed a second literal beside the first. */
+  commonOrigin?: {
+    /** The already-placed step whose pixel is reused. */
+    from: string;
+    /** The step that reuses it, on arrival. */
+    to: string;
+    /** Values prefilled into `to`'s fields, in order — the shared corner's
+     * value is known precisely because it is shared. Omit for a step with no
+     * value fields. */
+    prefill?: readonly string[];
+  };
   /** Slots every dataset under this graph type is created with, so
    * tuple capture is the type's *inherent* shape rather than something the
    * user must first discover and switch on. Histogram's bins are the first
@@ -713,6 +757,14 @@ export interface DataPointView {
   data: number[] | null;
 }
 
+/** X1 and Y1 are one physical pixel wherever the axes cross at a corner -- the
+ * overwhelmingly common case -- and that corner's Y is 0 by construction, hence
+ * the prefill. Shared by XY and Histogram the way they already share
+ * `fixedSteps`: one object, so the two cannot drift apart, and so neither has to
+ * spread `| undefined` through an optional property under
+ * `exactOptionalPropertyTypes`. */
+const XY_COMMON_ORIGIN = { from: 'x1', to: 'y1', prefill: ['0'] } as const;
+
 export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'xy',
   label: 'XY',
@@ -721,7 +773,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
-  supportsCommonOrigin: true,
+  commonOrigin: XY_COMMON_ORIGIN,
   logScaleGuards: [
     { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X' },
     { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y' },
@@ -802,7 +854,8 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
-  supportsCommonOrigin: true,
+  // Same steps as XY (it shares the array), so the same shared corner.
+  commonOrigin: XY_COMMON_ORIGIN,
   defaultSlots: HISTOGRAM_SLOTS,
   tupleNoun: 'bin',
   // Same axes, same steps, same options -> same guards. Sharing the arrays

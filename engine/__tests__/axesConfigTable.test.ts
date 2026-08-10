@@ -11,6 +11,7 @@ import {
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
   SPIDER_AXES_CONFIG,
   PIE_AXES_CONFIG,
+  commonOriginReuse,
   type AxesTypeConfig,
   type CalibratedAxes,
 } from '../calibrationSession.js';
@@ -353,5 +354,114 @@ describe('the config table — how many clicks each type asks for', () => {
     // OTHER type growing one silently changes its calibration flow.
     const withGlobals = ALL.filter((c) => c.globalFields.length > 0).map((c) => c.id).sort();
     expect(withGlobals).toEqual(['ccr', 'pie']);
+  });
+});
+
+/**
+ * COMMON ORIGIN — the shared corner, and the reuse decision.
+ *
+ * ⚑ WHY THIS BLOCK EXISTS. Until v2.1 the capability was declared
+ * (`supportsCommonOrigin: true`) while the two step keys it turns on were
+ * LITERALS inside `Workspace.tsx` (`next?.key === 'y1'`, `placed['x1']`). Half a
+ * declaration — and the hardcoded half is the half that silently does nothing on
+ * a type whose steps are named differently, which is every bar-family type
+ * (`p1`/`p2`, and categorical Line's `v1`/`v2`). None of it had a single test.
+ */
+
+/** A `placed` map with just these step keys filled in. */
+function placedWith(...keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.map((k) => [k, { px: 0, py: 0, values: [] }]));
+}
+
+describe('the shared corner is declared, not named at the call site', () => {
+  it('names two real steps of its own type, donor before target', () => {
+    for (const config of ALL) {
+      const shared = config.commonOrigin;
+      if (!shared) continue;
+      const keys = stepKeys(config);
+      expect(keys, `${config.id}: commonOrigin.from`).toContain(shared.from);
+      expect(keys, `${config.id}: commonOrigin.to`).toContain(shared.to);
+      // The donor has to be placed before the walk arrives at the target, or
+      // the reuse can never fire.
+      expect(keys.indexOf(shared.from), config.id).toBeLessThan(keys.indexOf(shared.to));
+    }
+  });
+
+  it('prefills exactly one value per field of the step it fills', () => {
+    for (const config of ALL) {
+      const shared = config.commonOrigin;
+      if (!shared) continue;
+      const target = config.fixedSteps.find((st) => st.key === shared.to);
+      expect(target, `${config.id}: ${shared.to} exists`).toBeDefined();
+      expect(shared.prefill?.length ?? 0, config.id).toBe(target!.valueFields.length);
+    }
+  });
+
+  it('XY and Histogram share ONE declaration, so they cannot drift apart', () => {
+    expect(XY_AXES_CONFIG.commonOrigin).toEqual({ from: 'x1', to: 'y1', prefill: ['0'] });
+    expect(HISTOGRAM_AXES_CONFIG.commonOrigin).toBe(XY_AXES_CONFIG.commonOrigin);
+  });
+
+  it('the types with no shared corner declare none', () => {
+    for (const config of [BAR_AXES_CONFIG, CATEGORICAL_LINE_CONFIG, BOX_PLOT_AXES_CONFIG,
+                          POLAR_AXES_CONFIG, TERNARY_AXES_CONFIG, MAP_AXES_CONFIG,
+                          CIRCULAR_CHART_RECORDER_AXES_CONFIG, SPIDER_AXES_CONFIG,
+                          PIE_AXES_CONFIG] as unknown as AxesTypeConfig<CalibratedAxes>[]) {
+      expect(config.commonOrigin, config.id).toBeUndefined();
+    }
+  });
+});
+
+describe('commonOriginReuse — when the walk should take the shared pixel', () => {
+  const xy = XY_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
+
+  it('fires on arriving at the target with the donor placed', () => {
+    expect(commonOriginReuse(xy, true, 'y1', placedWith('x1', 'x2'))).toEqual({
+      from: 'x1',
+      prefill: ['0'],
+    });
+  });
+
+  it('does not fire when the user has turned the option off', () => {
+    expect(commonOriginReuse(xy, false, 'y1', placedWith('x1', 'x2'))).toBeNull();
+  });
+
+  it('does not fire for a type that declares no shared corner', () => {
+    const bar = BAR_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
+    expect(commonOriginReuse(bar, true, 'p2', placedWith('p1'))).toBeNull();
+  });
+
+  it('does not fire at any step but the declared target', () => {
+    expect(commonOriginReuse(xy, true, 'x2', placedWith('x1'))).toBeNull();
+    expect(commonOriginReuse(xy, true, 'y2', placedWith('x1', 'x2', 'y1'))).toBeNull();
+  });
+
+  it('does not fire before the donor has been placed', () => {
+    expect(commonOriginReuse(xy, true, 'y1', placedWith('x2'))).toBeNull();
+  });
+
+  it('⚑ does not fire once the target is placed — an offer on arrival, not a rule', () => {
+    // Without this the reuse would re-assert itself and overwrite a pixel the
+    // user had already put down by hand.
+    expect(commonOriginReuse(xy, true, 'y1', placedWith('x1', 'x2', 'y1'))).toBeNull();
+  });
+
+  it('does not fire when the walk has run off the end', () => {
+    expect(commonOriginReuse(xy, true, undefined, placedWith('x1', 'x2', 'y1', 'y2'))).toBeNull();
+  });
+
+  it('⚑ hands back a COPY of the prefill, so a caller cannot mutate the config', () => {
+    const first = commonOriginReuse(xy, true, 'y1', placedWith('x1'))!;
+    first.prefill[0] = 'tampered';
+    expect(commonOriginReuse(xy, true, 'y1', placedWith('x1'))!.prefill).toEqual(['0']);
+    expect(XY_AXES_CONFIG.commonOrigin!.prefill).toEqual(['0']);
+  });
+
+  it('Histogram behaves identically, which is the point of the declaration', () => {
+    const hist = HISTOGRAM_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
+    expect(commonOriginReuse(hist, true, 'y1', placedWith('x1', 'x2'))).toEqual({
+      from: 'x1',
+      prefill: ['0'],
+    });
   });
 });
