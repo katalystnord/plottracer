@@ -212,3 +212,117 @@ describe('a pie round, end to end', () => {
     expect(score.penaltySeconds).toBeLessThan(1);
   });
 });
+
+
+/**
+ * THE EXPLODED PIE — the pool's fourth HARD round (v2.1).
+ *
+ * ⚑ WHY IT IS A BOSS LEVEL RATHER THAN A LONGER ONE. A pulled-out slice does not
+ * share the pie's centre, so it is measured about its OWN apex. Measured about
+ * the shared centre instead, the config's own comment puts a 90-degree slice
+ * about 8 degrees out — a wrong number with nothing on screen looking wrong. The
+ * chain breaks there too (a pulled-out slice shares no boundary with anyone), so
+ * its two edges are a pair of their own.
+ *
+ * The second test is the one that earns the grade: it traces the same figure
+ * WITHOUT arming the explosion and shows the reading go wrong.
+ */
+interface RawSlice {
+  exploded: boolean;
+  apex: { px: number; py: number };
+  startEdge: { px: number; py: number };
+  endEdge: { px: number; py: number };
+}
+const explodedRaw = JSON.parse(readFileSync('samples/pie-exploded-market-share.truth.json', 'utf8')) as {
+  total: number;
+  calibration: { imageWidth: number; imageHeight: number; anchors: Record<string, unknown>; slices: RawSlice[] };
+  series: ChallengeTruth['series'];
+};
+const EXPLODED: ChallengeTruth = {
+  graphType: 'pie',
+  total: explodedRaw.total,
+  calibration: {
+    imageWidth: explodedRaw.calibration.imageWidth,
+    imageHeight: explodedRaw.calibration.imageHeight,
+    anchors: { outline: explodedRaw.calibration.anchors.outline as never },
+  },
+  series: explodedRaw.series,
+};
+
+/**
+ * Trace every slice the way the figure demands. `armExplosion: false` is the
+ * player who never noticed the pulled-out slice.
+ *
+ * A non-exploded slice following another non-exploded one needs only its END
+ * edge — the chain already pre-opened it holding the shared boundary. After an
+ * exploded slice there is no chain to inherit, so both edges are clicked.
+ */
+function traceExplodedPie(
+  session: CalibrationSession<never>,
+  slices: readonly RawSlice[],
+  armExplosion: boolean
+): void {
+  let chainHoldsStart = false;
+  for (const sl of slices) {
+    if (sl.exploded && armExplosion) {
+      session.setNextSectorExploded(true);
+      session.addDataPoint(sl.apex.px, sl.apex.py);
+      session.addDataPoint(sl.startEdge.px, sl.startEdge.py);
+      session.addDataPoint(sl.endEdge.px, sl.endEdge.py);
+      chainHoldsStart = false;
+      continue;
+    }
+    if (!chainHoldsStart) session.addDataPoint(sl.startEdge.px, sl.startEdge.py);
+    session.addDataPoint(sl.endEdge.px, sl.endEdge.py);
+    chainHoldsStart = true;
+  }
+}
+
+describe('the exploded-pie round', () => {
+  const slices = explodedRaw.calibration.slices;
+
+  it('⚑ a trace that ARMS the explosion returns the figure’s own values', () => {
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    adoptRound(session as unknown as CalibrationSession<never>, EXPLODED);
+    traceExplodedPie(session as unknown as CalibrationSession<never>, slices, true);
+
+    const items = session.getTupleRows().flatMap((row) => (row.derived === null ? [] : [[row.derived]]));
+    const truthItems = truthPieValues(EXPLODED);
+    expect(items).toHaveLength(truthItems.length);
+    items.forEach((v, i) => expect(v[0]!).toBeCloseTo(truthItems[i]![0]!, 1));
+
+    const score = scoreOrderedRound(items, truthItems, truthValueRange(EXPLODED), 0);
+    expect(score.breakdown.misses).toBe(0);
+    expect(score.breakdown.extras).toBe(0);
+    expect(score.penaltySeconds).toBeLessThan(1);
+  });
+
+  it('⚑ MISSING the explosion reads the pulled-out slice wrong — the round’s whole point', () => {
+    // Without this the round is just a longer pie and the HARD grade is a
+    // decoration. The player who never armed it gets a plausible number that is
+    // not the figure's.
+    const session = new CalibrationSession(PIE_AXES_CONFIG);
+    adoptRound(session as unknown as CalibrationSession<never>, EXPLODED);
+    traceExplodedPie(session as unknown as CalibrationSession<never>, slices, false);
+
+    const items = session.getTupleRows().flatMap((row) => (row.derived === null ? [] : [[row.derived]]));
+    const truthItems = truthPieValues(EXPLODED);
+    const explodedIndex = slices.findIndex((sl) => sl.exploded);
+    expect(explodedIndex).toBeGreaterThanOrEqual(0);
+    const got = items[explodedIndex]?.[0];
+    expect(got).toBeDefined();
+    // Wrong, and wrong by an amount a player would not spot: measured about the
+    // shared centre the slice reads 25.09 where the figure says 27.
+    expect(Math.abs(got! - truthItems[explodedIndex]![0]!)).toBeGreaterThan(1);
+
+    // ⚑ AND THE ERROR DOES NOT STAY LOCAL. The next slice's boundary is measured
+    // about the same wrong apex, so it reads 22.91 against a true 21 -- one
+    // missed observation moves TWO readings, and both land on plausible numbers.
+    const neighbour = items[explodedIndex + 1]?.[0];
+    expect(neighbour).toBeDefined();
+    expect(Math.abs(neighbour! - truthItems[explodedIndex + 1]![0]!)).toBeGreaterThan(1);
+
+    const score = scoreOrderedRound(items, truthItems, truthValueRange(EXPLODED), 0);
+    expect(score.penaltySeconds).toBeGreaterThan(0);
+  });
+});

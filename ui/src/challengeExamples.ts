@@ -4,7 +4,7 @@
  * by the SAME `EXAMPLES` id used to load the figure. Kept out of `engine/` so the
  * pure round logic stays asset-free and node-testable.
  *
- * Pool = 12 examples across 7 scoring families: XY curves + scatter (Phase A),
+ * Pool = 13 examples across 7 scoring families: XY curves + scatter (Phase A),
  * bar / histogram / box (Phase B), the three v2.0 bar variants, and the two
  * non-Cartesian records — spider (N×1D) and pie (1.5D intervals).
  */
@@ -22,6 +22,7 @@ import barStackedTruth from '../../samples/bar-stacked-cost.truth.json';
 import boxTruth from '../../samples/bar-box-plot-tensile-strength.truth.json';
 import spiderTruth from '../../samples/spider-material-profile.truth.json';
 import pieTruth from '../../samples/pie-filler-composition.truth.json';
+import pieExplodedTruth from '../../samples/pie-exploded-market-share.truth.json';
 
 export interface ChallengeMeta {
   family: ChallengeFamily;
@@ -39,7 +40,7 @@ export interface ChallengeMeta {
  *
  *     xy 61 · dashed 49 · scatter 26 · boxplot 25 · histogram 20
  *     bar 12 · xy-multi 9 · grouped 8 · missing 8 · stacked 8
- *     spider 6 · pie 6
+ *     spider 6 · pie 6 · pie-exploded 9 (+1 arming toggle)
  *
  * ⚑ boxplot is graded HARD on 25 clicks while scatter is MEDIUM on 26: a box is
  * five NAMED slots per item, which has to be held in mind, where a scatter's
@@ -85,7 +86,8 @@ const spiderChallengeTruth: ChallengeTruth = {
   series: [spiderRaw.series[0]!],
 };
 
-const pieRaw = pieTruth as unknown as {
+/** Both pie rounds reshape identically; only the file differs. */
+interface PieRawTruth {
   total: number;
   calibration: {
     imageWidth: number;
@@ -94,22 +96,28 @@ const pieRaw = pieTruth as unknown as {
     slices: NonNullable<ChallengeTruth['calibration']['slices']>;
   };
   series: ChallengeTruth['series'];
-};
-const pieChallengeTruth: ChallengeTruth = {
-  graphType: 'pie',
-  total: pieRaw.total,
-  calibration: {
-    imageWidth: pieRaw.calibration.imageWidth,
-    imageHeight: pieRaw.calibration.imageHeight,
-    // ⚑ ONLY the outline. `centre` and `rim` are in the file as the FITTED
-    // result, and the app fits them from the outline rather than being told --
-    // handing them over as placed points would seed the round with two handles
-    // no calibration step owns.
-    anchors: { outline: pieRaw.calibration.anchors.outline as never },
-    ...(pieRaw.calibration.slices ? { slices: pieRaw.calibration.slices } : {}),
-  },
-  series: pieRaw.series,
-};
+}
+function pieChallengeTruthFrom(raw: PieRawTruth): ChallengeTruth {
+  return {
+    graphType: 'pie',
+    total: raw.total,
+    calibration: {
+      imageWidth: raw.calibration.imageWidth,
+      imageHeight: raw.calibration.imageHeight,
+      // ⚑ ONLY the outline. `centre` and `rim` are in the file as the FITTED
+      // result, and the app fits them from the outline rather than being told --
+      // handing them over as placed points would seed the round with two handles
+      // no calibration step owns.
+      anchors: { outline: raw.calibration.anchors.outline as never },
+      // Carried for the reveal, which draws each slice's true edge from ITS OWN
+      // apex -- the pulled-out slice's apex is not the pie's centre.
+      ...(raw.calibration.slices ? { slices: raw.calibration.slices } : {}),
+    },
+    series: raw.series,
+  };
+}
+const pieChallengeTruth = pieChallengeTruthFrom(pieTruth as unknown as PieRawTruth);
+const pieExplodedChallengeTruth = pieChallengeTruthFrom(pieExplodedTruth as unknown as PieRawTruth);
 
 /** Keyed by the `EXAMPLES` id (see Workspace.tsx); the Workspace fills in the
  * image src + axes config id from that same entry when building a round. */
@@ -221,6 +229,24 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
     grade: 'medium',
     instruction: 'Click each slice boundary on the rim — start at the top (12 o’clock) and work clockwise.',
     truth: pieChallengeTruth,
+  },
+  // ⚑ THE BOSS LEVEL (v2.1). A pulled-out slice does not share the pie's centre,
+  // so it is measured about its OWN apex -- get that wrong and a 90-degree slice
+  // reads about 8 degrees off, a wrong number with nothing on screen looking
+  // wrong. The chain breaks there too (a pulled-out slice shares no boundary
+  // with anyone), so its two edges are a pair of their own: 9 clicks and one
+  // arming toggle against the plain pie's 6.
+  //
+  // ⚑ The instruction stays NEUTRAL, the same call the missing-bar round makes.
+  // Naming the pulled-out slice would give away the one thing being asked, and
+  // it does not need naming: the figure shows it, and the "Slice is exploded"
+  // control sits on the canvas the whole time a pie is being captured. Visible
+  // on screen is the bar -- not visible in the instruction.
+  'pie-exploded': {
+    family: 'pie',
+    grade: 'hard',
+    instruction: 'Click each slice boundary on the rim — start at the top (12 o’clock) and work clockwise.',
+    truth: pieExplodedChallengeTruth,
   },
 };
 
