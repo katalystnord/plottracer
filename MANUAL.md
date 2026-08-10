@@ -181,17 +181,25 @@ next. A reading you placed by hand is never overwritten.
   the cell **blank** rather than guess.
 - **Mark category ticks (optional, v2.1).** Once a Bar or Box Plot figure is
   calibrated, the calibration card offers **Mark category ticks?**. Open it, click
-  where the categories end (the value origin is already the start), and say how
-  many there are. Tick marks appear along the category axis; drag any of them if
-  the figure isn't evenly spaced. Choose whether the figure prints its ticks
-  **under each category** or **between them** — flip the setting and watch the
-  marks move to see which matches.
+  where the categories end (**P1** — the amber calibration handle — is already the
+  start), and say how many there are. Tick marks appear along the category axis;
+  drag any of them if the figure isn't evenly spaced. Choose whether the figure
+  prints its ticks **under each category** or **between them** — flip the setting
+  and watch the marks move to see which matches.
+  If P1 isn't where the categories start — you calibrated on a gridline part-way
+  up the value axis, say — press **Re-place axis** and click *both* ends yourself.
+  **Done** closes the panel and keeps everything; **Remove ticks** drops the marks
+  and the empty categories they created, keeping any you named or captured a bar
+  for.
   It is entirely optional. A single-series chart is one bar per category and needs
   none of it. Where it earns its place is a chart with **more than one series**, or
   one where **a series is missing a bar** — with the categories declared, every bar
   is filed by the band it sits in rather than by guessing from position, the table
   shows a row for every category before you capture anything, and a run of touching
   same-coloured bars can be split at the boundaries you marked.
+  If two bars of one series land in the same category — a miscounted figure, or a
+  bar sitting outside the axis you marked — the table says so underneath rather
+  than quietly showing one of them.
 - **⚠ Where the guess can go wrong, if you don't mark the ticks.** The
   nearest-already-named-bar rule above copes with a *later* series skipping a
   category. It cannot cope when the **first series you capture** is the one missing
