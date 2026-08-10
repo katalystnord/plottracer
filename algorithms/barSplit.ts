@@ -39,6 +39,15 @@ export interface SplitPiece {
   /** The band this piece fills, along the category axis. */
   from: number;
   to: number;
+  /** The INK's own extent along the category axis, within that band.
+   *
+   * ⚑ NOT the same as `from`/`to`, and conflating them was a real defect the
+   * corpus run caught: a bar is normally NARROWER than its band (that is what
+   * the gaps between bars are), so a piece boxed at the band edges is far wider
+   * than the bar it describes and misses the ground truth outright. The band
+   * says where to CUT; the ink says how wide the bar IS. */
+  atFrom: number;
+  atTo: number;
   /** The piece's own extent in the value direction, robustly estimated. */
   min: number;
   max: number;
@@ -107,9 +116,12 @@ export function splitRunAtDividers(
       emptyBands.push(band);
       continue;
     }
+    const ats = inBand.map((c) => c.at);
     pieces.push({
       from,
       to,
+      atFrom: Math.min(...ats),
+      atTo: Math.max(...ats),
       min: median(inBand.map((c) => c.min)),
       max: median(inBand.map((c) => c.max)),
       columns: inBand.length,

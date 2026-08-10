@@ -133,10 +133,15 @@ export function runBarDetect(
     const cuts = [span.lo, ...crossed, span.hi];
     const report = splitRunAtDividers(columns, cuts);
     for (const piece of report.pieces) {
+      // ⚑ The INK's extent, not the band's. A bar is narrower than its band --
+      // the gaps between bars are exactly that difference -- so boxing a piece
+      // at the band edges describes something much wider than the bar and misses
+      // the bar outright. Caught by the corpus run; every unit fixture happened
+      // to have bars that filled their bands completely, so nothing local saw it.
       boxes.push(
         categoryAxis === 'x'
-          ? { start: { x: piece.from, y: piece.min }, end: { x: piece.to, y: piece.max } }
-          : { start: { x: piece.min, y: piece.from }, end: { x: piece.max, y: piece.to } }
+          ? { start: { x: piece.atFrom, y: piece.min }, end: { x: piece.atTo, y: piece.max } }
+          : { start: { x: piece.min, y: piece.atFrom }, end: { x: piece.max, y: piece.atTo } }
       );
     }
   }

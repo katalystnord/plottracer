@@ -253,3 +253,27 @@ describe('end to end: a merged run of three touching bars', () => {
     expect(reconcileWithExpected(report, 3).complete).toBe(true);
   });
 });
+
+describe('⚑ a piece is boxed by its INK, not by its band', () => {
+  it('reports the ink extent when the bar is narrower than its band', () => {
+    // The defect the corpus run caught, and which every fixture above hid by
+    // having bars that filled their bands exactly. A real bar has gaps either
+    // side; boxing it at the band edges describes something much wider than the
+    // bar and misses it outright.
+    const columns: RunColumn[] = [];
+    for (let at = 12; at <= 27; at++) columns.push({ at, min: 30, max: 100 });
+    const piece = splitRunAtDividers(columns, [0, 40]).pieces[0]!;
+    expect(piece.from).toBe(0);
+    expect(piece.to).toBe(40);
+    expect(piece.atFrom).toBe(12);
+    expect(piece.atTo).toBe(27);
+  });
+
+  it('each piece of a merged run gets its own ink extent', () => {
+    // Two touching bars with a small gap between them inside one run.
+    const columns = [...bar(2, 16, 20), ...bar(22, 16, 60)];
+    const { pieces } = splitRunAtDividers(columns, [0, 20, 40]);
+    expect(pieces.map((p) => [p.atFrom, p.atTo])).toEqual([[2, 17], [22, 37]]);
+    expect(pieces.map((p) => [p.from, p.to])).toEqual([[0, 20], [20, 40]]);
+  });
+});
