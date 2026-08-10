@@ -13,20 +13,40 @@ import type { Pt, AxisRanges } from '../algorithms/challengeScore.js';
 /** How a round is captured + scored. `curve`/`scatter` map to `scoreRound`;
  * `histogram` is scored as a scatter over (bin-centre, value); `bar`/`box` use
  * `scoreOrderedRound`. It also selects the calibration config + capture readout. */
-export type ChallengeFamily = 'curve' | 'scatter' | 'histogram' | 'bar' | 'box';
+export type ChallengeFamily = 'curve' | 'scatter' | 'histogram' | 'bar' | 'box' | 'spider' | 'pie';
 
 // --- truth-file shape ---
 export interface ChallengeAnchor {
   px: number;
   py: number;
-  value: number;
+  /** The number typed at this anchor. Absent for a value-less step (a pie's
+   * outline points are pure geometry — the rim carries no reading). */
+  value?: number;
+  /** A second field the step asks for, positionally after the value — a spider
+   * spoke's axis name. Absent where the step has only one field. */
+  name?: string;
 }
 /** Calibration anchors keyed by the config's step key: XY/histogram carry
  * `x1/x2/y1/y2`; bar/box carry `p1/p2` (value axis only). */
 export interface ChallengeCalibration {
   imageWidth: number;
   imageHeight: number;
-  anchors: Record<string, ChallengeAnchor>;
+  /**
+   * One entry per calibration step key. An ARRAY value is a REPEATING step and
+   * expands to `key1 … keyN` — the same unrolling `CalibrationSession.getSteps`
+   * does — which is how a spider's spokes and a pie's outline arrive.
+   */
+  anchors: Record<string, ChallengeAnchor | ChallengeAnchor[]>;
+  /** Pie only: the true slice edges, as recorded pixels. The reveal draws these
+   * directly rather than reconstructing them from angles. */
+  slices?: readonly ChallengePieSlice[];
+}
+
+/** A pie slice's own geometry in the truth file (pixels, image-native). */
+export interface ChallengePieSlice {
+  apex: { px: number; py: number };
+  startEdge: { px: number; py: number };
+  endEdge: { px: number; py: number };
 }
 export interface ChallengeTruthAxis {
   label: string;
@@ -43,8 +63,17 @@ export interface ChallengeTruthSeries {
 }
 export interface ChallengeTruth {
   graphType: string;
-  /** `x` is absent for bar/box (value axis only). */
-  axes: { x?: ChallengeTruthAxis; y: ChallengeTruthAxis };
+  /**
+   * `x` is absent for bar/box (value axis only), and the whole block is absent
+   * for spider and pie — NEITHER HAS ONE VALUE AXIS. A spider has one scale per
+   * spoke (`spokes` below) and a pie has a whole (`total`), so synthesising a
+   * `y` here would have been a fabricated axis standing in for the real model.
+   */
+  axes?: { x?: ChallengeTruthAxis; y: ChallengeTruthAxis };
+  /** Spider only: one scale per spoke, in spoke order. */
+  spokes?: readonly { centre: number; max: number }[];
+  /** Pie only: the whole the slices are read against. */
+  total?: number;
   calibration: ChallengeCalibration;
   series: ChallengeTruthSeries[];
 }
@@ -68,6 +97,13 @@ export interface AdoptCalibrationInput {
   placed: Record<string, { px: number; py: number; values: string[] }>;
   optionValues: Record<string, string>;
   globalValues: Record<string, string>;
+  /**
+   * How many copies of a REPEATING step the placed points need (a spider's
+   * spokes, a pie's outline). `adoptCalibration` does not read this — the caller
+   * grows the session with `addRepeat()` first, because a session left at the
+   * step minimum would drop every point past it on the floor.
+   */
+  repeatCount?: number;
 }
 
 /**
@@ -79,10 +115,31 @@ export interface AdoptCalibrationInput {
  */
 export function calibrationInputsFromAnchors(cal: ChallengeCalibration): AdoptCalibrationInput {
   const placed: AdoptCalibrationInput['placed'] = {};
+  let repeatCount = 0;
+  const put = (key: string, a: ChallengeAnchor): void => {
+    // Positional, matching the step's `valueFields` order: value first, then the
+    // optional second field (a spoke's name). An anchor with no value places a
+    // pure-geometry point (a pie outline click), which takes no fields at all.
+    const values = a.value === undefined ? [] : [String(a.value)];
+    if (a.name !== undefined) values.push(a.name);
+    placed[key] = { px: a.px, py: a.py, values };
+  };
   for (const [key, a] of Object.entries(cal.anchors)) {
-    placed[key] = { px: a.px, py: a.py, values: [String(a.value)] };
+    if (Array.isArray(a)) {
+      // A repeating step, unrolled the way the session unrolls it: `key1 … keyN`.
+      //
+      // ⚑ AN ARRAY IS THE ONLY THING THAT DECLARES A REPEAT. The first version
+      // also read a trailing digit as one, so that a truth file could name its
+      // spokes `spoke1 … spoke6` directly -- and a BAR's ordinary `p1`/`p2`
+      // anchors matched it, reporting a two-repeat calibration for a type with
+      // no repeating step at all. Caught by the fixed-shape test below.
+      a.forEach((one, i) => put(`${key}${i + 1}`, one));
+      repeatCount = Math.max(repeatCount, a.length);
+    } else {
+      put(key, a);
+    }
   }
-  return { placed, optionValues: {}, globalValues: {} };
+  return { placed, optionValues: {}, globalValues: {}, repeatCount };
 }
 
 /**
@@ -90,6 +147,7 @@ export function calibrationInputsFromAnchors(cal: ChallengeCalibration): AdoptCa
  * `|| 1` guards a degenerate `min===max` truth so scoring can't divide by zero.
  */
 export function truthValueRange(truth: ChallengeTruth): number {
+  if (!truth.axes) return truth.total ?? 1; // pie: the whole IS the range
   return (truth.axes.y.max - truth.axes.y.min) || 1;
 }
 
@@ -100,8 +158,8 @@ export function truthValueRange(truth: ChallengeTruth): number {
  */
 export function truthAxisRanges(truth: ChallengeTruth): AxisRanges {
   return {
-    xRange: (truth.axes.x ? truth.axes.x.max - truth.axes.x.min : 0) || 1,
-    yRange: (truth.axes.y.max - truth.axes.y.min) || 1,
+    xRange: (truth.axes?.x ? truth.axes.x.max - truth.axes.x.min : 0) || 1,
+    yRange: (truth.axes ? truth.axes.y.max - truth.axes.y.min : 0) || 1,
   };
 }
 
@@ -134,13 +192,108 @@ export function truthBoxValues(truth: ChallengeTruth): number[][] {
   ]);
 }
 
+/**
+ * One anchor by step key, or `null` where the key names a REPEATING step (an
+ * array) or nothing at all. The union is the price of one type covering both
+ * shapes; these two readers are the single place that pays it.
+ */
+export function singleAnchor(cal: ChallengeCalibration, key: string): ChallengeAnchor | null {
+  const a = cal.anchors[key];
+  return a && !Array.isArray(a) ? a : null;
+}
+
+/** The anchors of a REPEATING step, in order. Empty for a key that holds one
+ * anchor or nothing. */
+export function anchorList(cal: ChallengeCalibration, key: string): readonly ChallengeAnchor[] {
+  const a = cal.anchors[key];
+  return Array.isArray(a) ? a : [];
+}
+
+/**
+ * Spider truth as (spoke index, value-as-a-fraction-of-that-spoke) points.
+ *
+ * ⚑ WHY A SCATTER AND NOT THE ORDERED SCORER. A spider is N×1D: the spoke IS the
+ * identity, so a skipped spoke must be a MISS on that spoke, not a shift that
+ * makes every later reading score against the wrong axis. The ordered scorer
+ * pairs by position and cascades on a gap — right for a bar chart, where order
+ * is the only identity there is, and wrong here. Handing the index to the
+ * scatter scorer as the x coordinate makes the identity part of the match.
+ *
+ * ⚑ AND WHY THE VALUE IS A FRACTION. Each spoke carries its OWN scale — 120 MPa
+ * on one, 5 cost-index units on the next — so a raw error is not comparable
+ * between them. Normalising per spoke is the same thing the figure does when it
+ * draws them at a common radius.
+ */
+export function truthSpiderPoints(truth: ChallengeTruth): Pt[] {
+  const spokes = truth.spokes ?? [];
+  return (truth.series[0]?.points ?? []).map((p, i) => {
+    const spoke = spokes[i];
+    const span = spoke ? (spoke.max - spoke.centre) || 1 : 1;
+    return { x: i, y: (Number(p.value) - (spoke?.centre ?? 0)) / span };
+  });
+}
+
+/** The x span spider scoring normalises against — spoke 0 to spoke N−1. */
+export function spiderAxisRanges(truth: ChallengeTruth): AxisRanges {
+  return { xRange: (truth.spokes?.length ?? 1) - 1 || 1, yRange: 1 };
+}
+
+/** A user reading turned into the same (spoke index, fraction) space. `null`
+ * readings — a spoke left empty — are dropped, which is what makes them count as
+ * misses rather than as zeroes. */
+export function spiderUserPoints(
+  values: readonly (number | null)[],
+  truth: ChallengeTruth
+): Pt[] {
+  const spokes = truth.spokes ?? [];
+  const pts: Pt[] = [];
+  values.forEach((v, i) => {
+    if (v === null || !Number.isFinite(v)) return;
+    const spoke = spokes[i];
+    const span = spoke ? (spoke.max - spoke.centre) || 1 : 1;
+    pts.push({ x: i, y: (v - (spoke?.centre ?? 0)) / span });
+  });
+  return pts;
+}
+
+/** Pie truth as one-value vectors per slice, in the figure's own slice order
+ * (the round's instruction names where that order starts). */
+export function truthPieValues(truth: ChallengeTruth): number[][] {
+  return (truth.series[0]?.points ?? []).map((p) => [Number(p.value)]);
+}
+
+/**
+ * The true point on spoke `index` for `value`, in image pixels — the spider
+ * reveal.
+ *
+ * Straight-line interpolation between the two anchors the spoke was calibrated
+ * from (centre at its centre value, tip at its max), which is the same
+ * arithmetic `valueToPy` does for a bar's value axis. Nothing is fitted here:
+ * both ends are recorded pixels in the truth file.
+ */
+export function spiderPointAt(
+  cal: ChallengeCalibration,
+  truth: ChallengeTruth,
+  index: number,
+  value: number
+): { x: number; y: number } | null {
+  const origin = singleAnchor(cal, 'origin');
+  const tip = anchorList(cal, 'spoke')[index];
+  if (!origin || !tip) return null;
+  const spoke = truth.spokes?.[index];
+  if (!spoke) return null;
+  const span = (spoke.max - spoke.centre) || 1;
+  const t = (value - spoke.centre) / span;
+  return { x: origin.px + t * (tip.px - origin.px), y: origin.py + t * (tip.py - origin.py) };
+}
+
 /** Map a value on the value axis to an image-pixel `py`, from the p1/p2 anchors
  * (bar/box reveal — they have no x calibration, so the true values are drawn as
  * horizontal reference lines). */
 export function valueToPy(cal: ChallengeCalibration, value: number): number {
-  const p1 = cal.anchors.p1;
-  const p2 = cal.anchors.p2;
-  if (!p1 || !p2 || p2.value === p1.value) return 0;
+  const p1 = singleAnchor(cal, 'p1');
+  const p2 = singleAnchor(cal, 'p2');
+  if (!p1 || !p2 || p1.value === undefined || p2.value === undefined || p2.value === p1.value) return 0;
   const t = (value - p1.value) / (p2.value - p1.value);
   return p1.py + t * (p2.py - p1.py);
 }

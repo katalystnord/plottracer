@@ -125,6 +125,12 @@ import {
   truthSeriesPoints,
   truthHistogramPoints,
   truthBarValues,
+  truthSpiderPoints,
+  spiderUserPoints,
+  spiderAxisRanges,
+  spiderPointAt,
+  truthPieValues,
+  singleAnchor,
   truthBoxValues,
   valueToPy,
   type ChallengeExample,
@@ -2274,7 +2280,15 @@ export function Workspace() {
         );
       closePdf();
       resetDocument(ex.axesConfigId, dataURL); // fresh session (swapSession updates sessionRef); sets figureCaptured=false
-      sessionRef.current.adoptCalibration(calibrationInputsFromAnchors(ex.truth.calibration));
+      const inputs = calibrationInputsFromAnchors(ex.truth.calibration);
+      // ⚑ Grow the REPEATING step first. A spider's six spokes and a pie's four
+      // outline points are steps that do not exist until asked for, and a session
+      // sitting at the step minimum silently keeps only the first three placed
+      // points -- a calibration that looks adopted and is a different figure.
+      while (sessionRef.current.getRepeatCount() < (inputs.repeatCount ?? 0)) {
+        if (!sessionRef.current.addRepeat()) break;
+      }
+      sessionRef.current.adoptCalibration(inputs);
       imageCanvasRef.current?.loadImageFromSrc(dataURL, ex.name);
       // The example IS the whole figure-of-record: capture it (a no-op crop) so the
       // player can place points -- without this, capture stays pending and every
@@ -2330,6 +2344,27 @@ export function Workspace() {
         .getHistogramBins()
         .flatMap((b) => (b ? [{ x: (b.binStart + b.binEnd) / 2, y: b.value }] : []));
       score = scoreRound('scatter', [userPts], [truthHistogramPoints(ex.truth)], truthAxisRanges(ex.truth), rawSeconds);
+    } else if (ex.family === 'spider') {
+      // ⚑ Scored as a SCATTER over (spoke index, value as a fraction of that
+      // spoke). The index is the x coordinate, so a spoke left empty is a MISS on
+      // that spoke instead of shifting every later reading onto the wrong axis --
+      // see truthSpiderPoints for why the ordered scorer is wrong here.
+      const values = session.getSpiderTable().columns[0]?.values ?? [];
+      score = scoreRound(
+        'scatter',
+        [spiderUserPoints(values, ex.truth)],
+        [truthSpiderPoints(ex.truth)],
+        spiderAxisRanges(ex.truth),
+        rawSeconds
+      );
+    } else if (ex.family === 'pie') {
+      // The slice's value is DERIVED from its two boundaries, so the tuple's own
+      // `derived` is the reading -- neither member is the number being scored.
+      // Order is capture order, which the instruction pins to 12 o'clock.
+      const items = session
+        .getTupleRows()
+        .flatMap((row) => (row.derived === null ? [] : [[row.derived]]));
+      score = scoreOrderedRound(items, truthPieValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
     } else if (ex.family === 'bar') {
       // One value per bar, ranked left-to-right (no x calibration -> order is identity).
       const items =
@@ -4701,10 +4736,32 @@ export function Workspace() {
       const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(Number(p.x), Number(p.y))));
       return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
     }
+    // ⚑ Spider and pie are revealed from RECORDED PIXELS in the truth file, not
+    // from a projection: a spoke's true point interpolates between the two
+    // anchors it was calibrated from, and a pie's true edges are stored outright.
+    if (ex.family === 'spider') {
+      const pts = (ex.truth.series[0]?.points ?? []).map((p, i) =>
+        spiderPointAt(ex.truth.calibration, ex.truth, i, Number(p.value))
+      );
+      const ring = pts.filter((q): q is { x: number; y: number } => q !== null);
+      // The closed profile, plus each true reading as its own marker -- the ring
+      // shows the shape, the markers show where each answer sat on its axis.
+      return { curves: ring.length > 1 ? [[...ring, ring[0]!]] : [], markers: ring };
+    }
+    if (ex.family === 'pie') {
+      const slices = ex.truth.calibration.slices ?? [];
+      return {
+        curves: slices.map((sl) => [
+          { x: sl.apex.px, y: sl.apex.py },
+          { x: sl.startEdge.px, y: sl.startEdge.py },
+        ]),
+        markers: [],
+      };
+    }
     // bar/box have no x calibration -> draw the true values as horizontal lines
     // from the value-axis anchors (bar: each value; box: each median).
     const cal = ex.truth.calibration;
-    const x0 = cal.anchors.p1?.px ?? 0;
+    const x0 = singleAnchor(cal, 'p1')?.px ?? 0;
     const x1 = cal.imageWidth - 20;
     const hline = (value: number) => [
       { x: x0, y: valueToPy(cal, value) },

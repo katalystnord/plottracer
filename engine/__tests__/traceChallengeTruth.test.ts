@@ -14,6 +14,13 @@ import {
   drawGradedRounds,
   DEFAULT_GRADE_PLAN,
   type ChallengeGrade,
+  singleAnchor,
+  anchorList,
+  truthSpiderPoints,
+  spiderUserPoints,
+  spiderAxisRanges,
+  spiderPointAt,
+  truthPieValues,
 } from '../traceChallenge.js';
 
 /**
@@ -71,21 +78,21 @@ describe('the value range scoring normalises against', () => {
 describe('axis ranges for the ordered scorers', () => {
   it('reads both spans from a figure that has an x axis', () => {
     const r = truthAxisRanges(HISTOGRAM);
-    expect(r.xRange).toBeCloseTo(HISTOGRAM.axes.x!.max - HISTOGRAM.axes.x!.min, 9);
-    expect(r.yRange).toBeCloseTo(HISTOGRAM.axes.y.max - HISTOGRAM.axes.y.min, 9);
+    expect(r.xRange).toBeCloseTo(HISTOGRAM.axes!.x!.max - HISTOGRAM.axes!.x!.min, 9);
+    expect(r.yRange).toBeCloseTo(HISTOGRAM.axes!.y.max - HISTOGRAM.axes!.y.min, 9);
   });
 
   it('⚑ substitutes 1 for a MISSING x axis, which bar and box genuinely have', () => {
     // Bar/box truth carries no x axis at all. Without the fallback xRange is
     // 0 and any scorer that divides by it produces Infinity — and the comment
     // says this is inert for those types, which only holds if it is 1.
-    expect(BAR.axes.x).toBeUndefined();
+    expect(BAR.axes!.x).toBeUndefined();
     expect(truthAxisRanges(BAR).xRange).toBe(1);
     expect(truthAxisRanges(BAR).yRange).toBeCloseTo(450, 9);
   });
 
   it('substitutes 1 for a degenerate x axis too', () => {
-    const flatX = { ...HISTOGRAM, axes: { ...HISTOGRAM.axes, x: { label: 'x', min: 5, max: 5 } } } as ChallengeTruth;
+    const flatX = { ...HISTOGRAM, axes: { ...HISTOGRAM.axes!, x: { label: 'x', min: 5, max: 5 } } } as ChallengeTruth;
     expect(truthAxisRanges(flatX).xRange).toBe(1);
   });
 });
@@ -207,23 +214,23 @@ describe('drawing the true value as a reference line (bar/box reveal)', () => {
     // The reveal draws these lines over the figure. If the mapping is off,
     // the line sits beside the bar it is meant to mark and the player is told
     // their correct answer was wrong.
-    expect(valueToPy(cal, cal.anchors.p1!.value)).toBeCloseTo(cal.anchors.p1!.py, 6);
-    expect(valueToPy(cal, cal.anchors.p2!.value)).toBeCloseTo(cal.anchors.p2!.py, 6);
+    expect(valueToPy(cal, singleAnchor(cal, 'p1')!.value!)).toBeCloseTo(singleAnchor(cal, 'p1')!.py, 6);
+    expect(valueToPy(cal, singleAnchor(cal, 'p2')!.value!)).toBeCloseTo(singleAnchor(cal, 'p2')!.py, 6);
   });
 
   it('interpolates the midpoint to the midpoint row', () => {
-    const p1 = cal.anchors.p1!;
-    const p2 = cal.anchors.p2!;
-    const mid = (p1.value + p2.value) / 2;
+    const p1 = singleAnchor(cal, 'p1')!;
+    const p2 = singleAnchor(cal, 'p2')!;
+    const mid = (p1.value! + p2.value!) / 2;
     expect(valueToPy(cal, mid)).toBeCloseTo((p1.py + p2.py) / 2, 6);
   });
 
   it('extrapolates beyond the anchors rather than clamping', () => {
     // A truth value above the calibrated top is drawn off the axis, which is
     // honest; clamping would draw it ON the top gridline as if it belonged.
-    const p1 = cal.anchors.p1!;
-    const p2 = cal.anchors.p2!;
-    const beyond = valueToPy(cal, p2.value + (p2.value - p1.value));
+    const p1 = singleAnchor(cal, 'p1')!;
+    const p2 = singleAnchor(cal, 'p2')!;
+    const beyond = valueToPy(cal, p2.value! + (p2.value! - p1.value!));
     expect(beyond).toBeCloseTo(p2.py + (p2.py - p1.py), 6);
   });
 
@@ -239,7 +246,7 @@ describe('drawing the true value as a reference line (bar/box reveal)', () => {
 
   it('returns 0 when either anchor is missing, e.g. an XY truth with no p1/p2', () => {
     expect(valueToPy(HISTOGRAM.calibration, 10)).toBe(0);
-    const onlyP1 = { ...cal, anchors: { p1: cal.anchors.p1! } } as ChallengeCalibration;
+    const onlyP1 = { ...cal, anchors: { p1: singleAnchor(cal, 'p1')! } } as ChallengeCalibration;
     expect(valueToPy(onlyP1, 10)).toBe(0);
   });
 });
@@ -255,17 +262,17 @@ describe('starting a round pre-calibrated', () => {
     // bypass the string contract the session's own door expects.
     const input = calibrationInputsFromAnchors(BOX.calibration);
     expect(input.placed.p1).toEqual({
-      px: BOX.calibration.anchors.p1!.px,
-      py: BOX.calibration.anchors.p1!.py,
-      values: [String(BOX.calibration.anchors.p1!.value)],
+      px: singleAnchor(BOX.calibration, 'p1')!.px,
+      py: singleAnchor(BOX.calibration, 'p1')!.py,
+      values: [String(singleAnchor(BOX.calibration, 'p1')!.value)],
     });
     expect(typeof input.placed.p1!.values[0]).toBe('string');
   });
 
   it('carries the anchor pixels through unchanged, since they are already image-native', () => {
     const input = calibrationInputsFromAnchors(BOX.calibration);
-    expect(input.placed.p2!.px).toBe(BOX.calibration.anchors.p2!.px);
-    expect(input.placed.p2!.py).toBe(BOX.calibration.anchors.p2!.py);
+    expect(input.placed.p2!.px).toBe(singleAnchor(BOX.calibration, 'p2')!.px);
+    expect(input.placed.p2!.py).toBe(singleAnchor(BOX.calibration, 'p2')!.py);
   });
 
   it('leaves options and global values empty, so the config’s own defaults stand', () => {
@@ -393,5 +400,191 @@ describe('the WEIGHTED round draw (v2.1)', () => {
   it('honours a different plan', () => {
     const rs = drawGradedRounds(pool, gradeOf, { easy: 1, medium: 2, hard: 0 }, seeded(9));
     expect(counts(rs)).toEqual({ easy: 1, medium: 2, hard: 0 });
+  });
+});
+
+
+/**
+ * SPIDER AND PIE (v2.1) — the two families whose truth files do NOT match
+ * `ChallengeTruth` as shipped, because neither figure has one value axis. The
+ * UI reshapes them at import (`ui/src/challengeExamples.ts`); these tests do the
+ * same reshape from the same committed files, so a change to either file's
+ * layout fails here rather than silently mis-scoring a round.
+ */
+const spiderRaw = JSON.parse(readFileSync('samples/spider-material-profile.truth.json', 'utf8')) as {
+  axes: { centre: number; max: number }[];
+  calibration: {
+    imageWidth: number;
+    imageHeight: number;
+    anchors: Record<string, { px: number; py: number; value?: number; name?: string }>;
+  };
+  series: ChallengeTruth['series'];
+};
+const SPIDER: ChallengeTruth = {
+  graphType: 'spider',
+  spokes: spiderRaw.axes.map((a) => ({ centre: a.centre, max: a.max })),
+  calibration: {
+    imageWidth: spiderRaw.calibration.imageWidth,
+    imageHeight: spiderRaw.calibration.imageHeight,
+    anchors: {
+      origin: spiderRaw.calibration.anchors.origin!,
+      spoke: spiderRaw.axes.map((_, i) => spiderRaw.calibration.anchors[`spoke${i + 1}`]!),
+    },
+  },
+  series: [spiderRaw.series[0]!],
+};
+
+const pieRaw = JSON.parse(readFileSync('samples/pie-filler-composition.truth.json', 'utf8')) as {
+  total: number;
+  calibration: {
+    imageWidth: number;
+    imageHeight: number;
+    anchors: Record<string, unknown>;
+    slices: NonNullable<ChallengeTruth['calibration']['slices']>;
+  };
+  series: ChallengeTruth['series'];
+};
+const PIE: ChallengeTruth = {
+  graphType: 'pie',
+  total: pieRaw.total,
+  calibration: {
+    imageWidth: pieRaw.calibration.imageWidth,
+    imageHeight: pieRaw.calibration.imageHeight,
+    anchors: { outline: pieRaw.calibration.anchors.outline as never },
+    ...(pieRaw.calibration.slices ? { slices: pieRaw.calibration.slices } : {}),
+  },
+  series: pieRaw.series,
+};
+
+describe('spider truth — one scale per spoke', () => {
+  it('⚑ normalises each spoke by ITS OWN range, not a shared one', () => {
+    // The whole point of the N×1D record. Cost index tops out at 5 and tensile
+    // strength at 120; scored against a single range, a 0.4 slip on cost would
+    // read as nothing while the same fraction on tensile read as 48 MPa.
+    const pts = truthSpiderPoints(SPIDER);
+    const raw = SPIDER.series[0]!.points;
+    expect(SPIDER.spokes![0]!.max).toBe(120);
+    expect(SPIDER.spokes![5]!.max).toBe(5);
+    expect(pts[0]!.y).toBeCloseTo(Number(raw[0]!.value) / 120, 9);
+    expect(pts[5]!.y).toBeCloseTo(Number(raw[5]!.value) / 5, 9);
+    // ...and the two fractions are NOT what a shared range would have produced.
+    expect(pts[5]!.y).not.toBeCloseTo(Number(raw[5]!.value) / 120, 3);
+  });
+
+  it('carries the spoke INDEX as x, which is what makes a gap a miss', () => {
+    const pts = truthSpiderPoints(SPIDER);
+    expect(pts.map((p) => p.x)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('⚑ a spoke left EMPTY drops out rather than reading as the centre value', () => {
+    // A null slot scored as 0 would be a wrong ANSWER on that axis; dropped, it
+    // is a miss, which is what it actually is.
+    const values = [92, null, 21, 88, 46, 3.4];
+    const user = spiderUserPoints(values, SPIDER);
+    expect(user).toHaveLength(5);
+    expect(user.map((p) => p.x)).toEqual([0, 2, 3, 4, 5]);
+  });
+
+  it('a perfect trace lands exactly on the truth points', () => {
+    const values = SPIDER.series[0]!.points.map((p) => Number(p.value));
+    expect(spiderUserPoints(values, SPIDER)).toEqual(truthSpiderPoints(SPIDER));
+  });
+
+  it('⚑ spaces the spokes so a neighbouring one cannot be mistaken for a match', () => {
+    // Scoring is a scatter with a 0.15 match threshold. One spoke apart must
+    // exceed it, or a point on the WRONG axis scores as a good reading.
+    const r = spiderAxisRanges(SPIDER);
+    expect(1 / r.xRange).toBeGreaterThan(0.15);
+    expect(r.yRange).toBe(1);
+  });
+
+  it('⚑ puts the CENTRE value at the origin pixel and the max at the spoke tip', () => {
+    // The reveal is drawn from these. Off by a spoke and the player is shown a
+    // "true" profile that is not the one in the figure.
+    const cal = SPIDER.calibration;
+    const origin = singleAnchor(cal, 'origin')!;
+    for (let i = 0; i < SPIDER.spokes!.length; i++) {
+      const tip = anchorList(cal, 'spoke')[i]!;
+      const atCentre = spiderPointAt(cal, SPIDER, i, SPIDER.spokes![i]!.centre)!;
+      const atMax = spiderPointAt(cal, SPIDER, i, SPIDER.spokes![i]!.max)!;
+      expect(atCentre.x).toBeCloseTo(origin.px, 6);
+      expect(atCentre.y).toBeCloseTo(origin.py, 6);
+      expect(atMax.x).toBeCloseTo(tip.px, 6);
+      expect(atMax.y).toBeCloseTo(tip.py, 6);
+    }
+  });
+
+  it('returns null for a spoke the calibration has no anchor for', () => {
+    expect(spiderPointAt(SPIDER.calibration, SPIDER, 99, 10)).toBeNull();
+  });
+});
+
+describe('pie truth — the whole, and the slices read against it', () => {
+  it('reads the slice values in the figure’s own order', () => {
+    expect(truthPieValues(PIE)).toEqual([[42], [23], [18], [9], [8]]);
+  });
+
+  it('⚑ normalises against the TOTAL, since a pie has no value axis', () => {
+    expect(PIE.axes).toBeUndefined();
+    expect(truthValueRange(PIE)).toBe(100);
+  });
+
+  it('⚑ the slice values sum to the total — the figure’s own consistency check', () => {
+    const sum = truthPieValues(PIE).reduce((a, v) => a + v[0]!, 0);
+    expect(sum).toBeCloseTo(PIE.total!, 6);
+  });
+
+  it('ships the true slice edges as recorded pixels, one per slice', () => {
+    // The reveal draws apex->startEdge per slice; a missing block would draw
+    // nothing and read as "no answer" rather than as a broken reveal.
+    expect(PIE.calibration.slices).toHaveLength(truthPieValues(PIE).length);
+    for (const sl of PIE.calibration.slices!) {
+      expect(Number.isFinite(sl.apex.px)).toBe(true);
+      expect(Number.isFinite(sl.startEdge.py)).toBe(true);
+    }
+  });
+});
+
+describe('adopting a calibration with a REPEATING step', () => {
+  it('⚑ unrolls a spider’s spokes to the keys the session actually walks', () => {
+    const inputs = calibrationInputsFromAnchors(SPIDER.calibration);
+    expect(Object.keys(inputs.placed).sort()).toEqual(
+      ['origin', 'spoke1', 'spoke2', 'spoke3', 'spoke4', 'spoke5', 'spoke6'].sort()
+    );
+    // The count the loader grows the session to. Left at the step minimum, the
+    // spokes past it are dropped and the round calibrates to a different figure.
+    expect(inputs.repeatCount).toBe(6);
+  });
+
+  it('⚑ carries the spoke NAME as the step’s second field, positionally', () => {
+    const inputs = calibrationInputsFromAnchors(SPIDER.calibration);
+    // valueFields order is [value, name]; swapped, every spoke calibrates to
+    // NaN and the whole round reads null.
+    expect(inputs.placed.spoke1!.values[0]).toBe('120');
+    expect(inputs.placed.spoke1!.values[1]).toBe('Tensile strength (MPa)');
+    // The origin has one field only -- no name to append.
+    expect(inputs.placed.origin!.values).toEqual(['0']);
+  });
+
+  it('⚑ expands a pie’s outline ARRAY into outline1..N', () => {
+    const inputs = calibrationInputsFromAnchors(PIE.calibration);
+    expect(Object.keys(inputs.placed).sort()).toEqual(['outline1', 'outline2', 'outline3', 'outline4']);
+    expect(inputs.repeatCount).toBe(4);
+  });
+
+  it('⚑ places an outline point with NO value fields at all', () => {
+    // The outline is pure geometry -- the rim carries no reading. `String(undefined)`
+    // would have seeded every one of them with the literal text "undefined".
+    const inputs = calibrationInputsFromAnchors(PIE.calibration);
+    expect(inputs.placed.outline1!.values).toEqual([]);
+    expect(inputs.placed.outline1!.px).toBeCloseTo(450, 6);
+  });
+
+  it('⚑ leaves a FIXED-shape type at repeatCount 0, digits in its keys and all', () => {
+    // A bar's anchors are `p1`/`p2`. An earlier version read a trailing digit as
+    // a repeat count and reported 2 for a type with no repeating step -- the
+    // loader would then have grown a session that has nothing to grow.
+    expect(Object.keys(BAR.calibration.anchors)).toEqual(['p1', 'p2']);
+    expect(calibrationInputsFromAnchors(BAR.calibration).repeatCount).toBe(0);
   });
 });
