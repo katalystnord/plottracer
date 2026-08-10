@@ -271,6 +271,72 @@ def gen_bar_grouped():
     })
 
 
+def gen_bar_grouped_missing():
+    """Enzyme activity by substrate — a grouped bar where the FIRST series is
+    MISSING a category (v2.1).
+
+    ⚑ WHY THIS FIGURE EXISTS, and why the gap is in series ONE. Until category
+    ticks, a bar's category was guessed: the nearest already-named bar in another
+    series donated its name. That works when a LATER series skips a category. It
+    fabricates when the first-captured series is the incomplete one -- the missing
+    category never comes into being, so the later series' bar there attaches to a
+    neighbour and exports a wrong name indistinguishable from a transcribed one.
+    Verified against the live session, and order-dependent: capturing
+    left-to-right, the natural direction, is the one that lies.
+
+    ⚑ Measured: 0 of 230 multi-series bar charts in the ICPR corpus have a
+    category absent from a series. That corpus is PUBLISHED figures, so it
+    measures editorial polish -- journals do not print ragged grids. Draft and
+    internal data does, which is what our users bring, and nothing in samples
+    exercised it until now.
+
+    Truth = per-bar value, and the incomplete series simply has FOUR points where
+    the other has five. The absence is the record, not a zero."""
+    name = "bar-grouped-missing-assay"
+    cats = ["Buffer", "Glucose", "Lactose", "Sucrose", "Maltose"]
+    # The gap sits in the MIDDLE, where a positional guess mis-assigns most
+    # visibly -- an end gap could be mistaken for a short series.
+    control = {"Buffer": 14, "Glucose": 38, "Sucrose": 22, "Maltose": 31}
+    treated = {"Buffer": 16, "Glucose": 52, "Lactose": 44, "Sucrose": 29, "Maltose": 47}
+    x = np.arange(len(cats))
+    width = 0.4  # touching within each group, which is also the case ticks help
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    # np.nan draws nothing at all -- an ABSENT bar, not a zero-height one.
+    ax.bar(x - width / 2, [control.get(c, np.nan) for c in cats], width, color=NAVY, label="Control")
+    ax.bar(x + width / 2, [treated.get(c, np.nan) for c in cats], width, color="#c0392b", label="Treated")
+    ax.set_axisbelow(True)
+    ax.set_xticks(x)
+    ax.set_xticklabels(cats)
+    ax.set_ylim(0, 60)
+    ax.set_ylabel("Enzyme activity (U/mg)", fontsize=13)
+    ax.set_title("Enzyme activity by substrate — control assay not run for lactose", fontsize=14)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.legend(fontsize=10)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 60)
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {
+            "imagePath": name + ".png",
+            "note": (
+                "Synthetic ground truth. The FIRST series has no Lactose bar -- the "
+                "absence is part of the record, not a zero. Capturing this without "
+                "declared category ticks makes the second series' Lactose bar take a "
+                "neighbour's name."
+            ),
+        },
+        "graphType": "bar",
+        "axes": {"y": {"label": "Enzyme activity (U/mg)", "min": 0, "max": 60}},
+        "calibration": calib,
+        "series": [
+            {"name": "Control", "points": [{"category": c, "value": control[c]} for c in cats if c in control]},
+            {"name": "Treated", "points": [{"category": c, "value": treated[c]} for c in cats if c in treated]},
+        ],
+    })
+
+
 def gen_bar_stacked():
     """Quarterly cost breakdown — a STACKED bar (v2.0): four series drawn as
     segments of one bar per quarter. Truth = each series' own SEGMENT height
@@ -1306,6 +1372,7 @@ if __name__ == "__main__":
     gen_multiseries()
     gen_bar()
     gen_bar_grouped()
+    gen_bar_grouped_missing()
     gen_bar_stacked()
     gen_bar_floating()
     gen_histogram()
@@ -1328,4 +1395,4 @@ if __name__ == "__main__":
     gen_pie_exploded()
     gen_donut()
     gen_pie_tilted()
-    print("generated all 22 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, stacked bar, floating bar.")
+    print("generated all 23 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, grouped bar with a missing category, stacked bar, floating bar.")

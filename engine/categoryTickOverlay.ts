@@ -29,10 +29,13 @@ const TICK_LENGTH = 14;
  * placed them, they are frozen, and every generated mark derives from them. */
 const EDGE_LENGTH = 11;
 
-/** Colour of the marked category axis and its ticks. Deliberately the calibration
- * amber of P1 rather than a new hue — this geometry is placed the same way a
- * calibration handle is, even though it is not one. */
-export const CATEGORY_TICK_COLOR = '#e0a458';
+/** Colour of the marked category axis, its ends and its ticks.
+ *
+ * ⚑ Deliberately NOT the calibration amber. The category axis's first edge sits
+ * on the very same pixel as P1, so borrowing P1's colour would put two different
+ * kinds of thing in one place wearing one uniform. This is the violet the bar
+ * drag-box already uses — the "bar structure" hue, which is what this is. */
+export const CATEGORY_TICK_COLOR = '#7c3aed';
 
 /** The unit vector perpendicular to the axis, pointing away from the plot: down
  * for an upright chart, and rotating with the axis for anything else. Null for a
@@ -93,7 +96,27 @@ export function categoryAxisGlyphs({ edges, tickPoints }: CategoryOverlayInput):
  */
 export function categoryTickMarkers({ edges, tickPoints }: CategoryOverlayInput): CanvasMarker[] {
   if (!edges) return [];
-  return tickPoints.map((p, i) => ({
+  // ⚑ The two EDGES get a visible, LABELLED, non-draggable mark. Drawing them
+  // only as glyph segments made them invisible in practice: the segments carry
+  // no colour, so they rendered dark straight on top of the figure's own axis,
+  // and the marked SPAN could not be seen at all -- you could see where the
+  // categories started only because P1 happens to sit there. Caught by David
+  // reading a screenshot, which is the instrument that keeps finding these.
+  //
+  // Not draggable, and that stays deliberate: every tick is a function of these
+  // two, so dragging one rescales the lot and discards any the user adjusted.
+  // Visible is not the same as grabbable, and the labels say which is which.
+  const ends: CanvasMarker[] = [
+    { id: 'categoryAxisStart', x: edges[0].x, y: edges[0].y, label: 'Categories start' },
+    { id: 'categoryAxisEnd', x: edges[1].x, y: edges[1].y, label: 'Categories end' },
+  ].map((m) => ({
+    ...m,
+    color: CATEGORY_TICK_COLOR,
+    draggable: false,
+    kind: 'calibration' as const,
+    radius: 5,
+  }));
+  const ticks: CanvasMarker[] = tickPoints.map((p, i) => ({
     id: `categoryTick${i}`,
     x: p.x,
     y: p.y,
@@ -103,6 +126,7 @@ export function categoryTickMarkers({ edges, tickPoints }: CategoryOverlayInput)
     kind: 'calibration' as const,
     radius: 4,
   }));
+  return [...ends, ...ticks];
 }
 
 /** The tick index a marker id refers to, or null when the id is not one of ours. */

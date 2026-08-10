@@ -81,19 +81,41 @@ describe('the drawn axis', () => {
 describe('the drag handles', () => {
   it('gives every tick a draggable handle with a recoverable id', () => {
     const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
-    expect(markers).toHaveLength(2);
-    expect(markers[0]).toMatchObject({ id: 'categoryTick0', x: 225, y: 500, draggable: true });
-    expect(markers[1]!.id).toBe('categoryTick1');
+    const ticks = markers.filter((m) => categoryTickIndexFromId(m.id) !== null);
+    expect(ticks).toHaveLength(2);
+    expect(ticks[0]).toMatchObject({ id: 'categoryTick0', x: 225, y: 500, draggable: true });
+    expect(ticks[1]!.id).toBe('categoryTick1');
     expect(markers.every((m) => m.color === CATEGORY_TICK_COLOR)).toBe(true);
   });
 
-  it('⚑ gives the axis EDGES no handle — the destructive gesture must not be the easiest', () => {
+  it('⚑ marks the axis ENDS visibly, and names them', () => {
+    // Drawn only as glyph segments they were invisible in practice -- the
+    // segment channel carries no colour, so they rendered dark straight on the
+    // figure's own axis and the marked SPAN could not be seen at all. David
+    // spotted it in a screenshot: "I cannot see that you ever set the end".
+    const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 350, y: 500 }] });
+    const start = markers.find((m) => m.id === 'categoryAxisStart');
+    const end = markers.find((m) => m.id === 'categoryAxisEnd');
+    expect(start).toMatchObject({ x: 100, y: 500, label: 'Categories start' });
+    expect(end).toMatchObject({ x: 600, y: 500, label: 'Categories end' });
+  });
+
+  it('⚑ but the ends are NOT draggable — visible is not the same as grabbable', () => {
     // Every tick is a function of the two edges, so dragging one rescales them
     // all and discards any the user adjusted. Re-placing the axis lives in the
     // fold-out, where it can warn first.
     const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
-    expect(markers.map((m) => m.id)).toEqual(['categoryTick0']);
-    expect(markers.some((m) => m.x === 100 || m.x === 600)).toBe(false);
+    for (const id of ['categoryAxisStart', 'categoryAxisEnd']) {
+      expect(markers.find((m) => m.id === id)!.draggable, id).toBe(false);
+    }
+    // ...and neither end can be mistaken for a tick by the drag router.
+    expect(categoryTickIndexFromId('categoryAxisStart')).toBeNull();
+    expect(categoryTickIndexFromId('categoryAxisEnd')).toBeNull();
+  });
+
+  it('⚑ does not wear the calibration amber — P1 sits on the very same pixel', () => {
+    // Two different kinds of thing in one place must not wear one uniform.
+    expect(CATEGORY_TICK_COLOR).not.toBe('#e0a458');
   });
 
   it('reads a tick index back out of a marker id, and refuses anything else', () => {

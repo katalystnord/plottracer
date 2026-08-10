@@ -1,0 +1,78 @@
+{
+  "source": {
+    "imagePath": "bar-grouped-missing-assay.png",
+    "note": "Synthetic ground truth. The FIRST series has no Lactose bar -- the absence is part of the record, not a zero. Capturing this without declared category ticks makes the second series' Lactose bar take a neighbour's name."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Enzyme activity (U/mg)",
+      "min": 0,
+      "max": 60
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 67.78,
+        "py": 660.28,
+        "value": 0
+      },
+      "p2": {
+        "px": 67.78,
+        "py": 38.33,
+        "value": 60
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "Control",
+      "points": [
+        {
+          "category": "Buffer",
+          "value": 14
+        },
+        {
+          "category": "Glucose",
+          "value": 38
+        },
+        {
+          "category": "Sucrose",
+          "value": 22
+        },
+        {
+          "category": "Maltose",
+          "value": 31
+        }
+      ]
+    },
+    {
+      "name": "Treated",
+      "points": [
+        {
+          "category": "Buffer",
+          "value": 16
+        },
+        {
+          "category": "Glucose",
+          "value": 52
+        },
+        {
+          "category": "Lactose",
+          "value": 44
+        },
+        {
+          "category": "Sucrose",
+          "value": 29
+        },
+        {
+          "category": "Maltose",
+          "value": 47
+        }
+      ]
+    }
+  ]
+}

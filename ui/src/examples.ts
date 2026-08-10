@@ -16,6 +16,7 @@ import errorBarSample from '../../samples/errorbar-tensile-cure.png';
 import errorBarAsymSample from '../../samples/errorbar-failure-time-asymmetric.png';
 import barSample from '../../samples/bar-tensile-strength.png';
 import barGroupedSample from '../../samples/bar-grouped-viability.png';
+import barGroupedMissingSample from '../../samples/bar-grouped-missing-assay.png';
 import barStackedSample from '../../samples/bar-stacked-cost.png';
 import barFloatingSample from '../../samples/bar-floating-temperature.png';
 import categoricalSample from '../../samples/categorical-fibre-modulus.png';
@@ -85,6 +86,13 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // Grouped: two series sharing one category axis, side by side per category
   // -- ordinary zero-baseline bars, just two of them per row.
   { id: 'bar-grouped', name: 'Cell viability — control vs. treatment', src: barGroupedSample, axes: 'bar' },
+  // ⚑ The figure category TICKS exist for (v2.1): the FIRST series has no
+  // Lactose bar. Without declared categories the second series' Lactose bar
+  // takes a neighbour's name -- a fabricated category, indistinguishable from a
+  // transcribed one, and only when captured left-to-right. Absent from published
+  // corpora (0 of 230) because journals do not print ragged grids; ordinary in
+  // the draft data people actually bring.
+  { id: 'bar-grouped-missing', name: 'Enzyme activity — a series with a missing bar', src: barGroupedMissingSample, axes: 'bar' },
   // Stacked: each segment its own drag-box (v2.0's capture model), not a
   // shared-baseline reading -- the case stackGroup/derivedTupleValue's
   // SPAN-not-cumulative rule exists for.

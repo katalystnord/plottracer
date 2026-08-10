@@ -5529,39 +5529,90 @@ export function Workspace() {
               data-testid="category-ticks-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
             >
+              {/* ⚑ A DISCLOSURE, with the same rotating chevron the calibration
+                  card itself uses. Underlined text alone said "I am a link" and
+                  nothing said "I am how you close this again" -- so the only
+                  exits a reader could see were the two that destroy work. */}
               <button
                 type="button"
                 data-testid="category-ticks-toggle"
                 onClick={() => setCategoryPanelOpen((open) => !open)}
+                title={categoryPanelOpen ? 'Close category ticks' : 'Open category ticks'}
                 style={{
                   alignSelf: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
                   background: 'none',
                   border: 'none',
                   padding: 0,
                   font: 'inherit',
                   color: theme.color.text.secondary,
                   cursor: 'pointer',
-                  textDecoration: 'underline',
                 }}
               >
-                {categoryPanelSummary(
-                  session.getCategoryAxis().hasGeometry(),
-                  session.getCategoryAxis().getCategoryCount()
-                )}
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    // Grey, matching its own label rather than the card's teal
+                    // chevron above it: this is a sub-disclosure, and it should
+                    // read as quieter than the card it sits inside.
+                    color: theme.color.text.secondary,
+                    transform: categoryPanelOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  <ChevronDownIcon />
+                </span>
+                <span data-testid="category-ticks-summary">
+                  {categoryPanelSummary(
+                    session.getCategoryAxis().hasGeometry(),
+                    session.getCategoryAxis().getCategoryCount()
+                  )}
+                </span>
               </button>
               {categoryPanelOpen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 10 }}>
-                  <div style={{ color: theme.color.text.legend }}>{CATEGORY_PANEL_HINT}</div>
+                // Its own bounded section, not more rows in the calibration list.
+                // Unbounded, it read as three extra calibration settings -- the
+                // reader had no way to see where "the category thing" stopped and
+                // "Log scale / Horizontal bars" began.
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto 1fr',
+                    alignItems: 'center',
+                    columnGap: 10,
+                    rowGap: 7,
+                    padding: '8px 10px',
+                    marginBottom: 2,
+                    borderLeft: `2px solid ${theme.color.primary.main}`,
+                    background: theme.color.background.primary,
+                    borderRadius: 3,
+                  }}
+                >
+                  {/* The case FOR opening it is only worth making while it is
+                      still shut in spirit -- once an axis is marked the user has
+                      already been persuaded, and the paragraph is just noise
+                      sitting on top of the figure. */}
+                  {!session.getCategoryAxis().hasGeometry() && (
+                    <div style={{ gridColumn: '1 / -1', color: theme.color.text.legend }}>
+                      {CATEGORY_PANEL_HINT}
+                    </div>
+                  )}
                   {categoryPanel.prompt && (
-                    <div data-testid="category-ticks-prompt" style={{ color: theme.color.text.primary }}>
+                    <div
+                      data-testid="category-ticks-prompt"
+                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary }}
+                    >
                       {categoryPanel.prompt}
                     </div>
                   )}
                   {categoryPanel.phase === 'declaring' && (
                     <>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        Categories
+                      <label htmlFor="category-count-input">Categories</label>
+                      <span>
                         <input
+                          id="category-count-input"
                           type="number"
                           min={1}
                           data-testid="category-count"
@@ -5573,13 +5624,13 @@ export function Workspace() {
                           }}
                           style={{ width: 56 }}
                         />
-                      </label>
+                      </span>
                       {/* Two RADIOS, not a select: both readings have to be visible
                           without a click, because the user is being asked which one
                           their figure prints -- and flipping it moves the marks on
                           screen, which is the whole answer. */}
-                      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', gap: 10 }}>
-                        <legend style={{ padding: 0, float: 'left', width: '100%' }}>Ticks are</legend>
+                      <span>Ticks are</span>
+                      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                         {(['centred', 'edge'] as TickConvention[]).map((c) => (
                           <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                             <input
@@ -5591,13 +5642,14 @@ export function Workspace() {
                                 if (session.setCategoryTickConvention(c)) commit();
                               }}
                             />
-                            {CONVENTION_LABELS[c]}
+                            <span style={{ whiteSpace: 'nowrap' }}>{CONVENTION_LABELS[c]}</span>
                           </label>
                         ))}
                       </fieldset>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        Series (optional)
+                      <label htmlFor="category-series-input"># Series (optional)</label>
+                      <span>
                         <input
+                          id="category-series-input"
                           type="number"
                           min={1}
                           data-testid="category-series-count"
@@ -5605,13 +5657,36 @@ export function Workspace() {
                           onChange={(e) => setCategorySeriesInput(e.target.value)}
                           style={{ width: 56 }}
                         />
-                      </label>
+                      </span>
                       {categoryPanel.regenerateWarning && (
-                        <div data-testid="category-regenerate-warning" style={{ color: theme.color.error }}>
+                        <div
+                          data-testid="category-regenerate-warning"
+                          style={{ gridColumn: '1 / -1', color: theme.color.error }}
+                        >
                           {categoryPanel.regenerateWarning}
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
+                        {/* ⚑ FIRST, and safe. Without it the only exits on screen
+                            were "Re-place axis" and "Remove ticks" -- both
+                            destructive. The way out must never be the way to lose
+                            your work (David, reading the screenshot). */}
+                        <button
+                          type="button"
+                          data-testid="category-done"
+                          onClick={() => setCategoryPanelOpen(false)}
+                          style={{
+                            fontSize: 12,
+                            border: `1px solid ${theme.color.primary.main}`,
+                            borderRadius: theme.border.radius.regular,
+                            background: theme.color.primary.main,
+                            color: '#fff',
+                            padding: '2px 12px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Done
+                        </button>
                         <button
                           type="button"
                           data-testid="category-replace-axis"

@@ -884,24 +884,21 @@ describe('Workspace: Bar axes', () => {
     // Not during the walk: the fold-out must never look like a calibration step.
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
     await calibrateBarStandard();
-    await page.getByTestId('calib-fold').click(); // the card auto-folds on calibrate
-    await page.waitForTimeout(100);
-    expect(await textOf('category-ticks-toggle')).toBe('Mark category ticks?');
+    // ⚑ No unfolding. The card auto-folds on calibrate and the offer is ON the
+    // folded chip bar -- which is the whole reason this costs the simple
+    // two-click workflow one line of text and nothing else.
+    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
   });
 
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('calib-fold').click();
-    await page.waitForTimeout(100);
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
   });
 
   it('⚑ marks the axis in ONE click, reusing the value origin, and draws the ticks', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await page.getByTestId('calib-fold').click();
-    await page.waitForTimeout(100);
     await page.getByTestId('category-ticks-toggle').click();
     await page.waitForTimeout(100);
 
@@ -912,11 +909,11 @@ describe('Workspace: Bar axes', () => {
     await clickAt(600, 400);
     await page.waitForTimeout(150);
     expect(await page.getByTestId('category-ticks-prompt').count()).toBe(0);
-    expect(await textOf('category-ticks-toggle')).toContain('Category ticks');
+    expect(await textOf('category-ticks-summary')).toContain('Category ticks');
 
     await page.getByTestId('category-count').fill('4');
     await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-toggle')).toBe('Category ticks \u2014 4 categories');
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks \u2014 4 categories');
 
     // Both conventions are visible without opening anything, and centred is preset.
     expect(await page.getByTestId('category-convention-centred').isChecked()).toBe(true);
@@ -929,8 +926,6 @@ describe('Workspace: Bar axes', () => {
   it('removes the ticks again, leaving the calibration untouched', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await page.getByTestId('calib-fold').click();
-    await page.waitForTimeout(100);
     await page.getByTestId('category-ticks-toggle').click();
     await clickAt(600, 400);
     await page.waitForTimeout(150);
@@ -939,7 +934,7 @@ describe('Workspace: Bar axes', () => {
 
     await page.getByTestId('category-remove-ticks').click();
     await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-toggle')).toBe('Mark category ticks?');
+    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
     // The value calibration is untouched -- ticks never gated it and removing
     // them must not disturb it.
     expect(await page.getByTestId('run-calibration').count()).toBe(0);
@@ -4977,7 +4972,7 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
     // without its Help entry is invisible, which is how a graph type ends up with
     // no way in for anyone who did not build it.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(23);
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(24);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
