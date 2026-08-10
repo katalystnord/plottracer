@@ -374,3 +374,154 @@ describe('deserialize — routing a file by its version stamp', () => {
     expect(target.getDatasetCount()).toBe(1);
   });
 });
+
+describe('the category TICK geometry round-trips (v2.1)', () => {
+  /** A project whose category axis has been marked with 4 categories. */
+  function withGeometry(): { plot: PlotData; ca: CategoryAxis } {
+    const { plot, ds } = simpleProject();
+    const ca = new CategoryAxis();
+    ca.name = 'Categories';
+    plot.addCategoryAxis(ca);
+    plot.setCategoryAxisForDataset(ds, ca);
+    ca.setAxisEdges({ x: 100, y: 500 }, { x: 600, y: 500 });
+    ca.setCategoryCount(4);
+    return { plot, ca };
+  }
+
+  /** Write, JSON round-trip, read back into a fresh PlotData. */
+  function reopen(plot: PlotData): CategoryAxis {
+    const target = new PlotData();
+    expect(target.deserialize(JSON.parse(JSON.stringify(plot.serialize())))).not.toBe(false);
+    const [ca] = target.getCategoryAxisColl();
+    expect(ca).toBeDefined();
+    return ca!;
+  }
+
+  it('⚑ writes NO geometry key for an axis nobody marked — old projects stay identical', () => {
+    const { plot, ds } = simpleProject();
+    const ca = new CategoryAxis();
+    ca.name = 'Categories';
+    ca.addCategory('Flax');
+    plot.addCategoryAxis(ca);
+    plot.setCategoryAxisForDataset(ds, ca);
+    expect(plot.serialize().categoryAxisColl).toEqual([{ name: 'Categories', categories: ['Flax'] }]);
+  });
+
+  it('writes the edges, the convention and the ticks as parameters', () => {
+    const { plot } = withGeometry();
+    expect(plot.serialize().categoryAxisColl![0]!.geometry).toEqual({
+      edges: [{ x: 100, y: 500 }, { x: 600, y: 500 }],
+      convention: 'centred',
+      ticks: [0.125, 0.375, 0.625, 0.875],
+    });
+  });
+
+  it('reads back an axis that answers exactly as the one that was saved', () => {
+    const { plot, ca } = withGeometry();
+    const reopened = reopen(plot);
+    expect(reopened.getAxisEdges()).toEqual(ca.getAxisEdges());
+    expect(reopened.getConvention()).toBe('centred');
+    expect(reopened.getTickParams()).toEqual(ca.getTickParams());
+    expect(reopened.getDividerPoints()).toEqual(ca.getDividerPoints());
+    expect(reopened.bandIndexAt({ x: 300, y: 200 })).toBe(ca.bandIndexAt({ x: 300, y: 200 }));
+  });
+
+  it('⚑ preserves DRAGGED ticks — the whole point of storing them rather than regenerating', () => {
+    const { plot, ca } = withGeometry();
+    ca.moveTick(1, { x: 300, y: 500 });
+    const dragged = [...ca.getTickParams()];
+    const reopened = reopen(plot);
+    expect(reopened.getTickParams()).toEqual(dragged);
+    expect(reopened.hasAdjustments()).toBe(true);
+  });
+
+  it('omits the adjusted flag when nothing was dragged, and reads back unadjusted', () => {
+    const { plot } = withGeometry();
+    expect(plot.serialize().categoryAxisColl![0]!.geometry).not.toHaveProperty('adjusted');
+    expect(reopen(plot).hasAdjustments()).toBe(false);
+  });
+
+  it('round-trips the edge convention, which has a different tick count', () => {
+    const { plot, ca } = withGeometry();
+    ca.setConvention('edge');
+    const reopened = reopen(plot);
+    expect(reopened.getConvention()).toBe('edge');
+    expect(reopened.getTickParams()).toEqual([0.25, 0.5, 0.75]);
+  });
+
+  it('carries the geometry on a TILTED axis, not just an image-aligned one', () => {
+    const { plot, ca } = withGeometry();
+    ca.setAxisEdges({ x: 50, y: 60 }, { x: 350, y: 460 });
+    ca.setCategoryCount(2);
+    expect(reopen(plot).getTickPoints()).toEqual(ca.getTickPoints());
+  });
+});
+
+describe('a hand-edited file cannot put the tick geometry in an impossible state', () => {
+  /** A serialized project carrying whatever geometry the caller supplies. */
+  function fileWithGeometry(geometry: unknown): Record<string, unknown> {
+    const { plot, ds } = simpleProject();
+    const ca = new CategoryAxis();
+    ca.name = 'Categories';
+    ca.addCategory('a');
+    ca.addCategory('b');
+    ca.addCategory('c');
+    plot.addCategoryAxis(ca);
+    plot.setCategoryAxisForDataset(ds, ca);
+    const written = JSON.parse(JSON.stringify(plot.serialize())) as Record<string, unknown>;
+    (written.categoryAxisColl as Record<string, unknown>[])[0]!.geometry = geometry;
+    return written;
+  }
+
+  function read(geometry: unknown): CategoryAxis {
+    const target = new PlotData();
+    expect(target.deserialize(fileWithGeometry(geometry))).not.toBe(false);
+    return target.getCategoryAxisColl()[0]!;
+  }
+
+  const EDGES = [{ x: 100, y: 500 }, { x: 600, y: 500 }];
+
+  it('⚑ refuses a DEGENERATE axis at the load door, exactly as a click would', () => {
+    // The stored convention is deliberately 'edge' here: a refused axis must
+    // apply NOTHING from the geometry block, and asserting only hasGeometry()
+    // let a mutant through that still took the convention on the way past.
+    const ca = read({ edges: [{ x: 100, y: 500 }, { x: 100, y: 500 }], convention: 'edge', ticks: [] });
+    expect(ca.hasGeometry()).toBe(false);
+    expect(ca.getConvention()).toBe('centred');
+    expect(ca.getCategories()).toEqual(['a', 'b', 'c']); // the names survive
+  });
+
+  it('refuses a denormally short axis, the case coordinate equality misses', () => {
+    const ca = read({ edges: [{ x: 0, y: 0 }, { x: 1e-200, y: 0 }], convention: 'centred', ticks: [] });
+    expect(ca.hasGeometry()).toBe(false);
+  });
+
+  it('refuses non-finite or missing edges without throwing', () => {
+    expect(read({ edges: [{ x: NaN, y: 0 }, { x: 1, y: 1 }], convention: 'centred', ticks: [] }).hasGeometry()).toBe(false);
+    expect(read({ convention: 'centred', ticks: [] }).hasGeometry()).toBe(false);
+    expect(read({ edges: 'nonsense', convention: 'centred', ticks: [] }).hasGeometry()).toBe(false);
+  });
+
+  it('falls back to centred for a convention it does not recognise', () => {
+    const ca = read({ edges: EDGES, convention: 'sideways', ticks: [] });
+    expect(ca.getConvention()).toBe('centred');
+    expect(ca.getTickParams()).toEqual([1 / 6, 0.5, 5 / 6]); // regenerated for 3 categories
+  });
+
+  it('⚑ repairs a tick list that no sequence of clicks could produce', () => {
+    // Out of order, outside the axis, wrong length -- each rebuilt rather than
+    // refused, because losing an aid is cheap and losing the project is not.
+    for (const ticks of [[0.9, 0.2, 0.5], [0, 0.5, 0.9], [0.5], [0.2, 0.2, 0.8], [NaN, 0.5, 0.8]]) {
+      const ca = read({ edges: EDGES, convention: 'centred', ticks });
+      expect(ca.hasGeometry()).toBe(true);
+      expect(ca.getTickParams()).toEqual([1 / 6, 0.5, 5 / 6]);
+      expect(ca.hasAdjustments()).toBe(false);
+    }
+  });
+
+  it('survives a missing tick list entirely', () => {
+    const ca = read({ edges: EDGES, convention: 'edge' });
+    expect(ca.hasGeometry()).toBe(true);
+    expect(ca.getTickParams()).toEqual([1 / 3, 2 / 3]);
+  });
+});

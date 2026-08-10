@@ -51,7 +51,7 @@ import { CircularChartRecorderAxes, type RotationDirection, type RotationTime } 
 import { SpiderAxes } from './axes/spider.js';
 import { PieAxes } from './axes/pie.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from './connectedPoints.js';
-import { CategoryAxis } from './categoryAxis.js';
+import { CategoryAxis, type TickConvention } from './categoryAxis.js';
 
 export type AnyAxes = XYAxes | BarAxes | PolarAxes | TernaryAxes | MapAxes | ImageAxes | CircularChartRecorderAxes | SpiderAxes | PieAxes;
 export type AnyMeasurement = DistanceMeasurement | AngleMeasurement | AreaMeasurement;
@@ -137,6 +137,29 @@ export interface SerializedDatasetData {
 export interface SerializedCategoryAxisData {
   name: string;
   categories: string[];
+  /** v2.1: the category TICK geometry, and additive again — absent for every
+   * axis whose owner never marked one, which is every project written before
+   * this and every bar chart the user simply did not need it for. An older
+   * reader drops the key and reads the name list exactly as before.
+   *
+   * ⚑ Ticks are stored as PARAMETERS along the axis (0 at the first edge, 1 at
+   * the second), not as pixels. Two consequences worth knowing when reading a
+   * file: the numbers are resolution-independent, and a crop or rotation that
+   * moved the figure only had to move the two edges. */
+  geometry?: SerializedCategoryGeometry;
+}
+
+/** See SerializedCategoryAxisData.geometry. */
+export interface SerializedCategoryGeometry {
+  /** The two placed points that ARE the category axis. */
+  edges: [{ x: number; y: number }, { x: number; y: number }];
+  convention: TickConvention;
+  /** Parameters in (0,1), strictly increasing. Validated on load — see
+   * CategoryAxis.restoreTickParams. */
+  ticks: number[];
+  /** Present only when the user dragged a tick, so a reopened project still
+   * knows to warn before regenerating discards their adjustments. */
+  adjusted?: boolean;
 }
 
 export interface SerializedMeasurementData {
@@ -539,6 +562,22 @@ export class PlotData {
         const ca = new CategoryAxis();
         ca.name = caData.name;
         for (const category of caData.categories) ca.addCategory(category);
+        // v2.1 tick geometry, read AFTER the names because the tick count is a
+        // function of how many categories there are.
+        //
+        // ⚑ Every step here is the SAME call the interactive path makes, so the
+        // load door cannot admit a state the click path refuses: setAxisEdges
+        // rejects a degenerate or denormal axis, setConvention rejects an
+        // unknown one (leaving the default), and restoreTickParams rejects a
+        // tick list that is the wrong length or not strictly inside and
+        // increasing. A rejected tick list is REGENERATED rather than refusing
+        // the load -- these are an aid, and nothing measured is lost by
+        // rebuilding them, where refusing would cost the user their data.
+        const geo = caData.geometry;
+        if (geo && ca.setAxisEdges(geo.edges?.[0] as never, geo.edges?.[1] as never)) {
+          ca.setConvention(geo.convention);
+          ca.restoreTickParams(geo.ticks ?? [], geo.adjusted === true);
+        }
         this.addCategoryAxis(ca);
       }
     }
@@ -763,7 +802,28 @@ export class PlotData {
     // written when at least one exists, so a project with none round-trips
     // byte-for-byte identically to before this field existed.
     if (this._categoryAxisColl.length > 0) {
-      data.categoryAxisColl = this._categoryAxisColl.map((ca) => ({ name: ca.name, categories: [...ca.getCategories()] }));
+      data.categoryAxisColl = this._categoryAxisColl.map((ca) => {
+        const edges = ca.getAxisEdges();
+        return {
+          name: ca.name,
+          categories: [...ca.getCategories()],
+          // Omitted entirely when the axis was never marked, so a project that
+          // never used ticks round-trips byte-for-byte as it did before v2.1.
+          ...(edges
+            ? {
+                geometry: {
+                  edges: [
+                    { x: edges[0].x, y: edges[0].y },
+                    { x: edges[1].x, y: edges[1].y },
+                  ] as SerializedCategoryGeometry['edges'],
+                  convention: ca.getConvention(),
+                  ticks: [...ca.getTickParams()],
+                  ...(ca.hasAdjustments() ? { adjusted: true } : {}),
+                },
+              }
+            : {}),
+        };
+      });
     }
 
     for (const ds of this._datasetColl) {

@@ -659,3 +659,86 @@ describe('moveTick survives a point that is finite but absurd', () => {
     expect(ax.hasAdjustments()).toBe(false);
   });
 });
+
+describe('restoreTickParams — the LOAD door enforces what the click path does', () => {
+  /** The parameters a 4-category centred axis generates. */
+  const FOUR = [0.125, 0.375, 0.625, 0.875];
+
+  it('accepts a stored set that satisfies every invariant', () => {
+    const ax = withAxis(4);
+    expect(ax.restoreTickParams([0.1, 0.4, 0.6, 0.9], true)).toBe(true);
+    expect(ax.getTickParams()).toEqual([0.1, 0.4, 0.6, 0.9]);
+    expect(ax.hasAdjustments()).toBe(true);
+  });
+
+  it('defaults to unadjusted, so a file that never said so does not claim it', () => {
+    const ax = withAxis(4);
+    ax.restoreTickParams([0.1, 0.4, 0.6, 0.9]);
+    expect(ax.hasAdjustments()).toBe(false);
+  });
+
+  it('⚑ REGENERATES rather than refusing — the ticks are an aid, the data is not', () => {
+    // Refusing the load would cost the user their measurements over a broken
+    // hint. Rebuilding the hint costs nothing measured.
+    //
+    // ⚑ The axis is DRAGGED out of shape first, deliberately. Starting from a
+    // freshly generated axis, "regenerated" and "left untouched" are the same
+    // state, so the assertion passed either way and the mutant survived.
+    const ax = withAxis(4);
+    ax.moveTick(0, { x: 110, y: 500 });
+    ax.moveTick(3, { x: 590, y: 500 });
+    expect(ax.getTickParams()).not.toEqual(FOUR);
+
+    expect(ax.restoreTickParams([0.5])).toBe(false);
+    expect(ax.getTickParams()).toEqual(FOUR); // rebuilt, not merely left alone
+    expect(ax.hasAdjustments()).toBe(false);
+  });
+
+  it('rejects a set of the wrong length for the convention and count', () => {
+    expect(withAxis(4).restoreTickParams([0.2, 0.4, 0.6])).toBe(false); // centred wants 4
+    expect(withAxis(4, 'edge').restoreTickParams([0.2, 0.4, 0.6, 0.8])).toBe(false); // edge wants 3
+  });
+
+  it('rejects ticks that are not strictly inside the axis', () => {
+    expect(withAxis(2).restoreTickParams([0, 0.5])).toBe(false);
+    expect(withAxis(2).restoreTickParams([0.5, 1])).toBe(false);
+    expect(withAxis(2).restoreTickParams([-0.2, 0.5])).toBe(false);
+    expect(withAxis(2).restoreTickParams([0.5, 1.4])).toBe(false);
+  });
+
+  it('rejects ticks that are not strictly increasing — order carries the categories', () => {
+    expect(withAxis(3).restoreTickParams([0.6, 0.2, 0.8])).toBe(false);
+    expect(withAxis(3).restoreTickParams([0.2, 0.2, 0.8])).toBe(false); // equal, so a zero-width band
+  });
+
+  it('rejects a non-finite tick', () => {
+    expect(withAxis(2).restoreTickParams([NaN, 0.5])).toBe(false);
+    expect(withAxis(2).restoreTickParams([0.2, Infinity])).toBe(false);
+  });
+
+  it('rejects anything that is not an array at all', () => {
+    expect(withAxis(2).restoreTickParams('0.2,0.7' as unknown as number[])).toBe(false);
+    expect(withAxis(2).restoreTickParams(null as unknown as number[])).toBe(false);
+  });
+
+  it('does nothing when no axis has been marked', () => {
+    const ax = new CategoryAxis();
+    ax.setCategoryCount(3);
+    expect(ax.restoreTickParams([0.2, 0.5, 0.8])).toBe(false);
+    expect(ax.getTickParams()).toEqual([]);
+  });
+
+  it('an empty set is CORRECT for a single edge-mode category, not a rejection', () => {
+    const ax = withAxis(1, 'edge');
+    expect(ax.restoreTickParams([])).toBe(true);
+    expect(ax.getTickParams()).toEqual([]);
+  });
+
+  it('copies the array, so the caller cannot move ticks by mutating what it passed', () => {
+    const ax = withAxis(2);
+    const mine = [0.2, 0.7];
+    ax.restoreTickParams(mine);
+    mine[0] = 0.9;
+    expect(ax.getTickParams()).toEqual([0.2, 0.7]);
+  });
+});

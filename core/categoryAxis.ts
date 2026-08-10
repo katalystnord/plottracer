@@ -355,6 +355,39 @@ export class CategoryAxis {
     return true;
   }
 
+  /**
+   * Restore ticks from a loaded file, validating them the way the interactive
+   * path does. Returns true if the stored set was usable, false if it was
+   * rejected and regenerated instead.
+   *
+   * ⚑ THE LOAD PATH IS THE MODEL'S OTHER ENTRANCE, and this project has been
+   * bitten repeatedly by a guard that only the click path reaches. A stored tick
+   * list must be finite, strictly inside the axis, strictly increasing, and the
+   * right LENGTH for the convention and category count — exactly the invariants
+   * `moveTick` maintains — or a hand-edited file would put the model in a state
+   * no sequence of clicks can produce.
+   *
+   * ⚑ It REPAIRS rather than refusing, and that is a deliberate consequence of
+   * ticks being an aid: regenerating loses nothing measured, where refusing the
+   * load would cost the user their actual data over a broken hint. Same
+   * "surface, don't refuse" stance `loadCalibrated` already takes.
+   */
+  restoreTickParams(params: readonly number[], adjusted = false): boolean {
+    if (!this._edges) return false;
+    const expected = tickCountFor(this._convention, this._categories.length);
+    const usable =
+      Array.isArray(params) &&
+      params.length === expected &&
+      params.every((t, i) => Number.isFinite(t) && t > 0 && t < 1 && (i === 0 || t > params[i - 1]!));
+    if (!usable) {
+      this.regenerateTicks();
+      return false;
+    }
+    this._tickParams = [...params];
+    this._adjusted = adjusted;
+    return true;
+  }
+
   /** Whether the tick set still matches the declared category count. Only ever
    * true if a category was added or removed through the naming path without a
    * regeneration — the one way the two can drift apart. */
