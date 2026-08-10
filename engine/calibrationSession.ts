@@ -2077,7 +2077,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // convenience plain Bar always had, ported from per-point to
         // per-tuple); every other slotted type keeps its plain default,
         // since prefillTupleCategoryLabel no-ops immediately for them.
-        if (newTupleIndex !== null && !this.prefillTupleCategoryLabel(dataset, newTupleIndex)) {
+        // v2.1: with the axis marked there is nothing to guess and nothing to
+        // store -- the band answers, and reserveEmptyCategorySlot would append a
+        // category BEYOND the declared count, which is exactly the drift
+        // `ticksAreStale` exists to detect.
+        if (
+          newTupleIndex !== null &&
+          !this.categoriesFollowBands() &&
+          !this.prefillTupleCategoryLabel(dataset, newTupleIndex)
+        ) {
           this.autoLabelTuple(newTupleIndex);
         }
       } else {
@@ -2425,12 +2433,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // not a per-tuple copied string -- see setTupleLabel's own comment for
     // why, and usesCategoryAxis's for exactly which shapes this covers.
     if (this.usesCategoryAxis(dataset)) {
-      for (const pixelIndex of tuple) {
-        if (pixelIndex === null || pixelIndex === undefined) continue;
-        const idx = dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
-        if (typeof idx === 'number') return this.categoryAxis.getCategories()[idx] ?? '';
-      }
-      return '';
+      const idx = this.categoryIndexOfTuple(dataset, tupleIndex);
+      return idx === null ? '' : (this.categoryAxis.getCategories()[idx] ?? '');
     }
     for (const pixelIndex of tuple) {
       if (pixelIndex === null || pixelIndex === undefined) continue;
@@ -2483,6 +2487,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const target = pixels[0]!;
 
     if (this.usesCategoryAxis(dataset)) {
+      // v2.1: with the axis marked, the BAND is the category's identity, so
+      // renaming a bar renames its band -- for every series at once, which is
+      // correct, because one band is one category. None of the reuse-or-create
+      // reasoning below applies: it exists to resolve WHICH category an
+      // unmarked bar means, and a declared band leaves nothing to resolve.
+      if (this.categoriesFollowBands()) {
+        const band = this.categoryIndexOfTuple(dataset, tupleIndex);
+        return band === null ? false : this.categoryAxis.renameCategory(band, label);
+      }
       const existingRaw = dataset.getPixel(target).metadata?.['categoryIndex'];
       const existingIdx = typeof existingRaw === 'number' ? existingRaw : -1;
       let idx: number;
@@ -2669,6 +2682,44 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * which keep the plain per-tuple string label (metadata.label). */
   private usesCategoryAxis(dataset: Dataset): boolean {
     return this.config.axesKind === 'bar' && dataset.hasSlots();
+  }
+
+  /**
+   * Whether a bar's category is DERIVED from the declared bands rather than
+   * stored on the pixel (v2.1) — true exactly while the category axis is marked.
+   *
+   * ⚑ THIS IS WHAT MAKES "adjust a tick and the bars re-home" WORK. A stored
+   * index is a second copy of a fact the geometry already answers, and the two
+   * disagree the moment a divider moves: the bar sits in band 2 and the file
+   * still says 3. Deriving it means there is nothing to go stale.
+   *
+   * ⚑ The usual objection to deriving — that a derived link has no model
+   * entrance to guard, the lesson the error-bar cap/datum link taught — does not
+   * apply here, because there is nothing to guard. A band index is a pure
+   * function of a pixel and the declared dividers; it cannot be inconsistent,
+   * only recomputed.
+   */
+  private categoriesFollowBands(): boolean {
+    return this.supportsCategoryTicks() && this.categoryAxis.hasGeometry();
+  }
+
+  /** The category a tuple belongs to: its BAND while the axis is marked, the
+   * stored `metadata.categoryIndex` otherwise. Null when neither can answer. */
+  private categoryIndexOfTuple(dataset: Dataset, tupleIndex: number): number | null {
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return null;
+    if (this.categoriesFollowBands()) {
+      const primary = tuple.find((v): v is number => v !== null && v !== undefined);
+      if (primary === undefined) return null;
+      const p = dataset.getPixel(primary);
+      return this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+    }
+    for (const pixelIndex of tuple) {
+      if (pixelIndex === null || pixelIndex === undefined) continue;
+      const idx = dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
+      if (typeof idx === 'number') return idx;
+    }
+    return null;
   }
 
   /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never a
@@ -3394,11 +3445,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const tuples = dataset.getAllTuples();
       // categoryIndex -> tupleIndex, for this series only.
       const tupleForCategory = new Map<number, number>();
-      tuples.forEach((tuple, tupleIndex) => {
-        const primary = tuple.find((v): v is number => v !== null && v !== undefined);
-        if (primary === undefined) return;
-        const idx = dataset.getPixel(primary).metadata?.['categoryIndex'];
-        if (typeof idx === 'number') tupleForCategory.set(idx, tupleIndex);
+      tuples.forEach((_tuple, tupleIndex) => {
+        const idx = this.categoryIndexOfTuple(dataset, tupleIndex);
+        if (idx !== null) tupleForCategory.set(idx, tupleIndex);
       });
       const values: (number | null)[] = [];
       const tupleIndices: (number | null)[] = [];

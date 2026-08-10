@@ -1089,9 +1089,14 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
   distinctPixelSteps: [['v1', 'v2']],
-  // ⚑ `v1`, not `p1` -- this type names its own steps, which is exactly why the
-  // seed is declared rather than written as a literal at the call site.
-  categoryTicks: { originStep: 'v1' },
+  // ⚑ NO `categoryTicks` yet, deliberately. This type's X genuinely is
+  // categorical, so it wants them -- but its points are captured ungrouped and
+  // carry a per-point NAME (`metadata.label`), not a `categoryIndex`, so a
+  // declared band has nothing to write to and nothing to read from. Declaring
+  // the capability now would put a control on screen that does nothing, which
+  // is worse than not having it. When the per-point path moves to a category
+  // index, the seed step here is `v1`, not `p1` -- which is exactly why
+  // `categoryTicks.originStep` is declared rather than written as a literal.
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
   fixedSteps: [
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
