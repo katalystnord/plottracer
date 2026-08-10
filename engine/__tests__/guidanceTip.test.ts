@@ -655,3 +655,30 @@ describe('autoExtractModesFor', () => {
     expect(autoExtractModesFor('none')).toEqual([]);
   });
 });
+
+
+/** A bar chart mid-capture: the state whose message the marking mode overrides. */
+const barPlacing = (over: Partial<GuidanceTipInput> = {}): GuidanceTipInput =>
+  base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', ...over });
+
+describe('⚑ the tips bar while the category axis is being marked (v2.1 audit)', () => {
+  it('stops telling the user to drag a bar, because no click can capture one', () => {
+    // Box capture stands down while the fold-out is asking for an edge, and a
+    // plain click becomes the edge. The tips bar -- described in its own header
+    // as the one constant place for contextual guidance -- went on saying "Drag
+    // from one corner of the bar to the opposite corner", false in both halves.
+    const marking = guidanceTipBase(barPlacing({ isMarkingCategoryAxis: true }));
+    expect(marking).not.toContain('corner');
+    expect(marking).toContain('category axis');
+  });
+
+  it('says how to get back, so it is not a state with no visible exit', () => {
+    const marking = guidanceTipBase(barPlacing({ isMarkingCategoryAxis: true }));
+    expect(marking).toContain('Mark category ticks?');
+  });
+
+  it('leaves the ordinary bar guidance alone when nothing is being marked', () => {
+    expect(guidanceTipBase(barPlacing({ isMarkingCategoryAxis: false }))).toContain('corner');
+    expect(guidanceTipBase(barPlacing())).toContain('corner');
+  });
+});

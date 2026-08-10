@@ -33,6 +33,16 @@ export type GuidanceMeasureTool = 'distance' | 'angle' | 'area' | 'slope';
 
 export interface GuidanceTipInput {
   canvasHasImage: boolean;
+  /**
+   * The category-ticks fold-out is waiting for an axis edge.
+   *
+   * ⚑ While it is, box capture STANDS DOWN and a click on the canvas becomes an
+   * axis edge instead of a bar corner. Without this input the tips bar -- the
+   * one constant place for contextual guidance -- went on telling the user to
+   * "drag from one corner of the bar to the opposite corner", which was false in
+   * both halves at that moment (v2.1 audit).
+   */
+  isMarkingCategoryAxis?: boolean;
   mode: ToolMode;
   figureCaptured: boolean;
   eyedropper: null | 'grid' | 'series' | 'trace';
@@ -83,6 +93,11 @@ export interface GuidanceTipInput {
  * `guidanceTip` is what `ui/` renders.
  */
 export function guidanceTipBase(input: GuidanceTipInput): string {
+  // Checked first: it overrides every capture message, because for as long as it
+  // is true no click can capture anything.
+  if (input.isMarkingCategoryAxis === true) {
+    return 'Marking the category axis — your next click sets where the categories end. Close “Mark category ticks?” to go back to placing bars.';
+  }
   const {
     canvasHasImage,
     mode,

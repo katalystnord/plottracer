@@ -3,6 +3,24 @@ import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
 import type { ReactNode } from 'react';
 
+/**
+ * What to say when a category holds more than one of a series' readings.
+ *
+ * Names the categories involved and what to do, because the fix is the user's:
+ * either the declared count is wrong or a bar sits outside the marked axis, and
+ * only they can see which.
+ */
+export function crowdedMessage(
+  crowded: readonly { categoryIndex: number }[],
+  categoryNames: readonly string[],
+  tupleNoun: string
+): string {
+  const names = [...new Set(crowded.map((c) => categoryNames[c.categoryIndex] ?? `#${c.categoryIndex + 1}`))];
+  const list = names.filter((n) => n !== '').join(', ');
+  const where = list === '' ? '' : ` (${list})`;
+  return `${crowded.length} more ${tupleNoun}${crowded.length === 1 ? '' : 's'} fall${crowded.length === 1 ? 's' : ''} in a category that already has one${where}, so ${crowded.length === 1 ? 'it is' : 'they are'} not shown above. Check the category count, or whether a ${tupleNoun} sits outside the marked axis.`;
+}
+
 /** One series' column of the bar table, index-aligned with the categories. */
 export interface BarColumn {
   seriesIndex: number;
@@ -15,6 +33,17 @@ export interface BarCategoryTable {
   columns: readonly BarColumn[];
   categoryNames: readonly string[];
   categoryRawNames: readonly string[];
+  /**
+   * Readings that could not be shown, because another one of the same series
+   * already occupies that category.
+   *
+   * ⚑ THE TRACE THAT DID NOT EXIST. The session computes this precisely so that
+   * "nothing is dropped without a trace", and the UI declared it out of its own
+   * interface and never rendered it. Two bars landing in one band -- a stray bar
+   * past the last divider, or a mis-declared count, both ordinary -- produced a
+   * complete-LOOKING table with a real reading silently missing (v2.1 audit).
+   */
+  crowded?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
 }
 
 export interface BarTableProps {
@@ -161,6 +190,14 @@ export function BarTable({
     {table.categoryNames.length === 0 && (
       <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
         {noPointsHint}
+      </div>
+    )}
+    {(table.crowded?.length ?? 0) > 0 && (
+      <div
+        data-testid="bar-crowded"
+        style={{ padding: 8, color: theme.color.error, fontSize: 12.5 }}
+      >
+        {crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
       </div>
     )}
     </>  );

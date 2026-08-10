@@ -157,6 +157,19 @@ export interface CategoryPanelInput {
   edgesPlaced: number;
   /** A tick has been dragged since the last generation. */
   hasAdjustments: boolean;
+  /**
+   * The user asked to place BOTH ends by hand — "Re-place axis".
+   *
+   * ⚑ Without this the seed always wins and the two-click walk is unreachable:
+   * `seedPixel` is P1, which exists the moment the figure is calibrated, so
+   * `canReuseSeed` was permanently true, `edgesPlaced` permanently 0, and the
+   * two prompts below were dead strings. P1 is only the category axis's corner
+   * on a chart calibrated AT the corner — its own prompt is "a known bar value
+   * (e.g. 0)", and clicking the 0 gridline mid-plot is perfectly ordinary
+   * calibration, which anchored the category axis in the middle of the figure
+   * with nothing on screen able to move it (v2.1 audit).
+   */
+  placeBothEdges: boolean;
 }
 
 /** Why a click could not become an axis edge. Null when nothing has failed. */
@@ -198,7 +211,7 @@ export interface CategoryPanelView {
 export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView {
   const { supported, isCalibrated, open, hasGeometry, seedPixel, edgesPlaced, hasAdjustments } =
     input;
-  const canReuseSeed = seedPixel !== null && edgesPlaced === 0;
+  const canReuseSeed = seedPixel !== null && edgesPlaced === 0 && !input.placeBothEdges;
 
   if (!supported || !isCalibrated) {
     return { phase: 'unavailable', prompt: null, regenerateWarning: null, canReuseSeed: false };
@@ -241,10 +254,31 @@ export function categoryPanelSummary(hasGeometry: boolean, categoryCount: number
   return categoryCount === 1 ? 'Category ticks — 1 category' : `Category ticks — ${categoryCount} categories`;
 }
 
-/** Why someone would open it. Shown inside, once, rather than as a tooltip. */
+/**
+ * Why someone would open it. Shown inside, once, rather than as a tooltip.
+ *
+ * ⚑ The third sentence is the one a user looking at a MERGED RUN needs. Splitting
+ * touching same-coloured bars at the marked boundaries is the biggest thing this
+ * feature buys, and it was documented only in MANUAL — so someone staring at the
+ * exact figure it helps had nothing on screen telling them to open the fold-out
+ * (v2.1 audit).
+ */
 export const CATEGORY_PANEL_HINT =
   'Recommended for charts with more than one series, or where a series is missing a bar. ' +
-  'Marking the categories tells PlotTracer which bar belongs to which, instead of it guessing from position.';
+  'Marking the categories tells PlotTracer which bar belongs to which, instead of it guessing from position. ' +
+  'It also lets Auto-extract split a run of touching same-coloured bars at the boundaries you mark.';
+
+/**
+ * Shown once the ticks are up, because dragging them is otherwise invisible.
+ *
+ * ⚑ The ticks are 4px dots with no label and no tooltip. "Drag any of them if
+ * the figure isn't evenly spaced" lived only in MANUAL, and the sole hint on
+ * screen was the regenerate warning's "discarding the ones you moved" — legible
+ * only to someone who already knew. A capability whose only announcement is the
+ * manual fails the keystone rule (v2.1 audit).
+ */
+export const CATEGORY_TICK_DRAG_HINT =
+  'Ticks not lining up? Drag any of them along the axis — the figure may not be evenly spaced.';
 
 /** The convention labels, kept here so the two words the user reads are next to
  * the code that acts on them. */

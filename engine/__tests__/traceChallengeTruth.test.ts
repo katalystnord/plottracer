@@ -21,7 +21,9 @@ import {
   spiderAxisRanges,
   spiderPointAt,
   truthPieValues,
+  pieRevealRays,
 } from '../traceChallenge.js';
+import { SCATTER_MATCH_THRESHOLD } from '../../algorithms/challengeScore.js';
 
 /**
  * The truth-readers behind The Trace Challenge, traced against the REAL
@@ -319,11 +321,22 @@ describe('the bar truth shapes the Challenge can actually score', () => {
     expect(truthBarValues(FLOATING).every((v) => Number.isFinite(v[0]))).toBe(false);
   });
 
-  it('every truth file the Challenge pool imports is value-shaped', () => {
-    // The pool is the live surface; this asserts what it relies on.
-    for (const file of ['bar-tensile-strength.truth.json']) {
+  it('⚑ every truth file the Challenge pool imports is value-shaped', () => {
+    // ⚑ The list is DERIVED from the manifest, not typed here. It used to be a
+    // one-element hardcoded array while the pool held four bar files, so the
+    // test's own title was false and a fifth would have slipped in unchecked
+    // (v2.1 audit). `bar-floating` is deliberately NOT in the pool -- see the
+    // test above -- and this is what keeps that true.
+    const manifest = readFileSync('ui/src/challengeExamples.ts', 'utf8');
+    const files = [...manifest.matchAll(/samples\/([\w-]+\.truth\.json)/g)].map((m) => m[1]!);
+    const barFiles = files.filter((f) => f.startsWith('bar-') && !f.includes('box'));
+    expect(barFiles.length).toBeGreaterThanOrEqual(4); // the pool really does hold several
+    for (const file of barFiles) {
       const t = truth(file);
-      expect(truthBarValues(t).every((v) => Number.isFinite(v[0]))).toBe(true);
+      expect(
+        truthBarValues(t).every((v) => Number.isFinite(v[0])),
+        `${file} is not value-shaped`
+      ).toBe(true);
     }
   });
 });
@@ -488,14 +501,60 @@ describe('spider truth — one scale per spoke', () => {
   it('a perfect trace lands exactly on the truth points', () => {
     const values = SPIDER.series[0]!.points.map((p) => Number(p.value));
     expect(spiderUserPoints(values, SPIDER)).toEqual(truthSpiderPoints(SPIDER));
+    // ⚑ …and against the ARITHMETIC, not just against the other function. The
+    // assertion above compares two readers applying identical maths to identical
+    // inputs, so it passes unchanged if the shared normalisation is wrong
+    // (`max + centre` instead of `max - centre`, say). This pins the numbers
+    // (v2.1 audit).
+    const user = spiderUserPoints(values, SPIDER);
+    expect(user[0]!.y).toBeCloseTo(92 / 120, 9);
+    expect(user[5]!.y).toBeCloseTo(3.4 / 5, 9);
+  });
+
+  it('⚑⚑ measures from the spoke’s CENTRE, not from zero', () => {
+    // ⚑ WHY THIS FIXTURE IS SYNTHETIC, against the project's usual rule. Every
+    // spoke of every shipped spider has `centre: 0`, which makes `max - centre`
+    // and `max + centre` the SAME NUMBER -- so no committed figure can tell the
+    // two apart, and the tests above pass with the subtraction reversed. A
+    // non-zero centre is a real thing (a radar chart whose axes start at a
+    // baseline rather than at nothing) and this is the arithmetic of a pure
+    // reader, not a claim about any figure (v2.1 audit).
+    const offset: ChallengeTruth = {
+      ...SPIDER,
+      spokes: [{ centre: 20, max: 120 }, { centre: -5, max: 5 }],
+      series: [{ name: 'x', points: [{ value: 70 }, { value: 0 }] }],
+    };
+    const pts = truthSpiderPoints(offset);
+    // 70 sits halfway between 20 and 120.
+    expect(pts[0]!.y).toBeCloseTo(0.5, 9);
+    // 0 sits halfway between -5 and 5.
+    expect(pts[1]!.y).toBeCloseTo(0.5, 9);
+    // The user reader must agree, since a perfect trace has to score perfect.
+    expect(spiderUserPoints([70, 0], offset)).toEqual(pts);
   });
 
   it('⚑ spaces the spokes so a neighbouring one cannot be mistaken for a match', () => {
-    // Scoring is a scatter with a 0.15 match threshold. One spoke apart must
-    // exceed it, or a point on the WRONG axis scores as a good reading.
+    // Scoring is a scatter match: one spoke apart must exceed the threshold, or
+    // a point on the WRONG axis scores as a good reading. The threshold is
+    // IMPORTED, not typed as 0.15 -- a hardcoded copy stays green when the real
+    // constant moves, which is the one thing this assertion exists to notice.
     const r = spiderAxisRanges(SPIDER);
-    expect(1 / r.xRange).toBeGreaterThan(0.15);
+    expect(1 / r.xRange).toBeGreaterThan(SCATTER_MATCH_THRESHOLD);
     expect(r.yRange).toBe(1);
+  });
+
+  it('⚑⚑ …and keeps that true at ANY spoke count, not just the shipped figure’s six', () => {
+    // THE DEFECT (v2.1 audit): xRange was the spoke count minus one, so the more
+    // spokes a figure had the CLOSER neighbours became in matching space. Six
+    // spokes gives 0.2 and passes; eight gives 0.143 and a reading on the wrong
+    // spoke matches -- the exact cascade the scatter scorer was chosen to stop.
+    for (const n of [2, 6, 8, 12, 40]) {
+      const wide: ChallengeTruth = {
+        ...SPIDER,
+        spokes: Array.from({ length: n }, () => ({ centre: 0, max: 100 })),
+      };
+      expect(1 / spiderAxisRanges(wide).xRange).toBeGreaterThan(SCATTER_MATCH_THRESHOLD);
+    }
   });
 
   it('⚑ puts the CENTRE value at the origin pixel and the max at the spoke tip', () => {
@@ -529,19 +588,49 @@ describe('pie truth — the whole, and the slices read against it', () => {
     expect(truthValueRange(PIE)).toBe(100);
   });
 
+  it('⚑ a degenerate total falls back to 1 rather than dividing by zero', () => {
+    // Every sibling reader in the file guards with `|| 1`; this one used `??`,
+    // which passes 0 straight through. The result was Infinity seconds in the
+    // game total AND in the persisted high score.
+    expect(truthValueRange({ ...PIE, total: 0 })).toBe(1);
+    const noTotal = { ...PIE };
+    delete (noTotal as { total?: number }).total;
+    expect(truthValueRange(noTotal)).toBe(1);
+  });
+
   it('⚑ the slice values sum to the total — the figure’s own consistency check', () => {
     const sum = truthPieValues(PIE).reduce((a, v) => a + v[0]!, 0);
     expect(sum).toBeCloseTo(PIE.total!, 6);
   });
 
-  it('ships the true slice edges as recorded pixels, one per slice', () => {
-    // The reveal draws apex->startEdge per slice; a missing block would draw
-    // nothing and read as "no answer" rather than as a broken reveal.
-    expect(PIE.calibration.slices).toHaveLength(truthPieValues(PIE).length);
-    for (const sl of PIE.calibration.slices!) {
-      expect(Number.isFinite(sl.apex.px)).toBe(true);
-      expect(Number.isFinite(sl.startEdge.py)).toBe(true);
-    }
+  it('⚑ ships the true slice edges as recorded pixels, and they DESCRIBE the slices', () => {
+    // ⚑ The first version asserted `Number.isFinite` on two of the six
+    // coordinates. It passed if every slice shared one startEdge, or if apex and
+    // startEdge were swapped -- i.e. it could not have caught the reveal defect
+    // it was written to protect (v2.1 audit). These assertions are about the
+    // GEOMETRY instead.
+    const slices = PIE.calibration.slices!;
+    expect(slices).toHaveLength(truthPieValues(PIE).length);
+
+    const centre = slices[0]!.apex;
+    const radius = Math.hypot(slices[0]!.startEdge.px - centre.px, slices[0]!.startEdge.py - centre.py);
+    expect(radius).toBeGreaterThan(50); // a real pie, not a collapsed one
+
+    const seen = new Set<string>();
+    slices.forEach((sl, i) => {
+      // Every edge sits on the rim, measured from that slice's own apex...
+      for (const edge of [sl.startEdge, sl.endEdge]) {
+        expect(Math.hypot(edge.px - sl.apex.px, edge.py - sl.apex.py)).toBeCloseTo(radius, 0);
+      }
+      // ...the edges are distinct (a zero-width slice would pass finiteness)...
+      expect(Math.hypot(sl.startEdge.px - sl.endEdge.px, sl.startEdge.py - sl.endEdge.py)).toBeGreaterThan(1);
+      seen.add(`${Math.round(sl.startEdge.px)},${Math.round(sl.startEdge.py)}`);
+      // ...and on a PLAIN pie the chain closes: each end is the next start.
+      const next = slices[(i + 1) % slices.length]!;
+      expect(sl.endEdge.px).toBeCloseTo(next.startEdge.px, 0);
+      expect(sl.endEdge.py).toBeCloseTo(next.startEdge.py, 0);
+    });
+    expect(seen.size).toBe(slices.length); // no two slices share a start
   });
 });
 
@@ -586,5 +675,45 @@ describe('adopting a calibration with a REPEATING step', () => {
     // loader would then have grown a session that has nothing to grow.
     expect(Object.keys(BAR.calibration.anchors)).toEqual(['p1', 'p2']);
     expect(calibrationInputsFromAnchors(BAR.calibration).repeatCount).toBe(0);
+  });
+});
+
+
+describe('⚑ the pie reveal draws every boundary the player had to click (v2.1 audit)', () => {
+  const plain = PIE.calibration.slices!;
+  const exploded = (
+    JSON.parse(readFileSync('samples/pie-exploded-market-share.truth.json', 'utf8')) as {
+      calibration: { slices: NonNullable<ChallengeTruth['calibration']['slices']> };
+    }
+  ).calibration.slices;
+
+  it('a plain pie needs one ray per slice — every boundary is shared', () => {
+    expect(pieRevealRays(plain)).toHaveLength(plain.length);
+  });
+
+  it('⚑⚑ an EXPLODED pie needs MORE, because the pulled-out slice shares nothing', () => {
+    // The defect: drawing only `apex -> startEdge` left the exploded slice's far
+    // edge and the boundary above it with nothing drawn, so the wedge whose
+    // whole lesson is "this one has edges of its own" read as unenclosed.
+    const rays = pieRevealRays(exploded);
+    expect(rays.length).toBeGreaterThan(exploded.length);
+
+    const drawn = new Set(rays.map((r) => `${Math.round(r[1]!.x)},${Math.round(r[1]!.y)}`));
+    for (const sl of exploded) {
+      expect(drawn.has(`${Math.round(sl.startEdge.px)},${Math.round(sl.startEdge.py)}`)).toBe(true);
+      expect(drawn.has(`${Math.round(sl.endEdge.px)},${Math.round(sl.endEdge.py)}`)).toBe(true);
+    }
+  });
+
+  it('⚑ and the pulled-out slice’s rays start at ITS apex, not the pie’s centre', () => {
+    const sl = exploded.find((s) => s.apex.px !== exploded[0]!.apex.px)!;
+    const rays = pieRevealRays(exploded).filter(
+      (r) => Math.abs(r[0]!.x - sl.apex.px) < 0.5 && Math.abs(r[0]!.y - sl.apex.py) < 0.5
+    );
+    expect(rays).toHaveLength(2); // both of its own edges
+  });
+
+  it('draws nothing for a figure with no slices, rather than throwing', () => {
+    expect(pieRevealRays([])).toEqual([]);
   });
 });

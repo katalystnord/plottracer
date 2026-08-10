@@ -147,7 +147,10 @@ export function calibrationInputsFromAnchors(cal: ChallengeCalibration): AdoptCa
  * `|| 1` guards a degenerate `min===max` truth so scoring can't divide by zero.
  */
 export function truthValueRange(truth: ChallengeTruth): number {
-  if (!truth.axes) return truth.total ?? 1; // pie: the whole IS the range
+  // ⚑ `|| 1`, not `?? 1` — the file's own convention, and the one place it was
+  // not followed. A pie truth with `total: 0` divided by zero, and `Infinity`
+  // seconds rode into the game total and the persisted high score.
+  if (!truth.axes) return (truth.total ?? 0) || 1; // pie: the whole IS the range
   return (truth.axes.y.max - truth.axes.y.min) || 1;
 }
 
@@ -233,9 +236,21 @@ export function truthSpiderPoints(truth: ChallengeTruth): Pt[] {
   });
 }
 
-/** The x span spider scoring normalises against — spoke 0 to spoke N−1. */
-export function spiderAxisRanges(truth: ChallengeTruth): AxisRanges {
-  return { xRange: (truth.spokes?.length ?? 1) - 1 || 1, yRange: 1 };
+/**
+ * The ranges spider scoring normalises against.
+ *
+ * ⚑ `xRange` IS 1, NOT THE SPOKE COUNT. Normalising the index by N−1 made
+ * neighbouring spokes closer together the more spokes a figure had: at N = 6 two
+ * adjacent spokes are 0.2 apart and safely outside the scatter scorer's 0.15
+ * match threshold, but at N = 8 they are 0.143 apart and a reading on the WRONG
+ * spoke matches — which is precisely the cascade the scatter scorer was chosen
+ * to prevent. With xRange 1 the spoke index is an exact identity at any N: one
+ * spoke apart is 1.0, six times the threshold, forever. No shipped figure has
+ * eight spokes; this is a property of the scoring, not of the current pool
+ * (v2.1 audit).
+ */
+export function spiderAxisRanges(_truth: ChallengeTruth): AxisRanges {
+  return { xRange: 1, yRange: 1 };
 }
 
 /** A user reading turned into the same (spoke index, fraction) space. `null`
@@ -300,6 +315,37 @@ export function derivedTupleItems(
  * (the round's instruction names where that order starts). */
 export function truthPieValues(truth: ChallengeTruth): number[][] {
   return (truth.series[0]?.points ?? []).map((p) => [Number(p.value)]);
+}
+
+/**
+ * The rays a pie's reveal draws — one per BOUNDARY the player had to click.
+ *
+ * ⚑ NOT one per slice. On a plain pie every boundary belongs to two slices, so
+ * drawing each slice's START covers all of them and the ring closes. A
+ * PULLED-OUT slice shares nothing with anyone, so its far edge — and the
+ * boundary above it — belong to no other slice and got no reveal at all: the
+ * round whose entire lesson is "the exploded slice has edges of its own" drew
+ * only half of them, and the exploded wedge read as unenclosed (v2.1 audit).
+ *
+ * Each ray starts at that slice's OWN apex, which for a pulled-out slice is its
+ * tip rather than the pie's centre.
+ */
+export function pieRevealRays(
+  slices: readonly ChallengePieSlice[]
+): { x: number; y: number }[][] {
+  const shared = (a: { px: number; py: number }, b: { px: number; py: number }): boolean =>
+    Math.abs(a.px - b.px) < 0.5 && Math.abs(a.py - b.py) < 0.5;
+  const rays: { x: number; y: number }[][] = [];
+  slices.forEach((sl, i) => {
+    const ray = (edge: { px: number; py: number }): { x: number; y: number }[] => [
+      { x: sl.apex.px, y: sl.apex.py },
+      { x: edge.px, y: edge.py },
+    ];
+    rays.push(ray(sl.startEdge));
+    const next = slices[(i + 1) % slices.length];
+    if (!next || !shared(sl.endEdge, next.startEdge)) rays.push(ray(sl.endEdge));
+  });
+  return rays;
 }
 
 /**

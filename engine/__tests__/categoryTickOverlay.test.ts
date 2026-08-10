@@ -9,6 +9,8 @@ import {
   categoryTickMarkers,
   categoryMarkMessage,
   isMarkingCategoryAxis,
+  CATEGORY_PANEL_HINT,
+  CATEGORY_TICK_DRAG_HINT,
   type CategoryPanelInput,
 } from '../categoryTickOverlay.js';
 
@@ -29,6 +31,7 @@ function panel(over: Partial<CategoryPanelInput> = {}) {
     isCalibrated: true,
     open: true,
     hasGeometry: false,
+    placeBothEdges: false,
     seedPixel: null,
     edgesPlaced: 0,
     hasAdjustments: false,
@@ -234,5 +237,60 @@ describe('⚑ a refused mark says why (review #10)', () => {
   it('tells the user what to do, not just what went wrong', () => {
     // The project's own rule for errors: explain the fix, not only the fault.
     expect(categoryMarkMessage('too-close')).toContain('further along');
+  });
+});
+
+
+describe('⚑⚑ "Re-place axis" can place BOTH ends — the walk that was unreachable', () => {
+  const seed = { px: 100, py: 500 };
+
+  it('reuses P1 by default, which is the one-click offer', () => {
+    const v = panel({ seedPixel: seed });
+    expect(v.canReuseSeed).toBe(true);
+    expect(v.prompt).toContain('P1 (the amber handle) is being reused');
+  });
+
+  it('⚑ but asks for BOTH ends once the user says so', () => {
+    // THE DEFECT (v2.1 audit): `canReuseSeed` was `seedPixel !== null &&
+    // edgesPlaced === 0`, and P1 exists the moment the figure is calibrated --
+    // so it was permanently true, `edgesPlaced` permanently 0, and both of the
+    // prompts below were dead strings no user could ever see. P1's own prompt is
+    // "a known bar value (e.g. 0)"; clicking that gridline mid-plot is ordinary
+    // calibration and anchored the category axis in the middle of the figure
+    // with nothing on screen able to move it.
+    const v = panel({ seedPixel: seed, placeBothEdges: true });
+    expect(v.canReuseSeed).toBe(false);
+    expect(v.prompt).toBe('Click where the categories start, then where they end.');
+  });
+
+  it('⚑ and then asks for the second, so the walk is reachable end to end', () => {
+    const v = panel({ seedPixel: seed, placeBothEdges: true, edgesPlaced: 1 });
+    expect(v.canReuseSeed).toBe(false);
+    expect(v.prompt).toBe('Now click where the categories end.');
+  });
+});
+
+
+describe('⚑ the two capabilities that were documented only in MANUAL (v2.1 audit)', () => {
+  it('the hint names the touching-bars payoff, which is the biggest one', () => {
+    // Splitting a merged run at the marked boundaries is the #1 fixable
+    // auto-extract limit, and someone staring at exactly that figure had nothing
+    // on screen telling them to open the fold-out.
+    expect(CATEGORY_PANEL_HINT).toContain('touching same-coloured bars');
+  });
+
+  it('the hint still leads with the case most people have', () => {
+    // The addition must not bury the ordinary reason under the specialist one.
+    expect(CATEGORY_PANEL_HINT.indexOf('more than one series')).toBeLessThan(
+      CATEGORY_PANEL_HINT.indexOf('touching same-coloured bars')
+    );
+  });
+
+  it('⚑ dragging a tick is announced on screen, not only in the manual', () => {
+    // The ticks are 4px unlabelled dots; the only previous on-screen trace of
+    // this was the warning's "discarding the ones you moved", which is legible
+    // only to someone who already knew.
+    expect(CATEGORY_TICK_DRAG_HINT).toContain('Drag');
+    expect(CATEGORY_TICK_DRAG_HINT.toLowerCase()).toContain('evenly spaced');
   });
 });

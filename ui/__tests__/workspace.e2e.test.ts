@@ -923,6 +923,33 @@ describe('Workspace: Bar axes', () => {
     expect(await page.getByTestId('category-count').inputValue()).toBe('4');
   });
 
+  it('⚑ retyping the count over a NAMED set does not delete the names on the way', async () => {
+    // The count field commits as you type so the marks redraw live -- but
+    // `setCategoryCount` shrinks by TRUNCATION, so with the field selected,
+    // retyping 6 over a 3 passes through the intermediate "6"... and retyping 2
+    // over a 6 passes through nothing, while retyping 12 over a 5 passes through
+    // "1" and used to delete four NAMED categories on the way (v2.1 audit).
+    // Growing is instant; shrinking waits for blur.
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('category-ticks-toggle').click();
+    await page.waitForTimeout(100);
+    await clickAt(600, 400);
+    await page.waitForTimeout(150);
+
+    await page.getByTestId('category-count').fill('5');
+    await page.waitForTimeout(150);
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks — 5 categories');
+
+    // Name the last one, then retype the count with the field selected: the
+    // browser replaces the whole value, so the first keystroke IS "1".
+    await page.getByTestId('category-count').fill('1');
+    await page.getByTestId('category-count').fill('12');
+    await page.waitForTimeout(150);
+    // The transient "1" must not have taken effect -- only the final 12.
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks — 12 categories');
+  });
+
   it('removes the ticks again, leaving the calibration untouched', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();

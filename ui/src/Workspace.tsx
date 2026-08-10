@@ -24,6 +24,7 @@ import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } fr
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import {
   CATEGORY_PANEL_HINT,
+  CATEGORY_TICK_DRAG_HINT,
   CONVENTION_LABELS,
   categoryAxisGlyphs,
   categoryPanelSummary,
@@ -131,6 +132,7 @@ import {
   spiderPointAt,
   truthPieValues,
   derivedTupleItems,
+  pieRevealRays,
   singleAnchor,
   truthBoxValues,
   valueToPy,
@@ -1043,6 +1045,10 @@ export function Workspace() {
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
   const [categoryCountInput, setCategoryCountInput] = useState('');
   const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
+  // Set by "Re-place axis": the next marking gesture asks for BOTH ends rather
+  // than reusing P1, which is the only way to correct an axis whose start P1 got
+  // wrong. Cleared once an axis is marked.
+  const [categoryPlaceBothEdges, setCategoryPlaceBothEdges] = useState(false);
   const [categorySeriesInput, setCategorySeriesInput] = useState('');
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
@@ -1181,6 +1187,7 @@ export function Workspace() {
         hasGeometry: session.getCategoryAxis().hasGeometry(),
         seedPixel: session.categoryTickOriginPixel(),
         edgesPlaced: categoryFirstEdge ? 1 : 0,
+        placeBothEdges: categoryPlaceBothEdges,
         hasAdjustments: session.getCategoryAxis().hasAdjustments(),
       }),
     [session, version, axes, categoryPanelOpen, categoryFirstEdge]
@@ -2289,13 +2296,20 @@ export function Workspace() {
       while (sessionRef.current.getRepeatCount() < (inputs.repeatCount ?? 0)) {
         if (!sessionRef.current.addRepeat()) break;
       }
-      sessionRef.current.adoptCalibration(inputs);
+      // ⚑ The boolean matters. A truth file whose anchors no longer calibrate
+      // yields a round that LOOKS playable, records points with no data, and
+      // scores as all-misses -- with the one surface carrying the reason
+      // (`getCalibrationError`) folded away on the next line.
+      const adopted = sessionRef.current.adoptCalibration(inputs);
+      if (!adopted) setCalibExpanded(true);
       imageCanvasRef.current?.loadImageFromSrc(dataURL, ex.name);
       // The example IS the whole figure-of-record: capture it (a no-op crop) so the
       // player can place points -- without this, capture stays pending and every
       // click is blocked ("Frame the whole figure... press Capture").
       setFigureCaptured(true);
-      setCalibExpanded(false); // the player didn't calibrate -- don't clutter/occlude with the calib card
+      // the player didn't calibrate -- don't clutter/occlude with the calib card,
+      // unless the adoption failed, in which case that card is the explanation
+      if (adopted) setCalibExpanded(false);
       setMode('place-point');
       setRoundStartMs(Date.now());
       bump();
@@ -2554,6 +2568,7 @@ export function Workspace() {
         if (session.markCategoryAxis(first, { x: px, y: py })) {
           setCategoryFirstEdge(null);
           setCategoryMarkError(null);
+          setCategoryPlaceBothEdges(false);
           setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
           commit();
         } else {
@@ -3290,6 +3305,15 @@ export function Workspace() {
       newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis);
       sessionRef.current = newSession;
       setColorTraceRegion(null); // new figure's pixel space -> old trace region is stale (audit A1)
+      // ⚑ The fold-out's own inputs are per-figure too. Without this the
+      // Categories box showed the PREVIOUS figure's number (or nothing) beside
+      // the ticks the loaded one actually has, and a stale "same point" refusal
+      // from ten minutes ago sat there in red (v2.1 audit).
+      setCategoryCountInput(String(newSession.getCategoryAxis().getCategoryCount() || ''));
+      setCategoryFirstEdge(null);
+      setCategoryMarkError(null);
+      setCategoryPlaceBothEdges(false);
+      setCategoryPanelOpen(false);
 
       applyProvenance(fig.provenance ?? {}); // restore where this figure came from
       applyPdfState(null); // a saved project is a baked image, not a live PDF
@@ -4747,13 +4771,7 @@ export function Workspace() {
     }
     if (ex.family === 'pie') {
       const slices = ex.truth.calibration.slices ?? [];
-      return {
-        curves: slices.map((sl) => [
-          { x: sl.apex.px, y: sl.apex.py },
-          { x: sl.startEdge.px, y: sl.startEdge.py },
-        ]),
-        markers: [],
-      };
+      return { curves: pieRevealRays(slices), markers: [] };
     }
     // bar/box have no x calibration -> draw the true values as horizontal lines
     // from the value-axis anchors (bar: each value; box: each median).
@@ -5054,6 +5072,7 @@ export function Workspace() {
   // pops in and out of the right panel.
   const guidanceTip = buildGuidanceTip({
     canvasHasImage,
+    isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
     mode,
     figureCaptured,
     eyedropper,
@@ -5615,7 +5634,10 @@ export function Workspace() {
               the feature exists to find it -- the summary line is on screen the
               moment the axes are calibrated. Every branch below comes from
               `categoryPanelView`, which is pure and unit-tested. */}
-          {categoryPanel.phase !== 'unavailable' && (
+          {/* ⚑ Not during a Challenge round: opening it mid-round turns the
+              player's bar clicks into category-axis edges while the clock runs
+              (v2.1 audit). */}
+          {gamePhase === null && categoryPanel.phase !== 'unavailable' && (
             <div
               data-testid="category-ticks-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
@@ -5706,8 +5728,36 @@ export function Workspace() {
                       {categoryPanel.prompt}
                     </div>
                   )}
+                  {categoryPanel.phase === 'mark-axis' && (
+                    // ⚑ A VISIBLE WAY OUT. In this phase the panel rendered only
+                    // a prompt -- no Done, no Cancel -- while every canvas click
+                    // anywhere in the app was being captured as an axis edge,
+                    // including in Eraser and Select. The only exit was
+                    // re-clicking the summary chevron, and nothing said so
+                    // (v2.1 audit).
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
+                      <button
+                        type="button"
+                        data-testid="category-cancel-mark"
+                        onClick={() => {
+                          setCategoryFirstEdge(null);
+                          setCategoryMarkError(null);
+                          setCategoryPlaceBothEdges(false);
+                          setCategoryPanelOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                   {categoryPanel.phase === 'declaring' && (
                     <>
+                      <div
+                        data-testid="category-drag-hint"
+                        style={{ gridColumn: '1 / -1', color: theme.color.text.legend, fontSize: 12 }}
+                      >
+                        {CATEGORY_TICK_DRAG_HINT}
+                      </div>
                       <label htmlFor="category-count-input">Categories</label>
                       <span>
                         <input
@@ -5716,10 +5766,36 @@ export function Workspace() {
                           min={1}
                           data-testid="category-count"
                           value={categoryCountInput}
+                          // ⚑ GROWING COMMITS AS YOU TYPE; SHRINKING WAITS FOR
+                          // BLUR OR ENTER.
+                          //
+                          // `setCategoryCount` shrinks by TRUNCATION, dropping
+                          // the trailing categories names and all -- so with the
+                          // whole field selected, retyping 12 over a 5 passed
+                          // through the intermediate "1" and silently deleted
+                          // four named categories on the way (v2.1 audit).
+                          //
+                          // ⚑ But committing only on blur was WORSE: the ticks
+                          // stopped appearing as the number was typed, and that
+                          // live redraw is the entire feedback loop this panel
+                          // is built around -- you type a count and SEE whether
+                          // the marks land on the figure. Caught by the e2e.
+                          // Growing can never destroy a name, so it stays
+                          // instant; only the destructive direction waits.
                           onChange={(e) => {
                             setCategoryCountInput(e.target.value);
                             const n = Number(e.target.value);
+                            const current = session.getCategoryAxis().getCategoryCount();
+                            if (Number.isInteger(n) && n >= 1 && n >= current && session.setCategoryCount(n))
+                              commit();
+                          }}
+                          onBlur={() => {
+                            const n = Number(categoryCountInput);
                             if (Number.isInteger(n) && n >= 1 && session.setCategoryCount(n)) commit();
+                            else setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
                           }}
                           style={{ width: 56 }}
                         />
@@ -5789,9 +5865,17 @@ export function Workspace() {
                         <button
                           type="button"
                           data-testid="category-replace-axis"
+                          title="Re-place axis — click both ends of the category axis again. Any ticks you moved are lost."
                           onClick={() => {
+                            // ⚑ BOTH ends, which is what the label says. Reusing
+                            // P1 here made the start impossible to correct: P1 is
+                            // "a known bar value (e.g. 0)", so a figure calibrated
+                            // on a gridline mid-plot anchored the category axis in
+                            // the middle of the figure for good.
                             session.clearCategoryAxisGeometry();
                             setCategoryFirstEdge(null);
+                            setCategoryMarkError(null);
+                            setCategoryPlaceBothEdges(true);
                             commit();
                           }}
                         >
@@ -5800,11 +5884,14 @@ export function Workspace() {
                         <button
                           type="button"
                           data-testid="category-remove-ticks"
+                          title="Remove ticks — drop the marks and the empty categories they created. Named categories and captured bars are kept."
                           onClick={() => {
                             // Takes back the empty categories the declaration
                             // created; keeps any that were named or have a bar.
                             session.removeCategoryTicks();
                             setCategoryFirstEdge(null);
+                            setCategoryMarkError(null);
+                            setCategoryPlaceBothEdges(false);
                             setCategoryPanelOpen(false);
                             commit();
                           }}
