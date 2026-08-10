@@ -7,6 +7,7 @@ import {
   categoryPanelView,
   categoryTickIndexFromId,
   categoryTickMarkers,
+  categoryMarkMessage,
   isMarkingCategoryAxis,
   type CategoryPanelInput,
 } from '../categoryTickOverlay.js';
@@ -212,5 +213,26 @@ describe('the words on screen', () => {
   it('names both conventions in the figure’s terms, not ours', () => {
     expect(CONVENTION_LABELS.centred).toBe('Under each category');
     expect(CONVENTION_LABELS.edge).toBe('Between categories');
+  });
+});
+
+describe('⚑ a refused mark says why (review #10)', () => {
+  it('says nothing when nothing has failed', () => {
+    expect(categoryMarkMessage(null)).toBeNull();
+  });
+
+  it('names the reason, and what to do instead', () => {
+    // The only way marking refuses is a zero-length axis -- the second click
+    // landing on the first edge. Without a message the click did nothing, the
+    // prompt was unchanged, and the app simply appeared to ignore the user.
+    const msg = categoryMarkMessage('too-close');
+    expect(msg).toBe(
+      'That is the same point as the start of the axis — click where the categories END, further along.'
+    );
+  });
+
+  it('tells the user what to do, not just what went wrong', () => {
+    // The project's own rule for errors: explain the fix, not only the fault.
+    expect(categoryMarkMessage('too-close')).toContain('further along');
   });
 });

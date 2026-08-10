@@ -30,7 +30,9 @@ import {
   categoryPanelView,
   categoryTickIndexFromId,
   categoryTickMarkers,
+  categoryMarkMessage,
   isMarkingCategoryAxis,
+  type CategoryMarkError,
 } from '../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../core/categoryAxis.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
@@ -1033,6 +1035,7 @@ export function Workspace() {
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
   const [categoryCountInput, setCategoryCountInput] = useState('');
+  const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
   const [categorySeriesInput, setCategorySeriesInput] = useState('');
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
@@ -2518,8 +2521,15 @@ export function Workspace() {
         }
         if (session.markCategoryAxis(first, { x: px, y: py })) {
           setCategoryFirstEdge(null);
+          setCategoryMarkError(null);
           setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
           commit();
+        } else {
+          // ⚑ Say why. The only way this refuses is a zero-length axis -- the
+          // second click landing on the first edge -- and without this the click
+          // did nothing, the prompt was unchanged, and the app simply appeared
+          // to ignore the user.
+          setCategoryMarkError('too-close');
         }
         return;
       }
@@ -5624,6 +5634,14 @@ export function Workspace() {
                   {!session.getCategoryAxis().hasGeometry() && (
                     <div style={{ gridColumn: '1 / -1', color: theme.color.text.legend }}>
                       {CATEGORY_PANEL_HINT}
+                    </div>
+                  )}
+                  {categoryMarkMessage(categoryMarkError) && (
+                    <div
+                      data-testid="category-mark-error"
+                      style={{ gridColumn: '1 / -1', color: theme.color.error }}
+                    >
+                      {categoryMarkMessage(categoryMarkError)}
                     </div>
                   )}
                   {categoryPanel.prompt && (

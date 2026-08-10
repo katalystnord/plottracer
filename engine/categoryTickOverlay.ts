@@ -159,6 +159,24 @@ export interface CategoryPanelInput {
   hasAdjustments: boolean;
 }
 
+/** Why a click could not become an axis edge. Null when nothing has failed. */
+export type CategoryMarkError = 'too-close' | null;
+
+/**
+ * What to say when `markCategoryAxis` refuses.
+ *
+ * ⚑ A REFUSAL WITH NO VISIBLE REASON is the shape this project has been bitten
+ * by repeatedly, and the fold-out had one: if the second click lands on the seed
+ * pixel (or on the first edge), `setAxisEdges` refuses a zero-length axis, the
+ * handler returns having done nothing, and the prompt is unchanged. The user
+ * clicks and the app appears to ignore them (code review, 2026-08-10).
+ */
+export function categoryMarkMessage(error: CategoryMarkError): string | null {
+  return error === 'too-close'
+    ? 'That is the same point as the start of the axis — click where the categories END, further along.'
+    : null;
+}
+
 export interface CategoryPanelView {
   phase: CategoryTickPhase;
   /** What the fold-out asks for next; null when it is asking nothing. */
