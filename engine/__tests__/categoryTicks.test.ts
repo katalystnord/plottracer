@@ -468,3 +468,66 @@ describe('⚑ the detector cuts a merged run at the declared dividers', () => {
     expect(r).not.toHaveProperty('expectation');
   });
 });
+
+describe('the dividers the DETECTOR is handed', () => {
+  it('is nothing at all until an axis is marked — so the detector call is unchanged', () => {
+    // ⚑ The whole un-ticked path depends on this being null: a caller passing it
+    // straight through gets exactly the pre-v2.1 behaviour.
+    expect(calibratedBar().categoryDividersForDetect()).toBeNull();
+    const s = new CalibrationSession<CalibratedAxes>(SPIDER_AXES_CONFIG as never);
+    expect(s.categoryDividersForDetect()).toBeNull();
+  });
+
+  it('hands over scalar positions along the category axis, ascending', () => {
+    const s = withTicks(4); // axis x=100..600, centred
+    expect(s.categoryDividersForDetect()).toEqual({
+      dividers: [100, 225, 350, 475, 600],
+      categoryAxis: 'x',
+    });
+  });
+
+  it('⚑ MEASURES the direction from the marked axis, not from the option', () => {
+    // "Horizontal bars" and the marked axis are independent declarations today,
+    // so asking the geometry is the one that cannot disagree with what was drawn.
+    const s = calibratedBar();
+    s.markCategoryAxis({ x: 90, y: 100 }, { x: 90, y: 600 }); // a vertical axis
+    s.setCategoryCount(2);
+    const d = s.categoryDividersForDetect()!;
+    expect(d.categoryAxis).toBe('y');
+    expect(d.dividers).toEqual([100, 350, 600]);
+  });
+
+  it('follows a dragged tick, so what the detector cuts on is what is on screen', () => {
+    const s = withTicks(2);
+    s.moveCategoryTick(0, { x: 150, y: 500 });
+    const d = s.categoryDividersForDetect()!;
+    expect(d.dividers[1]).toBeGreaterThan(100);
+    expect(d.dividers[1]).toBeLessThan(350); // the midpoint moved with the tick
+  });
+});
+
+describe('the divider handover holds up against the awkward cases', () => {
+  it('⚑ refuses even when geometry was set on the axis DIRECTLY, bypassing the session', () => {
+    // The session gate refuses to MARK an axis on a type with no categories, but
+    // getCategoryAxis() hands out the object, so the model can be reached around
+    // the gate. The guard has to hold on the way out too, or a spider could feed
+    // dividers to the bar detector.
+    const s = new CalibrationSession<CalibratedAxes>(SPIDER_AXES_CONFIG as never);
+    s.getCategoryAxis().setAxisEdges(A, B);
+    s.getCategoryAxis().setCategoryCount(3);
+    expect(s.getCategoryAxis().hasGeometry()).toBe(true);
+    expect(s.categoryDividersForDetect()).toBeNull();
+  });
+
+  it('⚑ hands over ASCENDING dividers even for an axis marked right-to-left', () => {
+    // Nothing stops a user clicking the far end first. The dividers then come out
+    // of the model descending, and splitRunAtDividers requires ascending -- it
+    // would cut nothing at all and the feature would silently do nothing.
+    const s = calibratedBar();
+    s.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 });
+    s.setCategoryCount(4);
+    const d = s.categoryDividersForDetect()!;
+    expect(d.dividers).toEqual([...d.dividers].sort((a, b) => a - b));
+    expect(d.dividers).toEqual([100, 225, 350, 475, 600]);
+  });
+});

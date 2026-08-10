@@ -4218,7 +4218,12 @@ export function Workspace() {
     // agnostic. `noun` names whichever the active type actually captures.
     if (config.autoExtractKind === 'bounding-box') {
       const noun = config.tupleNoun ?? 'bar';
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
+      // v2.1: hand the declared category geometry to the detector, so a merged
+      // run of touching same-coloured bars is cut at the dividers the user
+      // marked. Null when nothing is declared, which is exactly the pre-v2.1
+      // call -- the un-ticked path is unchanged.
+      const declared = session.categoryDividersForDetect();
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { ...declared, expected: session.getCategoryAxis().getCategoryCount() } : undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;

@@ -2945,6 +2945,30 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return true;
   }
 
+  /**
+   * The declared category dividers, ready for the bar detector: scalar positions
+   * along the category axis, plus which image axis that is.
+   *
+   * Null whenever there is nothing declared, so a caller passing this straight
+   * through gets exactly the pre-v2.1 behaviour when the user has not marked
+   * anything — the un-ticked path stays untouched by construction.
+   *
+   * ⚑ The direction is MEASURED from the marked axis, not read off the
+   * "Horizontal bars" option: the two are independent declarations today and
+   * asking the geometry is the one that cannot disagree with what was drawn.
+   */
+  categoryDividersForDetect(): { dividers: number[]; categoryAxis: 'x' | 'y' } | null {
+    if (!this.supportsCategoryTicks()) return null;
+    const edges = this.categoryAxis.getAxisEdges();
+    if (!edges) return null;
+    const horizontal = Math.abs(edges[1].x - edges[0].x) >= Math.abs(edges[1].y - edges[0].y);
+    const axis: 'x' | 'y' = horizontal ? 'x' : 'y';
+    const points = this.categoryAxis.getDividerPoints();
+    if (points.length < 2) return null;
+    const dividers = points.map((p) => (axis === 'x' ? p.x : p.y)).sort((a, b) => a - b);
+    return { dividers, categoryAxis: axis };
+  }
+
   /** Which category a pixel falls under, or null when no axis is marked. This
    * is what replaces the nearest-donor name guess once ticks exist. */
   categoryBandAt(px: number, py: number): number | null {
