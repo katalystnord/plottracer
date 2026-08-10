@@ -179,6 +179,30 @@ next. A reading you placed by hand is never overwritten.
   along the category axis, so it lands on the right category however you click and
   whatever you skip. Where the app can't tell which category you meant, it leaves
   the cell **blank** rather than guess.
+- **Mark category ticks (optional, v2.1).** Once a Bar or Box Plot figure is
+  calibrated, the calibration card offers **Mark category ticks?**. Open it, click
+  where the categories end (the value origin is already the start), and say how
+  many there are. Tick marks appear along the category axis; drag any of them if
+  the figure isn't evenly spaced. Choose whether the figure prints its ticks
+  **under each category** or **between them** — flip the setting and watch the
+  marks move to see which matches.
+  It is entirely optional. A single-series chart is one bar per category and needs
+  none of it. Where it earns its place is a chart with **more than one series**, or
+  one where **a series is missing a bar** — with the categories declared, every bar
+  is filed by the band it sits in rather than by guessing from position, the table
+  shows a row for every category before you capture anything, and a run of touching
+  same-coloured bars can be split at the boundaries you marked.
+- **⚠ Where the guess can go wrong, if you don't mark the ticks.** The
+  nearest-already-named-bar rule above copes with a *later* series skipping a
+  category. It cannot cope when the **first series you capture** is the one missing
+  a bar: that category never comes into existence, so a later series' bar there
+  takes its nearest neighbour's name instead. The wrong name looks exactly like one
+  you typed.
+  It depends on the direction you capture in — left-to-right is the one that can
+  mislead — and it only affects **names**, never measured values. To avoid it,
+  either mark the category ticks, or capture your most complete series first. To
+  spot it, check the Category column against the figure: a bar under one label
+  carrying a different one is the symptom, usually with a blank cell nearby.
 - On a **Line** (categorical X) figure the same Category column exists, but the
   names belong to individual *points* rather than to shared rows, since each point
   is its own reading.
