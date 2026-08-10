@@ -650,6 +650,24 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * breaks on a type whose steps are named differently. Bar's are `p1`/`p2`
    * and categorical Line's are `v1`/`v2`, so any second user of this would
    * have needed a second literal beside the first. */
+  /**
+   * This graph type has CATEGORIES the user can mark out (v2.1), and which
+   * already-placed calibration step seeds the first edge of the category axis.
+   *
+   * Presence IS the capability -- Bar, categorical Line and Box Plot, the three
+   * types whose other axis is categorical. Histogram bins are numeric intervals
+   * and spider spokes are axes, so neither declares it.
+   *
+   * ⚑ The seed step is DECLARED for the same reason `commonOrigin`'s keys now
+   * are: it is `p1` for Bar and Box Plot but `v1` for categorical Line, so a
+   * literal would work on two of the three types and quietly do nothing on the
+   * third. The value origin sits at the category axis's first edge, so reusing
+   * that pixel is what makes marking the axis one click instead of two.
+   *
+   * ⚑ Ticks are an AID, not a calibration: nothing here is a step in the walk,
+   * and no measured value depends on any of it. See core/categoryAxis.ts.
+   */
+  categoryTicks?: { originStep: string };
   commonOrigin?: {
     /** The already-placed step whose pixel is reused. */
     from: string;
@@ -957,6 +975,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
+  categoryTicks: { originStep: 'p1' },
   tupleNoun: 'bar',
   tupleMembers: 'object',
   derivedTupleValue: {
@@ -1070,6 +1089,9 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
   distinctPixelSteps: [['v1', 'v2']],
+  // ⚑ `v1`, not `p1` -- this type names its own steps, which is exactly why the
+  // seed is declared rather than written as a literal at the call site.
+  categoryTicks: { originStep: 'v1' },
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
   fixedSteps: [
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
@@ -1119,6 +1141,8 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   defaultSlots: BOX_PLOT_SLOTS,
+  // Shares Bar's fixedSteps (below), so the same seed step.
+  categoryTicks: { originStep: 'p1' },
   tupleNoun: 'box',
   // Shares Bar's calibration and guards -- reusing the arrays keeps them from
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this

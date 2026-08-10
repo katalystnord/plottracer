@@ -190,7 +190,7 @@ import { BarAxes } from '../core/axes/bar.js';
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
-import { CategoryAxis } from '../core/categoryAxis.js';
+import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
@@ -2827,6 +2827,80 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.categoryAxis;
   }
 
+  // ---------------------------------------------------------------------------
+  // Category TICKS (v2.1). Thin, and deliberately so: the geometry itself lives
+  // in core/categoryAxis.ts where it is pure and mutation-testable. What these
+  // add is the one thing the model cannot know -- whether this GRAPH TYPE has
+  // categories at all, and which placed calibration pixel seeds the axis. Every
+  // mutator is gated on that, so a spider or polar session cannot acquire tick
+  // geometry through a stray call and then serialize it.
+  //
+  // ⚑ An AID, not a calibration. None of this is a step in the walk, none of it
+  // gates `runCalibration`, and no measured value depends on it.
+  // ---------------------------------------------------------------------------
+
+  /** Whether this graph type has categories the user can mark out. */
+  supportsCategoryTicks(): boolean {
+    return this.config.categoryTicks !== undefined;
+  }
+
+  /**
+   * The already-placed calibration pixel that seeds the category axis's first
+   * edge — the value origin, which sits on that edge in an ordinary bar chart.
+   * Null when the type has no categories or the seed step is not placed yet.
+   *
+   * ⚑ Offered, never imposed: this is what lets the UI put the first edge down
+   * for free, exactly as an XY calibration reuses X1 for Y1, and the user can
+   * place both edges by hand when P1 was clicked partway up the axis instead of
+   * at the corner.
+   */
+  categoryTickOriginPixel(): { px: number; py: number } | null {
+    const ticks = this.config.categoryTicks;
+    if (!ticks) return null;
+    const seed = this.placed[ticks.originStep];
+    return seed ? { px: seed.px, py: seed.py } : null;
+  }
+
+  /** Mark the two edges that ARE the category axis. Refuses for a type with no
+   * categories, and for a degenerate axis (the model's own guard). */
+  markCategoryAxis(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    return this.categoryAxis.setAxisEdges(a, b);
+  }
+
+  /** Declare how many categories the figure has, regenerating the ticks. */
+  setCategoryCount(count: number): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    return this.categoryAxis.setCategoryCount(count);
+  }
+
+  /** Switch between ticks under the categories and ticks between them. */
+  setCategoryTickConvention(convention: TickConvention): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    return this.categoryAxis.setConvention(convention);
+  }
+
+  /** Drag one tick; the model clamps it between its neighbours. */
+  moveCategoryTick(index: number, point: { x: number; y: number }): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    return this.categoryAxis.moveTick(index, point);
+  }
+
+  /** Drop the marks, keeping the category NAMES — working without ticks is a
+   * supported way to use the tool, not a broken state. */
+  clearCategoryAxisGeometry(): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    this.categoryAxis.clearGeometry();
+    return true;
+  }
+
+  /** Which category a pixel falls under, or null when no axis is marked. This
+   * is what replaces the nearest-donor name guess once ticks exist. */
+  categoryBandAt(px: number, py: number): number | null {
+    if (!this.supportsCategoryTicks()) return null;
+    return this.categoryAxis.bandIndexAt({ x: px, y: py });
+  }
+
   getSlotNames(): string[] {
     return this.activeEntry.dataset.getSlotNames();
   }
@@ -4086,6 +4160,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.pendingPixel) {
       const m = map(this.pendingPixel.px, this.pendingPixel.py);
       this.pendingPixel = { px: m.x, py: m.y };
+    }
+    // v2.1: the two category-axis EDGES are stored pixels too, so they move with
+    // the image like every other handle.
+    //
+    // ⚑ The TICKS need no pass of their own, and that is why they are stored as
+    // parameters along the axis rather than as pixels: moving the two edges
+    // carries the whole set by construction. A tick list transformed
+    // independently could drift off the axis it belongs to; this cannot.
+    const edges = this.categoryAxis.getAxisEdges();
+    if (edges) {
+      const a = map(edges[0].x, edges[0].y);
+      const b = map(edges[1].x, edges[1].y);
+      // Keep the ticks: setAxisEdges regenerates, which would silently discard
+      // any the user had dragged. An image edit must not undo their work.
+      const ticks = [...this.categoryAxis.getTickParams()];
+      const adjusted = this.categoryAxis.hasAdjustments();
+      if (this.categoryAxis.setAxisEdges({ x: a.x, y: a.y }, { x: b.x, y: b.y })) {
+        this.categoryAxis.restoreTickParams(ticks, adjusted);
+      }
     }
     for (const entry of this.datasetEntries) {
       entry.dataset.getAllPixels().forEach((pt, i) => {
