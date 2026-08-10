@@ -12,6 +12,7 @@ import {
 } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { CalibratedAxes } from '../axesTypeConfigs.js';
+import { runBarDetect } from '../barDetectRun.js';
 
 /**
  * CATEGORY TICKS, wired into the session (v2.1).
@@ -352,5 +353,118 @@ describe('the un-ticked path is untouched', () => {
     expect(s.getTupleLabel(0)).toBe('Flax'); // band 0, still named Flax
     s.clearCategoryAxisGeometry();
     expect(s.getTupleLabel(0)).toBe('Flax'); // stored index again
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Splitting a merged run at the declared dividers, through the detector.
+// ---------------------------------------------------------------------------
+
+/** An RGBA image with `bars` drawn in one colour on white. */
+function figureWith(w: number, h: number, bars: [number, number, number, number][]): Uint8ClampedArray {
+  const data = new Uint8ClampedArray(w * h * 4).fill(255);
+  for (const [x0, y0, x1, y1] of bars) {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const o = (y * w + x) * 4;
+        data[o] = 20; data[o + 1] = 60; data[o + 2] = 140; data[o + 3] = 255;
+      }
+    }
+  }
+  return data;
+}
+
+describe('⚑ the detector cuts a merged run at the declared dividers', () => {
+  const W = 60;
+  const H = 30;
+  // Three TOUCHING bars of one colour: one blob, three different heights.
+  const TOUCHING = figureWith(W, H, [[0, 4, 19, 25], [20, 14, 39, 25], [40, 9, 59, 25]]);
+  const BLUE: [number, number, number] = [20, 60, 140];
+
+  it('without declared categories it is still one oversized bar', () => {
+    // The limit this feature exists for, asserted so the fix has something to be
+    // measured against.
+    const r = runBarDetect(TOUCHING, W, H, BLUE, 30);
+    expect('boxes' in r).toBe(true);
+    if (!('boxes' in r)) return;
+    expect(r.blobs).toBe(1);
+    expect(r.boxes).toHaveLength(1);
+  });
+
+  it('with them, it recovers three bars from the one blob', () => {
+    const r = runBarDetect(TOUCHING, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40, 60],
+      categoryAxis: 'x',
+      expected: 3,
+    });
+    expect('boxes' in r).toBe(true);
+    if (!('boxes' in r)) return;
+    expect(r.blobs).toBe(1); // still one blob...
+    expect(r.boxes).toHaveLength(3); // ...but three bars
+    // ⚑ Each piece carries its OWN top edge, which is the whole point: a single
+    // bounding box would have reported the tallest for all three.
+    expect(r.boxes.map((b) => b.start.y)).toEqual([4, 14, 9]);
+    expect(r.expectation).toEqual({ expected: 3, found: 3, complete: true, emptyBands: [] });
+  });
+
+  it('⚑ NAMES the category that came up empty, rather than returning a short table', () => {
+    // Three categories declared; the middle one has no ink at all. A table that
+    // is quietly missing a row looks finished, which is the failure this exists
+    // to prevent.
+    const gapped = figureWith(W, H, [[2, 4, 18, 25], [42, 9, 58, 25]]);
+    const r = runBarDetect(gapped, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40, 60],
+      categoryAxis: 'x',
+      expected: 3,
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    expect(r.boxes).toHaveLength(2);
+    expect(r.expectation).toEqual({ expected: 3, found: 2, complete: false, emptyBands: [1] });
+  });
+
+  it('⚑ names an empty band whether it came from a SPLIT or from no blob at all', () => {
+    // The middle category is empty here because its bar was never detected --
+    // not because a merged run was cut. Equally absent, equally named.
+    const gapped = figureWith(W, H, [[2, 4, 18, 25], [42, 9, 58, 25]]);
+    const r = runBarDetect(gapped, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40, 60],
+      categoryAxis: 'x',
+      expected: 3,
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    expect(r.blobs).toBe(2); // two separate blobs, no split involved
+    expect(r.expectation?.emptyBands).toEqual([1]);
+  });
+
+  it('leaves a blob that sits inside ONE band exactly as it was', () => {
+    // Separated bars already work; re-measuring them could only move a reading
+    // that was already right.
+    const separated = figureWith(W, H, [[2, 4, 15, 25], [42, 9, 55, 25]]);
+    const plain = runBarDetect(separated, W, H, BLUE, 30);
+    const withCats = runBarDetect(separated, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40, 60],
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in plain) || !('boxes' in withCats)) throw new Error('expected boxes');
+    expect(withCats.boxes).toEqual(plain.boxes);
+  });
+
+  it('declared categories with fewer than two dividers change nothing', () => {
+    const plain = runBarDetect(TOUCHING, W, H, BLUE, 30);
+    const odd = runBarDetect(TOUCHING, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [10],
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in plain) || !('boxes' in odd)) throw new Error('expected boxes');
+    expect(odd.boxes).toEqual(plain.boxes);
+  });
+
+  it('no expectation is reported when no count was declared', () => {
+    const r = runBarDetect(TOUCHING, W, H, BLUE, 30, 'foreground', undefined, undefined, {
+      dividers: [0, 20, 40, 60],
+      categoryAxis: 'x',
+    });
+    if (!('boxes' in r)) throw new Error('expected boxes');
+    expect(r).not.toHaveProperty('expectation');
   });
 });

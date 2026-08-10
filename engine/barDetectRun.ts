@@ -21,6 +21,12 @@
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import {
+  reconcileWithExpected,
+  runColumnsFromMask,
+  splitRunAtDividers,
+  type ExpectationReport,
+} from '../algorithms/barSplit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 
 export interface DetectedBarBox {
@@ -32,12 +38,29 @@ export interface DetectedBarBox {
 }
 
 export interface BarDetectSuccess {
-  /** One opposite-corner box per accepted blob. */
+  /** One opposite-corner box per accepted blob, or per PIECE where a merged run
+   * was cut at declared dividers. */
   boxes: DetectedBarBox[];
   /** Matched-pixel count (before blob reduction), for UI feedback. */
   matched: number;
-  /** Number of accepted blobs (== boxes.length), for UI feedback. */
+  /** Number of accepted blobs, for UI feedback. With declared categories this
+   * can be fewer than `boxes.length`: one merged run yields several bars. */
   blobs: number;
+  /** How the answer compared with the declared structure — present only when
+   * categories were declared AND a count was given. Reports; never acts. */
+  expectation?: ExpectationReport;
+}
+
+/** Declared category geometry, when the user has marked it (v2.1). Absent =
+ * exactly the pre-v2.1 behaviour, which is the un-ticked path staying untouched. */
+export interface BarDetectCategories {
+  /** Divider positions along the category axis, ascending, in image pixels. */
+  dividers: readonly number[];
+  /** Which way the categories run: `x` upright, `y` for horizontal bars. */
+  categoryAxis: 'x' | 'y';
+  /** How many bars the declared structure implies. Used ONLY to report a short
+   * answer -- never to relax anything until the count is satisfied. */
+  expected?: number;
 }
 
 export type BarDetectResult = BarDetectSuccess | { error: string };
@@ -65,7 +88,8 @@ export function runBarDetect(
   tolerance: number,
   mode: ColorFilterMode = 'foreground',
   region?: FilterRegion,
-  opts?: BlobDetectOptions
+  opts?: BlobDetectOptions,
+  categories?: BarDetectCategories
 ): BarDetectResult {
   const { mask, count } = colorFilter(data, width, height, target, tolerance, mode, region);
   if (count < MIN_MATCHED_PIXELS) {
@@ -75,12 +99,71 @@ export function runBarDetect(
   if (blobs.length === 0) {
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }
+  const plainBoxes = blobs.map((b) => ({
+    start: { x: b.bbox.minX, y: b.bbox.minY },
+    end: { x: b.bbox.maxX, y: b.bbox.maxY },
+  }));
+  if (!categories || categories.dividers.length < 2) {
+    return { boxes: plainBoxes, matched: count, blobs: blobs.length };
+  }
+
+  // ⚑ v2.1: with the categories declared, a blob spanning more than one band is
+  // a MERGED RUN of touching bars -- the #1 fixable limit against real figures --
+  // and is cut at the dividers the user placed. Each piece is re-measured from
+  // the mask by the MEDIAN of its own columns (see algorithms/barSplit.ts), so a
+  // divider a few pixels into the taller neighbour cannot drag the shorter bar's
+  // reading up. Nothing is invented for an empty band.
+  const { dividers, categoryAxis, expected } = categories;
+  const along = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
+    categoryAxis === 'x' ? { lo: b.minX, hi: b.maxX } : { lo: b.minY, hi: b.maxY };
+  const boxes: DetectedBarBox[] = [];
+  for (const blob of blobs) {
+    const span = along(blob.bbox);
+    const crossed = dividers.filter((d) => d > span.lo && d < span.hi);
+    if (crossed.length === 0) {
+      // Wholly inside one band: nothing to cut, and re-measuring it would only
+      // risk moving a reading that was already right.
+      boxes.push({
+        start: { x: blob.bbox.minX, y: blob.bbox.minY },
+        end: { x: blob.bbox.maxX, y: blob.bbox.maxY },
+      });
+      continue;
+    }
+    const columns = runColumnsFromMask(mask, width, height, blob.bbox, categoryAxis);
+    const cuts = [span.lo, ...crossed, span.hi];
+    const report = splitRunAtDividers(columns, cuts);
+    for (const piece of report.pieces) {
+      boxes.push(
+        categoryAxis === 'x'
+          ? { start: { x: piece.from, y: piece.min }, end: { x: piece.to, y: piece.max } }
+          : { start: { x: piece.min, y: piece.from }, end: { x: piece.max, y: piece.to } }
+      );
+    }
+  }
+  // ⚑ Which DECLARED bands ended up with no bar, across the whole figure -- not
+  // merely the ones a split found empty. A category missing because its blob was
+  // never detected at all is exactly as absent as one missing from inside a
+  // merged run, and the user needs it named either way. Computed from the boxes
+  // finally produced, so it cannot disagree with what was returned.
+  const bandOf = (b: DetectedBarBox): number => {
+    const lo = categoryAxis === 'x' ? b.start.x : b.start.y;
+    const hi = categoryAxis === 'x' ? b.end.x : b.end.y;
+    const mid = (lo + hi) / 2;
+    for (let i = 0; i < dividers.length - 1; i++) {
+      if (mid < dividers[i + 1]!) return i;
+    }
+    return dividers.length - 2;
+  };
+  const filled = new Set(boxes.map(bandOf));
+  const emptyBands = Array.from({ length: dividers.length - 1 }, (_, i) => i).filter(
+    (i) => !filled.has(i)
+  );
   return {
-    boxes: blobs.map((b) => ({
-      start: { x: b.bbox.minX, y: b.bbox.minY },
-      end: { x: b.bbox.maxX, y: b.bbox.maxY },
-    })),
+    boxes,
     matched: count,
     blobs: blobs.length,
+    ...(expected !== undefined
+      ? { expectation: reconcileWithExpected({ pieces: boxes, emptyBands }, expected) }
+      : {}),
   };
 }
