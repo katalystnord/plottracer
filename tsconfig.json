@@ -23,8 +23,17 @@
     // more than a spread.
     "exactOptionalPropertyTypes": true,
     // MEASURED and deliberately NOT on:
-    //   ui/ under exactOptionalPropertyTypes  45 errors -- a separate job, and
-    //     the rule is about the RECORD, which lives in core/algorithms/engine.
+    //   ui/ under exactOptionalPropertyTypes  43 errors (re-measured 2026-08-11,
+    //     was 45) -- and the re-measurement is why it is still off. Widening our
+    //     OWN prop types clears 25 of them mechanically (one line in icons.tsx
+    //     takes 13), but the rest do not stay type-level: ~6 need conditional
+    //     spreads into MUI and Konva configs on rendering paths, and ~12 are
+    //     call sites feeding the PROJECT FILE -- FigureRecord's imageFileName,
+    //     SourceDocument, the measurement records -- where the correct fix is to
+    //     make the key ABSENT, in the save/load path. That is worth doing and it
+    //     is the flag's whole point; it is not worth doing as the last commit
+    //     before a release, in the one layer mutation cannot reach and whose only
+    //     instrument is an 18-minute e2e run. First item of v2.2.
     //   noPropertyAccessFromIndexSignature    63 errors -- style, not a claim.
     "esModuleInterop": true,
     "skipLibCheck": true,
