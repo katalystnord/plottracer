@@ -82,6 +82,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Needed for `body_path` below -- this job otherwise never checks out the
+      # repo, so the notes file would not exist in its workspace and the page
+      # would publish bare again, which is the defect it exists to fix.
+      - uses: actions/checkout@v4
       - name: Download all installers
         uses: actions/download-artifact@v4
         with:
@@ -97,4 +101,15 @@ jobs:
             artifacts/**/*.exe
           fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # ⚑ THE RELEASE PAGE IS THE DOWNLOAD PAGE, and until v2.1 it carried
+          # nothing but the auto-generated changelog link. Notes written into the
+          # tag annotation are visible only to `git tag -n`; this action does not
+          # read them, so v2.0.0, v2.0.1 and v2.0.2 all published BARE and had to
+          # be backfilled by hand. It mattered most for v2.0.2, whose whole reason
+          # to exist was to tell people their asymmetric error bars might be filed
+          # against the wrong point -- a warning published nowhere.
+          # `release-notes/<tag>.md` is now the source, and `generate_release_notes`
+          # stays on because softprops APPENDS the changelog to a supplied body
+          # rather than replacing it.
+          body_path: release-notes/${{ github.ref_name }}.md
           generate_release_notes: true
