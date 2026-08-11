@@ -9,6 +9,7 @@ import {
   sampleColorBar,
   type ColorBarStrip,
 } from '../../algorithms/colorBar.js';
+import { checkColorScale, readColor, type ColorScale } from '../../algorithms/colorScale.js';
 import type { RGB } from '../../algorithms/colorFilter.js';
 
 /**
@@ -88,6 +89,26 @@ function keyStrip(fig: TruthFigure, img: Image): ColorBarStrip {
   return result.strip!;
 }
 
+/**
+ * The whole calibrated key: the strip, plus the two labelled ticks that give it
+ * a scale. This is the app's own object (`algorithms/colorScale.ts`) rather than
+ * arithmetic the test does for itself — an earlier version of this file
+ * interpolated the ticks inline, which measured the inversion against a mapping
+ * no user would ever run.
+ */
+function keyScale(fig: TruthFigure, img: Image): ColorScale {
+  const scale: ColorScale = {
+    strip: keyStrip(fig, img),
+    ticks: [
+      { point: fig.key.ticks[0]!, value: fig.key.ticks[0]!.value },
+      { point: fig.key.ticks[1]!, value: fig.key.ticks[1]!.value },
+    ],
+    log: false,
+  };
+  expect(checkColorScale(scale)).toBeNull();
+  return scale;
+}
+
 function pixelAt(img: Image, x: number, y: number): RGB {
   const i = (Math.round(y) * img.width + Math.round(x)) * 4;
   return [img.data[i]!, img.data[i + 1]!, img.data[i + 2]!];
@@ -123,22 +144,13 @@ interface CellOutcome {
  */
 function readFigure(fig: TruthFigure, sample: (img: Image, c: TruthCell) => RGB): CellOutcome[] {
   const img = loadPixels(fig.file);
-  const strip = keyStrip(fig, img);
-  const [tickA, tickB] = [fig.key.ticks[0]!, fig.key.ticks[1]!];
-  const tA = positionOnStrip(strip, tickA)!;
-  const tB = positionOnStrip(strip, tickB)!;
-  const toValue = (t: number): number =>
-    tickA.value + ((t - tA) / (tB - tA)) * (tickB.value - tickA.value);
-
+  const scale = keyScale(fig, img);
   return fig.cells.map((cell) => {
-    const reading = invertColor(strip, sample(img, cell))!;
-    const ends = [toValue(reading.tLow), toValue(reading.tHigh)];
-    const lo = Math.min(...ends);
-    const hi = Math.max(...ends);
+    const reading = readColor(scale, sample(img, cell))!;
     return {
-      error: Math.abs(toValue(reading.t) - cell.value),
-      covered: cell.value >= lo && cell.value <= hi,
-      bandWidth: hi - lo,
+      error: Math.abs(reading.value - cell.value),
+      covered: cell.value >= reading.low && cell.value <= reading.high,
+      bandWidth: reading.high - reading.low,
       distance: reading.distance,
       ambiguous: reading.rivals.length > 0,
     };

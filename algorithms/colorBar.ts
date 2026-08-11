@@ -208,6 +208,30 @@ function rampSpread(samples: readonly ColorBarSample[]): number {
 }
 
 /**
+ * Whether two clicked ends can be a strip at all, judged on GEOMETRY ALONE.
+ *
+ * ⚑ Separate from `sampleColorBar` because it has to run where there is no
+ * image to sample: the calibration walk can refuse a degenerate pair of clicks
+ * the moment they are made, long before a colour is read through them. One rule,
+ * two entrances — the alternative is the calibration card and the sampler each
+ * carrying their own idea of what a strip is, and drifting.
+ */
+export function checkStripGeometry(from: Point2D, to: Point2D): ColorBarRefusal | null {
+  if (
+    !Number.isFinite(from.x) ||
+    !Number.isFinite(from.y) ||
+    !Number.isFinite(to.x) ||
+    !Number.isFinite(to.y)
+  ) {
+    return 'not-a-line';
+  }
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.sqrt(dx * dx + dy * dy) < MIN_STRIP_LENGTH_PX) return 'not-a-line';
+  return null;
+}
+
+/**
  * The check `sampleColorBar` applies to what it read, exported so the load path
  * can apply the identical one to a strip that arrives from a project file.
  * Returns null when the samples are usable.
@@ -237,19 +261,12 @@ export function sampleColorBar(
 ): ColorBarStripResult {
   const thickness = Math.max(1, Math.round(options.thickness ?? 1));
 
-  if (
-    !Number.isFinite(from.x) ||
-    !Number.isFinite(from.y) ||
-    !Number.isFinite(to.x) ||
-    !Number.isFinite(to.y)
-  ) {
-    return { strip: null, reason: 'not-a-line' };
-  }
+  const geometry = checkStripGeometry(from, to);
+  if (geometry !== null) return { strip: null, reason: geometry };
 
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.sqrt(dx * dx + dy * dy);
-  if (length < MIN_STRIP_LENGTH_PX) return { strip: null, reason: 'not-a-line' };
 
   const inside = (p: Point2D): boolean =>
     p.x >= 0 && p.y >= 0 && p.x <= width - 1 && p.y <= height - 1;
