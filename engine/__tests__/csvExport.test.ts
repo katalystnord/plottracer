@@ -206,6 +206,18 @@ describe('curve fit export (v0.8)', () => {
     expect(s.fit.samples).toEqual([{ x: 0, y: 1 }, { x: 1, y: 3 }]);
   });
 
+  it('carries `degree` in JSON only where it means something', () => {
+    // The same v1.5 defect the summary column already guards, in the other
+    // format: a Gaussian has no degree, and the number that would ride along is
+    // the leftover polynomial spinner value. Three cases, because the rule reads
+    // BOTH whether a model is named and which one it is.
+    const degreeOf = (f: CurveFitExport) =>
+      JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([0, 1])], fit: f }], ['X', 'Y'])).series[0].fit.degree;
+    expect(degreeOf(fit)).toBe(1); // no model named: a polynomial, from before models existed
+    expect(degreeOf({ ...fit, model: 'polynomial' })).toBe(1);
+    expect(degreeOf({ ...fit, model: 'gaussian', degree: 7 })).toBeUndefined();
+  });
+
   it('omits the fit key entirely for a series with no fit', () => {
     const doc = JSON.parse(buildSeriesJSON([{ name: 'S', rows: [row([1, 2])] }], ['X', 'Y']));
     expect(doc.series[0]).not.toHaveProperty('fit');
@@ -249,6 +261,19 @@ describe('curve fit export (v0.8)', () => {
   it('marks the sampled-curve block too, because that block can be taken on its own', () => {
     const csv = renderTable([fittedCurveSection(unsettled, ['X', 'Y'])], 'csv');
     expect(csv.split('\n')[0]).toBe('Fitted curve — Series 1 (did not settle)');
+  });
+
+  // ⚑ Every other test here hands the labels in, so the column names a caller
+  // does NOT supply were never exercised. A blank header in an exported table is
+  // not cosmetic: the block is designed to be taken on its own, and a nameless
+  // column in a file nobody has the app open beside is a column of numbers
+  // meaning nothing.
+  it('names the sampled columns x and y when the caller supplies no labels', () => {
+    expect(fittedCurveSection(fit).header).toEqual(['x', 'y']);
+  });
+
+  it('falls back per column, so one supplied label does not blank the other', () => {
+    expect(fittedCurveSection(fit, ['Time']).header).toEqual(['Time', 'y']);
   });
 
   // ⚑ v1.5 audit: `degree` rode into every export including the five nonlinear
@@ -343,6 +368,11 @@ describe('curve fit export (v0.8)', () => {
   it('the Geometry per-point section is its own titled 1-based block', () => {
     const csv = renderTable([geometryTableSection('S', geom, ['X', 'Y'])], 'csv');
     expect(csv).toBe('Geometry per-point — S\npoint,X,Y,cumulative_length,curvature\n1,0,0,0,0\n2,3,4,5,1.5');
+  });
+
+  it('names the per-point x/y columns even when the caller supplies no labels', () => {
+    expect(geometryTableSection('S', geom).header).toEqual(['point', 'x', 'y', 'cumulative_length', 'curvature']);
+    expect(geometryTableSection('S', geom, ['Time']).header[2]).toBe('y');
   });
 
   it('buildSeriesJSON emits geometry as its own key (1-based), omitted when absent', () => {
