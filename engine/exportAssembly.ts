@@ -204,7 +204,11 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
 
   const sections: TableSection[] = [];
   const fits: CurveFitExport[] = [];
-  const geometries: { series: string; result: GeometryResult | null }[] = [];
+  // ⚑ Non-null, and it is the push sites that make it true: both are guarded by
+  // `if (g)`. Declaring it nullable and filtering the nulls out again at the end
+  // put a second gate behind the first, so neither could be shown to matter --
+  // the same mutual masking the geometry panel's doubled refusal had.
+  const geometries: { series: string; result: GeometryResult }[] = [];
   // ⚑ The SHAPE is the session's answer, not a cascade of identity checks here
   // (refactor 2): this used to read `id === 'histogram'`, then a grouped test --
   // a cascade of questions about what a type is CALLED, in the UI, where a
@@ -269,12 +273,9 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   }
   // Geometry the same way (v1.1): a summary block, then each series'
   // per-point cumulative-length / curvature table -- both derived, separate.
-  const geoms = geometries.filter(
-    (g): g is { series: string; result: GeometryResult } => g.result != null
-  );
-  if (geoms.length > 0) {
-    sections.push(geometrySummarySection(geoms));
-    for (const g of geoms) sections.push(geometryTableSection(g.series, g.result, exportFields));
+  if (geometries.length > 0) {
+    sections.push(geometrySummarySection(geometries));
+    for (const g of geometries) sections.push(geometryTableSection(g.series, g.result, exportFields));
   }
   return sections;
 }

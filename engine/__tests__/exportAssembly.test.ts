@@ -74,6 +74,11 @@ function inputFor(
   };
 }
 
+/** `Object.hasOwn` in a repo that compiles to ES2020. Asking whether the KEY is
+ * there, not whether reading it gives undefined — which is the whole question
+ * for `rSquared` and `converged`, where an absent field means "does not apply". */
+const hasKey = (obj: object, key: string): boolean => Object.prototype.hasOwnProperty.call(obj, key);
+
 function titles(sections: readonly TableSection[]): (string | undefined)[] {
   return sections.map((s) => s.title);
 }
@@ -164,6 +169,242 @@ describe('the geometry gate', () => {
     setGeometryState(session.getDataset(), { closed: false });
     const sections = buildExportSections(inputFor(session, { configId: 'polar' }));
     expect(titles(sections).join('|').toLowerCase()).not.toContain('geometr');
+  });
+});
+
+/**
+ * The fit block INSIDE the file, not merely the fact that a block appeared.
+ *
+ * ⚑ Two of its keys are ABSENT on purpose, and absence is the whole meaning:
+ * `rSquared` is undefined for a flat series (v1.5.1 — R² divides by zero when
+ * every y is the mean, and the old code answered 1, which is not a rounding
+ * error but an invented number), and `converged` does not apply to a polynomial,
+ * which is solved directly and has nothing to settle. A test that only checks
+ * the values that ARE written cannot tell "omitted" from "written as null".
+ */
+describe('the curve fit block that reaches the file', () => {
+  const fitOf = (session: CalibrationSession<XYAxes>, overrides: Partial<ExportAssemblyInput> = {}) =>
+    JSON.parse(buildExportJson(inputFor(session, overrides))).series[0].fit as Record<string, unknown>;
+
+  function fitted(session: CalibrationSession<XYAxes>, model?: 'exponential') {
+    const result = runCurveFit(session.getDataset(), session.getAxes()!, {
+      degree: 1,
+      restrict: false,
+      ...(model ? { model } : {}),
+    });
+    if ('error' in result) throw new Error(result.error);
+    setCurveFitState(session.getDataset(), result.curveFit);
+  }
+
+  it('carries R² for a series that has one', () => {
+    const session = buildSession();
+    fitted(session);
+    // The points are exactly collinear, so a straight-line fit is exact.
+    expect(fitOf(session).rSquared).toBeCloseTo(1, 6);
+  });
+
+  it('OMITS R² for a flat series rather than claiming 1', () => {
+    // Every y identical: SStot is exactly 0, so R² has no value at all. The key
+    // must be missing, not null and not 1 — a reader that finds a number there
+    // reads it as a goodness this fit never had.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    for (const px of [100, 130, 160, 190]) session.addDataPoint(px, 235);
+    fitted(session);
+
+    const fit = fitOf(session);
+    expect(hasKey(fit, 'rSquared')).toBe(false);
+    // ...and RMS, which IS defined here, still arrives — the honest headline.
+    expect(fit.rms).toBeCloseTo(0, 6);
+  });
+
+  it('omits `converged` for a polynomial, which has nothing to settle', () => {
+    const session = buildSession();
+    fitted(session);
+    expect(hasKey(fitOf(session), 'converged')).toBe(false);
+  });
+
+  it('carries `converged` for a solver-fitted model, and that model’s own name', () => {
+    // ⚑ The red warning on the card has to ride into the file: a nonlinear fit
+    // that ran out of iterations must never be read as a result.
+    const session = buildSession();
+    fitted(session, 'exponential');
+    const fit = fitOf(session);
+    expect(hasKey(fit, 'converged')).toBe(true);
+    expect(typeof fit.converged).toBe('boolean');
+    expect(fit.model).toBe('exponential');
+  });
+
+  it('samples the fitted curve as real x/y points', () => {
+    const session = buildSession();
+    fitted(session);
+    const samples = fitOf(session).samples as Array<{ x: number; y: number }>;
+    expect(samples.length).toBeGreaterThan(1);
+    for (const p of samples) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+    // A sampled straight line still satisfies the line it was fitted to.
+    const last = samples[samples.length - 1]!;
+    expect(last.y).toBeCloseTo(2 * last.x + 1, 6);
+  });
+});
+
+describe('export scope decides WHICH series reach the file', () => {
+  function twoSeries(): CalibrationSession<XYAxes> {
+    const session = buildSession();
+    session.addDataset('Series 2');
+    session.setActiveDataset(1);
+    session.addDataPoint(220, 115); // (4, 9) — still on y = 2x + 1
+    session.addDataPoint(250, 85); // (5, 11), so this series can carry a fit too
+    return session;
+  }
+
+  it('scope "active" writes only the active series — the second one, here', () => {
+    const parsed = JSON.parse(buildExportJson(inputFor(twoSeries(), { scope: 'active' })));
+    expect(parsed.series.map((s: { name: string }) => s.name)).toEqual(['Series 2']);
+  });
+
+  it('scope "all" writes every series, in order', () => {
+    const parsed = JSON.parse(buildExportJson(inputFor(twoSeries(), { scope: 'all' })));
+    expect(parsed.series.map((s: { name: string }) => s.name)).toEqual(['Series 1', 'Series 2']);
+  });
+
+  it('names the fit after the series it belongs to, under either scope', () => {
+    // ⚑ The blocks are keyed by NAME, so resolving the active series wrongly
+    // does not lose the fit — it files it against somebody else's data.
+    const session = twoSeries();
+    const result = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });
+    if ('error' in result) throw new Error(result.error);
+    setCurveFitState(session.getDataset(), result.curveFit);
+
+    for (const scope of ['active', 'all'] as const) {
+      const sections = buildExportSections(inputFor(session, { scope }));
+      const summary = sections.find((s) => (s.title ?? '').toLowerCase().includes('fit'));
+      expect(summary, `no fit block for scope ${scope}`).toBeDefined();
+      expect(JSON.stringify(summary!.rows)).toContain('Series 2');
+      expect(JSON.stringify(summary!.rows)).not.toContain('Series 1');
+    }
+  });
+
+  it('emits one fit block per fitted series and none for the others', () => {
+    const session = twoSeries();
+    const result = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });
+    if ('error' in result) throw new Error(result.error);
+    setCurveFitState(session.getDataset(), result.curveFit);
+
+    const sections = buildExportSections(inputFor(session, { scope: 'all' }));
+    const summary = sections.find((s) => (s.title ?? '').toLowerCase().includes('fit'));
+    expect(summary!.rows).toHaveLength(1);
+  });
+});
+
+/**
+ * ⚑ These three blocks had NO mutation coverage at all before they were
+ * written: no test reached this module with an error relation set, none looked
+ * at geometry in the JSON path (only in the sections), and none exercised a fit
+ * saved before nonlinear models existed. Each is a whole feature's worth of
+ * export, not an edge of one.
+ */
+describe('an error series exports as a series carrying its relation', () => {
+  function withErrorSeries(): CalibrationSession<XYAxes> {
+    const session = buildSession();
+    session.addDataset('Upper');
+    session.setActiveDataset(1);
+    // Caps one data-unit above the first two points of Series 1.
+    session.addDataPoint(100, 220);
+    session.addDataPoint(130, 190);
+    expect(session.setErrorRelation(1, { role: 'upper', of: 'Series 1' })).toBeNull();
+    session.setActiveDataset(0);
+    return session;
+  }
+
+  it('carries the relation into JSON, naming the series it belongs to', () => {
+    const parsed = JSON.parse(buildExportJson(inputFor(withErrorSeries(), { scope: 'all' })));
+    const upper = parsed.series.find((s: { name: string }) => s.name === 'Upper');
+    expect(upper.relation).toEqual({ role: 'upper', of: 'Series 1' });
+  });
+
+  it('carries the measured Δ as its own column in the table export', () => {
+    // The Δ is the number a reader takes away, and it is DERIVED — the record is
+    // the cap's own position. ⚠️ The JSON export carries the relation but no Δ:
+    // `buildSeriesJSON` never reads the `deltas` its caller assembles, so a JSON
+    // consumer has to re-derive the cap→datum pairing itself, which is exactly
+    // the rule that has shipped wrong twice.
+    const sections = buildExportSections(inputFor(withErrorSeries(), { scope: 'all' }));
+    const header = sections[0]!.header.map(String);
+    const deltaAt = header.indexOf('Upper delta');
+    expect(deltaAt, `no delta column in ${header.join(' | ')}`).toBeGreaterThan(-1);
+    const column = sections[0]!.rows.map((r) => r[deltaAt]);
+    // Two caps were placed, one data-unit above the first two points; the rows
+    // past them stay BLANK rather than reporting an error of zero.
+    expect(column.slice(0, 2).map(Number)).toEqual([1, 1]);
+    expect(column.slice(2)).toEqual(['', '']);
+  });
+
+  it('leaves an ordinary series with no relation key at all', () => {
+    const parsed = JSON.parse(buildExportJson(inputFor(withErrorSeries(), { scope: 'all' })));
+    const plain = parsed.series.find((s: { name: string }) => s.name === 'Series 1');
+    expect(hasKey(plain, 'relation')).toBe(false);
+    expect(hasKey(plain, 'deltas')).toBe(false);
+  });
+});
+
+describe('geometry reaches the file under either scope, named for its series', () => {
+  it('rides into JSON alongside the points, never mixed into them', () => {
+    const session = buildSession();
+    setGeometryState(session.getDataset(), { closed: false });
+    const parsed = JSON.parse(buildExportJson(inputFor(session, { configId: 'xy' })));
+    expect(parsed.series[0].geometry.arcLength).toBeGreaterThan(0);
+    // The record is still the record.
+    expect(parsed.series[0].points).toHaveLength(LINE_PIXELS.length);
+  });
+
+  it('names each series’ geometry block when the scope is "all"', () => {
+    const session = buildSession();
+    session.addDataset('Series 2');
+    session.setActiveDataset(1);
+    session.addDataPoint(220, 115);
+    session.addDataPoint(250, 85);
+    setGeometryState(session.getDatasets()[1]!, { closed: false });
+
+    const sections = buildExportSections(inputFor(session, { scope: 'all', configId: 'xy' }));
+    const summary = sections.find((s) => (s.title ?? '').toLowerCase().includes('geometr'));
+    expect(summary, 'no geometry block under scope "all"').toBeDefined();
+    expect(JSON.stringify(summary!.rows)).toContain('Series 2');
+  });
+
+  it('names it for the ACTIVE series when the scope is "active"', () => {
+    // ⚑ Blank here is the fabricated-name defect's twin: a geometry block filed
+    // against no series at all, in the format every non-JSON export renders
+    // through.
+    const session = buildSession();
+    session.addDataset('Series 2');
+    session.setActiveDataset(1);
+    session.addDataPoint(220, 115);
+    session.addDataPoint(250, 85);
+    setGeometryState(session.getDatasets()[1]!, { closed: false });
+
+    const sections = buildExportSections(inputFor(session, { scope: 'active', configId: 'xy' }));
+    const summary = sections.find((s) => (s.title ?? '').toLowerCase().includes('geometr'));
+    expect(JSON.stringify(summary!.rows)).toContain('Series 2');
+  });
+});
+
+describe('a fit saved before nonlinear models existed', () => {
+  it('reads as a polynomial rather than as a model with no name', () => {
+    // Files saved before v1.5 carry no `model` key at all, and the absence means
+    // polynomial — the only kind that existed. Exporting an empty name there
+    // would describe the fit as nothing in particular.
+    const session = buildSession();
+    const result = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });
+    if ('error' in result) throw new Error(result.error);
+    const { model: _dropped, ...legacy } = result.curveFit;
+    setCurveFitState(session.getDataset(), legacy);
+
+    const parsed = JSON.parse(buildExportJson(inputFor(session)));
+    expect(parsed.series[0].fit.model).toBe('polynomial');
   });
 });
 

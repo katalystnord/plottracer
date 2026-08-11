@@ -5,6 +5,11 @@ import { runGeometry, getGeometryState, setGeometryState } from '../geometryPane
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
+/** `Object.hasOwn` in a repo that compiles to ES2020. Asking whether the KEY is
+ * there, not whether reading it gives undefined — which is the whole question
+ * wherever an absent field means "does not apply". */
+const hasKey = (obj: object, key: string): boolean => Object.prototype.hasOwnProperty.call(obj, key);
+
 function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   const steps: Array<[number, number, string]> = [
     [100, 250, '0'],
@@ -119,7 +124,7 @@ describe('geometry state on the dataset', () => {
     setGeometryState(dataset, null);
     // Absent, not present-and-undefined: the key's presence is what "geometry is
     // on for this series" means to every reader of the record.
-    expect(Object.hasOwn(dataset.getMetadata(), 'geometry')).toBe(false);
+    expect(hasKey(dataset.getMetadata(), 'geometry')).toBe(false);
     expect(getGeometryState(dataset)).toBeNull();
   });
 
