@@ -122,6 +122,21 @@ def make_heatmap(name, cmap, values):
         "height_px": round(float(box.y1 - box.y0), 2),
     }
 
+    # ⚑ The figure's own x/y calibration, so a test can read the WHOLE MATRIX
+    # rather than probing cells it already knows the pixel of. Two points per
+    # axis, exactly what the app asks a user to click.
+    def axis_point(dx, dy, value):
+        x_disp, y_disp = ax.transData.transform((dx, dy))
+        pixel = display_to_image(fig, x_disp, y_disp)
+        return {"x": pixel["x"], "y": pixel["y"], "value": value}
+
+    frame = {
+        "x1": axis_point(X_EDGES[0], Y_EDGES[0], X_EDGES[0]),
+        "x2": axis_point(X_EDGES[-1], Y_EDGES[0], X_EDGES[-1]),
+        "y1": axis_point(X_EDGES[0], Y_EDGES[0], Y_EDGES[0]),
+        "y2": axis_point(X_EDGES[0], Y_EDGES[-1], Y_EDGES[-1]),
+    }
+
     cells = []
     for row in range(len(Y_EDGES) - 1):
         for col in range(len(X_EDGES) - 1):
@@ -144,7 +159,7 @@ def make_heatmap(name, cmap, values):
     path = os.path.join(OUT, name)
     fig.savefig(path, dpi=DPI)
     plt.close(fig)
-    return {"file": name, "cmap": cmap, "key": key, "cells": cells}
+    return {"file": name, "cmap": cmap, "key": key, "frame": frame, "grid": {"x": X_EDGES, "y": Y_EDGES}, "cells": cells}
 
 
 def jpeg_degrade(src_name, dst_name, quality=35):
