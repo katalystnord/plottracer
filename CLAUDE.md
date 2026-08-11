@@ -96,7 +96,13 @@ npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
 - **Packaging:** `build/electron-builder-ui.yml`; CI builds Linux + macOS (.dmg) +
   Windows (.exe) on tag push (`.github/workflows/build.yml`).
 - **Commits:** small, self-contained, and verified (typecheck + lint + relevant
-  tests) before committing. End commit messages with:
+  tests) before committing. ⚑ **A pre-commit hook enforces the typecheck** —
+  install it once per clone with `git config core.hooksPath tools/git-hooks`.
+  It exists because a green test run does NOT mean the code compiles: vitest
+  strips types rather than checking them, and so does `vite build`, so a commit
+  that did not typecheck got in and CI had nothing to say about it either.
+  `.github/workflows/build.yml`'s `check` job is the half that survives a fresh
+  clone and `--no-verify`. End commit messages with:
   `Co-Authored-By: Claude Opus 5.0 (1M context) <noreply@anthropic.com>`
 
 ---

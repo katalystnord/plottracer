@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# Refuse a commit that does not typecheck.
+#
+# ⚑ WHY THIS EXISTS. On 2026-08-11 a commit went in with a failing typecheck:
+# `Object.hasOwn` and `Array.at` do not compile at this project's ES2020 target,
+# the vitest run was green because vitest strips types rather than checking them,
+# and `npm run typecheck` simply was not run. It was caught two commits later, by
+# hand. The gate existed; it was skipped because the tests were green.
+#
+# ⚑ AND CI WOULD NOT HAVE CAUGHT IT EITHER — the workflow ran `npm ci` and the
+# packager and nothing else, and `vite build` strips types too. This hook is the
+# fast half of the fix; `.github/workflows/build.yml`'s `check` job is the half
+# that survives a fresh clone and `--no-verify`.
+#
+# Install (per clone, since git does not ship hooks):
+#     git config core.hooksPath tools/git-hooks
+#
+# Skipping is deliberate and visible: `git commit --no-verify`.
+
+set -uo pipefail
+
+# Only TypeScript can break a typecheck, so a docs- or notes-only commit pays
+# nothing. Uses the STAGED list, which is what is about to be committed.
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.tsx?$'; then
+  exit 0
+fi
+
+# npm is not on PATH in a bare hook shell on this machine (nvm), so find it the
+# same way the project's own notes say to.
+if ! command -v npm >/dev/null 2>&1; then
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  # shellcheck disable=SC1091
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "pre-commit: npm not found — cannot typecheck. Fix your PATH, or commit with --no-verify." >&2
+  exit 1
+fi
+
+echo "pre-commit: typechecking (~10s)…"
+# ⚠️ This checks the WORKING TREE, not the staged snapshot. Stashing to check the
+# index exactly is its own hazard (it can lose work when a hook is interrupted),
+# and the working tree is what the author is about to be judged on anyway. Worth
+# knowing if you ever stage a subset of your edits.
+if ! npm run --silent typecheck; then
+  cat >&2 <<'MSG'
+
+pre-commit: REFUSED — the tree does not typecheck.
+
+  A green test run does not mean the code compiles: vitest strips types rather
+  than checking them, and so does the production build. That is exactly how a
+  broken commit got in before this hook existed.
+
+  Fix it, or commit deliberately with:  git commit --no-verify
+MSG
+  exit 1
+fi
+exit 0

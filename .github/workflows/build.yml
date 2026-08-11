@@ -18,7 +18,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ⚑ THE DURABLE HALF OF THE TYPECHECK GATE. Until v2.1.0 this workflow ran
+  # `npm ci` and the packager and NOTHING else — no typecheck, no lint, no tests
+  # — so a commit that did not compile could be built, tagged and PUBLISHED. It
+  # nearly was: `vite build` strips types rather than checking them, exactly as
+  # vitest does, so nothing in the pipeline would have said a word.
+  # tools/git-hooks/pre-commit is the fast local half; this is the half that
+  # survives a fresh clone and `git commit --no-verify`.
+  check:
+    name: Typecheck and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+
   build:
+    needs: check
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
