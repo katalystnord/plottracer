@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { Dataset } from '../../core/dataset.js';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
-import { runGeometry } from '../geometryPanel.js';
+import { runGeometry, getGeometryState, setGeometryState } from '../geometryPanel.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
@@ -77,5 +78,56 @@ describe('runGeometry', () => {
 
     const result = runGeometry(session.getDataset(), session.getAxes()!, false);
     expect(result).toEqual({ error: expect.stringContaining('slots') });
+  });
+});
+
+/**
+ * The persisted geometry REQUEST (v1.1). It is what makes geometry a saved,
+ * series-bound output rather than WPD's throwaway popup: Workspace writes it when
+ * the user turns geometry on, and exportAssembly reads it to decide whether the
+ * export carries a geometry section at all. It shares one metadata record with
+ * every other per-series output, which is what the first test here is about.
+ */
+describe('geometry state on the dataset', () => {
+  it('round-trips the open/closed choice, and reports none when unset', () => {
+    const dataset = new Dataset();
+    expect(getGeometryState(dataset)).toBeNull();
+    setGeometryState(dataset, { closed: true });
+    expect(getGeometryState(dataset)).toEqual({ closed: true });
+    setGeometryState(dataset, { closed: false });
+    expect(getGeometryState(dataset)).toEqual({ closed: false });
+  });
+
+  it('leaves the series’ OTHER outputs alone', () => {
+    // The metadata record is shared — the curve fit and the error-bar relation
+    // live in it too. Writing geometry by replacing the record instead of
+    // extending it would silently delete them, and the user would find out at
+    // export time.
+    const dataset = new Dataset();
+    dataset.setMetadata({ curveFit: { fn: 'a*x+b' }, errorRelation: 'symmetric' });
+    setGeometryState(dataset, { closed: true });
+    expect(dataset.getMetadata()).toEqual({
+      curveFit: { fn: 'a*x+b' },
+      errorRelation: 'symmetric',
+      geometry: { closed: true },
+    });
+  });
+
+  it('REMOVES the request when cleared, rather than leaving an empty one behind', () => {
+    const dataset = new Dataset();
+    setGeometryState(dataset, { closed: true });
+    setGeometryState(dataset, null);
+    // Absent, not present-and-undefined: the key's presence is what "geometry is
+    // on for this series" means to every reader of the record.
+    expect(Object.hasOwn(dataset.getMetadata(), 'geometry')).toBe(false);
+    expect(getGeometryState(dataset)).toBeNull();
+  });
+
+  it('stores it under "geometry", which is a name in the saved file', () => {
+    // Not an internal detail: the key travels into the project file, so renaming
+    // it loses the request in every project already saved.
+    const dataset = new Dataset();
+    setGeometryState(dataset, { closed: true });
+    expect(dataset.getMetadata()['geometry']).toEqual({ closed: true });
   });
 });

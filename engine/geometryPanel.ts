@@ -56,15 +56,15 @@ export function runGeometry(dataset: Dataset, axes: AnyAxes, closed: boolean): R
     };
   }
 
-  const points = getGeometryPoints(dataset, axes);
-  if (points.length < 2) {
-    return { error: 'Need at least 2 points to compute geometry statistics.' };
-  }
-
-  // computeGeometry now refuses the same case itself (v2.0 pre-launch audit)
-  // -- this check stays as the user-facing message; the null branch below is
-  // defense-in-depth for the same reason the guard was added to the model.
-  const geometry = computeGeometry(points, closed);
+  // ⚑ ONE refusal, not two. The v2.0 pre-launch audit put the "fewer than 2
+  // points" guard into computeGeometry itself, where it belongs, and this
+  // function kept its own copy of the same test immediately above the call --
+  // so the model's refusal could never be the one that fired. Two checks of one
+  // predicate on one path is not defense-in-depth; it is a dead branch, and it
+  // made BOTH of them unverifiable (each masked the other, so neither could be
+  // shown to matter). The model decides; this layer turns its refusal into the
+  // sentence the user reads, naming the requirement rather than the failure.
+  const geometry = computeGeometry(getGeometryPoints(dataset, axes), closed);
   if (!geometry) {
     return { error: 'Need at least 2 points to compute geometry statistics.' };
   }
