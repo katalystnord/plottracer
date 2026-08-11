@@ -63,8 +63,13 @@ describe('traceSpiderAlongSpokes', () => {
       expect(candidate.reason).toBeNull();
       expect(candidate.runs).toHaveLength(1);
       expect(candidate.atPx).not.toBeNull();
-      // The OUTER edge of a 4px-wide stroke centred on 50.
-      expectNear(candidate.atPx, 52);
+      // ⚑ 50 — the stroke's CENTRE, which is where the drawn ring actually is.
+      // This expected 52, the stroke's outer edge, and that number WAS the defect
+      // this file's premise: a stroked shape read at its far edge over-reads by
+      // half its line width, and on the real bundled figure (whose vertices carry
+      // markers) by a whole marker radius, uniformly, on every axis at once.
+      // See SpokeRun.atPx and the PNG test in engine/__tests__/spiderTraceRun.
+      expectNear(candidate.atPx, 50);
     }
   });
 
@@ -122,8 +127,9 @@ describe('traceSpiderAlongSpokes', () => {
       // ⚑ ...and it hands back BOTH, so the user can be shown what was found rather
       // than just told no. A refusal with no evidence is a dead end.
       expect(candidate.runs).toHaveLength(2);
-      expectNear(candidate.runs[0]!.atPx, 42);
-      expectNear(candidate.runs[1]!.atPx, 82);
+      // The rings' own radii — see the first test on why this is not 42/82.
+      expectNear(candidate.runs[0]!.atPx, 40);
+      expectNear(candidate.runs[1]!.atPx, 80);
     }
   });
 
@@ -148,7 +154,7 @@ describe('traceSpiderAlongSpokes', () => {
 
     for (const candidate of found) {
       expect(candidate.runs).toHaveLength(1);
-      expectNear(candidate.atPx, 62);
+      expectNear(candidate.atPx, 60);
     }
   });
 
@@ -166,7 +172,7 @@ describe('traceSpiderAlongSpokes', () => {
     const found = traceSpiderAlongSpokes(mask, W, H, ORIGIN, SPOKES);
     expect(found[0]!.reason).toBeNull();
     expect(found[0]!.runs).toHaveLength(1);
-    expectNear(found[0]!.atPx, 72);
+    expectNear(found[0]!.atPx, 70);
   });
 
   it('looks a little past the calibrated known point, but not indefinitely', () => {
@@ -176,7 +182,7 @@ describe('traceSpiderAlongSpokes', () => {
     // a legend swatch or a caption, not the series.
     const near = blankMask();
     markRing(near, 108); // 8% past a 100px spoke
-    expectNear(traceSpiderAlongSpokes(near, W, H, ORIGIN, SPOKES)[0]!.atPx, 110);
+    expectNear(traceSpiderAlongSpokes(near, W, H, ORIGIN, SPOKES)[0]!.atPx, 108);
 
     const far = blankMask();
     markRing(far, 130); // 30% past — outside the default 15% overshoot

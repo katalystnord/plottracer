@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runSpiderTrace, spiderBoxRegion } from '../spiderTraceRun.js';
+import { readPng } from './helpers/readPng.js';
 import {
   CalibrationSession,
   SPIDER_AXES_CONFIG,
@@ -360,12 +361,37 @@ describe('the bundled example, traced end to end', () => {
     }
   }
 
-  /** Draw one series as a closed polygon through its own truth values. */
+  /** A filled disc, standing for the marker a radar chart draws at each vertex. */
+  function marker(data: Uint8ClampedArray, c: { x: number; y: number }, rgb: [number, number, number]): void {
+    const r = 4.5; // matplotlib markersize 7 at dpi 100 is a 4.86px radius
+    for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) {
+      for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) {
+        if (Math.hypot(dx, dy) > r) continue;
+        const x = Math.round(c.x) + dx;
+        const y = Math.round(c.y) + dy;
+        if (x < 0 || y < 0 || x >= TW || y >= TH) continue;
+        const i = (y * TW + x) * 4;
+        data[i] = rgb[0];
+        data[i + 1] = rgb[1];
+        data[i + 2] = rgb[2];
+      }
+    }
+  }
+
+  /** Draw one series as a closed polygon through its own truth values, WITH the
+   * marker each vertex carries.
+   *
+   * ⚑ The markers were missing here, and their absence is what let this test
+   * credit the real figure's ~4.8px over-read to a ~1px stroke bias for three
+   * releases: the synthetic figure could not exhibit the defect it was supposed to
+   * be watching. It draws the same KIND of figure as the bundled PNG now — but the
+   * accuracy claim belongs to the PNG test below, which reads the shipped ink. */
   function drawSeries(data: Uint8ClampedArray, axes: SpiderAxes, values: number[], rgb: [number, number, number]) {
     const vertices = values.map((v, i) => axes.dataToPixel(i, v));
     for (let i = 0; i < vertices.length; i++) {
       stroke(data, vertices[i]!, vertices[(i + 1) % vertices.length]!, rgb);
     }
+    for (const v of vertices) marker(data, v, rgb);
   }
 
   const COLOURS: [number, number, number][] = [
@@ -481,5 +507,89 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
 
   it('answers flat for an ordinary XY series', () => {
     expect(new CalibrationSession(XY_AXES_CONFIG).getExportShape()).toBe('flat');
+  });
+});
+
+/**
+ * ⚑⚑ THE SHIPPED PNG, not a figure this test drew.
+ *
+ * The block above strokes lines between vertices and draws NO MARKERS, so it can
+ * only ever exhibit a half-stroke bias — while the real figure draws a marker at
+ * every vertex, and the vertex is exactly where the crossing is measured. Its 2%
+ * tolerance was wide enough to absorb the real error while crediting it to the
+ * wrong cause: a test that invents its own geometry proves self-consistency, not
+ * truth. This traces `samples/spider-material-profile.png` itself, against the
+ * `.truth.json` committed beside it.
+ */
+describe('the bundled example PNG, traced as it ships', () => {
+  // From the generator: line-only polygons, three distinct colours, a marker at
+  // every vertex (samples/generators/gen_samples.py).
+  const SERIES_INK: [number, number, number][] = [
+    [0x1f, 0x4e, 0x79],
+    [0xc1, 0x55, 0x3b],
+    [0x3a, 0x9d, 0x5d],
+  ];
+
+  function tracedErrors(): { name: string; axis: string; read: number; published: number; px: number }[] {
+    const png = readPng(fileURLToPath(new URL('../../samples/spider-material-profile.png', import.meta.url)));
+    const axes = axesFromTruth();
+    const out: { name: string; axis: string; read: number; published: number; px: number }[] = [];
+    truth.series.forEach((series, s) => {
+      const result = runSpiderTrace(png.data, png.width, png.height, axes, SERIES_INK[s]!, 60);
+      if ('error' in result) throw new Error(`${series.name}: ${result.error}`);
+      result.readings.forEach((reading, i) => {
+        expect(reading.reason, `${series.name} / ${truth.axes[i]!.name}`).toBeNull();
+        const published = series.points[i]!.value;
+        const range = truth.axes[i]!.max - truth.axes[i]!.centre;
+        // The error in PIXELS, which is what makes the diagnosis: a geometry bias
+        // is constant in pixels across axes of different ranges, while a
+        // calibration error is proportional to the reading.
+        const radiusPx = Math.hypot(
+          truth.calibration.anchors[`spoke${i + 1}`]!.px - truth.calibration.anchors['origin']!.px,
+          truth.calibration.anchors[`spoke${i + 1}`]!.py - truth.calibration.anchors['origin']!.py
+        );
+        out.push({
+          name: series.name,
+          axis: truth.axes[i]!.name,
+          read: reading.value!,
+          published,
+          px: ((reading.value! - published) / range) * radiusPx,
+        });
+      });
+    });
+    return out;
+  }
+
+  it('reads every published value off the real ink, on six axes of six ranges', () => {
+    // ⚑ Every reading is reported, not just the first to fail: a systematic bias
+    // and one awkward vertex look identical when a loop stops at the first miss.
+    const rows = tracedErrors().map((e) => {
+      const range = truth.axes.find((a) => a.name === e.axis)!;
+      const fraction = Math.abs(e.read - e.published) / (range.max - range.centre);
+      return { ...e, fraction };
+    });
+    const table = rows
+      .map((r) => `${r.name} / ${r.axis}: read ${r.read.toFixed(2)} vs ${r.published} (${(100 * r.fraction).toFixed(2)}%, ${r.px.toFixed(2)}px)`)
+      .join('\n');
+    const worst = Math.max(...rows.map((r) => r.fraction));
+    // 1.5% of each axis's own range. ⚑ The bound is set by ONE reading — Cellulose
+    // film's tensile strength, a spike at 110 of 120 whose neighbours are 9 and
+    // 4.3. At a vertex that sharp the polygon's two edges hug the ray, so the ink
+    // reaches further back towards the centre than the marker does and drags the
+    // middle inward. That is the residual the old comment predicted, and it is now
+    // BOUNDED and visible rather than hidden inside a uniform over-read: the other
+    // seventeen readings are all inside 0.7%, and thirteen inside 0.35%.
+    expect(worst, table).toBeLessThan(0.015);
+  });
+
+  it('carries no systematic outward bias — the marker radius is not a reading', () => {
+    // ⚑ The DIAGNOSTIC assertion, and the one that failed before the fix. A
+    // vertex marker is ~4.9px in radius; reading a run's outer end put every
+    // value that far out, uniformly, on every axis at once. The mean signed
+    // error in pixels is what sees it — individual errors can cancel in a
+    // percentage, a constant bias cannot hide in a mean.
+    const errors = tracedErrors();
+    const meanPx = errors.reduce((s, e) => s + e.px, 0) / errors.length;
+    expect(Math.abs(meanPx), `mean signed error ${meanPx.toFixed(2)} px across ${errors.length} readings`).toBeLessThan(1.5);
   });
 });
