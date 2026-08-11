@@ -92,6 +92,10 @@ export interface HeatmapCellReading {
   /** Other values this cell's colour is equally consistent with (a cyclic key, a
    * key that revisits a colour). Non-empty means AMBIGUOUS, not imprecise. */
   rivals: readonly ColorValueBand[];
+  /** The reading sits against an END of the key, so the cell may be CLIPPED —
+   * see `ColorValueReading.atKeyLimit`. The one wrong value distance and
+   * uniformity cannot see. */
+  atKeyLimit: boolean;
   /**
    * The fraction of the cell's sampled pixels that match the colour we read, to
    * within the noise floor. 1 for a flat printed cell; lower for a cell carrying
@@ -183,7 +187,7 @@ function readCell(
     samples: window.length,
   };
   if (rgb === null) {
-    return { ...base, rgb: [0, 0, 0], reading: null, rivals: [], uniformity: 0 };
+    return { ...base, rgb: [0, 0, 0], reading: null, rivals: [], uniformity: 0, atKeyLimit: false };
   }
 
   const matching = window.filter((c) => colorDistance(c, rgb) <= COLOR_NOISE_FLOOR).length;
@@ -196,6 +200,7 @@ function readCell(
         ? null
         : { value: value.value, low: value.low, high: value.high, distance: value.distance },
     rivals: value?.rivals ?? [],
+    atKeyLimit: value?.atKeyLimit ?? false,
     uniformity: matching / window.length,
   };
 }

@@ -1,0 +1,268 @@
+{
+  "source": {
+    "imagePath": "heatmap-weld-temperature.png",
+    "note": "Synthetic ground truth \u2014 the value of every cell, and its bounds."
+  },
+  "graphType": "heatmap",
+  "axes": {
+    "x": {
+      "label": "Distance from weld centre (mm)",
+      "min": 0.0,
+      "max": 14.0
+    },
+    "y": {
+      "label": "Depth (mm)",
+      "min": 0.0,
+      "max": 6.0
+    },
+    "value": {
+      "label": "Peak temperature (\u00b0C)",
+      "min": 60.0,
+      "max": 780.0,
+      "log": false
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 53.15,
+        "py": 496.6,
+        "value": 0.0
+      },
+      "x2": {
+        "px": 876.12,
+        "py": 496.6,
+        "value": 14.0
+      },
+      "y1": {
+        "px": 53.15,
+        "py": 496.6,
+        "value": 0.0
+      },
+      "y2": {
+        "px": 53.15,
+        "py": 35.33,
+        "value": 6.0
+      },
+      "k1": {
+        "px": 55.15,
+        "py": 608.12
+      },
+      "k2": {
+        "px": 874.12,
+        "py": 608.12
+      },
+      "kv1": {
+        "px": 98.87,
+        "py": 608.12,
+        "value": 100.0
+      },
+      "kv2": {
+        "px": 213.18,
+        "py": 608.12,
+        "value": 200.0
+      }
+    }
+  },
+  "grid": {
+    "x": [
+      0.0,
+      2.0,
+      5.0,
+      6.0,
+      9.0,
+      14.0
+    ],
+    "y": [
+      0.0,
+      1.0,
+      3.5,
+      4.0,
+      6.0
+    ]
+  },
+  "cells": [
+    {
+      "xMin": 0.0,
+      "xMax": 2.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 1.0,
+      "yCentre": 0.5,
+      "value": 161.4
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 5.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 3.5,
+      "yCentre": 0.5,
+      "value": 170.3
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 5.5,
+      "yCentre": 0.5,
+      "value": 132.4
+    },
+    {
+      "xMin": 6.0,
+      "xMax": 9.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 7.5,
+      "yCentre": 0.5,
+      "value": 195.0
+    },
+    {
+      "xMin": 9.0,
+      "xMax": 14.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 11.5,
+      "yCentre": 0.5,
+      "value": 210.6
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 2.0,
+      "yMin": 1.0,
+      "yMax": 3.5,
+      "xCentre": 1.0,
+      "yCentre": 2.25,
+      "value": 191.0
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 5.0,
+      "yMin": 1.0,
+      "yMax": 3.5,
+      "xCentre": 3.5,
+      "yCentre": 2.25,
+      "value": 236.2
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 1.0,
+      "yMax": 3.5,
+      "xCentre": 5.5,
+      "yCentre": 2.25,
+      "value": 292.3
+    },
+    {
+      "xMin": 6.0,
+      "xMax": 9.0,
+      "yMin": 1.0,
+      "yMax": 3.5,
+      "xCentre": 7.5,
+      "yCentre": 2.25,
+      "value": 315.2
+    },
+    {
+      "xMin": 9.0,
+      "xMax": 14.0,
+      "yMin": 1.0,
+      "yMax": 3.5,
+      "xCentre": 11.5,
+      "yCentre": 2.25,
+      "value": 347.4
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 2.0,
+      "yMin": 3.5,
+      "yMax": 4.0,
+      "xCentre": 1.0,
+      "yCentre": 3.75,
+      "value": 206.6
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 5.0,
+      "yMin": 3.5,
+      "yMax": 4.0,
+      "xCentre": 3.5,
+      "yCentre": 3.75,
+      "value": 275.1
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 3.5,
+      "yMax": 4.0,
+      "xCentre": 5.5,
+      "yCentre": 3.75,
+      "value": 316.9
+    },
+    {
+      "xMin": 6.0,
+      "xMax": 9.0,
+      "yMin": 3.5,
+      "yMax": 4.0,
+      "xCentre": 7.5,
+      "yCentre": 3.75,
+      "value": 395.5
+    },
+    {
+      "xMin": 9.0,
+      "xMax": 14.0,
+      "yMin": 3.5,
+      "yMax": 4.0,
+      "xCentre": 11.5,
+      "yCentre": 3.75,
+      "value": 451.9
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 2.0,
+      "yMin": 4.0,
+      "yMax": 6.0,
+      "xCentre": 1.0,
+      "yCentre": 5.0,
+      "value": 269.4
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 5.0,
+      "yMin": 4.0,
+      "yMax": 6.0,
+      "xCentre": 3.5,
+      "yCentre": 5.0,
+      "value": 340.6
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 4.0,
+      "yMax": 6.0,
+      "xCentre": 5.5,
+      "yCentre": 5.0,
+      "value": 424.3
+    },
+    {
+      "xMin": 6.0,
+      "xMax": 9.0,
+      "yMin": 4.0,
+      "yMax": 6.0,
+      "xCentre": 7.5,
+      "yCentre": 5.0,
+      "value": 518.5
+    },
+    {
+      "xMin": 9.0,
+      "xMax": 14.0,
+      "yMin": 4.0,
+      "yMax": 6.0,
+      "xCentre": 11.5,
+      "yCentre": 5.0,
+      "value": 567.5
+    }
+  ]
+}

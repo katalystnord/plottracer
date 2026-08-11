@@ -343,6 +343,34 @@ describe('readHeatmap', () => {
     }
   });
 
+  it('flags a cell sitting at the KEY’S LIMIT, where a clipped value hides', () => {
+    // ⚑⚑ THE ONE WRONG VALUE THE OTHER TWO MEASURES CANNOT SEE. A figure whose
+    // data runs past its own colour key draws those cells in the key's extreme
+    // colour: the colour matches the ramp exactly, fills the cell uniformly, and
+    // reads back with total confidence as the key's limit. Nothing about the
+    // pixels is wrong — the figure simply no longer contains the number.
+    //
+    // Found by BUILDING AN EXAMPLE: the first IC50 sample generated values up to
+    // 1580 nM against a key stopping at 600, and five cells came back exact,
+    // uniform and up to 62% wrong.
+    const data = greyKeyImage();
+    fill(data, 20, 20, 220, 220, [255, 255, 255]); // the key's top colour
+    const clipped = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
+    expect(clipped[0]!.reading!.distance).toBe(0);
+    expect(clipped[0]!.uniformity).toBe(1);
+    expect(clipped[0]!.atKeyLimit).toBe(true);
+
+    // …and a cell comfortably inside the key is not flagged, or the warning
+    // would be permanently on and mean nothing.
+    fill(data, 20, 20, 220, 220, [120, 120, 120]);
+    const inside = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
+    expect(inside[0]!.atKeyLimit).toBe(false);
+
+    // The other end of the key counts too.
+    fill(data, 20, 20, 220, 220, [0, 0, 0]);
+    expect(readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))![0]!.atKeyLimit).toBe(true);
+  });
+
   it('clamps an absurd inset instead of sampling nothing', () => {
     const data = greyKeyImage();
     fill(data, 20, 20, 220, 220, [90, 90, 90]);

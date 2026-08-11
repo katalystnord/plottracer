@@ -38,6 +38,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 SAMPLES_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 NAVY = "#1f4e79"
@@ -1367,6 +1368,147 @@ def gen_pie_tilted():
     })
 
 
+
+def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values, fig, ax, cbar, log=False):
+    """A heatmap's ground truth: the CELLS, and the calibration a reader needs to
+    find them — the four x/y anchors plus the colour key's own four clicks.
+
+    ⚑ The record is one row per cell with its BOUNDS and its centre, because
+    edges -> centres is derivable and centres -> edges is not once cells are
+    unequal (matplotlib's own `shading='flat'` requires n+1 edges and refuses
+    centres). The truth file therefore carries the edges, and anything that
+    wants centres computes them.
+
+    ⚑ The key's two labelled TICKS are recorded separately from the strip's two
+    ENDS. They are two different measurements: the ramp starts where the ink
+    starts, the numbers sit wherever the tick machinery put them, and assuming
+    otherwise biased an earlier fixture by 0.6 degrees on a 160-degree figure."""
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+
+    def px(x_disp, y_disp):
+        return {"px": round(float(x_disp), 2), "py": round(float(h - y_disp), 2)}
+
+    def at(dx, dy):
+        return px(*ax.transData.transform((dx, dy)))
+
+    box = cbar.ax.get_window_extent()
+    y_mid = (box.y0 + box.y1) / 2
+    lo, hi = cbar.mappable.get_clim()
+    ticks = [t for t in cbar.get_ticks() if lo < t < hi][:2] or [lo, hi]
+    key_ticks = []
+    for value in ticks:
+        x_disp, _ = cbar.ax.transData.transform((value, 0.5))
+        key_ticks.append({**px(x_disp, y_mid), "value": round(float(value), 6)})
+
+    cells = []
+    for r in range(len(y_edges) - 1):
+        for c in range(len(x_edges) - 1):
+            cells.append({
+                "xMin": x_edges[c], "xMax": x_edges[c + 1],
+                "yMin": y_edges[r], "yMax": y_edges[r + 1],
+                "xCentre": round((x_edges[c] + x_edges[c + 1]) / 2, 6),
+                "yCentre": round((y_edges[r] + y_edges[r + 1]) / 2, 6),
+                "value": round(float(values[r][c]), 6),
+            })
+
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png", "note": note},
+        "graphType": "heatmap",
+        "axes": {
+            "x": {"label": xlabel, "min": x_edges[0], "max": x_edges[-1]},
+            "y": {"label": ylabel, "min": y_edges[0], "max": y_edges[-1]},
+            "value": {"label": vlabel, "min": round(float(lo), 6), "max": round(float(hi), 6), "log": log},
+        },
+        "calibration": {
+            "imageWidth": int(fig.get_figwidth() * fig.dpi),
+            "imageHeight": int(h),
+            "anchors": {
+                "x1": {**at(x_edges[0], y_edges[0]), "value": x_edges[0]},
+                "x2": {**at(x_edges[-1], y_edges[0]), "value": x_edges[-1]},
+                "y1": {**at(x_edges[0], y_edges[0]), "value": y_edges[0]},
+                "y2": {**at(x_edges[0], y_edges[-1]), "value": y_edges[-1]},
+                # The strip's two ENDS -- inset 2px so they sit inside the frame
+                # the colorbar draws, which is where a user clicks too.
+                "k1": px(box.x0 + 2, y_mid),
+                "k2": px(box.x1 - 2, y_mid),
+                "kv1": key_ticks[0],
+                "kv2": key_ticks[1],
+            },
+        },
+        "grid": {"x": list(x_edges), "y": list(y_edges)},
+        "cells": cells,
+    })
+
+
+def gen_heatmap_weld():
+    """A continuous field with UNEQUAL cells and no drawn borders (v2.2).
+
+    ⚑ The hard half of boundary detection: every boundary here is a bare colour
+    discontinuity, with no printed rule to follow. And the columns and rows are
+    all different widths, so nothing about the answer can come from assuming a
+    pitch -- which is exactly the case the record was designed for and the one a
+    "rows x columns" count cannot express."""
+    name = "heatmap-weld-temperature"
+    x_edges = [0.0, 2.0, 5.0, 6.0, 9.0, 14.0]
+    y_edges = [0.0, 1.0, 3.5, 4.0, 6.0]
+    rng = np.random.default_rng(4242)
+    base = np.array([[120 + 55 * (r + 1) * (0.6 + 0.35 * c) for c in range(len(x_edges) - 1)]
+                     for r in range(len(y_edges) - 1)])
+    values = np.round(np.clip(base + rng.normal(0, 18, base.shape), 60, 780), 1)
+
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    mesh = ax.pcolormesh(x_edges, y_edges, values, cmap="viridis", vmin=60, vmax=780,
+                         shading="flat", edgecolors="none")
+    ax.set_xlabel("Distance from weld centre (mm)")
+    ax.set_ylabel("Depth (mm)")
+    ax.set_title("Peak temperature across a weld cross-section")
+    cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.14)
+    cbar.set_label("Peak temperature (°C)")
+    fig.tight_layout()
+    _heatmap_truth(name, "Synthetic ground truth — the value of every cell, and its bounds.",
+                   "Distance from weld centre (mm)", "Depth (mm)", "Peak temperature (°C)",
+                   x_edges, y_edges, values, fig, ax, cbar)
+    _save(fig, name)
+
+
+def gen_heatmap_assay():
+    """Regular cells WITH drawn white borders and a LOG colour key (v2.2).
+
+    ⚑ Everything the weld figure is not, on purpose. A printed border changes
+    colour TWICE -- once at each edge -- so a naive detector reports one rule as
+    two boundaries with an empty cell between them; and a log key is ordinary in
+    any figure spanning decades, where reading it as linear is wrong by a factor
+    rather than by a rounding."""
+    name = "heatmap-assay-log"
+    cols, rows = 6, 5
+    x_edges = [float(i) for i in range(cols + 1)]
+    y_edges = [float(i) for i in range(rows + 1)]
+    rng = np.random.default_rng(7)
+    # ⚑ INSIDE the key's own range, and the first version was not. Values ran to
+    # 1580 nM against a key stopping at 600, so matplotlib CLIPPED five cells to
+    # the key's top colour — and a clipped cell reads back exact, uniform and
+    # wrong, because the figure genuinely no longer contains the number. That is
+    # a defect in the FIGURE, not in the reader, and a bundled example must not
+    # ship one. (It is also what prompted the reader's `atKeyLimit` warning.)
+    values = np.round(10 ** (0.75 + 2.0 * rng.random((rows, cols))), 2)
+
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    mesh = ax.pcolormesh(x_edges, y_edges, values, cmap="magma",
+                         norm=LogNorm(vmin=3, vmax=600), shading="flat",
+                         edgecolors="white", linewidth=2.5)
+    ax.set_xlabel("Compound")
+    ax.set_ylabel("Cell line")
+    ax.set_title("Half-maximal inhibitory concentration")
+    cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.14)
+    cbar.set_label("IC50 (nM, log scale)")
+    fig.tight_layout()
+    _heatmap_truth(name, "Synthetic ground truth — a LOG colour key and drawn cell borders.",
+                   "Compound", "Cell line", "IC50 (nM, log scale)",
+                   x_edges, y_edges, values, fig, ax, cbar, log=True)
+    _save(fig, name)
+
+
 if __name__ == "__main__":
     gen_scatter()
     gen_multiseries()
@@ -1395,4 +1537,6 @@ if __name__ == "__main__":
     gen_pie_exploded()
     gen_donut()
     gen_pie_tilted()
-    print("generated all 23 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, grouped bar with a missing category, stacked bar, floating bar.")
+    gen_heatmap_weld()
+    gen_heatmap_assay()
+    print("generated all 25 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, grouped bar with a missing category, stacked bar, floating bar.")

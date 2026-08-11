@@ -112,6 +112,10 @@ import selectPointSvg from '../../icons/custom/select-point.svg?raw';
 // style) except Box Plot, which reuses the icon already drawn for it.
 import graphXySvg from '../../icons/custom/graph-xy.svg?raw';
 import graphHistogramSvg from '../../icons/custom/graph-histogram.svg?raw';
+// ⚑ A heatmap's glyph is a 3x3 of cells at DIFFERENT opacities — the one thing
+// that distinguishes it from a plain grid at 24px, and the one thing a reader
+// scanning the picker for "mine has coloured squares" is looking for.
+import graphHeatmapSvg from '../../icons/custom/graph-heatmap.svg?raw';
 import graphBarSvg from '../../icons/custom/graph-bar.svg?raw';
 import graphCategoricalLineSvg from '../../icons/custom/graph-categorical-line.svg?raw';
 import boxPlotSvg from '../../icons/custom/box-plot.svg?raw';
@@ -188,6 +192,7 @@ export interface GraphIconProps {
 export const ErrorBarsIcon = ({ size }: GraphIconProps = {}) => <Icon svg={errorBarsSvg} size={size} />;
 export const GraphXyIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphXySvg} size={size} />;
 export const GraphHistogramIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphHistogramSvg} size={size} />;
+export const GraphHeatmapIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphHeatmapSvg} size={size} />;
 export const GraphBarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphBarSvg} size={size} />;
 export const GraphCategoricalLineIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphCategoricalLineSvg} size={size} />;
 export const GraphBoxPlotIcon = ({ size }: GraphIconProps = {}) => <Icon svg={boxPlotSvg} size={size} />;
@@ -210,6 +215,7 @@ export const GraphCcrIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphC
 export const GRAPH_TYPE_ICONS: Record<string, (props?: GraphIconProps) => React.JSX.Element> = {
   xy: GraphXyIcon,
   histogram: GraphHistogramIcon,
+  heatmap: GraphHeatmapIcon,
   bar: GraphBarIcon,
   categorical: GraphCategoricalLineIcon,
   boxplot: GraphBoxPlotIcon,

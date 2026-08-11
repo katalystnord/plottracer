@@ -28,11 +28,15 @@ import { runGeometry, getGeometryState } from './geometryPanel.js';
 import {
   buildSeriesJSON,
   buildHistogramJSON,
+  buildHeatmapJSON,
   buildTupleSeriesJSON,
   flatDataSection,
   allSeriesSection,
   tupleDataSection,
   histogramSection,
+  heatmapCellsSection,
+  heatmapMatrixSection,
+  type HeatmapExportCell,
   measurementsSection,
   curveFitSummarySection,
   fittedCurveSection,
@@ -64,6 +68,17 @@ export interface ExportAssemblyInput {
   /** Raw measurement numbers + units (checkpoint 82), never a formatted string
    * -- the caller resolves these from its own recorded overlays. */
   measures: readonly MeasurementCsvRow[];
+  /**
+   * A heatmap's cells (v2.2), supplied by the caller.
+   *
+   * ⚑ EVERY OTHER SHAPE READS ITS ROWS OFF THE DATASETS; this one cannot. A
+   * heatmap's values are read from the IMAGE through the grid, and neither the
+   * image nor the reading lives in the session — so the cells arrive the same
+   * way `measures` does, resolved by the caller that has them. Absent or empty
+   * means the user has not pressed Read cells yet, and the export says so
+   * rather than writing an empty table that looks like an empty figure.
+   */
+  heatmapCells?: readonly HeatmapExportCell[];
 }
 
 /**
@@ -164,6 +179,9 @@ export function buildExportJson(input: ExportAssemblyInput): string {
   // invariant is ever violated, blank is the honest answer, not a name that
   // could be confused for a real series someone captured.
   const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? '';
+  if (exportShape === 'heatmap') {
+    return buildHeatmapJSON(input.heatmapCells ?? [], measures);
+  }
   if (exportShape === 'bins') {
     return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
   }
@@ -217,7 +235,14 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   // Bar-with-box-plot-groups case is dynamic, and getExportShape is the one
   // place that knows.
   const exportShape = session.getExportShape();
-  if (exportShape === 'bins') {
+  if (exportShape === 'heatmap') {
+    // ⚑ The record FIRST, the convenience view second. A reader opening the file
+    // meets the long form — bounds, centre, value and the evidence for it —
+    // before the pivoted matrix, which is derived from it.
+    const cells = input.heatmapCells ?? [];
+    sections.push(heatmapCellsSection(cells, rounder));
+    sections.push(heatmapMatrixSection(cells));
+  } else if (exportShape === 'bins') {
     sections.push(histogramSection(session.getHistogramBins(), rounder));
   } else if (exportShape === 'tuples') {
     // One titled block per series when the scope says all -- see buildExportJson's

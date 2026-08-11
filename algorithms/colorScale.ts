@@ -102,6 +102,22 @@ export interface ColorValueBand {
 
 export interface ColorValueReading extends ColorValueBand {
   /**
+   * The reading sits against one END of the key.
+   *
+   * ⚑⚑ WHERE A CLIPPED CELL HIDES. A figure whose data runs past its own colour
+   * key draws every such cell in the key's extreme colour — so the cell's colour
+   * matches the ramp EXACTLY (distance 0), fills the cell uniformly, and reads
+   * back as the key's limit with total confidence. It is the one wrong value the
+   * other two measures cannot see, because nothing about the pixels is wrong:
+   * the figure genuinely does not contain the number any more.
+   *
+   * Measured, not guessed: the band the colour is consistent with reaches the
+   * first or last position on the strip. A cell legitimately AT the limit reads
+   * the same way — which is the point. Neither the tool nor the reader can tell
+   * them apart, and saying so is the only honest option.
+   */
+  atKeyLimit: boolean;
+  /**
    * Other values the same colour is equally consistent with — a cyclic key, a
    * diverging one that revisits a pale colour, or a degraded figure where the
    * colour error is as large as the difference between two stretches of key.
@@ -216,8 +232,11 @@ export function readColor(scale: ColorScale, rgb: RGB): ColorValueReading | null
     };
   };
 
+  const first = scale.strip.samples[0]!.t;
+  const last = scale.strip.samples[scale.strip.samples.length - 1]!.t;
   return {
     ...band(reading.t, reading.tLow, reading.tHigh, reading.distance),
+    atKeyLimit: reading.tLow <= first || reading.tHigh >= last,
     rivals: reading.rivals.map((r) => band(r.t, r.tLow, r.tHigh, r.distance)),
   };
 }

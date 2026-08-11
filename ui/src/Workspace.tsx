@@ -204,6 +204,8 @@ import { runBarDetect } from '../../engine/barDetectRun.js';
 import {
   buildColorScale,
   detectGrid,
+  gridFromAxes,
+  gridToAxes,
   initialGrid,
   readHeatmapCells,
   type HeatmapRow,
@@ -1107,6 +1109,14 @@ export function Workspace() {
   const [heatmapColumns, setHeatmapColumns] = useState('');
   const [heatmapRows, setHeatmapRows] = useState('');
   const [heatmapCells, setHeatmapCells] = useState<HeatmapRow[]>([]);
+  /** ⚑ Read through a ref by the export, which is a `useCallback` shared by
+   * nine formats: making it depend on the cells state would rebuild it on every
+   * read, and an export that captured a stale array would write the previous
+   * figure's numbers. */
+  const heatmapCellsRef = useRef<HeatmapRow[]>([]);
+  useEffect(() => {
+    heatmapCellsRef.current = heatmapCells;
+  }, [heatmapCells]);
   const [heatmapDetectMessage, setHeatmapDetectMessage] = useState('');
   const [heatmapSummary, setHeatmapSummary] = useState('');
   const [heatmapError, setHeatmapError] = useState<string | null>(null);
@@ -1719,6 +1729,43 @@ export function Workspace() {
     return raw.trim() !== '' && Number.isInteger(n) && n > 0 ? n : undefined;
   };
 
+  /**
+   * Set the grid, and put it where a save and an undo will both find it.
+   *
+   * ⚑ ONE PLACE, because there are two consumers that must never disagree: the
+   * overlay on screen reads the state, and the project file reads the axes'
+   * metadata. Writing the state without the metadata gives a grid that vanishes
+   * on Save; writing the metadata without the state gives one that is saved and
+   * invisible. The undo snapshot serializes the axes, so this is also what makes
+   * a grid edit undoable — without any new snapshot field.
+   */
+  const applyHeatmapGrid = useCallback((grid: HeatmapState | null) => {
+    setHeatmapGrid(grid);
+    const axes = sessionRef.current.getAxes();
+    if (axes) gridToAxes(axes as unknown as { getMetadata(): Record<string, unknown>; setMetadata(o: Record<string, unknown>): void }, grid);
+  }, []);
+
+  /**
+   * Take the grid back OUT of the axes — the load path, and the undo path.
+   *
+   * ⚑ TWO ENTRANCES, ONE CALL. A project file and an undo snapshot both arrive
+   * as a serialized axes, so both restore the grid the same way. Without this
+   * the metadata would be written faithfully, saved faithfully, and never read:
+   * a grid that survives the round trip and does not come back on screen is
+   * indistinguishable from one that was never saved.
+   *
+   * ⚑ `gridFromAxes` VALIDATES rather than trusts, so a hand-edited or
+   * older-build file cannot install a grid the app would refuse to draw.
+   */
+  const restoreHeatmapGrid = useCallback(() => {
+    const axes = sessionRef.current.getAxes();
+    setHeatmapGrid(axes ? gridFromAxes(axes as unknown as { getMetadata(): Record<string, unknown>; setMetadata(o: Record<string, unknown>): void }) : null);
+    setHeatmapCells([]);
+    setHeatmapSummary('');
+    setHeatmapDetectMessage('');
+    setHeatmapError(null);
+  }, []);
+
   const runHeatmapDetect = useCallback(() => {
     setHeatmapError(null);
     const img = imageCanvasRef.current?.getImageData();
@@ -1737,8 +1784,8 @@ export function Workspace() {
     // ⚑ A refused detection leaves the PREVIOUS grid alone. Replacing it with
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
-    if (result.grid !== null) setHeatmapGrid(result.grid);
-  }, [heatmapBounds, heatmapGrid, heatmapColumns, heatmapRows]);
+    if (result.grid !== null) applyHeatmapGrid(result.grid);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapGrid, heatmapColumns, heatmapRows]);
 
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
@@ -1763,11 +1810,11 @@ export function Workspace() {
     }
     const grid = heatmapGrid ?? initialGrid(bounds);
     const result = readHeatmapCells(image, axes, grid, scale);
-    setHeatmapGrid(grid);
+    applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [heatmapBounds, heatmapGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapGrid]);
 
   /**
    * The grid drawn on the figure: one line per divider, spanning the grid's own
@@ -1858,6 +1905,7 @@ export function Workspace() {
         setAxesTypeId(snapshot.axesTypeId);
       }
       sessionRef.current.restoreState(snapshot.session);
+      restoreHeatmapGrid(); // the grid rides in the axes metadata the snapshot carries
       applyMeasurements(snapshot.measurements);
       applyMeasureScale(snapshot.scale);
       applyProvenance(snapshot.provenance); // roll a crop's provenance back with it
@@ -1883,7 +1931,7 @@ export function Workspace() {
       syncAfterRestore();
       bump();
     },
-    [applyMeasurements, applyMeasureScale, applyProvenance, setPending, setColorTraceRegion, syncAfterRestore, bump]
+    [applyMeasurements, applyMeasureScale, applyProvenance, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
   );
   const undo = useCallback(() => {
     const snapshot = history.undo();
@@ -3462,6 +3510,7 @@ export function Workspace() {
       // Categories box showed the PREVIOUS figure's number (or nothing) beside
       // the ticks the loaded one actually has, and a stale "same point" refusal
       // from ten minutes ago sat there in red (v2.1 audit).
+      restoreHeatmapGrid(); // a saved heatmap reopens with the grid it was saved with
       setCategoryCountInput(String(newSession.getCategoryAxis().getCategoryCount() || ''));
       setCategoryFirstEdge(null);
       setCategoryMarkError(null);
@@ -3505,7 +3554,7 @@ export function Workspace() {
       bump();
       return true;
     },
-    [history, bump, markClean, applyMeasurements, applyMeasureScale, setPending, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle]
+    [history, bump, markClean, applyMeasurements, applyMeasureScale, restoreHeatmapGrid, setPending, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle]
   );
 
   // === Multi-figure session (checkpoint 110, design §1/§8) ===
@@ -4057,6 +4106,12 @@ export function Workspace() {
         scope: exportScope,
         precision: mode,
         measures,
+        // ⚑ Resolved here for the same reason `measures` is: a heatmap's cells
+        // are read from the IMAGE through the grid, and neither the image nor
+        // the reading lives in the session. Empty until the user has pressed
+        // Read cells, which the export reports as an empty table rather than
+        // inventing one.
+        heatmapCells: heatmapCellsRef.current,
       };
 
       let content: string;

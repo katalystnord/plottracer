@@ -155,6 +155,62 @@ export function initialGrid(axesBounds: {
   };
 }
 
+/**
+ * Where the grid LIVES between sessions: the axes' own metadata.
+ *
+ * ⚑⚑ THE SAME HOME PIE'S TOTAL AND SWEEP USE, for the same stated reason —
+ * the grid has no pixel to ride on, so the axes metadata is its one place in
+ * the file. Choosing it over a new project-file field is not a shortcut: axes
+ * metadata already rides through `core/plotData.ts`'s serialize/deserialize,
+ * which means the grid is saved, reopened AND undone by machinery that is
+ * already tested, instead of by three new entrances each needing their own
+ * guard. The undo snapshot is a `plotData` serialization too.
+ *
+ * ⚑ Stored in DATA coordinates, like everything else about the grid, so it
+ * survives a re-calibration or an image edit with its meaning intact.
+ */
+const GRID_METADATA_KEY = 'heatmapGrid';
+
+/** The minimal axes surface this needs — structural, so no `core/axes` import. */
+export interface MetadataCarrier {
+  getMetadata(): Record<string, unknown>;
+  setMetadata(obj: Record<string, unknown>): void;
+}
+
+/**
+ * Read the grid an axes is carrying, or null when it has none.
+ *
+ * ⚑ VALIDATED ON THE WAY OUT, not trusted. This is a load-path entrance: the
+ * numbers come from a file a user may have edited, from an older build, or from
+ * a different tool. `checkDividers` is the same rule the interactive path
+ * applies, so a file cannot produce a grid the app would refuse to let you
+ * draw.
+ */
+export function gridFromAxes(axes: MetadataCarrier): HeatmapState | null {
+  const raw = axes.getMetadata()[GRID_METADATA_KEY];
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { x, y } = raw as { x?: unknown; y?: unknown };
+  if (!Array.isArray(x) || !Array.isArray(y)) return null;
+  const xs = checkDividers(x.map(Number)).dividers;
+  const ys = checkDividers(y.map(Number)).dividers;
+  if (xs === null || ys === null) return null;
+  return { xDividers: xs, yDividers: ys };
+}
+
+/**
+ * Put the grid where a save will find it. A null grid REMOVES the key rather
+ * than writing an empty one, so a file never carries a grid that is not a grid.
+ */
+export function gridToAxes(axes: MetadataCarrier, grid: HeatmapState | null): void {
+  const meta = { ...axes.getMetadata() };
+  if (grid === null) {
+    delete meta[GRID_METADATA_KEY];
+  } else {
+    meta[GRID_METADATA_KEY] = { x: [...grid.xDividers], y: [...grid.yDividers] };
+  }
+  axes.setMetadata(meta);
+}
+
 export interface DetectGridOptions {
   /** How many columns the figure has, if the user has said. A CHECK on the
    * answer, never a target — see `algorithms/gridDetect.ts`. */
@@ -271,6 +327,9 @@ export interface HeatmapRow {
   /** Other values this colour is equally consistent with. Non-empty means the
    * reading is AMBIGUOUS and must not be treated as a number. */
   rivalValues: number[];
+  /** The cell's colour is the key's extreme, so the figure may have CLIPPED it —
+   * the value could be this or anything beyond it. */
+  atKeyLimit: boolean;
   /** The one-line verdict the table shows: what, if anything, is wrong with
    * this cell. Empty for a cell with nothing to report. */
   warning: string;
@@ -287,6 +346,9 @@ function warningFor(cell: HeatmapCellReading): string {
   if (cell.reading === null) return 'No value — the colour key cannot be read';
   const parts: string[] = [];
   if (cell.rivals.length > 0) parts.push(`${cell.rivals.length + 1} possible values`);
+  // ⚑ First among the soft warnings, because it is the one nothing else catches:
+  // a clipped cell is exact, uniform and wrong.
+  if (cell.atKeyLimit) parts.push('at the key’s limit — may be clipped');
   if (cell.reading.distance > 0) parts.push(`colour ${cell.reading.distance.toFixed(1)} off the key`);
   if (cell.uniformity < UNIFORMITY_WORTH_REPORTING) {
     parts.push(`${Math.round(cell.uniformity * 100)}% of the cell`);
@@ -343,6 +405,7 @@ export function readHeatmapCells(
     distance: cell.reading?.distance ?? null,
     uniformity: cell.uniformity,
     rivalValues: cell.rivals.map((r) => r.value),
+    atKeyLimit: cell.atKeyLimit,
     warning: warningFor(cell),
   }));
   const flagged = rows.filter((r) => r.warning !== '').length;

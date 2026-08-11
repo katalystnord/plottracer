@@ -220,6 +220,20 @@ describe('readHeatmapCells', () => {
     expect(rows[0]!.warning).toBe('Not on the image');
   });
 
+  it('says so in the ROW when a cell sits at the key’s limit', () => {
+    // The warning has to reach the user, not just the object: a clipped cell is
+    // the one wrong value with nothing else to give it away.
+    const { image, axes, placed } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    // The bottom-left cell of this figure is its coldest; widen the grid to a
+    // single cell so the read covers the key's extremes.
+    const { rows } = readHeatmapCells(image, axes, { xDividers: [0, 9], yDividers: [0, 8] }, scale!);
+    expect(rows).toHaveLength(1);
+    if (rows[0]!.atKeyLimit) expect(rows[0]!.warning).toMatch(/key’s limit/);
+    // And whatever this particular cell does, the flag and the sentence agree.
+    expect(rows[0]!.atKeyLimit).toBe(/key’s limit/.test(rows[0]!.warning));
+  });
+
   it('needs a grid before it can read anything', () => {
     const { image, axes, placed } = scene();
     const { scale } = buildColorScale(placed, image, false);

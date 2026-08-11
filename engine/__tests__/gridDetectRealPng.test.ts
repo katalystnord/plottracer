@@ -103,7 +103,13 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
     for (const axis of ['x', 'y'] as const) {
       const expected = truePositions(axis === 'x' ? fig.grid.x : fig.grid.y);
       const { candidates } = detectDividers(img.data, img.width, img.height, box, axis);
-      expect(candidates.length).toBeGreaterThan(expected.length); // spurious peaks exist
+      // ⚑ At LEAST the real ones — never fewer. An earlier version demanded
+      // strictly more, on the grounds that JPEG always adds spurious peaks; then
+      // widening the merge window from 5px to 8px (for the drawn rules in the
+      // bundled IC50 example) absorbed the spurious ones on this figure's x axis
+      // and the test failed for an IMPROVEMENT. The claim worth making is that
+      // the true boundaries rank at the top, which holds either way.
+      expect(candidates.length).toBeGreaterThanOrEqual(expected.length);
       const top = candidates
         .slice(0, expected.length)
         .map((c) => c.position)

@@ -615,13 +615,18 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * - `'tuples'` — the tuple table: one row per box/bin, columns for its members.
    *   For types whose tuple IS one object (see tupleMembers).
    * - `'bins'` — histogram bins, as true edges.
+   * - `'heatmap'` (v2.2) — a MATRIX: one row per cell carrying its bounds, its
+   *   centre and its value, plus the same cells pivoted as a convenience view.
+   *   Unlike every shape above it, the rows do not come from the datasets — a
+   *   heatmap's cells are read from the image through the grid, so the caller
+   *   supplies them (see `ExportAssemblyInput.heatmapCells`).
    *
    * ⚑ Resolve it through `session.getExportShape()`, never by reading this field
    * directly: Box Plot is ALSO reachable as a toggle on a Bar session, so the
    * shape depends on the series as well as the type. That method is the one place
    * that knows.
    */
-  exportShape?: 'flat' | 'tuples' | 'bins';
+  exportShape?: 'flat' | 'tuples' | 'bins' | 'heatmap';
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
@@ -965,6 +970,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'heatmap',
   label: 'Heatmap',
   axesKind: 'xy',
+  exportShape: 'heatmap',
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
@@ -1035,45 +1041,58 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     }
   },
   buildAxes(cal, ctx) {
-    // ⚑ Only the first four points are the x/y frame. `XYAxes.calibrate` reads
-    // its four points BY INDEX, so handing it the whole eight-point calibration
-    // would work by accident today and break the moment a step is reordered;
-    // the four are copied out explicitly instead.
-    const frame = new Calibration();
+    // The x/y frame is the FIRST FOUR points and only those — `XYAxes`'s own
+    // maths reads them by index and never looks further.
     for (let i = 0; i < 4; i++) {
-      const p = cal.getPoint(i);
-      if (p === null) return { error: 'Calibration is incomplete — place all four X and Y points.' };
-      frame.addPoint(p.px, p.py, p.dx ?? '', p.dy ?? '');
+      if (cal.getPoint(i) === null) {
+        return { error: 'Calibration is incomplete — place all four X and Y points.' };
+      }
     }
     const axes = new XYAxes();
+    // ⚑⚑ THE WHOLE EIGHT-POINT CALIBRATION GOES IN, not a four-point copy of
+    // its frame, and that is what makes the colour key SURVIVE A SAVE. An axes
+    // instance carries its own `calibration` into the project file, and
+    // `loadCalibrated` rebuilds the placed points from it BY STEP INDEX — so
+    // handing the axes only the frame means the key's four clicks are written
+    // nowhere, and a reopened heatmap has a calibration it cannot read a single
+    // cell through. The first version here did exactly that.
     const ok = axes.calibrate(
-      frame,
+      cal,
       optionBool(ctx.options, 'isLogX'),
       optionBool(ctx.options, 'isLogY'),
       optionBool(ctx.options, 'skipRotation')
     );
     if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    // ⚑⚑ WITHOUT THE GRAPH-TYPE STAMP A SAVED HEATMAP REOPENS AS AN XY CHART —
+    // its cells gone, its key clicks read as stray axis points. Every type that
+    // shares an axes class with another must say which one it is (Histogram,
+    // categorical Line, Box Plot and Spider all do); this one shares `XYAxes`
+    // and did not.
+    //
+    // ⚑ And `isLogValue` rides with it, for the reason pie's total and sweep do:
+    // the colour key is not part of `XYAxes`, so it has no pixel to ride on and
+    // the axes METADATA is its one home in the file. Without it a reopened
+    // project reads every cell off a linear key it was never calibrated with.
+    axes.setMetadata({
+      ...axes.getMetadata(),
+      [GRAPH_TYPE_METADATA_KEY]: 'heatmap',
+      heatmapLogValue: String(optionBool(ctx.options, 'isLogValue')),
+    });
     return { axes };
   },
   /**
-   * ⚠️ `isLogValue` IS ABSENT HERE ON PURPOSE, and this is a note for phase 3
-   * rather than an oversight. `extractOptions` restores settings by reading them
-   * back off the calibrated axes instance — and the colour key is not part of
-   * `XYAxes`, so there is nothing to read it from. The key's whole state (the
-   * strip's geometry, the two ticks, and whether its scale is logarithmic) needs
-   * its own slot in the project file, which lands with capture.
-   *
-   * ⚑ It cannot lose anyone's setting today, because this type is not in the
-   * graph-type list and no file can contain one. The moment it is listed, this
-   * comment is a defect — a project reopening with its log key silently linear
-   * is exactly the "options quietly revert to defaults" shape the load path has
-   * been bitten by before.
+   * ⚑ `isLogValue` comes back out of the axes METADATA, where `buildAxes` put
+   * it — the same round trip pie's tilt makes, and for the same reason. Without
+   * it a reopened project would silently revert to a linear colour key and
+   * change every value in the figure.
    */
   extractOptions(axes) {
+    const meta = axes.getMetadata() as Record<string, unknown>;
     return {
       isLogX: String(axes.isLogX()),
       isLogY: String(axes.isLogY()),
       skipRotation: String(axes.noRotation()),
+      isLogValue: String(meta['heatmapLogValue'] ?? 'false'),
     };
   },
 };

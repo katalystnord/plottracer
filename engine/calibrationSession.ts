@@ -1282,7 +1282,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The tuple table would give one series read off the nearest ray — the v1.4
    * audit's export defect.
    */
-  getExportShape(): 'flat' | 'tuples' | 'bins' {
+  getExportShape(): 'flat' | 'tuples' | 'bins' | 'heatmap' {
     if (this.config.exportShape) return this.config.exportShape;
     const grouped = this.activeEntry.dataset.hasSlots();
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';

@@ -64,15 +64,21 @@ const DEFAULT_MIN_STRENGTH = 8;
  * How wide a drawn rule may be before its two edges stop being one boundary,
  * in pixels.
  *
- * ⚑ A REAL TRADE-OFF, stated rather than tuned away: five pixels covers the
- * printed borders published figures actually use, and it means two GENUINE
- * boundaries closer together than that merge into one. At that width the cell
- * between them is five pixels across and has no interior to sample, so the
- * merge costs nothing that could have been read — but a caller working on a
- * very dense matrix can lower it, and the proposal is visible on screen either
- * way.
+ * ⚑ MEASURED, not guessed, and the first number was too small. A printed rule
+ * shows up as a change at EACH of its edges, so the two peaks sit roughly its
+ * width plus its anti-aliasing apart: a 2.5pt border at 100 dpi — an ordinary
+ * choice, and what the bundled IC50 example uses — put them 4.3px apart on one
+ * axis and 5.0px apart on the other. A five-pixel window merged the first and
+ * split the second, so the same figure reported the right number of columns and
+ * one row too many. Eight covers a rule up to about 7px.
+ *
+ * ⚑ A REAL TRADE-OFF, stated rather than tuned away: two GENUINE boundaries
+ * closer together than this merge into one. At that width the cell between them
+ * is eight pixels across and the reader insets a fifth of it, so there is
+ * essentially nothing there to read — but a caller working on a very dense
+ * matrix can lower it, and the proposal is visible on screen either way.
  */
-const DEFAULT_MERGE_PX = 5;
+const DEFAULT_MERGE_PX = 8;
 
 /** One proposed boundary. */
 export interface DividerCandidate {

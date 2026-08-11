@@ -11,6 +11,8 @@ import xySample from '../../samples/xy-stress-strain.png';
 import xyMultiSample from '../../samples/xy-multiseries-modulus.png';
 import scatterSample from '../../samples/scatter-crosslink-modulus.png';
 import dashedReleaseSample from '../../samples/xy-dashed-release.png';
+import heatmapWeldSample from '../../samples/heatmap-weld-temperature.png';
+import heatmapAssaySample from '../../samples/heatmap-assay-log.png';
 import histogramSample from '../../samples/histogram-pore-size.png';
 import errorBarSample from '../../samples/errorbar-tensile-cure.png';
 import errorBarAsymSample from '../../samples/errorbar-failure-time-asymmetric.png';
@@ -77,6 +79,15 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // an untouched lower cap reports a symmetry the figure never drew.
   { id: 'errorbar-asym', name: 'Error bars — asymmetric 95% CI', src: errorBarAsymSample, axes: 'xy', icon: 'errorbars' },
   { id: 'histogram', name: 'Pore size distribution', src: histogramSample, axes: 'histogram' },
+  // Two heatmaps (v2.2), and they teach OPPOSITE halves of the same feature.
+  // The weld figure has UNEQUAL cells and no drawn borders, so every boundary
+  // is a bare colour discontinuity — the hard case for detection, and the case
+  // a "rows x columns" count cannot express. The assay figure has regular cells
+  // WITH printed white rules (a border changes colour twice, once at each edge)
+  // and a LOG colour key, where reading the key as linear is wrong by a factor
+  // rather than by a rounding. Neither is a variation on the other.
+  { id: 'heatmap', name: 'Weld cross-section temperature', src: heatmapWeldSample, axes: 'heatmap' },
+  { id: 'heatmap-log', name: 'IC50 assay — log colour key', src: heatmapAssaySample, axes: 'heatmap' },
   { id: 'bar', name: 'Tensile strength', src: barSample, axes: 'bar' },
   // Three more bar examples (v2.0, David: "some more bar graph test cases"),
   // each isolating one shape the v2.0 model exists for -- the same

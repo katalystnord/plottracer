@@ -1,0 +1,360 @@
+{
+  "source": {
+    "imagePath": "heatmap-assay-log.png",
+    "note": "Synthetic ground truth \u2014 a LOG colour key and drawn cell borders."
+  },
+  "graphType": "heatmap",
+  "axes": {
+    "x": {
+      "label": "Compound",
+      "min": 0.0,
+      "max": 6.0
+    },
+    "y": {
+      "label": "Cell line",
+      "min": 0.0,
+      "max": 5.0
+    },
+    "value": {
+      "label": "IC50 (nM, log scale)",
+      "min": 3.0,
+      "max": 600.0,
+      "log": true
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 53.15,
+        "py": 495.25,
+        "value": 0.0
+      },
+      "x2": {
+        "px": 880.56,
+        "py": 495.25,
+        "value": 6.0
+      },
+      "y1": {
+        "px": 53.15,
+        "py": 495.25,
+        "value": 0.0
+      },
+      "y2": {
+        "px": 53.15,
+        "py": 35.33,
+        "value": 5.0
+      },
+      "k1": {
+        "px": 55.15,
+        "py": 606.62
+      },
+      "k2": {
+        "px": 878.56,
+        "py": 606.62
+      },
+      "kv1": {
+        "px": 241.17,
+        "py": 606.62,
+        "value": 10.0
+      },
+      "kv2": {
+        "px": 600.75,
+        "py": 606.62,
+        "value": 100.0
+      }
+    }
+  },
+  "grid": {
+    "x": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0
+    ],
+    "y": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0
+    ]
+  },
+  "cells": [
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 0.5,
+      "yCentre": 0.5,
+      "value": 100.04
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 1.5,
+      "yCentre": 0.5,
+      "value": 350.29
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 3.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 2.5,
+      "yCentre": 0.5,
+      "value": 200.16
+    },
+    {
+      "xMin": 3.0,
+      "xMax": 4.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 3.5,
+      "yCentre": 0.5,
+      "value": 15.86
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 5.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 4.5,
+      "yCentre": 0.5,
+      "value": 22.4
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 5.5,
+      "yCentre": 0.5,
+      "value": 314.13
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 0.5,
+      "yCentre": 1.5,
+      "value": 5.76
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 1.5,
+      "yCentre": 1.5,
+      "value": 246.86
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 3.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 2.5,
+      "yCentre": 1.5,
+      "value": 220.87
+    },
+    {
+      "xMin": 3.0,
+      "xMax": 4.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 3.5,
+      "yCentre": 1.5,
+      "value": 48.51
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 5.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 4.5,
+      "yCentre": 1.5,
+      "value": 22.7
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 5.5,
+      "yCentre": 1.5,
+      "value": 20.27
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 0.5,
+      "yCentre": 2.5,
+      "value": 18.19
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 1.5,
+      "yCentre": 2.5,
+      "value": 43.67
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 3.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 2.5,
+      "yCentre": 2.5,
+      "value": 57.42
+    },
+    {
+      "xMin": 3.0,
+      "xMax": 4.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 3.5,
+      "yCentre": 2.5,
+      "value": 71.94
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 5.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 4.5,
+      "yCentre": 2.5,
+      "value": 550.81
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 5.5,
+      "yCentre": 2.5,
+      "value": 216.43
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 0.5,
+      "yCentre": 3.5,
+      "value": 98.71
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 1.5,
+      "yCentre": 3.5,
+      "value": 534.47
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 3.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 2.5,
+      "yCentre": 3.5,
+      "value": 15.16
+    },
+    {
+      "xMin": 3.0,
+      "xMax": 4.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 3.5,
+      "yCentre": 3.5,
+      "value": 11.76
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 5.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 4.5,
+      "yCentre": 3.5,
+      "value": 94.42
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 5.5,
+      "yCentre": 3.5,
+      "value": 6.88
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 0.5,
+      "yCentre": 4.5,
+      "value": 6.63
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 1.5,
+      "yCentre": 4.5,
+      "value": 60.23
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 3.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 2.5,
+      "yCentre": 4.5,
+      "value": 48.13
+    },
+    {
+      "xMin": 3.0,
+      "xMax": 4.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 3.5,
+      "yCentre": 4.5,
+      "value": 384.0
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 5.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 4.5,
+      "yCentre": 4.5,
+      "value": 101.97
+    },
+    {
+      "xMin": 5.0,
+      "xMax": 6.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 5.5,
+      "yCentre": 4.5,
+      "value": 60.01
+    }
+  ]
+}

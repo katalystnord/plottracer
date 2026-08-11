@@ -24,7 +24,31 @@ import type { GeometryResult } from '../algorithms/geometry.js';
 import type { ErrorRelation } from './errorRelation.js';
 import { type ExportValue } from '../core/exportValues.js';
 import type { ValueRounder } from '../core/exportPrecision.js';
-import { renderTable, type TableSection } from './tableFormats.js';
+import { renderTable, type Cell, type TableSection } from './tableFormats.js';
+
+/**
+ * One heatmap cell as the export sees it (v2.2) — structural, so this module
+ * stays independent of `engine/heatmapRun.ts` and its image-reading half.
+ * `engine/heatmapRun.ts`'s `HeatmapRow` satisfies it.
+ */
+export interface HeatmapExportCell {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+  xCentre: number;
+  yCentre: number;
+  /** Null for a cell that could not be read — written as empty, never 0. */
+  value: number | null;
+  low: number | null;
+  high: number | null;
+  distance: number | null;
+  uniformity: number;
+  /** The colour is the key's extreme, so the figure may have CLIPPED the value.
+   * Exported because it is the one warning the numbers cannot carry: a clipped
+   * cell is exact, uniform, and wrong. */
+  atKeyLimit?: boolean;
+}
 
 // The type-specific exports (box plot / histogram / error bars) don't flow through
 // valueAtPixel, so they take a ValueRounder built from the axes + precision mode
@@ -183,6 +207,99 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
     ]),
   };
 }
+/**
+ * A heatmap's cells, LONG FORM — one row per cell (v2.2).
+ *
+ * ⚑⚑ BOUNDS AND CENTRE, BOTH. The asymmetry decided it before any code was
+ * written: edges → centres is derivable and centres → edges is NOT once cells
+ * are unequal, and a real consumer needs each convention — matplotlib's
+ * `shading='flat'` REQUIRES n+1 edges and refuses centres, while
+ * `shading='nearest'` takes centres. A record carrying one of them fails
+ * against the other, so it carries both and neither reader does arithmetic on
+ * the record. Rebuilding the hardest test figure from this shape came back
+ * exact; from centres alone it was wrong by 0.375 data units.
+ *
+ * ⚑⚑ AND THE EVIDENCE RIDES WITH THE VALUE, in the same row. In a heatmap the
+ * colour IS the value, so a wrong cell has no other symptom — the interval it
+ * could not be told apart from, how far its colour sat off the key, and how
+ * much of the cell was actually that colour are the only things that say
+ * whether to trust the number. A file that dropped them would hand on 20
+ * confident numbers, which is precisely the failure this whole feature is built
+ * to prevent. Same precedent as the error-bar Δ, which rides into the file
+ * beside the point it belongs to.
+ *
+ * ⚑ An unread cell writes EMPTY, never 0 — `0` is a value a heatmap might
+ * really contain.
+ */
+export function heatmapCellsSection(
+  cells: readonly HeatmapExportCell[],
+  rounder: ValueRounder
+): TableSection {
+  const at = (v: number | null, cell: HeatmapExportCell, dim: 0 | 1): Cell =>
+    v === null ? '' : rounder.at([dim === 0 ? v : cell.xCentre, dim === 0 ? cell.yCentre : v], dim);
+  return {
+    title: 'Cells',
+    header: [
+      'x min',
+      'x max',
+      'y min',
+      'y max',
+      'x centre',
+      'y centre',
+      'value',
+      'value low',
+      'value high',
+      'colour offset',
+      'uniformity',
+      'at key limit',
+    ],
+    rows: cells.map((c) => [
+      at(c.xMin, c, 0),
+      at(c.xMax, c, 0),
+      at(c.yMin, c, 1),
+      at(c.yMax, c, 1),
+      at(c.xCentre, c, 0),
+      at(c.yCentre, c, 1),
+      // ⚑ The VALUE is not an x or a y — it is read off the colour key, whose
+      // resolution has nothing to do with the figure's pixel pitch. Rounding it
+      // through the axes' own resolution would claim a precision from the wrong
+      // instrument, so it is written as measured.
+      c.value === null ? '' : c.value,
+      c.low === null ? '' : c.low,
+      c.high === null ? '' : c.high,
+      c.distance === null ? '' : c.distance,
+      c.uniformity,
+      c.atKeyLimit === true ? 'yes' : '',
+    ]),
+  };
+}
+
+/**
+ * The same cells as a MATRIX — the convenience view, and the shape the wide /
+ * array-style consumers take (matplotlib, plotly, seaborn, R's `image`).
+ *
+ * ⚑ DERIVED, never the record. It is the long form pivoted, exactly as the
+ * error-bar Δ is derived from the two points it spans: written out so nobody
+ * has to pivot it by hand, and reconstructible from the section above if it
+ * ever disagreed. An unread cell is empty here too.
+ */
+export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): TableSection {
+  const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
+  const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
+  const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
+  return {
+    title: 'Matrix (value per cell)',
+    header: ['y \\ x', ...xs.map((x) => x)],
+    rows: ys.map((y) => [
+      y,
+      ...xs.map((x) => {
+        const cell = byKey.get(`${x},${y}`);
+        return cell?.value ?? '';
+      }),
+    ]),
+  };
+}
+
 /** The Measure tool's recorded results (distance/angle/area/slope) -- a
  * separate collection from the series data, so exported as their own labelled
  * block appended after the data (see docs/competitor-data-panel-study.md §5).
@@ -515,6 +632,56 @@ export function geometryTableSection(series: string, result: GeometryResult, val
  *
  * `valueErr` is included per bin only when present, so the shape stays clean
  * until error capture lands (see algorithms/histogram.ts). */
+/**
+ * The heatmap's JSON export (v2.2): the record, then the derived matrix.
+ *
+ * ⚑ THE SAME TWO SHAPES THE TABLE FORMATS GET, because the two library
+ * conventions are real and a file serving one fails the other: LONG/tidy (one
+ * row per cell — ggplot2's `geom_tile`, vega-lite) and WIDE/matrix (a 2D array
+ * plus coordinate vectors — matplotlib, plotly, seaborn, R's `image`). Our
+ * record IS the tidy one, and it pivots into the other, so both are written and
+ * neither consumer has to reshape anything by hand.
+ *
+ * ⚑ `null`, not 0, for a cell that could not be read — and JSON's null survives
+ * the round trip where a NaN would not (`setMetadata`'s own JSON pass rewrites
+ * NaN as null, and `null * x === 0` is how a laundered NaN became a flat line
+ * at zero once already).
+ */
+export function buildHeatmapJSON(
+  cells: readonly HeatmapExportCell[],
+  measurements: readonly MeasurementCsvRow[] = []
+): string {
+  const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
+  const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
+  const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
+  const doc: Record<string, unknown> = {
+    cells: cells.map((c) => ({
+      xMin: c.xMin,
+      xMax: c.xMax,
+      yMin: c.yMin,
+      yMax: c.yMax,
+      xCentre: c.xCentre,
+      yCentre: c.yCentre,
+      value: c.value,
+      // The evidence travels with the value, in the same object: the interval it
+      // could not be told apart from, how far off the key its colour sat, and
+      // how much of the cell actually was that colour.
+      valueLow: c.low,
+      valueHigh: c.high,
+      colourOffset: c.distance,
+      uniformity: c.uniformity,
+      atKeyLimit: c.atKeyLimit === true,
+    })),
+    matrix: {
+      x: xs,
+      y: ys,
+      values: ys.map((y) => xs.map((x) => byKey.get(`${x},${y}`)?.value ?? null)),
+    },
+  };
+  if (measurements.length > 0) doc['measurements'] = measurements;
+  return JSON.stringify(doc, null, 2);
+}
+
 export function buildHistogramJSON(
   name: string,
   bins: readonly (HistogramBin | null)[],
