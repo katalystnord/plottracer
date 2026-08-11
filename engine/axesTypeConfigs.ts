@@ -31,6 +31,8 @@ import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 
 import { binFromCorners } from '../algorithms/histogram.js';
+import { checkStripGeometry } from '../algorithms/colorBar.js';
+import { checkColorScaleValues } from '../algorithms/colorScale.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
 export interface CalibratedAxes {
@@ -917,6 +919,165 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
  * no meaning for an anchored bar (derivedTupleValue compares each corner's
  * VALUE to the declared baseline, never the slot position) but IS the signal
  * for a floating/offset bar's direction — see derivedTupleValue below. */
+/**
+ * Which calibration points a heatmap's colour key occupies, after the four x/y
+ * points. Named rather than written as literals because four of the eight
+ * indices in this config mean nothing to `XYAxes` and everything to the key —
+ * an off-by-one here reads the wrong click as a labelled tick, and every value
+ * in the figure would be wrong by a constant nobody could see.
+ */
+export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7 } as const;
+
+/**
+ * Heatmap (v2.2) — x and y on ordinary axes, and the VALUE on a colour key.
+ *
+ * ⚑⚑ THE COLOUR BAR IS AN AXIS, WHICH IS WHY THIS TYPE IS MOSTLY DECLARATION.
+ * A heatmap's x and y are read from pixel positions exactly as XY's are, so it
+ * calibrates `XYAxes` and adds nothing to it — the same call Histogram makes,
+ * for the same reason (`axesKind` is the class, `id` is the graph type). What is
+ * genuinely new is the third axis: four more clicks that say where the coloured
+ * strip runs and what two labelled positions on it are worth. See
+ * `algorithms/colorBar.ts` for the inversion and `algorithms/colorScale.ts` for
+ * the scale.
+ *
+ * ⚑ THE STRIP AND THE SCALE ARE TWO SEPARATE MEASUREMENTS, and collapsing them
+ * is the mistake this walk exists to prevent. "The key runs from its first pixel
+ * to its last, so its ends are the range" is wrong by a measurable amount: the
+ * ramp starts where the ink starts, while the printed numbers sit wherever the
+ * figure's tick machinery put them. Phase 1's own fixtures made that assumption
+ * and it biased every cell of a 160 °C figure by 0.6 °C. So two clicks say where
+ * the ramp IS, and two more say what it is WORTH.
+ *
+ * ⚑ WHY THE VALUE STEPS CARRY NO VALUE FIELDS ON THE STRIP ENDS. A click with
+ * nothing to type is not a wasted step — it is the difference between recording
+ * where the ink is and inferring it. Polar's origin is the same shape.
+ *
+ * ⚠️ NOT YET IN THE GRAPH-TYPE LIST, deliberately. Capture is phase 3: a heatmap
+ * cell is read from a GRID of dividers the user can adjust, which is the 2D
+ * generalisation of v2.1's category ticks, and `categoryTicks` today declares a
+ * single category axis (a bar chart has one; a heatmap can have two). Listing
+ * the type before that exists would put a graph type in the picker that can
+ * calibrate and then do nothing — the failure this project's keystone persona
+ * exists to catch. It is declared and tested here so phase 3 wires a thing that
+ * already works, not so it can be announced.
+ */
+export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
+  id: 'heatmap',
+  label: 'Heatmap',
+  axesKind: 'xy',
+  dataDim: 2,
+  valueLabels: ['X', 'Y'],
+  globalFields: [],
+  autoExtractKind: 'none',
+  options: [
+    { key: 'isLogX', label: 'Log X', kind: 'checkbox', default: false },
+    { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
+    // ⚑ The key's own log option, and it belongs beside the other two rather
+    // than anywhere special: a log colour scale is the ordinary log axis.
+    { key: 'isLogValue', label: 'Log colour scale', kind: 'checkbox', default: false },
+    { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
+  ],
+  commonOrigin: XY_COMMON_ORIGIN,
+  logScaleGuards: [
+    { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X' },
+    { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y' },
+  ],
+  distinctPixelSteps: [
+    ['x1', 'x2'],
+    ['y1', 'y2'],
+    // The key's two ends are a line, so they may not be the same pixel either —
+    // and `checkValues` below adds the stronger requirement that they be far
+    // enough apart to sample at all.
+    ['k1', 'k2'],
+  ],
+  parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
+  fixedSteps: [
+    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
+    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
+    { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
+    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
+    { key: 'k1', label: 'Key start', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip begins', valueFields: [] },
+    { key: 'k2', label: 'Key end', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip ends', valueFields: [] },
+    { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },
+    { key: 'kv2', label: 'Key value 2', color: '#d47fa8', prompt: 'Click a second labelled tick on the colour key and enter its number', valueFields: [{ key: 'kv2', label: 'Value', field: 'dy' }] },
+  ],
+  /**
+   * ⚑ The half of the colour key that can be checked WITHOUT the image, checked
+   * here so it fires on both entrances — the click path and a loaded file. The
+   * other half (is there actually a ramp along that line?) needs pixels and is
+   * refused by `sampleColorBar` when the strip is read, which the load path
+   * reaches too because a project file stores the key's GEOMETRY and re-samples
+   * rather than storing a copy of the colours.
+   */
+  checkValues(cal, options) {
+    const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
+    const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);
+    if (
+      from !== null &&
+      to !== null &&
+      checkStripGeometry({ x: from.px, y: from.py }, { x: to.px, y: to.py }) !== null
+    ) {
+      return 'The colour key’s two ends are too close together to read a ramp between them — click where the coloured strip begins and where it ends, along its length, not across its width.';
+    }
+    // Only once BOTH numbers are in, matching every other config's value check:
+    // a half-filled step is an unfinished calibration, and the walk already says
+    // so far better than a refusal would.
+    const a = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickA)?.dy ?? ''));
+    const b = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickB)?.dy ?? ''));
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    switch (checkColorScaleValues(a, b, optionBool(options, 'isLogValue'))) {
+      case 'ticks-equal-value':
+        return 'The colour key’s two labelled ticks have the same value — they must differ, or the key has no scale and every cell in the figure reads the same number.';
+      case 'log-needs-positive':
+        return 'A log colour scale cannot pass through zero or go negative — enter positive values (e.g. 1 and 100).';
+      default:
+        return null;
+    }
+  },
+  buildAxes(cal, ctx) {
+    // ⚑ Only the first four points are the x/y frame. `XYAxes.calibrate` reads
+    // its four points BY INDEX, so handing it the whole eight-point calibration
+    // would work by accident today and break the moment a step is reordered;
+    // the four are copied out explicitly instead.
+    const frame = new Calibration();
+    for (let i = 0; i < 4; i++) {
+      const p = cal.getPoint(i);
+      if (p === null) return { error: 'Calibration is incomplete — place all four X and Y points.' };
+      frame.addPoint(p.px, p.py, p.dx ?? '', p.dy ?? '');
+    }
+    const axes = new XYAxes();
+    const ok = axes.calibrate(
+      frame,
+      optionBool(ctx.options, 'isLogX'),
+      optionBool(ctx.options, 'isLogY'),
+      optionBool(ctx.options, 'skipRotation')
+    );
+    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    return { axes };
+  },
+  /**
+   * ⚠️ `isLogValue` IS ABSENT HERE ON PURPOSE, and this is a note for phase 3
+   * rather than an oversight. `extractOptions` restores settings by reading them
+   * back off the calibrated axes instance — and the colour key is not part of
+   * `XYAxes`, so there is nothing to read it from. The key's whole state (the
+   * strip's geometry, the two ticks, and whether its scale is logarithmic) needs
+   * its own slot in the project file, which lands with capture.
+   *
+   * ⚑ It cannot lose anyone's setting today, because this type is not in the
+   * graph-type list and no file can contain one. The moment it is listed, this
+   * comment is a defect — a project reopening with its log key silently linear
+   * is exactly the "options quietly revert to defaults" shape the load path has
+   * been bitten by before.
+   */
+  extractOptions(axes) {
+    return {
+      isLogX: String(axes.isLogX()),
+      isLogY: String(axes.isLogY()),
+      skipRotation: String(axes.noRotation()),
+    };
+  },
+};
+
 export const BAR_INTERVAL_SLOTS = ['Bar start', 'Bar end'] as const;
 
 /**
