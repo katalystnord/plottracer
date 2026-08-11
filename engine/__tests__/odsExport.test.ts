@@ -1,7 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { sectionsToOds } from '../odsExport.js';
-import type { TableSection } from '../tableFormats.js';
+import type { Cell, TableSection } from '../tableFormats.js';
+
+const partOf = (sections: readonly TableSection[], name: string): string =>
+  strFromU8(unzipSync(sectionsToOds(sections))[name]!);
+const contentOf = (sections: readonly TableSection[]): string => partOf(sections, 'content.xml');
+
+/**
+ * ⚑ Substring assertions cannot see a document fall apart: strike the XML
+ * prolog, or a namespace the document's own element names depend on, and every
+ * `toContain` in this file still passes. Parsing is what asks the question the
+ * user cares about — will a reader open this.
+ */
+const parse = (xml: string): Record<string, never> => {
+  const verdict = XMLValidator.validate(xml);
+  if (verdict !== true) throw new Error(`not well-formed XML: ${verdict.err.msg}`);
+  return new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@' }).parse(xml);
+};
+
+/** Everything the document says outside its markup, in order. */
+const textNodesOf = (xml: string): string =>
+  xml.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 /**
  * ODS export.
@@ -98,6 +119,115 @@ describe('sectionsToOds', () => {
     expect(names[1]).not.toBe(names[0]);
     for (const name of names) expect(name.length).toBeLessThanOrEqual(100);
     expect(names[1]).toMatch(/\(2\)$/);
+  });
+});
+
+/**
+ * The document as a DOCUMENT. Everything above asks what `content.xml` CONTAINS;
+ * these ask whether it is a file a reader will accept — the prolog, the root
+ * element, and the namespace declarations that every prefixed name in it depends
+ * on. `table:table` without `xmlns:table` is not a table, it is an error.
+ */
+describe('sectionsToOds writes a document a reader can open', () => {
+  it('opens with the XML declaration and parses as well-formed XML', () => {
+    const content = contentOf(SECTIONS);
+    expect(content.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(() => parse(content)).not.toThrow();
+  });
+
+  it('declares every namespace its element names use, and the ODF version', () => {
+    const root = parse(contentOf(SECTIONS))['office:document-content'] as unknown as Record<string, string>;
+    expect(root).toBeDefined();
+    expect(root['@xmlns:office']).toBe('urn:oasis:names:tc:opendocument:xmlns:office:1.0');
+    expect(root['@xmlns:table']).toBe('urn:oasis:names:tc:opendocument:xmlns:table:1.0');
+    expect(root['@xmlns:text']).toBe('urn:oasis:names:tc:opendocument:xmlns:text:1.0');
+    expect(root['@office:version']).toBe('1.3');
+  });
+
+  it('carries no text of its own — only what the figure put in the cells', () => {
+    // Tables, rows and cells are joined with NOTHING. Any separator would land
+    // in the spreadsheet as content, between cells, where a reader would show it.
+    expect(textNodesOf(contentOf(SECTIONS))).toBe('xy12.53n/a4whatvalueslope0.42');
+  });
+
+  it('writes a manifest that is itself a well-formed document', () => {
+    const manifest = partOf(SECTIONS, 'META-INF/manifest.xml');
+    expect(manifest.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    const root = parse(manifest)['manifest:manifest'] as unknown as Record<string, unknown>;
+    expect(root).toBeDefined();
+    expect(root['@manifest:version']).toBe('1.3');
+    expect(root['manifest:file-entry']).toHaveLength(2);
+  });
+});
+
+describe('sectionsToOds cell values', () => {
+  const cellsOf = (rows: Cell[][]): string[] =>
+    [...contentOf([{ header: ['v'], rows }]).matchAll(/<table:table-cell[^]*?(?:\/>|<\/table:table-cell>)/g)].map(
+      (m) => m[0]!
+    );
+
+  it('keeps a quote in the text instead of dropping it', () => {
+    // The escape is what lets the character survive at all: unescaped it would
+    // have to be removed, and a value the user measured would come back altered.
+    const content = contentOf([{ header: ['q'], rows: [['"q"']] }]);
+    expect(content).toContain('&quot;q&quot;');
+    expect(textNodesOf(content)).toBe('q"q"');
+  });
+
+  it('writes a non-finite number as TEXT, never as a numeric value', () => {
+    // office:value="NaN" is not a number to a spreadsheet — it is a broken cell,
+    // and the reader is free to show 0. Anything that cannot be a float has to
+    // travel as the text it is, so the reader sees that no number was measured.
+    const cells = cellsOf([[Number.NaN, Number.POSITIVE_INFINITY]]);
+    expect(cells[1]).toContain('office:value-type="string"');
+    expect(cells[2]).toContain('office:value-type="string"');
+    expect(cells.join('')).not.toContain('office:value="NaN"');
+    expect(cells.join('')).not.toContain('office:value="Infinity"');
+  });
+
+  it('leaves a null or undefined cell blank, whichever entrance it came from', () => {
+    // `Cell` is `string | number`, so TypeScript forbids these at this door —
+    // but the rows are assembled from exported values and read back out of
+    // project and foreign files, and the guard is here because that door is not
+    // the only one. A 0 in place of "not measured" is the failure it prevents.
+    const rows = [[null, undefined]] as unknown as Cell[][];
+    const cells = cellsOf(rows);
+    expect(cells[1]).toBe('<table:table-cell/>');
+    expect(cells[2]).toBe('<table:table-cell/>');
+  });
+});
+
+describe('sectionsToOds table names', () => {
+  const namesOf = (sections: TableSection[]): string[] =>
+    [...contentOf(sections).matchAll(/table:name="([^"]*)"/g)].map((m) => m[1]!);
+
+  it('replaces an illegal character with a space rather than closing the gap', () => {
+    // "Run 1/2" is two words either way; deleting the slash would fuse them into
+    // a name the user never wrote.
+    expect(namesOf([{ title: 'Run 1/2', header: ['a'], rows: [] }])).toEqual(['Run 1 2']);
+  });
+
+  it('trims the space an illegal character leaves at the end', () => {
+    expect(namesOf([{ title: 'Run 2:', header: ['a'], rows: [] }])).toEqual(['Run 2']);
+  });
+
+  it('falls back to "Sheet" when sanitising leaves nothing but spaces', () => {
+    expect(namesOf([{ title: '[*?]', header: ['a'], rows: [] }])).toEqual(['Sheet']);
+  });
+
+  it('caps a long name at 100 characters', () => {
+    const names = namesOf([{ title: 'T'.repeat(120), header: ['a'], rows: [] }]);
+    expect(names[0]).toBe('T'.repeat(100));
+  });
+
+  it('numbers a third collision (3), not back down to (1)', () => {
+    const fit = (): TableSection => ({ title: 'Fit', header: ['a'], rows: [] });
+    expect(namesOf([fit(), fit(), fit()])).toEqual(['Fit', 'Fit (2)', 'Fit (3)']);
+  });
+
+  it('names successive untitled sections Data, Sheet 2, Sheet 3', () => {
+    const anon = (): TableSection => ({ header: ['a'], rows: [] });
+    expect(namesOf([anon(), anon(), anon()])).toEqual(['Data', 'Sheet 2', 'Sheet 3']);
   });
 });
 
