@@ -10,6 +10,7 @@ import { autoExtractModesFor, AUTO_EXTRACT_MODES, type ToolMode } from '../toolM
 import {
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
+  HEATMAP_AXES_CONFIG,
   BAR_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
@@ -25,6 +26,7 @@ import {
 const ALL_CONFIGS: readonly GuidanceConfig[] = [
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
+  HEATMAP_AXES_CONFIG,
   BAR_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
@@ -398,6 +400,19 @@ describe('noPointsHint', () => {
     expect(noPointsHint({ mode: 'select', config: XY_AXES_CONFIG })).toBe(
       'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.'
     );
+  });
+
+  it('sends a HEATMAP user to its card, and never to a tool that cannot capture it', () => {
+    // ⚑ FOUND BY LOOKING AT A SCREENSHOT of the finished feature, not by a test.
+    // The panel invited "click on the image to add data points" beside a heatmap
+    // table holding 20 values — and a heatmap's cells are never placed by hand,
+    // so following it drops stray points and teaches the user the app is broken.
+    // Fourth instance of the contradiction class this function was written for.
+    for (const mode of ALL_MODES) {
+      const hint = noPointsHint({ mode, config: HEATMAP_AXES_CONFIG });
+      expect(hint, mode).toMatch(/Heatmap card/);
+      expect(hint, mode).not.toMatch(/click on the image|Add points|Auto-extract/i);
+    }
   });
 });
 

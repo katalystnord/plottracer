@@ -229,6 +229,15 @@ interface ImageCanvasProps {
    * truth series); `markers` are hollow dots for a scatter's true points. Display
    * only (listening=false). */
   challengeReveal?: { curves: { x: number; y: number }[][]; markers: { x: number; y: number }[] } | null;
+  /**
+   * The heatmap grid (v2.2): one polyline per divider, in image-pixel space.
+   *
+   * ⚑ Drawn, never grabbed — `listening={false}` like every other overlay here.
+   * A divider is adjusted from the Heatmap card, not by dragging the line: the
+   * line is what tells the user WHERE the boundary the app is using actually
+   * sits, which is the whole reason a proposed grid is safe to propose.
+   */
+  gridOverlay?: { x: number; y: number }[][] | null;
   /** Check Calibration overlay (v0.8): the 4 image-space corners of the
    * calibrated axis box, drawn as a magenta rectangle so a user can see whether
    * it aligns with the plot's real axes. Null when off / not applicable. */
@@ -421,7 +430,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1807,6 +1816,21 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 })()}
                 {/* Trace Challenge reveal (v1.2): the TRUE answer over the figure --
                     dashed green curves + hollow markers. Display only. */}
+                {gridOverlay?.map((line, gi) =>
+                  line.length > 1 ? (
+                    <Line
+                      key={`hm-grid-${gi}`}
+                      points={line.flatMap((p) => {
+                        const s = imageToScreen(view, p.x, p.y);
+                        return [s.x, s.y];
+                      })}
+                      stroke="#a87fd4"
+                      strokeWidth={1.5}
+                      dash={[6, 4]}
+                      listening={false}
+                    />
+                  ) : null
+                )}
                 {challengeReveal?.curves.map((curve, ci) =>
                   curve.length > 1 ? (
                     <Line

@@ -3,6 +3,7 @@ import {
   CalibrationSession,
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
+  HEATMAP_AXES_CONFIG,
   BAR_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
@@ -200,6 +201,15 @@ import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js'
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { runBarDetect } from '../../engine/barDetectRun.js';
+import {
+  buildColorScale,
+  detectGrid,
+  initialGrid,
+  readHeatmapCells,
+  type HeatmapRow,
+  type HeatmapState,
+} from '../../engine/heatmapRun.js';
+import { HeatmapCard } from './panels/HeatmapCard.js';
 import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
 import {
   runCurveFit,
@@ -610,6 +620,14 @@ const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   // which CLAUDE.md flags as a keystone failure; promoting it to a named entry is
   // correctness, not polish. Datasets auto-carry the Min/Q1/Median/Q3/Max groups.
   BOX_PLOT_AXES_CONFIG,
+  // Heatmap (v2.2), closing the rectangular group rather than joining the bar
+  // family. The picker answers "what does my figure look like?", and a heatmap
+  // looks like neither a bar chart nor a scatter -- it is a grid of coloured
+  // cells. What it shares with everything above it is the FRAME: two ordinary
+  // axes at right angles, which is what it calibrates. So it sits last among
+  // the rectangular charts and first before the radial ones, which is exactly
+  // where a reader scanning for "mine has a colour key" stops looking.
+  HEATMAP_AXES_CONFIG,
   POLAR_AXES_CONFIG,
   // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a
   // shared centre, and differs in the way that matters: Polar has ONE radial scale
@@ -1072,6 +1090,26 @@ export function Workspace() {
   // below. `geometryTableOpen` toggles the per-point table in the output panel.
   const [geometryClosed, setGeometryClosed] = useState(false);
   const [geometryTableOpen, setGeometryTableOpen] = useState(false);
+
+  /* ── Heatmap capture (v2.2) ──────────────────────────────────────────────
+   *
+   * ⚑ The grid lives HERE, in view state, and that is a stated limitation
+   * rather than a decision: it is not in the session's snapshot, so undo does
+   * not restore it, and it is not in the project file, so it does not survive
+   * Save. Both belong in `CalibrationSession` beside the category axis, and
+   * both are the next piece of work — along with the export, which is why the
+   * cells are shown here and not yet written to a file. Nothing can be lost
+   * today that was ever saved, and the card says what it has.
+   *
+   * ⚑ Everything the buttons DO is in `engine/heatmapRun.ts`. What is left in
+   * this file is which state to set. */
+  const [heatmapGrid, setHeatmapGrid] = useState<HeatmapState | null>(null);
+  const [heatmapColumns, setHeatmapColumns] = useState('');
+  const [heatmapRows, setHeatmapRows] = useState('');
+  const [heatmapCells, setHeatmapCells] = useState<HeatmapRow[]>([]);
+  const [heatmapDetectMessage, setHeatmapDetectMessage] = useState('');
+  const [heatmapSummary, setHeatmapSummary] = useState('');
+  const [heatmapError, setHeatmapError] = useState<string | null>(null);
   // Default tuned to the light grey most plotting libraries (matplotlib et al.)
   // draw gridlines in (~#e6e6e6), with a forgiving tolerance, so "Remove" does
   // something visible out of the box instead of silently matching nothing (the
@@ -1650,6 +1688,112 @@ export function Workspace() {
     // invoke it during render, so a graph-type change is picked up anyway.
   }, []);
 
+  /**
+   * The heatmap's own bounds, taken from what the user calibrated.
+   *
+   * ⚑ The grid starts as ONE cell spanning the calibration, and its outer
+   * boundaries are ordinary dividers from that moment on. They are not a claim
+   * about where the plot box is — they are simply the only span the session
+   * knows, and detection fills in between them.
+   */
+  const heatmapBounds = useCallback((): { xMin: number; xMax: number; yMin: number; yMax: number } | null => {
+    const placed = sessionRef.current.getPlacedPoints();
+    const values = ['x1', 'x2', 'y1', 'y2'].map((k) => Number(placed[k]?.values[0]));
+    if (values.some((v) => !Number.isFinite(v))) return null;
+    const [x1, x2, y1, y2] = values as [number, number, number, number];
+    return {
+      xMin: Math.min(x1, x2),
+      xMax: Math.max(x1, x2),
+      yMin: Math.min(y1, y2),
+      yMax: Math.max(y1, y2),
+    };
+  }, []);
+
+  /** Is this a calibrated heatmap with an image to read? The card's buttons are
+   * disabled rather than absent when it is not, so nothing appears out of
+   * nowhere once the last calibration value is typed. */
+  const heatmapActive = axesTypeId === HEATMAP_AXES_CONFIG.id;
+
+  const declaredCount = (raw: string): number | undefined => {
+    const n = Number(raw.trim());
+    return raw.trim() !== '' && Number.isInteger(n) && n > 0 ? n : undefined;
+  };
+
+  const runHeatmapDetect = useCallback(() => {
+    setHeatmapError(null);
+    const img = imageCanvasRef.current?.getImageData();
+    const axes = sessionRef.current.getAxes();
+    const bounds = heatmapBounds();
+    if (!img || !axes || !bounds) {
+      setHeatmapError('Finish the calibration first — the grid is measured against it.');
+      return;
+    }
+    const start = heatmapGrid ?? initialGrid(bounds);
+    const result = detectGrid({ data: img.data, width: img.width, height: img.height }, axes, start, {
+      ...(declaredCount(heatmapColumns) !== undefined ? { columns: declaredCount(heatmapColumns)! } : {}),
+      ...(declaredCount(heatmapRows) !== undefined ? { rows: declaredCount(heatmapRows)! } : {}),
+    });
+    setHeatmapDetectMessage(result.message);
+    // ⚑ A refused detection leaves the PREVIOUS grid alone. Replacing it with
+    // nothing would throw away work the user had already accepted, to report a
+    // failure the message has already reported.
+    if (result.grid !== null) setHeatmapGrid(result.grid);
+  }, [heatmapBounds, heatmapGrid, heatmapColumns, heatmapRows]);
+
+  const runHeatmapRead = useCallback(() => {
+    setHeatmapError(null);
+    const img = imageCanvasRef.current?.getImageData();
+    const axes = sessionRef.current.getAxes();
+    const bounds = heatmapBounds();
+    if (!img || !axes || !bounds) {
+      setHeatmapError('Finish the calibration first — the cells are read through it.');
+      return;
+    }
+    const image = { data: img.data, width: img.width, height: img.height };
+    const { scale, error } = buildColorScale(
+      sessionRef.current.getPlacedPoints(),
+      image,
+      sessionRef.current.getOptions()['isLogValue'] === 'true'
+    );
+    if (scale === null) {
+      setHeatmapError(error);
+      setHeatmapCells([]);
+      setHeatmapSummary('');
+      return;
+    }
+    const grid = heatmapGrid ?? initialGrid(bounds);
+    const result = readHeatmapCells(image, axes, grid, scale);
+    setHeatmapGrid(grid);
+    setHeatmapCells(result.rows);
+    setHeatmapSummary(result.summary);
+    setHeatmapError(result.error);
+  }, [heatmapBounds, heatmapGrid]);
+
+  /**
+   * The grid drawn on the figure: one line per divider, spanning the grid's own
+   * extent on the other axis.
+   *
+   * ⚑ Built through the axes' `dataToPixel`, so a rotated calibration draws a
+   * rotated grid — the lines land on the figure's own cells rather than on the
+   * screen's rows and columns.
+   */
+  const heatmapOverlay = useMemo(() => {
+    if (!heatmapActive || !heatmapGrid) return null;
+    const axes = session.getAxes();
+    if (!axes) return null;
+    const xs = heatmapGrid.xDividers;
+    const ys = heatmapGrid.yDividers;
+    if (xs.length < 2 || ys.length < 2) return null;
+    const yLo = ys[0]!;
+    const yHi = ys[ys.length - 1]!;
+    const xLo = xs[0]!;
+    const xHi = xs[xs.length - 1]!;
+    return [
+      ...xs.map((x) => [axes.dataToPixel(x, yLo), axes.dataToPixel(x, yHi)]),
+      ...ys.map((y) => [axes.dataToPixel(xLo, y), axes.dataToPixel(xHi, y)]),
+    ];
+  }, [heatmapActive, heatmapGrid, session]);
+
   // A text/color field edit is "pending" between its first keystroke and the
   // blur that ends it -- tracked so commitPendingEdit only pushes an undo
   // entry when something actually changed, not on a bare focus+blur.
@@ -2033,6 +2177,15 @@ export function Workspace() {
       // means that figure is gone, and a true sentence about the wrong subject is
       // worse than none -- it read as though the CURRENT figure had lost content.
       setProjectNotice(null);
+      // ⚑ The heatmap's grid and its cells describe the figure that just went
+      // away. A stale matrix left on screen is a measurement of a figure that no
+      // longer exists — the same rule the Geometry card follows, and the reason
+      // this clearing belongs in the SHARED swap rather than in one caller.
+      setHeatmapGrid(null);
+      setHeatmapCells([]);
+      setHeatmapDetectMessage('');
+      setHeatmapSummary('');
+      setHeatmapError(null);
       setDataValueInputs([]);
       setSegmentFillError(null);
       setCurveFitDegree(1);
@@ -6448,6 +6601,7 @@ export function Workspace() {
           onCurveFitClick={curveFitState && mode === 'pan' ? openCurveFitPanel : undefined}
           geometryOverlay={geometryOverlay}
           challengeReveal={challengeReveal}
+          gridOverlay={heatmapOverlay}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
@@ -7010,6 +7164,30 @@ export function Workspace() {
       />
 
       <CurveFitCard state={curveFitState} seriesName={activeInfo?.name ?? 'Series'} />
+
+      {heatmapActive && (
+        <HeatmapCard
+          columns={heatmapColumns}
+          rows={heatmapRows}
+          onColumnsChange={setHeatmapColumns}
+          onRowsChange={setHeatmapRows}
+          gridSize={
+            heatmapGrid
+              ? {
+                  columns: Math.max(0, heatmapGrid.xDividers.length - 1),
+                  rows: Math.max(0, heatmapGrid.yDividers.length - 1),
+                }
+              : null
+          }
+          onDetect={runHeatmapDetect}
+          onRead={runHeatmapRead}
+          detectMessage={heatmapDetectMessage}
+          summary={heatmapSummary}
+          error={heatmapError}
+          cells={heatmapCells}
+          canRead={session.isCalibrated()}
+        />
+      )}
 
       <GeometryCard
         enabled={geometryState !== null}

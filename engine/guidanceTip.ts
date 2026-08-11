@@ -241,6 +241,16 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // interval, so there is no second end to drag.
       if (config.id === 'categorical')
         return 'Click each category’s marker in turn — where you click on the value axis IS the number recorded.';
+      // ⚑ A HEATMAP IS NOT CAPTURED BY CLICKING THE FIGURE, so the default
+      // invitation is worse than unhelpful here: a user who follows it drops
+      // stray points on the image and concludes nothing is working. Its cells
+      // come from a GRID, which is the Heatmap card's job. Same contradiction
+      // class as the three already recorded in `noPointsHint` below — two
+      // things on screen telling the reader opposite stories — reached at a
+      // fourth site, and caught by looking at a screenshot of the finished
+      // feature rather than by any test.
+      if (config.id === 'heatmap')
+        return 'Use the Heatmap card to detect the grid and read the cells — a heatmap’s values come from its grid, not from clicking the figure.';
       return 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
     }
     if (mode === 'calibrate') {
@@ -337,6 +347,11 @@ export function guidanceTip(input: GuidanceTipInput): string {
  * screenshot test bench while shooting the By-colour gallery image.
  */
 export function noPointsHint({ mode, config }: { mode: ToolMode; config: GuidanceConfig }): string {
+  // ⚑ Before every mode branch, because it is true in all of them: a heatmap's
+  // cells are never placed by hand, so no tool on the rail is the answer and
+  // naming one would be the contradiction this function exists to prevent.
+  if (config.id === 'heatmap')
+    return 'No points yet — a heatmap is read from its grid: use the Heatmap card to detect the grid, then Read cells.';
   if (mode === 'color-trace')
     return 'No points yet — pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
   if (mode === 'segment-fill') return 'No points yet — click the curve on the image to flood-fill it.';

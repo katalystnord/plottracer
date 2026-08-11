@@ -134,6 +134,11 @@ function makePdf(pageCount: number): Buffer {
   return Buffer.from(parts.join(''), 'latin1');
 }
 const SAMPLE_IMAGE = path.join(REPO_ROOT, 'samples/xy-stress-strain.png');
+// The heatmap fixture, which ships the values it was drawn from — so the e2e
+// can check the numbers the app puts on screen against the figure's own truth
+// rather than against itself (engine/__tests__/fixtures/colorbars/).
+const HEATMAP_IMAGE = path.join(REPO_ROOT, 'engine/__tests__/fixtures/colorbars/heatmap-viridis.png');
+const HEATMAP_TRUTH = path.join(REPO_ROOT, 'engine/__tests__/fixtures/colorbars/truth.json');
 // A 2-page LZW TIFF (B7) — historic scans are commonly (multipage) TIFF.
 const MULTIPAGE_TIFF = path.join(REPO_ROOT, 'ui/__tests__/fixtures/multipage.tiff');
 
@@ -231,7 +236,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -5875,7 +5880,14 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // radial scale with a measured angle, versus N independent axes and no angle at
     // all -- is a question the user should be asked next to the alternative, not
     // left to discover after calibrating the wrong one.
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line', 'Box Plot', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    // "Heatmap" (v2.2) closes the rectangular group: it shares the FRAME with
+    // everything above it -- two ordinary axes at right angles -- and shares the
+    // look of none of them, so it goes last among the rectangles rather than
+    // beside a chart it resembles. ⚑ This assertion is why the list is a
+    // decision rather than an accident: adding a type without deciding where it
+    // belongs fails here, which is what happened when this one was first
+    // dropped in beside Box Plot with a comment claiming it sat with XY.
+    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line', 'Box Plot', 'Heatmap', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {
@@ -7990,5 +8002,123 @@ describe('Workspace: the F1 help card', () => {
     await page.getByTestId('help-overlay-manual').click();
     expect(await cardCount()).toBe(1);
     expect(await page.getByTestId('mode-pan').count()).toBe(1);
+  });
+});
+
+/**
+ * HEATMAPS (v2.2) — the whole feature, driven through the real app.
+ *
+ * ⚑ THE ONE INSTRUMENT THE UNIT TESTS CANNOT BE. Everything under `engine/` is
+ * measured against this same figure already; what is unproven until here is that
+ * a person can actually get to it — that the type is in the picker, that eight
+ * clicks land where the calibration expects them, that the buttons are reachable
+ * and that the numbers arrive on screen. Six of this project's defects were found
+ * by David USING the app and none of them by a green unit test.
+ *
+ * ⚑ The figure ships its own truth, so this checks the app's answer against the
+ * VALUES THE FIGURE WAS DRAWN FROM — not against the app's own arithmetic.
+ */
+describe('heatmap capture (v2.2)', () => {
+  interface HeatmapTruth {
+    key: { from: { x: number; y: number }; to: { x: number; y: number }; ticks: Array<{ x: number; y: number; value: number }> };
+    frame: Record<'x1' | 'x2' | 'y1' | 'y2', { x: number; y: number; value: number }>;
+    grid: { x: number[]; y: number[] };
+    cells: Array<{ value: number; x_min: number; x_max: number; y_min: number; y_max: number }>;
+  }
+  const truth = (
+    JSON.parse(fs.readFileSync(HEATMAP_TRUTH, 'utf8')) as { figures: Array<{ file: string } & HeatmapTruth> }
+  ).figures.find((f) => f.file === 'heatmap-viridis.png')!;
+
+  /** Image pixel -> canvas-local, through the view the app reports. The fit is
+   * asynchronous and window-size dependent, so it is READ rather than assumed. */
+  async function imageToLocal(x: number, y: number): Promise<{ lx: number; ly: number }> {
+    const text = (await page.getByTestId('view-state').textContent()) ?? '';
+    const m = /scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/.exec(text);
+    if (!m) throw new Error(`could not read the view state: ${text}`);
+    const scale = Number(m[1]);
+    return { lx: Number(m[2]) + x * scale, ly: Number(m[3]) + y * scale };
+  }
+
+  async function clickImagePixel(x: number, y: number) {
+    const { lx, ly } = await imageToLocal(x, y);
+    await clickAt(lx, ly);
+  }
+
+  /** The eight clicks of a heatmap calibration, at the figure's own pixels. */
+  async function calibrateHeatmap() {
+    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+      const p = truth.frame[step];
+      await clickImagePixel(p.x, p.y);
+      await confirmValue(String(p.value));
+    }
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(200);
+  }
+
+  beforeEach(async () => {
+    await app.evaluate(({ dialog }, samplePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
+    }, HEATMAP_IMAGE);
+  });
+
+  afterEach(async () => {
+    await app.evaluate(({ dialog }, samplePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
+    }, SAMPLE_IMAGE);
+  });
+
+  it('is offered in the graph-type picker', async () => {
+    await resetWorkspace('heatmap');
+    expect(await page.getByTestId('heatmap-card').isVisible()).toBe(true);
+  });
+
+  it('detects the grid and reads the matrix, matching the figure’s own values', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
+
+    // The user says how many cells the figure has — a CHECK on detection.
+    await page.getByTestId('heatmap-columns').fill('5');
+    await page.getByTestId('heatmap-rows').fill('4');
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-detect-message')).toMatch(/5 columns/);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-summary')).toBe('20 cells read, all clean.');
+    expect(await page.getByTestId('heatmap-row').count()).toBe(20);
+
+    // ⚑ Against the figure's OWN truth, not the app's arithmetic: the first row
+    // is the cell at the origin corner.
+    const first = truth.cells.find((c) => c.x_min === 0 && c.y_min === 0)!;
+    const cells = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
+    // ⚑ Two decimals, not four, and the difference is CLICK QUANTISATION rather
+    // than slack: every calibration point here was placed by a real mouse click
+    // at a fitted zoom, so it lands on a screen pixel and the frame it defines is
+    // off by a fraction of an image pixel. Measured: 0.003 of a data unit on a
+    // 9-unit axis, 0.04% — which is the precision a person clicking gets, and
+    // the unit tests already pin the arithmetic exactly.
+    expect(Number(cells[0])).toBeCloseTo(0.5, 2); // x centre of a 0..1 column
+    expect(Number(cells[1])).toBeCloseTo(1, 2); // y centre of a 0..2 row
+    expect(Math.abs(Number(cells[2]) - first.value)).toBeLessThan(1.5);
+    expect(cells[4]).toBe(''); // no warning: the cell vouches for itself
+  });
+
+  it('reports a miss instead of inventing boundaries', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-columns').fill('9');
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-detect-message')).toMatch(/Found 4 of the 8 boundaries/);
+    expect(await textOf('heatmap-detect-message')).toMatch(/by hand/);
   });
 });
