@@ -1,0 +1,44 @@
+name: Check
+
+# ⚑ THE GATE THAT SEES ORDINARY COMMITS. `build.yml` only runs on a version tag
+# or a hand dispatch, so the typecheck job living there gates the RELEASE and
+# nothing else — a commit that does not compile could sit on master for days.
+# This runs on every push and pull request instead, in about a minute.
+#
+# Both exist on purpose and the duplication is the point: this one catches the
+# mistake early, and build.yml's own `check` job makes a tag self-contained, so
+# a release cannot publish uncompiled code even if it is tagged from a commit
+# that never went through here.
+#
+# tools/git-hooks/pre-commit is the third layer — the same typecheck, ~10s, at
+# the moment of the mistake. Install it per clone:
+#     git config core.hooksPath tools/git-hooks
+#
+# Why a typecheck needs a gate at all: a green test run does NOT mean the code
+# compiles. vitest strips types rather than checking them, and so does
+# `vite build`, so on 2026-08-11 a commit using `Object.hasOwn` (not available at
+# this project's ES2020 target) went in green and was caught by hand two commits
+# later.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
