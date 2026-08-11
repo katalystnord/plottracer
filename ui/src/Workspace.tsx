@@ -204,9 +204,12 @@ import { runBarDetect } from '../../engine/barDetectRun.js';
 import {
   buildColorScale,
   detectGrid,
+  dividerHandles,
+  dragDivider,
   gridFromAxes,
   gridToAxes,
   initialGrid,
+  isDividerHandle,
   readHeatmapCells,
   type HeatmapRow,
   type HeatmapState,
@@ -597,6 +600,11 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
 // `as const`) so .find() below returns a single covariant type instead of
 // a union of each config's own axes type -- see CalibratedAxes's doc
 // comment in engine/calibrationSession.ts for why that covariance holds.
+/** The heatmap grid's one colour, shared by the dashed lines on the canvas and
+ * the handles that move them — so the thing you grab is visibly the thing that
+ * moves. */
+const HEATMAP_GRID_COLOR = '#a87fd4';
+
 const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   XY_AXES_CONFIG,
   // Sits next to XY because it *is* XY underneath (checkpoint 66) -- and
@@ -1765,6 +1773,50 @@ export function Workspace() {
     setHeatmapDetectMessage('');
     setHeatmapError(null);
   }, []);
+
+  /**
+   * A divider was dragged. Move it, or leave everything exactly as it was.
+   *
+   * ⚑ THE REFUSAL IS THE FEATURE. `dragDivider` will not let a boundary cross
+   * its neighbour, and when it refuses, this does nothing at all — React
+   * re-renders the handle from unchanged state, so it springs back to where it
+   * was and the user sees the divider stop. Re-sorting instead would keep the
+   * geometry valid and renumber every cell past it: every value still correct,
+   * every one filed under the wrong column.
+   *
+   * ⚑ THE CELLS ARE RE-READ, not left stale. A table describing the previous
+   * grid is a measurement of a figure that no longer exists — the rule the
+   * Geometry card already follows. Re-reading only happens once cells exist, so
+   * a user adjusting the grid before pressing Read cells is not surprised by a
+   * table appearing under their hands.
+   */
+  const moveHeatmapDivider = useCallback(
+    (id: string, px: number, py: number) => {
+      const axesNow = sessionRef.current.getAxes();
+      if (!heatmapGrid || !axesNow) return;
+      const [dx, dy] = axesNow.pixelToData(px, py);
+      if (dx === undefined || dy === undefined || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      const next = dragDivider(heatmapGrid, id, { x: dx, y: dy });
+      if (next === null) return; // refused: the handle springs back
+      applyHeatmapGrid(next);
+      const img = imageCanvasRef.current?.getImageData();
+      if (heatmapCells.length > 0 && img) {
+        const image = { data: img.data, width: img.width, height: img.height };
+        const { scale } = buildColorScale(
+          sessionRef.current.getPlacedPoints(),
+          image,
+          sessionRef.current.getOptions()['isLogValue'] === 'true'
+        );
+        if (scale) {
+          const result = readHeatmapCells(image, axesNow, next, scale);
+          setHeatmapCells(result.rows);
+          setHeatmapSummary(result.summary);
+        }
+      }
+      commit();
+    },
+    [applyHeatmapGrid, commit, heatmapCells.length, heatmapGrid]
+  );
 
   const runHeatmapDetect = useCallback(() => {
     setHeatmapError(null);
@@ -3124,6 +3176,10 @@ export function Workspace() {
 
   const handleMarkerDragEnd = useCallback(
     (id: string, x: number, y: number) => {
+      if (isDividerHandle(id)) {
+        moveHeatmapDivider(id, x, y);
+        return;
+      }
       const tickIndex = categoryTickIndexFromId(id);
       if (tickIndex !== null) {
         // The model clamps it between its neighbours, so a tick can never cross
@@ -3139,7 +3195,7 @@ export function Workspace() {
       }
       commit();
     },
-    [session, commit]
+    [session, commit, moveHeatmapDivider]
   );
 
   // Apply an in-progress datapoint value edit (checkpoint 39): re-derive the
@@ -4816,6 +4872,32 @@ export function Workspace() {
   }, [session, version]);
   const categoryGlyphs = useMemo(() => categoryAxisGlyphs(categoryOverlay), [categoryOverlay]);
   const categoryMarkers = useMemo(() => categoryTickMarkers(categoryOverlay), [categoryOverlay]);
+
+  /**
+   * A grab handle on every heatmap divider — ORDINARY CANVAS MARKERS, so they
+   * inherit dragging, hit-testing and the zoom/pan transform from the machinery
+   * every other handle already uses. The category ticks took the same route for
+   * the same reason.
+   *
+   * ⚑ No label. A divider's identity is its POSITION, which the line already
+   * shows; twelve captions reading "hmx:3" across the bottom of a figure would
+   * be noise over the one thing the user is trying to look at.
+   */
+  const heatmapHandles = useMemo<CanvasMarker[]>(() => {
+    if (!heatmapActive || !heatmapGrid) return [];
+    const axesNow = session.getAxes();
+    if (!axesNow) return [];
+    return dividerHandles(heatmapGrid, axesNow).map((h) => ({
+      id: h.id,
+      x: h.x,
+      y: h.y,
+      label: '',
+      color: HEATMAP_GRID_COLOR,
+      draggable: true,
+      kind: 'calibration' as const,
+      radius: 4,
+    }));
+  }, [heatmapActive, heatmapGrid, session]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -5096,8 +5178,11 @@ export function Workspace() {
   // rest of the overlay uses -- segments for the marks, markers for the drag
   // handles -- so ImageCanvas needed no new render path for any of this.
   const allMarkers = useMemo<CanvasMarker[]>(
-    () => (categoryMarkers.length > 0 ? [...markers, ...categoryMarkers] : markers),
-    [markers, categoryMarkers]
+    () =>
+      categoryMarkers.length > 0 || heatmapHandles.length > 0
+        ? [...markers, ...categoryMarkers, ...heatmapHandles]
+        : markers,
+    [markers, categoryMarkers, heatmapHandles]
   );
   const allBinGlyphs = useMemo(
     () => (categoryGlyphs.length > 0 ? [...binGlyphs, ...categoryGlyphs] : binGlyphs),

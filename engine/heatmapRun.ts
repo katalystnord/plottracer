@@ -34,7 +34,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers } from '../core/heatmapGrid.js';
+import { checkDividers, moveDivider } from '../core/heatmapGrid.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
 /** The image, as the canvas hands it over. */
@@ -209,6 +209,96 @@ export function gridToAxes(axes: MetadataCarrier, grid: HeatmapState | null): vo
     meta[GRID_METADATA_KEY] = { x: [...grid.xDividers], y: [...grid.yDividers] };
   }
   axes.setMetadata(meta);
+}
+
+/**
+ * A draggable handle for one divider, in image pixels.
+ *
+ * ⚑ THE HANDLES SIT OUTSIDE THE PLOT, on the axis the divider belongs to. Put
+ * them on the line itself and they cover the cells the user is trying to read —
+ * and a heatmap is nothing BUT the thing they would cover. Off the edge, the
+ * grid stays legible while it is being adjusted, which is the only time its
+ * exact position matters.
+ */
+export interface DividerHandle {
+  /** `hmx:3` / `hmy:0` — the axis and the index, so a drag knows what it moved. */
+  id: string;
+  x: number;
+  y: number;
+}
+
+/** How far outside the plot box a handle sits, in pixels. */
+const HANDLE_OFFSET_PX = 16;
+
+/**
+ * Where to draw a grab handle for every divider.
+ *
+ * ⚑ The offset direction is COMPUTED from the axes rather than assumed to be
+ * "down" and "left": a figure calibrated upside down, or a rotated scan, has its
+ * own idea of which way is out of the plot, and handles that ignored it would
+ * sit inside the figure on exactly the charts that are hardest to read already.
+ */
+export function dividerHandles(grid: HeatmapState, axes: PixelProjector): DividerHandle[] {
+  const xs = checkDividers(grid.xDividers).dividers;
+  const ys = checkDividers(grid.yDividers).dividers;
+  if (xs === null || ys === null) return [];
+  const [yLo, yHi] = [ys[0]!, ys[ys.length - 1]!];
+  const [xLo, xHi] = [xs[0]!, xs[xs.length - 1]!];
+
+  const outward = (from: { x: number; y: number }, towards: { x: number; y: number }) => {
+    const dx = from.x - towards.x;
+    const dy = from.y - towards.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (!Number.isFinite(len) || len === 0) return { x: 0, y: 0 };
+    return { x: (dx / len) * HANDLE_OFFSET_PX, y: (dy / len) * HANDLE_OFFSET_PX };
+  };
+
+  const handles: DividerHandle[] = [];
+  const xOut = outward(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xLo, yHi));
+  xs.forEach((x, i) => {
+    const p = axes.dataToPixel(x, yLo);
+    handles.push({ id: `hmx:${i}`, x: p.x + xOut.x, y: p.y + xOut.y });
+  });
+  const yOut = outward(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xHi, yLo));
+  ys.forEach((y, i) => {
+    const p = axes.dataToPixel(xLo, y);
+    handles.push({ id: `hmy:${i}`, x: p.x + yOut.x, y: p.y + yOut.y });
+  });
+  return handles.filter((h) => Number.isFinite(h.x) && Number.isFinite(h.y));
+}
+
+/** Is this a grid handle, as opposed to a data point or a calibration reticle? */
+export function isDividerHandle(id: string): boolean {
+  return /^hm[xy]:\d+$/.test(id);
+}
+
+/**
+ * Move the divider a handle belongs to, to where it was dropped.
+ *
+ * ⚑ ONLY THE COORDINATE THAT MATTERS IS READ. An x-divider takes the drop's x
+ * and ignores its y entirely, so the gesture is constrained to the axis without
+ * any special drag mode: drag it anywhere and it slides along its own axis.
+ *
+ * ⚑ RETURNS NULL WHEN THE MOVE IS REFUSED, which is the whole reason the model
+ * owns this rule — `moveDivider` will not let a divider cross its neighbour,
+ * because re-sorting would renumber every cell past it and file correct values
+ * under the wrong column. The handle then springs back to where it was, and the
+ * user sees the boundary stop.
+ */
+export function dragDivider(
+  grid: HeatmapState,
+  handleId: string,
+  data: { x: number; y: number }
+): HeatmapState | null {
+  const match = /^hm([xy]):(\d+)$/.exec(handleId);
+  if (!match) return null;
+  const index = Number(match[2]);
+  if (match[1] === 'x') {
+    const next = moveDivider(grid.xDividers, index, data.x);
+    return next === null ? null : { xDividers: next, yDividers: grid.yDividers };
+  }
+  const next = moveDivider(grid.yDividers, index, data.y);
+  return next === null ? null : { xDividers: grid.xDividers, yDividers: next };
 }
 
 export interface DetectGridOptions {

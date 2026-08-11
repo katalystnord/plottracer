@@ -7,7 +7,10 @@ import { Calibration } from '../../core/calibration.js';
 import {
   buildColorScale,
   detectGrid,
+  dividerHandles,
+  dragDivider,
   initialGrid,
+  isDividerHandle,
   readHeatmapCells,
   type SourceImage,
 } from '../heatmapRun.js';
@@ -240,5 +243,81 @@ describe('readHeatmapCells', () => {
     const result = readHeatmapCells(image, axes, { xDividers: [1], yDividers: [0, 8] }, scale!);
     expect(result.rows).toEqual([]);
     expect(result.error).toMatch(/at least one boundary/i);
+  });
+});
+
+describe('dragging a divider', () => {
+  /** An upright frame: data x 0..10 across pixels 100..400, data y 0..20 up
+   * pixels 300..100 (image y grows downward, as a figure's does). */
+  const upright = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 300 - y * 10 }) };
+  const grid = { xDividers: [0, 4, 10], yDividers: [0, 20] };
+
+  it('puts one handle on every divider, OUTSIDE the plot', () => {
+    const handles = dividerHandles(grid, upright);
+    expect(handles.map((h) => h.id)).toEqual(['hmx:0', 'hmx:1', 'hmx:2', 'hmy:0', 'hmy:1']);
+    // x handles sit below the plot's bottom edge (y = 300), not on it.
+    expect(handles[0]).toEqual({ id: 'hmx:0', x: 100, y: 316 });
+    expect(handles[1]!.x).toBe(220); // the divider at data x = 4
+    // y handles sit to the LEFT of the left edge (x = 100).
+    expect(handles[3]).toEqual({ id: 'hmy:0', x: 84, y: 300 });
+  });
+
+  it('works out which way is OUT from the axes, not from the screen', () => {
+    // ⚑ A figure calibrated upside down has its own idea of outward. Handles
+    // that assumed "down and left" would sit INSIDE the plot on exactly the
+    // charts that are hardest to read already.
+    const flipped = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 100 + y * 10 }) };
+    const handles = dividerHandles(grid, flipped);
+    // The plot's y = 0 edge is now at the TOP, so its handles go ABOVE it.
+    expect(handles[0]!.y).toBe(84);
+  });
+
+  it('is empty for a grid that is not a grid', () => {
+    expect(dividerHandles({ xDividers: [1], yDividers: [0, 5] }, upright)).toEqual([]);
+  });
+
+  it('tells a grid handle from a data point', () => {
+    expect(isDividerHandle('hmx:0')).toBe(true);
+    expect(isDividerHandle('hmy:12')).toBe(true);
+    expect(isDividerHandle('x1')).toBe(false);
+    expect(isDividerHandle('hmz:1')).toBe(false);
+    expect(isDividerHandle('hmx:')).toBe(false);
+  });
+
+  it('moves the divider to where it was dropped', () => {
+    expect(dragDivider(grid, 'hmx:1', { x: 7, y: 3 })).toEqual({
+      xDividers: [0, 7, 10],
+      yDividers: [0, 20],
+    });
+  });
+
+  it('reads ONLY the axis the handle belongs to', () => {
+    // ⚑ The gesture is constrained without a drag mode: an x handle takes the
+    // drop's x and ignores its y, so it slides along its own axis wherever the
+    // pointer goes.
+    const a = dragDivider(grid, 'hmx:1', { x: 7, y: 3 });
+    const b = dragDivider(grid, 'hmx:1', { x: 7, y: 999 });
+    expect(a).toEqual(b);
+    // …and a y handle is the mirror image.
+    expect(dragDivider(grid, 'hmy:1', { x: -50, y: 12 })).toEqual({
+      xDividers: [0, 4, 10],
+      yDividers: [0, 12],
+    });
+  });
+
+  it('REFUSES a drag past a neighbour, so the handle springs back', () => {
+    // ⚑⚑ The model's rule, surfaced as a gesture. Re-sorting instead would keep
+    // the geometry valid and renumber every cell past the one being dragged:
+    // every value still right, every one filed under the wrong column.
+    expect(dragDivider(grid, 'hmx:1', { x: 11, y: 0 })).toBeNull();
+    expect(dragDivider(grid, 'hmx:1', { x: -1, y: 0 })).toBeNull();
+    // The OUTER dividers have no neighbour beyond them and may go anywhere.
+    expect(dragDivider(grid, 'hmx:2', { x: 99, y: 0 })!.xDividers).toEqual([0, 4, 99]);
+  });
+
+  it('refuses an id that is not a handle, and a drop that is not a number', () => {
+    expect(dragDivider(grid, 'x1', { x: 5, y: 5 })).toBeNull();
+    expect(dragDivider(grid, 'hmx:9', { x: 5, y: 5 })).toBeNull();
+    expect(dragDivider(grid, 'hmx:1', { x: NaN, y: 5 })).toBeNull();
   });
 });

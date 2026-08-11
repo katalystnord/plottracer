@@ -192,6 +192,11 @@ export interface MeasureOverlay {
  * 'series' are click-only (a marker click selects one point / the whole series). */
 export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
 
+/** ⚑ The same violet the Heatmap card's handles use (Workspace's
+ * HEATMAP_GRID_COLOR): the line you see and the dot you grab have to read as one
+ * thing, or the handle looks like a stray data point. */
+const GRID_OVERLAY_COLOR = '#a87fd4';
+
 interface ImageCanvasProps {
   /** Markers to overlay, in image-pixel space (not screen space). */
   points?: CanvasMarker[];
@@ -1824,7 +1829,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         const s = imageToScreen(view, p.x, p.y);
                         return [s.x, s.y];
                       })}
-                      stroke="#a87fd4"
+                      stroke={GRID_OVERLAY_COLOR}
                       strokeWidth={1.5}
                       dash={[6, 4]}
                       listening={false}

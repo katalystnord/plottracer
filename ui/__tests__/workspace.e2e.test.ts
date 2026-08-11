@@ -8117,6 +8117,47 @@ describe('heatmap capture (v2.2)', () => {
     expect(cells[4]).toBe(''); // no warning: the cell vouches for itself
   });
 
+  it('lets a divider be DRAGGED, and re-reads the cells it moved', async () => {
+    // ⚑⚑ ADJUSTABILITY IS LOAD-BEARING (David): a published heatmap's rows and
+    // columns are not equally sized, and a grid that can only be generated is a
+    // grid that is wrong on exactly the figures that need it most. Detection
+    // proposes; this is the half where the user decides.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-columns').fill('5');
+    await page.getByTestId('heatmap-rows').fill('4');
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(300);
+    const before = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
+
+    // The first column's far boundary, at data x = 1 on a 0..9 axis. Its handle
+    // sits just below the plot; drag it right to widen the column.
+    const axisY = truth.frame.x1.y;
+    const from = await imageToLocal(
+      truth.frame.x1.x + ((truth.frame.x2.x - truth.frame.x1.x) * 1) / 9,
+      axisY
+    );
+    const to = await imageToLocal(
+      truth.frame.x1.x + ((truth.frame.x2.x - truth.frame.x1.x) * 2.5) / 9,
+      axisY
+    );
+    await refreshCanvasBox();
+    // +16px down the screen: where dividerHandles() puts the grab dot.
+    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly + 16);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly + 16, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+
+    // The cell got wider, and its value was re-read rather than left describing
+    // the grid it used to have.
+    const after = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
+    expect(Number(after[0])).toBeGreaterThan(Number(before[0])); // x centre moved right
+    expect(after[2]).not.toBe(before[2]); // …and the value with it
+    expect(await page.getByTestId('heatmap-row').count()).toBe(20); // no cell gained or lost
+  });
+
   it('reports a miss instead of inventing boundaries', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
