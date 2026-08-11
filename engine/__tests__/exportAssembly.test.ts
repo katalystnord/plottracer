@@ -326,12 +326,18 @@ describe('an error series exports as a series carrying its relation', () => {
     expect(upper.relation).toEqual({ role: 'upper', of: 'Series 1' });
   });
 
+  it('carries the measured Δ into JSON as well as the table', () => {
+    // Both formats, deliberately: the absolute cap position is what was measured
+    // off the pixels and stays the record, while the Δ is what a plotting library
+    // takes. Until v2.1 the JSON dropped it, leaving a JSON reader to re-derive
+    // the cap→datum pairing — the one rule that has shipped wrong twice.
+    const parsed = JSON.parse(buildExportJson(inputFor(withErrorSeries(), { scope: 'all' })));
+    const upper = parsed.series.find((s: { name: string }) => s.name === 'Upper');
+    expect(upper.deltas).toHaveLength(2);
+    for (const d of upper.deltas) expect(d).toBeCloseTo(1, 6);
+  });
+
   it('carries the measured Δ as its own column in the table export', () => {
-    // The Δ is the number a reader takes away, and it is DERIVED — the record is
-    // the cap's own position. ⚠️ The JSON export carries the relation but no Δ:
-    // `buildSeriesJSON` never reads the `deltas` its caller assembles, so a JSON
-    // consumer has to re-derive the cap→datum pairing itself, which is exactly
-    // the rule that has shipped wrong twice.
     const sections = buildExportSections(inputFor(withErrorSeries(), { scope: 'all' }));
     const header = sections[0]!.header.map(String);
     const deltaAt = header.indexOf('Upper delta');

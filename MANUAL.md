@@ -290,8 +290,12 @@ its opposite number — and leaves the data point. Deleting the data point takes
 its error bars with it.
 
 **Export.** The caps leave as their own series, under the names you gave them,
-as **absolute positions** rather than as ± deltas. A delta is arithmetic anyone
-can redo; the positions are what was measured off the figure.
+carrying **both** the **absolute positions** and the **± delta** from each cap to
+its data point. The positions are what was measured off the figure, so they are
+the record; the delta is what a plotting library asks for — matplotlib's `yerr`
+and Excel want deltas, ggplot's `ymin`/`ymax` want the absolutes — so neither
+reader has to do arithmetic on the record. A row with no cap leaves the delta
+blank rather than reporting an error of zero.
 
 ## 8. Measure (optional)
 

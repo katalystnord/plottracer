@@ -150,6 +150,19 @@ describe('buildSeriesJSON', () => {
     });
   });
 
+  it('carries the deltas beside the absolute cap positions, nulling a row with no cap', () => {
+    // Both, deliberately (see SeriesForCSV.deltas): the absolutes are the record,
+    // the deltas are what matplotlib's yerr takes. A null says "no cap on this
+    // row" — never a 0, which would read as an error bar of zero length.
+    const doc = JSON.parse(
+      buildSeriesJSON(
+        [{ name: 'Upper', rows: [row([0, 2]), row([1, 4])], relation: { role: 'upper', of: 'S' }, deltas: [1, null] }],
+        ['X', 'Y']
+      )
+    );
+    expect(doc.series[0].deltas).toEqual([1, null]);
+  });
+
   it('omits relation entirely for an ordinary series rather than nulling it', () => {
     const json = buildSeriesJSON([{ name: 'Control', rows: [row([5, 6])] }], ['X', 'Y']);
     expect('relation' in JSON.parse(json).series[0]).toBe(false);

@@ -373,6 +373,14 @@ export function buildSeriesJSON(
         })),
       };
       if (s.relation) entry.relation = { role: s.relation.role, of: s.relation.of };
+      // ⚑ The Δ ships in JSON too, as `deltas` already promises: the absolutes
+      // stay the record, the deltas are what matplotlib's `yerr` and Excel take.
+      // Until v2.1 this key existed, was computed by buildExportJson's caller and
+      // silently dropped here, so the JSON reader alone had to re-derive the
+      // cap→datum pairing -- the one rule that has shipped wrong twice. A `null`
+      // marks a row with no cap, the same way an unmeasured value is null rather
+      // than absent.
+      if (s.deltas) entry.deltas = [...s.deltas];
       // The fit is a SEPARATE key from `points` (David) -- a reader takes the
       // record or the derived model, never entangled. `samples` is the sampled
       // fitted curve; the equation/coefficients are the model it came from.
