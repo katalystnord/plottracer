@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { theme } from '../theme.js';
 import type { HeatmapRow } from '../../../engine/heatmapRun.js';
 
@@ -27,11 +28,27 @@ export interface HeatmapCellsTableProps {
   cells: HeatmapRow[];
   /** Shown when there are no cells yet — the heatmap's own "no points" hint. */
   noCellsHint: string;
+  /**
+   * Click-to-edit the CATEGORY name, per axis — the same gesture the bar
+   * chart's Category column has had since v2.0.
+   *
+   * ⚑⚑ A NAME IS THE ONE THING IN THIS TABLE THE FIGURE DOES NOT MEASURE, so it
+   * is the one thing that must be correctable in place. Every other column is
+   * read off the pixels; the names are transcribed by a person, and a person
+   * mistypes. Bulk entry stays in the grid fold-down (twelve gene names in one
+   * field), and this is how you fix the one that is wrong.
+   *
+   * ⚑ Editing ANY cell of a column edits the COLUMN — the name belongs to the
+   * band, not to the cell — which is exactly what the bar table does when
+   * naming a category shared by several series.
+   */
+  renderXName?: (bandIndex: number, name: string) => ReactNode;
+  renderYName?: (bandIndex: number, name: string) => ReactNode;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
-export function HeatmapCellsTable({ cells, noCellsHint }: HeatmapCellsTableProps) {
+export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName }: HeatmapCellsTableProps) {
   if (cells.length === 0) {
     return (
       <p data-testid="heatmap-no-cells" style={{ color: theme.color.text.secondary, fontSize: theme.font.size.small }}>
@@ -68,8 +85,19 @@ export function HeatmapCellsTable({ cells, noCellsHint }: HeatmapCellsTableProps
               {/* The name where the figure prints one, the measured centre where
                   it does not. Only the TABLE chooses: the export carries both,
                   because the bounds stay true whatever the axis is called. */}
-              <td style={{ paddingRight: 8 }}>{cell.xLabel || num(cell.xCentre, 4)}</td>
-              <td style={{ paddingRight: 8 }}>{cell.yLabel || num(cell.yCentre, 4)}</td>
+              {/* ⚑ Editable only where the coordinate IS a name. On a value
+                  axis the cell shows a measured centre, and a measurement is
+                  not something to type over. */}
+              <td style={{ paddingRight: 8 }}>
+                {cell.xIsCategory && renderXName
+                  ? renderXName(cell.col, cell.xLabel)
+                  : cell.xLabel || num(cell.xCentre, 4)}
+              </td>
+              <td style={{ paddingRight: 8 }}>
+                {cell.yIsCategory && renderYName
+                  ? renderYName(cell.row, cell.yLabel)
+                  : cell.yLabel || num(cell.yCentre, 4)}
+              </td>
               <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>
               <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
                 {cell.value === null ? '—' : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}

@@ -1090,6 +1090,10 @@ export function Workspace() {
    * start, so the feature is discoverable without the card growing over the
    * figure before anyone has asked it to. */
   const [heatmapPanelOpen, setHeatmapPanelOpen] = useState(false);
+  /** Which band's name is being typed, per axis — the same one-at-a-time editor
+   * the bar chart's category column uses. */
+  const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | null>(null);
+  const [editingHeatmapYName, setEditingHeatmapYName] = useState<number | null>(null);
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
   const [categoryCountInput, setCategoryCountInput] = useState('');
   const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
@@ -5567,6 +5571,47 @@ export function Workspace() {
   // non-categoryAxis branch), since Pie has no cross-series category identity
   // to share. tupleNoun gives a nicer, type-specific placeholder ("Sector 1",
   // "Box 1") than a generic "Category N" would.
+  /**
+   * Rename one heatmap CATEGORY, from the cell the user clicked.
+   *
+   * ⚑⚑ THE TABLE WORKS IN CELL INDICES AND THE BOXES WORK IN READING ORDER, so
+   * the edit is applied in cell space and converted back — through the SAME
+   * `labelsForCells`, which is its own inverse. Writing the cell index straight
+   * into the typed text would put the name on the mirror-image band on any
+   * ordinary upward-y figure, which is the exact defect the audit found this
+   * morning, re-introduced from the other end.
+   */
+  const setHeatmapCategoryName = useCallback(
+    (axis: 'x' | 'y', bandIndex: number, name: string) => {
+      const axesNow = sessionRef.current.getAxes();
+      if (!axesNow || !heatmapShownGrid) return;
+      const cellOrdered = labelsForCells(heatmapLabels, heatmapShownGrid, axesNow);
+      const next = [...(axis === 'x' ? cellOrdered.x : cellOrdered.y)];
+      while (next.length <= bandIndex) next.push('');
+      next[bandIndex] = name;
+      const edited = axis === 'x' ? { x: next, y: cellOrdered.y } : { x: cellOrdered.x, y: next };
+      const typed = labelsForCells(edited, heatmapShownGrid, axesNow);
+      applyHeatmapLabels(formatLabelList(typed.x), formatLabelList(typed.y));
+    },
+    [applyHeatmapLabels, heatmapLabels, heatmapShownGrid]
+  );
+
+  const renderHeatmapXName = (bandIndex: number, name: string) =>
+    renderEditableName(
+      bandIndex, name, editingHeatmapXName, setEditingHeatmapXName,
+      (i, v) => setHeatmapCategoryName('x', i, v),
+      `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
+      'Click to name this column, as the figure prints it', 90
+    );
+
+  const renderHeatmapYName = (bandIndex: number, name: string) =>
+    renderEditableName(
+      bandIndex, name, editingHeatmapYName, setEditingHeatmapYName,
+      (i, v) => setHeatmapCategoryName('y', i, v),
+      `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
+      'Click to name this row, as the figure prints it', 90
+    );
+
   const renderEditableTupleLabel = (tupleIndex: number, rawLabel: string) =>
     renderEditableName(
       tupleIndex, rawLabel, editingTupleLabel, setEditingTupleLabel, setTupleLabel,
@@ -7490,7 +7535,12 @@ export function Workspace() {
                the output in the same place as for the other graphs… else it
                becomes very confusing for the users, and extremely
                inconsistent"). The card keeps the INPUTS. */
-            <HeatmapCellsTable cells={heatmapCells} noCellsHint={noPointsHint} />
+            <HeatmapCellsTable
+              cells={heatmapCells}
+              noCellsHint={noPointsHint}
+              renderXName={renderHeatmapXName}
+              renderYName={renderHeatmapYName}
+            />
           ) : isHistogram ? (
             <HistogramBinsTable
               rows={tupleRows}

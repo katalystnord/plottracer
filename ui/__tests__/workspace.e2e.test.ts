@@ -8075,6 +8075,30 @@ describe('heatmap capture (v2.2)', () => {
     }
   }
 
+  /** The same walk with Y declared CATEGORICAL: the row edge takes no value and
+   * the far edge carries the COUNT, so no coordinate is ever typed for it. */
+  async function calibrateHeatmapCategorical() {
+    await page.getByText('Y is categories', { exact: true }).click();
+    await page.waitForTimeout(150);
+    for (const step of ['x1', 'x2'] as const) {
+      const p = truth.frame[step];
+      await clickImagePixel(p.x, p.y);
+      await confirmValue(String(p.value));
+    }
+    await clickImagePixel(truth.frame.y1.x, truth.frame.y1.y);
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValue('4'); // four rows on this figure
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(250);
+    await openHeatmapGrid();
+  }
+
   async function calibrateHeatmap() {
     for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
       const p = truth.frame[step];
@@ -8367,6 +8391,48 @@ describe('heatmap capture (v2.2)', () => {
     ).toBe(0);
     // The panel names what it holds, as it already does for a histogram's bins.
     expect(await textOf('data-points-heading')).toBe('Cells');
+  });
+
+  it('lets a CATEGORY name be edited in the table, on the band it belongs to', async () => {
+    // ⚑ A name is the one thing in that table the figure does not measure — it
+    // is transcribed by a person, and a person mistypes. Same click-to-edit the
+    // bar chart's Category column has had since v2.0.
+    //
+    // ⚑⚑ AND IT MUST LAND ON THE RIGHT BAND. The table works in CELL indices
+    // (row 0 = yMin, the bottom) while the name boxes work in READING order
+    // (first name = the top). An edit that wrote the cell index straight into
+    // the typed text would put the name on the mirror-image row — the exact
+    // defect the audit found this morning, re-entered from the other end.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmapCategorical();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(500);
+
+    // Name the rows top-down, then correct the TOP one from the table.
+    await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
+    await page.waitForTimeout(300);
+    const rows = await page.getByTestId('heatmap-row').count();
+    // The LAST table row is the top of the figure — that is where "top" went.
+    const last = page.getByTestId('heatmap-row').nth(rows - 1);
+    expect((await last.locator('td').allTextContents())[1]).toBe('top');
+
+    // ⚑ The band index, not the table row: the last table row is the TOP of the
+    // figure, which is the highest cell index. `EditableName` reuses one testid
+    // for the resting span and the open input, so it has to be the exact band.
+    const topBand = 3; // four rows on this figure
+    await page.getByTestId(`heatmap-y-name-${topBand}`).click();
+    await page.waitForTimeout(200);
+    const editor = page.getByTestId(`heatmap-y-name-${topBand}`);
+    await editor.fill('RENAMED');
+    await editor.press('Enter');
+    await page.waitForTimeout(300);
+
+    // It landed on the band that was clicked…
+    expect((await page.getByTestId('heatmap-row').nth(rows - 1).locator('td').allTextContents())[1]).toBe('RENAMED');
+    // …and the typed list reads back in the SAME order, with only that one
+    // changed — proof the edit went through the reading-order mapping and not
+    // around it.
+    expect(await page.getByTestId('heatmap-y-labels').inputValue()).toBe('RENAMED, upper, lower, bottom');
   });
 
   it('reports a miss instead of inventing boundaries', async () => {
