@@ -83,6 +83,16 @@ export interface EditableNameProps {
   editing: boolean;
   /** The name as stored — empty means unnamed, and shows a dash. */
   name: string;
+  /**
+   * What to show at rest when the name is empty, instead of the dash.
+   *
+   * ⚑ A dash is right where something ELSE in the row identifies it — a bar's
+   * value, a spider axis's reading. It is wrong where the name is the row's ONLY
+   * identifier: a heatmap's category column rendered five dashes and the rows
+   * became indistinguishable, so the table stopped saying which cell was which.
+   * Callers in that position pass the ordinal the record actually holds.
+   */
+  emptyDisplay?: string;
   testId: string;
   placeholder: string;
   title: string;
@@ -96,6 +106,7 @@ export interface EditableNameProps {
 export function EditableName({
   editing,
   name,
+  emptyDisplay,
   testId,
   placeholder,
   title,
@@ -130,7 +141,11 @@ export function EditableName({
       title={title}
       style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
     >
-      {name === '' ? <span style={{ color: theme.color.text.legend }}>—</span> : name}
+      {name === '' ? (
+        <span style={{ color: theme.color.text.legend }}>{emptyDisplay ?? '—'}</span>
+      ) : (
+        name
+      )}
     </span>
   );
 }

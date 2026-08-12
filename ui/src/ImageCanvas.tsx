@@ -197,10 +197,12 @@ export interface MeasureOverlay {
  * 'series' are click-only (a marker click selects one point / the whole series). */
 export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
 
-/** ⚑ The same violet the Heatmap card's handles use (Workspace's
- * HEATMAP_GRID_COLOR): the line you see and the dot you grab have to read as one
- * thing, or the handle looks like a stray data point. */
-const GRID_OVERLAY_COLOR = '#a87fd4';
+/** ⚑ The same violet the CATEGORY TICKS use, which the heatmap's handles now
+ * take too (Workspace's HEATMAP_GRID_COLOR aliases it): the line you see and the
+ * dot you grab have to read as one thing, or the handle looks like a stray data
+ * point — and a boundary placed on an axis is the same mechanism whether the
+ * figure is a bar chart or a matrix, so it should not be a different colour. */
+const GRID_OVERLAY_COLOR = '#7c3aed';
 
 interface ImageCanvasProps {
   /** Markers to overlay, in image-pixel space (not screen space). */

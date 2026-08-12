@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { theme } from '../theme.js';
 import type { HeatmapRow } from '../../../engine/heatmapRun.js';
 
@@ -22,6 +22,19 @@ import type { HeatmapRow } from '../../../engine/heatmapRun.js';
  * heatmap the colour IS the value, so a wrong cell has no other symptom — the
  * interval it cannot be told apart from and the note saying what is off about it
  * are not decoration, they are the only way to know which numbers to trust.
+ *
+ * ⚑⚑ AND IT OPENS AS A MATRIX, because that is what a heatmap is. David: *"You
+ * are presenting a matrix as a table in the results, and that is just a mess.
+ * There is no way anyone could see the categories belonging where. We should
+ * have two buttons to say present results as a [matrix] [table]."* Twenty-five
+ * rows of `x, y, value` is the tidy/long form — correct, exportable, and
+ * unreadable against the figure. The matrix puts each value where the figure put
+ * it with the names down the edges; the long form is one click away and is the
+ * only view with room for the evidence.
+ *
+ * ⚑ Both are the same record — the matrix is the long form pivoted, and the
+ * names come from the same per-band lists — so switching view cannot change a
+ * number or move a name, and a name typed in either applies to the whole band.
  */
 
 export interface HeatmapCellsTableProps {
@@ -42,13 +55,15 @@ export interface HeatmapCellsTableProps {
    * band, not to the cell — which is exactly what the bar table does when
    * naming a category shared by several series.
    */
-  renderXName?: (bandIndex: number, name: string) => ReactNode;
-  renderYName?: (bandIndex: number, name: string) => ReactNode;
+  renderXName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
+  renderYName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
 export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName }: HeatmapCellsTableProps) {
+  const [view, setView] = useState<'matrix' | 'table'>('matrix');
+
   if (cells.length === 0) {
     return (
       <p data-testid="heatmap-no-cells" style={{ color: theme.color.text.secondary, fontSize: theme.font.size.small }}>
@@ -56,6 +71,113 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
       </p>
     );
   }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {(['matrix', 'table'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            data-testid={`heatmap-view-${kind}`}
+            onClick={() => setView(kind)}
+            style={{
+              fontSize: theme.font.size.small,
+              padding: '1px 8px',
+              borderRadius: theme.border.radius.regular,
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+              border: `1px solid ${view === kind ? theme.color.primary.main : theme.color.border.regular}`,
+              background: view === kind ? theme.color.primary.main : theme.color.background.primary,
+              color: view === kind ? '#fff' : theme.color.text.primary,
+            }}
+          >
+            {kind}
+          </button>
+        ))}
+      </div>
+      {view === 'matrix' ? (
+        <MatrixView cells={cells} renderXName={renderXName} renderYName={renderYName} />
+      ) : (
+        <LongView cells={cells} renderXName={renderXName} renderYName={renderYName} />
+      )}
+    </div>
+  );
+}
+
+type ViewProps = Pick<HeatmapCellsTableProps, 'cells' | 'renderXName' | 'renderYName'>;
+
+/**
+ * The figure's own shape: one cell per cell, names down the edges.
+ *
+ * ⚑⚑ ROWS RUN TOP-DOWN, which is the whole point of this view. Cell row 0 is
+ * `yMin` — the BOTTOM of the plot — so rendering rows in index order would print
+ * the matrix upside down against the figure it came from, and "which category
+ * belongs where" would be exactly as unanswerable as it was in the long form.
+ */
+function MatrixView({ cells, renderXName, renderYName }: ViewProps) {
+  const columns = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
+  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
+  const byKey = new Map(cells.map((c) => [`${c.col},${c.row}`, c]));
+  return (
+    <div style={{ maxHeight: 320, overflow: 'auto' }}>
+      <table
+        data-testid="heatmap-matrix"
+        style={{ borderCollapse: 'collapse', fontSize: theme.font.size.small, fontVariantNumeric: 'tabular-nums' }}
+      >
+        <thead>
+          <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
+            <th />
+            {columns.map((col) => {
+              const cell = cells.find((c) => c.col === col)!;
+              return (
+                <th key={col} style={{ padding: '0 8px', fontWeight: 500 }}>
+                  {cell.xIsCategory && renderXName
+                    ? renderXName(col, cell.xLabel, cell.xCentre)
+                    : cell.xLabel || num(cell.xCentre, 4)}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const rowCell = cells.find((c) => c.row === row)!;
+            return (
+              <tr key={row} data-testid="heatmap-matrix-row">
+                <th style={{ color: theme.color.text.legend, textAlign: 'left', paddingRight: 8, fontWeight: 500 }}>
+                  {rowCell.yIsCategory && renderYName
+                    ? renderYName(row, rowCell.yLabel, rowCell.yCentre)
+                    : rowCell.yLabel || num(rowCell.yCentre, 4)}
+                </th>
+                {columns.map((col) => {
+                  const cell = byKey.get(`${col},${row}`);
+                  return (
+                    <td
+                      key={col}
+                      // ⚑ The evidence cannot fit in a matrix cell, so a flagged
+                      // one is coloured and carries its note as a tooltip, and
+                      // the Table view holds the full account. A matrix showing
+                      // only numbers would hide the one thing that says which
+                      // numbers to trust.
+                      title={cell?.warning || undefined}
+                      style={{ padding: '0 8px', textAlign: 'right', color: cell?.warning ? theme.color.error : undefined }}
+                    >
+                      {cell ? num(cell.value, 5) : ''}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One row per cell — the tidy/long form, and the only view with room for the
+ * evidence that says whether to trust a value. */
+function LongView({ cells, renderXName, renderYName }: ViewProps) {
   return (
     <div style={{ maxHeight: 320, overflow: 'auto' }}>
       <table
@@ -90,12 +212,12 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
                   not something to type over. */}
               <td style={{ paddingRight: 8 }}>
                 {cell.xIsCategory && renderXName
-                  ? renderXName(cell.col, cell.xLabel)
+                  ? renderXName(cell.col, cell.xLabel, cell.xCentre)
                   : cell.xLabel || num(cell.xCentre, 4)}
               </td>
               <td style={{ paddingRight: 8 }}>
                 {cell.yIsCategory && renderYName
-                  ? renderYName(cell.row, cell.yLabel)
+                  ? renderYName(cell.row, cell.yLabel, cell.yCentre)
                   : cell.yLabel || num(cell.yCentre, 4)}
               </td>
               <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>

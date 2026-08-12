@@ -27,6 +27,7 @@ import {
   CATEGORY_PANEL_HINT,
   CATEGORY_TICK_DRAG_HINT,
   CONVENTION_LABELS,
+  CATEGORY_TICK_COLOR,
   categoryAxisGlyphs,
   categoryPanelSummary,
   categoryPanelView,
@@ -618,7 +619,18 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
 /** The heatmap grid's one colour, shared by the dashed lines on the canvas and
  * the handles that move them — so the thing you grab is visibly the thing that
  * moves. */
-const HEATMAP_GRID_COLOR = '#a87fd4';
+/**
+ * ⚑⚑ THE SAME VIOLET THE BAR CHART'S CATEGORY TICKS USE, imported rather than
+ * re-chosen. David: *"the points for the grids are difficult to spot, and we
+ * should reuse the tick graphics we had for the bar graph"* — and then: *"We had
+ * all of this already in the design, and you still went and invented everything
+ * again. Why??"* He is right: the settled design says v2.1's category ticks are
+ * the structural FOUNDATION for the heatmap grid, and a boundary you place on an
+ * axis is the same mechanism whether the figure is a bar chart or a matrix. A
+ * paler shade of my own choosing made it a different-looking thing that behaves
+ * identically, and it was harder to see into the bargain.
+ */
+const HEATMAP_GRID_COLOR = CATEGORY_TICK_COLOR;
 
 const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   XY_AXES_CONFIG,
@@ -1806,6 +1818,27 @@ export function Workspace() {
     [heatmapXLabels, heatmapYLabels]
   );
 
+  /**
+   * The counts the CALIBRATION already declared, per axis — null on a value
+   * axis, which never declared one.
+   *
+   * ⚑ David: *"Why do I have to FIRST tell it that there are 5 rows in the
+   * calibration, and then 5 again? That should carry over."* The ordinal frame a
+   * category axis is built on runs 0…N, so N IS the count; asking for it a
+   * second time invited the two to disagree, and a typo'd 6 against a declared 5
+   * made detection refuse the whole grid.
+   */
+  const heatmapDeclared = useMemo<{ columns: number | null; rows: number | null }>(() => {
+    const bounds = heatmapBounds();
+    const kinds = heatmapKinds();
+    if (!bounds) return { columns: null, rows: null };
+    return {
+      columns: kinds.x === 'category' ? Math.max(1, Math.round(bounds.xMax - bounds.xMin)) : null,
+      rows: kinds.y === 'category' ? Math.max(1, Math.round(bounds.yMax - bounds.yMin)) : null,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heatmapBounds, heatmapKinds, session, version]);
+
   const heatmapShownGrid = useMemo<HeatmapState | null>(() => {
     if (!heatmapActive) return null;
     if (heatmapGrid !== null) return heatmapGrid;
@@ -2024,16 +2057,19 @@ export function Workspace() {
       return;
     }
     const start = heatmapShownGrid ?? initialGridFor(bounds, heatmapKinds());
+    // ⚑ A declared category count is the check; the box is only for a value axis.
+    const columns = heatmapDeclared.columns ?? declaredCount(heatmapColumns);
+    const rows = heatmapDeclared.rows ?? declaredCount(heatmapRows);
     const result = detectGrid({ data: img.data, width: img.width, height: img.height }, axes, start, {
-      ...(declaredCount(heatmapColumns) !== undefined ? { columns: declaredCount(heatmapColumns)! } : {}),
-      ...(declaredCount(heatmapRows) !== undefined ? { rows: declaredCount(heatmapRows)! } : {}),
+      ...(columns !== undefined ? { columns } : {}),
+      ...(rows !== undefined ? { rows } : {}),
     });
     setHeatmapDetectMessage(result.message);
     // ⚑ A refused detection leaves the PREVIOUS grid alone. Replacing it with
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
     if (result.grid !== null) applyHeatmapGrid(result.grid);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapShownGrid, heatmapColumns, heatmapRows]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapDeclared, heatmapKinds, heatmapShownGrid, heatmapColumns, heatmapRows]);
 
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
@@ -5113,7 +5149,7 @@ export function Workspace() {
       color: HEATMAP_GRID_COLOR,
       draggable: true,
       kind: 'calibration' as const,
-      radius: h.id === selectedDividerId ? 7 : 4,
+      radius: h.id === selectedDividerId ? 7 : 5,
     }));
   }, [heatmapShownGrid, selectedDividerId, session]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
@@ -5528,12 +5564,16 @@ export function Workspace() {
     testId: string,
     placeholder: string,
     title: string,
-    width: number
+    width: number,
+    /** What an UNNAMED one reads as at rest, where a dash would leave the row
+     * unidentifiable — see `EditableNameProps.emptyDisplay`. */
+    emptyDisplay?: string
   ) {
     return (
       <EditableName
         editing={editingIndex === index}
         name={rawName}
+        {...(emptyDisplay === undefined ? {} : { emptyDisplay })}
         testId={testId}
         placeholder={placeholder}
         title={title}
@@ -5596,20 +5636,30 @@ export function Workspace() {
     [applyHeatmapLabels, heatmapLabels, heatmapShownGrid]
   );
 
-  const renderHeatmapXName = (bandIndex: number, name: string) =>
+  /**
+   * ⚑ AN UNNAMED BAND STILL HAS TO BE IDENTIFIABLE. The name column is the only
+   * thing distinguishing one categorical row from another, so a bare dash — the
+   * right answer where a bar's value sits beside it — turned five rows into five
+   * dashes. It falls back to the ORDINAL CENTRE, which is what the record holds
+   * and what the export writes, so the table agrees with the file before anyone
+   * types a thing.
+   */
+  const renderHeatmapXName = (bandIndex: number, name: string, ordinal: number) =>
     renderEditableName(
       bandIndex, name, editingHeatmapXName, setEditingHeatmapXName,
       (i, v) => setHeatmapCategoryName('x', i, v),
       `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
-      'Click to name this column, as the figure prints it', 90
+      'Click to name this column, as the figure prints it', 90,
+      ordinal.toPrecision(4)
     );
 
-  const renderHeatmapYName = (bandIndex: number, name: string) =>
+  const renderHeatmapYName = (bandIndex: number, name: string, ordinal: number) =>
     renderEditableName(
       bandIndex, name, editingHeatmapYName, setEditingHeatmapYName,
       (i, v) => setHeatmapCategoryName('y', i, v),
       `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
-      'Click to name this row, as the figure prints it', 90
+      'Click to name this row, as the figure prints it', 90,
+      ordinal.toPrecision(4)
     );
 
   const renderEditableTupleLabel = (tupleIndex: number, rawLabel: string) =>
@@ -6239,6 +6289,8 @@ export function Workspace() {
                 rows={heatmapRows}
                 onColumnsChange={setHeatmapColumns}
                 onRowsChange={setHeatmapRows}
+                declaredColumns={heatmapDeclared.columns}
+                declaredRows={heatmapDeclared.rows}
                 gridSize={
                   heatmapShownGrid
                     ? {

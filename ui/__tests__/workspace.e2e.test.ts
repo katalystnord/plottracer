@@ -8066,6 +8066,13 @@ describe('heatmap capture (v2.2)', () => {
   }
 
   /** The eight clicks of a heatmap calibration, at the figure's own pixels. */
+  /** The Cells panel opens as a MATRIX (David: a matrix presented as a table
+   * "is just a mess"), so a test that counts one-row-per-cell has to say so. */
+  async function showHeatmapTable() {
+    await page.getByTestId('heatmap-view-table').click();
+    await page.waitForTimeout(150);
+  }
+
   /** Open the grid fold-down on the calibration card — the inputs live there
    * now, beside the calibration that defines them. */
   async function openHeatmapGrid() {
@@ -8175,6 +8182,10 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
     expect(await textOf('heatmap-summary')).toBe('20 cells read, all clean.');
+    // The matrix is what opens, and it is the figure's own shape: five columns
+    // across, four rows down, so a reader can see which cell is which.
+    expect(await page.getByTestId('heatmap-matrix-row').count()).toBe(4);
+    await showHeatmapTable();
     expect(await page.getByTestId('heatmap-row').count()).toBe(20);
 
     // ⚑ Against the figure's OWN truth, not the app's arithmetic: the first row
@@ -8205,6 +8216,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
+    await showHeatmapTable();
     const before = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
 
     // The first column's far boundary, at data x = 1 on a 0..9 axis. Its handle
@@ -8246,6 +8258,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
+    await showHeatmapTable();
     expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
 
     await page.getByTestId('heatmap-add-column').click();
@@ -8313,6 +8326,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(400);
+    await showHeatmapTable();
 
     await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
@@ -8378,6 +8392,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(400);
+    await showHeatmapTable();
 
     expect(await page.getByTestId('heatmap-row').count()).toBeGreaterThan(0);
     // The record is INSIDE the data-points panel…
@@ -8407,6 +8422,7 @@ describe('heatmap capture (v2.2)', () => {
     await calibrateHeatmapCategorical();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(500);
+    await showHeatmapTable();
 
     // Name the rows top-down, then correct the TOP one from the table.
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');

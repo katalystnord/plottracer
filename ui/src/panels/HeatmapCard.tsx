@@ -33,6 +33,18 @@ export interface HeatmapCardProps {
   rows: string;
   onColumnsChange: (value: string) => void;
   onRowsChange: (value: string) => void;
+  /**
+   * The count ALREADY DECLARED at calibration, per axis, or null for a value
+   * axis that never declared one.
+   *
+   * ⚑⚑ A CATEGORY AXIS IS NOT ASKED TWICE. David: *"Why do I have to FIRST tell
+   * it that there are 5 rows in the calibration, and then 5 again? That should
+   * carry over."* It does now: declaring the categories IS the declaration, so
+   * the box is replaced by what it already knows. Two fields for one fact is how
+   * his 5 met a typo'd 6 and detection refused the whole grid.
+   */
+  declaredColumns: number | null;
+  declaredRows: number | null;
   /** How many boundaries the grid currently holds, so the user can see the grid
    * exists even before reading any cells. */
   gridSize: { columns: number; rows: number } | null;
@@ -75,6 +87,8 @@ export function HeatmapCard({
   rows,
   onColumnsChange,
   onRowsChange,
+  declaredColumns,
+  declaredRows,
   gridSize,
   onDetect,
   onRead,
@@ -100,30 +114,44 @@ export function HeatmapCard({
         style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
       >
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            Columns
-            <input
-              data-testid="heatmap-columns"
-              value={columns}
-              onChange={(e) => onColumnsChange(e.target.value)}
-              inputMode="numeric"
-              style={{ width: 46 }}
-            />
-          </label>
-          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            Rows
-            <input
-              data-testid="heatmap-rows"
-              value={rows}
-              onChange={(e) => onRowsChange(e.target.value)}
-              inputMode="numeric"
-              style={{ width: 46 }}
-            />
-          </label>
+          {declaredColumns === null ? (
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              Columns
+              <input
+                data-testid="heatmap-columns"
+                value={columns}
+                onChange={(e) => onColumnsChange(e.target.value)}
+                inputMode="numeric"
+                style={{ width: 46 }}
+              />
+            </label>
+          ) : (
+            <span data-testid="heatmap-declared-columns">
+              Columns: <b>{declaredColumns}</b> — from the calibration
+            </span>
+          )}
+          {declaredRows === null ? (
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              Rows
+              <input
+                data-testid="heatmap-rows"
+                value={rows}
+                onChange={(e) => onRowsChange(e.target.value)}
+                inputMode="numeric"
+                style={{ width: 46 }}
+              />
+            </label>
+          ) : (
+            <span data-testid="heatmap-declared-rows">
+              Rows: <b>{declaredRows}</b> — from the calibration
+            </span>
+          )}
         </div>
-        <span style={{ color: theme.color.text.legend }}>
-          Leave blank to take whatever the figure shows.
-        </span>
+        {(declaredColumns === null || declaredRows === null) && (
+          <span style={{ color: theme.color.text.legend }}>
+            Leave blank to take whatever the figure shows.
+          </span>
+        )}
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>
             Detect grid
