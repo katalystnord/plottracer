@@ -8137,6 +8137,18 @@ describe('heatmap capture (v2.2)', () => {
     await app.evaluate(({ dialog }, samplePath) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
     }, HEATMAP_IMAGE);
+    // ⚑⚑ A BIGGER WINDOW, because that is what a user does. A heatmap has the
+    // tallest calibration card in the app — eight steps plus the grid fold-down
+    // plus the per-axis options — and at the harness's default size it floats
+    // over the pixels the walk asks you to click. David, when I mistook that for
+    // a regression: *"We make the window bigger to see the full figure! Up to
+    // the user! Not a regression! We have ALSO talked about this before!"* A
+    // fixed display size is authoritative about CONTENT and only suggestive
+    // about LAYOUT, so the harness resizes rather than the product changing.
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(1800, 1200);
+    });
+    await page.waitForTimeout(300);
   });
 
   afterEach(async () => {

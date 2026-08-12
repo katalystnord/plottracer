@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
+import { heatmapBounds, initialGridFor } from '../heatmapRun.js';
 import { Calibration } from '../../core/calibration.js';
 
 /**
@@ -308,5 +309,89 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
     // log(0) at the first edge would make every reading -Infinity or NaN.
     expect(s.runCalibration()).toBe(true);
     expect(s.getAxes()!.isLogX()).toBe(false);
+  });
+});
+
+
+describe('the TICK CONVENTION — centred marks vs boundary marks', () => {
+  /**
+   * ⚑⚑ David: *"for some of them, the tick markers actually sit centred in
+   * category mode, and the edge of boundaries are in between, right?"* Right —
+   * matplotlib and ggplot print a tick under each category, Excel prints one
+   * between them, and it is the same `TickConvention` v2.1's category ticks
+   * already carry. Asking for the outer EDGE of a band on a figure that marks
+   * only centres asks the user to point at something unprinted.
+   *
+   * THE CLAIM UNDER TEST: the two conventions are two ways to say the SAME
+   * geometry. Given a figure whose five bands run across pixels 100…400, the
+   * edge clicks (100, 400) and the centred clicks (130, 370) must produce the
+   * identical grid — because a centred tick is half a band inside the edge.
+   */
+  function walk(options: Record<string, string>, firstPx: number, lastPx: number, count: string) {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    for (const [k, v] of Object.entries(options)) s.setOption(k, v);
+    const steps: Array<[number, number, string[]]> = [
+      [firstPx, 300, []],
+      [lastPx, 300, [count]],
+      [100, 300, ['0']],
+      [100, 100, ['20']],
+      [120, 420, []],
+      [380, 420, []],
+      [150, 420, ['5']],
+      [350, 420, ['95']],
+    ];
+    for (const [px, py, values] of steps) {
+      s.handleCalibrationClick(px, py);
+      if (values.length > 0) s.confirmCalibrationValues(values);
+    }
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  }
+
+  it('asks for a CENTRE when the figure marks centres, and says so', () => {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('xIsCategory', 'true');
+    s.setOption('xTicksCentred', 'true');
+    const steps = s.getSteps();
+    expect(steps.find((st) => st.key === 'x1')!.prompt).toMatch(/CENTRE of the first column/);
+    expect(steps.find((st) => st.key === 'x2')!.prompt).toMatch(/CENTRE of the last column/);
+    // …and still asks for the count on the second click, never a coordinate.
+    expect(steps.find((st) => st.key === 'x2')!.valueFields[0]!.label).toBe('Columns');
+  });
+
+  it('puts the SAME grid on the figure from either kind of click', () => {
+    // Five bands across pixels 100…400: bands are 60px, so the first centre is
+    // at 130 and the last at 370.
+    const edges = walk({ xIsCategory: 'true' }, 100, 400, '5');
+    const centres = walk({ xIsCategory: 'true', xTicksCentred: 'true' }, 130, 370, '5');
+    const a = edges.getAxes()!;
+    const b = centres.getAxes()!;
+    // The plot's own edges read 0 and 5 under BOTH conventions — the centred
+    // walk never pointed at them.
+    for (const [px, want] of [[100, 0], [400, 5], [250, 2.5]] as const) {
+      expect(a.pixelToData(px, 300)[0]).toBeCloseTo(want, 6);
+      expect(b.pixelToData(px, 300)[0]).toBeCloseTo(want, 6);
+    }
+  });
+
+  it('spans the whole ordinal range, not just what was clicked', () => {
+    // ⚑ The trap this exists to stop: the centred calibration's own values run
+    // 0.5…4.5, and reading those as the grid's extent would drop half a band off
+    // each end and shift every boundary inward.
+    const centres = walk({ xIsCategory: 'true', xTicksCentred: 'true' }, 130, 370, '5');
+    const bounds = heatmapBounds(centres.getAxes()! as never)!;
+    expect(bounds.xMin).toBe(0);
+    expect(bounds.xMax).toBe(5);
+    const grid = initialGridFor(bounds, { x: 'category', y: 'value' });
+    expect([...grid.xDividers]).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('remembers the convention, because the extent cannot be read back without it', () => {
+    const centres = walk({ xIsCategory: 'true', xTicksCentred: 'true' }, 130, 370, '5');
+    expect(centres.getAxes()!.getMetadata()['heatmapXTicks']).toBe('centred');
+    expect(HEATMAP_AXES_CONFIG.extractOptions!(centres.getAxes()!)['xTicksCentred']).toBe('true');
+    // An edge-marked axis says so too, rather than defaulting silently.
+    const edges = walk({ xIsCategory: 'true' }, 100, 400, '5');
+    expect(edges.getAxes()!.getMetadata()['heatmapXTicks']).toBe('edge');
   });
 });

@@ -6697,7 +6697,14 @@ export function Workspace() {
               data-testid="axes-options"
               style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 12, color: theme.color.text.secondary }}
             >
-              {config.options!.map((opt) =>
+              {config
+                .options!
+                // ⚑ An option that cannot change anything is not shown: the tick
+                // convention means nothing until its axis is declared
+                // categorical. Same rule as disabling Grid Removal without an
+                // image — do not present a control whose outcome is decided.
+                .filter((opt) => opt.onlyWhen === undefined || axesOptions[opt.onlyWhen] === 'true')
+                .map((opt) =>
                 opt.kind === 'checkbox' ? (
                   <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                     <input

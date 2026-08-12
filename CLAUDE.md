@@ -89,6 +89,21 @@ npm run lint        # eslint
 npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
 ```
 
+- ⚑⚑ **REUSE BEFORE YOU BUILD — and REVIEW FOR IT.** Before adding a module,
+  a component, a marker style or a gesture, find what already does that job and
+  extend it. Ask in review: *what existing thing does this duplicate, and why is
+  it not being used?* A parallel mechanism is not neutral — it forks every
+  decision downstream of it, and each fork looks locally reasonable.
+  ⚠️ **v2.2 is the case study.** The settled design said v2.1's category ticks
+  were the structural FOUNDATION for the heatmap grid. That was read as a claim
+  about the IDEA rather than the CODE, and `core/heatmapGrid.ts` was written with
+  a comment justifying a second store. From that one paragraph came: its own
+  marker graphics instead of `categoryTickMarkers`, its own count box instead of
+  the declared count, its own tick convention (none) instead of
+  `TickConvention` — and the same paragraph asserted "a heatmap always has a
+  numeric scale", which is what hid the missing category axis for a whole
+  release. David: *"We had all of this already in the design, and you still went
+  and invented everything again. Why??"*
 - **Tests:** unit tests across core/algorithms/engine; Electron + Playwright e2e in
   `ui/__tests__/workspace.e2e.test.ts`. **Add coverage as part of the same change,
   not as an afterthought.** A green test proves nothing until it has been shown to

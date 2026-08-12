@@ -186,16 +186,30 @@ export interface GlobalFieldInfo {
  * one Record shape serves every kind and rides the same rails globalValues
  * already proved.
  */
+/**
+ * An option may declare that it only APPLIES while another option is on.
+ *
+ * ⚑ An option that cannot change anything should not be on screen: the
+ * heatmap's tick convention means nothing until the axis is declared
+ * categorical, and offering it anyway is both clutter and an invitation to set
+ * something with no effect. Same rule as disabling Grid Removal without an
+ * image — do not present a control whose outcome is already decided.
+ */
+export interface AxesOptionVisibility {
+  /** Shown only while this other option's checkbox is on. */
+  onlyWhen?: string;
+}
+
 export type AxesOption =
-  | { key: string; label: string; kind: 'checkbox'; default: boolean }
-  | {
+  | ({ key: string; label: string; kind: 'checkbox'; default: boolean } & AxesOptionVisibility)
+  | ({
       key: string;
       label: string;
       kind: 'choice';
       choices: readonly { value: string; label: string }[];
       default: string;
-    }
-  | { key: string; label: string; kind: 'text'; default: string; placeholder?: string };
+    } & AxesOptionVisibility)
+  | ({ key: string; label: string; kind: 'text'; default: string; placeholder?: string } & AxesOptionVisibility);
 
 /** Context handed to buildAxes. Grew from a bare `globalValues` argument at
  * checkpoint 68 so options — and MapAxes's image height, which only its
@@ -1027,7 +1041,9 @@ export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7
 function heatmapIndexFrame(
   cal: Calibration,
   xCategory: boolean,
-  yCategory: boolean
+  yCategory: boolean,
+  xCentred = false,
+  yCentred = false
 ): Calibration | string {
   if (!xCategory && !yCategory) return cal;
   const count = (index: number, axis: 'dx' | 'dy'): number => {
@@ -1042,15 +1058,27 @@ function heatmapIndexFrame(
   if (yCategory && !(Number.isInteger(rows) && rows >= 1)) {
     return 'Enter how many ROWS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
   }
+  // ⚑⚑ A CENTRED TICK IS HALF A BAND INSIDE THE EDGE, and that is the entire
+  // difference between the two conventions. Clicking the first and last band
+  // CENTRES of an N-band axis marks 0.5 and N-0.5 in ordinal space; clicking the
+  // outer edges marks 0 and N. The axes is scaled from whichever pair was
+  // actually clicked, so the figure's own edges still land on 0 and N either
+  // way — the user is never asked to point at something the figure does not
+  // print. Same relationship `core/categoryAxis.ts` encodes between a centred
+  // tick and its band's dividers.
+  const span = (count: number, centred: boolean): [string, string] =>
+    centred ? [String(0.5), String(count - 0.5)] : ['0', String(count)];
+  const [xLo, xHi] = span(columns, xCentred);
+  const [yLo, yHi] = span(rows, yCentred);
   const next = new Calibration(cal.getDimensions());
   for (let i = 0; i < cal.getCount(); i++) {
     const p = cal.getPoint(i)!;
     let dx = p.dx ?? '';
     let dy = p.dy ?? '';
-    if (xCategory && i === 0) dx = '0';
-    if (xCategory && i === 1) dx = String(columns);
-    if (yCategory && i === 2) dy = '0';
-    if (yCategory && i === 3) dy = String(rows);
+    if (xCategory && i === 0) dx = xLo;
+    if (xCategory && i === 1) dx = xHi;
+    if (yCategory && i === 2) dy = yLo;
+    if (yCategory && i === 3) dy = yHi;
     next.addPoint(p.px, p.py, dx, dy);
   }
   return next;
@@ -1075,6 +1103,16 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // fabricated data, which is tenet 9 broken by the prompt itself.
     { key: 'xIsCategory', label: 'X is categories', kind: 'checkbox', default: false },
     { key: 'yIsCategory', label: 'Y is categories', kind: 'checkbox', default: false },
+    // ⚑⚑ WHERE THE FIGURE PRINTS ITS TICKS, which decides what the two clicks
+    // MEAN. David: *"for some of them, the tick markers actually sit centred in
+    // category mode, and the edge of boundaries are in between, right?"* Right,
+    // and it is the same `TickConvention` v2.1's category ticks already carry:
+    // matplotlib and ggplot print a tick under each category, Excel prints one
+    // between them. Asking for the outer EDGE of the first band on a figure that
+    // marks only centres is asking the user to eyeball something unprinted —
+    // when the thing they can actually see is the tick itself.
+    { key: 'xTicksCentred', label: 'X ticks at category centres', kind: 'checkbox', default: false, onlyWhen: 'xIsCategory' },
+    { key: 'yTicksCentred', label: 'Y ticks at category centres', kind: 'checkbox', default: false, onlyWhen: 'yIsCategory' },
     { key: 'isLogX', label: 'Log X', kind: 'checkbox', default: false },
     { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
     // ⚑ The key's own log option, and it belongs beside the other two rather
@@ -1101,17 +1139,26 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     const categorical = (axis: 'x' | 'y', step: CalibStepInfo): CalibStepInfo => {
       const noun = axis === 'x' ? 'column' : 'row';
       const isFirst = step.key.endsWith('1');
+      const centred = optionBool(options, axis === 'x' ? 'xTicksCentred' : 'yTicksCentred');
+      // ⚑ The click is aimed at what the FIGURE prints: a centred tick if it has
+      // them, the band's outer edge if the ticks sit on the boundaries.
+      const firstPrompt = centred
+        ? `Click the tick at the CENTRE of the first ${noun}`
+        : `Click the outer edge of the FIRST ${noun} — the start of the ${noun}s, not the middle of one`;
+      const lastPrompt = centred
+        ? `Click the tick at the CENTRE of the last ${noun}, then enter how many ${noun}s the figure has`
+        : `Click the outer edge of the LAST ${noun}, then enter how many ${noun}s the figure has`;
       return isFirst
         ? {
             ...step,
-            label: axis === 'x' ? 'X start' : 'Y start',
-            prompt: `Click the outer edge of the FIRST ${noun} — the start of the ${noun}s, not the middle of one`,
+            label: axis === 'x' ? (centred ? 'First column' : 'X start') : centred ? 'First row' : 'Y start',
+            prompt: firstPrompt,
             valueFields: [],
           }
         : {
             ...step,
-            label: axis === 'x' ? 'X end' : 'Y end',
-            prompt: `Click the outer edge of the LAST ${noun}, then enter how many ${noun}s the figure has`,
+            label: axis === 'x' ? (centred ? 'Last column' : 'X end') : centred ? 'Last row' : 'Y end',
+            prompt: lastPrompt,
             valueFields: [
               {
                 key: step.key,
@@ -1218,7 +1265,9 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     }
     const xCategory = optionBool(ctx.options, 'xIsCategory');
     const yCategory = optionBool(ctx.options, 'yIsCategory');
-    const frame = heatmapIndexFrame(cal, xCategory, yCategory);
+    const xCentred = optionBool(ctx.options, 'xTicksCentred');
+    const yCentred = optionBool(ctx.options, 'yTicksCentred');
+    const frame = heatmapIndexFrame(cal, xCategory, yCategory, xCentred, yCentred);
     if (typeof frame === 'string') return { error: frame };
     const axes = new XYAxes();
     // ⚑⚑ THE WHOLE EIGHT-POINT CALIBRATION GOES IN, not a four-point copy of
@@ -1257,6 +1306,11 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       // and the walk would come back asking for coordinates again.
       heatmapXKind: xCategory ? 'category' : 'value',
       heatmapYKind: yCategory ? 'category' : 'value',
+      // ⚑ The convention rides with the kind, because the grid's EXTENT cannot be
+      // read back from the calibration without it: 0.5…4.5 is five bands under
+      // one convention and four under the other.
+      heatmapXTicks: xCentred ? 'centred' : 'edge',
+      heatmapYTicks: yCentred ? 'centred' : 'edge',
     });
     return { axes };
   },
@@ -1275,6 +1329,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       isLogValue: String(meta['heatmapLogValue'] ?? 'false'),
       xIsCategory: String(meta['heatmapXKind'] === 'category'),
       yIsCategory: String(meta['heatmapYKind'] === 'category'),
+      xTicksCentred: String(meta['heatmapXTicks'] === 'centred'),
+      yTicksCentred: String(meta['heatmapYTicks'] === 'centred'),
     };
   },
 };

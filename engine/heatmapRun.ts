@@ -188,12 +188,23 @@ export function heatmapBounds(
   const values = [at(0, 'dx'), at(1, 'dx'), at(2, 'dy'), at(3, 'dy')];
   if (values.some((v) => !Number.isFinite(v))) return null;
   const [x1, x2, y1, y2] = values as [number, number, number, number];
-  return {
-    xMin: Math.min(x1, x2),
-    xMax: Math.max(x1, x2),
-    yMin: Math.min(y1, y2),
-    yMax: Math.max(y1, y2),
+  const meta = axes.getMetadata();
+  /**
+   * ⚑⚑ A CATEGORY AXIS SPANS ITS WHOLE ORDINAL RANGE, whatever was clicked. Two
+   * CENTRED ticks are half a band inside each edge, so the calibrated values run
+   * 0.5…N-0.5 while the grid still has to cover 0…N — reading the clicked values
+   * as the extent would drop half a band off each end and shift every boundary.
+   * The count is recovered from the convention the calibration recorded.
+   */
+  const spanOf = (lo: number, hi: number, kindKey: string, tickKey: string): [number, number] => {
+    if (meta[kindKey] !== 'category') return [Math.min(lo, hi), Math.max(lo, hi)];
+    const width = Math.abs(hi - lo);
+    const count = meta[tickKey] === 'centred' ? Math.round(width) + 1 : Math.round(width);
+    return [0, Math.max(1, count)];
   };
+  const [xMin, xMax] = spanOf(x1, x2, 'heatmapXKind', 'heatmapXTicks');
+  const [yMin, yMax] = spanOf(y1, y2, 'heatmapYKind', 'heatmapYTicks');
+  return { xMin, xMax, yMin, yMax };
 }
 
 /**
