@@ -95,6 +95,19 @@ npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
   fail *without* the fix.
 - **Packaging:** `build/electron-builder-ui.yml`; CI builds Linux + macOS (.dmg) +
   Windows (.exe) on tag push (`.github/workflows/build.yml`).
+- ⚑⚑ **REBUILD THE LOCAL PACKAGES AFTER EVERY COMMITTED CHANGE, WITHOUT BEING
+  ASKED** — `npm run ui:dist:linux`, then state the path and verify the version by
+  READING the control file (`dpkg-deb -f …`), never by executing the package.
+  David, 2026-08-12: *"The best thing that has held today is me actually testing
+  things, so please always rebuild the local packages… I do not trust anything
+  until I have seen it."* That day the suite was green at 3,448 tests and he still
+  found six real defects in one afternoon — a value axis assumed where the design
+  said category, an output panel where no other type keeps its output, examples
+  drawn to fit the tool's own limits. **His hands on the built app are the only
+  instrument here that points outward**; every other one (tests, mutation, lint,
+  the screenshot bench) asks whether the code agrees with itself. A stale package
+  silently disables the best check the project has, so "I'll rebuild when you're
+  ready" is the wrong answer — build it and say where it is.
 - **Commits:** small, self-contained, and verified (typecheck + lint + relevant
   tests) before committing. ⚑ **A pre-commit hook enforces the typecheck** —
   install it once per clone with `git config core.hooksPath tools/git-hooks`.
