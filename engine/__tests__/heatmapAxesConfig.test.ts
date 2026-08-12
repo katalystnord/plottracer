@@ -194,3 +194,119 @@ describe('HEATMAP_AXES_CONFIG', () => {
     expect(HEATMAP_AXES_CONFIG.autoExtractKind).toBe('none');
   });
 });
+
+
+describe('a CATEGORY axis — the question a value axis cannot ask', () => {
+  /** The eight clicks with x declared categorical: no coordinate is ever typed
+   * for x, only a COUNT. */
+  function categoricalSession(options: Record<string, string> = {}) {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('xIsCategory', 'true');
+    for (const [k, v] of Object.entries(options)) s.setOption(k, v);
+    return s;
+  }
+
+  it('asks for an EDGE and a COUNT instead of two coordinates', () => {
+    // ⚑⚑ The defect this fixes: the walk demanded a numeric coordinate for an
+    // axis the figure prints names on, so the tool itself invited fabricated
+    // data. The first edge now takes no typed value at all.
+    const steps = categoricalSession().getSteps();
+    const x1 = steps.find((st) => st.key === 'x1')!;
+    const x2 = steps.find((st) => st.key === 'x2')!;
+    expect(x1.valueFields).toEqual([]);
+    expect(x1.prompt).toMatch(/outer edge of the FIRST column/);
+    expect(x2.valueFields).toHaveLength(1);
+    expect(x2.valueFields[0]!.label).toBe('Columns');
+    expect(x2.prompt).toMatch(/how many columns/);
+    // …and the y axis is untouched, because the two are declared independently.
+    expect(steps.find((st) => st.key === 'y1')!.valueFields).toHaveLength(1);
+  });
+
+  it('DERIVES the 0…N frame from the count, so nobody types a coordinate', () => {
+    const s = categoricalSession();
+    const walk: Array<[number, number, string[]]> = [
+      [100, 300, []],        // x start edge — a click, nothing to type
+      [400, 300, ['5']],     // x end edge + "5 columns"
+      [100, 300, ['0']],
+      [100, 100, ['20']],
+      [120, 420, []],
+      [380, 420, []],
+      [150, 420, ['5']],
+      [350, 420, ['95']],
+    ];
+    for (const [px, py, values] of walk) {
+      s.handleCalibrationClick(px, py);
+      if (values.length > 0) s.confirmCalibrationValues(values);
+    }
+    expect(s.runCalibration()).toBe(true);
+    const axes = s.getAxes()!;
+    // Five columns across the clicked span: the left edge is index 0 and the
+    // right edge index 5, so a pixel in the middle reads 2.5 — the centre of
+    // the third band.
+    expect(axes.pixelToData(100, 300)[0]).toBeCloseTo(0, 6);
+    expect(axes.pixelToData(400, 300)[0]).toBeCloseTo(5, 6);
+    expect(axes.pixelToData(250, 300)[0]).toBeCloseTo(2.5, 6);
+    // The y axis stayed a measured one.
+    expect(axes.pixelToData(100, 100)[1]).toBeCloseTo(20, 6);
+  });
+
+  it('records WHICH axes are ordinals, so a reopened file does not ask again', () => {
+    const s = categoricalSession();
+    for (const [px, py, values] of [
+      [100, 300, []], [400, 300, ['4']], [100, 300, ['0']], [100, 100, ['20']],
+      [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
+    ] as Array<[number, number, string[]]>) {
+      s.handleCalibrationClick(px, py);
+      if (values.length > 0) s.confirmCalibrationValues(values);
+    }
+    expect(s.runCalibration()).toBe(true);
+    const meta = s.getAxes()!.getMetadata();
+    expect(meta['heatmapXKind']).toBe('category');
+    expect(meta['heatmapYKind']).toBe('value');
+    expect(HEATMAP_AXES_CONFIG.extractOptions!(s.getAxes()!)['xIsCategory']).toBe('true');
+    expect(HEATMAP_AXES_CONFIG.extractOptions!(s.getAxes()!)['yIsCategory']).toBe('false');
+  });
+
+  it('REFUSES a count that is not a whole number of categories', () => {
+    const cal = new Calibration();
+    cal.addPoint(100, 300, '', '');
+    cal.addPoint(400, 300, '2.5', '');
+    cal.addPoint(100, 300, '', '0');
+    cal.addPoint(100, 100, '', '20');
+    const problem = HEATMAP_AXES_CONFIG.checkValues!(cal, { xIsCategory: 'true' }, {});
+    expect(problem).toMatch(/whole number/i);
+    // ⚑ And the refusal names where the NAMES go, because "2.5 columns" is
+    // usually someone trying to type a category rather than a count.
+    expect(problem).toMatch(/names are typed later/i);
+    // Zero is not a grid either.
+    expect(HEATMAP_AXES_CONFIG.checkValues!(
+      (() => { const c = new Calibration(); c.addPoint(100, 300, '', ''); c.addPoint(400, 300, '0', ''); c.addPoint(100, 300, '', '0'); c.addPoint(100, 100, '', '20'); return c; })(),
+      { xIsCategory: 'true' },
+      {}
+    )).toMatch(/whole number/i);
+  });
+
+  it('says nothing while the count is still being typed', () => {
+    const cal = new Calibration();
+    cal.addPoint(100, 300, '', '');
+    cal.addPoint(400, 300, '', '');
+    cal.addPoint(100, 300, '', '0');
+    cal.addPoint(100, 100, '', '20');
+    expect(HEATMAP_AXES_CONFIG.checkValues!(cal, { xIsCategory: 'true' }, {})).toBeNull();
+  });
+
+  it('never takes the LOG of an ordinal, whatever the option says', () => {
+    const s = categoricalSession({ isLogX: 'true' });
+    for (const [px, py, values] of [
+      [100, 300, []], [400, 300, ['3']], [100, 300, ['0']], [100, 100, ['20']],
+      [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
+    ] as Array<[number, number, string[]]>) {
+      s.handleCalibrationClick(px, py);
+      if (values.length > 0) s.confirmCalibrationValues(values);
+    }
+    // ⚑ A log category axis would take the log of a counted position — and
+    // log(0) at the first edge would make every reading -Infinity or NaN.
+    expect(s.runCalibration()).toBe(true);
+    expect(s.getAxes()!.isLogX()).toBe(false);
+  });
+});

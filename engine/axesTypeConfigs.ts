@@ -230,6 +230,19 @@ export interface LogScaleGuard {
   field: 'dx' | 'dy';
   /** How the axis is named to the user, e.g. "X", "radial". */
   label: string;
+  /**
+   * An option that DISABLES this guard when set — the axis is not a scale at
+   * all under it.
+   *
+   * ⚑ Added for the heatmap's category axes, and a test is what demanded it: a
+   * category axis types no coordinates, so the guard read two blank endpoints
+   * and refused the whole calibration the moment "Log X" happened to be ticked.
+   * The refusal was correct about the values and wrong about the question —
+   * there is no log to take of a counted position, so the guard has nothing to
+   * check rather than something to complain about. `buildAxes` drops the log
+   * flag for the same reason.
+   */
+  unless?: string;
 }
 
 /**
@@ -297,6 +310,7 @@ export function checkGuards(
 ): string | null {
   for (const g of config.logScaleGuards ?? []) {
     if (!optionBool(options, g.option)) continue;
+    if (g.unless !== undefined && optionBool(options, g.unless)) continue;
     const vals: number[] = [];
     for (const idx of g.points) {
       const pt = cal.getPoint(idx);
@@ -688,6 +702,23 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * and no measured value depends on any of it. See core/categoryAxis.ts.
    */
   categoryTicks?: { originStep: string };
+  /**
+   * Rewrite the walk when an OPTION changes what a step is asking for.
+   *
+   * ⚑⚑ A heatmap's axes are each independently a CATEGORY or a VALUE, and the
+   * two need different questions — not different wording for the same question.
+   * A value axis asks "what number is this pixel worth?"; a category axis has no
+   * number to give, so asking for one makes the tool demand a coordinate the
+   * figure never printed. That is the tool inviting fabricated data, which is
+   * tenet 9 broken by the prompt itself.
+   *
+   * Applied in `CalibrationSession.getSteps()`, the single choke point every
+   * read of the step list already goes through, so nothing else has to know.
+   */
+  stepsForOptions?: (
+    steps: readonly CalibStepInfo[],
+    options: Readonly<Record<string, string>>
+  ) => CalibStepInfo[];
   commonOrigin?: {
     /** The already-placed step whose pixel is reused. */
     from: string;
@@ -977,6 +1008,54 @@ export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7
  * adjustable dividers, the 2D generalisation of v2.1's category ticks. A test
  * asserts the picker's contents, so the gate is a decision rather than a memory.
  */
+/**
+ * The calibration `XYAxes` is actually given, with a category axis's ORDINAL
+ * frame filled in.
+ *
+ * ⚑⚑ THE USER TYPES A COUNT AND THE TOOL DERIVES THE FRAME. On a category axis
+ * the two clicks say where the categories start and end, and the count says how
+ * many there are; 0…N then follows. Nobody typed a coordinate, because the
+ * figure printed none — which is the whole point. On a value axis nothing is
+ * substituted and the calibration passes through untouched.
+ *
+ * ⚑ A SUBSTITUTED COPY, not a mutated original: the axes carries whatever
+ * calibration it is handed into the project file, so the derived frame is what
+ * gets saved and a reopened heatmap rebuilds the identical index space. Mutating
+ * the session's own calibration would put numbers back in front of the user at
+ * steps that deliberately ask for none.
+ */
+function heatmapIndexFrame(
+  cal: Calibration,
+  xCategory: boolean,
+  yCategory: boolean
+): Calibration | string {
+  if (!xCategory && !yCategory) return cal;
+  const count = (index: number, axis: 'dx' | 'dy'): number => {
+    const raw = cal.getPoint(index)?.[axis] ?? '';
+    return parseFloat(String(raw));
+  };
+  const columns = xCategory ? count(1, 'dx') : NaN;
+  const rows = yCategory ? count(3, 'dy') : NaN;
+  if (xCategory && !(Number.isInteger(columns) && columns >= 1)) {
+    return 'Enter how many COLUMNS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
+  }
+  if (yCategory && !(Number.isInteger(rows) && rows >= 1)) {
+    return 'Enter how many ROWS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
+  }
+  const next = new Calibration(cal.getDimensions());
+  for (let i = 0; i < cal.getCount(); i++) {
+    const p = cal.getPoint(i)!;
+    let dx = p.dx ?? '';
+    let dy = p.dy ?? '';
+    if (xCategory && i === 0) dx = '0';
+    if (xCategory && i === 1) dx = String(columns);
+    if (yCategory && i === 2) dy = '0';
+    if (yCategory && i === 3) dy = String(rows);
+    next.addPoint(p.px, p.py, dx, dy);
+  }
+  return next;
+}
+
 export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'heatmap',
   label: 'Heatmap',
@@ -987,6 +1066,15 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   globalFields: [],
   autoExtractKind: 'none',
   options: [
+    // ⚑⚑ THE QUESTION THE WHOLE TYPE TURNS ON, and it is asked FIRST because it
+    // changes the walk. A heatmap's x and y are each independently a CATEGORY
+    // or a VALUE — gene × sample, treatment × time, field × field — and all
+    // four combinations are published. Without this the type could only be
+    // calibrated as value × value, so a categorical figure forced the user to
+    // invent numeric coordinates it never printed: the tool demanding
+    // fabricated data, which is tenet 9 broken by the prompt itself.
+    { key: 'xIsCategory', label: 'X is categories', kind: 'checkbox', default: false },
+    { key: 'yIsCategory', label: 'Y is categories', kind: 'checkbox', default: false },
     { key: 'isLogX', label: 'Log X', kind: 'checkbox', default: false },
     { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
     // ⚑ The key's own log option, and it belongs beside the other two rather
@@ -994,10 +1082,59 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'isLogValue', label: 'Log colour scale', kind: 'checkbox', default: false },
     { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
   ],
+  /**
+   * A category axis asks for its EDGES and a COUNT, never for coordinates.
+   *
+   * ⚑ The first edge takes NO typed value at all — the same shape as the colour
+   * key's strip ends, and for the same reason: a click with nothing to type is
+   * the difference between recording where the ink is and inferring it. The
+   * second edge carries the one number a person can actually read off the
+   * figure, which is HOW MANY categories there are. Everything else about the
+   * axis follows from those two clicks, exactly as v2.1's category ticks do.
+   *
+   * ⚑ The count is a DECLARATION, not a measurement — the user counts what the
+   * figure prints. The index positions it implies (0…N) are ordinals, not
+   * lengths, and the export says which axes are categorical so nobody reads
+   * them as millimetres.
+   */
+  stepsForOptions(steps, options) {
+    const categorical = (axis: 'x' | 'y', step: CalibStepInfo): CalibStepInfo => {
+      const noun = axis === 'x' ? 'column' : 'row';
+      const isFirst = step.key.endsWith('1');
+      return isFirst
+        ? {
+            ...step,
+            label: axis === 'x' ? 'X start' : 'Y start',
+            prompt: `Click the outer edge of the FIRST ${noun} — the start of the ${noun}s, not the middle of one`,
+            valueFields: [],
+          }
+        : {
+            ...step,
+            label: axis === 'x' ? 'X end' : 'Y end',
+            prompt: `Click the outer edge of the LAST ${noun}, then enter how many ${noun}s the figure has`,
+            valueFields: [
+              {
+                key: step.key,
+                label: axis === 'x' ? 'Columns' : 'Rows',
+                field: axis === 'x' ? 'dx' : 'dy',
+              },
+            ],
+          };
+    };
+    return steps.map((step) => {
+      if (optionBool(options, 'xIsCategory') && (step.key === 'x1' || step.key === 'x2')) {
+        return categorical('x', step);
+      }
+      if (optionBool(options, 'yIsCategory') && (step.key === 'y1' || step.key === 'y2')) {
+        return categorical('y', step);
+      }
+      return step;
+    });
+  },
   commonOrigin: XY_COMMON_ORIGIN,
   logScaleGuards: [
-    { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X' },
-    { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y' },
+    { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X', unless: 'xIsCategory' },
+    { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y', unless: 'yIsCategory' },
   ],
   distinctPixelSteps: [
     ['x1', 'x2'],
@@ -1027,6 +1164,26 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
    * rather than storing a copy of the colours.
    */
   checkValues(cal, options) {
+    // ⚑ The category COUNT, checked on the interactive path as well as in
+    // `buildAxes` — the same rule at both entrances. A count of 0, 2.5 or "many"
+    // would otherwise reach the axes as a frame width and produce a grid with a
+    // fractional number of bands.
+    const countProblem = (index: number, axis: 'dx' | 'dy', noun: string): string | null => {
+      const raw = String(cal.getPoint(index)?.[axis] ?? '');
+      if (raw.trim() === '') return null; // still typing; the walk says what is missing
+      const n = parseFloat(raw);
+      return Number.isInteger(n) && n >= 1
+        ? null
+        : `The number of ${noun} must be a whole number, 1 or more — count them off the figure. Their names are typed later, in the Heatmap card.`;
+    };
+    if (optionBool(options, 'xIsCategory')) {
+      const problem = countProblem(1, 'dx', 'columns');
+      if (problem) return problem;
+    }
+    if (optionBool(options, 'yIsCategory')) {
+      const problem = countProblem(3, 'dy', 'rows');
+      if (problem) return problem;
+    }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);
     if (
@@ -1059,6 +1216,10 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
         return { error: 'Calibration is incomplete — place all four X and Y points.' };
       }
     }
+    const xCategory = optionBool(ctx.options, 'xIsCategory');
+    const yCategory = optionBool(ctx.options, 'yIsCategory');
+    const frame = heatmapIndexFrame(cal, xCategory, yCategory);
+    if (typeof frame === 'string') return { error: frame };
     const axes = new XYAxes();
     // ⚑⚑ THE WHOLE EIGHT-POINT CALIBRATION GOES IN, not a four-point copy of
     // its frame, and that is what makes the colour key SURVIVE A SAVE. An axes
@@ -1068,9 +1229,11 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // nowhere, and a reopened heatmap has a calibration it cannot read a single
     // cell through. The first version here did exactly that.
     const ok = axes.calibrate(
-      cal,
-      optionBool(ctx.options, 'isLogX'),
-      optionBool(ctx.options, 'isLogY'),
+      frame,
+      // ⚑ A category axis is never logarithmic: index space has no decades in
+      // it, and honouring the option here would take the log of an ordinal.
+      !xCategory && optionBool(ctx.options, 'isLogX'),
+      !yCategory && optionBool(ctx.options, 'isLogY'),
       optionBool(ctx.options, 'skipRotation')
     );
     if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
@@ -1088,6 +1251,12 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       ...axes.getMetadata(),
       [GRAPH_TYPE_METADATA_KEY]: 'heatmap',
       heatmapLogValue: String(optionBool(ctx.options, 'isLogValue')),
+      // ⚑⚑ WHICH AXES ARE ORDINALS. Without this a reopened project cannot tell
+      // a category axis from a value axis — its coordinates are 0,1,2… either
+      // way — so the export would present counted positions as measured ones
+      // and the walk would come back asking for coordinates again.
+      heatmapXKind: xCategory ? 'category' : 'value',
+      heatmapYKind: yCategory ? 'category' : 'value',
     });
     return { axes };
   },
@@ -1104,6 +1273,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       isLogY: String(axes.isLogY()),
       skipRotation: String(axes.noRotation()),
       isLogValue: String(meta['heatmapLogValue'] ?? 'false'),
+      xIsCategory: String(meta['heatmapXKind'] === 'category'),
+      yIsCategory: String(meta['heatmapYKind'] === 'category'),
     };
   },
 };

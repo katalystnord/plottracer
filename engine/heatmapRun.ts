@@ -38,7 +38,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import { checkDividers, equalDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
@@ -129,6 +129,83 @@ export function buildColorScale(
     default:
       return { scale, error: null };
   }
+}
+
+/** The axes surface needed to read a heatmap's frame back — structural, so no
+ * `core/axes` import. `XYAxes` satisfies it. */
+export interface HeatmapFrameCarrier {
+  calibration: { getPoint(index: number): { dx: unknown; dy: unknown } | null } | null;
+  getMetadata(): Record<string, unknown>;
+}
+
+/** Whether each axis is an ordinal or a measured scale, as the calibration
+ * recorded it. */
+export interface HeatmapAxisKinds {
+  x: 'category' | 'value';
+  y: 'category' | 'value';
+}
+
+export function heatmapAxisKinds(axes: HeatmapFrameCarrier): HeatmapAxisKinds {
+  const meta = axes.getMetadata();
+  return {
+    x: meta['heatmapXKind'] === 'category' ? 'category' : 'value',
+    y: meta['heatmapYKind'] === 'category' ? 'category' : 'value',
+  };
+}
+
+/**
+ * The span the grid lives in, read from the axes' OWN calibration.
+ *
+ * ⚑⚑ FROM THE CALIBRATION, NOT FROM THE TYPED TEXT, and that is what makes a
+ * category axis work at all: its steps ask for a count and an edge, so there is
+ * no typed coordinate to read — the frame `buildAxes` derived (0…N) exists only
+ * on the axes. Reading the boxes instead left a categorical heatmap with no
+ * bounds, therefore no grid, therefore no cells: the feature silently absent.
+ * It also removes a second source of truth for something the axes already knows.
+ */
+export function heatmapBounds(
+  axes: HeatmapFrameCarrier
+): { xMin: number; xMax: number; yMin: number; yMax: number } | null {
+  const cal = axes.calibration;
+  if (!cal) return null;
+  const at = (index: number, axis: 'dx' | 'dy'): number => Number(cal.getPoint(index)?.[axis] ?? NaN);
+  const values = [at(0, 'dx'), at(1, 'dx'), at(2, 'dy'), at(3, 'dy')];
+  if (values.some((v) => !Number.isFinite(v))) return null;
+  const [x1, x2, y1, y2] = values as [number, number, number, number];
+  return {
+    xMin: Math.min(x1, x2),
+    xMax: Math.max(x1, x2),
+    yMin: Math.min(y1, y2),
+    yMax: Math.max(y1, y2),
+  };
+}
+
+/**
+ * The grid a fresh heatmap starts with — and on a CATEGORY axis it is not one
+ * cell but every declared band.
+ *
+ * ⚑⚑ THE COUNT IS ALREADY A DECLARATION, so the bands are declared, not
+ * guessed. A user who has said "12 columns" has told us where every boundary is
+ * on an evenly-drawn categorical axis, and making them press Detect or drag
+ * twelve dividers into place would be asking twice for something already
+ * answered. They stay ordinary adjustable dividers, so an unevenly drawn figure
+ * is still expressible — the count is a starting point, exactly as
+ * `equalDividers` has always been.
+ */
+export function initialGridFor(
+  bounds: { xMin: number; xMax: number; yMin: number; yMax: number },
+  kinds: HeatmapAxisKinds
+): HeatmapState {
+  const bandsFor = (lo: number, hi: number, category: boolean): number[] => {
+    if (!category) return [lo, hi];
+    // The ordinal frame runs 0…N, so its width IS the number of bands.
+    const count = Math.round(hi - lo);
+    return equalDividers(lo, hi, count) ?? [lo, hi];
+  };
+  return {
+    xDividers: bandsFor(bounds.xMin, bounds.xMax, kinds.x === 'category'),
+    yDividers: bandsFor(bounds.yMin, bounds.yMax, kinds.y === 'category'),
+  };
 }
 
 /**
@@ -615,6 +692,10 @@ export interface HeatmapRow {
    * the pixels and stay measured whatever the axis is called. */
   xLabel: string;
   yLabel: string;
+  /** This coordinate is an ORDINAL — a counted position, not a measured one.
+   * Rides into the export so a reader cannot mistake band 3 for 3 mm. */
+  xIsCategory: boolean;
+  yIsCategory: boolean;
 }
 
 /** How much of a cell may be something other than its colour before it is worth
@@ -659,7 +740,8 @@ export function readHeatmapCells(
   axes: PixelProjector,
   grid: HeatmapState,
   scale: ColorScale,
-  labels: HeatmapLabels = NO_HEATMAP_LABELS
+  labels: HeatmapLabels = NO_HEATMAP_LABELS,
+  kinds: HeatmapAxisKinds = { x: 'value', y: 'value' }
 ): ReadHeatmapCellsResult {
   const cells = readHeatmap(
     image.data,
@@ -692,6 +774,8 @@ export function readHeatmapCells(
     warning: warningFor(cell),
     xLabel: labelAt(labels.x, cell.col),
     yLabel: labelAt(labels.y, cell.row),
+    xIsCategory: kinds.x === 'category',
+    yIsCategory: kinds.y === 'category',
   }));
   const flagged = rows.filter((r) => r.warning !== '').length;
   const summary =

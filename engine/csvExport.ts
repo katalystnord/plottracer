@@ -52,6 +52,17 @@ export interface HeatmapExportCell {
    * rather than a number (v2.2). Empty on a value axis. */
   xLabel?: string;
   yLabel?: string;
+  /**
+   * Is this cell's x / y coordinate an ORDINAL rather than a measurement?
+   *
+   * ⚑⚑ A category axis's bounds are 0,1,2… — counted positions, not lengths —
+   * and they look exactly like a value axis's would. Without saying so the file
+   * hands a reader `x_min 3, x_max 4` for "the fourth gene" and invites them to
+   * treat it as a distance. The record says which it is; it does not drop the
+   * numbers, because the ordinal IS the position the figure drew.
+   */
+  xIsCategory?: boolean;
+  yIsCategory?: boolean;
 }
 
 /** Does any cell carry a name on this axis? Decides whether the export grows a
@@ -242,6 +253,13 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
  * ⚑ An unread cell writes EMPTY, never 0 — `0` is a value a heatmap might
  * really contain.
  */
+/** "x (category index)" where the axis is counted, "x min" where it is
+ * measured — the header carries the distinction rather than a footnote. */
+function axisHeader(cells: readonly HeatmapExportCell[], axis: 'x' | 'y', suffix: string): string {
+  const category = cells.some((c) => (axis === 'x' ? c.xIsCategory : c.yIsCategory));
+  return category ? `${axis} ${suffix} (category index)` : `${axis} ${suffix}`;
+}
+
 export function heatmapCellsSection(
   cells: readonly HeatmapExportCell[],
   rounder: ValueRounder
@@ -262,12 +280,12 @@ export function heatmapCellsSection(
       // the reader).
       ...(xNamed ? ['x label'] : []),
       ...(yNamed ? ['y label'] : []),
-      'x min',
-      'x max',
-      'y min',
-      'y max',
-      'x centre',
-      'y centre',
+      axisHeader(cells, 'x', 'min'),
+      axisHeader(cells, 'x', 'max'),
+      axisHeader(cells, 'y', 'min'),
+      axisHeader(cells, 'y', 'max'),
+      axisHeader(cells, 'x', 'centre'),
+      axisHeader(cells, 'y', 'centre'),
       'value',
       'value low',
       'value high',
@@ -710,6 +728,13 @@ export function buildHeatmapJSON(
       ...(c.xLabel ? { xLabel: c.xLabel } : {}),
       ...(c.yLabel ? { yLabel: c.yLabel } : {}),
     })),
+    // ⚑ Said ONCE for the whole figure rather than repeated per cell: it is a
+    // property of the axis, and a reader deciding how to plot this needs it
+    // before they look at any row.
+    axes: {
+      x: cells.some((c) => c.xIsCategory) ? 'category' : 'value',
+      y: cells.some((c) => c.yIsCategory) ? 'category' : 'value',
+    },
     matrix: {
       x: xs,
       y: ys,

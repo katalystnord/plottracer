@@ -211,7 +211,9 @@ import {
   dragDivider,
   gridFromAxes,
   gridToAxes,
-  initialGrid,
+  heatmapAxisKinds,
+  heatmapBounds as heatmapBounds_,
+  initialGridFor,
   isDividerHandle,
   labelsForCells,
   labelsFromAxes,
@@ -219,6 +221,8 @@ import {
   type MetadataCarrier,
   readHeatmapCells,
   removeDividerHandle,
+  type HeatmapAxisKinds,
+  type HeatmapFrameCarrier,
   type HeatmapLabels,
   type HeatmapRow,
   type HeatmapState,
@@ -1743,16 +1747,16 @@ export function Workspace() {
    * knows, and detection fills in between them.
    */
   const heatmapBounds = useCallback((): { xMin: number; xMax: number; yMin: number; yMax: number } | null => {
-    const placed = sessionRef.current.getPlacedPoints();
-    const values = ['x1', 'x2', 'y1', 'y2'].map((k) => Number(placed[k]?.values[0]));
-    if (values.some((v) => !Number.isFinite(v))) return null;
-    const [x1, x2, y1, y2] = values as [number, number, number, number];
-    return {
-      xMin: Math.min(x1, x2),
-      xMax: Math.max(x1, x2),
-      yMin: Math.min(y1, y2),
-      yMax: Math.max(y1, y2),
-    };
+    const axes = sessionRef.current.getAxes();
+    return axes ? heatmapBounds_(axes as unknown as HeatmapFrameCarrier) : null;
+  }, []);
+
+  /** Category or value, per axis, as the calibration recorded it. */
+  const heatmapKinds = useCallback((): HeatmapAxisKinds => {
+    const axes = sessionRef.current.getAxes();
+    return axes
+      ? heatmapAxisKinds(axes as unknown as HeatmapFrameCarrier)
+      : { x: 'value' as const, y: 'value' as const };
   }, []);
 
   /** Is this a calibrated heatmap with an image to read? The card's buttons are
@@ -1796,13 +1800,13 @@ export function Workspace() {
     if (heatmapGrid !== null) return heatmapGrid;
     if (!session.isCalibrated()) return null;
     const bounds = heatmapBounds();
-    return bounds === null ? null : initialGrid(bounds);
+    return bounds === null ? null : initialGridFor(bounds, heatmapKinds());
     // `version` is the only signal React has that the ref-held session mutated,
     // so it is listed deliberately even though the body does not read it —
     // without it this would freeze at "not calibrated yet" (see the same note
     // above the memo block further down).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heatmapActive, heatmapBounds, heatmapGrid, session, version]);
+  }, [heatmapActive, heatmapBounds, heatmapKinds, heatmapGrid, session, version]);
 
   /**
    * Set the grid, and put it where a save and an undo will both find it.
@@ -1931,14 +1935,14 @@ export function Workspace() {
           sessionRef.current.getOptions()['isLogValue'] === 'true'
         );
         if (scale) {
-          const result = readHeatmapCells(image, axesNow, next, scale, labelsForCells(heatmapLabels, next, axesNow));
+          const result = readHeatmapCells(image, axesNow, next, scale, labelsForCells(heatmapLabels, next, axesNow), heatmapKinds());
           setHeatmapCells(result.rows);
           setHeatmapSummary(result.summary);
         }
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length, heatmapLabels]
+    [applyHeatmapGrid, commit, heatmapCells.length, heatmapKinds, heatmapLabels]
   );
 
   const moveHeatmapDivider = useCallback(
@@ -2008,7 +2012,7 @@ export function Workspace() {
       setHeatmapError('Finish the calibration first — the grid is measured against it.');
       return;
     }
-    const start = heatmapShownGrid ?? initialGrid(bounds);
+    const start = heatmapShownGrid ?? initialGridFor(bounds, heatmapKinds());
     const result = detectGrid({ data: img.data, width: img.width, height: img.height }, axes, start, {
       ...(declaredCount(heatmapColumns) !== undefined ? { columns: declaredCount(heatmapColumns)! } : {}),
       ...(declaredCount(heatmapRows) !== undefined ? { rows: declaredCount(heatmapRows)! } : {}),
@@ -2018,7 +2022,7 @@ export function Workspace() {
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
     if (result.grid !== null) applyHeatmapGrid(result.grid);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapShownGrid, heatmapColumns, heatmapRows]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapShownGrid, heatmapColumns, heatmapRows]);
 
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
@@ -2041,13 +2045,13 @@ export function Workspace() {
       setHeatmapSummary('');
       return;
     }
-    const grid = heatmapShownGrid ?? initialGrid(bounds);
-    const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes));
+    const grid = heatmapShownGrid ?? initialGridFor(bounds, heatmapKinds());
+    const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes), heatmapKinds());
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapLabels, heatmapShownGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 
   /**
    * The grid drawn on the figure: one line per divider, spanning the grid's own

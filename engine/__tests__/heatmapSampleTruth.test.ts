@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { readPng } from './helpers/readPng.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
-import { buildColorScale, detectGrid, initialGrid, readHeatmapCells } from '../heatmapRun.js';
+import { buildColorScale, detectGrid, heatmapBounds as heatmapBoundsOf, initialGrid, initialGridFor, readHeatmapCells } from '../heatmapRun.js';
+import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.js';
 import type { PlacedCalibPoint } from '../calibrationSession.js';
 
 /**
@@ -165,5 +166,93 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
       const flagged = read.rows.filter((r) => r.warning !== '');
       expect(flagged.map((r) => `${r.col},${r.row}: ${r.warning}`), name).toEqual([]);
     }
+  });
+});
+
+describe('the SAME figure read through a CATEGORY calibration', () => {
+  /**
+   * ⚑⚑ TWO PATHS, ONE FIGURE, AND THEY MUST AGREE. The assay example's axes are
+   * genuinely categorical — compound × cell line — and it was drawn with numeric
+   * axes only because that is all the tool could calibrate when it was made
+   * (David spotted the assumption from the calibration card: *"this assumes
+   * value based axis, no?"*). Its bands are unit-wide, so a category
+   * calibration's derived 0…N frame lands on exactly the same pixels as the
+   * value calibration's — which makes the two paths comparable, and any
+   * disagreement a defect rather than a difference of convention.
+   *
+   * ⚑ Nobody types a coordinate on this path. Two edge clicks and a COUNT.
+   */
+  function categorySession(columns: number, rows: number): CalibrationSession<XYAxes> {
+    const truth = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../../samples/heatmap-assay-log.truth.json', import.meta.url)), 'utf8')
+    ) as SampleTruth;
+    const a = truth.calibration.anchors;
+    const s = new CalibrationSession<XYAxes>(HEATMAP_AXES_CONFIG);
+    s.setOption('xIsCategory', 'true');
+    s.setOption('yIsCategory', 'true');
+    s.setOption('isLogValue', 'true');
+    const walk: Array<[number, number, string[]]> = [
+      [a.x1.px, a.x1.py, []],
+      [a.x2.px, a.x2.py, [String(columns)]],
+      [a.y1.px, a.y1.py, []],
+      [a.y2.px, a.y2.py, [String(rows)]],
+      [a.k1.px, a.k1.py, []],
+      [a.k2.px, a.k2.py, []],
+      [a.kv1.px, a.kv1.py, [String(a.kv1.value)]],
+      [a.kv2.px, a.kv2.py, [String(a.kv2.value)]],
+    ];
+    for (const [px, py, values] of walk) {
+      s.handleCalibrationClick(px, py);
+      if (values.length > 0) s.confirmCalibrationValues(values);
+    }
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  }
+
+  it('DECLARING the counts gives the figure’s own grid, with no detection at all', () => {
+    // ⚑ The count is already a declaration, so the bands are declared rather
+    // than guessed: six columns and five rows land exactly on the committed
+    // grid. A user who has counted the categories has told us where every
+    // boundary is.
+    const { truth } = sample('heatmap-assay-log');
+    const session = categorySession(6, 5);
+    const axes = session.getAxes()!;
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    expect([...grid.xDividers]).toEqual(truth.grid.x);
+    expect([...grid.yDividers]).toEqual(truth.grid.y);
+  });
+
+  it('reads every cell to the SAME value the value-axis path does', () => {
+    const { truth, image, placed } = sample('heatmap-assay-log');
+    const session = categorySession(6, 5);
+    const axes = session.getAxes()!;
+    const { scale } = buildColorScale(placed, image, true);
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    const { rows, error } = readHeatmapCells(image, axes, grid, scale!, undefined, {
+      x: 'category',
+      y: 'category',
+    });
+    expect(error).toBeNull();
+    expect(rows).toHaveLength(truth.cells.length);
+    for (const row of rows) {
+      const want = truth.cells.find(
+        (c) => Math.abs(c.xMin - row.xMin) < 1e-6 && Math.abs(c.yMin - row.yMin) < 1e-6
+      )!;
+      expect(want, `no truth cell at ${row.xMin},${row.yMin}`).toBeDefined();
+      // A LOG key, so agreement is judged as a RATIO — an absolute tolerance
+      // would be meaningless across 3…600 nM.
+      expect(Math.abs(row.value! / want.value - 1)).toBeLessThan(0.05);
+    }
+  });
+
+  it('marks the coordinates as ORDINALS, so nobody reads band 3 as 3 mm', () => {
+    const { image, placed } = sample('heatmap-assay-log');
+    const session = categorySession(6, 5);
+    const axes = session.getAxes()!;
+    const { scale } = buildColorScale(placed, image, true);
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    const { rows } = readHeatmapCells(image, axes, grid, scale!, undefined, { x: 'category', y: 'category' });
+    expect(rows[0]!.xIsCategory).toBe(true);
+    expect(rows[0]!.yIsCategory).toBe(true);
   });
 });

@@ -505,9 +505,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSteps(): readonly CalibStepInfo[] {
     const repeating = this.config.repeatingStep;
-    if (!repeating) return this.config.fixedSteps;
+    // ⚑ An option can change what a step ASKS FOR — a heatmap axis declared as
+    // categories wants a count, not a coordinate. Applied here because this is
+    // the one place the step list is read from (see the note above), so a
+    // reshaped walk cannot be missed by anything downstream.
+    const fixed = this.config.stepsForOptions
+      ? this.config.stepsForOptions(this.config.fixedSteps, this.optionValues)
+      : this.config.fixedSteps;
+    if (!repeating) return fixed;
 
-    const steps: CalibStepInfo[] = [...this.config.fixedSteps];
+    const steps: CalibStepInfo[] = [...fixed];
     for (let i = 1; i <= this.repeatCount; i++) {
       steps.push({
         ...repeating.step,
