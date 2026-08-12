@@ -47,10 +47,14 @@ export interface HeatmapCardProps {
   xLabels: string;
   yLabels: string;
   onLabelsChange: (xLabels: string, yLabels: string) => void;
+  /** Blur handler: a text edit becomes one undo entry when it ENDS, never one
+   * per keystroke — the same rule every other text field here follows. */
+  onCommitPendingEdit: () => void;
   /** "3 of 5 named", or a warning that there are more names than cells. Empty
    * before anything has been typed. */
   xLabelCoverage: string;
   yLabelCoverage: string;
+
   /** Detection's own report — agreement, a miss, or why nothing could be read. */
   detectMessage: string;
   /** The read-out summary, and the cells themselves. */
@@ -78,6 +82,7 @@ export function HeatmapCard({
   xLabels,
   yLabels,
   onLabelsChange,
+  onCommitPendingEdit,
   xLabelCoverage,
   yLabelCoverage,
   detectMessage,
@@ -193,6 +198,7 @@ export function HeatmapCard({
                 data-testid="heatmap-x-labels"
                 value={xLabels}
                 onChange={(e) => onLabelsChange(e.target.value, yLabels)}
+                onBlur={onCommitPendingEdit}
                 placeholder="names, comma separated"
                 style={{ flex: 1, minWidth: 0 }}
               />
@@ -203,10 +209,20 @@ export function HeatmapCard({
                 data-testid="heatmap-y-labels"
                 value={yLabels}
                 onChange={(e) => onLabelsChange(xLabels, e.target.value)}
+                onBlur={onCommitPendingEdit}
                 placeholder="names, comma separated"
                 style={{ flex: 1, minWidth: 0 }}
               />
             </label>
+            {/* ⚑ THE CONVENTION, SAID OUT LOUD rather than left to be discovered
+                from an export. It is a constant and not a computed direction
+                because the mapping GUARANTEES it: `labelsForCells` measures
+                which way the cell indices run and flips the typed list to suit,
+                so the first name is the top-left cell on an ordinary figure, on
+                one calibrated upside down, and on a rotated scan alike. */}
+            <span data-testid="heatmap-label-direction" style={{ color: theme.color.text.legend }}>
+              First name = the figure’s top-left cell; columns left → right, rows top → bottom.
+            </span>
             {xLabelCoverage || yLabelCoverage ? (
               <span data-testid="heatmap-label-coverage" style={{ color: theme.color.text.secondary }}>
                 {[xLabelCoverage && `Columns: ${xLabelCoverage}`, yLabelCoverage && `Rows: ${yLabelCoverage}`]

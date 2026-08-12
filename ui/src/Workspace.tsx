@@ -213,6 +213,7 @@ import {
   gridToAxes,
   initialGrid,
   isDividerHandle,
+  labelsForCells,
   labelsFromAxes,
   labelsToAxes,
   type MetadataCarrier,
@@ -1837,8 +1838,14 @@ export function Workspace() {
       setHeatmapXLabels(xText);
       setHeatmapYLabels(yText);
       const axes = sessionRef.current.getAxes();
-      if (!axes) return;
-      const labels: HeatmapLabels = { x: parseLabelList(xText), y: parseLabelList(yText) };
+      const grid = heatmapShownGrid;
+      if (!axes || !grid) return;
+      // ⚑⚑ TYPED IN READING ORDER, STORED PER CELL. The first row name belongs
+      // to the row at the TOP of the figure, which is the LAST cell index on an
+      // ordinary upward-y plot — see `labelsForCells`. Storing the typed order
+      // verbatim filed every name against the wrong row, silently.
+      const typed: HeatmapLabels = { x: parseLabelList(xText), y: parseLabelList(yText) };
+      const labels = labelsForCells(typed, grid, axes);
       labelsToAxes(axes as unknown as MetadataCarrier, labels);
       setHeatmapCells((prev) =>
         prev.map((row) => ({
@@ -1848,7 +1855,7 @@ export function Workspace() {
         }))
       );
     },
-    []
+    [heatmapShownGrid]
   );
 
   /**
@@ -1869,9 +1876,13 @@ export function Workspace() {
     // ⚑ The names come back with the grid, through the same door. A reopened
     // heatmap whose columns lost their names would export the index numbers this
     // whole feature exists to replace — and it would do it silently.
-    const labels = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
-    setHeatmapXLabels(formatLabelList(labels.x));
-    setHeatmapYLabels(formatLabelList(labels.y));
+    const stored = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
+    // Back through the SAME mapping, which is its own inverse: the boxes show
+    // the figure's reading order, the file holds the cell order.
+    const restoredGrid = axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null;
+    const shown = restoredGrid && axes ? labelsForCells(stored, restoredGrid, axes) : stored;
+    setHeatmapXLabels(formatLabelList(shown.x));
+    setHeatmapYLabels(formatLabelList(shown.y));
     setHeatmapCells([]);
     setHeatmapSummary('');
     setHeatmapDetectMessage('');
@@ -1920,7 +1931,7 @@ export function Workspace() {
           sessionRef.current.getOptions()['isLogValue'] === 'true'
         );
         if (scale) {
-          const result = readHeatmapCells(image, axesNow, next, scale, heatmapLabels);
+          const result = readHeatmapCells(image, axesNow, next, scale, labelsForCells(heatmapLabels, next, axesNow));
           setHeatmapCells(result.rows);
           setHeatmapSummary(result.summary);
         }
@@ -2031,7 +2042,7 @@ export function Workspace() {
       return;
     }
     const grid = heatmapShownGrid ?? initialGrid(bounds);
-    const result = readHeatmapCells(image, axes, grid, scale, heatmapLabels);
+    const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes));
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
@@ -2072,6 +2083,16 @@ export function Workspace() {
     pendingEditRef.current = false;
     commit();
   }, [commit]);
+  /** Mark a text edit in progress from a handler declared ABOVE the ref.
+   *
+   * ⚑ The React Compiler refuses a ref mutation that appears earlier in the
+   * component than the `useRef` it belongs to — and it reports the refusal at
+   * every OTHER mutation site, eight of them, in code that had not changed.
+   * Same unmasking trap the v2.1 split hit: the compiler stops at its first
+   * bailout, so one new one makes a pile of latent ones visible at once. */
+  const markPendingEdit = useCallback(() => {
+    pendingEditRef.current = true;
+  }, []);
 
   // Re-sync React-held UI state to a session that was just replaced wholesale
   // by an undo/redo restore -- the same shape of resync openProject does after
@@ -7517,7 +7538,15 @@ export function Workspace() {
           }
           xLabels={heatmapXLabels}
           yLabels={heatmapYLabels}
-          onLabelsChange={applyHeatmapLabels}
+          onLabelsChange={(x, y) => {
+            // ⚑ A text edit: marked pending here and committed on blur, the same
+            // rule every other text field follows. Without it the names were in
+            // no snapshot at all, and an undo of an unrelated action discarded
+            // everything typed, with no redo to get it back.
+            markPendingEdit();
+            applyHeatmapLabels(x, y);
+          }}
+          onCommitPendingEdit={commitPendingEdit}
           xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
           yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
           detectMessage={heatmapDetectMessage}

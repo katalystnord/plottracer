@@ -13,6 +13,8 @@ import {
   dragDivider,
   initialGrid,
   isDividerHandle,
+  labelOrderReversed,
+  labelsForCells,
   readHeatmapCells,
   removeDividerHandle,
   type SourceImage,
@@ -99,6 +101,42 @@ describe('buildColorScale', () => {
     const { image, placed } = scene();
     const negative = { ...placed, kv1: { ...placed['kv1']!, values: ['-20'] } };
     expect(buildColorScale(negative, image, true).error).toMatch(/positive values/i);
+  });
+
+  // ⚑⚑ THE OTHER FOUR REFUSALS HAD NO TEST AT ALL — found by mutation, which
+  // reported the sentences as no-coverage. These are the words the user reads
+  // when the tool declines to measure something, and this file's stated job is
+  // translating a code into a sentence that names the requirement; an empty or
+  // wrong one would have shipped unnoticed. Asserting on the WORDS of a refusal
+  // is what found three MISSING refusals in the axes classes.
+  it('refuses a key clicked off the image, and says so', () => {
+    const { image, placed } = scene();
+    const off = { ...placed, k2: { px: image.width + 50, py: 10, values: [] } };
+    expect(buildColorScale(off, image, false).error).toMatch(/must both be on the image/i);
+  });
+
+  it('refuses a key with nothing on it, naming transparency', () => {
+    // A fully transparent strip: nothing was drawn where the user pointed.
+    const blank: SourceImage = { data: new Uint8ClampedArray(40 * 40 * 4), width: 40, height: 40 };
+    const onBlank = {
+      k1: { px: 4, py: 20, values: [] },
+      k2: { px: 36, py: 20, values: [] },
+      kv1: { px: 8, py: 20, values: ['0'] },
+      kv2: { px: 32, py: 20, values: ['100'] },
+    };
+    expect(buildColorScale(onBlank, blank, false).error).toMatch(/transparent/i);
+  });
+
+  it('refuses a tick whose value is not a number', () => {
+    const { image, placed } = scene();
+    const typo = { ...placed, kv1: { ...placed['kv1']!, values: ['twenty'] } };
+    expect(buildColorScale(typo, image, false).error).toMatch(/must both be numbers/i);
+  });
+
+  it('refuses two ticks clicked at the same place on the strip', () => {
+    const { image, placed } = scene();
+    const same = { ...placed, kv2: { ...placed['kv2']!, px: placed['kv1']!.px, py: placed['kv1']!.py } };
+    expect(buildColorScale(same, image, false).error).toMatch(/same place along the strip/i);
   });
 });
 
@@ -353,6 +391,45 @@ describe('dragging a divider', () => {
   });
 });
 
+describe('which way the figure READS', () => {
+  /** Upright: data y grows UP the page, so row 0 (yMin) is the BOTTOM row. */
+  const upright = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 300 - y * 10 }) };
+  /** Calibrated upside down: data y grows DOWN, so row 0 is already the top. */
+  const flipped = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 100 + y * 10 }) };
+  /** Mirrored x: the first column sits on the RIGHT. */
+  const mirrored = { dataToPixel: (x: number, y: number) => ({ x: 400 - x * 30, y: 300 - y * 10 }) };
+  const grid = { xDividers: [0, 4, 10], yDividers: [0, 10, 20] };
+
+  it('says ROWS run against the reading order on an ordinary figure', () => {
+    // ⚑⚑ THE AUDIT'S FINDING. A person copying names off a published heatmap
+    // reads them top-down; cell row 0 is yMin, at the bottom. Without the flip
+    // the first name lands on the last row — every value right, every name
+    // filed against the wrong one, and nothing on screen saying so.
+    expect(labelOrderReversed(grid, upright)).toEqual({ x: false, y: true });
+  });
+
+  it('is MEASURED, not assumed — an upside-down calibration reads the other way', () => {
+    // ⚑ The reason this is a function and not the constant `{x:false, y:true}`.
+    expect(labelOrderReversed(grid, flipped)).toEqual({ x: false, y: false });
+    expect(labelOrderReversed(grid, mirrored)).toEqual({ x: true, y: true });
+  });
+
+  it('claims no order at all for a grid that is not a grid', () => {
+    expect(labelOrderReversed({ xDividers: [1], yDividers: [0, 5] }, upright)).toEqual({ x: false, y: false });
+  });
+
+  it('lines the typed names up with the cells they name', () => {
+    const typed = { x: ['left', 'right'], y: ['top', 'bottom'] };
+    // Columns are already left-to-right; rows are flipped onto the cells.
+    expect(labelsForCells(typed, grid, upright)).toEqual({
+      x: ['left', 'right'],
+      y: ['bottom', 'top'],
+    });
+    // …and the same call on the flipped figure leaves the rows alone.
+    expect(labelsForCells(typed, grid, flipped).y).toEqual(['top', 'bottom']);
+  });
+});
+
 describe('adding and removing a boundary', () => {
   const grid = { xDividers: [0, 4, 10], yDividers: [0, 20] };
 
@@ -405,6 +482,18 @@ describe('adding and removing a boundary', () => {
     expect(removeDividerHandle(grid, 'hmy:1')).toBeNull();
     expect(removeDividerHandle(grid, 'hmz:0')).toBeNull();
     expect(removeDividerHandle(grid, 'hmx:9')).toBeNull();
+  });
+
+  it('removes a ROW boundary too, not only a column one', () => {
+    // ⚑ Found by mutation: every removal test used the x axis, because the
+    // fixture's y axis had only its outer two dividers and every y case refused
+    // before reaching the branch. A transposition there — returning the x list
+    // for a y handle — would have survived silently.
+    const twoWay = { xDividers: [0, 4, 10], yDividers: [0, 5, 20] };
+    expect(removeDividerHandle(twoWay, 'hmy:1')).toEqual({
+      xDividers: [0, 4, 10],
+      yDividers: [0, 20],
+    });
   });
 
   it('lets an OUTER boundary go once there is an interior one to take its place', () => {

@@ -8261,6 +8261,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(400);
 
     await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
+    await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
     await page.waitForTimeout(300);
     // The card counts rather than refuses — four names on a five-column figure
     // is someone part-way through, not an error.
@@ -8268,6 +8269,19 @@ describe('heatmap capture (v2.2)', () => {
     // The table shows the name the moment it is typed, without re-reading.
     const first = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
     expect(first[0]).toBe('BRCA1');
+
+    // ⚑⚑ THE ROW ORDER, which the v2.2 audit caught: the table is ordered by
+    // cell index and cell row 0 is yMin — the BOTTOM of the figure — while a
+    // person copies names off a heatmap TOP-DOWN. So the first row name typed
+    // must land on the LAST table row, and the last name on the first. Before
+    // the fix every row name was filed one-for-one against the wrong row, with
+    // every value correct and nothing on screen saying so.
+    const rowCount = await page.getByTestId('heatmap-row').count();
+    expect(first[1]).toBe('bottom');
+    const lastRow = await page.getByTestId('heatmap-row').nth(rowCount - 1).locator('td').allTextContents();
+    expect(lastRow[1]).toBe('top');
+    // And the convention is stated on screen rather than left to be discovered.
+    expect(await textOf('heatmap-label-direction')).toMatch(/top-left cell/);
 
     const csvPath = heatmapTempFile('csv');
     await stubHeatmapSaveDialog(csvPath);
@@ -8280,8 +8294,10 @@ describe('heatmap capture (v2.2)', () => {
 
     // ⚑ The name is BESIDE the measured bounds, never instead of them: the
     // bounds are read off the pixels and stay true whatever the axis is called.
-    expect(csv).toMatch(/x label,x min,x max,y min,y max,x centre,y centre,value/);
-    expect(csv).toMatch(/^BRCA1,/m);
+    expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,value/);
+    // ⚑ The first cell is col 0 / row 0 — the figure's BOTTOM-left — so it
+    // carries the LAST row name typed. The order survives into the file.
+    expect(csv).toMatch(/^BRCA1,bottom,/m);
     // A quoted name keeps its comma through the record AND through the CSV.
     expect(csv).toMatch(/"EGFR, mut"/);
     // The matrix's header row takes the names, where there is only one slot.

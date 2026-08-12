@@ -81,7 +81,13 @@ export function parseLabelList(text: string): string[] {
  * across a save and a reopen.
  */
 export function formatLabelList(labels: readonly string[]): string {
-  return labels
+  // ⚑ Trailing empties are dropped, because `reindexLabels` PADS a short list to
+  // the grid's size and a reopened project would otherwise show the user
+  // "BRCA1, TP53, , , " — punctuation they did not type, growing every time the
+  // grid does. Empties BETWEEN names are kept: those are positions.
+  const trimmed = [...labels];
+  while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
+  return trimmed
     .map((l) => (l.includes(',') || l.includes('"') ? `"${l.replace(/"/g, '""')}"` : l))
     .join(', ');
 }
@@ -97,6 +103,41 @@ export function formatLabelList(labels: readonly string[]): string {
 export function labelAt(labels: readonly string[], index: number): string {
   if (!Number.isInteger(index) || index < 0) return '';
   return labels[index] ?? '';
+}
+
+/**
+ * Line up a typed list with the CELLS it names, reversing it when the figure
+ * reads the opposite way to the cell indices.
+ *
+ * ⚑⚑ THE DEFECT THIS EXISTS TO STOP, found in the v2.2 audit. Cell row 0 is
+ * `yMin` — the BOTTOM of the plot — while a person copying names off a
+ * published heatmap reads them TOP-DOWN, because that is how the figure prints
+ * them. So the first name typed was landing on the last row: every value
+ * correct, every name filed against the wrong one, and nothing on screen saying
+ * so. It is the same failure `moveDivider` refuses to allow when it will not
+ * re-sort dividers — values right, filed wrong is the silent kind of wrong.
+ *
+ * ⚑ PADDED FIRST, THEN REVERSED, and the order matters: three names on a
+ * five-row figure belong to the top three rows, not to rows 0–2 counted from
+ * the bottom. Reversing a short list without padding would slide them two rows
+ * down the figure.
+ *
+ * ⚑ Its own inverse for a given `cellCount`, which is what lets the display
+ * path reuse it instead of carrying a second copy of the rule.
+ */
+export function reindexLabels(
+  labels: readonly string[],
+  cellCount: number,
+  reversed: boolean
+): string[] {
+  if (!Number.isInteger(cellCount) || cellCount < 0) return [...labels];
+  const padded = Array.from({ length: Math.max(cellCount, labels.length) }, (_, i) => labels[i] ?? '');
+  if (!reversed) return padded;
+  // Only the cells' own slots take part in the flip; anything the user typed
+  // BEYOND the grid has no cell to be reversed against, so it stays where it is
+  // and `labelCoverage` reports it as surplus.
+  const within = padded.slice(0, cellCount).reverse();
+  return [...within, ...padded.slice(cellCount)];
 }
 
 /**

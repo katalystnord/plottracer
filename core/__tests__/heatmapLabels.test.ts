@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLabelList, labelAt, labelCoverage, parseLabelList } from '../heatmapLabels.js';
+import { formatLabelList, labelAt, labelCoverage, parseLabelList, reindexLabels } from '../heatmapLabels.js';
 
 /**
  * The names on a heatmap's axes — "the label is the coordinate" (v2.2).
@@ -47,9 +47,54 @@ describe('formatLabelList', () => {
     expect(formatLabelList(['6" pipe'])).toBe('"6"" pipe"');
   });
 
+  it('drops TRAILING empties, which padding creates and the user never typed', () => {
+    // ⚑ `reindexLabels` pads a short list to the grid's size; without this a
+    // reopened project showed "BRCA1, TP53, , , " — punctuation growing every
+    // time the grid did. Gaps BETWEEN names are positions and stay.
+    expect(formatLabelList(['A', 'B', '', ''])).toBe('A, B');
+    expect(formatLabelList(['A', '', 'C'])).toBe('A, , C');
+    expect(formatLabelList(['', ''])).toBe('');
+  });
+
   it('round-trips a list with commas, quotes and gaps', () => {
     const labels = ['A, B', '', '6" pipe', 'plain'];
     expect(parseLabelList(formatLabelList(labels))).toEqual(labels);
+  });
+});
+
+describe('reindexLabels — the order the figure is READ in', () => {
+  it('leaves a list alone when the cells run the way the figure reads', () => {
+    expect(reindexLabels(['A', 'B', 'C'], 3, false)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('REVERSES when cell 0 is the far end of the figure', () => {
+    // ⚑⚑ The audit's finding: cell row 0 is yMin, the BOTTOM of the plot, while
+    // a person copying names off a published heatmap reads them top-down. The
+    // first name typed belongs to the LAST row index.
+    expect(reindexLabels(['top', 'middle', 'bottom'], 3, true)).toEqual(['bottom', 'middle', 'top']);
+  });
+
+  it('PADS BEFORE REVERSING, so a short list names the rows it was read from', () => {
+    // ⚑ Three names on a five-row figure belong to the TOP three rows. Reversing
+    // without padding would slide them two rows down the figure — a silent
+    // mis-filing that looks like a shorter list, not like a wrong one.
+    expect(reindexLabels(['a', 'b', 'c'], 5, true)).toEqual(['', '', 'c', 'b', 'a']);
+    expect(reindexLabels(['a', 'b', 'c'], 5, false)).toEqual(['a', 'b', 'c', '', '']);
+  });
+
+  it('is its own inverse, which is what lets one rule serve both directions', () => {
+    const typed = ['top', '', 'bottom'];
+    expect(reindexLabels(reindexLabels(typed, 3, true), 3, true)).toEqual(typed);
+  });
+
+  it('leaves SURPLUS labels past the grid where they are', () => {
+    // They have no cell to be reversed against; `labelCoverage` reports them.
+    expect(reindexLabels(['a', 'b', 'c'], 2, true)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('refuses to invent an order for a nonsense cell count', () => {
+    expect(reindexLabels(['a'], -1, true)).toEqual(['a']);
+    expect(reindexLabels(['a'], 1.5, true)).toEqual(['a']);
   });
 });
 

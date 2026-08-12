@@ -106,10 +106,17 @@ export interface ColorBarSample {
 
 /**
  * A sampled colour key. The ONLY way to obtain one is `sampleColorBar`, which
- * refuses the unusable cases — but the type has a second entrance the moment a
- * project file carries one, so `checkStripSamples` is exported for the load path
- * to run the identical check. (Guards belong in the model, and the model has
- * more than one entrance.)
+ * refuses the unusable cases.
+ *
+ * ⚠️ THIS ONCE CLAIMED "the type has a second entrance the moment a project file
+ * carries one", and a `checkLoadedStrip` was built in `engine/heatmapRun.ts` to
+ * guard that entrance. The entrance never opened: the settled design stores the
+ * key's GEOMETRY and re-samples the colours from the image on every load, so a
+ * project file carries no strip and the load path comes through `sampleColorBar`
+ * like every other path. The v2.2 audit found the guard with no caller and no
+ * test and deleted it. `checkStripSamples` stays exported because it is the rule
+ * `sampleColorBar` applies and it is worth testing directly — not because
+ * anything else runs it.
  */
 export interface ColorBarStrip {
   /** Ordered by `t` ascending. Positions where every pixel was transparent are

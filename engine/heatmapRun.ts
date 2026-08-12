@@ -17,14 +17,18 @@
  * ⚑ Every refusal here comes back as a SENTENCE, because this is the layer that
  * faces the user. The modules underneath return codes; translating them is this
  * file's job, and each sentence names the requirement as well as the fault.
+ *
+ * ⚑ THERE IS NO SEPARATE LOAD-PATH CHECK, and that is deliberate. A
+ * `checkLoadedStrip` used to sit here claiming to be "the load path's own
+ * entrance to the same model"; it had no caller and no test, and the v2.2 audit
+ * deleted it. The claim was false in a way that mattered: the strip is
+ * RE-SAMPLED from the image on every load rather than stored, so the load path
+ * already runs `sampleColorBar` and gets that function's own refusal. A second
+ * entrance would only be needed if the colours were stored — and the reason
+ * they are not is written on `buildColorScale`.
  */
 
-import {
-  checkStripSamples,
-  sampleColorBar,
-  type ColorBarRefusal,
-  type ColorBarStrip,
-} from '../algorithms/colorBar.js';
+import { sampleColorBar, type ColorBarRefusal } from '../algorithms/colorBar.js';
 import { checkColorScale, type ColorScale } from '../algorithms/colorScale.js';
 import {
   detectDividers,
@@ -35,7 +39,7 @@ import {
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
 import { checkDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
-import { labelAt } from '../core/heatmapLabels.js';
+import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
 /** The image, as the canvas hands it over. */
@@ -125,13 +129,6 @@ export function buildColorScale(
     default:
       return { scale, error: null };
   }
-}
-
-/** Re-check a strip that arrived from somewhere other than `sampleColorBar` —
- * the load path's own entrance to the same model. */
-export function checkLoadedStrip(strip: ColorBarStrip): string | null {
-  const reason = checkStripSamples(strip.samples);
-  return reason === null ? null : stripRefusalSentence(reason);
 }
 
 /**
@@ -232,6 +229,45 @@ export const NO_HEATMAP_LABELS: HeatmapLabels = { x: [], y: [] };
 const LABELS_METADATA_KEY = 'heatmapLabels';
 
 /**
+ * Does cell-index order run OPPOSITE to the way the figure is read?
+ *
+ * ⚑⚑ MEASURED FROM THE AXES, NEVER ASSUMED — which is the whole reason this is
+ * a function and not the constant `{ x: false, y: true }`. On the ordinary
+ * upward-y figure, row 0 is `yMin` and sits at the BOTTOM, so a list typed
+ * top-down is reversed; on a figure calibrated upside down, or a rotated scan,
+ * it is not. The same click that told us which way is out of the plot tells us
+ * this: project the grid's two extremes and look at where they land on screen.
+ *
+ * ⚑ Screen y grows DOWNWARD, so the row whose pixel y is SMALLER is the one
+ * higher up the page. Getting that backwards is the defect this fixes, in
+ * mirror image.
+ */
+export function labelOrderReversed(
+  grid: HeatmapState,
+  axes: PixelProjector
+): { x: boolean; y: boolean } {
+  const xs = checkDividers(grid.xDividers).dividers;
+  const ys = checkDividers(grid.yDividers).dividers;
+  if (xs === null || ys === null) return { x: false, y: false };
+  const xLo = xs[0]!;
+  const xHi = xs[xs.length - 1]!;
+  const yLo = ys[0]!;
+  const yHi = ys[ys.length - 1]!;
+  const left = axes.dataToPixel(xLo, yLo);
+  const right = axes.dataToPixel(xHi, yLo);
+  const bottom = axes.dataToPixel(xLo, yLo);
+  const top = axes.dataToPixel(xLo, yHi);
+  return {
+    // Columns are read left to right: reversed when the FIRST column sits to the
+    // right of the last one on screen.
+    x: Number.isFinite(left.x) && Number.isFinite(right.x) ? left.x > right.x : false,
+    // Rows are read top to bottom: reversed when the FIRST row (yMin) sits lower
+    // on the page than the last, which is the ordinary figure.
+    y: Number.isFinite(top.y) && Number.isFinite(bottom.y) ? bottom.y > top.y : false,
+  };
+}
+
+/**
  * Read the labels an axes is carrying.
  *
  * ⚑ VALIDATED, not trusted — a load-path entrance like `gridFromAxes`. Anything
@@ -259,6 +295,30 @@ export function labelsToAxes(axes: MetadataCarrier, labels: HeatmapLabels): void
     meta[LABELS_METADATA_KEY] = { x: [...labels.x], y: [...labels.y] };
   }
   axes.setMetadata(meta);
+}
+
+/**
+ * The typed lists, lined up with the cells they name.
+ *
+ * ⚑ ONE PLACE, and everything that touches labels goes through it — attaching
+ * them to cells, showing them in the boxes, writing them to the file. The rule
+ * (pad, then flip if the figure reads the other way) is only correct if it is
+ * applied identically in every direction; two copies of it would disagree the
+ * first time an axis was flipped, and the disagreement would look like nothing
+ * at all until the export was read.
+ */
+export function labelsForCells(
+  labels: HeatmapLabels,
+  grid: HeatmapState,
+  axes: PixelProjector
+): HeatmapLabels {
+  const reversed = labelOrderReversed(grid, axes);
+  const columns = Math.max(0, checkDividers(grid.xDividers).dividers!.length - 1);
+  const rows = Math.max(0, checkDividers(grid.yDividers).dividers!.length - 1);
+  return {
+    x: reindexLabels(labels.x, columns, reversed.x),
+    y: reindexLabels(labels.y, rows, reversed.y),
+  };
 }
 
 /**
