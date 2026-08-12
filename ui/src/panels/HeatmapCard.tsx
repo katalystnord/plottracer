@@ -31,6 +31,17 @@ export interface HeatmapCardProps {
   gridSize: { columns: number; rows: number } | null;
   onDetect: () => void;
   onRead: () => void;
+  /** Add a boundary on one axis — it lands in the middle of the widest cell,
+   * which is where a boundary detection missed almost always belongs. */
+  onAddColumnBoundary: () => void;
+  onAddRowBoundary: () => void;
+  /** The boundary whose handle the user clicked on the figure, in the figure's
+   * own units — null when none is picked. */
+  selectedBoundary: { axis: 'x' | 'y'; value: number } | null;
+  onRemoveBoundary: () => void;
+  /** False when removing it would leave the axis with no cell at all; the button
+   * stays visible and says why, rather than the refusal arriving on click. */
+  canRemoveBoundary: boolean;
   /** Detection's own report — agreement, a miss, or why nothing could be read. */
   detectMessage: string;
   /** The read-out summary, and the cells themselves. */
@@ -50,6 +61,11 @@ export function HeatmapCard({
   gridSize,
   onDetect,
   onRead,
+  onAddColumnBoundary,
+  onAddRowBoundary,
+  selectedBoundary,
+  onRemoveBoundary,
+  canRemoveBoundary,
   detectMessage,
   summary,
   error,
@@ -100,6 +116,51 @@ export function HeatmapCard({
           <span data-testid="heatmap-grid-size" style={{ color: theme.color.text.secondary }}>
             Grid: {gridSize.columns} × {gridSize.rows} cells
           </span>
+        )}
+        {/* ⚑⚑ THE HAND `detectGrid` KEEPS TELLING THE USER TO USE. When detection
+            finds every rule the figure draws but one, it refuses to fill the miss
+            in and says "place the missing ones by hand" — and until now there was
+            no gesture that could. A message naming an action the interface does
+            not offer is the keystone-persona failure, not a wording problem.
+            ⚑ Buttons rather than a canvas gesture: a boundary added by clicking
+            the figure would be invisible machinery, and a heatmap's canvas is the
+            one surface where clicks mean nothing else. */}
+        {gridSize && (
+          <>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" data-testid="heatmap-add-column" onClick={onAddColumnBoundary}>
+                + Column boundary
+              </button>
+              <button type="button" data-testid="heatmap-add-row" onClick={onAddRowBoundary}>
+                + Row boundary
+              </button>
+            </div>
+            {selectedBoundary ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span data-testid="heatmap-selected-boundary" style={{ color: theme.color.text.secondary }}>
+                  {selectedBoundary.axis === 'x' ? 'Column' : 'Row'} boundary at{' '}
+                  {selectedBoundary.axis === 'x' ? 'x' : 'y'} = {selectedBoundary.value.toPrecision(4)}
+                </span>
+                <button
+                  type="button"
+                  data-testid="heatmap-remove-boundary"
+                  onClick={onRemoveBoundary}
+                  disabled={!canRemoveBoundary}
+                  title={
+                    canRemoveBoundary
+                      ? 'Remove this boundary and merge the two cells it separates'
+                      : 'An axis keeps its last two boundaries — one cell is still a grid'
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <span style={{ color: theme.color.text.legend }}>
+                Drag a handle beside the figure to move a boundary; click one to remove it.
+              </span>
+            )}
+          </>
         )}
         {detectMessage && (
           <span data-testid="heatmap-detect-message" style={{ color: theme.color.text.secondary }}>

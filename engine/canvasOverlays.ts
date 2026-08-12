@@ -52,6 +52,17 @@ export interface CanvasMarker {
    * Purely presentational: it moves TEXT, never the marker, so nothing measured moves.
    */
   labelAway?: { x: number; y: number };
+  /**
+   * Hang the label BELOW this marker instead of above it.
+   *
+   * ⚑ The other half of the same problem `labelAway` solves, for a line rather
+   * than a rim: a heatmap's four colour-key handles sit along one horizontal
+   * strip, so a fixed up-and-right offset prints them on top of each other.
+   * Which steps stagger is declared by the axes config, not decided here — only
+   * the config knows its own crowding. Presentational: it moves TEXT, never the
+   * marker.
+   */
+  labelBelow?: boolean;
   /** Override the data-dot radius (checkpoint 120): interpolation-assist draws
    * anchors big and derived samples small. Defaults to 5. */
   radius?: number;
@@ -217,6 +228,9 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // A non-radial figure has no centre to lean away from, so the key is not
         // there at all — the same rule v2.0 turned on for the record.
         ...(labelAway ? { labelAway } : {}),
+        // Spread for the same exactOptionalPropertyTypes reason as labelAway:
+        // a step that does not stagger has no key at all.
+        ...(step.labelBelow === true ? { labelBelow: true } : {}),
         // Selected for keyboard nudge (checkpoint 127) -- highlighted so you can
         // see which handle the arrow keys will move.
         selected: activeHandleKey === step.key,

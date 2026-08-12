@@ -8158,6 +8158,72 @@ describe('heatmap capture (v2.2)', () => {
     expect(await page.getByTestId('heatmap-row').count()).toBe(20); // no cell gained or lost
   });
 
+  it('ADDS a boundary the detector missed, and removes one it invented', async () => {
+    // ⚑⚑ THE GESTURE THE APP HAS BEEN TELLING USERS TO USE. `detectGrid` refuses
+    // to fill a miss in and says "place the missing ones by hand" — a sentence
+    // that named an action the interface did not offer until this test's feature
+    // existed. Both halves are driven here, through the card the user sees.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-columns').fill('5');
+    await page.getByTestId('heatmap-rows').fill('4');
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+
+    await page.getByTestId('heatmap-add-column').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 6 × 4 cells');
+    // The new boundary announces WHERE it went, in the figure's own units — a
+    // cell that silently split somewhere in a six-column grid is a change the
+    // user has to hunt for.
+    expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = /);
+    // And the cells were re-read, not left describing the grid they had.
+    expect(await page.getByTestId('heatmap-row').count()).toBe(24);
+    // ⚑⚑ AND DETECTION'S REPORT IS GONE. It read "5 columns, matching the 4
+    // boundaries found" beside "Grid: 6 × 4 cells" — a card contradicting itself
+    // about the figure in front of it, found by looking at a screenshot rather
+    // than by any assertion. The user overruled the proposal; the proposal stops
+    // describing the grid.
+    expect(await page.getByTestId('heatmap-detect-message').count()).toBe(0);
+
+    await page.getByTestId('heatmap-remove-boundary').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+    expect(await page.getByTestId('heatmap-row').count()).toBe(20);
+
+    // A row boundary is the same gesture on the other axis, and the card says so.
+    await page.getByTestId('heatmap-add-row').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 5 cells');
+    expect(await textOf('heatmap-selected-boundary')).toMatch(/^Row boundary at y = /);
+  });
+
+  it('gives a calibrated heatmap its grid straight away, and picks the handle that is CLICKED', async () => {
+    // ⚑⚑ NO INVISIBLE PRECONDITION. The grid, its handles and the boundary
+    // buttons are on screen the moment the calibration finishes — they used to
+    // appear only after pressing Detect or Read, which nothing on screen said.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-grid-size')).toBe('Grid: 1 × 1 cells');
+
+    // Click the x-divider handle at the calibrated left edge (data x = 0).
+    const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
+    await refreshCanvasBox();
+    await clickAt(left.lx, left.ly + 16);
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = 0\.0/);
+
+    // ⚑ THE REFUSAL IS READ BEFORE IT FIRES. This axis is down to the two
+    // boundaries that ARE the grid, so Remove is disabled and carries the
+    // reason — a button that fails on click teaches nothing.
+    const remove = page.getByTestId('heatmap-remove-boundary');
+    expect(await remove.isDisabled()).toBe(true);
+    expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
+  });
+
   it('reports a miss instead of inventing boundaries', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();

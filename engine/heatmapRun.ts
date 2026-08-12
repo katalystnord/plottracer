@@ -34,7 +34,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers, moveDivider } from '../core/heatmapGrid.js';
+import { checkDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
 /** The image, as the canvas hands it over. */
@@ -299,6 +299,82 @@ export function dragDivider(
   }
   const next = moveDivider(grid.yDividers, index, data.y);
   return next === null ? null : { xDividers: grid.xDividers, yDividers: next };
+}
+
+/**
+ * Which divider a handle refers to, and what it currently sits at — so the card
+ * can say *which* boundary is selected in the figure's own units rather than in
+ * a handle id nobody typed.
+ */
+export function describeDivider(
+  grid: HeatmapState,
+  handleId: string
+): { axis: 'x' | 'y'; index: number; value: number } | null {
+  const match = /^hm([xy]):(\d+)$/.exec(handleId);
+  if (!match) return null;
+  const axis = match[1] === 'x' ? 'x' : 'y';
+  const index = Number(match[2]);
+  const dividers = axis === 'x' ? grid.xDividers : grid.yDividers;
+  const value = dividers[index];
+  return value === undefined ? null : { axis, index, value };
+}
+
+/**
+ * Add a boundary on one axis, and say which handle it became.
+ *
+ * ⚑⚑ IT LANDS IN THE MIDDLE OF THE WIDEST CELL, and that is not an arbitrary
+ * parking spot — it is where a MISSING boundary almost always belongs. When
+ * detection finds six of the seven rules a figure draws, the cell it failed to
+ * split is exactly twice its neighbours' width, so the widest cell IS the
+ * evidence for where the seventh one goes. `detectGrid` already refuses to fill
+ * a miss in and tells the user to place it by hand; this is the hand.
+ *
+ * ⚑ A STARTING POSITION, NEVER A CLAIM. The midpoint is arithmetic in data
+ * coordinates, which on a log axis is not the middle of the drawn cell — and it
+ * does not need to be, because nothing is recorded until the user drags it onto
+ * the boundary they can see and reads the cells. Making it cleverer would
+ * dress a guess up as a measurement (tenets 9 and 10).
+ *
+ * ⚑ THE NEW HANDLE'S ID COMES BACK so the caller can select it. A boundary that
+ * appears somewhere in a twelve-column grid with nothing to say where is a
+ * change the user has to hunt for.
+ */
+export function addDivider(
+  grid: HeatmapState,
+  axis: 'x' | 'y'
+): { grid: HeatmapState; handleId: string } | null {
+  const dividers = checkDividers(axis === 'x' ? grid.xDividers : grid.yDividers).dividers;
+  if (dividers === null) return null;
+  let widest = 0;
+  for (let i = 1; i < dividers.length - 1; i++) {
+    if (dividers[i + 1]! - dividers[i]! > dividers[widest + 1]! - dividers[widest]!) widest = i;
+  }
+  const at = (dividers[widest]! + dividers[widest + 1]!) / 2;
+  const next = insertDivider(dividers, at);
+  if (next === null) return null;
+  const index = next.indexOf(at);
+  if (index < 0) return null;
+  return {
+    grid: axis === 'x' ? { ...grid, xDividers: next } : { ...grid, yDividers: next },
+    handleId: `hm${axis}:${index}`,
+  };
+}
+
+/**
+ * Remove the boundary a handle belongs to, merging the two cells it separated.
+ *
+ * ⚑ REFUSES to go below one cell, in the model rather than here: two dividers
+ * ARE the grid's outer edges, and a heatmap with no interior is still a heatmap
+ * with one cell. The card disables the button and says why, so the refusal is
+ * read before it fires rather than after.
+ */
+export function removeDividerHandle(grid: HeatmapState, handleId: string): HeatmapState | null {
+  const found = describeDivider(grid, handleId);
+  if (found === null) return null;
+  const dividers = found.axis === 'x' ? grid.xDividers : grid.yDividers;
+  const next = removeDivider(dividers, found.index);
+  if (next === null) return null;
+  return found.axis === 'x' ? { ...grid, xDividers: next } : { ...grid, yDividers: next };
 }
 
 export interface DetectGridOptions {

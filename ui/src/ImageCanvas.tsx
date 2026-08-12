@@ -145,8 +145,13 @@ function labelPlacement(
   screenX: number,
   screenY: number,
   gap: number,
-  away?: { x: number; y: number }
+  away?: { x: number; y: number },
+  below?: boolean
 ): { x: number; y: number; align: 'left' | 'right' } {
+  // ⚑ `below` wins over the outward ray: a marker asking to stagger is telling
+  // us its NEIGHBOURS are the problem, which leaning outward cannot fix — on a
+  // straight colour key every handle's outward direction is the same direction.
+  if (below === true) return { x: screenX + gap, y: screenY + 8, align: 'left' };
   if (!away) return { x: screenX + gap, y: screenY - 20, align: 'left' };
   const dx = screenX - away.x;
   const dy = screenY - away.y;
@@ -1640,7 +1645,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           <Line points={[0, 8, 0, 12]} stroke={point.color} strokeWidth={1.6} listening={false} />
                         </Group>
                         {(() => {
-                          const lp = labelPlacement(screenX, screenY, 12, awayOf(point));
+                          const lp = labelPlacement(screenX, screenY, 12, awayOf(point), point.labelBelow);
                           return (
                             <KonvaText
                               x={lp.align === 'right' ? lp.x - 200 : lp.x}

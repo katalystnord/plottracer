@@ -5,13 +5,16 @@ import { readPng } from './helpers/readPng.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
 import {
+  addDivider,
   buildColorScale,
+  describeDivider,
   detectGrid,
   dividerHandles,
   dragDivider,
   initialGrid,
   isDividerHandle,
   readHeatmapCells,
+  removeDividerHandle,
   type SourceImage,
 } from '../heatmapRun.js';
 import type { PlacedCalibPoint } from '../calibrationSession.js';
@@ -319,5 +322,67 @@ describe('dragging a divider', () => {
     expect(dragDivider(grid, 'x1', { x: 5, y: 5 })).toBeNull();
     expect(dragDivider(grid, 'hmx:9', { x: 5, y: 5 })).toBeNull();
     expect(dragDivider(grid, 'hmx:1', { x: NaN, y: 5 })).toBeNull();
+  });
+});
+
+describe('adding and removing a boundary', () => {
+  const grid = { xDividers: [0, 4, 10], yDividers: [0, 20] };
+
+  it('says which divider a handle is, in the figure’s own units', () => {
+    expect(describeDivider(grid, 'hmx:1')).toEqual({ axis: 'x', index: 1, value: 4 });
+    expect(describeDivider(grid, 'hmy:1')).toEqual({ axis: 'y', index: 1, value: 20 });
+    expect(describeDivider(grid, 'hmx:9')).toBeNull();
+    expect(describeDivider(grid, 'x1')).toBeNull();
+  });
+
+  it('drops the new boundary in the MIDDLE OF THE WIDEST CELL', () => {
+    // ⚑⚑ Where a missing boundary actually is. Detection that found every rule
+    // but one leaves that cell twice its neighbours' width, so the widest cell
+    // is the evidence — not a parking spot.
+    const added = addDivider(grid, 'x');
+    expect(added!.grid.xDividers).toEqual([0, 4, 7, 10]);
+    expect(added!.grid.yDividers).toBe(grid.yDividers);
+  });
+
+  it('hands back the handle it created, so the user can see what moved', () => {
+    // The new divider is the SECOND on the axis here, and its handle id has to
+    // name that index or a card selecting it would select a different boundary.
+    const added = addDivider({ xDividers: [0, 6, 8], yDividers: [0, 20] }, 'x');
+    expect(added!.grid.xDividers).toEqual([0, 3, 6, 8]);
+    expect(added!.handleId).toBe('hmx:1');
+    expect(describeDivider(added!.grid, added!.handleId)).toEqual({ axis: 'x', index: 1, value: 3 });
+  });
+
+  it('splits the single starting cell when there is nothing else to split', () => {
+    const added = addDivider(grid, 'y');
+    expect(added!.grid.yDividers).toEqual([0, 10, 20]);
+    expect(added!.handleId).toBe('hmy:1');
+  });
+
+  it('refuses on a grid that is not a grid, and on a cell with no room left', () => {
+    expect(addDivider({ xDividers: [1], yDividers: [0, 20] }, 'x')).toBeNull();
+    // Two dividers a hair apart have no midpoint distinct from either of them.
+    expect(addDivider({ xDividers: [1, 1 + 1e-10], yDividers: [0, 20] }, 'x')).toBeNull();
+  });
+
+  it('removes the boundary a handle belongs to, merging its two cells', () => {
+    expect(removeDividerHandle(grid, 'hmx:1')).toEqual({
+      xDividers: [0, 10],
+      yDividers: [0, 20],
+    });
+  });
+
+  it('REFUSES to remove the last boundary of an axis — one cell is still a grid', () => {
+    expect(removeDividerHandle(grid, 'hmy:0')).toBeNull();
+    expect(removeDividerHandle(grid, 'hmy:1')).toBeNull();
+    expect(removeDividerHandle(grid, 'hmz:0')).toBeNull();
+    expect(removeDividerHandle(grid, 'hmx:9')).toBeNull();
+  });
+
+  it('lets an OUTER boundary go once there is an interior one to take its place', () => {
+    // ⚑ Nothing marks the outer dividers as special: removing hmx:0 leaves the
+    // cell that started at 4 as the grid's new left edge, which is exactly what
+    // a user cropping a stray column off the figure means to do.
+    expect(removeDividerHandle(grid, 'hmx:0')!.xDividers).toEqual([4, 10]);
   });
 });

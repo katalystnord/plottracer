@@ -99,6 +99,19 @@ export interface CalibStepInfo {
   /** Value(s) collected for this step's point, in entry order. Empty for a
    * point that needs no typed value at all (e.g. Polar's origin). */
   valueFields: readonly CalibValueField[];
+  /**
+   * Hang this handle's label BELOW the reticle instead of above it.
+   *
+   * ⚑ Declared per step because only the config knows its own crowding. A
+   * heatmap's four colour-key clicks all land along one horizontal strip, so
+   * four labels at the same fixed up-and-right offset print on top of each
+   * other — "Key value 2=120" and "Key end" overlapped into an unreadable smear
+   * on the shipped build, found on a screenshot because no test can see a label
+   * collide. Staggering the two KINDS of key click also draws the distinction
+   * the walk depends on: two clicks say what the ramp is WORTH (above, where the
+   * longer labels have room), two say where it IS (below).
+   */
+  labelBelow?: boolean;
 }
 
 /**
@@ -957,14 +970,12 @@ export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7
  * nothing to type is not a wasted step — it is the difference between recording
  * where the ink is and inferring it. Polar's origin is the same shape.
  *
- * ⚠️ NOT YET IN THE GRAPH-TYPE LIST, deliberately. Capture is phase 3: a heatmap
- * cell is read from a GRID of dividers the user can adjust, which is the 2D
- * generalisation of v2.1's category ticks, and `categoryTicks` today declares a
- * single category axis (a bar chart has one; a heatmap can have two). Listing
- * the type before that exists would put a graph type in the picker that can
- * calibrate and then do nothing — the failure this project's keystone persona
- * exists to catch. It is declared and tested here so phase 3 wires a thing that
- * already works, not so it can be announced.
+ * ⚑ IT IS IN THE GRAPH-TYPE LIST NOW, and the order it was done in is the point.
+ * This config shipped one release UNLISTED on purpose, because a type that can
+ * calibrate and then do nothing is the failure this project's keystone persona
+ * exists to catch. It was listed only once capture existed behind it — a grid of
+ * adjustable dividers, the 2D generalisation of v2.1's category ticks. A test
+ * asserts the picker's contents, so the gate is a decision rather than a memory.
  */
 export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'heatmap',
@@ -1002,8 +1013,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
     { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
     { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
-    { key: 'k1', label: 'Key start', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip begins', valueFields: [] },
-    { key: 'k2', label: 'Key end', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip ends', valueFields: [] },
+    { key: 'k1', label: 'Key start', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip begins', valueFields: [], labelBelow: true },
+    { key: 'k2', label: 'Key end', color: '#a87fd4', prompt: 'Click where the colour key’s coloured strip ends', valueFields: [], labelBelow: true },
     { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },
     { key: 'kv2', label: 'Key value 2', color: '#d47fa8', prompt: 'Click a second labelled tick on the colour key and enter its number', valueFields: [{ key: 'kv2', label: 'Value', field: 'dy' }] },
   ],

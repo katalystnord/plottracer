@@ -146,6 +146,21 @@ describe('calibration handles', () => {
     const plain = buildCanvasMarkers(base({ steps: [step('x1')], placedPoints: { x1: { px: 1, py: 2, values: [] } } }));
     expect('labelAway' in plain[0]!).toBe(false);
   });
+
+  it('carry the STAGGER a config asks for, so labels on one line do not collide', () => {
+    // ⚑ The heatmap's four colour-key clicks land along one strip, where every
+    // handle's outward direction is the same direction — so leaning away cannot
+    // separate them and the config says which ones hang below instead. Which
+    // steps stagger is the config's knowledge, never this module's.
+    const staggered = { ...step('kv1', 'Key value 1'), labelBelow: true };
+    const m = buildCanvasMarkers(
+      base({ steps: [staggered, step('k1', 'Key start')], placedPoints: { kv1: { px: 1, py: 2, values: ['20'] }, k1: { px: 3, py: 2, values: [] } } })
+    );
+    expect(m[0]!.labelBelow).toBe(true);
+    // …and a step that did not ask carries no key at all, not an explicit
+    // `undefined` — the exactOptionalPropertyTypes rule labelAway follows.
+    expect('labelBelow' in m[1]!).toBe(false);
+  });
 });
 
 describe('the pending calibration pixel', () => {

@@ -202,7 +202,9 @@ import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { runBarDetect } from '../../engine/barDetectRun.js';
 import {
+  addDivider,
   buildColorScale,
+  describeDivider,
   detectGrid,
   dividerHandles,
   dragDivider,
@@ -211,6 +213,7 @@ import {
   initialGrid,
   isDividerHandle,
   readHeatmapCells,
+  removeDividerHandle,
   type HeatmapRow,
   type HeatmapState,
 } from '../../engine/heatmapRun.js';
@@ -1103,17 +1106,25 @@ export function Workspace() {
 
   /* ── Heatmap capture (v2.2) ──────────────────────────────────────────────
    *
-   * ⚑ The grid lives HERE, in view state, and that is a stated limitation
-   * rather than a decision: it is not in the session's snapshot, so undo does
-   * not restore it, and it is not in the project file, so it does not survive
-   * Save. Both belong in `CalibrationSession` beside the category axis, and
-   * both are the next piece of work — along with the export, which is why the
-   * cells are shown here and not yet written to a file. Nothing can be lost
-   * today that was ever saved, and the card says what it has.
+   * ⚑ The grid is MIRRORED here, not owned here. Its home is the axes' own
+   * metadata (`gridToAxes` / `gridFromAxes`), which is what makes it survive a
+   * Save and an undo without any new project-file or snapshot field; this state
+   * exists so the overlay and the card can read it during a render. Every write
+   * goes through `applyHeatmapGrid`, so the two cannot drift.
+   *
+   * ⚠️ This comment used to say the opposite — that the grid was view state
+   * only, lost on Save — and it stayed that way for a commit after persistence
+   * shipped. A comment describing a limitation that has been fixed is read as
+   * current by the next person; grade the comments against the code, not only
+   * the prose.
    *
    * ⚑ Everything the buttons DO is in `engine/heatmapRun.ts`. What is left in
    * this file is which state to set. */
   const [heatmapGrid, setHeatmapGrid] = useState<HeatmapState | null>(null);
+  /** Which divider handle the user last clicked, so the card can offer to remove
+   * THAT boundary. Its own state rather than `activeHandleKey`, which is cleared
+   * on anything that is not a placed calibration point (see the guard effect). */
+  const [selectedDividerId, setSelectedDividerId] = useState<string | null>(null);
   const [heatmapColumns, setHeatmapColumns] = useState('');
   const [heatmapRows, setHeatmapRows] = useState('');
   const [heatmapCells, setHeatmapCells] = useState<HeatmapRow[]>([]);
@@ -1738,6 +1749,38 @@ export function Workspace() {
   };
 
   /**
+   * The grid as the user sees it: what has been recorded, or — before anything
+   * has — the one cell a finished calibration already implies.
+   *
+   * ⚑⚑ THE GRID CONTROLS WERE AN INVISIBLE PRECONDITION WITHOUT THIS. The
+   * overlay, the drag handles and the boundary buttons all appeared only after
+   * pressing Detect or Read, and nothing on screen said so — the keystone
+   * persona's named failure mode, and worst on exactly the figures that need the
+   * grid most: a continuous field draws no cell boundaries at all, so detection
+   * has nothing to find and its user could reasonably conclude the grid is
+   * something only a drawn-grid figure gets.
+   *
+   * ⚑ DERIVED, NOT STORED, which is why it is a `useMemo` and not an effect
+   * writing state. Nothing goes into the axes' metadata until the user actually
+   * changes something: an untouched grid is recoverable from the calibration it
+   * came from, and a file that carried it would be storing a copy of something
+   * derivable — the same rule that keeps the colour key's SAMPLES out of the
+   * project file. Every edit path below records the result.
+   */
+  const heatmapShownGrid = useMemo<HeatmapState | null>(() => {
+    if (!heatmapActive) return null;
+    if (heatmapGrid !== null) return heatmapGrid;
+    if (!session.isCalibrated()) return null;
+    const bounds = heatmapBounds();
+    return bounds === null ? null : initialGrid(bounds);
+    // `version` is the only signal React has that the ref-held session mutated,
+    // so it is listed deliberately even though the body does not read it —
+    // without it this would freeze at "not calibrated yet" (see the same note
+    // above the memo block further down).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heatmapActive, heatmapBounds, heatmapGrid, session, version]);
+
+  /**
    * Set the grid, and put it where a save and an undo will both find it.
    *
    * ⚑ ONE PLACE, because there are two consumers that must never disagree: the
@@ -1790,14 +1833,22 @@ export function Workspace() {
    * a user adjusting the grid before pressing Read cells is not surprised by a
    * table appearing under their hands.
    */
-  const moveHeatmapDivider = useCallback(
-    (id: string, px: number, py: number) => {
+  /**
+   * Record a grid the user just edited, and re-read the cells it moved.
+   *
+   * ⚑⚑ DETECTION'S REPORT IS CLEARED, and a screenshot is what caught this: the
+   * card read *"Grid: 6 × 4 cells"* directly above *"5 columns, matching the 4
+   * boundaries found"*. The sentence was true when it was written and describes
+   * a proposal the user has since overruled — a panel contradicting itself about
+   * the same figure, which is the fourth-and-counting instance of the class
+   * `engine/guidanceTip.ts` exists to document. A report of a measurement that no
+   * longer describes the grid is not stale wording, it is a wrong statement.
+   */
+  const applyHeatmapGridEdit = useCallback(
+    (next: HeatmapState) => {
       const axesNow = sessionRef.current.getAxes();
-      if (!heatmapGrid || !axesNow) return;
-      const [dx, dy] = axesNow.pixelToData(px, py);
-      if (dx === undefined || dy === undefined || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
-      const next = dragDivider(heatmapGrid, id, { x: dx, y: dy });
-      if (next === null) return; // refused: the handle springs back
+      if (!axesNow) return;
+      setHeatmapDetectMessage('');
       applyHeatmapGrid(next);
       const img = imageCanvasRef.current?.getImageData();
       if (heatmapCells.length > 0 && img) {
@@ -1815,8 +1866,66 @@ export function Workspace() {
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length, heatmapGrid]
+    [applyHeatmapGrid, commit, heatmapCells.length]
   );
+
+  const moveHeatmapDivider = useCallback(
+    (id: string, px: number, py: number) => {
+      const axesNow = sessionRef.current.getAxes();
+      if (!heatmapShownGrid || !axesNow) return;
+      const [dx, dy] = axesNow.pixelToData(px, py);
+      if (dx === undefined || dy === undefined || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      const next = dragDivider(heatmapShownGrid, id, { x: dx, y: dy });
+      if (next === null) return; // refused: the handle springs back
+      applyHeatmapGridEdit(next);
+    },
+    [applyHeatmapGridEdit, heatmapShownGrid]
+  );
+
+  /**
+   * Add a boundary on one axis — the hand `detectGrid` tells the user to use.
+   *
+   * ⚑ THE NEW BOUNDARY IS SELECTED IMMEDIATELY. It lands in the middle of the
+   * widest cell, which is where a missed rule usually is but not always where
+   * this user wants it; selecting it puts its position in the card in the
+   * figure's own units, so a change that could otherwise be hunted for is
+   * announced.
+   */
+  const addHeatmapDivider = useCallback(
+    (axis: 'x' | 'y') => {
+      if (!heatmapShownGrid) return;
+      const added = addDivider(heatmapShownGrid, axis);
+      if (added === null) {
+        setHeatmapError('There is no room for another boundary — the widest cell is already as thin as a boundary.');
+        return;
+      }
+      setHeatmapError(null);
+      setSelectedDividerId(added.handleId);
+      applyHeatmapGridEdit(added.grid);
+    },
+    [applyHeatmapGridEdit, heatmapShownGrid]
+  );
+
+  /** Remove the boundary whose handle is selected, merging its two cells. The
+   * model refuses to take an axis below one cell; the button is disabled for
+   * that case, so the refusal is read before it can fire. */
+  const removeHeatmapDivider = useCallback(() => {
+    if (!heatmapShownGrid || !selectedDividerId) return;
+    const next = removeDividerHandle(heatmapShownGrid, selectedDividerId);
+    if (next === null) return;
+    setSelectedDividerId(null);
+    applyHeatmapGridEdit(next);
+  }, [applyHeatmapGridEdit, heatmapShownGrid, selectedDividerId]);
+
+  /** What the card shows about the picked boundary. Recomputed from the GRID
+   * rather than remembered at click time, so a boundary that has since been
+   * dragged reads out where it is now — and one that stopped existing (undo, a
+   * reopened file, a fresh detection) stops being offered for removal. */
+  const selectedBoundary = useMemo(() => {
+    if (!heatmapShownGrid || !selectedDividerId) return null;
+    const found = describeDivider(heatmapShownGrid, selectedDividerId);
+    return found === null ? null : { axis: found.axis, value: found.value };
+  }, [heatmapShownGrid, selectedDividerId]);
 
   const runHeatmapDetect = useCallback(() => {
     setHeatmapError(null);
@@ -1827,7 +1936,7 @@ export function Workspace() {
       setHeatmapError('Finish the calibration first — the grid is measured against it.');
       return;
     }
-    const start = heatmapGrid ?? initialGrid(bounds);
+    const start = heatmapShownGrid ?? initialGrid(bounds);
     const result = detectGrid({ data: img.data, width: img.width, height: img.height }, axes, start, {
       ...(declaredCount(heatmapColumns) !== undefined ? { columns: declaredCount(heatmapColumns)! } : {}),
       ...(declaredCount(heatmapRows) !== undefined ? { rows: declaredCount(heatmapRows)! } : {}),
@@ -1837,7 +1946,7 @@ export function Workspace() {
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
     if (result.grid !== null) applyHeatmapGrid(result.grid);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapGrid, heatmapColumns, heatmapRows]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapShownGrid, heatmapColumns, heatmapRows]);
 
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
@@ -1860,13 +1969,13 @@ export function Workspace() {
       setHeatmapSummary('');
       return;
     }
-    const grid = heatmapGrid ?? initialGrid(bounds);
+    const grid = heatmapShownGrid ?? initialGrid(bounds);
     const result = readHeatmapCells(image, axes, grid, scale);
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapShownGrid]);
 
   /**
    * The grid drawn on the figure: one line per divider, spanning the grid's own
@@ -1877,11 +1986,11 @@ export function Workspace() {
    * screen's rows and columns.
    */
   const heatmapOverlay = useMemo(() => {
-    if (!heatmapActive || !heatmapGrid) return null;
+    if (!heatmapShownGrid) return null;
     const axes = session.getAxes();
     if (!axes) return null;
-    const xs = heatmapGrid.xDividers;
-    const ys = heatmapGrid.yDividers;
+    const xs = heatmapShownGrid.xDividers;
+    const ys = heatmapShownGrid.yDividers;
     if (xs.length < 2 || ys.length < 2) return null;
     const yLo = ys[0]!;
     const yHi = ys[ys.length - 1]!;
@@ -1891,7 +2000,7 @@ export function Workspace() {
       ...xs.map((x) => [axes.dataToPixel(x, yLo), axes.dataToPixel(x, yHi)]),
       ...ys.map((y) => [axes.dataToPixel(xLo, y), axes.dataToPixel(xHi, y)]),
     ];
-  }, [heatmapActive, heatmapGrid, session]);
+  }, [heatmapShownGrid, session]);
 
   // A text/color field edit is "pending" between its first keystroke and the
   // blur that ends it -- tracked so commitPendingEdit only pushes an undo
@@ -2973,6 +3082,14 @@ export function Workspace() {
   // series' own markers carry the `point-` id; inactive series aren't selectable
   // (select the series in the dropdown first).
   const handleMarkerClick = useCallback((id: string, shiftKey?: boolean) => {
+    // A grid handle is not a calibration point and not a datum: clicking one
+    // picks the BOUNDARY, which is what the Heatmap card then offers to remove.
+    if (isDividerHandle(id)) {
+      setSelectedDividerId(id);
+      setActivePointIndex(null);
+      setActiveHandleKey(null);
+      return;
+    }
     if (id.startsWith('point-')) {
       const idx = Number(id.slice('point-'.length));
       if (mode === 'eraser') {
@@ -4882,12 +4999,16 @@ export function Workspace() {
    * ⚑ No label. A divider's identity is its POSITION, which the line already
    * shows; twelve captions reading "hmx:3" across the bottom of a figure would
    * be noise over the one thing the user is trying to look at.
+   *
+   * ⚑ THE SELECTED HANDLE IS DRAWN BIGGER, because the card names a boundary in
+   * data units and the user has to find it among a dozen identical squares. The
+   * card and the canvas are one gesture, so the pick has to be visible in both.
    */
   const heatmapHandles = useMemo<CanvasMarker[]>(() => {
-    if (!heatmapActive || !heatmapGrid) return [];
+    if (!heatmapShownGrid) return [];
     const axesNow = session.getAxes();
     if (!axesNow) return [];
-    return dividerHandles(heatmapGrid, axesNow).map((h) => ({
+    return dividerHandles(heatmapShownGrid, axesNow).map((h) => ({
       id: h.id,
       x: h.x,
       y: h.y,
@@ -4895,9 +5016,9 @@ export function Workspace() {
       color: HEATMAP_GRID_COLOR,
       draggable: true,
       kind: 'calibration' as const,
-      radius: 4,
+      radius: h.id === selectedDividerId ? 7 : 4,
     }));
-  }, [heatmapActive, heatmapGrid, session]);
+  }, [heatmapShownGrid, selectedDividerId, session]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -7312,15 +7433,24 @@ export function Workspace() {
           onColumnsChange={setHeatmapColumns}
           onRowsChange={setHeatmapRows}
           gridSize={
-            heatmapGrid
+            heatmapShownGrid
               ? {
-                  columns: Math.max(0, heatmapGrid.xDividers.length - 1),
-                  rows: Math.max(0, heatmapGrid.yDividers.length - 1),
+                  columns: Math.max(0, heatmapShownGrid.xDividers.length - 1),
+                  rows: Math.max(0, heatmapShownGrid.yDividers.length - 1),
                 }
               : null
           }
           onDetect={runHeatmapDetect}
           onRead={runHeatmapRead}
+          onAddColumnBoundary={() => addHeatmapDivider('x')}
+          onAddRowBoundary={() => addHeatmapDivider('y')}
+          selectedBoundary={selectedBoundary}
+          onRemoveBoundary={removeHeatmapDivider}
+          canRemoveBoundary={
+            selectedBoundary !== null &&
+            heatmapShownGrid !== null &&
+            (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
+          }
           detectMessage={heatmapDetectMessage}
           summary={heatmapSummary}
           error={heatmapError}
