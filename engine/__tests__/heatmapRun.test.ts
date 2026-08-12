@@ -133,6 +133,48 @@ describe('buildColorScale', () => {
     expect(buildColorScale(typo, image, false).error).toMatch(/must both be numbers/i);
   });
 
+  it('REFUSES A BANDED KEY, naming why — and no real ramp trips it', () => {
+    // ⚑⚑ THE THIRD AGREED CASE THAT WAS NEVER BUILT. The settled record says a
+    // DISCRETE key (significance bands, cluster IDs, land cover) identifies a
+    // LABEL, not a number, and must be refused naming why. Inverting a cell
+    // against it lands on a plateau covering a whole range; reporting the middle
+    // of that range is a number the figure does not contain, arriving with no
+    // symptom — the exact failure this module exists to prevent.
+    const bands = 6;
+    const width = 400;
+    const height = 40;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const band = Math.min(bands - 1, Math.floor((x / width) * bands));
+        const i = (y * width + x) * 4;
+        data[i] = 20 + band * 40;
+        data[i + 1] = 90;
+        data[i + 2] = 200 - band * 30;
+        data[i + 3] = 255;
+      }
+    }
+    const banded: SourceImage = { data, width, height };
+    const placedOnBands = {
+      k1: { px: 4, py: 20, values: [] },
+      k2: { px: 396, py: 20, values: [] },
+      kv1: { px: 40, py: 20, values: ['1'] },
+      kv2: { px: 360, py: 20, values: ['6'] },
+    };
+    const refused = buildColorScale(placedOnBands, banded, false);
+    expect(refused.scale).toBeNull();
+    expect(refused.error).toMatch(/discrete bands/i);
+    // It says what the cost is, not just that it declined.
+    expect(refused.error).toMatch(/not contain|by eye/i);
+
+    // ⚑ AND THE FIXTURES ARE THE OTHER HALF OF THIS TEST. A detector that
+    // refuses banded keys is worthless if it also refuses viridis — the real
+    // keys measure 108–260 levels against a threshold of 20, and this is what
+    // keeps that margin honest as the sampler changes.
+    const { image, placed } = scene();
+    expect(buildColorScale(placed, image, false).error).toBeNull();
+  });
+
   it('refuses two ticks clicked at the same place on the strip', () => {
     const { image, placed } = scene();
     const same = { ...placed, kv2: { ...placed['kv2']!, px: placed['kv1']!.px, py: placed['kv1']!.py } };

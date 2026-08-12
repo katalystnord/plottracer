@@ -143,6 +143,18 @@ export type ColorBarRefusal =
   | 'off-image'
   /** Everything along the strip was fully transparent — there is no key here. */
   | 'no-pixels'
+  /**
+   * The key is drawn as a handful of DISCRETE BANDS rather than a continuous
+   * ramp (significance levels, cluster IDs, land cover).
+   *
+   * ⚑⚑ A BANDED KEY IDENTIFIES A LABEL, NOT A VALUE. Inverting a cell's colour
+   * against it lands on a plateau covering a whole range, and reporting the
+   * middle of that range would be a number the figure never contains — the one
+   * failure mode this module exists to prevent, since in a heatmap the colour
+   * IS the value and a wrong one has no other symptom. Agreed as a v2.2 scope
+   * refusal when the record was settled, and it must NAME why.
+   */
+  | 'discrete'
   /** The strip carries one flat colour (see `MIN_RAMP_SPREAD`) — most likely
    * clicked across the bar rather than along it. */
   | 'no-ramp';
@@ -246,8 +258,66 @@ export function checkStripGeometry(from: Point2D, to: Point2D): ColorBarRefusal 
 export function checkStripSamples(samples: readonly ColorBarSample[]): ColorBarRefusal | null {
   if (samples.length < 2) return 'no-pixels';
   if (rampSpread(samples) < MIN_RAMP_SPREAD) return 'no-ramp';
+  if (samples.length >= MIN_SAMPLES_TO_JUDGE_BANDING && countColorLevels(samples) <= MAX_DISCRETE_LEVELS) {
+    return 'discrete';
+  }
   return null;
 }
+
+/** The step below which two samples count as the same colour, measured against
+ * the key's OWN spread rather than an absolute RGB distance. */
+function levelTolerance(samples: readonly ColorBarSample[]): number {
+  return rampSpread(samples) / LEVELS_A_RAMP_MUST_RESOLVE;
+}
+
+/**
+ * How many distinct colours the strip actually shows, walking it end to end and
+ * counting a new level whenever the colour leaves the current one by more than
+ * the noise floor.
+ *
+ * ⚑ MEASURED, not assumed, and the fixtures set the threshold: the four real
+ * matplotlib keys shipped here come out at 108, 171, 195 and — on a q35 JPEG —
+ * 239 and 260 levels. A published banded key has a handful. Two orders of
+ * magnitude apart, so `MAX_DISCRETE_LEVELS` sits far from both: it does not
+ * have to be tuned, only to fall in the gap.
+ *
+ * ⚑⚑ THE STEP IS MEASURED AGAINST THE KEY'S OWN SPREAD, and a MONOCHROME key is
+ * why (David: *"Non-colour / monochrome heatmaps are going to be a problem
+ * though"*). Counting against a fixed RGB distance conflates two different
+ * things: a key with FEW colours, and a key with CLOSE ones. A greyscale ramp
+ * over a narrow range — say 100…160 — moves a fraction of an RGB unit per
+ * sample, so an absolute floor would see one long plateau and call a perfectly
+ * ordinary monochrome key "banded", refusing a figure the tool can read.
+ * Relative to its own spread it resolves the same ~64 levels a full-range ramp
+ * does, while a six-band key still shows six however wide its colours are.
+ * Low CONTRAST is not the same as few LEVELS, and only the second is a reason
+ * to refuse.
+ */
+export function countColorLevels(samples: readonly ColorBarSample[]): number {
+  const tolerance = levelTolerance(samples);
+  let levels = 0;
+  let current: RGB | null = null;
+  for (const s of samples) {
+    if (current === null || colorDistance(s.rgb, current) > tolerance) {
+      levels++;
+      current = s.rgb;
+    }
+  }
+  return levels;
+}
+
+/** How finely a continuous ramp is expected to resolve its own range. A key
+ * spanning any colour distance at all is a ramp if it walks that distance in
+ * many small steps, and bands if it jumps it in a few. */
+const LEVELS_A_RAMP_MUST_RESOLVE = 64;
+
+/** Above this many distinct colours the key is a ramp, not a set of bands. The
+ * least any real fixture shows is 108. */
+const MAX_DISCRETE_LEVELS = 20;
+
+/** Below this many samples the strip is too short to judge — a 30px key has few
+ * levels because it has few pixels, not because it is banded. */
+const MIN_SAMPLES_TO_JUDGE_BANDING = 60;
 
 /**
  * Read the key: walk the line from `from` to `to` across an RGBA image, one

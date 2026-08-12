@@ -4,6 +4,7 @@ import {
   MIN_RAMP_SPREAD,
   MIN_STRIP_LENGTH_PX,
   checkStripSamples,
+  countColorLevels,
   colorDistance,
   invertColor,
   medoidColor,
@@ -134,6 +135,29 @@ const dipRamp: RGBRamp = (u) => {
 const KEY_W = 201;
 const KEY_H = 21;
 
+/**
+ * A strip built straight from a ramp, WITHOUT the sampling entrance's checks.
+ *
+ * ⚑ For fixtures that are deliberately coarse — `lutRamp` is an eight-entry
+ * table, exaggerating a real colormap's 256 — because `sampleColorBar` now
+ * REFUSES a key showing that few colours, and rightly: eight colours cannot
+ * yield a continuous reading, so a number derived from one would be invented.
+ * The tests below are about how a plateau is INVERTED, which is a different
+ * question from whether such a key should be accepted, so they take their input
+ * directly rather than weakening the gate that protects real figures.
+ */
+function rawStripOf(ramp: RGBRamp, width = KEY_W): ColorBarStrip {
+  return {
+    samples: Array.from({ length: width }, (_, i) => ({
+      t: i / (width - 1),
+      rgb: ramp(i / (width - 1)),
+    })),
+    from: { x: 0, y: 10 },
+    to: { x: width - 1, y: 10 },
+    thickness: 1,
+  };
+}
+
 function stripOf(ramp: RGBRamp, thickness = 1): ColorBarStrip {
   const img = makeKey(KEY_W, KEY_H, ramp);
   const result = sampleColorBar(img, KEY_W, KEY_H, { x: 0, y: 10 }, { x: KEY_W - 1, y: 10 }, {
@@ -142,6 +166,50 @@ function stripOf(ramp: RGBRamp, thickness = 1): ColorBarStrip {
   expect(result.reason).toBeNull();
   return result.strip!;
 }
+
+describe('a MONOCHROME key is not a banded one', () => {
+  /** Grey, but spanning only 100…160 — a low-contrast key of the kind a
+   * black-and-white figure prints. */
+  const faintGrey: RGBRamp = (u) => {
+    const g = Math.round(100 + u * 60);
+    return [g, g, g];
+  };
+  /** Six flat bands: significance levels, cluster IDs, land cover. */
+  const sixBands: RGBRamp = (u) => {
+    const g = Math.min(5, Math.floor(u * 6)) * 45 + 10;
+    return [g, g, g];
+  };
+
+  it('accepts a faint greyscale ramp, which an absolute threshold would refuse', () => {
+    // ⚑⚑ David: *"Non-colour / monochrome heatmaps are going to be a problem
+    // though."* They are the case that decides how banding is measured. This key
+    // moves 0.3 of an RGB unit per sample — far below any fixed noise floor — so
+    // counting levels against an absolute distance sees one long plateau and
+    // calls an ordinary monochrome key banded. Counted against its OWN spread it
+    // resolves as finely as a full-range ramp does.
+    const img = makeKey(KEY_W, KEY_H, faintGrey);
+    const result = sampleColorBar(img, KEY_W, KEY_H, { x: 0, y: 10 }, { x: KEY_W - 1, y: 10 }, { thickness: 1 });
+    expect(result.reason).toBeNull();
+    expect(countColorLevels(result.strip!.samples)).toBeGreaterThan(20);
+  });
+
+  it('still refuses six flat bands, however far apart their colours are', () => {
+    const img = makeKey(KEY_W, KEY_H, sixBands);
+    const result = sampleColorBar(img, KEY_W, KEY_H, { x: 0, y: 10 }, { x: KEY_W - 1, y: 10 }, { thickness: 1 });
+    expect(result.reason).toBe('discrete');
+    expect(result.strip).toBeNull();
+  });
+
+  it('reads a faint grey key to the same POSITIONS a bright one gives', () => {
+    // ⚑ Accepting it is only half the claim — the readings have to be right.
+    // Low contrast costs PRECISION (the band is wider), not accuracy.
+    const faint = stripOf(faintGrey);
+    for (const u of [0.15, 0.5, 0.85]) {
+      const reading = invertColor(faint, faintGrey(u))!;
+      expect(reading.t).toBeCloseTo(u, 1);
+    }
+  });
+});
 
 describe('sampleColorBar', () => {
   it('samples one position per pixel step, end to end', () => {
@@ -618,7 +686,7 @@ describe('invertColor', () => {
     // is what a large figure or a coarse key gives. Returning the first tied
     // position — what a plain argmin does — biases EVERY reading to the low end
     // of its plateau by half a plateau, in the same direction every time.
-    const strip = stripOf(lutRamp);
+    const strip = rawStripOf(lutRamp);
     const reading = invertColor(strip, lutRamp(0.5))!;
     // The plateau holding this colour runs from t = 0.5 to t = 0.5 + 1/8.
     expect(reading.t).toBeCloseTo(0.5 + 1 / 16, 2);
@@ -630,7 +698,7 @@ describe('invertColor', () => {
     // table entry are printed identically. A band narrower than the step to the
     // next colour would exclude values the figure cannot distinguish, while
     // reporting distance 0.
-    const strip = stripOf(lutRamp);
+    const strip = rawStripOf(lutRamp);
     const reading = invertColor(strip, lutRamp(0.5))!;
     // The plateau is 1/8 of the key wide; the band must reach into its
     // neighbours, so it is wider than the plateau alone.
@@ -642,7 +710,7 @@ describe('invertColor', () => {
     // one, lands between two table entries. Its position is inside that step,
     // and reporting the nearest entry instead would quantise every such reading
     // to the key's own pitch.
-    const strip = stripOf(lutRamp);
+    const strip = rawStripOf(lutRamp);
     const boundary = strip.samples.findIndex((s) => s.rgb[0] === 144);
     const before = strip.samples[boundary - 1]!;
     const after = strip.samples[boundary]!;
@@ -659,7 +727,7 @@ describe('invertColor', () => {
     // The refinement looks both ways out of a plateau. Only ever testing the
     // upper side would leave a whole branch of the key unread — and a heatmap's
     // low cells are as much data as its high ones.
-    const strip = stripOf(lutRamp);
+    const strip = rawStripOf(lutRamp);
     const boundary = strip.samples.findIndex((s) => s.rgb[0] === 144);
     const before = strip.samples[boundary - 1]!;
     const after = strip.samples[boundary]!;
@@ -698,7 +766,7 @@ describe('invertColor', () => {
   it('measures how far OFF the step a between-entries colour sits', () => {
     // Same position, but tinted away from the ramp. The along-the-key component
     // still places it; the across component is reported as distance.
-    const strip = stripOf(lutRamp);
+    const strip = rawStripOf(lutRamp);
     const reading = invertColor(strip, [120, 108, 108])!;
     // Projecting (12,0,0) onto the step's direction (36,36,36) leaves
     // (8,-4,-4) — a distance of sqrt(96).

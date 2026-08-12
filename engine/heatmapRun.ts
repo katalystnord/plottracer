@@ -68,6 +68,14 @@ function stripRefusalSentence(reason: ColorBarRefusal): string {
       return 'Nothing was found along the colour key — the strip is fully transparent there.';
     case 'no-ramp':
       return 'The colour key reads as one flat colour, so every cell would come out the same. Click along the strip’s LENGTH rather than across its width.';
+    case 'discrete':
+      // ⚑⚑ NAMES WHY, AND WHAT IT WOULD HAVE COST. The user is being told the
+      // tool will not do the thing they asked for, so the sentence has to carry
+      // the reason: a banded key maps a colour to a RANGE, and the number we
+      // could invent for it — the middle of that range — is one the figure does
+      // not contain. In a heatmap the colour IS the value, so that invented
+      // number would arrive with no symptom at all.
+      return 'This colour key is drawn as a few discrete bands rather than a continuous ramp, so a cell’s colour identifies a BAND — a range — and not a value. PlotTracer will not report a number the figure does not contain: read these cells against the key by eye, or trace a figure whose key is a continuous ramp.';
   }
 }
 
