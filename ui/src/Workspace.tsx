@@ -5761,8 +5761,10 @@ export function Workspace() {
         </TopBarGroup>
 
         {/* Analysis group (checkpoint 40) -- floating Popovers. Grid Removal is
-            always available (image prep); Curve Fit and Geometry are XY-only +
-            calibrated. */}
+            image prep, so it needs only an image (Curve Fit and Geometry are
+            XY-only + calibrated) -- but it DOES need one: it used to open on an
+            empty canvas with a Remove button that could only ever answer 'No
+            image loaded.' */}
         <TopBarGroup>
         <GridRemovalPanel
           color={gridRemovalColor}
@@ -5772,6 +5774,7 @@ export function Workspace() {
           error={gridRemovalError}
           onRun={handleRemoveGridLines}
           onPickFromImage={() => setEyedropper('grid')}
+          enabled={canvasHasImage}
         />
 
         {/* Curve Fit + Geometry moved to the LEFT RAIL (v0.8) -- with these two

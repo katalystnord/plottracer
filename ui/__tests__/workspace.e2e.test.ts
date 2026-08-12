@@ -3498,14 +3498,26 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
 });
 
 describe('Workspace: Grid Line Removal (checkpoint 28)', () => {
-  it('shows a clear error when no image is loaded yet', async () => {
-    // Deliberately not calling resetWorkspace() -- it always opens an
-    // image as its first step; this test needs the app's true initial
-    // state, before any image has been chosen.
-    await page.getByTestId('grid-removal-trigger').click();
-    await page.getByTestId('grid-removal-run').click();
+  it('CANNOT BE OPENED before an image, rather than opening and then refusing', async () => {
+    // ⚑ This test used to assert the opposite — open the panel on an empty
+    // canvas, press Remove, read 'No image loaded.' — which was the DEFECT
+    // written down as the expectation. Every control beside it (Export, zoom,
+    // undo) was gated on having an image; this one offered a colour picker, a
+    // tolerance and a button whose only possible outcome was a refusal.
+    //
+    // Deliberately not calling resetWorkspace(): it opens an image as its first
+    // step, and this needs the app's true initial state.
+    expect(await page.getByTestId('grid-removal-trigger').isDisabled()).toBe(true);
+    // …and the panel body is not merely hidden behind a click that does nothing.
+    await page.getByTestId('grid-removal-trigger').click({ force: true });
     await page.waitForTimeout(150);
-    expect(await textOf('grid-removal-error')).toMatch(/No image loaded/);
+    expect(await page.getByTestId('grid-removal-run').count()).toBe(0);
+  });
+
+  it('is enabled the moment there IS an image', async () => {
+    // The companion half: a gate that never opens is just a removal.
+    await resetWorkspace('xy');
+    expect(await page.getByTestId('grid-removal-trigger').isDisabled()).toBe(false);
   });
 
   it('is usable before calibrating -- the panel is not axes-type or calibration gated', async () => {

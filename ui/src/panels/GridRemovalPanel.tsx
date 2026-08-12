@@ -11,6 +11,13 @@ import { GridRemovalIcon, EyedropperIcon } from '../icons.js';
  * leaving it open would put the panel between the cursor and the gridline the
  * user has just been told to click — the same class of defect as a marker
  * eating the press it was drawn to invite.
+ *
+ * ⚑ DISABLED WITHOUT AN IMAGE, like Export, zoom and undo beside it. This panel
+ * alone opened on an empty canvas, offering a colour picker, a tolerance and a
+ * Remove button whose only possible outcome was the sentence 'No image loaded.'
+ * — an interface inviting an action it already knows must fail. Every control
+ * around it was gated on `canvasHasImage` and this one was not; a v1.x
+ * oversight, not a v2.2 regression.
  */
 
 export interface GridRemovalPanelProps {
@@ -21,6 +28,8 @@ export interface GridRemovalPanelProps {
   error: string | null;
   onRun: () => void;
   onPickFromImage: () => void;
+  /** False until a figure is open. */
+  enabled: boolean;
 }
 
 export function GridRemovalPanel({
@@ -31,9 +40,10 @@ export function GridRemovalPanel({
   error,
   onRun,
   onPickFromImage,
+  enabled,
 }: GridRemovalPanelProps) {
   return (
-    <FloatingPanel label="Grid Removal" icon={<GridRemovalIcon />} testId="grid-removal">
+    <FloatingPanel label="Grid Removal" icon={<GridRemovalIcon />} testId="grid-removal" disabled={!enabled}>
       {(close) => (
         <>
           <p style={{ marginTop: 0, color: theme.color.text.secondary }}>
