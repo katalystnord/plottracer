@@ -23,9 +23,9 @@ fit the view with `Ctrl+0`.
 Pick the graph type from the **card picker** in the top bar — each type shows its
 own icon, so a bar chart and a histogram are told apart by their shape rather than
 by reading two similar names. The types are **XY** (linear/log/date),
-**Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Ternary**, **Map**,
-**Circular chart recorder**, **Histogram**, **Box plot**, or **Line** (categorical
-X)**.
+**Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Heatmap**, **Ternary**,
+**Map**, **Circular chart recorder**, **Histogram**, **Box plot**, or **Line**
+(categorical X)**.
 
 Error bars are not a graph type — they are **rail tool 6**, captured on top of
 whichever series they belong to.
@@ -342,7 +342,118 @@ polynomial is solved directly and has nothing to converge, so it reads `n/a`.
 The fit is always a **separate block** from the record — the traced points are
 never overwritten by the model drawn through them.
 
-## 10. Export
+## 10. Heatmaps
+
+A heatmap is a **matrix**, not a set of points, so nothing on it is clicked as a
+data point. You calibrate the two axes and the colour key, put a **grid** over
+the cells, and PlotTracer reads every cell through the key.
+
+### Is each axis a category or a value?
+
+Ask it per axis — a heatmap can be category × category (a correlation or
+confusion matrix, genes × samples), category × value (named treatments against
+time), or value × value (a continuous field). Tick **X is categories** and/or
+**Y is categories** on the Calibration card *before* you start clicking, because
+it changes what you are asked for.
+
+- **A value axis** asks for two points of known value, as any XY chart does.
+- **A category axis** asks for the two outer **edges** — where the first
+  category starts and the last one ends — and then for **how many categories
+  there are**. You never type a coordinate, because the figure never printed
+  one. The count is something you read off the figure by counting; the
+  positions it implies (0, 1, 2 …) are ordinals, and the export says so.
+
+### The colour key
+
+Four more clicks. Two say **where the coloured strip is** — click where it
+begins and where it ends, *along its length*. Two more say **what it is worth**:
+click a **printed tick** on the key and type the number printed there, then a
+second one. You do not have to hit the coloured band for those two — clicking
+the tick mark or its label below the bar works, because only the position along
+the key is read.
+
+Those are two separate measurements on purpose. "The key's ends are the minimum
+and maximum" is a guess, and on a real figure it is wrong by a measurable amount:
+the ramp starts where the ink starts, while the printed numbers sit wherever the
+figure's tick machinery put them.
+
+Tick **Log colour scale** if the key is logarithmic — reading a log key as
+linear is wrong by a factor, not by a rounding.
+
+### The grid
+
+The grid is a set of **boundaries per axis**, and every one of them is
+adjustable — published heatmaps have rows of unequal height and columns of
+unequal width.
+
+- **Detect grid** finds the boundaries in the figure's own ink (drawn rules, or
+  the colour discontinuities of a continuous field) and *proposes* them. Enter
+  **Columns** / **Rows** first if you know the counts and detection will check
+  itself against them — and if it finds fewer boundaries than it needs it
+  **says so and places nothing**, rather than filling in a plausible grid whose
+  cells are silently twice as wide as the figure's.
+- On a **category axis** the count you declared has already placed the
+  boundaries, so there is usually nothing to detect.
+- **Drag any handle** beside the figure to move a boundary; a boundary will not
+  cross its neighbour. **+ Column boundary** / **+ Row boundary** adds one in
+  the middle of the widest cell — which is where a missed one usually belongs —
+  and clicking a handle offers to **Remove** that boundary.
+
+### Names
+
+If the figure prints names rather than numbers, type them into **Column names**
+and **Row names**, comma separated, in reading order — the first name is the
+figure's top-left cell. Put a name containing a comma in "quotes". The card
+tells you how many of each axis are named; naming only some is fine, and the
+unnamed cells keep their measured coordinates.
+
+### Reading the cells
+
+**Read cells** fills the table. In a heatmap the colour *is* the value, so a
+wrong cell has no other symptom — no gap in a trace, no misplaced point — and
+every cell therefore reports its own evidence beside its number:
+
+| | |
+|---|---|
+| **range** | the values this colour cannot be told apart from |
+| colour offset | how far the cell's colour sat off the key's ramp |
+| *n*% of the cell | how much of the cell was actually the colour that was read |
+| at the key's limit | the colour is the key's extreme, so the figure may have **clipped** the value |
+
+The card says how many cells need a look. **A clipped cell is exact, uniform and
+wrong** — the figure stopped containing the number — and nothing but that
+warning can tell you.
+
+### What PlotTracer will not do here
+
+- **A key drawn as a handful of discrete bands** (significance levels, cluster
+  IDs, land cover) is **refused, and says why**. A colour on such a key
+  identifies a band — a range — and not a value; the number that could be
+  reported is the middle of that range, which is not in the figure.
+- **Monochrome keys work**, and cost precision rather than accuracy: greys sit
+  closer together than a colour ramp's steps, so the reported range is wider.
+  Note that on a grey key a black or white **cell border** is itself a colour on
+  the ramp, so a border caught in a cell will not show up as a colour offset —
+  the *% of the cell* figure is what catches it.
+- **A regular hatch or stipple over the cells is a known limitation.** A pattern
+  covering up to about a third of a cell is read correctly and flagged, but a
+  dense regular pattern can line up with the sampling grid and be read as if it
+  were the cell's own colour. If your figure is hatched, treat the flagged cells
+  as unresolved and check them against the key by eye.
+
+### Export
+
+Cells export in two shapes, both written: **one row per cell** — `x min`,
+`x max`, `y min`, `y max`, `x centre`, `y centre`, `value` plus the evidence
+columns — and the **matrix** view for readers that want a 2-D array with
+coordinate vectors. Both are written because real consumers need each: some
+plotting libraries require *n+1* edges and refuse centres, others take centres.
+Where an axis is categorical the header says `(category index)` and the names
+travel in their own column.
+
+---
+
+## 11. Export
 
 **Export** (top bar) → **CSV, TSV, JSON, OpenDocument (ODS), Excel (XLSX), LaTeX,
 MATLAB, Python, R**,

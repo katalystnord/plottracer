@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlotTracer — turn any graph back into data</title>
-<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, bar, histogram, box-plot, line, pie/donut, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers — across XY, log, bar, histogram, box-plot, line, pie/donut, heatmap, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer — turn any graph back into data">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
@@ -486,7 +486,7 @@
       <span class="eyebrow">See it on real figures</span>
       <h2>Built for the graphs papers actually publish.</h2>
       <p>Scatter and fitted trends, asymmetric error bars, true histogram bins,
-        box plots, pie and donut charts — the same tool, on the plots you meet in practice.</p>
+        box plots, pie and donut charts, heatmaps — the same tool, on the plots you meet in practice.</p>
     </div>
     <div class="shots">
       <figure class="shot-card" style="grid-column: 1 / -1;">
@@ -539,14 +539,18 @@
     <div class="sec-head">
       <span class="eyebrow">Breadth</span>
       <h2>Every graph your sources use.</h2>
-      <p>Eleven graph types over eight axis systems — XY curves, bar charts,
-        histograms, box plots, categorical lines, pie and donut charts, ternary
-        phase diagrams, polar plots, spider charts, maps, and circular chart
+      <p>Twelve graph types over eight axis systems — XY curves, bar charts,
+        histograms, box plots, categorical lines, pie and donut charts, heatmaps,
+        ternary phase diagrams, polar plots, spider charts, maps, and circular chart
         recorders. A bar is recorded as an interval, not a point, so floating and
         stacked bars keep both ends. Histograms capture true bin edges, and every
-        spoke of a spider keeps its own scale. Error bars are not a graph type
-        here: they are captured <em>on top of</em> whichever series they belong
-        to, asymmetric caps and all.</p>
+        spoke of a spider keeps its own scale. On a heatmap the colour key is
+        calibrated as a third axis, and each of the other two is independently a
+        category or a value — so a genes-by-samples matrix is calibrated by
+        clicking its edges and counting its categories, never by inventing
+        coordinates it does not print. Error bars are not a graph type here: they
+        are captured <em>on top of</em> whichever series they belong to,
+        asymmetric caps and all.</p>
     </div>
     <div class="gallery">
       <div class="glyph">
@@ -576,6 +580,11 @@
       <div class="glyph">
         <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="56" cy="38" r="25"/></g><path class="g-teal" d="M56 13 L 56 38 L 79 28" fill="none"/><path class="g-teal" d="M56 38 L 34 51" fill="none"/><path class="g-amber" d="M86 47 m -21 12 a 24 24 0 0 0 21 -25 L 65 47 Z" fill="none"/></svg>
         <span class="label">Pie / donut</span>
+      </div>
+      <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><!-- inline style, not an opacity attribute: .g-teal-f sets opacity in CSS and an
+           attribute loses to a class rule, which rendered every cell the same shade. --><g><rect class="g-teal-f" x="22" y="14" width="18" height="13" style="opacity:0.28"/><rect class="g-teal-f" x="44" y="14" width="18" height="13" style="opacity:0.85"/><rect class="g-teal-f" x="66" y="14" width="18" height="13" style="opacity:0.55"/><rect class="g-teal-f" x="88" y="14" width="18" height="13" style="opacity:1.0"/><rect class="g-teal-f" x="22" y="31" width="18" height="13" style="opacity:0.92"/><rect class="g-teal-f" x="44" y="31" width="18" height="13" style="opacity:0.38"/><rect class="g-teal-f" x="66" y="31" width="18" height="13" style="opacity:1.0"/><rect class="g-teal-f" x="88" y="31" width="18" height="13" style="opacity:0.62"/><rect class="g-teal-f" x="22" y="48" width="18" height="13" style="opacity:0.55"/><rect class="g-teal-f" x="44" y="48" width="18" height="13" style="opacity:1.0"/><rect class="g-teal-f" x="66" y="48" width="18" height="13" style="opacity:0.28"/><rect class="g-teal-f" x="88" y="48" width="18" height="13" style="opacity:0.8"/></g></svg>
+        <span class="label">Heatmap</span>
       </div>
       <div class="glyph">
         <svg viewBox="0 0 120 74"><path class="g-axis" d="M60 8 L 104 66 H 16 Z"/><circle class="g-amber" cx="60" cy="40" r="4"/><circle class="g-amber" cx="74" cy="52" r="4"/></svg>
@@ -610,8 +619,8 @@
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M6 16c4-1 6-8 12-11"/></svg>
-        <h3>Eleven chart types</h3>
-        <p>XY, bar, categorical line, histogram, box plot, polar, spider/radar, pie/donut, ternary, map and circular chart recorders — each calibrated the way that figure is actually drawn.</p>
+        <h3>Twelve chart types</h3>
+        <p>XY, bar, categorical line, histogram, box plot, polar, spider/radar, pie/donut, heatmap, ternary, map and circular chart recorders — each calibrated the way that figure is actually drawn.</p>
       </div>
 
       <div class="feature">
