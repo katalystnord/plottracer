@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, GRAPH_TYPE_METADATA_KEY } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
-import { gridFromAxes, gridToAxes, type HeatmapState } from '../heatmapRun.js';
+import { gridFromAxes, gridToAxes, labelsFromAxes, labelsToAxes, type HeatmapState } from '../heatmapRun.js';
 
 /**
  * A heatmap has to SURVIVE A SAVE (v2.2) — the grid, the colour key, and which
@@ -117,6 +117,34 @@ describe('a heatmap survives a save', () => {
     gridToAxes(before.getAxes()!, grid);
     const { session: after } = roundTrip(before);
     expect(gridFromAxes(after.getAxes()!)).toEqual(grid);
+  });
+
+  it('carries the axis NAMES through the file, beside the grid', () => {
+    // ⚑⚑ A reopened heatmap whose columns lost their names exports the index
+    // numbers the names exist to replace — silently, with every value correct.
+    const before = calibratedSession();
+    labelsToAxes(before.getAxes()!, { x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] });
+    const { session: after } = roundTrip(before);
+    expect(labelsFromAxes(after.getAxes()!)).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] });
+  });
+
+  it('has no names at all for a value × value heatmap, rather than empty lists in the file', () => {
+    expect(labelsFromAxes(calibratedSession().getAxes()!)).toEqual({ x: [], y: [] });
+    const session = calibratedSession();
+    labelsToAxes(session.getAxes()!, { x: ['A'], y: [] });
+    labelsToAxes(session.getAxes()!, { x: [], y: [] });
+    expect(session.getAxes()!.getMetadata()['heatmapLabels']).toBeUndefined();
+  });
+
+  it('REFUSES what a hand-edited file might carry, rather than printing it on the figure', () => {
+    // ⚑ A load-path entrance, so it validates like `gridFromAxes` does.
+    // `String(undefined)` would put the word "undefined" on a column of a
+    // published figure and export it as the name.
+    const session = calibratedSession();
+    session.getAxes()!.setMetadata({ ...session.getAxes()!.getMetadata(), heatmapLabels: { x: ['A', 7, null], y: 'nonsense' } });
+    expect(labelsFromAxes(session.getAxes()!)).toEqual({ x: ['A', '', ''], y: [] });
+    session.getAxes()!.setMetadata({ ...session.getAxes()!.getMetadata(), heatmapLabels: 'not an object' });
+    expect(labelsFromAxes(session.getAxes()!)).toEqual({ x: [], y: [] });
   });
 
   it('is null for an axes carrying no grid, rather than an empty one', () => {

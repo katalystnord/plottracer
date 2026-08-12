@@ -152,6 +152,64 @@ describe('heatmapMatrixSection', () => {
   });
 });
 
+describe('a NAMED axis — "the label is the coordinate"', () => {
+  /** The same grid with gene names on x and one sample name on y — the shape a
+   * gene × sample or confusion-matrix figure actually has. */
+  const NAMED: HeatmapExportCell[] = [
+    { ...GRID[0]!, xLabel: 'BRCA1', yLabel: 'tumour' },
+    { ...GRID[1]!, xLabel: 'TP53', yLabel: 'tumour' },
+    { ...GRID[2]!, xLabel: 'BRCA1' },
+    { ...GRID[3]!, xLabel: 'TP53' },
+  ];
+
+  it('adds the name BESIDE the measured bounds, never instead of them', () => {
+    // ⚑⚑ The bounds are read off the pixels and stay true whatever the axis is
+    // called; the name is the coordinate a reader can rejoin to their own data.
+    // Dropping either half breaks a real consumer.
+    const section = heatmapCellsSection(NAMED, makeRounder(axes(), 'auto'));
+    expect(section.header.slice(0, 3)).toEqual(['x label', 'y label', 'x min']);
+    expect(section.rows[1]!.slice(0, 9)).toEqual(['TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 20]);
+  });
+
+  it('leaves a VALUE axis exactly as it was — no empty column appears', () => {
+    // ⚑ The histogram's `value error` rule: a column exists only when something
+    // fills it, so a value × value heatmap's file does not change shape because
+    // a feature it does not use was added.
+    expect(heatmapCellsSection(GRID, makeRounder(axes(), 'auto')).header[0]).toBe('x min');
+    // …and an axis named on ONE side only grows that side's column alone.
+    const xOnly = NAMED.map((c) => ({ ...c, yLabel: '' }));
+    expect(heatmapCellsSection(xOnly, makeRounder(axes(), 'auto')).header.slice(0, 2)).toEqual(['x label', 'x min']);
+  });
+
+  it('puts the names in the MATRIX headers, where there is only one slot', () => {
+    // The matrix cannot carry both, and a named axis whose header row reads
+    // "0.5, 2.5" is the file this whole feature exists to stop shipping.
+    const section = heatmapMatrixSection(NAMED);
+    expect(section.header).toEqual(['y \\ x', 'BRCA1', 'TP53']);
+    // The unnamed row keeps its measured centre, so a half-named axis stays
+    // addressable instead of going blank.
+    expect(section.rows.map((r) => r[0])).toEqual(['tumour', 2.5]);
+    expect(section.rows[0]!.slice(1)).toEqual([10, 20]);
+  });
+
+  it('carries the names into the JSON, alongside the coordinate vectors', () => {
+    const doc = JSON.parse(buildHeatmapJSON(NAMED)) as {
+      cells: Array<Record<string, unknown>>;
+      matrix: { x: number[]; xLabels?: string[]; yLabels?: string[] };
+    };
+    expect(doc.cells[1]!['xLabel']).toBe('TP53');
+    // ⚑ Positions AND tick labels, aligned index for index — matplotlib wants
+    // numbers for the first and strings for the second.
+    expect(doc.matrix.x).toEqual([0.5, 2.5]);
+    expect(doc.matrix.xLabels).toEqual(['BRCA1', 'TP53']);
+    expect(doc.matrix.yLabels).toEqual(['tumour', '']);
+    // A value axis writes no label keys at all.
+    const plain = JSON.parse(buildHeatmapJSON(GRID)) as { cells: Array<Record<string, unknown>>; matrix: Record<string, unknown> };
+    expect('xLabel' in plain.cells[0]!).toBe(false);
+    expect('xLabels' in plain.matrix).toBe(false);
+  });
+});
+
 describe('buildHeatmapJSON', () => {
   it('writes the record and the matrix, both', () => {
     const doc = JSON.parse(buildHeatmapJSON(GRID)) as {

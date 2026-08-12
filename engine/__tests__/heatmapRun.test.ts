@@ -240,6 +240,34 @@ describe('readHeatmapCells', () => {
     expect(rows[0]!.atKeyLimit).toBe(/key’s limit/.test(rows[0]!.warning));
   });
 
+  it('attaches the axis NAME to every cell in that column or row', () => {
+    // ⚑⚑ "The label is the coordinate." A category axis's cells are identified
+    // by the name the figure prints; without it the export hands back 1, 2, 3.
+    const { image, axes, placed, fig } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    const grid = { xDividers: fig.grid.x, yDividers: fig.grid.y };
+    const result = readHeatmapCells(image, axes, grid, scale!, {
+      x: ['BRCA1', 'TP53'],
+      y: ['tumour'],
+    });
+    const columns = fig.grid.x.length - 1;
+    expect(result.rows[0]).toMatchObject({ col: 0, row: 0, xLabel: 'BRCA1', yLabel: 'tumour' });
+    expect(result.rows[1]).toMatchObject({ col: 1, xLabel: 'TP53' });
+    // ⚑ A SHORT LIST IS NOT AN ERROR — the unnamed cells keep the coordinates
+    // they always had, rather than the user being pushed into inventing names.
+    expect(result.rows[2]!.xLabel).toBe('');
+    expect(result.rows[columns]!.yLabel).toBe('');
+    // …and the measured geometry is untouched by any of it.
+    expect(result.rows[0]!.xCentre).toBeCloseTo((fig.grid.x[0]! + fig.grid.x[1]!) / 2, 10);
+  });
+
+  it('leaves every label empty when the figure names nothing', () => {
+    const { image, axes, placed, fig } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    const result = readHeatmapCells(image, axes, { xDividers: fig.grid.x, yDividers: fig.grid.y }, scale!);
+    expect(result.rows.every((r) => r.xLabel === '' && r.yLabel === '')).toBe(true);
+  });
+
   it('needs a grid before it can read anything', () => {
     const { image, axes, placed } = scene();
     const { scale } = buildColorScale(placed, image, false);

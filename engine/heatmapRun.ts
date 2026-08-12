@@ -35,6 +35,7 @@ import {
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
 import { checkDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import { labelAt } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
 /** The image, as the canvas hands it over. */
@@ -207,6 +208,55 @@ export function gridToAxes(axes: MetadataCarrier, grid: HeatmapState | null): vo
     delete meta[GRID_METADATA_KEY];
   } else {
     meta[GRID_METADATA_KEY] = { x: [...grid.xDividers], y: [...grid.yDividers] };
+  }
+  axes.setMetadata(meta);
+}
+
+/**
+ * The names on the two axes, one list per axis, indexed by CELL.
+ *
+ * ⚑ Empty lists are the norm, not a missing value: a value × value heatmap has
+ * nothing to name, and its cells' coordinates are the numbers the calibration
+ * already produces. See `core/heatmapLabels.ts` for why the label IS the
+ * coordinate on a category axis, and why this is not `core/categoryAxis.ts`.
+ */
+export interface HeatmapLabels {
+  x: readonly string[];
+  y: readonly string[];
+}
+
+export const NO_HEATMAP_LABELS: HeatmapLabels = { x: [], y: [] };
+
+/** Beside the grid, for the same reason the grid is there: no pixel to ride on,
+ * and axes metadata already saves, reopens and undoes through `plotData`. */
+const LABELS_METADATA_KEY = 'heatmapLabels';
+
+/**
+ * Read the labels an axes is carrying.
+ *
+ * ⚑ VALIDATED, not trusted — a load-path entrance like `gridFromAxes`. Anything
+ * that is not a list of strings is no labels at all rather than a list with
+ * holes of some other type in it: `String(undefined)` would put the word
+ * "undefined" on a column of a published figure.
+ */
+export function labelsFromAxes(axes: MetadataCarrier): HeatmapLabels {
+  const raw = axes.getMetadata()[LABELS_METADATA_KEY];
+  if (typeof raw !== 'object' || raw === null) return NO_HEATMAP_LABELS;
+  const { x, y } = raw as { x?: unknown; y?: unknown };
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((s) => (typeof s === 'string' ? s : '')) : [];
+  return { x: list(x), y: list(y) };
+}
+
+/** Put the labels where a save will find them. Two empty lists REMOVE the key
+ * rather than writing an empty record, so a value × value heatmap's file says
+ * nothing about names instead of saying nothing twice. */
+export function labelsToAxes(axes: MetadataCarrier, labels: HeatmapLabels): void {
+  const meta = { ...axes.getMetadata() };
+  if (labels.x.length === 0 && labels.y.length === 0) {
+    delete meta[LABELS_METADATA_KEY];
+  } else {
+    meta[LABELS_METADATA_KEY] = { x: [...labels.x], y: [...labels.y] };
   }
   axes.setMetadata(meta);
 }
@@ -499,6 +549,12 @@ export interface HeatmapRow {
   /** The one-line verdict the table shows: what, if anything, is wrong with
    * this cell. Empty for a cell with nothing to report. */
   warning: string;
+  /** The names printed on the axes for this cell, or `''` where the figure's
+   * axis is a value axis (or the user has not typed that one yet). ⚑ These sit
+   * BESIDE the coordinates, never instead of them: the bounds are measured off
+   * the pixels and stay measured whatever the axis is called. */
+  xLabel: string;
+  yLabel: string;
 }
 
 /** How much of a cell may be something other than its colour before it is worth
@@ -542,7 +598,8 @@ export function readHeatmapCells(
   image: SourceImage,
   axes: PixelProjector,
   grid: HeatmapState,
-  scale: ColorScale
+  scale: ColorScale,
+  labels: HeatmapLabels = NO_HEATMAP_LABELS
 ): ReadHeatmapCellsResult {
   const cells = readHeatmap(
     image.data,
@@ -573,6 +630,8 @@ export function readHeatmapCells(
     rivalValues: cell.rivals.map((r) => r.value),
     atKeyLimit: cell.atKeyLimit,
     warning: warningFor(cell),
+    xLabel: labelAt(labels.x, cell.col),
+    yLabel: labelAt(labels.y, cell.row),
   }));
   const flagged = rows.filter((r) => r.warning !== '').length;
   const summary =

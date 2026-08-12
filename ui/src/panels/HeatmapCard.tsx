@@ -42,6 +42,15 @@ export interface HeatmapCardProps {
   /** False when removing it would leave the axis with no cell at all; the button
    * stays visible and says why, rather than the refusal arriving on click. */
   canRemoveBoundary: boolean;
+  /** What the figure PRINTS along each axis, comma separated, as typed. Blank
+   * means the axis is a value axis and its coordinates are the numbers. */
+  xLabels: string;
+  yLabels: string;
+  onLabelsChange: (xLabels: string, yLabels: string) => void;
+  /** "3 of 5 named", or a warning that there are more names than cells. Empty
+   * before anything has been typed. */
+  xLabelCoverage: string;
+  yLabelCoverage: string;
   /** Detection's own report — agreement, a miss, or why nothing could be read. */
   detectMessage: string;
   /** The read-out summary, and the cells themselves. */
@@ -66,6 +75,11 @@ export function HeatmapCard({
   selectedBoundary,
   onRemoveBoundary,
   canRemoveBoundary,
+  xLabels,
+  yLabels,
+  onLabelsChange,
+  xLabelCoverage,
+  yLabelCoverage,
   detectMessage,
   summary,
   error,
@@ -160,6 +174,51 @@ export function HeatmapCard({
                 Drag a handle beside the figure to move a boundary; click one to remove it.
               </span>
             )}
+            {/* ⚑⚑ "THE LABEL IS THE COORDINATE." A heatmap's axes are each
+                independently a CATEGORY or a VALUE, and all four combinations are
+                published — gene × sample, treatment × time, field × field. On a
+                named axis the printed name is what identifies the cell, and an
+                export reading `1, 2, 3` for it cannot be rejoined to anything the
+                reader has. Typing what the figure prints is RECORDING, the same
+                act as typing a calibration tick's value; what would be
+                interpretation is inventing a name nobody printed, and nothing
+                here does that — an unnamed cell keeps its measured coordinates. */}
+            {/* ⚑ "Column NAMES", not "Columns": the card already has a Columns
+                box holding a COUNT, and two fields with the same word in one
+                panel is a question the user has to answer by experiment. Found
+                by reading a screenshot of the finished card. */}
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ minWidth: 84 }}>Column names</span>
+              <input
+                data-testid="heatmap-x-labels"
+                value={xLabels}
+                onChange={(e) => onLabelsChange(e.target.value, yLabels)}
+                placeholder="names, comma separated"
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </label>
+            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ minWidth: 84 }}>Row names</span>
+              <input
+                data-testid="heatmap-y-labels"
+                value={yLabels}
+                onChange={(e) => onLabelsChange(xLabels, e.target.value)}
+                placeholder="names, comma separated"
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </label>
+            {xLabelCoverage || yLabelCoverage ? (
+              <span data-testid="heatmap-label-coverage" style={{ color: theme.color.text.secondary }}>
+                {[xLabelCoverage && `Columns: ${xLabelCoverage}`, yLabelCoverage && `Rows: ${yLabelCoverage}`]
+                  .filter(Boolean)
+                  .join('. ')}
+              </span>
+            ) : (
+              <span style={{ color: theme.color.text.legend }}>
+                Name the columns and rows if the figure prints names rather than numbers — they
+                travel with the values into the export.
+              </span>
+            )}
           </>
         )}
         {detectMessage && (
@@ -202,8 +261,12 @@ export function HeatmapCard({
               <tbody>
                 {cells.map((cell) => (
                   <tr key={`${cell.col}-${cell.row}`} data-testid="heatmap-row">
-                    <td style={{ paddingRight: 8 }}>{num(cell.xCentre, 4)}</td>
-                    <td style={{ paddingRight: 8 }}>{num(cell.yCentre, 4)}</td>
+                    {/* ⚑ The name where the figure prints one, the measured
+                        centre where it does not. Only the TABLE chooses: the
+                        export carries both, because the bounds stay true
+                        whatever the axis is called. */}
+                    <td style={{ paddingRight: 8 }}>{cell.xLabel || num(cell.xCentre, 4)}</td>
+                    <td style={{ paddingRight: 8 }}>{cell.yLabel || num(cell.yCentre, 4)}</td>
                     <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>
                     <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
                       {cell.value === null ? '—' : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}

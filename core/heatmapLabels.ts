@@ -1,0 +1,118 @@
+/**
+ * The NAMES on a heatmap's axes (v2.2) — "the label is the coordinate".
+ *
+ * ⚑⚑ WHY A HEATMAP NEEDS THIS AND AN XY CHART DOES NOT. The settled record asks
+ * one question per axis — is it a CATEGORY or a VALUE? — and all four
+ * combinations are published: gene × sample, treatment × time, field × field.
+ * On a value axis the coordinate is a number the calibration already produces.
+ * On a CATEGORY axis the coordinate is the printed name, and until it is
+ * recorded the export hands back `1, 2, 3` for what the figure calls `BRCA1,
+ * TP53, EGFR` — numbers that are not wrong so much as not the answer. A
+ * correlation matrix or a confusion matrix exported that way cannot be rejoined
+ * to anything.
+ *
+ * ⚑ TYPING A NAME IS RECORDING, NOT INTERPRETING (tenet 9). The name is printed
+ * on the figure; transcribing it is the same act as typing the value of a
+ * calibration tick, which the whole tool already rests on. What would be
+ * interpretation is INVENTING one — inferring "Sample 4" from a sequence, or
+ * fabricating a name for an unlabelled band — and nothing here does that: an
+ * unnamed cell keeps its numeric coordinates and exports an empty label.
+ *
+ * ⚑ ONE LIST PER AXIS, INDEXED BY CELL, and deliberately NOT `core/categoryAxis.ts`.
+ * That class is the canonical name list a bar chart's DATASETS bind to through
+ * `metadata.categoryIndex`, one per session; a heatmap has two independent
+ * axes, no datasets and no tuples, so binding it here would mean one axis
+ * silently renaming the other. The band model is shared; the storage is not.
+ *
+ * Pure: strings in, strings out. No image, no axes, no DOM.
+ */
+
+/**
+ * Split what the user typed into one label per cell.
+ *
+ * ⚑ COMMAS SEPARATE, AND DOUBLE QUOTES PROTECT A COMMA INSIDE A NAME. Twelve
+ * gene names in one field is the gesture that fits a sidebar — a box per row
+ * would be a column of twelve inputs — and the CSV convention is the one
+ * readers already know, which matters because a label like `Treatment A, 10 mg`
+ * is ordinary in published figures and splitting it in half would be a silent
+ * loss of exactly the thing being recorded.
+ *
+ * ⚑ POSITION IS MEANING: an empty field keeps its slot, so `A,,C` names the
+ * first and third columns and leaves the second unnamed rather than shifting C
+ * onto column 2. A wholly empty string is no labels at all.
+ */
+export function parseLabelList(text: string): string[] {
+  if (text.trim() === '') return [];
+  const out: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      // A doubled quote inside a quoted field is one literal quote, as CSV has
+      // it — so a name that really contains `"` is still expressible.
+      if (ch === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ',') {
+      out.push(field.trim());
+      field = '';
+    } else {
+      field += ch;
+    }
+  }
+  out.push(field.trim());
+  return out;
+}
+
+/**
+ * The labels back as one line the user can edit — the same text they typed,
+ * rebuilt from the record rather than remembered alongside it.
+ *
+ * ⚑ Quoting is re-applied where it is NEEDED and nowhere else, so a plain list
+ * reads as a plain list on the way back and does not accumulate punctuation
+ * across a save and a reopen.
+ */
+export function formatLabelList(labels: readonly string[]): string {
+  return labels
+    .map((l) => (l.includes(',') || l.includes('"') ? `"${l.replace(/"/g, '""')}"` : l))
+    .join(', ');
+}
+
+/**
+ * The label for one cell index, or `''` when that cell has none.
+ *
+ * ⚑ A SHORT LIST IS NOT AN ERROR. Someone naming the three columns they care
+ * about on a twelve-column figure has recorded three true things, and refusing
+ * that would push them into inventing nine more. The unnamed cells keep their
+ * measured coordinates, which is what they had before anyone typed anything.
+ */
+export function labelAt(labels: readonly string[], index: number): string {
+  if (!Number.isInteger(index) || index < 0) return '';
+  return labels[index] ?? '';
+}
+
+/**
+ * How many of an axis's cells are named — the sentence the card shows.
+ *
+ * ⚑ IT COUNTS RATHER THAN VALIDATES, and says so plainly, because both
+ * mismatches are things a user does on the way to being finished: fewer labels
+ * than cells while still typing, more than cells after removing a boundary. A
+ * refusal would be wrong in both cases; a count is a measurement, and it makes
+ * the extra-labels case visible instead of letting names silently address cells
+ * that are not there.
+ */
+export function labelCoverage(labels: readonly string[], cellCount: number): string {
+  const named = labels.slice(0, Math.max(0, cellCount)).filter((l) => l !== '').length;
+  const extra = Math.max(0, labels.length - Math.max(0, cellCount));
+  if (named === 0 && extra === 0) return '';
+  const head = `${named} of ${cellCount} named`;
+  return extra === 0 ? head : `${head}; ${extra} more label${extra === 1 ? '' : 's'} than cells`;
+}

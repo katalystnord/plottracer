@@ -48,6 +48,17 @@ export interface HeatmapExportCell {
    * Exported because it is the one warning the numbers cannot carry: a clipped
    * cell is exact, uniform, and wrong. */
   atKeyLimit?: boolean;
+  /** What the figure PRINTS on each axis for this cell, where it prints a name
+   * rather than a number (v2.2). Empty on a value axis. */
+  xLabel?: string;
+  yLabel?: string;
+}
+
+/** Does any cell carry a name on this axis? Decides whether the export grows a
+ * label column at all — the same rule the histogram's `value error` column
+ * follows, so a value x value heatmap's file stays exactly what it was. */
+function hasLabels(cells: readonly HeatmapExportCell[], axis: 'x' | 'y'): boolean {
+  return cells.some((c) => (axis === 'x' ? c.xLabel : c.yLabel));
 }
 
 // The type-specific exports (box plot / histogram / error bars) don't flow through
@@ -237,9 +248,20 @@ export function heatmapCellsSection(
 ): TableSection {
   const at = (v: number | null, cell: HeatmapExportCell, dim: 0 | 1): Cell =>
     v === null ? '' : rounder.at([dim === 0 ? v : cell.xCentre, dim === 0 ? cell.yCentre : v], dim);
+  const xNamed = hasLabels(cells, 'x');
+  const yNamed = hasLabels(cells, 'y');
   return {
     title: 'Cells',
     header: [
+      // ⚑⚑ THE NAME COMES FIRST AND THE BOUNDS STAY. On a category axis the
+      // label IS the coordinate — a gene name, a treatment, a confusion-matrix
+      // class — and a file that exported `1, 2, 3` for it cannot be rejoined to
+      // anything the reader has. But the bounds are MEASURED off the pixels and
+      // remain true whatever the axis is called, so the name is added beside
+      // them rather than in place of them (tenet 9: record, do not choose for
+      // the reader).
+      ...(xNamed ? ['x label'] : []),
+      ...(yNamed ? ['y label'] : []),
       'x min',
       'x max',
       'y min',
@@ -254,6 +276,8 @@ export function heatmapCellsSection(
       'at key limit',
     ],
     rows: cells.map((c) => [
+      ...(xNamed ? [c.xLabel ?? ''] : []),
+      ...(yNamed ? [c.yLabel ?? ''] : []),
       at(c.xMin, c, 0),
       at(c.xMax, c, 0),
       at(c.yMin, c, 1),
@@ -287,11 +311,21 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
   const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
   const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
   const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
+  // ⚑ THE HEADERS TAKE THE NAME WHERE THERE IS ONE. The matrix has exactly one
+  // slot per coordinate, so unlike the long form it cannot carry both — and a
+  // named axis whose header row reads `1, 2, 3` is the shape that made this
+  // whole feature necessary. A cell with no name keeps its centre, so a
+  // half-named axis stays addressable rather than going blank.
+  const head = (coord: number, axis: 'x' | 'y'): string | number => {
+    const cell = cells.find((c) => (axis === 'x' ? c.xCentre : c.yCentre) === coord);
+    const label = axis === 'x' ? cell?.xLabel : cell?.yLabel;
+    return label !== undefined && label !== '' ? label : coord;
+  };
   return {
     title: 'Matrix (value per cell)',
-    header: ['y \\ x', ...xs.map((x) => x)],
+    header: ['y \\ x', ...xs.map((x) => head(x, 'x'))],
     rows: ys.map((y) => [
-      y,
+      head(y, 'y'),
       ...xs.map((x) => {
         const cell = byKey.get(`${x},${y}`);
         return cell?.value ?? '';
@@ -671,10 +705,19 @@ export function buildHeatmapJSON(
       colourOffset: c.distance,
       uniformity: c.uniformity,
       atKeyLimit: c.atKeyLimit === true,
+      // Written only where the figure prints a name, so a value x value heatmap's
+      // JSON is byte-for-byte what it was before names existed.
+      ...(c.xLabel ? { xLabel: c.xLabel } : {}),
+      ...(c.yLabel ? { yLabel: c.yLabel } : {}),
     })),
     matrix: {
       x: xs,
       y: ys,
+      // ⚑ The names ride ALONGSIDE the coordinate vectors rather than replacing
+      // them: `matplotlib`/`plotly` want numbers for positions and strings for
+      // tick labels, and both are here, aligned index for index.
+      ...(hasLabels(cells, 'x') ? { xLabels: xs.map((x) => cells.find((c) => c.xCentre === x)?.xLabel ?? '') } : {}),
+      ...(hasLabels(cells, 'y') ? { yLabels: ys.map((y) => cells.find((c) => c.yCentre === y)?.yLabel ?? '') } : {}),
       values: ys.map((y) => xs.map((x) => byKey.get(`${x},${y}`)?.value ?? null)),
     },
   };

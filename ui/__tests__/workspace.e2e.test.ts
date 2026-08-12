@@ -8066,6 +8066,16 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(200);
   }
 
+  /** Local copies: the export helpers live inside another describe's scope. */
+  function heatmapTempFile(extension: string): string {
+    return path.join(os.tmpdir(), `plottracer-hm-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`);
+  }
+  async function stubHeatmapSaveDialog(targetPath: string) {
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, targetPath);
+  }
+
   beforeEach(async () => {
     await app.evaluate(({ dialog }, samplePath) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
@@ -8222,6 +8232,49 @@ describe('heatmap capture (v2.2)', () => {
     const remove = page.getByTestId('heatmap-remove-boundary');
     expect(await remove.isDisabled()).toBe(true);
     expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
+  });
+
+  it('NAMES the columns, and the names travel into the export beside the bounds', async () => {
+    // ⚑⚑ "The label is the coordinate." The most common published heatmap is
+    // category × category — gene × sample, confusion matrix, correlation matrix
+    // — and an export reading `1, 2, 3` where the figure prints `BRCA1` cannot
+    // be rejoined to anything the reader has. Driven through the card and out to
+    // a real file, because that file is the product.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-columns').fill('5');
+    await page.getByTestId('heatmap-rows').fill('4');
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
+    await page.waitForTimeout(300);
+    // The card counts rather than refuses — four names on a five-column figure
+    // is someone part-way through, not an error.
+    expect(await textOf('heatmap-label-coverage')).toMatch(/Columns: 4 of 5 named/);
+    // The table shows the name the moment it is typed, without re-reading.
+    const first = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
+    expect(first[0]).toBe('BRCA1');
+
+    const csvPath = heatmapTempFile('csv');
+    await stubHeatmapSaveDialog(csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    const csv = await expect
+      .poll(() => (fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf8') : ''), { timeout: 8000 })
+      .not.toBe('')
+      .then(() => fs.readFileSync(csvPath, 'utf8'));
+
+    // ⚑ The name is BESIDE the measured bounds, never instead of them: the
+    // bounds are read off the pixels and stay true whatever the axis is called.
+    expect(csv).toMatch(/x label,x min,x max,y min,y max,x centre,y centre,value/);
+    expect(csv).toMatch(/^BRCA1,/m);
+    // A quoted name keeps its comma through the record AND through the CSV.
+    expect(csv).toMatch(/"EGFR, mut"/);
+    // The matrix's header row takes the names, where there is only one slot.
+    expect(csv).toMatch(/BRCA1,TP53,"EGFR, mut",KRAS/);
+    fs.unlinkSync(csvPath);
   });
 
   it('reports a miss instead of inventing boundaries', async () => {

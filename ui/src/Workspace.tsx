@@ -201,6 +201,7 @@ import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js'
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { runBarDetect } from '../../engine/barDetectRun.js';
+import { formatLabelList, labelCoverage, parseLabelList } from '../../core/heatmapLabels.js';
 import {
   addDivider,
   buildColorScale,
@@ -212,8 +213,12 @@ import {
   gridToAxes,
   initialGrid,
   isDividerHandle,
+  labelsFromAxes,
+  labelsToAxes,
+  type MetadataCarrier,
   readHeatmapCells,
   removeDividerHandle,
+  type HeatmapLabels,
   type HeatmapRow,
   type HeatmapState,
 } from '../../engine/heatmapRun.js';
@@ -1127,6 +1132,17 @@ export function Workspace() {
   const [selectedDividerId, setSelectedDividerId] = useState<string | null>(null);
   const [heatmapColumns, setHeatmapColumns] = useState('');
   const [heatmapRows, setHeatmapRows] = useState('');
+  /**
+   * What the figure PRINTS along each axis, as the user typed it.
+   *
+   * ⚑ THE TEXT is the state and the parsed list is derived, not the other way
+   * round: a user mid-way through typing `A, B, ` has a trailing separator that
+   * a parse-and-reformat round trip would keep eating under their hands. The
+   * record — the parsed list — is written to the axes on every change, so what
+   * is SAVED is always the list and never the punctuation.
+   */
+  const [heatmapXLabels, setHeatmapXLabels] = useState('');
+  const [heatmapYLabels, setHeatmapYLabels] = useState('');
   const [heatmapCells, setHeatmapCells] = useState<HeatmapRow[]>([]);
   /** ⚑ Read through a ref by the export, which is a `useCallback` shared by
    * nine formats: making it depend on the cells state would rebuild it on every
@@ -1767,6 +1783,13 @@ export function Workspace() {
    * derivable — the same rule that keeps the colour key's SAMPLES out of the
    * project file. Every edit path below records the result.
    */
+  /** The record the text boxes stand for — parsed once per render rather than at
+   * each of the three places that need it. */
+  const heatmapLabels = useMemo<HeatmapLabels>(
+    () => ({ x: parseLabelList(heatmapXLabels), y: parseLabelList(heatmapYLabels) }),
+    [heatmapXLabels, heatmapYLabels]
+  );
+
   const heatmapShownGrid = useMemo<HeatmapState | null>(() => {
     if (!heatmapActive) return null;
     if (heatmapGrid !== null) return heatmapGrid;
@@ -1793,8 +1816,40 @@ export function Workspace() {
   const applyHeatmapGrid = useCallback((grid: HeatmapState | null) => {
     setHeatmapGrid(grid);
     const axes = sessionRef.current.getAxes();
-    if (axes) gridToAxes(axes as unknown as { getMetadata(): Record<string, unknown>; setMetadata(o: Record<string, unknown>): void }, grid);
+    if (axes) gridToAxes(axes as unknown as MetadataCarrier, grid);
   }, []);
+
+  /**
+   * The axis NAMES, recorded where the grid is recorded.
+   *
+   * ⚑ THE PARSED LIST IS WHAT IS SAVED, never the raw text: the file then holds
+   * the record (one name per cell) instead of a punctuation style, and a reopen
+   * rebuilds the line from the list. Same axes-metadata home as the grid, so
+   * naming a column is saved and undone by machinery that already exists.
+   *
+   * ⚑ THE CELLS ARE RE-READ so the table shows the name the moment it is typed.
+   * The values do not change — a name cannot move a boundary — but a table that
+   * kept showing bare indices while the card said the axis was named would be
+   * the same self-contradiction the detect message was.
+   */
+  const applyHeatmapLabels = useCallback(
+    (xText: string, yText: string) => {
+      setHeatmapXLabels(xText);
+      setHeatmapYLabels(yText);
+      const axes = sessionRef.current.getAxes();
+      if (!axes) return;
+      const labels: HeatmapLabels = { x: parseLabelList(xText), y: parseLabelList(yText) };
+      labelsToAxes(axes as unknown as MetadataCarrier, labels);
+      setHeatmapCells((prev) =>
+        prev.map((row) => ({
+          ...row,
+          xLabel: labels.x[row.col] ?? '',
+          yLabel: labels.y[row.row] ?? '',
+        }))
+      );
+    },
+    []
+  );
 
   /**
    * Take the grid back OUT of the axes — the load path, and the undo path.
@@ -1810,7 +1865,13 @@ export function Workspace() {
    */
   const restoreHeatmapGrid = useCallback(() => {
     const axes = sessionRef.current.getAxes();
-    setHeatmapGrid(axes ? gridFromAxes(axes as unknown as { getMetadata(): Record<string, unknown>; setMetadata(o: Record<string, unknown>): void }) : null);
+    setHeatmapGrid(axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null);
+    // ⚑ The names come back with the grid, through the same door. A reopened
+    // heatmap whose columns lost their names would export the index numbers this
+    // whole feature exists to replace — and it would do it silently.
+    const labels = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
+    setHeatmapXLabels(formatLabelList(labels.x));
+    setHeatmapYLabels(formatLabelList(labels.y));
     setHeatmapCells([]);
     setHeatmapSummary('');
     setHeatmapDetectMessage('');
@@ -1859,14 +1920,14 @@ export function Workspace() {
           sessionRef.current.getOptions()['isLogValue'] === 'true'
         );
         if (scale) {
-          const result = readHeatmapCells(image, axesNow, next, scale);
+          const result = readHeatmapCells(image, axesNow, next, scale, heatmapLabels);
           setHeatmapCells(result.rows);
           setHeatmapSummary(result.summary);
         }
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length]
+    [applyHeatmapGrid, commit, heatmapCells.length, heatmapLabels]
   );
 
   const moveHeatmapDivider = useCallback(
@@ -1970,12 +2031,12 @@ export function Workspace() {
       return;
     }
     const grid = heatmapShownGrid ?? initialGrid(bounds);
-    const result = readHeatmapCells(image, axes, grid, scale);
+    const result = readHeatmapCells(image, axes, grid, scale, heatmapLabels);
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapShownGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapLabels, heatmapShownGrid]);
 
   /**
    * The grid drawn on the figure: one line per divider, spanning the grid's own
@@ -7451,6 +7512,11 @@ export function Workspace() {
             heatmapShownGrid !== null &&
             (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
           }
+          xLabels={heatmapXLabels}
+          yLabels={heatmapYLabels}
+          onLabelsChange={applyHeatmapLabels}
+          xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
+          yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
           detectMessage={heatmapDetectMessage}
           summary={heatmapSummary}
           error={heatmapError}
