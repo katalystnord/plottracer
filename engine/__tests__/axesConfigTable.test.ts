@@ -11,6 +11,8 @@ import {
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
   SPIDER_AXES_CONFIG,
   PIE_AXES_CONFIG,
+  HEATMAP_AXES_CONFIG,
+  commonOriginPairs,
   commonOriginReuse,
   type AxesTypeConfig,
   type CalibratedAxes,
@@ -376,25 +378,62 @@ function placedWith(...keys: string[]): Record<string, unknown> {
 describe('the shared corner is declared, not named at the call site', () => {
   it('names two real steps of its own type, donor before target', () => {
     for (const config of ALL) {
-      const shared = config.commonOrigin;
-      if (!shared) continue;
       const keys = stepKeys(config);
-      expect(keys, `${config.id}: commonOrigin.from`).toContain(shared.from);
-      expect(keys, `${config.id}: commonOrigin.to`).toContain(shared.to);
-      // The donor has to be placed before the walk arrives at the target, or
-      // the reuse can never fire.
-      expect(keys.indexOf(shared.from), config.id).toBeLessThan(keys.indexOf(shared.to));
+      for (const shared of commonOriginPairs(config)) {
+        expect(keys, `${config.id}: commonOrigin.from`).toContain(shared.from);
+        expect(keys, `${config.id}: commonOrigin.to`).toContain(shared.to);
+        // The donor has to be placed before the walk arrives at the target, or
+        // the reuse can never fire.
+        expect(keys.indexOf(shared.from), `${config.id} ${shared.to}`).toBeLessThan(
+          keys.indexOf(shared.to)
+        );
+      }
     }
   });
 
   it('prefills exactly one value per field of the step it fills', () => {
+    // ⚑ Every declared pairing, not just the first: a type may share more than
+    // one pixel (a heatmap shares both corners of its plot box), and a prefill
+    // that outran its step's fields is what stopped common origin working on a
+    // category axis at all.
     for (const config of ALL) {
-      const shared = config.commonOrigin;
-      if (!shared) continue;
-      const target = config.fixedSteps.find((st) => st.key === shared.to);
-      expect(target, `${config.id}: ${shared.to} exists`).toBeDefined();
-      expect(shared.prefill?.length ?? 0, config.id).toBe(target!.valueFields.length);
+      for (const shared of commonOriginPairs(config)) {
+        const target = config.fixedSteps.find((st) => st.key === shared.to);
+        expect(target, `${config.id}: ${shared.to} exists`).toBeDefined();
+        expect(shared.prefill?.length ?? 0, `${config.id} ${shared.to}`).toBe(
+          target!.valueFields.length
+        );
+      }
     }
+  });
+
+  it('shares BOTH corners of a heatmap’s plot box, and only the first has a value', () => {
+    // ⚑⚑ A heatmap's axes span exactly the plot box, so its two opposite corners
+    // carry all four calibration points — two clicks instead of four (David:
+    // *"it should allow both common X or Y"*).
+    const pairs = commonOriginPairs(HEATMAP_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>);
+    expect(pairs.map((p) => `${p.from}->${p.to}`)).toEqual(['x1->y1', 'x2->y2']);
+    // The far corner's Y value is whatever the user typed for it; nothing is
+    // known about it the way an origin's 0 is known.
+    expect(pairs[1]!.prefill).toBeUndefined();
+  });
+
+  it('TRIMS a prefill to the fields the step actually has', () => {
+    // ⚑ The category-axis defect: `x1 -> y1` declares a prefill of ['0'], and a
+    // heatmap's categorical Y edge takes NO typed value, so the value was being
+    // fed to a step with nowhere to put it. David: *"the common origin does not
+    // work when you have a categorial axis."*
+    const heat = HEATMAP_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
+    expect(commonOriginReuse(heat, true, 'y1', placedWith('x1'), { valueFields: [] })).toEqual({
+      from: 'x1',
+      prefill: [],
+    });
+    // …and a step that DOES have a field still gets its value.
+    expect(
+      commonOriginReuse(heat, true, 'y1', placedWith('x1'), {
+        valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }],
+      })!.prefill
+    ).toEqual(['0']);
   });
 
   it('XY and Histogram share ONE declaration, so they cannot drift apart', () => {
@@ -454,7 +493,7 @@ describe('commonOriginReuse — when the walk should take the shared pixel', () 
     const first = commonOriginReuse(xy, true, 'y1', placedWith('x1'))!;
     first.prefill[0] = 'tampered';
     expect(commonOriginReuse(xy, true, 'y1', placedWith('x1'))!.prefill).toEqual(['0']);
-    expect(XY_AXES_CONFIG.commonOrigin!.prefill).toEqual(['0']);
+    expect(commonOriginPairs(XY_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>)[0]!.prefill).toEqual(['0']);
   });
 
   it('Histogram behaves identically, which is the point of the declaration', () => {

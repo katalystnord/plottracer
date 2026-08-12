@@ -8508,6 +8508,36 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-cell')).toBe('');
   });
 
+  it('calibrates a categorical heatmap from TWO CORNERS of the plot box', async () => {
+    // ⚑⚑ David: *"the common origin does not work when you have a categorial
+    // axis. And it should allow both common X or Y."* A heatmap's axes span
+    // exactly the plot box, so its two opposite corners carry all four x/y
+    // points — two clicks and two counts instead of four clicks and four values.
+    await resetWorkspace('heatmap');
+    await page.getByText('X is categories', { exact: true }).click();
+    await page.getByText('Y is categories', { exact: true }).click();
+    await page.waitForTimeout(200);
+    // The checkbox says what it will do, built from the pairings the type
+    // declares rather than a sentence naming one of them.
+    expect(await page.getByTestId('common-origin').locator('..').textContent()).toMatch(
+      /Shared corners/
+    );
+
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y); // bottom-left
+    await clickImagePixel(truth.frame.x2.x, truth.frame.y2.y); // top-right
+    await confirmValue('5'); // five columns
+    await confirmValue('4'); // four rows — the far corner was shared, not clicked
+    await page.waitForTimeout(200);
+
+    // Every x/y point is placed from two clicks, and the walk has moved on to
+    // the colour key.
+    const walk = await textOf('calibration-bar');
+    expect(walk).toMatch(/4\/8/);
+    // ⚑ The tips bar carries the STEP prompt (`calib-prompt` is the reuse row),
+    // and it is now asking for the colour key — every x/y point is done.
+    expect(await textOf('tips-bar')).toMatch(/colour key/i);
+  });
+
   it('reports a miss instead of inventing boundaries', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();

@@ -477,17 +477,55 @@ export function calibrationCompatible(
  * user has already put down by hand -- reuse is an offer on arrival, not a rule
  * that keeps reasserting itself.
  */
+export interface CommonOriginPair {
+  /** The already-placed step whose pixel is reused. */
+  from: string;
+  /** The step that reuses it, on arrival. */
+  to: string;
+  /** Values prefilled into `to`'s fields, in order — the shared corner's value
+   * is known precisely because it is shared. Omit for a step with no value
+   * fields, and see `commonOriginReuse`: it is trimmed to the fields the step
+   * actually has, because the walk can reshape them. */
+  prefill?: readonly string[];
+}
+
+/** Every pairing a type declares, however it declared them. */
+export function commonOriginPairs(
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin'>
+): readonly CommonOriginPair[] {
+  const shared = config.commonOrigin;
+  if (!shared) return [];
+  return Array.isArray(shared) ? shared : [shared as CommonOriginPair];
+}
+
 export function commonOriginReuse(
   config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin'>,
   enabled: boolean,
   nextStepKey: string | undefined,
-  placed: Readonly<Record<string, unknown>>
+  placed: Readonly<Record<string, unknown>>,
+  /**
+   * The step the pixel is being reused FOR, as the walk currently shapes it.
+   *
+   * ⚑⚑ THE PREFILL HAS TO FIT THE STEP IT LANDS ON. `commonOrigin` declares
+   * "and while you are there, this corner's value is 0" — true for an XY origin,
+   * meaningless on a heatmap's CATEGORY edge, which takes no typed value at all.
+   * David: *"the common origin does not work when you have a categorial axis."*
+   * It was feeding a value to a step with nowhere to put it. Trimmed to the
+   * fields the step actually has, so a no-value step shares the pixel and asks
+   * for nothing.
+   */
+  toStep?: Pick<CalibStepInfo, 'valueFields'>
 ): { from: string; prefill: string[] } | null {
-  const shared = config.commonOrigin;
-  if (!enabled || !shared) return null;
+  if (!enabled) return null;
+  const shared = commonOriginPairs(config).find((pair) => pair.to === nextStepKey);
+  if (!shared) return null;
   if (nextStepKey !== shared.to) return null;
   if (!placed[shared.from] || placed[shared.to]) return null;
-  return { from: shared.from, prefill: [...(shared.prefill ?? [])] };
+  const prefill = [...(shared.prefill ?? [])];
+  return {
+    from: shared.from,
+    prefill: toStep === undefined ? prefill : prefill.slice(0, toStep.valueFields.length),
+  };
 }
 
 /** Axes-metadata key recording which *graph type* built an axes instance.
@@ -733,16 +771,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
     steps: readonly CalibStepInfo[],
     options: Readonly<Record<string, string>>
   ) => CalibStepInfo[];
-  commonOrigin?: {
-    /** The already-placed step whose pixel is reused. */
-    from: string;
-    /** The step that reuses it, on arrival. */
-    to: string;
-    /** Values prefilled into `to`'s fields, in order — the shared corner's
-     * value is known precisely because it is shared. Omit for a step with no
-     * value fields. */
-    prefill?: readonly string[];
-  };
+  /**
+   * Steps that stand on the SAME PIXEL, so the user places it once.
+   *
+   * ⚑ One pairing or several. An XY origin shares a single corner (X1 & Y1);
+   * a heatmap shares BOTH corners of the plot box, because its two axes span
+   * exactly that box — David: *"it should allow both common X or Y"* — which
+   * turns four calibration clicks into two on the commonest case there is.
+   */
+  commonOrigin?: CommonOriginPair | readonly CommonOriginPair[];
   /** Slots every dataset under this graph type is created with, so
    * tuple capture is the type's *inherent* shape rather than something the
    * user must first discover and switch on. Histogram's bins are the first
@@ -1178,7 +1215,12 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       return step;
     });
   },
-  commonOrigin: XY_COMMON_ORIGIN,
+  // ⚑⚑ BOTH CORNERS OF THE PLOT BOX. A heatmap's two axes span exactly that box,
+  // so its bottom-left and top-right corners carry all four calibration points —
+  // two clicks instead of four, on the commonest figure this type sees. The
+  // prefill is trimmed per step, so a CATEGORY edge shares the pixel and is
+  // asked for nothing.
+  commonOrigin: [XY_COMMON_ORIGIN, { from: 'x2', to: 'y2' }],
   logScaleGuards: [
     { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X', unless: 'xIsCategory' },
     { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y', unless: 'yIsCategory' },

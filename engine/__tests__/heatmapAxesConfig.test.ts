@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS } from '../calibrationSession.js';
+import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS, commonOriginReuse } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { heatmapBounds, initialGridFor } from '../heatmapRun.js';
 import { Calibration } from '../../core/calibration.js';
@@ -393,5 +393,64 @@ describe('the TICK CONVENTION — centred marks vs boundary marks', () => {
     // An edge-marked axis says so too, rather than defaulting silently.
     const edges = walk({ xIsCategory: 'true' }, 100, 400, '5');
     expect(edges.getAxes()!.getMetadata()['heatmapXTicks']).toBe('edge');
+  });
+});
+
+
+describe('the SHARED CORNERS of a heatmap’s plot box', () => {
+  /**
+   * ⚑⚑ David: *"the common origin does not work when you have a categorial
+   * axis. And it should allow both common X or Y."* Both halves were real. The
+   * prefill declared for X1→Y1 is the origin's `0`, and a CATEGORY edge takes no
+   * typed value at all — so the walk took the shared pixel and then waited for a
+   * value the step could not accept, with no confirm button in sight. And only
+   * one pairing was ever declared, when a heatmap's axes span exactly the plot
+   * box: its two opposite corners carry all four points.
+   */
+  it('COMPLETES a no-value step from a reused pixel, as a click on it would', () => {
+    // ⚑ The two entrances to placing a point have to agree about when a point is
+    // finished. A click on a value-less step advances the walk; a reused pixel
+    // used to leave it pending forever.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('yIsCategory', 'true');
+    s.handleCalibrationClick(100, 300);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(400, 300);
+    s.confirmCalibrationValues(['10']);
+    expect(s.getCurrentStep()!.key).toBe('y1');
+    expect(s.reuseStepPixel('x1')).toBe(true);
+    // Placed AND advanced — not sitting on a step that can never be confirmed.
+    expect(Object.keys(s.getPlacedPoints())).toContain('y1');
+    expect(s.getCurrentStep()!.key).toBe('y2');
+  });
+
+  it('calibrates BOTH axes from two opposite corners', () => {
+    // The gesture this exists for: click the plot box's bottom-left and
+    // top-right, say how many columns and rows, and every x/y point is placed.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('xIsCategory', 'true');
+    s.setOption('yIsCategory', 'true');
+    s.handleCalibrationClick(100, 300); // one corner  -> x1 (no value)
+    s.handleCalibrationClick(400, 100); // the other   -> x2
+    s.confirmCalibrationValues(['6']);  // six columns
+
+    const share = () => {
+      const step = s.getCurrentStep();
+      const reuse = commonOriginReuse(
+        HEATMAP_AXES_CONFIG as never, true, step?.key, s.getPlacedPoints(), step ?? undefined
+      );
+      if (reuse) s.reuseStepPixel(reuse.from);
+      return reuse;
+    };
+    expect(share()).toEqual({ from: 'x1', prefill: [] }); // Y start takes no value
+    expect(s.getCurrentStep()!.key).toBe('y2');
+    expect(share()).toEqual({ from: 'x2', prefill: [] });
+    s.confirmCalibrationValues(['5']); // five rows
+    expect(Object.keys(s.getPlacedPoints()).sort()).toEqual(['x1', 'x2', 'y1', 'y2']);
+    // …and the shared pixels really are the corners that were clicked.
+    expect(s.getPlacedPoints()['y1']).toMatchObject({ px: 100, py: 300 });
+    expect(s.getPlacedPoints()['y2']).toMatchObject({ px: 400, py: 100 });
+    // The walk moves on to the colour key with nothing else asked of the axes.
+    expect(s.getCurrentStep()!.key).toBe('k1');
   });
 });

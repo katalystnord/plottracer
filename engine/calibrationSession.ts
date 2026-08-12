@@ -3796,6 +3796,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const step = this.getCurrentStep();
     const source = this.placed[fromKey];
     if (!step || !source) return false;
+    // ⚑⚑ A STEP WITH NOTHING TO TYPE COMPLETES HERE, exactly as a CLICK on it
+    // does (`handleCalibrationClick`). Leaving it pending instead is what made
+    // "common origin" appear to do nothing on a heatmap's CATEGORY axis: the
+    // shared pixel was taken, the walk then waited for a value the step does not
+    // have, and no confirm button exists to give it one — so the calibration
+    // simply stopped. David: *"the common origin does not work when you have a
+    // categorial axis."* The two entrances to placing a point have to agree
+    // about when a point is finished.
+    if (step.valueFields.length === 0) {
+      this.placed[step.key] = { px: source.px, py: source.py, values: [] };
+      this.pendingPixel = null;
+      this.stepIndex += 1;
+      return true;
+    }
     this.pendingPixel = { px: source.px, py: source.py };
     return true;
   }

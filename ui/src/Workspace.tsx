@@ -14,6 +14,7 @@ import {
   SPIDER_AXES_CONFIG,
   PIE_AXES_CONFIG,
   calibrationCompatible,
+  commonOriginPairs,
   commonOriginReuse,
   type AxesTypeConfig,
   type CalibratedAxes,
@@ -3421,18 +3422,33 @@ export function Workspace() {
       // pixel and prefill its value, so the user never places or reuses it by
       // hand -- they just confirm. Which steps those are is the TYPE's to
       // declare (config.commonOrigin), not this file's to name.
-      const reuse = commonOriginReuse(
-        config,
-        commonOrigin,
-        session.getCurrentStep()?.key,
-        session.getPlacedPoints()
-      );
-      if (reuse) {
+      // ⚑⚑ FOLLOW THE CHAIN, because a type may share more than one pixel. A
+      // heatmap shares BOTH corners of its plot box, and the first share
+      // (X start & Y start) completes without a value on a category axis — so a
+      // single pass placed it and stopped, leaving the second share (X end & Y
+      // end) never offered. Each turn of this loop PLACES a point, so it cannot
+      // spin; it stops as soon as a step needs something typed, or nothing more
+      // is shared.
+      let filled: string[] = [];
+      for (let guard = 0; guard < 8; guard++) {
+        const step = session.getCurrentStep();
+        const reuse = commonOriginReuse(
+          config,
+          commonOrigin,
+          step?.key,
+          session.getPlacedPoints(),
+          // ⚑ The step AS THE WALK CURRENTLY SHAPES IT — a heatmap's category
+          // edge takes no typed value, so there is nothing to prefill into it.
+          step ?? undefined
+        );
+        if (!reuse) break;
         session.reuseStepPixel(reuse.from);
-        setDataValueInputs(reuse.prefill);
-      } else {
-        setDataValueInputs([]);
+        if ((step?.valueFields.length ?? 0) > 0) {
+          filled = reuse.prefill;
+          break;
+        }
       }
+      setDataValueInputs(filled);
       commit();
     }
   }, [session, dataValueInputs, commit, commonOrigin, config]);
@@ -6291,7 +6307,19 @@ export function Workspace() {
                 checked={commonOrigin}
                 onChange={(e) => setCommonOrigin(e.target.checked)}
               />
-              Common origin — X1 &amp; Y1 are the same point
+              {/* ⚑ BUILT FROM THE PAIRINGS THE TYPE DECLARES, not written out
+                  here: a heatmap shares BOTH corners of its plot box, so a
+                  sentence naming only X1 & Y1 would be describing half of what
+                  the checkbox does. The step LABELS are used, so a category
+                  axis reads "First row" rather than "Y1". */}
+              {(() => {
+                const pairs = commonOriginPairs(config as never);
+                const labelOf = (key: string) => steps.find((st) => st.key === key)?.label ?? key;
+                const shared = pairs.map((p) => `${labelOf(p.from)} & ${labelOf(p.to)}`).join(', ');
+                return pairs.length > 1
+                  ? `Shared corners — ${shared} are the same points`
+                  : `Common origin — ${shared} are the same point`;
+              })()}
             </label>
           )}
           {/* ⚑⚑ THE GRID IS A DATA DEFINITION, SO IT LIVES ON THE CALIBRATION
