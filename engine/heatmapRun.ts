@@ -28,7 +28,7 @@
  * they are not is written on `buildColorScale`.
  */
 
-import { sampleColorBar, type ColorBarRefusal } from '../algorithms/colorBar.js';
+import { sampleColorBar, stripFromCorners, type ColorBarRefusal } from '../algorithms/colorBar.js';
 import { checkColorScale, type ColorScale } from '../algorithms/colorScale.js';
 import {
   detectDividers,
@@ -92,8 +92,7 @@ function stripRefusalSentence(reason: ColorBarRefusal): string {
 export function buildColorScale(
   placed: Readonly<Record<string, PlacedCalibPoint>>,
   image: SourceImage,
-  isLog: boolean,
-  thickness = 5
+  isLog: boolean
 ): { scale: ColorScale | null; error: string | null } {
   for (const key of KEY_STEPS) {
     if (placed[key] === undefined) {
@@ -105,13 +104,22 @@ export function buildColorScale(
   const kv1 = placed['kv1']!;
   const kv2 = placed['kv2']!;
 
+  // ⚑⚑ THE TWO KEY CLICKS ARE OPPOSITE CORNERS OF THE BAR, not two points along
+  // a centreline nothing is drawn on. A corner is printed and either hit or
+  // missed; the old pair gave the user nothing to aim at (David: *"it is really
+  // hard to know where to click on the key"*). The rectangle also MEASURES the
+  // strip's thickness, which used to be a hardcoded 5 px.
+  const geometry = stripFromCorners({ x: k1.px, y: k1.py }, { x: k2.px, y: k2.py });
+  if (geometry === null) {
+    return { scale: null, error: stripRefusalSentence('not-a-line') };
+  }
   const sampled = sampleColorBar(
     image.data,
     image.width,
     image.height,
-    { x: k1.px, y: k1.py },
-    { x: k2.px, y: k2.py },
-    { thickness }
+    geometry.from,
+    geometry.to,
+    { thickness: geometry.thickness }
   );
   if (sampled.strip === null) {
     return { scale: null, error: stripRefusalSentence(sampled.reason!) };

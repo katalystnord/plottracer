@@ -8162,7 +8162,10 @@ describe('heatmap capture (v2.2)', () => {
     // what makes this the heatmap's walk rather than an XY chart's.
     const walk = await textOf('calibration-bar');
     expect(walk).toMatch(/0\/8/);
-    expect(walk).toMatch(/Key start/);
+    // ⚑ The key is two OPPOSITE CORNERS of the bar now, not two points along a
+    // centreline nothing is drawn on — a corner is printed and can be aimed at.
+    expect(walk).toMatch(/Key corner/);
+    expect(walk).toMatch(/Opposite corner/);
     expect(walk).toMatch(/Key value 1/);
   });
 

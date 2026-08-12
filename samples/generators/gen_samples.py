@@ -1441,10 +1441,15 @@ def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values,
                 "x2": {**at(x_edges[-1], y_edges[0]), "value": x_edges[-1]},
                 "y1": {**at(x_edges[0], y_edges[0]), "value": y_edges[0]},
                 "y2": {**at(x_edges[0], y_edges[-1]), "value": y_edges[-1]},
-                # The strip's two ENDS -- inset 2px so they sit inside the frame
-                # the colorbar draws, which is where a user clicks too.
-                "k1": px(box.x0 + 2, y_mid),
-                "k2": px(box.x1 - 2, y_mid),
+                # ⚑ TWO OPPOSITE CORNERS of the coloured bar (v2.2), which is
+                # what the app now asks for: a corner is printed and either hit
+                # or missed, where a point on the centreline gave the user
+                # nothing to aim at. Inset 2px so they sit inside the frame the
+                # colorbar draws, which is where a careful click lands too — and
+                # the rectangle then MEASURES the strip's thickness instead of
+                # it being a hardcoded 5 px.
+                "k1": px(box.x0 + 2, box.y0 + 2),
+                "k2": px(box.x1 - 2, box.y1 - 2),
                 "kv1": key_ticks[0],
                 "kv2": key_ticks[1],
             },

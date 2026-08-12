@@ -3198,6 +3198,29 @@ export function Workspace() {
   // filling one slot at a time, the same generic mechanism every other
   // slotted type already uses (see the tips-bar copy above for why both work,
   // and boxMode's own gating below for when this fires at all).
+  /** The walk is asking for the colour key's first corner, so a drag across the
+   * bar means both corners at once. */
+  const isDraggingKeyCorners =
+    heatmapActive && mode === 'calibrate' && figureCaptured && session.getCurrentStep()?.key === 'k1';
+
+  /**
+   * A drag across the colour key: one corner at the press, the opposite at the
+   * release.
+   *
+   * ⚑ A CLICK IS STILL A CLICK. Under 3px of travel is not a drag, so it places
+   * the first corner and the walk asks for the second — the gesture is added,
+   * not swapped for the one people already know.
+   */
+  const handleKeyCornerDrag = useCallback(
+    (start: { x: number; y: number }, end: { x: number; y: number }) => {
+      const isClick = Math.abs(end.x - start.x) < 3 && Math.abs(end.y - start.y) < 3;
+      session.handleCalibrationClick(start.x, start.y);
+      if (!isClick) session.handleCalibrationClick(end.x, end.y);
+      commit();
+    },
+    [session, commit]
+  );
+
   const handleBoxRect = useCallback(
     (start: { x: number; y: number }, end: { x: number; y: number }) => {
       const isClick = Math.abs(end.x - start.x) < 3 && Math.abs(end.y - start.y) < 3;
@@ -7196,12 +7219,20 @@ export function Workspace() {
             // fold-out is asking for a category-axis edge, that click has to BE
             // the edge -- so box capture stands down for exactly that moment.
             // Caught by the e2e; no unit test could have seen it.
-            mode === 'place-point' &&
-            config.id === 'bar' &&
-            eyedropper === null &&
-            !isMarkingCategoryAxis(categoryPanel)
+            (mode === 'place-point' &&
+              config.id === 'bar' &&
+              eyedropper === null &&
+              !isMarkingCategoryAxis(categoryPanel)) ||
+            // ⚑⚑ THE COLOUR KEY IS DRAGGED CORNER TO CORNER (v2.2), and it is the
+            // SAME gesture as a bar's box for the same reason: two opposite
+            // corners of a rectangle, with the rubber band showing what you have
+            // while you have it. David: *"I would also like to add the ability to
+            // click and drag to the other corner of the color key, with visual
+            // feedback."* A plain click still works and places one corner, so the
+            // two-click route is not taken away from anyone who prefers it.
+            isDraggingKeyCorners
           }
-          onBoxRect={handleBoxRect}
+          onBoxRect={isDraggingKeyCorners ? handleKeyCornerDrag : handleBoxRect}
           selectMode={mode === 'select' ? selectSubMode : null}
           // v2.0 pre-launch audit: same consolidated guard as onRegionRect
           // above -- a tiny drag is a click, and handleImageClick already

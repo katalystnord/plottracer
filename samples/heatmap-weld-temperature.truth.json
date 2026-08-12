@@ -8,12 +8,14 @@
     "x": {
       "label": "Distance from weld centre (mm)",
       "min": 0.0,
-      "max": 14.0
+      "max": 14.0,
+      "kind": "value"
     },
     "y": {
       "label": "Depth (mm)",
       "min": 0.0,
-      "max": 6.0
+      "max": 6.0,
+      "kind": "value"
     },
     "value": {
       "label": "Peak temperature (\u00b0C)",
@@ -48,11 +50,11 @@
       },
       "k1": {
         "px": 55.15,
-        "py": 608.12
+        "py": 626.7
       },
       "k2": {
         "px": 874.12,
-        "py": 608.12
+        "py": 589.55
       },
       "kv1": {
         "px": 98.87,

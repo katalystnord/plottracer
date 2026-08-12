@@ -328,6 +328,52 @@ const MIN_SAMPLES_TO_JUDGE_BANDING = 60;
  * cross-section is transparent is DROPPED rather than filled in, which is why
  * samples carry their own `t`.
  */
+/**
+ * The strip a user DREW, from two opposite corners of the coloured bar.
+ *
+ * ⚑⚑ CORNERS ARE A TARGET A PERSON CAN ACTUALLY HIT. David, after failing to
+ * calibrate a key: *"it is really hard to know where to click on the key… ideally
+ * corners of the strip should be clickable, ideally opposite corners."* The old
+ * pair of clicks asked for two points ALONG the bar's centreline — a line nothing
+ * is drawn on, so there was nothing to aim at and no way to tell a good click
+ * from a bad one. A rectangle's corner is printed, unambiguous and either hit or
+ * missed.
+ *
+ * ⚑ AND IT MEASURES THE THICKNESS, which was a hardcoded 5 px. The bar's short
+ * side is right there in the gesture, so the sampling window becomes a property
+ * of the figure instead of a guess — on a thin key 5 px sampled outside the ink,
+ * and on a thick one it threw away most of the evidence.
+ *
+ * ⚑ INSET FROM THE SHORT SIDES, because a colour key is normally drawn with a
+ * black frame and a corner click lands ON it. Sampling the full height would mix
+ * the frame into every reading — the same reason `readHeatmap` insets a cell.
+ * The LONG axis is not inset: the ramp's ends are what the ends of the bar are.
+ */
+export function stripFromCorners(
+  a: Point2D,
+  b: Point2D
+): { from: Point2D; to: Point2D; thickness: number } | null {
+  if (![a.x, a.y, b.x, b.y].every((v) => Number.isFinite(v))) return null;
+  const x0 = Math.min(a.x, b.x);
+  const x1 = Math.max(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const y1 = Math.max(a.y, b.y);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  // The ramp runs along the LONGER side: a colour key is a long thin rectangle,
+  // and which way it lies is a property of the figure, not something to declare.
+  const horizontal = w >= h;
+  const shortSide = horizontal ? h : w;
+  const thickness = Math.max(1, Math.round(shortSide * STRIP_INSET_FRACTION));
+  return horizontal
+    ? { from: { x: x0, y: (y0 + y1) / 2 }, to: { x: x1, y: (y0 + y1) / 2 }, thickness }
+    : { from: { x: (x0 + x1) / 2, y: y0 }, to: { x: (x0 + x1) / 2, y: y1 }, thickness };
+}
+
+/** How much of the bar's short side to sample across, leaving its drawn frame
+ * outside the window. */
+const STRIP_INSET_FRACTION = 0.6;
+
 export function sampleColorBar(
   src: Uint8ClampedArray | Uint8Array,
   width: number,

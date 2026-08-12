@@ -4,6 +4,7 @@ import {
   MIN_RAMP_SPREAD,
   MIN_STRIP_LENGTH_PX,
   checkStripSamples,
+  stripFromCorners,
   countColorLevels,
   colorDistance,
   invertColor,
@@ -166,6 +167,54 @@ function stripOf(ramp: RGBRamp, thickness = 1): ColorBarStrip {
   expect(result.reason).toBeNull();
   return result.strip!;
 }
+
+describe('stripFromCorners — the gesture a person can actually aim at', () => {
+  it('takes the ramp along the LONGER side, whichever way the bar lies', () => {
+    // ⚑ Which way the key runs is a property of the figure, not a declaration.
+    const flat = stripFromCorners({ x: 10, y: 100 }, { x: 210, y: 130 })!;
+    expect(flat.from).toEqual({ x: 10, y: 115 });
+    expect(flat.to).toEqual({ x: 210, y: 115 });
+    const upright = stripFromCorners({ x: 100, y: 10 }, { x: 130, y: 210 })!;
+    expect(upright.from).toEqual({ x: 115, y: 10 });
+    expect(upright.to).toEqual({ x: 115, y: 210 });
+  });
+
+  it('reads the SAME strip whichever pair of opposite corners is dragged', () => {
+    // ⚑ A drag from bottom-right to top-left is the same rectangle, and a user
+    // has no reason to prefer one direction.
+    const a = stripFromCorners({ x: 10, y: 100 }, { x: 210, y: 130 })!;
+    const b = stripFromCorners({ x: 210, y: 130 }, { x: 10, y: 100 })!;
+    const c = stripFromCorners({ x: 10, y: 130 }, { x: 210, y: 100 })!;
+    expect(b).toEqual(a);
+    expect(c).toEqual(a);
+  });
+
+  it('MEASURES the thickness off the bar, inset from its drawn frame', () => {
+    // ⚑ It was a hardcoded 5 px: on a thin key that sampled outside the ink, on
+    // a thick one it discarded most of the evidence. A corner click lands ON the
+    // frame, so the window is inset rather than the full short side.
+    const strip = stripFromCorners({ x: 0, y: 0 }, { x: 300, y: 40 })!;
+    expect(strip.thickness).toBe(24);
+    expect(strip.thickness).toBeLessThan(40);
+    // A one-pixel-tall key still samples something rather than nothing.
+    expect(stripFromCorners({ x: 0, y: 0 }, { x: 300, y: 1 })!.thickness).toBe(1);
+  });
+
+  it('refuses corners that are not finite numbers', () => {
+    expect(stripFromCorners({ x: NaN, y: 0 }, { x: 10, y: 10 })).toBeNull();
+  });
+
+  it('feeds sampleColorBar a strip that reads the key it was drawn round', () => {
+    // End to end: draw a key, drag its corners, and check the ramp comes back.
+    const img = makeKey(KEY_W, KEY_H, greyRamp);
+    const corners = stripFromCorners({ x: 0, y: 0 }, { x: KEY_W - 1, y: KEY_H - 1 })!;
+    const result = sampleColorBar(img, KEY_W, KEY_H, corners.from, corners.to, {
+      thickness: corners.thickness,
+    });
+    expect(result.reason).toBeNull();
+    expect(result.strip!.samples).toHaveLength(KEY_W);
+  });
+});
 
 describe('a MONOCHROME key is not a banded one', () => {
   /** Grey, but spanning only 100…160 — a low-contrast key of the kind a
