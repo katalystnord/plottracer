@@ -9,8 +9,10 @@ import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.j
 import type { PlacedCalibPoint } from '../calibrationSession.js';
 
 /**
- * THE TWO BUNDLED HEATMAP EXAMPLES, traced against their own committed truth
- * (v2.2).
+ * THE THREE BUNDLED HEATMAP EXAMPLES, traced against their own committed truth
+ * (v2.2) — one per case the record enumerates, because a heatmap's two axes are
+ * each independently a CATEGORY or a VALUE and a figure cannot demonstrate a
+ * combination it does not have.
  *
  * ⚑ THE EXAMPLES ARE A PROMISE. Every one of them ships the exact values it was
  * rendered from, and a user can only judge this tool by whether what comes out
@@ -18,14 +20,26 @@ import type { PlacedCalibPoint } from '../calibrationSession.js';
  * example at all — so each is traced here, end to end, by the same functions the
  * card calls.
  *
- * ⚑ The two are opposites on purpose, and each covers what the other cannot:
+ * ⚑ Each covers what the others cannot:
  *
- *   weld ....... UNEQUAL cells, no drawn borders — every boundary is a bare
- *                colour discontinuity, and nothing about the answer can come
- *                from assuming a pitch.
- *   assay ...... regular cells WITH printed white rules (a border changes colour
- *                twice, once at each edge) and a LOG colour key, where reading
- *                the key as linear is wrong by a FACTOR, not by a rounding.
+ *   weld ....... VALUE × VALUE. UNEQUAL cells, no drawn borders — every boundary
+ *                is a bare colour discontinuity, and nothing about the answer
+ *                can come from assuming a pitch.
+ *   assay ...... CATEGORY × CATEGORY. Regular cells WITH printed white rules (a
+ *                border changes colour twice, once at each edge) and a LOG
+ *                colour key, where reading the key as linear is wrong by a
+ *                FACTOR, not by a rounding. Its axes print NAMES, so it cannot
+ *                be calibrated by typing coordinates at all.
+ *   timecourse . CATEGORY × VALUE, the mixed case: named treatments against real
+ *                time with unequal bins, so the two axes are captured by
+ *                OPPOSITE means in one figure.
+ *
+ * ⚠️ The first two shipped as value × value only — the assay figure was DRAWN
+ * with numeric axes because that was all the tool could calibrate — until David
+ * read the calibration card: *"Both examples heatmaps only use value axis. That
+ * does not hold."* An example drawn to fit the tool's limits hides the limit
+ * twice: once here, and once from every user who takes the bundled figures as
+ * what the tool is for.
  */
 
 interface SampleTruth {
@@ -166,6 +180,40 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
       const flagged = read.rows.filter((r) => r.warning !== '');
       expect(flagged.map((r) => `${r.col},${r.row}: ${r.warning}`), name).toEqual([]);
     }
+  });
+});
+
+describe('the MIXED case — a category axis against a value axis', () => {
+  /**
+   * ⚑⚑ THE THIRD OF FOUR ENUMERATED CASES, and until this figure existed
+   * nothing demonstrated it: both bundled heatmaps were value × value, which is
+   * what David caught — *"Both examples heatmaps only use value axis. That does
+   * not hold."* Rows here are named treatments with no coordinate at all;
+   * columns are time, with UNEQUAL bins. The two axes are therefore captured by
+   * opposite means in one figure, which is the case a same-kind figure cannot
+   * show.
+   */
+  it('reads every cell of the timecourse figure, and none of them warns', () => {
+    const { truth, image, axes, placed } = sample('heatmap-timecourse');
+    const { scale } = buildColorScale(placed, image, false);
+    const grid = { xDividers: truth.grid.x, yDividers: truth.grid.y };
+    const { rows, summary, error } = readHeatmapCells(image, axes, grid, scale!, undefined, {
+      x: 'value',
+      y: 'category',
+    });
+    expect(error).toBeNull();
+    expect(rows).toHaveLength(truth.cells.length);
+    for (const row of rows) {
+      const want = truth.cells.find(
+        (c) => Math.abs(c.xMin - row.xMin) < 1e-6 && Math.abs(c.yMin - row.yMin) < 1e-6
+      )!;
+      expect(want, `no truth cell at ${row.xMin},${row.yMin}`).toBeDefined();
+      expect(Math.abs(row.value! - want.value)).toBeLessThan(1.5);
+    }
+    // ⚑ A bundled example that ships a warning teaches the wrong thing — the
+    // narrow early bins of a real sampling schedule have to survive the reader.
+    expect(summary).toMatch(/all clean/);
+    expect(rows.every((r) => r.xIsCategory === false && r.yIsCategory === true)).toBe(true);
   });
 });
 

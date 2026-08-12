@@ -13,6 +13,7 @@ import scatterSample from '../../samples/scatter-crosslink-modulus.png';
 import dashedReleaseSample from '../../samples/xy-dashed-release.png';
 import heatmapWeldSample from '../../samples/heatmap-weld-temperature.png';
 import heatmapAssaySample from '../../samples/heatmap-assay-log.png';
+import heatmapTimecourseSample from '../../samples/heatmap-timecourse.png';
 import histogramSample from '../../samples/histogram-pore-size.png';
 import errorBarSample from '../../samples/errorbar-tensile-cure.png';
 import errorBarAsymSample from '../../samples/errorbar-failure-time-asymmetric.png';
@@ -79,15 +80,29 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // an untouched lower cap reports a symmetry the figure never drew.
   { id: 'errorbar-asym', name: 'Error bars — asymmetric 95% CI', src: errorBarAsymSample, axes: 'xy', icon: 'errorbars' },
   { id: 'histogram', name: 'Pore size distribution', src: histogramSample, axes: 'histogram' },
-  // Two heatmaps (v2.2), and they teach OPPOSITE halves of the same feature.
-  // The weld figure has UNEQUAL cells and no drawn borders, so every boundary
-  // is a bare colour discontinuity — the hard case for detection, and the case
-  // a "rows x columns" count cannot express. The assay figure has regular cells
-  // WITH printed white rules (a border changes colour twice, once at each edge)
-  // and a LOG colour key, where reading the key as linear is wrong by a factor
-  // rather than by a rounding. Neither is a variation on the other.
+  // THREE heatmaps (v2.2), one per case the record enumerates — because the axes
+  // are each independently a CATEGORY or a VALUE, and a figure cannot show a
+  // combination it does not have. The first two shipped as value × value only,
+  // which David caught immediately: "Both examples heatmaps only use value axis.
+  // That does not hold." An example drawn to fit the tool's limits hides the
+  // limit twice — once from the tests, once from every user who takes the
+  // bundled figures as what the tool is for.
+  //
+  //   weld ......... VALUE × VALUE. Unequal cells, no drawn borders, so every
+  //                  boundary is a bare colour discontinuity — the hard case for
+  //                  detection, and the one a "rows × columns" count cannot say.
+  //   IC50 ......... CATEGORY × CATEGORY. Named compounds against named cell
+  //                  lines, the commonest published heatmap there is: no
+  //                  coordinate is printed on either axis, so it can only be
+  //                  calibrated by clicking edges and counting. Printed white
+  //                  rules (a border changes colour twice) and a LOG key, where
+  //                  reading it as linear is wrong by a factor.
+  //   timecourse ... CATEGORY × VALUE, the mixed case. Named treatments against
+  //                  real time with UNEQUAL bins, so the two axes are captured
+  //                  by OPPOSITE means in one figure: one declared, one detected.
   { id: 'heatmap', name: 'Weld cross-section temperature', src: heatmapWeldSample, axes: 'heatmap' },
-  { id: 'heatmap-log', name: 'IC50 assay — log colour key', src: heatmapAssaySample, axes: 'heatmap' },
+  { id: 'heatmap-log', name: 'IC50 assay — named axes, log key', src: heatmapAssaySample, axes: 'heatmap' },
+  { id: 'heatmap-mixed', name: 'Time course — named rows, timed columns', src: heatmapTimecourseSample, axes: 'heatmap' },
   { id: 'bar', name: 'Tensile strength', src: barSample, axes: 'bar' },
   // Three more bar examples (v2.0, David: "some more bar graph test cases"),
   // each isolating one shape the v2.0 model exists for -- the same

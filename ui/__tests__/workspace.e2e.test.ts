@@ -5016,12 +5016,16 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // ⚑ A count is a real assertion here, not bookkeeping: an example that ships
     // without its Help entry is invisible, which is how a graph type ends up with
     // no way in for anyone who did not build it.
-    // 24 -> 26 with v2.2's two heatmaps. They are a PAIR on purpose and neither
-    // is a variation on the other: the weld figure has unequal cells and no
-    // drawn borders (every boundary a bare colour discontinuity), the IC50
-    // figure has printed white rules and a LOG colour key. One of them alone
-    // would leave half the feature with no way in.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(26);
+    // 24 -> 26 with v2.2's heatmaps, then 27: a heatmap's two axes are each
+    // independently a CATEGORY or a VALUE, and there is now one example per
+    // case, because a figure cannot demonstrate a combination it does not have.
+    // The weld figure is value × value with unequal cells and no drawn borders;
+    // the IC50 figure is category × category, named compounds against named cell
+    // lines, with printed rules and a LOG key; the timecourse is the MIXED case,
+    // named treatments against real time, so its two axes are captured by
+    // opposite means in one figure. The first two shipped as value × value only
+    // until David read the calibration card and said so.
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(27);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();

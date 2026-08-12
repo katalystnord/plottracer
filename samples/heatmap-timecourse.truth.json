@@ -1,0 +1,348 @@
+{
+  "source": {
+    "imagePath": "heatmap-timecourse.png",
+    "note": "Synthetic ground truth \u2014 a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins."
+  },
+  "graphType": "heatmap",
+  "axes": {
+    "x": {
+      "label": "Time (h)",
+      "min": 0.0,
+      "max": 24.0,
+      "kind": "value"
+    },
+    "y": {
+      "label": "Treatment",
+      "min": 0.0,
+      "max": 5.0,
+      "kind": "category",
+      "categories": [
+        "Vehicle",
+        "Low dose",
+        "Mid dose",
+        "High dose",
+        "Combination"
+      ]
+    },
+    "value": {
+      "label": "Engagement (%)",
+      "min": 0.0,
+      "max": 100.0,
+      "log": false
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 132.78,
+        "py": 509.59,
+        "value": 0.0
+      },
+      "x2": {
+        "px": 871.69,
+        "py": 509.59,
+        "value": 24.0
+      },
+      "y1": {
+        "px": 132.78,
+        "py": 509.59,
+        "value": 0.0
+      },
+      "y2": {
+        "px": 132.78,
+        "py": 35.33,
+        "value": 5.0
+      },
+      "k1": {
+        "px": 134.78,
+        "py": 606.02
+      },
+      "k2": {
+        "px": 869.69,
+        "py": 606.02
+      },
+      "kv1": {
+        "px": 280.56,
+        "py": 606.02,
+        "value": 20.0
+      },
+      "kv2": {
+        "px": 428.34,
+        "py": 606.02,
+        "value": 40.0
+      }
+    }
+  },
+  "grid": {
+    "x": [
+      0.0,
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      24.0
+    ],
+    "y": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0
+    ]
+  },
+  "cells": [
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 0.5,
+      "yCentre": 0.5,
+      "value": 40.73,
+      "yLabel": "Vehicle"
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 1.5,
+      "yCentre": 0.5,
+      "value": 83.7,
+      "yLabel": "Vehicle"
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 4.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 3.0,
+      "yCentre": 0.5,
+      "value": 28.28,
+      "yLabel": "Vehicle"
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 8.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 6.0,
+      "yCentre": 0.5,
+      "value": 10.1,
+      "yLabel": "Vehicle"
+    },
+    {
+      "xMin": 8.0,
+      "xMax": 24.0,
+      "yMin": 0.0,
+      "yMax": 1.0,
+      "xCentre": 16.0,
+      "yCentre": 0.5,
+      "value": 31.4,
+      "yLabel": "Vehicle"
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 0.5,
+      "yCentre": 1.5,
+      "value": 66.05,
+      "yLabel": "Low dose"
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 1.5,
+      "yCentre": 1.5,
+      "value": 71.38,
+      "yLabel": "Low dose"
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 4.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 3.0,
+      "yCentre": 1.5,
+      "value": 50.79,
+      "yLabel": "Low dose"
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 8.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 6.0,
+      "yCentre": 1.5,
+      "value": 31.49,
+      "yLabel": "Low dose"
+    },
+    {
+      "xMin": 8.0,
+      "xMax": 24.0,
+      "yMin": 1.0,
+      "yMax": 2.0,
+      "xCentre": 16.0,
+      "yCentre": 1.5,
+      "value": 82.89,
+      "yLabel": "Low dose"
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 0.5,
+      "yCentre": 2.5,
+      "value": 83.89,
+      "yLabel": "Mid dose"
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 1.5,
+      "yCentre": 2.5,
+      "value": 42.1,
+      "yLabel": "Mid dose"
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 4.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 3.0,
+      "yCentre": 2.5,
+      "value": 39.82,
+      "yLabel": "Mid dose"
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 8.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 6.0,
+      "yCentre": 2.5,
+      "value": 57.13,
+      "yLabel": "Mid dose"
+    },
+    {
+      "xMin": 8.0,
+      "xMax": 24.0,
+      "yMin": 2.0,
+      "yMax": 3.0,
+      "xCentre": 16.0,
+      "yCentre": 2.5,
+      "value": 65.66,
+      "yLabel": "Mid dose"
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 0.5,
+      "yCentre": 3.5,
+      "value": 57.71,
+      "yLabel": "High dose"
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 1.5,
+      "yCentre": 3.5,
+      "value": 41.8,
+      "yLabel": "High dose"
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 4.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 3.0,
+      "yCentre": 3.5,
+      "value": 42.56,
+      "yLabel": "High dose"
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 8.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 6.0,
+      "yCentre": 3.5,
+      "value": 59.91,
+      "yLabel": "High dose"
+    },
+    {
+      "xMin": 8.0,
+      "xMax": 24.0,
+      "yMin": 3.0,
+      "yMax": 4.0,
+      "xCentre": 16.0,
+      "yCentre": 3.5,
+      "value": 83.02,
+      "yLabel": "High dose"
+    },
+    {
+      "xMin": 0.0,
+      "xMax": 1.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 0.5,
+      "yCentre": 4.5,
+      "value": 9.08,
+      "yLabel": "Combination"
+    },
+    {
+      "xMin": 1.0,
+      "xMax": 2.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 1.5,
+      "yCentre": 4.5,
+      "value": 12.62,
+      "yLabel": "Combination"
+    },
+    {
+      "xMin": 2.0,
+      "xMax": 4.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 3.0,
+      "yCentre": 4.5,
+      "value": 69.73,
+      "yLabel": "Combination"
+    },
+    {
+      "xMin": 4.0,
+      "xMax": 8.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 6.0,
+      "yCentre": 4.5,
+      "value": 44.07,
+      "yLabel": "Combination"
+    },
+    {
+      "xMin": 8.0,
+      "xMax": 24.0,
+      "yMin": 4.0,
+      "yMax": 5.0,
+      "xCentre": 16.0,
+      "yCentre": 4.5,
+      "value": 71.06,
+      "yLabel": "Combination"
+    }
+  ]
+}

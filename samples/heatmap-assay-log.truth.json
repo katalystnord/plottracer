@@ -1,19 +1,36 @@
 {
   "source": {
     "imagePath": "heatmap-assay-log.png",
-    "note": "Synthetic ground truth \u2014 a LOG colour key and drawn cell borders."
+    "note": "Synthetic ground truth \u2014 a LOG colour key, drawn cell borders, and TWO CATEGORY AXES."
   },
   "graphType": "heatmap",
   "axes": {
     "x": {
       "label": "Compound",
       "min": 0.0,
-      "max": 6.0
+      "max": 6.0,
+      "kind": "category",
+      "categories": [
+        "AZD-114",
+        "BMS-27",
+        "GSK-903",
+        "LY-441",
+        "PF-06",
+        "RO-528"
+      ]
     },
     "y": {
       "label": "Cell line",
       "min": 0.0,
-      "max": 5.0
+      "max": 5.0,
+      "kind": "category",
+      "categories": [
+        "HeLa",
+        "A549",
+        "MCF-7",
+        "PC-3",
+        "U2OS"
+      ]
     },
     "value": {
       "label": "IC50 (nM, log scale)",
@@ -27,41 +44,41 @@
     "imageHeight": 700,
     "anchors": {
       "x1": {
-        "px": 53.15,
+        "px": 87.78,
         "py": 495.25,
         "value": 0.0
       },
       "x2": {
-        "px": 880.56,
+        "px": 885.0,
         "py": 495.25,
         "value": 6.0
       },
       "y1": {
-        "px": 53.15,
+        "px": 87.78,
         "py": 495.25,
         "value": 0.0
       },
       "y2": {
-        "px": 53.15,
+        "px": 87.78,
         "py": 35.33,
         "value": 5.0
       },
       "k1": {
-        "px": 55.15,
-        "py": 606.62
+        "px": 89.78,
+        "py": 605.86
       },
       "k2": {
-        "px": 878.56,
-        "py": 606.62
+        "px": 883.0,
+        "py": 605.86
       },
       "kv1": {
-        "px": 241.17,
-        "py": 606.62,
+        "px": 268.94,
+        "py": 605.86,
         "value": 10.0
       },
       "kv2": {
-        "px": 600.75,
-        "py": 606.62,
+        "px": 615.4,
+        "py": 605.86,
         "value": 100.0
       }
     }
@@ -93,7 +110,9 @@
       "yMax": 1.0,
       "xCentre": 0.5,
       "yCentre": 0.5,
-      "value": 100.04
+      "value": 100.04,
+      "xLabel": "AZD-114",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 1.0,
@@ -102,7 +121,9 @@
       "yMax": 1.0,
       "xCentre": 1.5,
       "yCentre": 0.5,
-      "value": 350.29
+      "value": 350.29,
+      "xLabel": "BMS-27",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 2.0,
@@ -111,7 +132,9 @@
       "yMax": 1.0,
       "xCentre": 2.5,
       "yCentre": 0.5,
-      "value": 200.16
+      "value": 200.16,
+      "xLabel": "GSK-903",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 3.0,
@@ -120,7 +143,9 @@
       "yMax": 1.0,
       "xCentre": 3.5,
       "yCentre": 0.5,
-      "value": 15.86
+      "value": 15.86,
+      "xLabel": "LY-441",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 4.0,
@@ -129,7 +154,9 @@
       "yMax": 1.0,
       "xCentre": 4.5,
       "yCentre": 0.5,
-      "value": 22.4
+      "value": 22.4,
+      "xLabel": "PF-06",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 5.0,
@@ -138,7 +165,9 @@
       "yMax": 1.0,
       "xCentre": 5.5,
       "yCentre": 0.5,
-      "value": 314.13
+      "value": 314.13,
+      "xLabel": "RO-528",
+      "yLabel": "HeLa"
     },
     {
       "xMin": 0.0,
@@ -147,7 +176,9 @@
       "yMax": 2.0,
       "xCentre": 0.5,
       "yCentre": 1.5,
-      "value": 5.76
+      "value": 5.76,
+      "xLabel": "AZD-114",
+      "yLabel": "A549"
     },
     {
       "xMin": 1.0,
@@ -156,7 +187,9 @@
       "yMax": 2.0,
       "xCentre": 1.5,
       "yCentre": 1.5,
-      "value": 246.86
+      "value": 246.86,
+      "xLabel": "BMS-27",
+      "yLabel": "A549"
     },
     {
       "xMin": 2.0,
@@ -165,7 +198,9 @@
       "yMax": 2.0,
       "xCentre": 2.5,
       "yCentre": 1.5,
-      "value": 220.87
+      "value": 220.87,
+      "xLabel": "GSK-903",
+      "yLabel": "A549"
     },
     {
       "xMin": 3.0,
@@ -174,7 +209,9 @@
       "yMax": 2.0,
       "xCentre": 3.5,
       "yCentre": 1.5,
-      "value": 48.51
+      "value": 48.51,
+      "xLabel": "LY-441",
+      "yLabel": "A549"
     },
     {
       "xMin": 4.0,
@@ -183,7 +220,9 @@
       "yMax": 2.0,
       "xCentre": 4.5,
       "yCentre": 1.5,
-      "value": 22.7
+      "value": 22.7,
+      "xLabel": "PF-06",
+      "yLabel": "A549"
     },
     {
       "xMin": 5.0,
@@ -192,7 +231,9 @@
       "yMax": 2.0,
       "xCentre": 5.5,
       "yCentre": 1.5,
-      "value": 20.27
+      "value": 20.27,
+      "xLabel": "RO-528",
+      "yLabel": "A549"
     },
     {
       "xMin": 0.0,
@@ -201,7 +242,9 @@
       "yMax": 3.0,
       "xCentre": 0.5,
       "yCentre": 2.5,
-      "value": 18.19
+      "value": 18.19,
+      "xLabel": "AZD-114",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 1.0,
@@ -210,7 +253,9 @@
       "yMax": 3.0,
       "xCentre": 1.5,
       "yCentre": 2.5,
-      "value": 43.67
+      "value": 43.67,
+      "xLabel": "BMS-27",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 2.0,
@@ -219,7 +264,9 @@
       "yMax": 3.0,
       "xCentre": 2.5,
       "yCentre": 2.5,
-      "value": 57.42
+      "value": 57.42,
+      "xLabel": "GSK-903",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 3.0,
@@ -228,7 +275,9 @@
       "yMax": 3.0,
       "xCentre": 3.5,
       "yCentre": 2.5,
-      "value": 71.94
+      "value": 71.94,
+      "xLabel": "LY-441",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 4.0,
@@ -237,7 +286,9 @@
       "yMax": 3.0,
       "xCentre": 4.5,
       "yCentre": 2.5,
-      "value": 550.81
+      "value": 550.81,
+      "xLabel": "PF-06",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 5.0,
@@ -246,7 +297,9 @@
       "yMax": 3.0,
       "xCentre": 5.5,
       "yCentre": 2.5,
-      "value": 216.43
+      "value": 216.43,
+      "xLabel": "RO-528",
+      "yLabel": "MCF-7"
     },
     {
       "xMin": 0.0,
@@ -255,7 +308,9 @@
       "yMax": 4.0,
       "xCentre": 0.5,
       "yCentre": 3.5,
-      "value": 98.71
+      "value": 98.71,
+      "xLabel": "AZD-114",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 1.0,
@@ -264,7 +319,9 @@
       "yMax": 4.0,
       "xCentre": 1.5,
       "yCentre": 3.5,
-      "value": 534.47
+      "value": 534.47,
+      "xLabel": "BMS-27",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 2.0,
@@ -273,7 +330,9 @@
       "yMax": 4.0,
       "xCentre": 2.5,
       "yCentre": 3.5,
-      "value": 15.16
+      "value": 15.16,
+      "xLabel": "GSK-903",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 3.0,
@@ -282,7 +341,9 @@
       "yMax": 4.0,
       "xCentre": 3.5,
       "yCentre": 3.5,
-      "value": 11.76
+      "value": 11.76,
+      "xLabel": "LY-441",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 4.0,
@@ -291,7 +352,9 @@
       "yMax": 4.0,
       "xCentre": 4.5,
       "yCentre": 3.5,
-      "value": 94.42
+      "value": 94.42,
+      "xLabel": "PF-06",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 5.0,
@@ -300,7 +363,9 @@
       "yMax": 4.0,
       "xCentre": 5.5,
       "yCentre": 3.5,
-      "value": 6.88
+      "value": 6.88,
+      "xLabel": "RO-528",
+      "yLabel": "PC-3"
     },
     {
       "xMin": 0.0,
@@ -309,7 +374,9 @@
       "yMax": 5.0,
       "xCentre": 0.5,
       "yCentre": 4.5,
-      "value": 6.63
+      "value": 6.63,
+      "xLabel": "AZD-114",
+      "yLabel": "U2OS"
     },
     {
       "xMin": 1.0,
@@ -318,7 +385,9 @@
       "yMax": 5.0,
       "xCentre": 1.5,
       "yCentre": 4.5,
-      "value": 60.23
+      "value": 60.23,
+      "xLabel": "BMS-27",
+      "yLabel": "U2OS"
     },
     {
       "xMin": 2.0,
@@ -327,7 +396,9 @@
       "yMax": 5.0,
       "xCentre": 2.5,
       "yCentre": 4.5,
-      "value": 48.13
+      "value": 48.13,
+      "xLabel": "GSK-903",
+      "yLabel": "U2OS"
     },
     {
       "xMin": 3.0,
@@ -336,7 +407,9 @@
       "yMax": 5.0,
       "xCentre": 3.5,
       "yCentre": 4.5,
-      "value": 384.0
+      "value": 384.0,
+      "xLabel": "LY-441",
+      "yLabel": "U2OS"
     },
     {
       "xMin": 4.0,
@@ -345,7 +418,9 @@
       "yMax": 5.0,
       "xCentre": 4.5,
       "yCentre": 4.5,
-      "value": 101.97
+      "value": 101.97,
+      "xLabel": "PF-06",
+      "yLabel": "U2OS"
     },
     {
       "xMin": 5.0,
@@ -354,7 +429,9 @@
       "yMax": 5.0,
       "xCentre": 5.5,
       "yCentre": 4.5,
-      "value": 60.01
+      "value": 60.01,
+      "xLabel": "RO-528",
+      "yLabel": "U2OS"
     }
   ]
 }

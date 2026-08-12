@@ -1369,7 +1369,8 @@ def gen_pie_tilted():
 
 
 
-def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values, fig, ax, cbar, log=False):
+def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values, fig, ax, cbar, log=False,
+                   x_categories=None, y_categories=None):
     """A heatmap's ground truth: the CELLS, and the calibration a reader needs to
     find them — the four x/y anchors plus the colour key's own four clicks.
 
@@ -1410,14 +1411,26 @@ def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values,
                 "xCentre": round((x_edges[c] + x_edges[c + 1]) / 2, 6),
                 "yCentre": round((y_edges[r] + y_edges[r + 1]) / 2, 6),
                 "value": round(float(values[r][c]), 6),
+                **({"xLabel": x_categories[c]} if x_categories else {}),
+                **({"yLabel": y_categories[r]} if y_categories else {}),
             })
 
     _write_truth(name, {
         "source": {"imagePath": name + ".png", "note": note},
         "graphType": "heatmap",
+        # ⚑⚑ THE AXIS KIND IS PART OF THE TRUTH. A heatmap's x and y are each
+        # independently a CATEGORY or a VALUE, and on a category axis the
+        # coordinates below are ORDINALS — counted positions, not measurements —
+        # with the printed name as the real coordinate. Recording only numbers
+        # here is how both bundled examples came to describe themselves as value
+        # axes when one of them is a compound-by-cell-line matrix.
         "axes": {
-            "x": {"label": xlabel, "min": x_edges[0], "max": x_edges[-1]},
-            "y": {"label": ylabel, "min": y_edges[0], "max": y_edges[-1]},
+            "x": {"label": xlabel, "min": x_edges[0], "max": x_edges[-1],
+                  "kind": "category" if x_categories else "value",
+                  **({"categories": list(x_categories)} if x_categories else {})},
+            "y": {"label": ylabel, "min": y_edges[0], "max": y_edges[-1],
+                  "kind": "category" if y_categories else "value",
+                  **({"categories": list(y_categories)} if y_categories else {})},
             "value": {"label": vlabel, "min": round(float(lo), 6), "max": round(float(hi), 6), "log": log},
         },
         "calibration": {
@@ -1473,15 +1486,26 @@ def gen_heatmap_weld():
 
 
 def gen_heatmap_assay():
-    """Regular cells WITH drawn white borders and a LOG colour key (v2.2).
+    """Regular cells WITH drawn white borders, a LOG colour key, and TWO CATEGORY
+    AXES (v2.2).
 
     ⚑ Everything the weld figure is not, on purpose. A printed border changes
     colour TWICE -- once at each edge -- so a naive detector reports one rule as
     two boundaries with an empty cell between them; and a log key is ordinary in
     any figure spanning decades, where reading it as linear is wrong by a factor
-    rather than by a rounding."""
+    rather than by a rounding.
+
+    ⚑⚑ AND ITS AXES PRINT NAMES, which they always should have. This figure is a
+    compound-by-cell-line matrix -- the commonest published heatmap there is --
+    and it was first drawn with numeric 0..6 / 0..5 axes for one reason: that was
+    all the tool could calibrate. David, 2026-08-12: *"Both examples heatmaps
+    only use value axis. That does not hold."* An example drawn to fit the
+    tool's limits hides the limit twice: once from the test corpus, and once from
+    every user who takes the bundled figures as what the tool is for."""
     name = "heatmap-assay-log"
     cols, rows = 6, 5
+    compounds = ["AZD-114", "BMS-27", "GSK-903", "LY-441", "PF-06", "RO-528"]
+    cell_lines = ["HeLa", "A549", "MCF-7", "PC-3", "U2OS"]
     x_edges = [float(i) for i in range(cols + 1)]
     y_edges = [float(i) for i in range(rows + 1)]
     rng = np.random.default_rng(7)
@@ -1497,15 +1521,68 @@ def gen_heatmap_assay():
     mesh = ax.pcolormesh(x_edges, y_edges, values, cmap="magma",
                          norm=LogNorm(vmin=3, vmax=600), shading="flat",
                          edgecolors="white", linewidth=2.5)
+    # ⚑ Names at the band CENTRES, which is where a figure prints them and what
+    # makes the axis categorical to a reader: there is no coordinate to read off
+    # this axis at all, only an ordered list of names.
+    ax.set_xticks([i + 0.5 for i in range(cols)])
+    ax.set_xticklabels(compounds, rotation=30, ha="right")
+    ax.set_yticks([i + 0.5 for i in range(rows)])
+    ax.set_yticklabels(cell_lines)
     ax.set_xlabel("Compound")
     ax.set_ylabel("Cell line")
     ax.set_title("Half-maximal inhibitory concentration")
     cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.14)
     cbar.set_label("IC50 (nM, log scale)")
     fig.tight_layout()
-    _heatmap_truth(name, "Synthetic ground truth — a LOG colour key and drawn cell borders.",
+    _heatmap_truth(name, "Synthetic ground truth — a LOG colour key, drawn cell borders, and TWO CATEGORY AXES.",
                    "Compound", "Cell line", "IC50 (nM, log scale)",
-                   x_edges, y_edges, values, fig, ax, cbar, log=True)
+                   x_edges, y_edges, values, fig, ax, cbar, log=True,
+                   x_categories=compounds, y_categories=cell_lines)
+    _save(fig, name)
+
+
+def gen_heatmap_timecourse():
+    """The MIXED case: a CATEGORY axis against a VALUE axis (v2.2).
+
+    ⚑⚑ THE THIRD OF THE FOUR COMBINATIONS THE RECORD ENUMERATES, and until this
+    figure existed nothing demonstrated it — both bundled heatmaps were value ×
+    value, which is what David caught: *"Both examples heatmaps only use value
+    axis. That does not hold."* Rows are named treatments with no coordinate of
+    any kind; columns are TIME, a real value axis, and its bins are UNEQUAL — 0,
+    1, 2, 4, 8, 24 hours, as a sampling schedule actually runs.
+
+    ⚑ So the two axes are captured by opposite means IN ONE FIGURE, which is the
+    teaching point: the category axis is DECLARED (two edges and a count, no
+    coordinate typed), while the value axis's unequal boundaries have to be
+    DETECTED from the drawn rules or placed by hand. A figure whose axes were
+    both one kind could never show that."""
+    name = "heatmap-timecourse"
+    treatments = ["Vehicle", "Low dose", "Mid dose", "High dose", "Combination"]
+    # ⚑ Unequal on purpose, and it is what a real time course does: dense early,
+    # sparse late. An evenly spaced grid cannot express it.
+    x_edges = [0.0, 1.0, 2.0, 4.0, 8.0, 24.0]
+    y_edges = [float(i) for i in range(len(treatments) + 1)]
+    rng = np.random.default_rng(19)
+    values = np.round(5 + 85 * rng.random((len(treatments), len(x_edges) - 1)), 2)
+
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    mesh = ax.pcolormesh(x_edges, y_edges, values, cmap="viridis", vmin=0, vmax=100,
+                         shading="flat", edgecolors="white", linewidth=2.0)
+    ax.set_xticks(x_edges)
+    ax.set_xticklabels([("%g" % e) for e in x_edges])
+    ax.set_yticks([i + 0.5 for i in range(len(treatments))])
+    ax.set_yticklabels(treatments)
+    ax.set_xlabel("Time (h)")
+    ax.set_ylabel("Treatment")
+    ax.set_title("Target engagement over time")
+    cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.12)
+    cbar.set_label("Engagement (%)")
+    fig.tight_layout()
+    _heatmap_truth(name,
+                   "Synthetic ground truth — a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins.",
+                   "Time (h)", "Treatment", "Engagement (%)",
+                   x_edges, y_edges, values, fig, ax, cbar, log=False,
+                   y_categories=treatments)
     _save(fig, name)
 
 
@@ -1539,4 +1616,5 @@ if __name__ == "__main__":
     gen_pie_tilted()
     gen_heatmap_weld()
     gen_heatmap_assay()
+    gen_heatmap_timecourse()
     print("generated all 25 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, grouped bar with a missing category, stacked bar, floating bar.")
