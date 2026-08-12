@@ -43,6 +43,11 @@ export interface GuidanceTipInput {
    * both halves at that moment (v2.1 audit).
    */
   isMarkingCategoryAxis?: boolean;
+  /** A heatmap has a grid on the figure, so its handles are there to be dragged.
+   * ⚑ Without this the tips bar kept telling a calibrated heatmap user to go and
+   * detect a grid they already had, while the gesture for adjusting it was
+   * written only inside a fold-out that is closed by default. */
+  heatmapHasGrid?: boolean;
   mode: ToolMode;
   figureCaptured: boolean;
   eyedropper: null | 'grid' | 'series' | 'trace';
@@ -100,6 +105,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   }
   const {
     canvasHasImage,
+    heatmapHasGrid,
     mode,
     figureCaptured,
     eyedropper,
@@ -250,7 +256,16 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // fourth site, and caught by looking at a screenshot of the finished
       // feature rather than by any test.
       if (config.id === 'heatmap')
-        return 'Use the Heatmap card to detect the grid and read the cells — a heatmap’s values come from its grid, not from clicking the figure.';
+        return heatmapHasGrid === true
+          ? // ⚑⚑ THE GESTURE, SAID WHERE IT IS ALWAYS VISIBLE. The handles beside
+            // the figure are draggable in every mode, but nothing on screen said
+            // so once the grid fold-down was closed — David: *"you need to know
+            // that you can select a point via the point selector, and then move
+            // one. Not obvious when you are setting the grids up."* The tips bar
+            // is this app's one constant place for "what do I do now?", so the
+            // answer belongs here rather than inside a panel you have to open.
+            'Drag a handle beside the figure to move a boundary, or click a cell to inspect it. The Grid fold-out on the Calibration card adds and removes boundaries.'
+          : 'Use the Heatmap card to detect the grid and read the cells — a heatmap’s values come from its grid, not from clicking the figure.';
       return 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
     }
     if (mode === 'calibrate') {

@@ -211,13 +211,34 @@ describe('detectGrid', () => {
     // sentence, not a plausible grid. A grid with a boundary missing looks
     // exactly like a grid.
     const { image, axes } = scene();
-    const result = detectGrid(image, axes, initialGrid({ xMin: 0, xMax: 9, yMin: 0, yMax: 8 }), {
-      columns: 9,
-    });
-    expect(result.grid).toBeNull();
+    const start = initialGrid({ xMin: 0, xMax: 9, yMin: 0, yMax: 8 });
+    const result = detectGrid(image, axes, start, { columns: 9 });
+    // ⚑ The x axis is left EXACTLY as it was — the miss is reported, never
+    // filled in, because a grid with a boundary missing looks exactly like a
+    // grid and its cells are silently twice as wide as the figure's.
+    expect([...result.grid!.xDividers]).toEqual([...start.xDividers]);
     expect(result.agrees).toBe(false);
     expect(result.message).toMatch(/Found 4 of the 8 boundaries/);
     expect(result.message).toMatch(/by hand/);
+  });
+
+  it('KEEPS the axis that succeeded when the other one misses', () => {
+    // ⚑⚑ David typed a 6 where his figure has 5 rows. Detection found all four
+    // COLUMN boundaries and then threw them away because the rows could not be
+    // met — leaving a 1 × 5 grid and five cells of nonsense at x = 12. The
+    // refusal was right about the rows and wrong about everything else.
+    const { image, axes } = scene();
+    const start = initialGrid({ xMin: 0, xMax: 9, yMin: 0, yMax: 8 });
+    const result = detectGrid(image, axes, start, { columns: 5, rows: 9 });
+    // The columns are there…
+    expect(result.grid).not.toBeNull();
+    expect(result.grid!.xDividers).toHaveLength(6);
+    // …the rows are untouched, not invented…
+    expect([...result.grid!.yDividers]).toEqual([...start.yDividers]);
+    // …and the message still says which half failed, and that it did.
+    expect(result.message).toMatch(/5 columns/);
+    expect(result.message).toMatch(/by hand/);
+    expect(result.agrees).toBe(false);
   });
 
   it('needs an outer boundary on each axis first', () => {

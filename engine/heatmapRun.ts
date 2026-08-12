@@ -694,13 +694,24 @@ export function detectGrid(
 
   const xGrid = axisGrid('x', xMin, xMax, options.columns);
   const yGrid = axisGrid('y', yMin, yMax, options.rows);
-  if (xGrid === null || yGrid === null) {
+  if (xGrid === null && yGrid === null) {
     return { grid: null, message: notes.join(' '), agrees: false };
   }
+  // ⚑⚑ ONE AXIS FAILING MUST NOT DISCARD THE OTHER. David typed a 6 where the
+  // figure has 5 rows; detection found all four COLUMN boundaries, then threw
+  // them away because the row count could not be met — leaving a 1 × 5 grid and
+  // five cells of nonsense. The refusal was right about the rows and wrong about
+  // everything else: a miss is reported per axis, and the axis that succeeded
+  // keeps its result. The failed one keeps the dividers it already had, so
+  // nothing is invented for it either.
+  const keptX = xGrid ?? [...xs];
+  const keptY = yGrid ?? [...ys];
   const agrees =
+    xGrid !== null &&
+    yGrid !== null &&
     (options.columns === undefined || reconcileWithCount(found.x, options.columns).agrees) &&
     (options.rows === undefined || reconcileWithCount(found.y, options.rows).agrees);
-  return { grid: { xDividers: xGrid, yDividers: yGrid }, message: notes.join(' '), agrees };
+  return { grid: { xDividers: keptX, yDividers: keptY }, message: notes.join(' '), agrees };
 }
 
 /** One row of the heatmap table, already formatted for display. */

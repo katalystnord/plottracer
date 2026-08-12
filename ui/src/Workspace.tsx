@@ -5751,6 +5751,7 @@ export function Workspace() {
   // pops in and out of the right panel.
   const guidanceTip = buildGuidanceTip({
     canvasHasImage,
+    heatmapHasGrid: heatmapShownGrid !== null,
     isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
     mode,
     figureCaptured,
