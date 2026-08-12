@@ -95,6 +95,10 @@ describe('reindexLabels — the order the figure is READ in', () => {
   it('refuses to invent an order for a nonsense cell count', () => {
     expect(reindexLabels(['a'], -1, true)).toEqual(['a']);
     expect(reindexLabels(['a'], 1.5, true)).toEqual(['a']);
+    // ⚑ NaN is the one that needs the guard, and mutation is what showed it:
+    // -1 and 1.5 fall out the same way with or without it, but `Array.from({
+    // length: NaN })` is EMPTY — the names would be dropped, not reordered.
+    expect(reindexLabels(['a', 'b'], NaN, true)).toEqual(['a', 'b']);
   });
 });
 
@@ -117,6 +121,13 @@ describe('labelCoverage', () => {
   it('counts the named cells rather than refusing a short list', () => {
     expect(labelCoverage(['A', 'B'], 5)).toBe('2 of 5 named');
     expect(labelCoverage(['A', '', 'C'], 5)).toBe('2 of 5 named');
+  });
+
+  it('still speaks up when NOTHING is named but names exist past the grid', () => {
+    // ⚑ The state a removed boundary can leave: no cell named, and names
+    // addressing cells that are not there. Staying silent here would hide the
+    // surplus entirely, since the numbers cannot show it.
+    expect(labelCoverage(['', ''], 0)).toBe('0 of 0 named; 2 more labels than cells');
   });
 
   it('SAYS SO when there are more labels than cells', () => {

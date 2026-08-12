@@ -101,7 +101,10 @@ export function formatLabelList(labels: readonly string[]): string {
  * measured coordinates, which is what they had before anyone typed anything.
  */
 export function labelAt(labels: readonly string[], index: number): string {
-  if (!Number.isInteger(index) || index < 0) return '';
+  // ⚑ No index guard, and mutation is what proved one unnecessary: an array
+  // lookup at -1, 1.5 or NaN is a plain property miss, so `?? ''` already
+  // answers every one of them. A guard that cannot change an answer reads as
+  // protection and is only something else to keep true.
   return labels[index] ?? '';
 }
 
