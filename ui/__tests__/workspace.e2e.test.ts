@@ -8454,6 +8454,48 @@ describe('heatmap capture (v2.2)', () => {
     expect(await page.getByTestId('heatmap-y-labels').inputValue()).toBe('RENAMED, upper, lower, bottom');
   });
 
+  it('links the picked CELL between the figure and the results, both ways', async () => {
+    // ⚑⚑ David: *"I do not think that I can select something on the heatmap, and
+    // that is selected in the matrix or table… if you are on a square in the
+    // matrix, it is highlighted in the heatmap?"* Correct — a heatmap's cells
+    // have no markers, so none of the selection machinery reached them. Every
+    // other type ties its table to its canvas; this is that, for a matrix.
+    //
+    // ⚑ AND IT CLOSES A REAL FALLTHROUGH. A bare click on a heatmap used to
+    // reach `add-point` and drop a raw datum into the active series — invisible
+    // until export, on a type whose own tips bar says values come from the grid.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    // From the matrix: clicking a square picks that cell.
+    await page.getByTestId('heatmap-matrix-cell-2-1').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-cell')).toBe('2,1');
+
+    // From the figure: a click inside a different cell moves the pick, and adds
+    // NOTHING to the series.
+    const middle = await imageToLocal(
+      truth.frame.x1.x + (truth.frame.x2.x - truth.frame.x1.x) * 0.75,
+      (truth.frame.x1.y + truth.frame.y2.y) / 2
+    );
+    await refreshCanvasBox();
+    await clickAt(middle.lx, middle.ly);
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-selected-cell')).not.toBe('2,1');
+    expect(await textOf('heatmap-selected-cell')).not.toBe('');
+    // The series is still empty — the click identified a cell, it did not record one.
+    expect(await page.getByTestId('series-select').textContent()).toMatch(/\(0\)/);
+
+    // Clicking the picked square again clears it.
+    const picked = (await textOf('heatmap-selected-cell')).split(',');
+    await page.getByTestId(`heatmap-matrix-cell-${picked[0]}-${picked[1]}`).click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-cell')).toBe('');
+  });
+
   it('reports a miss instead of inventing boundaries', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();

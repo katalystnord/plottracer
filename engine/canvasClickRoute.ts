@@ -30,6 +30,19 @@ export type CanvasClickRoute =
   | { kind: 'calibrate' }
   | { kind: 'segment-fill' }
   | { kind: 'interpolate' }
+  /**
+   * Pick the CELL under the cursor — a heatmap's answer to "what did I just
+   * click on?".
+   *
+   * ⚑⚑ AND IT CLOSES THE FALLTHROUGH ON A TYPE THAT CANNOT USE IT. A heatmap's
+   * values come from its grid, never from clicking the figure — the tips bar
+   * says so — yet a bare click still reached `add-point` and dropped a raw datum
+   * into the active series, invisible until export. That is the v0.8 "By colour"
+   * defect exactly: a gesture that feels natural on the figure, silently
+   * poisoning the record. Here the natural gesture has an honest meaning, so it
+   * gets one.
+   */
+  | { kind: 'select-cell' }
   | { kind: 'add-point' };
 
 export interface CanvasClickInput {
@@ -38,6 +51,9 @@ export interface CanvasClickInput {
   mode: ToolMode;
   /** The figure-of-record has been frozen. */
   figureCaptured: boolean;
+  /** This graph type's record is a MATRIX read from a grid, so a click on the
+   * figure identifies a cell rather than adding anything. */
+  readsCellsFromAGrid?: boolean;
 }
 
 /**
@@ -48,7 +64,12 @@ export interface CanvasClickInput {
  */
 export const ADDS_POINT_ON_CLICK: readonly ToolMode[] = ['place-point'];
 
-export function routeCanvasClick({ eyedropper, mode, figureCaptured }: CanvasClickInput): CanvasClickRoute {
+export function routeCanvasClick({
+  eyedropper,
+  mode,
+  figureCaptured,
+  readsCellsFromAGrid,
+}: CanvasClickInput): CanvasClickRoute {
   // Eyedropper intercepts the click before any tool action.
   if (eyedropper) return { kind: 'sample-colour', target: eyedropper };
   if (mode === 'pan') return { kind: 'ignore' };
@@ -86,5 +107,9 @@ export function routeCanvasClick({ eyedropper, mode, figureCaptured }: CanvasCli
   }
   if (mode === 'segment-fill') return { kind: 'segment-fill' };
   if (mode === 'interpolate') return { kind: 'interpolate' };
+  // ⚑ Last, so every mode above keeps its own meaning: a matrix type only
+  // changes what the FALLTHROUGH means, which is the one branch that was wrong
+  // for it.
+  if (readsCellsFromAGrid === true) return { kind: 'select-cell' };
   return { kind: 'add-point' };
 }

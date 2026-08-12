@@ -204,6 +204,7 @@ import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { runBarDetect } from '../../engine/barDetectRun.js';
 import { formatLabelList, labelCoverage, parseLabelList } from '../../core/heatmapLabels.js';
+import { cellIndexAt, cellsOf } from '../../core/heatmapGrid.js';
 import {
   addDivider,
   buildColorScale,
@@ -1104,6 +1105,9 @@ export function Workspace() {
   const [heatmapPanelOpen, setHeatmapPanelOpen] = useState(false);
   /** Which band's name is being typed, per axis — the same one-at-a-time editor
    * the bar chart's category column uses. */
+  /** The cell the user picked, in grid indices — the one thing tying a row of
+   * the results to the square it was read from. */
+  const [selectedCell, setSelectedCell] = useState<{ col: number; row: number } | null>(null);
   const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | null>(null);
   const [editingHeatmapYName, setEditingHeatmapYName] = useState<number | null>(null);
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
@@ -2101,6 +2105,28 @@ export function Workspace() {
   }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 
   /**
+   * The picked cell's four corners, for the canvas.
+   *
+   * ⚑ Built through the axes' own `dataToPixel` like the grid lines are, so a
+   * rotated calibration outlines the cell the figure drew rather than a
+   * screen-aligned rectangle near it.
+   */
+  const heatmapSelectionOutline = useMemo(() => {
+    if (!heatmapShownGrid || !selectedCell) return null;
+    const axes = session.getAxes();
+    if (!axes) return null;
+    const cells = cellsOf(heatmapShownGrid.xDividers, heatmapShownGrid.yDividers);
+    const cell = cells?.find((c) => c.col === selectedCell.col && c.row === selectedCell.row);
+    if (!cell) return null;
+    return [
+      axes.dataToPixel(cell.xMin, cell.yMin),
+      axes.dataToPixel(cell.xMax, cell.yMin),
+      axes.dataToPixel(cell.xMax, cell.yMax),
+      axes.dataToPixel(cell.xMin, cell.yMax),
+    ];
+  }, [heatmapShownGrid, selectedCell, session]);
+
+  /**
    * The grid drawn on the figure: one line per divider, spanning the grid's own
    * extent on the other axis.
    *
@@ -3075,7 +3101,7 @@ export function Workspace() {
         }
         return;
       }
-      const route = routeCanvasClick({ eyedropper, mode, figureCaptured });
+      const route = routeCanvasClick({ eyedropper, mode, figureCaptured, readsCellsFromAGrid: heatmapActive });
       switch (route.kind) {
         case 'sample-colour': {
           // px/py are native image-pixel coords (same space Segment Fill uses),
@@ -3162,6 +3188,18 @@ export function Workspace() {
           commit();
           return;
         }
+        case 'select-cell': {
+          // ⚑ `cellIndexAt` is the MODEL's own answer to "which cell is this?" —
+          // the same function the reader uses, so the square that lights up is
+          // the square the value came from, and a click outside the grid selects
+          // nothing rather than the nearest thing.
+          const axesNow = sessionRef.current.getAxes();
+          if (!axesNow || !heatmapShownGrid) return;
+          const [dx, dy] = axesNow.pixelToData(px, py);
+          if (dx === undefined || dy === undefined) return;
+          setSelectedCell(cellIndexAt(heatmapShownGrid.xDividers, heatmapShownGrid.yDividers, dx, dy));
+          return;
+        }
         case 'add-point': {
           // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
           // the axis the cursor is filling, which is what makes the dot land on the ray
@@ -3189,7 +3227,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, categoryPanel, categoryFirstEdge]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, categoryPanel, categoryFirstEdge, heatmapActive, heatmapShownGrid]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -7176,6 +7214,7 @@ export function Workspace() {
           geometryOverlay={geometryOverlay}
           challengeReveal={challengeReveal}
           gridOverlay={heatmapOverlay}
+          gridSelection={heatmapSelectionOutline}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
@@ -7552,6 +7591,12 @@ export function Workspace() {
                     line runs is mirrored here for e2e coverage (checkpoint 131) --
                     same precedent as box-plot-glyph-count. >0 for a dense trace, 0
                     for a sparse/scatter series. */}
+                {/* ⚑ The canvas outline is Konva and not DOM-inspectable, so the
+                    picked cell is mirrored here for e2e — the same precedent as
+                    series-line-runs and box-plot-glyph-count beside it. */}
+                <span data-testid="heatmap-selected-cell" style={{ display: 'none' }}>
+                  {selectedCell ? `${selectedCell.col},${selectedCell.row}` : ''}
+                </span>
                 <span data-testid="series-line-runs" style={{ display: 'none' }}>
                   {seriesLines.reduce((n, l) => n + l.runs.length, 0)}
                 </span>
@@ -7623,6 +7668,8 @@ export function Workspace() {
               noCellsHint={noPointsHint}
               renderXName={renderHeatmapXName}
               renderYName={renderHeatmapYName}
+              selectedCell={selectedCell}
+              onSelectCell={setSelectedCell}
             />
           ) : isHistogram ? (
             <HistogramBinsTable

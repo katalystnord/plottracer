@@ -250,6 +250,17 @@ interface ImageCanvasProps {
    * sits, which is the whole reason a proposed grid is safe to propose.
    */
   gridOverlay?: { x: number; y: number }[][] | null;
+  /**
+   * The four corners of the CELL the user has picked, in image pixels.
+   *
+   * ⚑ A heatmap's record has no markers on the figure — the cells are the
+   * record, and until now nothing on screen tied a row of the results to the
+   * square it came from. David: *"if you are on a square in the matrix, it is
+   * highlighted in the heatmap?"* Drawn as a filled outline rather than a dot,
+   * because what is selected is an AREA, and the figure already shows its
+   * colour.
+   */
+  gridSelection?: { x: number; y: number }[] | null;
   /** Check Calibration overlay (v0.8): the 4 image-space corners of the
    * calibrated axis box, drawn as a magenta rectangle so a user can see whether
    * it aligns with the plot's real axes. Null when off / not applicable. */
@@ -442,7 +453,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1828,6 +1839,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 })()}
                 {/* Trace Challenge reveal (v1.2): the TRUE answer over the figure --
                     dashed green curves + hollow markers. Display only. */}
+                {gridSelection && gridSelection.length > 2 && (
+                  <Line
+                    points={gridSelection.flatMap((p) => {
+                      const sc = imageToScreen(view, p.x, p.y);
+                      return [sc.x, sc.y];
+                    })}
+                    closed
+                    stroke={GRID_OVERLAY_COLOR}
+                    strokeWidth={2.5}
+                    // ⚑ A wash rather than a solid fill: the cell's COLOUR is
+                    // the datum being inspected, so covering it would hide the
+                    // thing the selection is asking about.
+                    fill="rgba(124, 58, 237, 0.18)"
+                    listening={false}
+                  />
+                )}
                 {gridOverlay?.map((line, gi) =>
                   line.length > 1 ? (
                     <Line

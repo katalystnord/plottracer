@@ -122,3 +122,32 @@ describe('the tools that route to their own handler', () => {
     expect(new Set(named).size).toBe(named.length);
   });
 });
+
+describe('a type whose record is a MATRIX', () => {
+  it('turns the fallthrough into a CELL PICK, not a data point', () => {
+    // ⚑⚑ The fallthrough was actively wrong here: a heatmap's values come from
+    // its grid — the tips bar says so — and a bare click still dropped a raw
+    // datum into the active series, invisible until export. Same shape as the
+    // v0.8 "By colour" defect that named this whole guard family.
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'place-point', figureCaptured: true, readsCellsFromAGrid: true })
+    ).toEqual({ kind: 'select-cell' });
+  });
+
+  it('changes ONLY the fallthrough — every other mode keeps its meaning', () => {
+    const matrix = { eyedropper: null, figureCaptured: true, readsCellsFromAGrid: true } as const;
+    expect(routeCanvasClick({ ...matrix, mode: 'pan' })).toEqual({ kind: 'ignore' });
+    expect(routeCanvasClick({ ...matrix, mode: 'measure' })).toEqual({ kind: 'measure' });
+    expect(routeCanvasClick({ ...matrix, mode: 'calibrate' })).toEqual({ kind: 'calibrate' });
+    expect(routeCanvasClick({ ...matrix, mode: 'eraser' })).toEqual({ kind: 'ignore' });
+    expect(
+      routeCanvasClick({ ...matrix, mode: 'place-point', eyedropper: 'series' })
+    ).toEqual({ kind: 'sample-colour', target: 'series' });
+  });
+
+  it('leaves every other graph type adding points as before', () => {
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'place-point', figureCaptured: true })
+    ).toEqual({ kind: 'add-point' });
+  });
+});

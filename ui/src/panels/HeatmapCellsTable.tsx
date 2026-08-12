@@ -57,11 +57,22 @@ export interface HeatmapCellsTableProps {
    */
   renderXName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
   renderYName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
+  /**
+   * The cell picked on the figure or here — the two are one selection.
+   *
+   * ⚑ A heatmap's cells have no markers on the canvas, so until now nothing tied
+   * a row of the results to the square it was read from. David: *"if you are on
+   * a square in the matrix, it is highlighted in the heatmap?"* It works both
+   * ways round, which is what every other type already does between its table
+   * and its markers.
+   */
+  selectedCell?: { col: number; row: number } | null;
+  onSelectCell?: (cell: { col: number; row: number } | null) => void;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
-export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName }: HeatmapCellsTableProps) {
+export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName, selectedCell, onSelectCell }: HeatmapCellsTableProps) {
   const [view, setView] = useState<'matrix' | 'table'>('matrix');
 
   if (cells.length === 0) {
@@ -96,15 +107,34 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
         ))}
       </div>
       {view === 'matrix' ? (
-        <MatrixView cells={cells} renderXName={renderXName} renderYName={renderYName} />
+        <MatrixView
+          cells={cells}
+          renderXName={renderXName}
+          renderYName={renderYName}
+          selectedCell={selectedCell}
+          onSelectCell={onSelectCell}
+        />
       ) : (
-        <LongView cells={cells} renderXName={renderXName} renderYName={renderYName} />
+        <LongView
+          cells={cells}
+          renderXName={renderXName}
+          renderYName={renderYName}
+          selectedCell={selectedCell}
+          onSelectCell={onSelectCell}
+        />
       )}
     </div>
   );
 }
 
-type ViewProps = Pick<HeatmapCellsTableProps, 'cells' | 'renderXName' | 'renderYName'>;
+type ViewProps = Pick<
+  HeatmapCellsTableProps,
+  'cells' | 'renderXName' | 'renderYName' | 'selectedCell' | 'onSelectCell'
+>;
+
+/** The pick reads as a highlight in both views — same colour as the outline the
+ * canvas draws, so the two are visibly one thing. */
+const PICKED_BACKGROUND = 'rgba(124, 58, 237, 0.18)';
 
 /**
  * The figure's own shape: one cell per cell, names down the edges.
@@ -114,7 +144,7 @@ type ViewProps = Pick<HeatmapCellsTableProps, 'cells' | 'renderXName' | 'renderY
  * the matrix upside down against the figure it came from, and "which category
  * belongs where" would be exactly as unanswerable as it was in the long form.
  */
-function MatrixView({ cells, renderXName, renderYName }: ViewProps) {
+function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCell }: ViewProps) {
   const columns = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
   const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
   const byKey = new Map(cells.map((c) => [`${c.col},${c.row}`, c]));
@@ -151,16 +181,25 @@ function MatrixView({ cells, renderXName, renderYName }: ViewProps) {
                 </th>
                 {columns.map((col) => {
                   const cell = byKey.get(`${col},${row}`);
+                  const picked = selectedCell?.col === col && selectedCell?.row === row;
                   return (
                     <td
                       key={col}
+                      data-testid={`heatmap-matrix-cell-${col}-${row}`}
+                      onClick={() => onSelectCell?.(picked ? null : { col, row })}
                       // ⚑ The evidence cannot fit in a matrix cell, so a flagged
                       // one is coloured and carries its note as a tooltip, and
                       // the Table view holds the full account. A matrix showing
                       // only numbers would hide the one thing that says which
                       // numbers to trust.
                       title={cell?.warning || undefined}
-                      style={{ padding: '0 8px', textAlign: 'right', color: cell?.warning ? theme.color.error : undefined }}
+                      style={{
+                        padding: '0 8px',
+                        textAlign: 'right',
+                        cursor: onSelectCell ? 'pointer' : undefined,
+                        background: picked ? PICKED_BACKGROUND : undefined,
+                        color: cell?.warning ? theme.color.error : undefined,
+                      }}
                     >
                       {cell ? num(cell.value, 5) : ''}
                     </td>
@@ -177,7 +216,7 @@ function MatrixView({ cells, renderXName, renderYName }: ViewProps) {
 
 /** One row per cell — the tidy/long form, and the only view with room for the
  * evidence that says whether to trust a value. */
-function LongView({ cells, renderXName, renderYName }: ViewProps) {
+function LongView({ cells, renderXName, renderYName, selectedCell, onSelectCell }: ViewProps) {
   return (
     <div style={{ maxHeight: 320, overflow: 'auto' }}>
       <table
@@ -203,7 +242,24 @@ function LongView({ cells, renderXName, renderYName }: ViewProps) {
         </thead>
         <tbody>
           {cells.map((cell) => (
-            <tr key={`${cell.col}-${cell.row}`} data-testid="heatmap-row">
+            <tr
+              key={`${cell.col}-${cell.row}`}
+              data-testid="heatmap-row"
+              onClick={() =>
+                onSelectCell?.(
+                  selectedCell?.col === cell.col && selectedCell?.row === cell.row
+                    ? null
+                    : { col: cell.col, row: cell.row }
+                )
+              }
+              style={{
+                cursor: onSelectCell ? 'pointer' : undefined,
+                background:
+                  selectedCell?.col === cell.col && selectedCell?.row === cell.row
+                    ? PICKED_BACKGROUND
+                    : undefined,
+              }}
+            >
               {/* The name where the figure prints one, the measured centre where
                   it does not. Only the TABLE chooses: the export carries both,
                   because the bounds stay true whatever the axis is called. */}
