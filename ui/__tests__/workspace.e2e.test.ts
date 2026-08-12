@@ -8066,6 +8066,15 @@ describe('heatmap capture (v2.2)', () => {
   }
 
   /** The eight clicks of a heatmap calibration, at the figure's own pixels. */
+  /** Open the grid fold-down on the calibration card — the inputs live there
+   * now, beside the calibration that defines them. */
+  async function openHeatmapGrid() {
+    if ((await page.getByTestId('heatmap-detect').count()) === 0) {
+      await page.getByTestId('heatmap-grid-toggle').click();
+      await page.waitForTimeout(150);
+    }
+  }
+
   async function calibrateHeatmap() {
     for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
       const p = truth.frame[step];
@@ -8080,6 +8089,7 @@ describe('heatmap capture (v2.2)', () => {
     }
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(200);
+    await openHeatmapGrid();
   }
 
   /** Local copies: the export helpers live inside another describe's scope. */
@@ -8104,9 +8114,25 @@ describe('heatmap capture (v2.2)', () => {
     }, SAMPLE_IMAGE);
   });
 
-  it('is offered in the graph-type picker', async () => {
+  it('is offered in the graph-type picker, and starts its own eight-step walk', async () => {
+    // ⚑ This used to assert the sidebar Heatmap CARD was visible. The card is
+    // now a fold-down on the calibration card and appears only once the axes
+    // are calibrated — because the calibration card floats over the figure, and
+    // an open fold-down covered the very pixels the walk asks you to click. So
+    // the assertion moves to what picking the type actually does: it starts the
+    // heatmap's own walk, whose first step is the colour key's business rather
+    // than an XY chart's four points.
     await resetWorkspace('heatmap');
-    expect(await page.getByTestId('heatmap-card').isVisible()).toBe(true);
+    // The grid fold-down is on screen from the start, CLOSED — the feature is
+    // discoverable before it exists, without growing the card over the figure.
+    expect(await page.getByTestId('heatmap-grid-summary').isVisible()).toBe(true);
+    expect(await page.getByTestId('heatmap-detect').count()).toBe(0);
+    // Eight steps, not four, and the extra ones are the colour key's — which is
+    // what makes this the heatmap's walk rather than an XY chart's.
+    const walk = await textOf('calibration-bar');
+    expect(walk).toMatch(/0\/8/);
+    expect(walk).toMatch(/Key start/);
+    expect(walk).toMatch(/Key value 1/);
   });
 
   it('detects the grid and reads the matrix, matching the figure’s own values', async () => {
@@ -8307,6 +8333,40 @@ describe('heatmap capture (v2.2)', () => {
     // The matrix's header row takes the names, where there is only one slot.
     expect(csv).toMatch(/BRCA1,TP53,"EGFR, mut",KRAS/);
     fs.unlinkSync(csvPath);
+  });
+
+  it('puts the CELLS where every other type puts its record, not in the card', async () => {
+    // ⚑⚑ THE INVARIANT A LINT RULE COULD NOT EXPRESS. The rail fold-out redesign
+    // settled it and marked it LOCKED — a fold-out takes INPUTS, a type's record
+    // goes to the Data-points panel — and v2.2 shipped a Heatmap card holding
+    // both, so a heatmap's output sat where no other type's does while the panel
+    // users actually read said "No points yet". David: *"we DO want the output
+    // in the same place as for the other graphs… Else it becomes very confusing
+    // for the users, and extremely inconsistent."*
+    //
+    // ⚑ A first attempt to catch this with a lint rule ("no <table> in a Card")
+    // was WITHDRAWN: it fired on GeometryCard, which is a legitimate
+    // series-bound output card under the same LOCKED note. The real invariant is
+    // about the PRIMARY RECORD, not about tables, and it is checkable only by
+    // asking where the record actually rendered.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    expect(await page.getByTestId('heatmap-row').count()).toBeGreaterThan(0);
+    // The record is INSIDE the data-points panel…
+    const inPanel = await page
+      .locator('[data-testid="data-points-panel"] [data-testid="heatmap-row"]')
+      .count();
+    expect(inPanel).toBeGreaterThan(0);
+    // …and NOT inside the calibration card's grid fold-down, which is inputs.
+    expect(
+      await page.locator('[data-testid="heatmap-grid-panel"] [data-testid="heatmap-row"]').count()
+    ).toBe(0);
+    // The panel names what it holds, as it already does for a histogram's bins.
+    expect(await textOf('data-points-heading')).toBe('Cells');
   });
 
   it('reports a miss instead of inventing boundaries', async () => {

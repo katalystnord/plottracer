@@ -1,9 +1,16 @@
 import { theme } from '../theme.js';
-import { SidebarSection, SidebarHeading } from '../layout.js';
-import type { HeatmapRow } from '../../../engine/heatmapRun.js';
 
 /**
- * The Heatmap card (v2.2) — the grid, and what the cells came out as.
+ * The heatmap's GRID DEFINITION — a fold-down on the calibration card (v2.2).
+ *
+ * ⚑⚑ WHERE THIS LIVES IS THE POINT. It was a sidebar card holding both the
+ * inputs AND the extracted cells; David: *"where we assign columns and rows, I
+ * think we need to have another fold down point on the calibration card, like
+ * we did for bars… Because it is part of setting up the data definition /
+ * calibration. NOT outputs."* So the counts, the boundaries and the names sit
+ * with the calibration that defines them, and the cells went to the Cells panel
+ * where every other type's output already is — the split the rail fold-out
+ * redesign settled and marked LOCKED, which this card had quietly broken.
  *
  * ⚑ EVERY DECISION IS IN `engine/heatmapRun.ts`; this file is a button, two
  * number boxes and a table. That is the split the v2.1 work settled on, and the
@@ -60,11 +67,8 @@ export interface HeatmapCardProps {
   /** The read-out summary, and the cells themselves. */
   summary: string;
   error: string | null;
-  cells: HeatmapRow[];
   canRead: boolean;
 }
-
-const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
 export function HeatmapCard({
   columns,
@@ -88,13 +92,10 @@ export function HeatmapCard({
   detectMessage,
   summary,
   error,
-  cells,
   canRead,
 }: HeatmapCardProps) {
   return (
-    <SidebarSection>
-      <SidebarHeading>Heatmap</SidebarHeading>
-      <div
+    <div
         data-testid="heatmap-card"
         style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
       >
@@ -252,51 +253,6 @@ export function HeatmapCard({
             {summary}
           </span>
         )}
-        {cells.length > 0 && (
-          <div style={{ maxHeight: 260, overflow: 'auto' }}>
-            <table
-              data-testid="heatmap-table"
-              style={{
-                borderCollapse: 'collapse',
-                fontSize: theme.font.size.small,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              <thead>
-                <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
-                  <th style={{ paddingRight: 8 }}>x</th>
-                  <th style={{ paddingRight: 8 }}>y</th>
-                  <th style={{ paddingRight: 8 }}>value</th>
-                  {/* ⚑ The interval travels WITH the value, in the same row and
-                      the same units. A number whose uncertainty lives somewhere
-                      else is read as exact. */}
-                  <th style={{ paddingRight: 8 }}>range</th>
-                  <th>note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cells.map((cell) => (
-                  <tr key={`${cell.col}-${cell.row}`} data-testid="heatmap-row">
-                    {/* ⚑ The name where the figure prints one, the measured
-                        centre where it does not. Only the TABLE chooses: the
-                        export carries both, because the bounds stay true
-                        whatever the axis is called. */}
-                    <td style={{ paddingRight: 8 }}>{cell.xLabel || num(cell.xCentre, 4)}</td>
-                    <td style={{ paddingRight: 8 }}>{cell.yLabel || num(cell.yCentre, 4)}</td>
-                    <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>
-                    <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
-                      {cell.value === null ? '—' : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}
-                    </td>
-                    <td style={{ color: cell.warning ? theme.color.error : undefined }}>
-                      {cell.warning}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </SidebarSection>
+    </div>
   );
 }

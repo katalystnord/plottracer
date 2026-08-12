@@ -383,6 +383,22 @@ export function labelsToAxes(axes: MetadataCarrier, labels: HeatmapLabels): void
 }
 
 /**
+ * The one line the calibration card's fold-down shows when it is CLOSED.
+ *
+ * ⚑ The grid is part of DEFINING the figure, not of reading it (David: *"it is
+ * part of setting up the data definition / calibration. NOT outputs."*), so it
+ * lives as a disclosure on the calibration card exactly as the bar chart's
+ * category ticks do — and like that one, its summary is on screen the moment
+ * the axes are calibrated, so nobody has to know the feature exists to find it.
+ */
+export function heatmapGridSummary(grid: HeatmapState | null): string {
+  if (grid === null) return 'Grid — calibrate the axes first';
+  const columns = Math.max(0, grid.xDividers.length - 1);
+  const rows = Math.max(0, grid.yDividers.length - 1);
+  return `Grid — ${columns} × ${rows} cells`;
+}
+
+/**
  * The typed lists, lined up with the cells they name.
  *
  * ⚑ ONE PLACE, and everything that touches labels goes through it — attaching

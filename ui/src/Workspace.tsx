@@ -113,6 +113,7 @@ import { TupleTable } from './panels/TupleTable.js';
 import { BarTable } from './panels/BarTable.js';
 import { SpiderTable } from './panels/SpiderTable.js';
 import { SpreadsheetTable } from './panels/SpreadsheetTable.js';
+import { HeatmapCellsTable } from './panels/HeatmapCellsTable.js';
 import { AutoExtractCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/AutoExtractCard.js';
 import { SeriesPanel } from './panels/SeriesPanel.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
@@ -212,6 +213,7 @@ import {
   gridFromAxes,
   gridToAxes,
   heatmapAxisKinds,
+  heatmapGridSummary,
   heatmapBounds as heatmapBounds_,
   initialGridFor,
   isDividerHandle,
@@ -1083,6 +1085,11 @@ export function Workspace() {
   // axis marking -- gesture state, not document state, so it lives here rather
   // than in the session: there is nothing to undo about half a gesture.
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
+  /** The heatmap grid's fold-down on the calibration card. Closed to begin
+   * with, like the category-tick panel: its summary line is on screen from the
+   * start, so the feature is discoverable without the card growing over the
+   * figure before anyone has asked it to. */
+  const [heatmapPanelOpen, setHeatmapPanelOpen] = useState(false);
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
   const [categoryCountInput, setCategoryCountInput] = useState('');
   const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
@@ -6131,6 +6138,103 @@ export function Workspace() {
               Common origin — X1 &amp; Y1 are the same point
             </label>
           )}
+          {/* ⚑⚑ THE GRID IS A DATA DEFINITION, SO IT LIVES ON THE CALIBRATION
+              CARD — a fold-down beside the bar chart's category ticks, not a
+              card of its own in the sidebar (David: "it is part of setting up
+              the data definition / calibration. NOT outputs"). The cells it
+              produces go to the Cells panel, where every other type's output
+              already is; what stays here is only what DESCRIBES the figure. */}
+          {/* ⚑ VISIBLE FROM THE START, closed, with a summary saying what it
+              needs — so the grid is discoverable before it exists rather than
+              appearing out of nowhere once the last value is typed.
+              ⚠️ It was briefly gated on "calibrated" because an e2e failed with
+              the open fold-down covering the pixels the walk asks you to click.
+              That was a FIXED-WINDOW-SIZE artefact, not a defect: a user with a
+              figure to see makes the window bigger, and that is their call. A
+              fixed display size is authoritative about CONTENT and only
+              suggestive about LAYOUT — the harness is not the judge of this. */}
+          {heatmapActive && (
+            <div
+              data-testid="heatmap-grid-panel"
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
+            >
+              <button
+                type="button"
+                data-testid="heatmap-grid-toggle"
+                onClick={() => setHeatmapPanelOpen((open) => !open)}
+                title={heatmapPanelOpen ? 'Close the grid settings' : 'Open the grid settings'}
+                style={{
+                  alignSelf: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  font: 'inherit',
+                  color: theme.color.text.secondary,
+                  cursor: 'pointer',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    color: theme.color.text.secondary,
+                    transform: heatmapPanelOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  <ChevronDownIcon />
+                </span>
+                <span data-testid="heatmap-grid-summary">{heatmapGridSummary(heatmapShownGrid)}</span>
+              </button>
+              {heatmapPanelOpen && (
+              <HeatmapCard
+                columns={heatmapColumns}
+                rows={heatmapRows}
+                onColumnsChange={setHeatmapColumns}
+                onRowsChange={setHeatmapRows}
+                gridSize={
+                  heatmapShownGrid
+                    ? {
+                        columns: Math.max(0, heatmapShownGrid.xDividers.length - 1),
+                        rows: Math.max(0, heatmapShownGrid.yDividers.length - 1),
+                      }
+                    : null
+                }
+                onDetect={runHeatmapDetect}
+                onRead={runHeatmapRead}
+                onAddColumnBoundary={() => addHeatmapDivider('x')}
+                onAddRowBoundary={() => addHeatmapDivider('y')}
+                selectedBoundary={selectedBoundary}
+                onRemoveBoundary={removeHeatmapDivider}
+                canRemoveBoundary={
+                  selectedBoundary !== null &&
+                  heatmapShownGrid !== null &&
+                  (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
+                }
+                xLabels={heatmapXLabels}
+                yLabels={heatmapYLabels}
+                onLabelsChange={(x, y) => {
+                  // ⚑ A text edit: marked pending here and committed on blur, the same
+                  // rule every other text field follows. Without it the names were in
+                  // no snapshot at all, and an undo of an unrelated action discarded
+                  // everything typed, with no redo to get it back.
+                  markPendingEdit();
+                  applyHeatmapLabels(x, y);
+                }}
+                onCommitPendingEdit={commitPendingEdit}
+                xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
+                yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
+                detectMessage={heatmapDetectMessage}
+                summary={heatmapSummary}
+                error={heatmapError}
+                canRead={session.isCalibrated()}
+              />
+
+              )}
+            </div>
+          )}
           {/* v2.1 CATEGORY TICKS. A fold-out on the calibration card, not a step
               in the walk: a bar chart still calibrates in two clicks, a
               single-series chart never needs any of this, and nobody has to know
@@ -7306,10 +7410,16 @@ export function Workspace() {
               </span>
             </p>
           )}
-          <SidebarSection>
+          {/* ⚑ Addressable, because WHERE a type's record renders is an
+              invariant worth asserting: the rail redesign puts every type's
+              output here, and v2.2's heatmap quietly put its cells in a card
+              instead. A test can only check that if the panel can be named. */}
+          <SidebarSection data-testid="data-points-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <SidebarHeading>{isHistogram ? 'Bins' : 'Data points'}</SidebarHeading>
+                <SidebarHeading data-testid="data-points-heading">
+                  {isHistogram ? 'Bins' : heatmapActive ? 'Cells' : 'Data points'}
+                </SidebarHeading>
                 {/* Konva overlay isn't DOM-inspectable, so the number of connecting-
                     line runs is mirrored here for e2e coverage (checkpoint 131) --
                     same precedent as box-plot-glyph-count. >0 for a dense trace, 0
@@ -7372,7 +7482,16 @@ export function Workspace() {
                 </div>
               )}
             </div>
-          {isHistogram ? (
+          {heatmapActive ? (
+            /* ⚑ A heatmap's record goes where every other type's record goes.
+               It first lived inside the Heatmap card, which left the panel a
+               user actually looks at saying "No points yet" while the real
+               output sat somewhere no other type puts one (David: "we DO want
+               the output in the same place as for the other graphs… else it
+               becomes very confusing for the users, and extremely
+               inconsistent"). The card keeps the INPUTS. */
+            <HeatmapCellsTable cells={heatmapCells} noCellsHint={noPointsHint} />
+          ) : isHistogram ? (
             <HistogramBinsTable
               rows={tupleRows}
               bins={histogramBins}
@@ -7515,51 +7634,6 @@ export function Workspace() {
 
       <CurveFitCard state={curveFitState} seriesName={activeInfo?.name ?? 'Series'} />
 
-      {heatmapActive && (
-        <HeatmapCard
-          columns={heatmapColumns}
-          rows={heatmapRows}
-          onColumnsChange={setHeatmapColumns}
-          onRowsChange={setHeatmapRows}
-          gridSize={
-            heatmapShownGrid
-              ? {
-                  columns: Math.max(0, heatmapShownGrid.xDividers.length - 1),
-                  rows: Math.max(0, heatmapShownGrid.yDividers.length - 1),
-                }
-              : null
-          }
-          onDetect={runHeatmapDetect}
-          onRead={runHeatmapRead}
-          onAddColumnBoundary={() => addHeatmapDivider('x')}
-          onAddRowBoundary={() => addHeatmapDivider('y')}
-          selectedBoundary={selectedBoundary}
-          onRemoveBoundary={removeHeatmapDivider}
-          canRemoveBoundary={
-            selectedBoundary !== null &&
-            heatmapShownGrid !== null &&
-            (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
-          }
-          xLabels={heatmapXLabels}
-          yLabels={heatmapYLabels}
-          onLabelsChange={(x, y) => {
-            // ⚑ A text edit: marked pending here and committed on blur, the same
-            // rule every other text field follows. Without it the names were in
-            // no snapshot at all, and an undo of an unrelated action discarded
-            // everything typed, with no redo to get it back.
-            markPendingEdit();
-            applyHeatmapLabels(x, y);
-          }}
-          onCommitPendingEdit={commitPendingEdit}
-          xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
-          yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
-          detectMessage={heatmapDetectMessage}
-          summary={heatmapSummary}
-          error={heatmapError}
-          cells={heatmapCells}
-          canRead={session.isCalibrated()}
-        />
-      )}
 
       <GeometryCard
         enabled={geometryState !== null}
