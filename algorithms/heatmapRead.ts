@@ -161,6 +161,28 @@ function readCell(
       // Sample on a lattice across the cell in DATA space, inset from its edges,
       // then project each point — so a rotated or log-scaled cell is still
       // sampled across its own interior rather than across a screen rectangle.
+      //
+      // ⚠️⚠️ KNOWN LIMITATION, DELIBERATELY LEFT (v2.2, David's call): THIS
+      // LATTICE IS REGULAR, SO A REGULAR OVERLAY CAN ALIAS WITH IT. Measured on
+      // 2026-08-12 after David asked whether hatched heatmaps exist — they do,
+      // and stippling to mark significance is common in climate and
+      // epidemiology figures. A hatch covering up to about a third of a cell is
+      // read CORRECTLY and flagged by `uniformity`. At half coverage the two
+      // periods lined up: seven samples across a 60px inset interior is a 10px
+      // stride, and a 2px checkerboard has constant parity at that stride, so
+      // every sample landed on ONE PHASE of the pattern.
+      //
+      // What that costs: with an off-ramp hatch (black over colour) `distance`
+      // shouts — 190 RGB units in the measurement. With a hatch that is ITSELF
+      // on the ramp — a grey hatch over a grey key — the reading comes back
+      // exact, uniform and wrong, which is the same silent class as a clipped
+      // cell and the one this module exists to prevent.
+      //
+      // ▶ THE FIX WHEN IT IS TIME: make the lattice incommensurate with any
+      // periodic pattern — a coprime sample count, or a deterministic sub-pixel
+      // jitter per row — so no stride can hold one phase. Do NOT "fix" it by
+      // raising `maxPerAxis`: a denser regular lattice aliases just as cleanly
+      // against a finer pattern.
       const u = lerpFraction(i, maxPerAxis, inset);
       const v = lerpFraction(j, maxPerAxis, inset);
       const p = bilinear(corners, u, v);
