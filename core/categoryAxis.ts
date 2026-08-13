@@ -24,171 +24,55 @@
  * "2019", "2020" as x-axis labels on an otherwise-categorical chart) stays
  * text here by construction, satisfying tenet 9 without a special case.
  */
-/**
- * Which printed tick a figure draws, and therefore what the user is pointing at
- * (v2.1). Measured, not guessed: across the 381 bar charts in the ICPR ground
- * truth that carry an `_x-tick-type`, 242 (63.5%) print a tick UNDER each
- * category (matplotlib, ggplot) and 139 (36.5%) print one BETWEEN them (Excel).
- * Neither is safe to assume, so it is a switchable declaration — offered as a
- * toggle beside the category count rather than as a question, because flipping
- * it moves the marks on screen and the answer is then visible on the figure.
- */
-export type TickConvention = 'centred' | 'edge';
+import {
+  BandedAxis,
+  bandIndexForParam,
+  dividerParamsFrom,
+  generateTickParams,
+  paramAtPoint,
+  pointAtParam,
+  tickCountFor,
+  type CategoryAxisPoint,
+  type TickConvention,
+} from './bandedAxis.js';
 
-/** The least separation two ticks may have, as a parameter along the axis —
- * sub-pixel on any real figure.
- *
- * ⚑ Shared by the drag and the LOAD door on purpose. `moveTick` leaves this much
- * on each side of a tick, which is what makes its "the window is never empty"
- * invariant true; a file that got in under a weaker rule broke it, so both
- * entrances now measure against the same constant rather than each carrying
- * their own idea of "close enough". */
-const TICK_EPS = 1e-6;
-
-/** A pixel position in image coordinates. */
-export interface CategoryAxisPoint {
-  readonly x: number;
-  readonly y: number;
-}
-
-/**
- * How many ticks `categoryCount` categories produce. `centred` draws one under
- * each category; `edge` draws one between each adjacent pair, so the outermost
- * two dividers are the axis edges rather than ticks (see `dividerParamsFrom`).
- * Zero for a count that is not a positive integer.
- */
-export function tickCountFor(convention: TickConvention, categoryCount: number): number {
-  if (!Number.isInteger(categoryCount) || categoryCount < 1) return 0;
-  return convention === 'centred' ? categoryCount : categoryCount - 1;
-}
-
-/**
- * The evenly spaced tick positions, as PARAMETERS along the axis: 0 at the
- * first edge, 1 at the second.
- *
- * ⚑ Parameters, not pixels, and that is the whole reason the geometry survives
- * an image edit for free. A rotation or a crop moves the two edge pixels; every
- * tick is defined relative to them, so the set follows by construction instead
- * of needing its own pass in `transformAllPixels`. It also makes the generated
- * positions exact rather than rounded through pixel space.
- */
-export function generateTickParams(convention: TickConvention, categoryCount: number): number[] {
-  // No `n === 0` early return: `Array.from({length: 0})` is already `[]`, so the
-  // guard could not change an answer -- and a guard that cannot fire is the shape
-  // this codebase has been bitten by five times. A refused count reaches here as
-  // n = 0 and falls out empty.
-  const n = tickCountFor(convention, categoryCount);
-  const total = categoryCount;
-  return convention === 'centred'
-    ? Array.from({ length: n }, (_, i) => (i + 0.5) / total)
-    : Array.from({ length: n }, (_, i) => (i + 1) / total);
-}
-
-/**
- * The N+1 dividers bounding N bands, in parameter space.
- *
- * ⚑ BOTH conventions resolve to the same N+1 dividers, and the two axis EDGES
- * are what completes either set — in `edge` the ticks are already dividers, in
- * `centred` the dividers are the midpoints between adjacent ticks. Using the
- * edges as the outer two is INTERNAL: on screen they stay the axis, and nothing
- * tells the user they double as ticks.
- */
-export function dividerParamsFrom(
-  convention: TickConvention,
-  tickParams: readonly number[]
-): number[] {
-  const interior =
-    convention === 'edge'
-      ? [...tickParams]
-      : tickParams.slice(0, -1).map((t, i) => (t + tickParams[i + 1]!) / 2);
-  return [0, ...interior, 1];
-}
-
-/**
- * Which band a parameter falls in, given `dividers` from `dividerParamsFrom`.
- *
- * ⚑ The outermost bands are UNBOUNDED — anything left of the first divider is
- * category 0 and anything right of the last is category N-1. A bar sitting just
- * outside the declared span still belongs to the category it is nearest, which
- * is what a reader would say looking at the figure.
- */
-export function bandIndexForParam(t: number, dividers: readonly number[]): number | null {
-  const bands = dividers.length - 1;
-  if (bands < 1 || !Number.isFinite(t)) return null;
-  for (let i = 0; i < bands; i++) {
-    if (t < dividers[i + 1]!) return i;
-  }
-  return bands - 1;
-}
-
-/** Where `t` sits in image coordinates, 0 at the first edge and 1 at the second. */
-export function pointAtParam(
-  edges: readonly [CategoryAxisPoint, CategoryAxisPoint],
-  t: number
-): CategoryAxisPoint {
-  const [a, b] = edges;
-  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
-}
-
-/**
- * `point` projected onto the axis, as a parameter. Deliberately NOT clamped:
- * a bar outside the declared span reads past 0 or 1, and `bandIndexForParam`
- * decides what that means rather than this function silently pretending the
- * point was inside.
- */
-export function paramAtPoint(
-  edges: readonly [CategoryAxisPoint, CategoryAxisPoint],
-  point: CategoryAxisPoint
-): number {
-  const [a, b] = edges;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const lenSq = dx * dx + dy * dy;
-  // ⚑ NOT redundant, and the first draft's test could not tell. For two
-  // IDENTICAL points the unguarded arithmetic is 0/0 and yields NaN on its own,
-  // which is why removing this line left every test green. But two points a
-  // DENORMAL distance apart underflow lenSq to zero while the numerator stays
-  // finite -- that divides to +/-Infinity, and an Infinity parameter sails
-  // through `Number.isFinite`-less callers as a real position. `axisLengthSq`
-  // below refuses such an axis at the door for the same reason.
-  if (lenSq === 0) return NaN;
-  return ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq;
-}
-
-function isUsablePoint(p: CategoryAxisPoint | undefined): p is CategoryAxisPoint {
-  return !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
-}
-
-/** The squared length of the axis, as the arithmetic that will actually divide
- * by it computes it. Zero here is the exact condition `paramAtPoint` cannot
- * survive — which is NOT the same as "the two points are equal", since a
- * denormally short axis underflows to zero with distinct endpoints. */
-function axisLengthSq(a: CategoryAxisPoint, b: CategoryAxisPoint): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  return dx * dx + dy * dy;
-}
+// ⚑ RE-EXPORTED, not moved away. The band geometry now lives in
+// `core/bandedAxis.ts` because it is not a category axis's private business —
+// but eight modules already import these names from here, and churning their
+// import lines would say something changed for them when nothing did.
+export {
+  bandIndexForParam,
+  dividerParamsFrom,
+  generateTickParams,
+  paramAtPoint,
+  pointAtParam,
+  tickCountFor,
+};
+export type { CategoryAxisPoint, TickConvention };
 
 export class CategoryAxis {
   name = 'Category';
 
   private _categories: string[] = [];
 
-  /** The two placed points that ARE the category axis (v2.1) — its line, its
-   * direction and its span. Null until the user marks it. Never presented as
-   * ticks, and frozen once placed: every tick is a function of these two, so
-   * moving one moves all of them (see `setAxisEdges`). */
-  private _edges: [CategoryAxisPoint, CategoryAxisPoint] | null = null;
-
-  private _convention: TickConvention = 'centred';
-
-  /** Tick positions as parameters along the axis — see `generateTickParams`. */
-  private _tickParams: number[] = [];
-
-  /** Whether any tick has been dragged since the last generation. Regeneration
-   * discards those adjustments, so the caller needs to know to say so first
-   * rather than silently reverting the user's corrections. */
-  private _adjusted = false;
+  /**
+   * The band mechanism — edges, convention, generated ticks, dividers, the
+   * adjustment flag and the drag. COMPOSED, not inherited and not copied.
+   *
+   * ⚑⚑ This class is two things, and only one of them is bar-specific. The
+   * NAME LIST below is: a bar chart's datasets bind to it, which is exactly why
+   * a heatmap must not share it — one axis would rename the other. The BANDS
+   * are not, and reading the memo's "not `core/categoryAxis.ts`" as covering
+   * both halves is what produced a second divider store, a second set of marker
+   * graphics and a second count box in v2.2. See `core/bandedAxis.ts`.
+   *
+   * ⚑ The one fact that stays HERE is the count: for a category axis the number
+   * of bands IS the name list's length, so it is synchronised on regeneration
+   * rather than stored twice. `BandedAxis` keeps its own count because an axis
+   * with no names still has bands — which is the whole reason a heatmap's value
+   * axis can have a grid at all.
+   */
+  private _bands = new BandedAxis();
 
   /**
    * Whether the user has DECLARED how many categories there are.
@@ -298,44 +182,40 @@ export class CategoryAxis {
    * screen wrong.
    */
   setAxisEdges(a: CategoryAxisPoint, b: CategoryAxisPoint): boolean {
-    if (!isUsablePoint(a) || !isUsablePoint(b)) return false;
-    // ⚑ Tested as a LENGTH, not as `a.x === b.x && a.y === b.y`. Coordinate
-    // equality misses the axis whose endpoints differ denormally: distinct
-    // points, but a squared length that underflows to zero, which divides to
-    // Infinity rather than NaN. Ask the same question the arithmetic asks.
-    if (axisLengthSq(a, b) === 0) return false;
-    this._edges = [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+    // ⚑ The degenerate-axis refusal lives in `BandedAxis.setEdges` now — tested
+    // as a LENGTH rather than as coordinate equality, because two endpoints a
+    // denormal distance apart are distinct points whose squared length
+    // underflows to zero and divides to Infinity rather than NaN.
+    if (!this._bands.setEdges(a, b)) return false;
     this.regenerateTicks();
     return true;
   }
 
   getAxisEdges(): readonly [CategoryAxisPoint, CategoryAxisPoint] | null {
-    return this._edges;
+    return this._bands.getEdges();
   }
 
   /** True once the axis is marked, i.e. once any of this is meaningful. */
   hasGeometry(): boolean {
-    return this._edges !== null;
+    return this._bands.hasGeometry();
   }
 
   /** Drops the geometry entirely, leaving the category NAMES untouched — the
    * un-ticked path is a supported way to work, not a broken state. */
   clearGeometry(): void {
-    this._edges = null;
-    this._tickParams = [];
-    this._adjusted = false;
+    this._bands.clearGeometry();
+    this._bands.clearBands();
     this._countDeclared = false;
   }
 
   getConvention(): TickConvention {
-    return this._convention;
+    return this._bands.getConvention();
   }
 
   /** Switching convention regenerates, which is the point: the marks move on
    * screen and the user sees which one matches the figure. */
   setConvention(convention: TickConvention): boolean {
-    if (convention !== 'centred' && convention !== 'edge') return false;
-    this._convention = convention;
+    if (!this._bands.setConvention(convention)) return false;
     this.regenerateTicks();
     return true;
   }
@@ -370,14 +250,16 @@ export class CategoryAxis {
    * reverting someone's corrections is the failure this flag exists to prevent.
    */
   regenerateTicks(): boolean {
-    if (!this._edges) {
-      this._tickParams = [];
-      this._adjusted = false;
-      return false;
-    }
-    this._tickParams = generateTickParams(this._convention, this._categories.length);
-    this._adjusted = false;
-    return true;
+    // ⚑ The count is synchronised HERE and only here, because for a category
+    // axis it is not a separate fact: it IS the name list's length. An empty
+    // list has no bands at all, which `BandedAxis.setCount` refuses to express
+    // on purpose — zero columns is not a figure — so the empty case takes the
+    // other door rather than passing a meaningless count through the one that
+    // guards a heatmap's declaration.
+    const declared = this._categories.length;
+    if (declared >= 1) this._bands.setCount(declared);
+    else this._bands.clearBands();
+    return this._bands.hasGeometry();
   }
 
   /**
@@ -398,85 +280,52 @@ export class CategoryAxis {
    * "surface, don't refuse" stance `loadCalibrated` already takes.
    */
   restoreTickParams(params: readonly number[], adjusted = false): boolean {
-    if (!this._edges) return false;
-    const expected = tickCountFor(this._convention, this._categories.length);
-    // ⚑ SPACED, not merely increasing (code review, 2026-08-10). `moveTick`'s
-    // comment states that the window between two neighbours is never empty, and
-    // the interactive path guarantees it by leaving EPS on each side. The load
-    // path did not: a hand-edited file with ticks 1e-12 apart passed
-    // "strictly increasing", and then dragging the middle one clamped it BELOW
-    // its predecessor -- ticks reordered, dividers non-monotonic, and every band
-    // assignment after that wrong. A guard the click path keeps and the file
-    // door does not is the "model has more than one entrance" class this
-    // codebase keeps rediscovering.
-    // ⚑ EPS, not 2*EPS: `moveTick` clamps to `prev + EPS`, so the least
-    // ADJACENT spacing a drag can leave is EPS. (The 2*EPS figure is the window
-    // between i-1 and i+1, which follows from it.) A stricter rule here refuses
-    // sets the click path itself produces.
-    //
-    // ⚑⚑ AND THE COMPARISON IS SLACKENED BY ONE ULP, because "clamps to
-    // prev + EPS" is not true in floating point. `(0.25 + 1e-6) - 0.25` is
-    // 9.999999999732445e-7 -- BELOW EPS -- and it rounds down like that at 78
-    // of the 299 tick positions generated for N = 2..24. Comparing against EPS
-    // exactly therefore rejected tick sets the drag had just produced, and
-    // because a rejected set is REGENERATED and `_adjusted` reset, the user's
-    // drag vanished with no warning -- on every project reopen AND on every
-    // rotate or crop, since `transformAllPixels` round-trips through this same
-    // door. The first version of this guard had exactly that defect, and the
-    // test written to prove it did not aimed at tick 0 against the axis edge,
-    // where `0 + 1e-6` is exactly representable and cannot fail (v2.1 audit).
-    const MIN_GAP = TICK_EPS * (1 - 1e-9);
-    const usable =
-      Array.isArray(params) &&
-      params.length === expected &&
-      params.every(
-        (t, i) =>
-          Number.isFinite(t) &&
-          t > 0 &&
-          t < 1 &&
-          (i === 0 || t - params[i - 1]! >= MIN_GAP)
-      );
-    if (!usable) {
-      this.regenerateTicks();
-      return false;
+    // ⚑ Sync the count first: `BandedAxis` validates the stored list's LENGTH
+    // against its own declared count, and for a category axis that count is the
+    // name list's length. Without this the file door would measure against a
+    // stale number — the drift `ticksAreStale` exists to report, silently
+    // deciding a load instead.
+    const declared = this._categories.length;
+    if (declared >= 1) {
+      if (declared !== this._bands.getCount()) this._bands.setCount(declared);
+    } else {
+      this._bands.clearBands();
     }
-    this._tickParams = [...params];
-    this._adjusted = adjusted;
-    return true;
+    return this._bands.restoreTickParams(params, adjusted);
   }
 
   /** Whether the tick set still matches the declared category count. Only ever
    * true if a category was added or removed through the naming path without a
-   * regeneration — the one way the two can drift apart. */
+   * regeneration — the one way the two can drift apart.
+   *
+   * ⚑ Measured against the NAME LIST, not against the band mechanism's own
+   * count, because that drift is precisely what this reports: `addCategory`
+   * deliberately does not regenerate, so the two numbers are allowed to differ
+   * until someone asks. */
   ticksAreStale(): boolean {
-    if (!this._edges) return false;
-    return this._tickParams.length !== tickCountFor(this._convention, this._categories.length);
+    if (!this._bands.hasGeometry()) return false;
+    return this._bands.getTickParams().length !== tickCountFor(this.getConvention(), this._categories.length);
   }
 
   getTickParams(): readonly number[] {
-    return this._tickParams;
+    return this._bands.getTickParams();
   }
 
   getTickPoints(): CategoryAxisPoint[] {
-    const edges = this._edges;
-    if (!edges) return [];
-    return this._tickParams.map((t) => pointAtParam(edges, t));
+    return this._bands.getTickPoints();
   }
 
   /** The N+1 dividers bounding the N bands — see `dividerParamsFrom`. */
   getDividerParams(): number[] {
-    if (!this._edges) return [];
-    return dividerParamsFrom(this._convention, this._tickParams);
+    return this._bands.getDividerParams();
   }
 
   getDividerPoints(): CategoryAxisPoint[] {
-    const edges = this._edges;
-    if (!edges) return [];
-    return this.getDividerParams().map((t) => pointAtParam(edges, t));
+    return this._bands.getDividerPoints();
   }
 
   hasAdjustments(): boolean {
-    return this._adjusted;
+    return this._bands.hasAdjustments();
   }
 
   /** Whether a category COUNT has been declared — the thing that turns a marked
@@ -502,25 +351,7 @@ export class CategoryAxis {
    * to remove.
    */
   moveTick(index: number, point: CategoryAxisPoint): boolean {
-    const edges = this._edges;
-    if (!edges) return false;
-    if (!Number.isInteger(index) || index < 0 || index >= this._tickParams.length) return false;
-    if (!isUsablePoint(point)) return false;
-    const t = paramAtPoint(edges, point);
-    // ⚑ Not masked by `isUsablePoint` above, and mutation testing is what showed
-    // it: a FINITE but astronomically large coordinate overflows the projection
-    // to Infinity. Without this the tick would be set to NaN and `moveTick`
-    // would return true, reporting a move it did not make.
-    if (!Number.isFinite(t)) return false;
-    const lower = (index === 0 ? 0 : this._tickParams[index - 1]!) + TICK_EPS;
-    const upper = (index === this._tickParams.length - 1 ? 1 : this._tickParams[index + 1]!) - TICK_EPS;
-    // ⚑ No `upper < lower` branch. Every drag already leaves EPS between a tick
-    // and each neighbour, so ticks i-1 and i+1 are never closer than 2*EPS and
-    // the window is never empty. Writing the branch anyway would be a refusal
-    // that cannot fire, and mutation testing shows it up as exactly that.
-    this._tickParams[index] = Math.min(Math.max(t, lower), upper);
-    this._adjusted = true;
-    return true;
+    return this._bands.moveTick(index, point);
   }
 
   /**
@@ -531,8 +362,6 @@ export class CategoryAxis {
    * of a guess, with no dependence on which series was captured first.
    */
   bandIndexAt(point: CategoryAxisPoint): number | null {
-    const edges = this._edges;
-    if (!edges || !isUsablePoint(point)) return null;
-    return bandIndexForParam(paramAtPoint(edges, point), this.getDividerParams());
+    return this._bands.bandIndexAt(point);
   }
 }
