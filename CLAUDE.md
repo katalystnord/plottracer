@@ -42,6 +42,110 @@ else is subordinate to them.
 
 ---
 
+## ⚑⚑ From an agreed design to a build — four gates
+
+**Why this exists.** v2.2's heatmap was designed over three hours and settled
+before any code. Everything then passed — 3,467 tests green, typecheck, lint, the
+full Electron e2e suite — and the next morning David found seven defects in one
+sitting, including a whole missing half of the feature. Nothing was rotten and
+nobody was careless. The design was recorded as **conclusions**, conclusions
+under-determine a build, and every instrument in this project asks whether *the
+code agrees with itself*.
+
+These are gates, not principles. The principle already existed — "an agreed
+design's cases become named tests" — and it did not fire.
+
+1. **A design is not finished until every case reads "given X, the screen shows
+   Y."** A conclusion can be resolved more than one way and still sound satisfied.
+   *"The real question is whether each axis is category or value"* is true, and it
+   permits "so category-ness decides whether the grid exists at all" — which is
+   what got built, and which cost the value×value heatmap its entire grid. The
+   memo named four axis cases and gave outcomes for none, so the build exercised
+   two. **If a case cannot be written as an observable outcome, the design is
+   still a conclusion.**
+
+2. **The cases become named failing tests before the first line of
+   implementation.** Named for the CASE, not the function — `a value axis has
+   bands too`, not `initialGridFor returns dividers`. A design doc reads as
+   satisfied; a red test does not.
+
+3. **⚑⚑ A comment may say WHY a mechanism is what it is. It may NOT assert what
+   the design requires unless a test of that name enforces it.** This is the one
+   that hid v2.2. `core/heatmapGrid.ts` opened by quoting the agreed memo almost
+   verbatim — *"ADJUSTABILITY IS LOAD-BEARING, AND IT KILLS ANY rows × columns
+   COUNT"* — above code that did not do that, while `Workspace.tsx` grew its own
+   count boxes. A comment restating the design is **false evidence of
+   compliance**: every later reader, including the author, checks the header, sees
+   the agreement and stops looking. Restating a design you have not enforced
+   manufactures the very thing that would have caught you.
+
+4. **⚑⚑ A walkthrough test may only click what a prompt on screen tells it to
+   click.** If the test needs a coordinate, an order or a precondition that no
+   visible text describes, that is a **UI defect found at the moment the test is
+   written** — not a detail of the test. v2.2's shared-corners e2e clicked the
+   plot box's TOP-RIGHT corner while the step prompt said only *"click a second
+   pixel position of a known, different X value"*; every user clicks the bottom
+   axis, lands both Y points on one row, and gets a parallel-axes refusal at the
+   end of the walk. The test proved the mechanism and concealed the workflow,
+   because it was written by the mind that already knew the answer. This gate is
+   what turns "could Parallel Universe David do it?" from a judgement call into a
+   test-authoring constraint.
+
+⚠️ **Where intuition used to cover this.** Spider, pie and bar were verifiable by
+eye — a slice's angle or a bar's height is either right or visibly wrong, so
+under-specification got caught by looking. A heatmap has no such referent: colour
+IS the value, and a wrong cell is silent by construction. The safety net was
+removed by the subject matter, not by anyone getting sloppy. Expect the same
+wherever the reading cannot be eyeballed.
+
+### ⚑⚑ WHEN WE ARE FIRST, three correctives are missing at once
+
+Every earlier type had something outside this project pushing back: bar had WPD's
+model, the chart libraries lifted in reverse, and 32 published figures; pie had 22
+surveyed tools. The heatmap has **no prior art at all** — no digitizer does this —
+while being the largest type by prevalence (406,986 articles). Nobody built it
+because it is hard, not because it does not matter. So all three correctives are
+absent together:
+
+- **the eye** — colour is the value, so a wrong cell is silent;
+- **prior art** — nothing to measure against, or to differ from deliberately;
+- **a round-trippable workflow** — the RECORD can be validated by construction
+  (regenerate the figure from it: max difference 0.0), and was. **A GESTURE
+  CANNOT BE.** There is no reverse test for "click the second corner."
+
+⚑ That asymmetry is the whole story of v2.2: the half with an instrument survived
+contact, the half with none collapsed. Read a pile of UX findings on a novel type
+as the missing instrument finally arriving, not as a bad day.
+
+⚑ **Reuse is MORE load-bearing here, not less.** With no external convention
+available, *our own mechanisms are the only convention that exists* — category
+ticks are the closest thing to a standard this problem has. Reinventing them
+costs more here than the same mistake would cost anywhere else in the codebase.
+
+### ⚑⚑ WHAT A FIRST BUILD MAY AND MAY NOT GET WRONG
+
+Do not let "first time is never perfect" absorb the avoidable half. The line:
+
+**Unreasonable to expect first time — the capture WORKFLOW.** That shared corners
+needed a corner-to-corner instruction; that the walk must survive ticking an
+option mid-way; that a prompt sent the second click to the wrong corner. None of
+it is knowable until a person makes the gesture, and no test can be written for a
+gesture nobody has made yet. Expect two or three passes with David's hands in
+between, and **keep the chains short** — drive it after each phase, not after
+five, so a workflow correction lands before anything is stacked on it.
+
+**Entirely reasonable to expect first time — the RECORD and the AGREED CASES.** A
+value×value heatmap having no grid was not a discovery from use: it was one of
+four cases named in the settled design, never implemented and never tested. Same
+for reinventing a mechanism the reuse rule already covered. Those needed a red
+test, not a user.
+
+The four gates above aim at the second list only. They cannot stop a workflow
+being wrong on its first outing — they stop a NAMED CASE being silently absent
+while every instrument reports green.
+
+---
+
 ## Project
 
 - **Name / token:** PlotTracer / `plottracer`

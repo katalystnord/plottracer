@@ -454,3 +454,55 @@ describe('the SHARED CORNERS of a heatmap’s plot box', () => {
     expect(s.getCurrentStep()!.key).toBe('k1');
   });
 });
+
+describe('an option that reshapes the step a pixel is already waiting under', () => {
+  /**
+   * ⚑⚑ THE THIRD ENTRANCE to "a point with nothing to type is finished". David,
+   * having clicked the first corner and only then ticked the two category
+   * boxes: *"the first point is left hanging and without focus."* Declaring the
+   * axis categorical strips X start's value field — and the value box, with its
+   * ✓, is the only thing that could have finished the pending point. The walk
+   * read 0/8 with a marker stranded on the figure and the tips bar still asking
+   * for a value nothing on screen could supply.
+   *
+   * Reshaping mid-walk is legitimate: the user is telling us what the figure is,
+   * and they should not have to know to tick the boxes BEFORE clicking. Nothing
+   * about that ordering is visible, which is exactly why it must not matter.
+   */
+  it('COMPLETES the pending point instead of stranding it', () => {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.handleCalibrationClick(100, 300); // X1 as a VALUE axis — awaits a number
+    expect(s.getPendingPixel()).toEqual({ px: 100, py: 300 });
+
+    s.setOption('xIsCategory', 'true'); // …and now it asks for nothing
+
+    expect(s.getPendingPixel()).toBeNull();
+    expect(s.getPlacedPoints()['x1']).toMatchObject({ px: 100, py: 300, values: [] });
+    expect(s.getCurrentStep()!.key).toBe('x2');
+  });
+
+  it('leaves a pending point alone when the step STILL takes a value', () => {
+    // The companion assertion: the completion must not fire on a step that has
+    // something to type, or a half-answered point would be placed with no value.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.handleCalibrationClick(100, 300);
+    s.setOption('yIsCategory', 'true'); // reshapes Y, not the step in hand
+
+    expect(s.getPendingPixel()).toEqual({ px: 100, py: 300 });
+    expect(s.getPlacedPoints()['x1']).toBeUndefined();
+    expect(s.getCurrentStep()!.key).toBe('x1');
+  });
+
+  it('does not disturb a finished calibration', () => {
+    // setOption's other job is re-reading a LIVE calibration; the new branch
+    // must not run there. Toggling an option after calibrating still just
+    // re-calibrates.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    walk(s);
+    expect(s.runCalibration()).toBe(true);
+    const before = { ...s.getPlacedPoints() };
+    s.setOption('isLogValue', 'true');
+    expect(s.getAxes()).not.toBeNull();
+    expect(s.getPlacedPoints()).toEqual(before);
+  });
+});

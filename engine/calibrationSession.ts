@@ -577,7 +577,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * *existing* handles should be read. */
   setOption(key: string, value: string): void {
     this.optionValues[key] = value;
-    if (this.axes) this.runCalibration();
+    if (this.axes) {
+      this.runCalibration();
+      return;
+    }
+    // ⚑⚑ AN OPTION CAN RESHAPE THE STEP A PIXEL IS ALREADY WAITING UNDER.
+    // "X is categories" turns X start from a step that takes a typed value into
+    // one that takes none, and a pixel clicked a moment earlier was then stuck:
+    // nothing on screen could finish it, because the thing that finishes it is
+    // the value box that just disappeared. Reshaping mid-walk is legitimate —
+    // the user is telling us what the figure is — so the pixel is kept and the
+    // point completed, rather than the click being thrown away.
+    if (this.pendingPixel) {
+      this.completeValuelessStep(this.pendingPixel.px, this.pendingPixel.py);
+    }
   }
 
   setImageHeight(height: number): void {
@@ -1960,13 +1973,36 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.axes) return 'ignored';
     const step = this.getCurrentStep();
     if (!step) return 'ignored';
-    if (step.valueFields.length === 0) {
-      this.placed[step.key] = { px, py, values: [] };
-      this.stepIndex += 1;
-      return 'point-placed';
-    }
+    if (this.completeValuelessStep(px, py)) return 'point-placed';
     this.pendingPixel = { px, py };
     return 'awaiting-value';
+  }
+
+  /**
+   * Place the current step from a pixel when the step asks for nothing typed,
+   * and move the walk on. Returns false — placing nothing — when the step does
+   * have fields to fill.
+   *
+   * ⚑⚑ ONE RULE, THREE ENTRANCES. "A point with nothing to type is finished the
+   * moment it has a pixel" was written out separately at each way in, and the
+   * ways in kept disagreeing: a CLICK completed such a step, a REUSED pixel left
+   * it pending (b866d14 — "common origin does nothing on a category axis"), and
+   * an OPTION TOGGLE that reshapes the step under a pixel already waiting did
+   * the same thing again. David, having clicked the first corner and then ticked
+   * "X is categories": *"the first point is left hanging and without focus."* It
+   * was: X start lost its value field, so the input and its ✓ button vanished,
+   * and the only thing that could have finished the point went with them —
+   * 0/8 set, a stranded marker on the figure, and the tips bar still asking for
+   * a value nothing could accept. Adding a fourth copy of the rule was how this
+   * kept happening, so there is now one.
+   */
+  private completeValuelessStep(px: number, py: number): boolean {
+    const step = this.getCurrentStep();
+    if (!step || step.valueFields.length > 0) return false;
+    this.placed[step.key] = { px, py, values: [] };
+    this.pendingPixel = null;
+    this.stepIndex += 1;
+    return true;
   }
 
   /** Handle a click while in Place Point tool mode: adds a data point to the
@@ -3797,19 +3833,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const source = this.placed[fromKey];
     if (!step || !source) return false;
     // ⚑⚑ A STEP WITH NOTHING TO TYPE COMPLETES HERE, exactly as a CLICK on it
-    // does (`handleCalibrationClick`). Leaving it pending instead is what made
-    // "common origin" appear to do nothing on a heatmap's CATEGORY axis: the
-    // shared pixel was taken, the walk then waited for a value the step does not
-    // have, and no confirm button exists to give it one — so the calibration
-    // simply stopped. David: *"the common origin does not work when you have a
-    // categorial axis."* The two entrances to placing a point have to agree
-    // about when a point is finished.
-    if (step.valueFields.length === 0) {
-      this.placed[step.key] = { px: source.px, py: source.py, values: [] };
-      this.pendingPixel = null;
-      this.stepIndex += 1;
-      return true;
-    }
+    // does. Leaving it pending instead is what made "common origin" appear to do
+    // nothing on a heatmap's CATEGORY axis: the shared pixel was taken, the walk
+    // then waited for a value the step does not have, and no confirm button
+    // exists to give it one — so the calibration simply stopped. David: *"the
+    // common origin does not work when you have a categorial axis."* See
+    // completeValuelessStep for why the rule lives in one place now.
+    if (this.completeValuelessStep(source.px, source.py)) return true;
     this.pendingPixel = { px: source.px, py: source.py };
     return true;
   }

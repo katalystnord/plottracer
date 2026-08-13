@@ -3649,7 +3649,15 @@ export function Workspace() {
    * every derived value and must be undoable as one step. */
   const setAxesOption = useCallback(
     (key: string, value: string) => {
+      // ⚑ WHAT THE BOX IS ASKING FOR CAN CHANGE UNDER WHAT IS TYPED IN IT.
+      // Ticking "X is categories" turns X end's field from an X VALUE into a
+      // COLUMN COUNT, so a "14" typed as a coordinate would sit there reading as
+      // fourteen columns. The pixel is kept (the click was real); the typed text
+      // is not, because the question it answered no longer exists.
+      const fieldsBefore = JSON.stringify(session.getCurrentStep()?.valueFields.map((f) => f.label));
       session.setOption(key, value);
+      const fieldsAfter = JSON.stringify(session.getCurrentStep()?.valueFields.map((f) => f.label));
+      if (fieldsBefore !== fieldsAfter) setDataValueInputs([]);
       commit();
     },
     [session, commit]
