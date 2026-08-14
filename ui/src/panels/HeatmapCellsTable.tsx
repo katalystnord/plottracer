@@ -143,6 +143,44 @@ type ViewProps = Pick<
 const PICKED_BACKGROUND = 'rgba(124, 58, 237, 0.18)';
 
 /**
+ * How strongly a cell is tinted with the colour it was read from.
+ *
+ * ⚑⚑ THE MATRIX MIRRORS THE FIGURE. David: *"Fill our cell with a color if it
+ * derived from color, and no color if it is user set or OCR"* — the indicator is
+ * the EVIDENCE, so nothing has to be learned, and a shadowed column shows up in
+ * the table as a darker band beside numbers that look perfectly reasonable.
+ *
+ * ⚑ A WASH rather than the full colour, so the numbers stay black and legible on
+ * a dark palette — and so the picked highlight, which is itself translucent,
+ * layers over it exactly as it does on the canvas. Same mechanism in both
+ * places; no special case for the table.
+ */
+const VALUE_TINT_ALPHA = 0.35;
+
+/** The cell's background: the colour it was read from, or nothing at all when
+ * the number came from somewhere else. */
+function tintOf(cell: { rgb?: readonly [number, number, number]; source?: string } | undefined) {
+  if (!cell?.rgb || cell.source !== 'colour') return undefined;
+  return `rgba(${cell.rgb[0]}, ${cell.rgb[1]}, ${cell.rgb[2]}, ${VALUE_TINT_ALPHA})`;
+}
+
+/**
+ * How a value reads, given where it came from.
+ *
+ * ⚑⚑ SQUARE brackets for a user-entered value — the convention from scholarly
+ * editing, epigraphy and archaeology, where `[x]` means EDITORIALLY SUPPLIED,
+ * which is exactly what this is. ⚠️ NOT round brackets: `(59)` is accounting
+ * notation for NEGATIVE FIFTY-NINE, and pasting it into a spreadsheet silently
+ * becomes −59 — the precise class of error this feature exists to prevent.
+ * ⚑ The bracket is TEXT, so it survives a copy-paste into a spreadsheet where
+ * the tint cannot. The channel carrying the most important fact is the one that
+ * travels; machine-readable provenance rides in the export's own column.
+ */
+function valueText(display: string, source?: string): string {
+  return source === 'user' ? `[${display}]` : display;
+}
+
+/**
  * The figure's own shape: one cell per cell, names down the edges.
  *
  * ⚑⚑ ROWS RUN TOP-DOWN, which is the whole point of this view. Cell row 0 is
@@ -256,11 +294,18 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
                         padding: '0 8px',
                         textAlign: 'right',
                         cursor: onPickCells ? 'pointer' : undefined,
-                        background: isPicked ? PICKED_BACKGROUND : undefined,
+                        // ⚑ THE SAME TRANSLUCENT HIGHLIGHT, LAYERED — exactly as
+                        // it is on the canvas, over whatever the cell's own
+                        // colour happens to be. No outline invented for the
+                        // table: "picked" looks like "picked" in both places.
+                        backgroundColor: tintOf(cell),
+                        backgroundImage: isPicked
+                          ? `linear-gradient(${PICKED_BACKGROUND}, ${PICKED_BACKGROUND})`
+                          : undefined,
                         color: cell?.warning ? theme.color.error : undefined,
                       }}
                     >
-                      {cell ? num(cell.value, 5) : ''}
+                      {cell ? valueText(num(cell.value, 5), cell.source) : ''}
                     </td>
                   );
                 })}
@@ -328,7 +373,15 @@ function LongView({ cells, renderXName, renderYName, selectedCells, onPickCells 
                   ? renderYName(cell.row, cell.yLabel, cell.yCentre, `y${cell.row}@${cell.col}-${cell.row}`)
                   : cell.yLabel || num(cell.yCentre, 4)}
               </td>
-              <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>
+              <td
+                style={{
+                  paddingRight: 8,
+                  // ⚑ The long form mirrors the matrix, which mirrors the figure.
+                  backgroundColor: tintOf(cell),
+                }}
+              >
+                {valueText(num(cell.value, 5), cell.source)}
+              </td>
               <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
                 {cell.value === null ? '—' : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}
               </td>

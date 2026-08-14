@@ -184,6 +184,32 @@ into five. Each question below would have caught several before they were built.
    error rather than at the click. Detection returns NOTHING rather than
    proposing the boundaries it did find.
 
+### ⚑⚑ MIRROR, DON'T MERELY MATCH
+
+David, 2026-08-14: *"We ALWAYS need to aim for consistency in anything that we
+make. Even better when two things can mirror each other in a visual way. Makes it
+absolutely clear what is referring to what."*
+
+**This is the POSITIVE form of the REUSE rule below.** Reuse is not only code
+economy — it is so the user can SEE that two things are the same thing. A
+mechanism reused looks the same, so no one has to be told they are related.
+
+⚑ **Half of v2.2's defects were failures to mirror**: the heatmap grew its own
+marker graphics beside `categoryTickMarkers`, its own single-cell selection
+beside the app's marquee, its own count box beside the declared count. Each one
+made the user learn a second thing that looked different and meant the same.
+
+⚑ **Where mirroring is doing real work now:** the Cells matrix is TINTED with the
+figure's own colours, so a cell in the table and a cell in the figure are
+obviously the same cell — and a shadowed column appears in both. The picked
+highlight is the SAME translucent overlay in the table and on the canvas, layered
+over whatever is underneath, so "picked" looks like "picked" everywhere. David,
+when I proposed inventing an outline for the table instead: *"We need to use the
+same mechanism... Do not invent special cases."*
+
+▶ **The test:** if two things refer to each other, can the user tell WITHOUT
+being told? If the answer needs a sentence, they are matching, not mirroring.
+
 ### ⚑⚑ WE ARE NEVER THE ONLY INSTRUMENT LOOKING AT THE FIGURE
 
 David, 2026-08-14, on why a heatmap cell's value must be re-editable: *"there

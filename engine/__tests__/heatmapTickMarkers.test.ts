@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { categoryAxisGlyphs, categoryTickMarkers } from '../categoryTickOverlay.js';
-import { heatmapAxisOverlays } from '../heatmapRun.js';
+import { heatmapAxisOverlays, readHeatmapCells } from '../heatmapRun.js';
 import type { PixelProjector } from '../../algorithms/heatmapRead.js';
 
 /**
@@ -81,3 +81,68 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
   });
 });
 
+
+/** One cell, read from a synthetic ramp — enough to see what the row carries. */
+function readOneCell() {
+  const width = 40;
+  const height = 20;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    const t = (i % width) / (width - 1);
+    data[i * 4] = Math.round(255 * t);
+    data[i * 4 + 1] = 0;
+    data[i * 4 + 2] = Math.round(255 * (1 - t));
+    data[i * 4 + 3] = 255;
+  }
+  const proj = { dataToPixel: (x: number, y: number) => ({ x: x * 10, y: y * 10 }) };
+  const scale = {
+    strip: { from: { x: 0, y: 15 }, to: { x: 39, y: 15 }, thickness: 3,
+      samples: Array.from({ length: 40 }, (_, i) => ({
+        t: i / 39,
+        rgb: [Math.round(255 * (i / 39)), 0, Math.round(255 * (1 - i / 39))] as [number, number, number],
+      })) },
+    ticks: [
+      { point: { x: 0, y: 15 }, value: 0 },
+      { point: { x: 39, y: 15 }, value: 100 },
+    ] as const,
+    log: false,
+  };
+  const { rows } = readHeatmapCells(
+    { data, width, height },
+    proj,
+    { xDividers: [0, 1], yDividers: [0, 1] },
+    scale as never
+  );
+  return rows[0]!;
+}
+
+describe('B16 — a cell says WHICH INSTRUMENT read it', () => {
+  /**
+   * ⚑⚑ David: *"if there is a printed number in a cell, the printed number is
+   * the preferred number. But we must still be able to edit it... And perhaps
+   * that needs a right click popup selection menu on each cell? Select, use OCR
+   * number, or Use number based on key calibration."*
+   *
+   * All three are MEASUREMENTS and they fail in opposite ways — OCR reads ink as
+   * glyphs and fails discretely; the colour reads ink as a ramp and fails
+   * continuously and silently; the user sees what both machines are blind to.
+   * A consumer treating an OCR'd 59 and a colour-inverted 58.7 as the same kind
+   * of number is wrong about both, which is why the source belongs in the row.
+   *
+   * ⚑ This is NOT the declared-vs-measured flag David rejected. Nothing here is
+   * invented; it records WHICH measurement.
+   */
+  it('reports a colour reading as coming from the colour, with the colour', () => {
+    const s = readOneCell();
+    expect(s.source).toBe('colour');
+    expect(s.rgb).toHaveLength(3);
+  });
+
+  it('keeps the sampled colour, so the table can mirror the figure', () => {
+    // ⚑ The indicator IS the evidence — the matrix is tinted with what was
+    // sampled, so a shadowed column shows as a darker band in the table beside
+    // numbers that look perfectly reasonable.
+    const s = readOneCell();
+    expect(s.rgb!.every((c) => Number.isInteger(c) && c >= 0 && c <= 255)).toBe(true);
+  });
+});

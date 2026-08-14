@@ -810,6 +810,28 @@ export interface HeatmapRow {
   yCentre: number;
   /** Null when the cell could not be read at all — shown as a dash, never a 0. */
   value: number | null;
+  /**
+   * The colour actually sampled, so the table can show WHERE the number came
+   * from — David: *"Fill our cell with a color if it derived from color, and no
+   * color if it is user set or OCR."* The indicator is the evidence itself, and
+   * it turns the matrix into a miniature of the figure: a shadowed column shows
+   * as a darker band beside numbers that look perfectly reasonable.
+   */
+  rgb?: readonly [number, number, number];
+  /**
+   * WHICH INSTRUMENT read this cell.
+   *
+   * ⚑⚑ All three are measurements and they fail in opposite ways — OCR reads
+   * ink as GLYPHS and fails discretely (right, or badly wrong); the colour reads
+   * ink as a RAMP and fails continuously (small, silent); the USER sees what
+   * both machines are blind to — a hatched cell, an asterisk over the fill, a
+   * texture the sampler averages away. A consumer treating an OCR'd 59 and a
+   * colour-inverted 58.7 as the same kind of number is wrong about both.
+   *
+   * ⚑ Not the declared-vs-measured flag: nothing here is invented. This is WHICH
+   * MEASUREMENT, which is why it belongs in the record.
+   */
+  source?: 'colour' | 'user' | 'ocr';
   low: number | null;
   high: number | null;
   /** How far the cell's colour sat off the key's ramp, in RGB units. */
@@ -903,6 +925,9 @@ export function readHeatmapCells(
     xCentre: cell.xCentre,
     yCentre: cell.yCentre,
     value: cell.reading?.value ?? null,
+    // ⚑ Carried through so the table can tint the cell with what was sampled.
+    ...(cell.rgb ? { rgb: [cell.rgb[0], cell.rgb[1], cell.rgb[2]] as const } : {}),
+    source: 'colour' as const,
     low: cell.reading?.low ?? null,
     high: cell.reading?.high ?? null,
     distance: cell.reading?.distance ?? null,
