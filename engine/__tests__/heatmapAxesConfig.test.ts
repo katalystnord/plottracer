@@ -424,85 +424,61 @@ describe('the SHARED CORNERS of a heatmap’s plot box', () => {
     expect(s.getCurrentStep()!.key).toBe('y2');
   });
 
-  it('calibrates BOTH axes from two opposite corners', () => {
-    // The gesture this exists for: click the plot box's bottom-left and
-    // top-right, say how many columns and rows, and every x/y point is placed.
+  it('shares ONE corner only — two shared pairs cannot calibrate at all', () => {
+    // ⚑⚑ THE FEATURE THIS REPLACES WAS GEOMETRICALLY IMPOSSIBLE. v2.2 declared a
+    // second pairing (x2 -> y2) so a heatmap could be calibrated from the plot
+    // box's two opposite corners — *"two clicks and two counts instead of four
+    // clicks and four values."* But sharing BOTH pairs leaves the calibration
+    // with TWO distinct pixels, and two points cannot define a 2-D transform:
+    // the Y axis vector becomes the X axis vector, so the axes are parallel by
+    // construction and the whole calibration is refused. At ANY corners.
+    //
+    // ⚑ David, day one: *"the text for shared origin is misleading or
+    // incorrect"* and *"we are missing a data point out."* A data point IS
+    // missing. The diagnosis that the prompts merely failed to say "click the
+    // opposite corner" was wrong; the opposite corner fails too.
+    //
+    // ⚑⚑ AND THE TEST THAT USED TO STAND HERE STOPPED AT 4/8 AND CHECKED THE
+    // WALK HAD MOVED ON — it never called `runCalibration`, so it proved the
+    // walk advanced and nothing about whether the result was usable. The e2e
+    // did the same. This one calibrates, which is the only assertion that could
+    // have caught it.
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
     s.setOption('xIsCategory', 'true');
     s.setOption('yIsCategory', 'true');
     s.handleCalibrationClick(100, 300); // one corner  -> x1 (no value)
     s.handleCalibrationClick(400, 100); // the other   -> x2
-    s.confirmCalibrationValues(['6']);  // six columns
+    s.confirmCalibrationValues(['6']);
 
-    const share = () => {
-      const step = s.getCurrentStep();
-      const reuse = commonOriginReuse(
-        HEATMAP_AXES_CONFIG as never, true, step?.key, s.getPlacedPoints(), step ?? undefined
+    const shareInto = (key: string) =>
+      commonOriginReuse(
+        HEATMAP_AXES_CONFIG as never,
+        true,
+        key,
+        s.getPlacedPoints(),
+        s.getCurrentStep() ?? undefined
       );
-      if (reuse) s.reuseStepPixel(reuse.from);
-      return reuse;
-    };
-    expect(share()).toEqual({ from: 'x1', prefill: [] }); // Y start takes no value
-    expect(s.getCurrentStep()!.key).toBe('y2');
-    expect(share()).toEqual({ from: 'x2', prefill: [] });
-    s.confirmCalibrationValues(['5']); // five rows
-    expect(Object.keys(s.getPlacedPoints()).sort()).toEqual(['x1', 'x2', 'y1', 'y2']);
-    // …and the shared pixels really are the corners that were clicked.
-    expect(s.getPlacedPoints()['y1']).toMatchObject({ px: 100, py: 300 });
-    expect(s.getPlacedPoints()['y2']).toMatchObject({ px: 400, py: 100 });
-    // The walk moves on to the colour key with nothing else asked of the axes.
-    expect(s.getCurrentStep()!.key).toBe('k1');
-  });
-});
-
-describe('an option that reshapes the step a pixel is already waiting under', () => {
-  /**
-   * ⚑⚑ THE THIRD ENTRANCE to "a point with nothing to type is finished". David,
-   * having clicked the first corner and only then ticked the two category
-   * boxes: *"the first point is left hanging and without focus."* Declaring the
-   * axis categorical strips X start's value field — and the value box, with its
-   * ✓, is the only thing that could have finished the pending point. The walk
-   * read 0/8 with a marker stranded on the figure and the tips bar still asking
-   * for a value nothing on screen could supply.
-   *
-   * Reshaping mid-walk is legitimate: the user is telling us what the figure is,
-   * and they should not have to know to tick the boxes BEFORE clicking. Nothing
-   * about that ordering is visible, which is exactly why it must not matter.
-   */
-  it('COMPLETES the pending point instead of stranding it', () => {
-    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
-    s.handleCalibrationClick(100, 300); // X1 as a VALUE axis — awaits a number
-    expect(s.getPendingPixel()).toEqual({ px: 100, py: 300 });
-
-    s.setOption('xIsCategory', 'true'); // …and now it asks for nothing
-
-    expect(s.getPendingPixel()).toBeNull();
-    expect(s.getPlacedPoints()['x1']).toMatchObject({ px: 100, py: 300, values: [] });
-    expect(s.getCurrentStep()!.key).toBe('x2');
+    // The ORIGIN is still shared — three distinct pixels remain, which is the
+    // long-standing case every XY chart has had.
+    expect(shareInto('y1')).toEqual({ from: 'x1', prefill: [] });
+    // The far corner is NOT, because sharing it would leave only two.
+    expect(shareInto('y2')).toBeNull();
   });
 
-  it('leaves a pending point alone when the step STILL takes a value', () => {
-    // The companion assertion: the completion must not fire on a step that has
-    // something to type, or a half-answered point would be placed with no value.
+  it('REFUSES a calibration whose Y points are the X points', () => {
+    // The geometric fact, stated where it cannot be argued with: place all four
+    // by hand at only two pixels and the calibration is impossible.
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
-    s.handleCalibrationClick(100, 300);
-    s.setOption('yIsCategory', 'true'); // reshapes Y, not the step in hand
-
-    expect(s.getPendingPixel()).toEqual({ px: 100, py: 300 });
-    expect(s.getPlacedPoints()['x1']).toBeUndefined();
-    expect(s.getCurrentStep()!.key).toBe('x1');
-  });
-
-  it('does not disturb a finished calibration', () => {
-    // setOption's other job is re-reading a LIVE calibration; the new branch
-    // must not run there. Toggling an option after calibrating still just
-    // re-calibrates.
-    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
-    walk(s);
-    expect(s.runCalibration()).toBe(true);
-    const before = { ...s.getPlacedPoints() };
-    s.setOption('isLogValue', 'true');
-    expect(s.getAxes()).not.toBeNull();
-    expect(s.getPlacedPoints()).toEqual(before);
+    const clicks: Array<[number, number, string[]]> = [
+      [100, 300, ['0']], [400, 100, ['10', '5']],
+      [100, 300, ['0']], [400, 100, ['20', '4']],
+      [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
+    ];
+    for (const [px, py, vals] of clicks) {
+      s.handleCalibrationClick(px, py);
+      if (vals.length > 0) s.confirmCalibrationValues(vals);
+    }
+    expect(s.runCalibration()).toBe(false);
+    expect(s.getCalibrationError()).toMatch(/parallel/i);
   });
 });

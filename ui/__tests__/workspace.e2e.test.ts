@@ -8434,7 +8434,7 @@ describe('heatmap capture (v2.2)', () => {
 
     // ⚑ The name is BESIDE the measured bounds, never instead of them: the
     // bounds are read off the pixels and stay true whatever the axis is called.
-    expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,value/);
+    expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,x width,y height,value/);
     // ⚑ The first cell is col 0 / row 0 — the figure's BOTTOM-left — so it
     // carries the LAST row name typed. The order survives into the file.
     expect(csv).toMatch(/^BRCA1,bottom,/m);
@@ -8579,34 +8579,35 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-cell')).toBe('');
   });
 
-  it('calibrates a categorical heatmap from TWO CORNERS of the plot box', async () => {
-    // ⚑⚑ David: *"the common origin does not work when you have a categorial
-    // axis. And it should allow both common X or Y."* A heatmap's axes span
-    // exactly the plot box, so its two opposite corners carry all four x/y
-    // points — two clicks and two counts instead of four clicks and four values.
+  it('shares the ORIGIN only, and the walk still asks for the far Y point', async () => {
+    // ⚑⚑ REPLACES a test that asserted a geometrically impossible feature and
+    // could not have noticed. It drove two corner clicks, checked the walk had
+    // reached 4/8, and stopped — it NEVER CALLED Calibrate. Sharing both corners
+    // leaves the calibration with two distinct pixels, and two points cannot
+    // define a 2-D transform, so the axes come out parallel and the whole thing
+    // is refused. The walk advancing proved nothing about the result.
+    //
+    // ⚑ David saw it on day one from the other side: *"the text for shared
+    // origin is misleading or incorrect"* and *"we are missing a data point
+    // out."* A data point IS missing.
     await resetWorkspace('heatmap');
     await page.getByTestId('calib-choice-xIsCategory-true').check();
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(200);
-    // The checkbox says what it will do, built from the pairings the type
-    // declares rather than a sentence naming one of them.
+    // ONE pairing now, so the sentence names one point rather than claiming two.
     expect(await page.getByTestId('common-origin').locator('..').textContent()).toMatch(
-      /Shared corners/
+      /Common origin/
     );
 
-    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y); // bottom-left
-    await clickImagePixel(truth.frame.x2.x, truth.frame.y2.y); // top-right
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y); // the origin corner
+    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y); // the far X point
     await confirmValue('5'); // five columns
-    await confirmValue('4'); // four rows — the far corner was shared, not clicked
     await page.waitForTimeout(200);
 
-    // Every x/y point is placed from two clicks, and the walk has moved on to
-    // the colour key.
-    const walk = await textOf('calibration-bar');
-    expect(walk).toMatch(/4\/8/);
-    // ⚑ The tips bar carries the STEP prompt (`calib-prompt` is the reuse row),
-    // and it is now asking for the colour key — every x/y point is done.
-    expect(await textOf('tips-bar')).toMatch(/colour key/i);
+    // Y start came free from the shared origin — but the walk still asks for the
+    // far Y point, because without it there is no second direction to calibrate.
+    expect(await textOf('calibration-bar')).toMatch(/3\/8/);
+    expect(await textOf('tips-bar')).toMatch(/row|Y end/i);
   });
 
   it('says WHY Remove is unavailable at the floor, before it is pressed', async () => {
@@ -8685,6 +8686,97 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary/);
     // The refusal held, so the grid is unchanged.
     expect(await page.getByTestId('heatmap-grid-summary').textContent()).toMatch(/5 × 4 cells/);
+  });
+
+  it('lets a MISTYPED calibration value be corrected without redoing the walk', async () => {
+    // ⚑⚑ David, looking at a log colour key that refused his 0 and told him to
+    // enter a positive value: *"And I don't see how I can edit the points at
+    // this point during the calibration even?"* There was no way. A placed
+    // calibration value was plain text, so the only route was Reset calibration
+    // — discarding eight clicks and six numbers to change one digit.
+    //
+    // ⚑ Not a heatmap defect: no type could edit one. It bites hardest here
+    // because the walk is twice as long and the colour key's two labelled ticks
+    // are the easiest numbers in the app to get wrong.
+    // ⚑ DURING the walk, which is where David was: all eight placed, nothing
+    // calibrated yet, and the app asking for a value he could not change.
+    await resetWorkspace('heatmap');
+    const bands = { x2: '5', y2: '4' } as Record<string, string>;
+    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+      const p = truth.frame[step];
+      await clickImagePixel(p.x, p.y);
+      await confirmValues(
+        step === 'x2' || step === 'y2' ? [String(p.value), bands[step]!] : [String(p.value)]
+      );
+    }
+    await page.waitForTimeout(200);
+
+    // The last column's declared count, as typed.
+    expect(await textOf('calib-value-x2-1')).toBe('5');
+    await page.getByTestId('calib-value-x2-1').click();
+    await page.waitForTimeout(150);
+    const box = page.getByTestId('calib-edit-x2-1');
+    await box.fill('6');
+    await box.press('Enter');
+    await page.waitForTimeout(400);
+
+    // Corrected in place, with the walk untouched — no Reset, no re-clicking.
+    expect(await textOf('calib-value-x2-1')).toBe('6');
+    // …and the correction is what the calibration then uses.
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(700);
+    // ⚑ The GRID is 5 × 4, because detection measured the figure — which has
+    // five columns — and a declaration does not override a measurement. What
+    // the corrected value changed is what detection was CHECKED against, and
+    // the shortfall it reports names the new number.
+    expect(await textOf('heatmap-detect-message')).toMatch(/6 columns/);
+  });
+
+  it('B6 — selects a RANGE, a COLUMN and a ROW, the way the app selects points', async () => {
+    // ⚑⚑ David, three times: *"I have no ability to edit or select multiple
+    // cells"*, *"I cannot select a range of cells, or click cells on the heatmap
+    // to select them"*, *"I cannot select a whole column for example."* The
+    // heatmap had its own single-cell pick while the app has had Shift-click and
+    // marquee multi-select for DATA POINTS since v1.2 — a parallel mechanism
+    // doing less, which is this release's recurring shape.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(500);
+
+    // One cell, as before.
+    await page.getByTestId('heatmap-matrix-cell-1-1').click();
+    await page.waitForTimeout(150);
+    expect(await textOf('heatmap-selected-cell')).toBe('1,1');
+
+    // Shift ADDS rather than replacing.
+    await page.getByTestId('heatmap-matrix-cell-2-1').click({ modifiers: ['Shift'] });
+    await page.waitForTimeout(150);
+    // Two picked, so "which cell?" has no single answer and the readout says so.
+    expect(await textOf('heatmap-selected-cell')).toBe('');
+    expect(await textOf('heatmap-selected-count')).toMatch(/2 cells/);
+
+    // A COLUMN header takes the whole column.
+    await page.getByTestId('heatmap-col-select-3').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-count')).toMatch(/4 cells/); // 4 rows
+
+    // …and a ROW header the whole row.
+    await page.getByTestId('heatmap-row-select-2').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-count')).toMatch(/5 cells/); // 5 columns
+
+    // Shift on a band that is already fully picked REMOVES it, so a second
+    // Shift-click is not a no-op for half of it.
+    await page.getByTestId('heatmap-row-select-2').click({ modifiers: ['Shift'] });
+    await page.waitForTimeout(200);
+    expect(await textOf('heatmap-selected-count')).toBe('');
   });
 
   it('lets ENTER walk a two-field step, without reaching for Tab', async () => {

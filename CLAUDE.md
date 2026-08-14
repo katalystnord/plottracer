@@ -184,6 +184,26 @@ into five. Each question below would have caught several before they were built.
    error rather than at the click. Detection returns NOTHING rather than
    proposing the boundaries it did find.
 
+### ⚑⚑ WE ARE NEVER THE ONLY INSTRUMENT LOOKING AT THE FIGURE
+
+David, 2026-08-14, on why a heatmap cell's value must be re-editable: *"there
+might be something in the color/patern/shape that a user can see and we can't."*
+A hatched cell, an asterisk over the fill, a printed label bleeding into the
+colour, a texture the modal sampler averages away.
+
+**So a user-entered value is NOT interpretation sneaking past tenet 9.** It is a
+reading taken with a better instrument — their eye — and it is recorded exactly
+the way ours is, through the same transform, with no flag distinguishing it. The
+distinction tenet 9 draws is between MEASURING and INVENTING, not between us and
+the user.
+
+⚑ **Which means EVERY measured value must be re-editable THROUGH THE MODEL**, and
+an edit must move the datum rather than overwrite the number. A data point's
+value edit repositions the point through the axes' inverse; a heatmap cell's must
+set its position on the COLOUR KEY, so the edited cell moves with the key if the
+key is recalibrated. An overridden number sits still and quietly disagrees with
+every other cell — and nothing on screen would say which of them to trust.
+
 ⚠️ **Where intuition used to cover this.** Spider, pie and bar were verifiable by
 eye — a slice's angle or a bar's height is either right or visibly wrong, so
 under-specification got caught by looking. A heatmap has no such referent: colour

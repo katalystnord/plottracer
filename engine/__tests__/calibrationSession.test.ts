@@ -2463,13 +2463,39 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
   });
 
   describe('Polar', () => {
+    /**
+     * A polar session walked to the end.
+     *
+     * ⚑ The LAST confirm now runs the type's own `checkValues`, so a walk
+     * carrying a bad value is refused THERE rather than at Calibrate — the
+     * refusal moved to the earliest moment the whole calibration is known. The
+     * pending pixel stays and the point is not placed, which is what lets the
+     * user correct the value in the box instead of re-clicking.
+     *
+     * These tests exist to pin the REFUSAL and its wording, so they place the
+     * final point through the model directly when the walk is expected to
+     * refuse — the calibration under test is the one a LOADED FILE would also
+     * present, and that door has never gone through `confirmCalibrationValues`.
+     */
     function polarReadyToCalibrate(r1 = '6', theta1 = '0', r2 = '12', theta2 = '') {
       const session = new CalibrationSession(POLAR_AXES_CONFIG);
       expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin
       expect(session.handleCalibrationClick(500, 400)).toBe('awaiting-value'); // P1
       expect(session.confirmCalibrationValues([r1, theta1])).toBe(true);
       expect(session.handleCalibrationClick(600, 400)).toBe('awaiting-value'); // P2
-      expect(session.confirmCalibrationValues([r2, theta2])).toBe(true);
+      if (!session.confirmCalibrationValues([r2, theta2])) {
+        // Refused at the click — the walk itself already caught it. Load the
+        // same calibration the file door would, so the message can be asserted.
+        session.adoptCalibration({
+          placed: {
+            origin: { px: 400, py: 400, values: [] },
+            p1: { px: 500, py: 400, values: [r1, theta1] },
+            p2: { px: 600, py: 400, values: [r2, theta2] },
+          },
+          optionValues: {},
+          globalValues: {},
+        });
+      }
       return session;
     }
 

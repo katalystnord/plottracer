@@ -407,15 +407,13 @@ describe('the shared corner is declared, not named at the call site', () => {
     }
   });
 
-  it('shares BOTH corners of a heatmap’s plot box, and only the first has a value', () => {
-    // ⚑⚑ A heatmap's axes span exactly the plot box, so its two opposite corners
-    // carry all four calibration points — two clicks instead of four (David:
-    // *"it should allow both common X or Y"*).
+  it('shares ONE corner on a heatmap — two shared pairs cannot calibrate', () => {
+    // ⚑⚑ Was `['x1->y1', 'x2->y2']`. Sharing both pairs leaves the calibration
+    // with two distinct pixels, and two points cannot define a 2-D transform —
+    // the axes come out parallel and the whole calibration is refused, whatever
+    // corners are clicked. See `heatmapAxesConfig.test.ts` for the geometry.
     const pairs = commonOriginPairs(HEATMAP_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>);
-    expect(pairs.map((p) => `${p.from}->${p.to}`)).toEqual(['x1->y1', 'x2->y2']);
-    // The far corner's Y value is whatever the user typed for it; nothing is
-    // known about it the way an origin's 0 is known.
-    expect(pairs[1]!.prefill).toBeUndefined();
+    expect(pairs.map((p) => `${p.from}->${p.to}`)).toEqual(['x1->y1']);
   });
 
   it('TRIMS a prefill to the fields the step actually has', () => {

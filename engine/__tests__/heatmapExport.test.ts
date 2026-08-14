@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heatmapCellsSection, heatmapMatrixSection, buildHeatmapJSON, type HeatmapExportCell } from '../csvExport.js';
+import { heatmapCellsSection, heatmapKeySection, heatmapMatrixSection, buildHeatmapJSON, type HeatmapExportCell } from '../csvExport.js';
 import { makeRounder } from '../../core/exportPrecision.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
@@ -55,22 +55,31 @@ const GRID: HeatmapExportCell[] = [
 ];
 
 describe('heatmapCellsSection', () => {
-  it('writes the bounds AND the centre, so neither reader does arithmetic', () => {
+  it('writes the bounds, the centre AND the extent, so no reader does arithmetic', () => {
     // ⚑ Edges → centres is derivable; centres → edges is NOT once cells are
     // unequal. matplotlib settles it: `shading='flat'` REQUIRES n+1 edges and
     // refuses centres, `shading='nearest'` takes centres.
+    // ⚑⚑ WIDTH AND HEIGHT ADDED 2026-08-14. The error-bar precedent is to carry
+    // the absolutes AND the delta so neither reader computes; cells carried the
+    // absolutes and the centre and stopped. `bar(x, height, WIDTH)` takes a
+    // width directly, so one of the two real consumer conventions was left to
+    // work it out. Area stays DERIVED — colour is the value and the bounds say
+    // where it applies; area is measured only in a mosaic, where geometry IS
+    // the value.
     const section = heatmapCellsSection(GRID, makeRounder(axes(), 'auto'));
-    expect(section.header.slice(0, 7)).toEqual([
+    expect(section.header.slice(0, 9)).toEqual([
       'x min',
       'x max',
       'y min',
       'y max',
       'x centre',
       'y centre',
+      'x width',
+      'y height',
       'value',
     ]);
     expect(section.rows).toHaveLength(4);
-    expect(section.rows[1]!.slice(0, 7)).toEqual([1, 4, 0, 2, 2.5, 1, 20]);
+    expect(section.rows[1]!.slice(0, 9)).toEqual([1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
   it('carries the interval, the colour offset and the uniformity into the file', () => {
@@ -78,14 +87,14 @@ describe('heatmapCellsSection', () => {
       [cell({ value: 42.5, low: 41, high: 44, distance: 2.5, uniformity: 0.75 })],
       makeRounder(axes(), 'auto')
     );
-    expect(section.header.slice(7)).toEqual([
+    expect(section.header.slice(section.header.indexOf('value') + 1)).toEqual([
       'value low',
       'value high',
       'colour offset',
       'uniformity',
       'at key limit',
     ]);
-    expect(section.rows[0]!.slice(6)).toEqual([42.5, 41, 44, 2.5, 0.75, '']);
+    expect(section.rows[0]!.slice(section.header.indexOf('value') + 1)).toEqual([41, 44, 2.5, 0.75, '']);
   });
 
   it('writes an unread cell EMPTY, never as zero', () => {
@@ -96,7 +105,7 @@ describe('heatmapCellsSection', () => {
       [cell({ value: null, low: null, high: null, distance: null, uniformity: 0 })],
       makeRounder(axes(), 'auto')
     );
-    expect(section.rows[0]!.slice(6)).toEqual(['', '', '', '', 0, '']);
+    expect(section.rows[0]!.slice(section.header.indexOf('value'))).toEqual(['', '', '', '', 0, '']);
     expect(section.rows[0]!.slice(0, 4)).toEqual([0, 1, 0, 2]);
   });
 
@@ -106,7 +115,7 @@ describe('heatmapCellsSection', () => {
     // precision borrowed from the wrong instrument — while the coordinates,
     // which ARE pixel-derived, are rounded exactly as every other export is.
     const section = heatmapCellsSection([cell({ value: 42.123456789 })], makeRounder(axes(), 'auto'));
-    expect(section.rows[0]![6]).toBe(42.123456789);
+    expect(section.rows[0]![section.header.indexOf('value')]).toBe(42.123456789);
   });
 
   it('carries the CLIPPING flag, which no number in the row could imply', () => {
@@ -114,13 +123,13 @@ describe('heatmapCellsSection', () => {
     // figure stopped containing the value. A file that dropped this would hand
     // on a confident number with its one caveat removed.
     const section = heatmapCellsSection([cell({ atKeyLimit: true })], makeRounder(axes(), 'auto'));
-    expect(section.rows[0]![11]).toBe('yes');
+    expect(section.rows[0]![section.header.indexOf('at key limit')]).toBe('yes');
     expect(JSON.parse(buildHeatmapJSON([cell({ atKeyLimit: true })])).cells[0].atKeyLimit).toBe(true);
   });
 
   it('renders through the ordinary table formats', () => {
     const csv = renderTable([heatmapCellsSection(GRID, makeRounder(axes(), 'auto'))], 'csv');
-    expect(csv).toMatch(/x min,x max,y min,y max,x centre,y centre,value/);
+    expect(csv).toMatch(/x min,x max,y min,y max,x centre,y centre,x width,y height,value/);
     expect(csv.split('\n').filter((l) => l.trim() !== '')).toHaveLength(6); // title + header + 4
   });
 });
@@ -168,7 +177,7 @@ describe('a NAMED axis — "the label is the coordinate"', () => {
     // Dropping either half breaks a real consumer.
     const section = heatmapCellsSection(NAMED, makeRounder(axes(), 'auto'));
     expect(section.header.slice(0, 3)).toEqual(['x label', 'y label', 'x min']);
-    expect(section.rows[1]!.slice(0, 9)).toEqual(['TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 20]);
+    expect(section.rows[1]!.slice(0, 11)).toEqual(['TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
   it('leaves a VALUE axis exactly as it was — no empty column appears', () => {
@@ -326,5 +335,55 @@ describe('the export ROUTES a heatmap session to those sections', () => {
     const sections = buildExportSections(input([]));
     expect(sections[0]!.rows).toEqual([]);
     expect(JSON.parse(buildExportJson(input([]))).cells).toEqual([]);
+  });
+});
+
+describe('B10 — the colour key’s extent travels with the export', () => {
+  /**
+   * ⚑⚑ David asked whether the weld sample could be regenerated from what we
+   * save. Its generator is in the repo:
+   *
+   *   pcolormesh(x_edges, y_edges, values, cmap="viridis", vmin=60, vmax=780)
+   *
+   * The DATA reproduced exactly — `x_edges` and `y_edges` fall out of the cell
+   * bounds and the matrix IS the value array, unequal cells included. But
+   * `vmin`/`vmax` never left the app: we exported readings taken ON the colour
+   * axis and never the axis's own span, while x and y have carried theirs all
+   * along because every cell writes its bounds. A consumer redrawing falls back
+   * to the values' own min and max and gets different colours, with nothing
+   * saying why.
+   *
+   * ⚑ The COLORMAP stays out. We measure the ramp rather than guessing which
+   * published map it is, and an inferred name would be the one part of the file
+   * nobody could check.
+   */
+  const KEY = { from: 60, to: 780, log: false };
+
+  it('writes the key’s span as its own section', () => {
+    const section = heatmapKeySection(KEY);
+    expect(section.title).toBe('Colour key');
+    expect(section.header).toEqual(['key from', 'key to', 'log']);
+    expect(section.rows[0]).toEqual([60, 780, '']);
+  });
+
+  it('keeps the click ORDER, because a key may run high to low', () => {
+    expect(heatmapKeySection({ from: 780, to: 60, log: false }).rows[0]).toEqual([780, 60, '']);
+  });
+
+  it('says when the key is logarithmic', () => {
+    expect(heatmapKeySection({ ...KEY, log: true }).rows[0]).toEqual([60, 780, 'yes']);
+  });
+
+  it('carries it in the JSON beside the cells', () => {
+    const doc = JSON.parse(buildHeatmapJSON(GRID, [], KEY)) as {
+      colourKey?: { from: number; to: number; log: boolean };
+    };
+    expect(doc.colourKey).toEqual({ from: 60, to: 780, log: false });
+  });
+
+  it('writes NOTHING when the key could not be read, rather than a guess', () => {
+    // ⚑ The same rule the grid follows: assert only what was measured.
+    const doc = JSON.parse(buildHeatmapJSON(GRID, [])) as Record<string, unknown>;
+    expect(doc['colourKey']).toBeUndefined();
   });
 });

@@ -1290,6 +1290,20 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
             ],
           };
     };
+    // ⚑⚑ A LOG KEY IS CALIBRATED FROM PRINTED TICKS, NOT FROM THE STRIP'S ENDS,
+    // and the prompt has to say so before the click rather than after it. The
+    // ends of a colour ramp usually carry no printed number — on the weld
+    // sample the strip runs 60…780 while the ticks read 100…700 — so clicking
+    // an end and typing what looks like the start of the scale is the natural
+    // move. On a LINEAR key beginning at 0 it is often even right. On a log key
+    // it can never be: the scale never reaches zero. David hit exactly that.
+    const logKey = (step: CalibStepInfo): CalibStepInfo => ({
+      ...step,
+      prompt:
+        step.key === 'kv1'
+          ? 'Click a LABELLED tick on the colour key — e.g. 10¹ — and enter the number printed there. A log key never reaches zero, so the strip’s ends usually carry no usable number.'
+          : 'Click a SECOND labelled tick on the colour key and enter its number. Both must be positive: a log scale cannot pass through zero.',
+    });
     return steps.map((step) => {
       if (optionBool(options, 'xIsCategory') && (step.key === 'x1' || step.key === 'x2')) {
         return categorical('x', step);
@@ -1297,15 +1311,34 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       if (optionBool(options, 'yIsCategory') && (step.key === 'y1' || step.key === 'y2')) {
         return categorical('y', step);
       }
+      if (optionBool(options, 'isLogValue') && (step.key === 'kv1' || step.key === 'kv2')) {
+        return logKey(step);
+      }
       return step;
     });
   },
-  // ⚑⚑ BOTH CORNERS OF THE PLOT BOX. A heatmap's two axes span exactly that box,
-  // so its bottom-left and top-right corners carry all four calibration points —
-  // two clicks instead of four, on the commonest figure this type sees. The
-  // prefill is trimmed per step, so a CATEGORY edge shares the pixel and is
-  // asked for nothing.
-  commonOrigin: [XY_COMMON_ORIGIN, { from: 'x2', to: 'y2' }],
+  // ⚑⚑ ONE SHARED CORNER, NOT TWO — AND THE SECOND ONE WAS GEOMETRICALLY
+  // IMPOSSIBLE. v2.2 declared `[XY_COMMON_ORIGIN, { from: 'x2', to: 'y2' }]` on
+  // the reasoning that a heatmap's axes span exactly the plot box, so its two
+  // opposite corners carry all four x/y points. They cannot. Sharing BOTH pairs
+  // leaves the calibration with TWO distinct pixels, and two points cannot
+  // define a 2-D transform: the Y axis vector becomes identical to the X axis
+  // vector, so the axes are parallel by construction and `checkValues` refuses
+  // the whole calibration — at whatever corners the user clicks.
+  //
+  // ⚑ David saw it from the other side on day one: *"the text for shared origin
+  // is misleading or incorrect"* and *"we are missing a data point out."* A data
+  // point IS missing. The diagnosis that the prompts merely failed to say
+  // "click the opposite corner" was wrong — the opposite corner fails too.
+  //
+  // ⚑⚑ AND BOTH TESTS THAT "VERIFIED" IT STOPPED AT 4/8 AND ASSERTED THE WALK
+  // HAD MOVED ON. Neither ever called `runCalibration`, so they proved the walk
+  // advanced and nothing about whether the result could be used. A walk that
+  // reaches the end of a calibration nobody can complete is not a feature.
+  //
+  // The ORIGIN pairing stays: x1 = y1 leaves three distinct pixels, which is the
+  // long-standing shared-origin case every XY chart has had.
+  commonOrigin: XY_COMMON_ORIGIN,
   logScaleGuards: [
     { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X', unless: 'xIsCategory' },
     { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y', unless: 'yIsCategory' },

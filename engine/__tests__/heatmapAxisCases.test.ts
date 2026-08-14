@@ -228,3 +228,97 @@ describe('B4 — a MEASURED axis says where its clicks landed too', () => {
     expect(bad.runCalibration()).toBe(false);
   });
 });
+
+describe('B11 — a LOG colour key says what it needs, and refuses at the click', () => {
+  /**
+   * ⚑⚑ David: *"It is really difficult to know where to click, so clicking known
+   * points like this causes this type of error."* He clicked the END of the
+   * colour strip for the first key value and typed 0 — which is the natural
+   * move, and on a linear key beginning at zero it is often right. On a LOG key
+   * it can never be: the scale never reaches zero, and the ends of the ramp
+   * usually carry no printed number at all (the weld sample's strip runs 60…780
+   * while its ticks read 100…700).
+   *
+   * The old behaviour accepted the click, carried it through the rest of the
+   * walk, and refused at Calibrate — by which point nothing said which of eight
+   * clicks was wrong, and there was no way to edit it either.
+   */
+  it('asks for a LABELLED tick, and warns the ends carry no number', () => {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('isLogValue', 'true');
+    const kv1 = s.getSteps().find((st) => st.key === 'kv1')!;
+    expect(kv1.prompt).toMatch(/LABELLED tick/);
+    expect(kv1.prompt).toMatch(/never reaches zero|ends/i);
+    // …and says it only when it applies.
+    const linear = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    expect(linear.getSteps().find((st) => st.key === 'kv1')!.prompt).not.toMatch(/log/i);
+  });
+
+  it('REFUSES the zero at the click that completes the walk, not at Calibrate', () => {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('isLogValue', 'true');
+    const clicks: Array<[number, number, string[]]> = [
+      [100, 300, ['0']], [400, 300, ['10', '5']],
+      [100, 300, ['0']], [100, 100, ['20', '4']],
+      [120, 420, []], [380, 420, []],
+      [150, 420, ['0']], // the strip's end, typed as zero — David's click
+      [350, 420, ['100']],
+    ];
+    const results = clicks.map(([px, py, vals]) => {
+      s.handleCalibrationClick(px, py);
+      return vals.length > 0 ? s.confirmCalibrationValues(vals) : true;
+    });
+    // Every step up to the last is accepted — one value alone cannot say whether
+    // a log scale passes through zero, so the last confirm is the EARLIEST
+    // honest moment to refuse.
+    expect(results.slice(0, -1).every(Boolean)).toBe(true);
+    expect(results[results.length - 1]).toBe(false);
+    expect(s.getCalibrationError()).toMatch(/log colour scale/i);
+  });
+
+  it('keeps the pending pixel so the value can be corrected in place', () => {
+    // ⚑ A refused confirm must not cost the click. The box keeps what was typed
+    // and the user fixes the number — the alternative is hunting for that tick
+    // again, which is what made the old refusal so expensive.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('isLogValue', 'true');
+    for (const [px, py, vals] of [
+      [100, 300, ['0']], [400, 300, ['10', '5']],
+      [100, 300, ['0']], [100, 100, ['20', '4']],
+      [120, 420, []], [380, 420, []], [150, 420, ['5']],
+    ] as Array<[number, number, string[]]>) {
+      s.handleCalibrationClick(px, py);
+      if (vals.length > 0) s.confirmCalibrationValues(vals);
+    }
+    s.handleCalibrationClick(350, 420);
+    expect(s.confirmCalibrationValues(['-3'])).toBe(false);
+    expect(s.getPendingPixel()).toEqual({ px: 350, py: 420 });
+    expect(s.getCurrentStep()!.key).toBe('kv2');
+    // …and the corrected value goes straight through.
+    expect(s.confirmCalibrationValues(['100'])).toBe(true);
+    expect(s.runCalibration()).toBe(true);
+  });
+});
+
+describe('B11b — switching Log ON re-checks what was already typed', () => {
+  it('reports immediately, rather than waiting for Calibrate', () => {
+    // ⚑ A 0 typed on a LINEAR key is legitimate. Ticking Log makes it
+    // impossible — and nothing said so until Calibrate, which is how David
+    // ended up with a refusal and no idea which of eight clicks caused it.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    for (const [px, py, vals] of [
+      [100, 300, ['0']], [400, 300, ['10', '5']],
+      [100, 300, ['0']], [100, 100, ['20', '4']],
+      [120, 420, []], [380, 420, []], [150, 420, ['0']], [350, 420, ['100']],
+    ] as Array<[number, number, string[]]>) {
+      s.handleCalibrationClick(px, py);
+      if (vals.length > 0) s.confirmCalibrationValues(vals);
+    }
+    expect(s.getCalibrationError()).toBeNull(); // fine on a linear key
+    s.setOption('isLogValue', 'true');
+    expect(s.getCalibrationError()).toMatch(/log colour scale/i);
+    // …and switching it back off clears it, rather than leaving a stale verdict.
+    s.setOption('isLogValue', 'false');
+    expect(s.getCalibrationError()).toBeNull();
+  });
+});

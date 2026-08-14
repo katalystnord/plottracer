@@ -31,6 +31,32 @@ import { renderTable, type Cell, type TableSection } from './tableFormats.js';
  * stays independent of `engine/heatmapRun.ts` and its image-reading half.
  * `engine/heatmapRun.ts`'s `HeatmapRow` satisfies it.
  */
+/**
+ * The COLOUR KEY's own extent — the third axis's span.
+ *
+ * ⚑⚑ David asked whether the weld sample could be regenerated from what we
+ * save. The data: yes — `x_edges` and `y_edges` fall out of the cell bounds and
+ * the matrix IS the value array, unequal cells included. But the generator also
+ * took `vmin=60, vmax=780`, and we exported readings on the colour axis while
+ * never exporting the axis itself. A consumer redrawing falls back to the
+ * values' own min and max and gets different colours, with nothing saying why.
+ *
+ * ⚑ x and y have carried their extent all along, because every cell writes its
+ * bounds. This is the same fact for the third axis — the last place it was
+ * being treated as less than an axis.
+ *
+ * ⚑ The COLORMAP is deliberately absent: we measure the ramp rather than
+ * guessing which published map it is, and a name we inferred would be the one
+ * part of the file nobody could check.
+ */
+export interface HeatmapKeyExport {
+  /** The value at each end of the strip, in click order — a key may run
+   * high-to-low, and plenty do. */
+  from: number;
+  to: number;
+  log: boolean;
+}
+
 export interface HeatmapExportCell {
   xMin: number;
   xMax: number;
@@ -286,6 +312,18 @@ export function heatmapCellsSection(
       axisHeader(cells, 'y', 'max'),
       axisHeader(cells, 'x', 'centre'),
       axisHeader(cells, 'y', 'centre'),
+      // ⚑⚑ THE DELTA HALF, which was missing. The error-bar precedent
+      // (`39f2d81`) is to carry the absolutes AND the delta "so neither reader
+      // does arithmetic on the record" — cells got the absolutes and the centre
+      // and stopped there. It is not pedantry: `bar(x, height, WIDTH)` takes a
+      // width directly while `pcolormesh` takes edges, so one of the two real
+      // consumer conventions had to compute its own input.
+      // ⚑ AREA stays derived. Colour is the value and the bounds say where it
+      // applies, so an area column would be a second copy of a multiplication.
+      // Area becomes a MEASURED quantity only for a mosaic, where the geometry
+      // IS the value.
+      axisHeader(cells, 'x', 'width'),
+      axisHeader(cells, 'y', 'height'),
       'value',
       'value low',
       'value high',
@@ -302,6 +340,12 @@ export function heatmapCellsSection(
       at(c.yMax, c, 1),
       at(c.xCentre, c, 0),
       at(c.yCentre, c, 1),
+      // ⚑ A WIDTH is a difference, not a position, so it is rounded through the
+      // axis's own resolution the same way the bounds are — `at` takes the pair
+      // it belongs to, which keeps a log axis honest about what its resolution
+      // means at that coordinate.
+      at(c.xMax - c.xMin, c, 0),
+      at(c.yMax - c.yMin, c, 1),
       // ⚑ The VALUE is not an x or a y — it is read off the colour key, whose
       // resolution has nothing to do with the figure's pixel pitch. Rounding it
       // through the axes' own resolution would claim a precision from the wrong
@@ -313,6 +357,21 @@ export function heatmapCellsSection(
       c.uniformity,
       c.atKeyLimit === true ? 'yes' : '',
     ]),
+  };
+}
+
+/**
+ * The colour key's extent, as its own small section.
+ *
+ * ⚑ A SECTION rather than extra columns on every cell: the key's span is a fact
+ * about the FIGURE, not about any one cell, and repeating it 20 times would
+ * invite the copies disagreeing.
+ */
+export function heatmapKeySection(key: HeatmapKeyExport): TableSection {
+  return {
+    title: 'Colour key',
+    header: ['key from', 'key to', 'log'],
+    rows: [[key.from, key.to, key.log ? 'yes' : '']],
   };
 }
 
@@ -701,12 +760,15 @@ export function geometryTableSection(series: string, result: GeometryResult, val
  */
 export function buildHeatmapJSON(
   cells: readonly HeatmapExportCell[],
-  measurements: readonly MeasurementCsvRow[] = []
+  measurements: readonly MeasurementCsvRow[] = [],
+  key?: HeatmapKeyExport
 ): string {
   const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
   const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
   const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
   const doc: Record<string, unknown> = {
+    // ⚑ The third axis's own span, beside the readings taken on it.
+    ...(key ? { colourKey: { from: key.from, to: key.to, log: key.log } } : {}),
     cells: cells.map((c) => ({
       xMin: c.xMin,
       xMax: c.xMax,

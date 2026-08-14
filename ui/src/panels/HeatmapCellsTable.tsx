@@ -67,12 +67,16 @@ export interface HeatmapCellsTableProps {
    * and its markers.
    */
   selectedCell?: { col: number; row: number } | null;
-  onSelectCell?: (cell: { col: number; row: number } | null) => void;
+  /** Every picked cell, as `col,row` keys — the app's own selection model,
+   * which data points have used since v1.2. */
+  selectedCells?: ReadonlySet<string>;
+  /** Pick these keys; `additive` is Shift held. A header hands its whole band. */
+  onPickCells?: (keys: readonly string[], additive: boolean) => void;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
-export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName, selectedCell, onSelectCell }: HeatmapCellsTableProps) {
+export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName, selectedCell, selectedCells, onPickCells }: HeatmapCellsTableProps) {
   const [view, setView] = useState<'matrix' | 'table'>('matrix');
 
   if (cells.length === 0) {
@@ -112,7 +116,8 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
           renderXName={renderXName}
           renderYName={renderYName}
           selectedCell={selectedCell}
-          onSelectCell={onSelectCell}
+          selectedCells={selectedCells}
+          onPickCells={onPickCells}
         />
       ) : (
         <LongView
@@ -120,7 +125,8 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
           renderXName={renderXName}
           renderYName={renderYName}
           selectedCell={selectedCell}
-          onSelectCell={onSelectCell}
+          selectedCells={selectedCells}
+          onPickCells={onPickCells}
         />
       )}
     </div>
@@ -129,7 +135,7 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
 
 type ViewProps = Pick<
   HeatmapCellsTableProps,
-  'cells' | 'renderXName' | 'renderYName' | 'selectedCell' | 'onSelectCell'
+  'cells' | 'renderXName' | 'renderYName' | 'selectedCell' | 'selectedCells' | 'onPickCells'
 >;
 
 /** The pick reads as a highlight in both views — same colour as the outline the
@@ -144,7 +150,9 @@ const PICKED_BACKGROUND = 'rgba(124, 58, 237, 0.18)';
  * the matrix upside down against the figure it came from, and "which category
  * belongs where" would be exactly as unanswerable as it was in the long form.
  */
-function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCell }: ViewProps) {
+function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCells }: ViewProps) {
+  const key = (col: number, row: number) => `${col},${row}`;
+  const picked = (col: number, row: number) => selectedCells?.has(key(col, row)) === true;
   const columns = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
   const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
   const byKey = new Map(cells.map((c) => [`${c.col},${c.row}`, c]));
@@ -160,10 +168,42 @@ function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCel
             {columns.map((col) => {
               const cell = cells.find((c) => c.col === col)!;
               return (
-                <th key={col} style={{ padding: '0 8px', fontWeight: 500 }}>
-                  {cell.xIsCategory && renderXName
-                    ? renderXName(col, cell.xLabel, cell.xCentre)
-                    : cell.xLabel || num(cell.xCentre, 4)}
+                <th
+                  key={col}
+                  data-testid={`heatmap-col-select-${col}`}
+                  onClick={(e) => onPickCells?.(rows.map((r) => key(col, r)), e.shiftKey)}
+                  title="Click to select this whole column — Shift to add it to the picked cells"
+                  style={{
+                    padding: '0 8px',
+                    fontWeight: 700,
+                    textAlign: 'left',
+                    cursor: onPickCells ? 'pointer' : undefined,
+                    // ⚑ A band shows as picked only when ALL of it is, so a
+                    // partial range never looks like a whole column.
+                    background: rows.every((r) => picked(col, r)) ? PICKED_BACKGROUND : undefined,
+                  }}
+                >
+                  {/* ⚑⚑ THE HEADER IS THE COLUMN'S IDENTITY, not a coordinate.
+                      It used to show the CENTRE — `0.9994`, `3.496` — which is a
+                      DERIVED value presented as the thing itself, unstable (drag
+                      a boundary and every label changes), and not how any
+                      generator identifies a column: `pcolormesh` takes EDGES,
+                      `seaborn.heatmap` takes NAMES, `imshow` takes INDICES. A
+                      per-column centre is the lossy input convention, and it was
+                      the label.
+                      ⚑ So: the NUMBER always, because a column's position never
+                      moves; the NAME where the figure prints one; and the EXTENT
+                      underneath, which is what the record actually holds. */}
+                  <div data-testid={`heatmap-col-head-${col}`}>{`C${col + 1}`}</div>
+                  {cell.xIsCategory && renderXName ? (
+                    <div style={{ fontWeight: 500 }}>{renderXName(col, cell.xLabel, cell.xCentre)}</div>
+                  ) : cell.xLabel ? (
+                    <div style={{ fontWeight: 500 }}>{cell.xLabel}</div>
+                  ) : (
+                    <div style={{ fontWeight: 400, color: theme.color.text.legend }}>
+                      {`${num(cell.xMin, 3)} – ${num(cell.xMax, 3)}`}
+                    </div>
+                  )}
                 </th>
               );
             })}
@@ -174,19 +214,38 @@ function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCel
             const rowCell = cells.find((c) => c.row === row)!;
             return (
               <tr key={row} data-testid="heatmap-matrix-row">
-                <th style={{ color: theme.color.text.legend, textAlign: 'left', paddingRight: 8, fontWeight: 500 }}>
-                  {rowCell.yIsCategory && renderYName
-                    ? renderYName(row, rowCell.yLabel, rowCell.yCentre)
-                    : rowCell.yLabel || num(rowCell.yCentre, 4)}
+                <th
+                  data-testid={`heatmap-row-select-${row}`}
+                  onClick={(e) => onPickCells?.(columns.map((c) => key(c, row)), e.shiftKey)}
+                  title="Click to select this whole row — Shift to add it to the picked cells"
+                  style={{
+                    textAlign: 'left',
+                    paddingRight: 8,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: onPickCells ? 'pointer' : undefined,
+                    background: columns.every((c) => picked(c, row)) ? PICKED_BACKGROUND : undefined,
+                  }}
+                >
+                  <span data-testid={`heatmap-row-head-${row}`}>{`R${row + 1}`}</span>{' '}
+                  {rowCell.yIsCategory && renderYName ? (
+                    <span style={{ fontWeight: 500 }}>{renderYName(row, rowCell.yLabel, rowCell.yCentre)}</span>
+                  ) : rowCell.yLabel ? (
+                    <span style={{ fontWeight: 500 }}>{rowCell.yLabel}</span>
+                  ) : (
+                    <span style={{ fontWeight: 400, color: theme.color.text.legend }}>
+                      {`${num(rowCell.yMin, 3)} – ${num(rowCell.yMax, 3)}`}
+                    </span>
+                  )}
                 </th>
                 {columns.map((col) => {
                   const cell = byKey.get(`${col},${row}`);
-                  const picked = selectedCell?.col === col && selectedCell?.row === row;
+                  const isPicked = picked(col, row);
                   return (
                     <td
                       key={col}
                       data-testid={`heatmap-matrix-cell-${col}-${row}`}
-                      onClick={() => onSelectCell?.(picked ? null : { col, row })}
+                      onClick={(e) => onPickCells?.([key(col, row)], e.shiftKey)}
                       // ⚑ The evidence cannot fit in a matrix cell, so a flagged
                       // one is coloured and carries its note as a tooltip, and
                       // the Table view holds the full account. A matrix showing
@@ -196,8 +255,8 @@ function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCel
                       style={{
                         padding: '0 8px',
                         textAlign: 'right',
-                        cursor: onSelectCell ? 'pointer' : undefined,
-                        background: picked ? PICKED_BACKGROUND : undefined,
+                        cursor: onPickCells ? 'pointer' : undefined,
+                        background: isPicked ? PICKED_BACKGROUND : undefined,
                         color: cell?.warning ? theme.color.error : undefined,
                       }}
                     >
@@ -216,7 +275,9 @@ function MatrixView({ cells, renderXName, renderYName, selectedCell, onSelectCel
 
 /** One row per cell — the tidy/long form, and the only view with room for the
  * evidence that says whether to trust a value. */
-function LongView({ cells, renderXName, renderYName, selectedCell, onSelectCell }: ViewProps) {
+function LongView({ cells, renderXName, renderYName, selectedCells, onPickCells }: ViewProps) {
+  const key = (col: number, row: number) => `${col},${row}`;
+  const picked = (col: number, row: number) => selectedCells?.has(key(col, row)) === true;
   return (
     <div style={{ maxHeight: 320, overflow: 'auto' }}>
       <table
@@ -245,19 +306,10 @@ function LongView({ cells, renderXName, renderYName, selectedCell, onSelectCell 
             <tr
               key={`${cell.col}-${cell.row}`}
               data-testid="heatmap-row"
-              onClick={() =>
-                onSelectCell?.(
-                  selectedCell?.col === cell.col && selectedCell?.row === cell.row
-                    ? null
-                    : { col: cell.col, row: cell.row }
-                )
-              }
+              onClick={(e) => onPickCells?.([key(cell.col, cell.row)], e.shiftKey)}
               style={{
-                cursor: onSelectCell ? 'pointer' : undefined,
-                background:
-                  selectedCell?.col === cell.col && selectedCell?.row === cell.row
-                    ? PICKED_BACKGROUND
-                    : undefined,
+                cursor: onPickCells ? 'pointer' : undefined,
+                background: picked(cell.col, cell.row) ? PICKED_BACKGROUND : undefined,
               }}
             >
               {/* The name where the figure prints one, the measured centre where

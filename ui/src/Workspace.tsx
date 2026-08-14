@@ -40,6 +40,7 @@ import {
 import type { TickConvention } from '../../core/categoryAxis.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
+import { valueAtPosition } from '../../algorithms/colorScale.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
@@ -1109,7 +1110,56 @@ export function Workspace() {
    * the bar chart's category column uses. */
   /** The cell the user picked, in grid indices — the one thing tying a row of
    * the results to the square it was read from. */
-  const [selectedCell, setSelectedCell] = useState<{ col: number; row: number } | null>(null);
+  /**
+   * The picked cells, as `col,row` keys.
+   *
+   * ⚑⚑ A SET, not one cell. David: *"I have no ability to edit or select
+   * multiple cells... I cannot select a range of cells, or click cells on the
+   * heatmap to select them... I cannot select a whole column for example."* The
+   * heatmap had its own single-cell pick while the app has had marquee-drag and
+   * Shift-click multi-select for DATA POINTS since v1.2 — a parallel mechanism
+   * doing less, which is the pattern this release keeps repeating.
+   *
+   * ⚑ Kept as keys rather than as `{col,row}` objects so membership is a lookup
+   * rather than a scan: a column pick on a large matrix adds hundreds at once.
+   */
+  const [selectedCells, setSelectedCells] = useState<ReadonlySet<string>>(new Set());
+  const cellKey = (col: number, row: number) => `${col},${row}`;
+  /** The single pick, for everything that still means "the one cell in hand" —
+   * the readout, the canvas outline, the value the card names. Null unless
+   * exactly one is picked, because "which cell?" has no answer for a range. */
+  const selectedCell = useMemo(() => {
+    if (selectedCells.size !== 1) return null;
+    const [col, row] = [...selectedCells][0]!.split(',').map(Number);
+    return { col: col!, row: row! };
+  }, [selectedCells]);
+
+  /**
+   * Pick cells the way the app already picks points: plain click replaces,
+   * Shift adds or removes, and a header takes a whole band.
+   */
+  const pickCells = useCallback(
+    (keys: readonly string[], additive: boolean) => {
+      setSelectedCells((prev) => {
+        if (!additive) {
+          // Clicking the current single pick clears it, as it always has.
+          if (keys.length === 1 && prev.size === 1 && prev.has(keys[0]!)) return new Set();
+          return new Set(keys);
+        }
+        const next = new Set(prev);
+        // ⚑ A band toggles as a WHOLE: if every cell in it is already picked the
+        // gesture removes them, otherwise it adds. Toggling cell-by-cell would
+        // make a second Shift-click on a column a no-op for half of it.
+        const allIn = keys.every((k) => next.has(k));
+        for (const k of keys) {
+          if (allIn) next.delete(k);
+          else next.add(k);
+        }
+        return next;
+      });
+    },
+    []
+  );
   // ⚑ Keyed by the rendered COPY, not the band — the long form shows a band's
   // name once per cell, and one editor per copy fights itself for focus. See
   // `renderEditableName`'s `editKey`.
@@ -1184,6 +1234,9 @@ export function Workspace() {
    * read, and an export that captured a stale array would write the previous
    * figure's numbers. */
   const heatmapCellsRef = useRef<HeatmapRow[]>([]);
+  /** The colour key's own span, captured when the cells were read — the third
+   * axis's extent, which the export carries beside the readings taken on it. */
+  const heatmapKeyRef = useRef<{ from: number; to: number; log: boolean } | undefined>(undefined);
   useEffect(() => {
     heatmapCellsRef.current = heatmapCells;
   }, [heatmapCells]);
@@ -2134,6 +2187,15 @@ export function Workspace() {
     // and read the figure through it — every value filed under boundaries nobody
     // had measured, and the numbers look exactly as trustworthy as measured ones.
     // A heatmap's cells ARE its grid; without one there is nothing to report.
+    // ⚑ The key's ENDS are its extent — `vmin`/`vmax` in the generator that drew
+    // the figure. Recorded here, where the scale exists, rather than recomputed
+    // at export time from something that may have moved.
+    const keyFrom = valueAtPosition(scale, 0);
+    const keyTo = valueAtPosition(scale, 1);
+    heatmapKeyRef.current =
+      keyFrom === null || keyTo === null
+        ? undefined
+        : { from: keyFrom, to: keyTo, log: sessionRef.current.getOptions()['isLogValue'] === 'true' };
     const grid = heatmapShownGrid;
     if (!grid) {
       setHeatmapError(
@@ -3241,7 +3303,13 @@ export function Workspace() {
           if (!axesNow || !heatmapShownGrid) return;
           const [dx, dy] = axesNow.pixelToData(px, py);
           if (dx === undefined || dy === undefined) return;
-          setSelectedCell(cellIndexAt(heatmapShownGrid.xDividers, heatmapShownGrid.yDividers, dx, dy));
+          const hit = cellIndexAt(heatmapShownGrid.xDividers, heatmapShownGrid.yDividers, dx, dy);
+          // ⚑ A bare canvas click REPLACES the pick, the way clicking one data
+          // point does. Shift-adding from the figure needs the modifier, which
+          // this route does not carry — the table is where a range is built,
+          // and the figure stays "show me this one".
+          if (hit) pickCells([cellKey(hit.col, hit.row)], false);
+          else setSelectedCells(new Set());
           return;
         }
         case 'add-point': {
@@ -3457,6 +3525,13 @@ export function Workspace() {
    * the one being asked for. */
   const valueInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  /** The calibration value being corrected, as raw in-progress text — so typing
+   * does not re-run the calibration on every keystroke. Applied on blur/Enter,
+   * exactly as `editingCell` does for a data point's value. */
+  const [editingCalibValue, setEditingCalibValue] = useState<
+    { key: string; index: number; value: string } | null
+  >(null);
+
   const setDataValueInputAt = useCallback((index: number, value: string) => {
     setDataValueInputs((prev) => {
       const next = [...prev];
@@ -3593,6 +3668,32 @@ export function Workspace() {
   // the other axes types' dataToPixel is an unimplemented stub (see core/axes/
   // bar.ts's note; the same reason Curve Fit/Geometry are XY-only), so their
   // cells stay read-only and this never runs for them.
+  /**
+   * Apply a corrected calibration value.
+   *
+   * ⚑ The model owns the rules — `setCalibrationValues` runs the same guard the
+   * walk does and re-calibrates live — so this only closes the editor and
+   * commits to history. A REFUSED edit leaves the old value standing, which is
+   * why the editor closes either way: the card then shows what the model has.
+   */
+  // ⚑ A plain function, not a `useCallback`. The React Compiler refuses to
+  // memoize this one ("existing memoization could not be preserved") and an
+  // event handler called from a map has nothing to gain from it — a hook that
+  // is not doing its job is worse than no hook, and suppressing the rule would
+  // hide the fact that it never was memoized.
+  const commitCalibValueEdit = (edit: { key: string; index: number; value: string }) => {
+    setEditingCalibValue(null);
+    const placedNow = session.getPlacedPoints()[edit.key];
+    if (!placedNow) return;
+    // ⚑ Built by map rather than spread-then-assign: the compiler cannot keep
+    // its memoization across a local mutation of a derived array, and a value
+    // this small has no reason to be built by mutating one.
+    const next = placedNow.values.map((v, i) => (i === edit.index ? edit.value : v));
+    // ⚑ Only a change goes to history. A REFUSED edit alters nothing, and
+    // closing the editor already re-renders, so there is nothing to bump.
+    if (session.setCalibrationValues(edit.key, next)) commit();
+  };
+
   const commitDataPointEdit = useCallback(() => {
     const cell = editingCell;
     if (!cell) return;
@@ -4565,6 +4666,7 @@ export function Workspace() {
         // Read cells, which the export reports as an empty table rather than
         // inventing one.
         heatmapCells: heatmapCellsRef.current,
+        ...(heatmapKeyRef.current ? { heatmapKey: heatmapKeyRef.current } : {}),
       };
 
       let content: string;
@@ -6453,7 +6555,42 @@ export function Workspace() {
                         </button>
                       </span>
                     ) : placed ? (
-                      <span style={{ fontWeight: 600 }}>{placed.values.join(', ')}</span>
+                      /* ⚑⚑ EDITABLE WHERE IT IS SHOWN. This was plain text, so a
+                         mistyped calibration number could only be corrected by
+                         Reset calibration — discarding the whole walk. David,
+                         staring at a log colour key that refused his 0 and told
+                         him to enter a positive value: *"And I don't see how I
+                         can edit the points at this point during the calibration
+                         even?"* There was no way; the app asked for something it
+                         did not let him do.
+                         ⚑ Every other value in the app is editable where it is
+                         displayed — a data point's value in the table, a
+                         category's name. The calibration value, which everything
+                         else is measured against, was the exception. */
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {placed.values.map((v, vi) => (
+                          <EditableValue
+                            key={`${step.key}-${vi}`}
+                            editing={
+                              editingCalibValue?.key === step.key && editingCalibValue.index === vi
+                            }
+                            editValue={editingCalibValue?.value ?? v}
+                            display={v}
+                            testIdEdit={`calib-edit-${step.key}-${vi}`}
+                            testIdValue={`calib-value-${step.key}-${vi}`}
+                            title="Click to edit — re-reads every value through the corrected calibration"
+                            width={52}
+                            onStartEdit={() =>
+                              setEditingCalibValue({ key: step.key, index: vi, value: v })
+                            }
+                            onChange={(next: string) =>
+                              setEditingCalibValue({ key: step.key, index: vi, value: next })
+                            }
+                            onCommit={() => editingCalibValue && commitCalibValueEdit(editingCalibValue)}
+                            onCancel={() => setEditingCalibValue(null)}
+                          />
+                        ))}
+                      </span>
                     ) : (
                       <span style={{ color: theme.color.text.legend }}>{active ? 'click image' : '—'}</span>
                     )}
@@ -7855,6 +7992,11 @@ export function Workspace() {
                 <span data-testid="heatmap-selected-cell" style={{ display: 'none' }}>
                   {selectedCell ? `${selectedCell.col},${selectedCell.row}` : ''}
                 </span>
+                {/* ⚑ How MANY are picked, which the single-cell readout above
+                    cannot say: "which cell?" has no answer for a range. */}
+                <span data-testid="heatmap-selected-count" style={{ display: 'none' }}>
+                  {selectedCells.size > 1 ? `${selectedCells.size} cells` : ''}
+                </span>
                 <span data-testid="series-line-runs" style={{ display: 'none' }}>
                   {seriesLines.reduce((n, l) => n + l.runs.length, 0)}
                 </span>
@@ -7927,7 +8069,8 @@ export function Workspace() {
               renderXName={renderHeatmapXName}
               renderYName={renderHeatmapYName}
               selectedCell={selectedCell}
-              onSelectCell={setSelectedCell}
+              selectedCells={selectedCells}
+              onPickCells={pickCells}
             />
           ) : isHistogram ? (
             <HistogramBinsTable

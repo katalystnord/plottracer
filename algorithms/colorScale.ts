@@ -190,6 +190,39 @@ export function checkColorScaleValues(
  * worst place to lose data, since the extremes are usually the point of the
  * figure.
  */
+/**
+ * Where a VALUE sits along the key — the inverse of `valueAtPosition`.
+ *
+ * ⚑⚑ THE THIRD AXIS IS AN AXIS, so it inverts like the other two. David, when I
+ * proposed treating a corrected cell value as an OVERRIDE with a
+ * declared-vs-measured flag: *"NO. And seriously NO. Heatmaps are a 2.5D graph
+ * type. The values are STORED ON THE THIRD AXIS. Changing a value in a cell
+ * MOVES THE VALUE on the third axis that records the value, and nothing else!"*
+ * Right — editing a cell is the same gesture as editing a data point's y, which
+ * repositions the point through the axes' inverse transform. The point just
+ * moves along the COLOUR KEY instead of inside the plot box, so there is nothing
+ * to declare and no provenance to record.
+ *
+ * Null when the scale cannot answer — an unusable key, a non-finite value, or a
+ * value a LOG key cannot represent (zero or negative).
+ */
+export function positionAtValue(scale: ColorScale, value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  if (checkColorScale(scale) !== null) return null;
+  const [a, b] = scale.ticks;
+  const ta = positionOnStrip(scale.strip, a.point)!;
+  const tb = positionOnStrip(scale.strip, b.point)!;
+  if (scale.log) {
+    if (value <= 0) return null;
+    const la = Math.log(a.value);
+    const lb = Math.log(b.value);
+    if (lb === la) return null;
+    return ta + ((Math.log(value) - la) / (lb - la)) * (tb - ta);
+  }
+  if (b.value === a.value) return null;
+  return ta + ((value - a.value) / (b.value - a.value)) * (tb - ta);
+}
+
 export function valueAtPosition(scale: ColorScale, t: number): number | null {
   if (!Number.isFinite(t)) return null;
   if (checkColorScale(scale) !== null) return null;

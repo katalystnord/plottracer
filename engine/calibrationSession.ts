@@ -591,6 +591,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.pendingPixel) {
       this.completeValuelessStep(this.pendingPixel.px, this.pendingPixel.py);
     }
+    // ⚑⚑ AN OPTION CAN INVALIDATE VALUES ALREADY TYPED. Switching the colour key
+    // to Log makes a 0 that was legitimate a moment ago impossible — and with
+    // nothing re-checking, the walk carried on and refused at Calibrate. The
+    // question is only answerable once every point is placed (a log scale needs
+    // BOTH key values to say whether it passes through zero), so that is when it
+    // is asked. A live calibration already re-runs above and gets this for free.
+    const steps = this.getSteps();
+    if (steps.every((st) => this.placed[st.key])) {
+      const last = steps[steps.length - 1]!;
+      this.calibrationError = this.problemWith(last.key, this.placed[last.key]!);
+    }
   }
 
   setImageHeight(height: number): void {
@@ -3858,10 +3869,85 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const field = step.valueFields[i]!;
       return v === '' && field.optional ? (field.blankValue ?? '0') : v;
     });
-    this.placed[step.key] = { px: this.pendingPixel.px, py: this.pendingPixel.py, values: filled };
+    // ⚑⚑ REFUSED AT THE CLICK, NOT EIGHT STEPS LATER. The type's own
+    // `checkValues` already knows this answer — it just was not consulted until
+    // Calibrate, so a value the model could reject immediately was accepted,
+    // carried through the rest of the walk, and rejected at the end with no clue
+    // which click caused it. David hit it on a LOG COLOUR KEY: the strip's ends
+    // carry no printed number, so clicking one and typing 0 is the natural
+    // mistake, and the refusal arrived after all eight steps.
+    //
+    // ⚑ Safe on a HALF-FINISHED walk because `checkValues` is written to be:
+    // "does not refuse a calibration that is merely unfinished" is one of its
+    // own tests. It reports only what it can already tell is wrong.
+    //
+    // ⚑ The point is NOT placed and the pending pixel STAYS, so the box keeps
+    // what was typed and the user corrects it in place rather than re-clicking.
+    const candidate = { px: this.pendingPixel.px, py: this.pendingPixel.py, values: filled };
+    // ⚑⚑ ASKED THE MOMENT THE WALK IS COMPLETE, not at Calibrate. A type's
+    // `checkValues` answers about a WHOLE calibration — Polar reports "P2's r
+    // value must be a number" before P2 exists — so it cannot be asked halfway
+    // and cannot be diffed either, because the complaint simply MOVES from one
+    // missing point to the next as the walk fills in.
+    //
+    // ⚑ So the last confirm is where it fires, which is also the EARLIEST
+    // HONEST point for the case that prompted this: a log colour key is only
+    // wrong once BOTH labelled ticks are known — one value alone cannot say
+    // whether the scale passes through zero. David clicked the strip's end and
+    // typed 0, and learned about it eight steps later at Calibrate.
+    //
+    // ⚑ The point is NOT placed and the pending pixel STAYS, so the box keeps
+    // what was typed and it is corrected in place rather than re-clicked.
+    const completes = this.getSteps().every(
+      (st) => st.key === step.key || this.placed[st.key] !== undefined
+    );
+    const problem = completes ? this.problemWith(step.key, candidate) : null;
+    if (problem) {
+      this.calibrationError = problem;
+      return false;
+    }
+    this.calibrationError = null;
+    this.placed[step.key] = candidate;
     this.pendingPixel = null;
     this.stepIndex += 1;
     return true;
+  }
+
+  /**
+   * What the type's own rules say about placing `candidate` at `key`, or null.
+   *
+   * ⚑ ONE PLACE, so the click path and the value-edit path ask the same question
+   * of the same authority. `checkGuards` is what `runCalibration` consults; the
+   * only difference here is that the calibration is incomplete, which it
+   * tolerates by design.
+   */
+  private problemWith(key: string, candidate: PlacedCalibPoint | null): string | null {
+    const steps = this.getSteps();
+    const trial: Record<string, PlacedCalibPoint> = { ...this.placed };
+    if (candidate) trial[key] = candidate;
+    else delete trial[key];
+    const cal = new Calibration(this.config.calibrationDimensions ?? 2);
+    for (const st of steps) {
+      const p = trial[st.key];
+      if (!p) break; // the walk stops where the points do; guards tolerate that
+      let dx = '0';
+      let dy = '0';
+      let dz = '';
+      st.valueFields.forEach((f, i) => {
+        const v = p.values[i] ?? '';
+        if (f.field === 'dx') dx = v;
+        else if (f.field === 'dy') dy = v;
+        else dz = v;
+      });
+      cal.addPoint(p.px, p.py, dx, dy, dz);
+    }
+    return checkGuards(
+      this.config as unknown as AxesTypeConfig<CalibratedAxes>,
+      cal,
+      this.optionValues,
+      this.globalValues,
+      steps
+    );
   }
 
   /** Build the Calibration + axes instance from the placed calibration points
@@ -4397,6 +4483,54 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (calibration && cp) calibration.setDataAt(calibrationIndex, cp.dx ?? '', cp.dy ?? '', name);
       (this.axes as unknown as SpiderAxes).setSpokeName(index, name);
       this.applyAxesDerivedSlots();
+    }
+    return true;
+  }
+
+  /**
+   * Correct the VALUE of an already-placed calibration point, leaving its pixel
+   * where it is. True when the edit was accepted.
+   *
+   * ⚑⚑ THERE WAS NO WAY TO DO THIS. `updateCalibPointPixel` below has always let
+   * a placed point be dragged, so its GEOMETRY was editable — but nothing ever
+   * set its values, so a mistyped number was frozen until Reset calibration
+   * discarded the entire walk. David hit it at the worst moment: the app refused
+   * his log colour key with *"enter positive values"* and gave him no way to
+   * enter them. *"And I don't see how I can edit the points at this point during
+   * the calibration even?"*
+   *
+   * ⚑ Not a heatmap defect — every type has had it. It bites hardest here
+   * because the walk is eight steps rather than four.
+   *
+   * ⚑ THE SAME GUARD AS THE WALK, because this is the model's second entrance to
+   * the same fact. `confirmCalibrationValues` requires a value for every
+   * non-optional field and takes exactly one per field; an edit that skipped
+   * either would be a door with a weaker lock, which is the shape this project
+   * has been bitten by four times.
+   *
+   * ⚑ AND IT RE-CALIBRATES LIVE, the rule `setOption` already follows: a
+   * corrected value describes how the EXISTING handles should be read, so it
+   * takes effect now rather than waiting for another Calibrate press.
+   */
+  setCalibrationValues(key: string, values: readonly string[]): boolean {
+    const step = this.getSteps().find((st) => st.key === key);
+    const point = this.placed[key];
+    if (!step || !point || values.length !== step.valueFields.length) return false;
+    const trimmed = values.map((v) => v.trim());
+    if (step.valueFields.some((f, i) => !f.optional && trimmed[i] === '')) return false;
+    const filled = trimmed.map((v, i) => {
+      const field = step.valueFields[i]!;
+      return v === '' && field.optional ? (field.blankValue ?? '0') : v;
+    });
+    const previous = [...point.values];
+    point.values = filled;
+    // ⚑ A refused re-calibration must not leave the axes half-changed: put the
+    // old values back and report the edit as refused, so the calibration on
+    // screen still matches the one the user had.
+    if (this.axes && !this.runCalibration()) {
+      point.values = previous;
+      this.runCalibration();
+      return false;
     }
     return true;
   }

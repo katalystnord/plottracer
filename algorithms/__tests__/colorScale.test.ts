@@ -3,6 +3,7 @@ import {
   MIN_TICK_SEPARATION_PX,
   checkColorScale,
   readColor,
+  positionAtValue,
   valueAtPosition,
   type ColorScale,
 } from '../colorScale.js';
@@ -361,5 +362,39 @@ describe('readColor', () => {
       log: false,
     };
     expect(readColor(empty, [0, 0, 0])).toBeNull();
+  });
+});
+
+describe('positionAtValue — the third axis inverts like the other two', () => {
+  /**
+   * ⚑⚑ David: *"Heatmaps are a 2.5D graph type. The values are STORED ON THE
+   * THIRD AXIS. Changing a value in a cell MOVES THE VALUE on the third axis
+   * that records the value, and nothing else!"* Editing a cell is the same
+   * gesture as editing a data point's y — the point moves through the axes'
+   * inverse transform, just along the colour key rather than inside the plot.
+   */
+  it('round-trips against valueAtPosition on a linear key', () => {
+    const scale = scaleOf(0, 100);
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const v = valueAtPosition(scale, t)!;
+      expect(positionAtValue(scale, v)).toBeCloseTo(t, 9);
+    }
+  });
+
+  it('round-trips on a LOG key, where the spacing is not uniform', () => {
+    const scale = scaleOf(1, 100, true);
+    for (const t of [0.1, 0.5, 0.9]) {
+      const v = valueAtPosition(scale, t)!;
+      expect(positionAtValue(scale, v)).toBeCloseTo(t, 9);
+    }
+  });
+
+  it('REFUSES a value a log key cannot hold, rather than answering', () => {
+    // ⚑ Zero and negatives have no position on a log scale. Returning a number
+    // would put the cell somewhere the figure could never have drawn it.
+    const scale = scaleOf(1, 100, true);
+    expect(positionAtValue(scale, 0)).toBeNull();
+    expect(positionAtValue(scale, -5)).toBeNull();
+    expect(positionAtValue(scale, NaN)).toBeNull();
   });
 });

@@ -35,7 +35,9 @@ import {
   tupleDataSection,
   histogramSection,
   heatmapCellsSection,
+  heatmapKeySection,
   heatmapMatrixSection,
+  type HeatmapKeyExport,
   type HeatmapExportCell,
   measurementsSection,
   curveFitSummarySection,
@@ -79,6 +81,9 @@ export interface ExportAssemblyInput {
    * rather than writing an empty table that looks like an empty figure.
    */
   heatmapCells?: readonly HeatmapExportCell[];
+  /** The colour key's own extent — the third axis's span. Absent when the key
+   * could not be read, in which case nothing is written rather than a guess. */
+  heatmapKey?: HeatmapKeyExport;
 }
 
 /**
@@ -180,7 +185,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
   // could be confused for a real series someone captured.
   const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? '';
   if (exportShape === 'heatmap') {
-    return buildHeatmapJSON(input.heatmapCells ?? [], measures);
+    return buildHeatmapJSON(input.heatmapCells ?? [], measures, input.heatmapKey);
   }
   if (exportShape === 'bins') {
     return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
@@ -242,6 +247,9 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     const cells = input.heatmapCells ?? [];
     sections.push(heatmapCellsSection(cells, rounder));
     sections.push(heatmapMatrixSection(cells));
+    // ⚑ Last, because it describes the FIGURE rather than the data — a reader
+    // scanning for values meets those first.
+    if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
   } else if (exportShape === 'bins') {
     sections.push(histogramSection(session.getHistogramBins(), rounder));
   } else if (exportShape === 'tuples') {
