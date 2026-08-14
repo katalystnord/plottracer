@@ -207,20 +207,29 @@ describe('detectGrid', () => {
     expect(result.message).toMatch(/4 column boundaries found/);
   });
 
-  it('REPORTS a miss rather than filling one in', () => {
-    // ⚑ Asked for more cells than there is evidence for, the answer is a
-    // sentence, not a plausible grid. A grid with a boundary missing looks
-    // exactly like a grid.
+  it('KEEPS what it measured and NAMES what is missing, rather than proposing nothing', () => {
+    // ⚑⚑ REWRITTEN 2026-08-14, premise and all. This asserted that a shortfall
+    // left the axis EXACTLY as it was — "the miss is reported, never filled in,
+    // because a grid with a boundary missing looks exactly like a grid". The
+    // argument is right; the remedy was wrong. Discarding four correct
+    // measurements to avoid an invisible error trades a measurement for a blank,
+    // and David hit it as *"why is the detection not working anymore?"* once
+    // every axis declared a count (case A1) and every axis therefore took the
+    // checked path.
+    //
+    // ⚑ The error is made VISIBLE instead of avoided: the grid carries fewer
+    // cells than the declared count, and the sentence says how many are missing.
     const { image, axes } = scene();
     const start = initialGrid({ xMin: 0, xMax: 9, yMin: 0, yMax: 8 });
     const result = detectGrid(image, axes, start, { columns: 9 });
-    // ⚑ The x axis is left EXACTLY as it was — the miss is reported, never
-    // filled in, because a grid with a boundary missing looks exactly like a
-    // grid and its cells are silently twice as wide as the figure's.
-    expect([...result.grid!.xDividers]).toEqual([...start.xDividers]);
+    // The four boundaries the ink actually shows are placed…
+    expect(result.grid!.xDividers).toHaveLength(6);
+    // …the missing four are NOT invented — six dividers is five cells, not nine…
+    expect(result.grid!.xDividers.length - 1).toBeLessThan(9);
+    // …and nothing claims agreement.
     expect(result.agrees).toBe(false);
     expect(result.message).toMatch(/Found 4 of the 8 boundaries/);
-    expect(result.message).toMatch(/by hand/);
+    expect(result.message).toMatch(/add the missing 4 by hand/);
   });
 
   it('KEEPS the axis that succeeded when the other one misses', () => {
@@ -234,8 +243,10 @@ describe('detectGrid', () => {
     // The columns are there…
     expect(result.grid).not.toBeNull();
     expect(result.grid!.xDividers).toHaveLength(6);
-    // …the rows are untouched, not invented…
-    expect([...result.grid!.yDividers]).toEqual([...start.yDividers]);
+    // …the rows keep the boundaries the ink DOES show — four of the eight the
+    // typo asked for — rather than being blanked or invented up to nine…
+    expect(result.grid!.yDividers.length).toBeGreaterThan(2);
+    expect(result.grid!.yDividers.length - 1).toBeLessThan(9);
     // …and the message still says which half failed, and that it did.
     expect(result.message).toMatch(/5 columns/);
     expect(result.message).toMatch(/by hand/);

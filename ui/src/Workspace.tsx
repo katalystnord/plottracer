@@ -1842,14 +1842,24 @@ export function Workspace() {
     if (!heatmapActive) return null;
     if (heatmapGrid !== null) return heatmapGrid;
     if (!session.isCalibrated()) return null;
-    const bounds = heatmapBounds();
-    return bounds === null ? null : initialGridFor(bounds, heatmapCounts());
+    // ⚑⚑ NO GRID UNTIL ONE HAS BEEN MEASURED. This used to fall back to an
+    // evenly divided lattice the moment the count was known — geometry we
+    // INVENTED, drawn as confidently as one we had read off the figure. On any
+    // figure whose columns are not evenly spaced (0, 1, 2, 4, 8, 24 is an
+    // ordinary time axis) that grid is visibly wrong, and David: *"it will look
+    // like we have gotten it wrong every single time. We show it AFTER."*
+    //
+    // ⚑ Tenet 9, in its plainest form. The COUNT is a declaration the user made;
+    // the POSITIONS were ours. Drawing them as one thing said we had measured
+    // something we had not. An even lattice is still available for a continuous
+    // field — but it is asked for, never asserted.
+    return null;
     // `version` is the only signal React has that the ref-held session mutated,
     // so it is listed deliberately even though the body does not read it —
     // without it this would freeze at "not calibrated yet" (see the same note
     // above the memo block further down).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heatmapActive, heatmapBounds, heatmapCounts, heatmapGrid, session, version]);
+  }, [heatmapActive, heatmapGrid, session, version]);
 
   /**
    * Set the grid, and put it where a save and an undo will both find it.
@@ -2075,6 +2085,30 @@ export function Workspace() {
     if (result.grid !== null) applyHeatmapGrid(result.grid);
   }, [applyHeatmapGrid, heatmapBounds, heatmapCounts, heatmapShownGrid]);
 
+  /**
+   * Lay an evenly spaced grid over the plot, because the user asked for one.
+   *
+   * ⚑⚑ THE LATTICE IS NOW A REQUEST. It used to be drawn automatically the
+   * moment a count was known, which asserted boundaries nobody had measured —
+   * and on a figure with unequal columns it was visibly wrong on every use. What
+   * survives is the case that genuinely needs it: a continuous field draws no
+   * cell boundaries at all, so a sampling lattice is the honest reading, and the
+   * message says plainly that these positions are chosen rather than read.
+   */
+  const overlayEvenHeatmapGrid = useCallback(() => {
+    const bounds = heatmapBounds();
+    const counts = heatmapCounts();
+    if (!bounds || !Number.isInteger(counts.columns) || !Number.isInteger(counts.rows)) {
+      setHeatmapError('Finish the calibration first — an even grid is spaced across it.');
+      return;
+    }
+    setHeatmapError(null);
+    applyHeatmapGrid(initialGridFor(bounds, counts));
+    setHeatmapDetectMessage(
+      `Even ${counts.columns} × ${counts.rows} grid laid over the plot — these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`
+    );
+  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts]);
+
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
     const img = imageCanvasRef.current?.getImageData();
@@ -2096,13 +2130,23 @@ export function Workspace() {
       setHeatmapSummary('');
       return;
     }
-    const grid = heatmapShownGrid ?? initialGridFor(bounds, heatmapCounts());
+    // ⚑⚑ NO GRID, NO CELLS. This used to fall back to an evenly divided lattice
+    // and read the figure through it — every value filed under boundaries nobody
+    // had measured, and the numbers look exactly as trustworthy as measured ones.
+    // A heatmap's cells ARE its grid; without one there is nothing to report.
+    const grid = heatmapShownGrid;
+    if (!grid) {
+      setHeatmapError(
+        'No grid yet — detect the boundaries the figure draws, or overlay an even grid from the Grid fold-out, then read the cells.'
+      );
+      return;
+    }
     const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes), heatmapKinds());
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts, heatmapKinds, heatmapLabels, heatmapShownGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 
   /**
    * The picked cell's four corners, for the canvas.
@@ -3407,6 +3451,12 @@ export function Workspace() {
   );
 
 
+  /** The live calibration value boxes, in field order — so Enter can hand on to
+   * the next one. A ref rather than a query: the boxes are rebuilt whenever the
+   * step reshapes, and a stale testid lookup would focus a box that is no longer
+   * the one being asked for. */
+  const valueInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   const setDataValueInputAt = useCallback((index: number, value: string) => {
     setDataValueInputs((prev) => {
       const next = [...prev];
@@ -3463,10 +3513,23 @@ export function Workspace() {
       // reached by unfolding when you actually want to change Log Y or the like.
       setCalibExpanded(false);
       commit();
+      // ⚑⚑ A HEATMAP READS ITS BOUNDARIES OFF THE FIGURE, HERE. The design said
+      // the assist for a drawn-cell figure is *"DETECT the boundaries and
+      // PROPOSE the grid; the user adjusts"* — and detection sat behind a
+      // fold-out nobody was told about, while an evenly divided lattice was
+      // drawn instead. David: *"Why does it not automatically jump towards the
+      // detect grid?"* Because nothing made it. Now the calibration that
+      // establishes the plot box immediately measures what the box contains.
+      //
+      // ⚑ It runs AFTER commit so the axes exist to measure against, and it is
+      // safe when there is nothing to find: `detectGrid` reports rather than
+      // invents, and a figure with no drawn cells simply gets no grid — which is
+      // the honest answer until the user asks for a lattice.
+      if (heatmapActive) queueMicrotask(() => runHeatmapDetect());
     } else {
       bump();
     }
-  }, [session, bump, commit]);
+  }, [session, bump, commit, heatmapActive, runHeatmapDetect]);
 
   const setGlobalField = useCallback(
     (key: string, value: string) => {
@@ -6350,12 +6413,38 @@ export function Workspace() {
                         {pendingValueFields.map((vf, vi) => (
                           <input
                             key={vf.key}
+                            ref={(el) => {
+                              valueInputRefs.current[vi] = el;
+                            }}
                             data-testid={vi === 0 ? 'data-value-input' : `data-value-input-${vi}`}
                             value={dataValueInputs[vi] ?? ''}
                             onChange={(e) => setDataValueInputAt(vi, e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && confirmDataValue()}
+                            /* ⚑⚑ ENTER MOVES TO THE NEXT BOX, and only confirms on
+                               the last one. David: *"when I just pressed enter, I
+                               want it to jump to the box... I can press tab (do
+                               not remove that capability) but it is not as
+                               intuitive."* A step with two fields — a heatmap
+                               axis's coordinate and its band count, a polar
+                               point's r and θ — used to swallow Enter entirely:
+                               `confirmDataValue` refuses while a required field
+                               is blank, so the key did nothing at all and the
+                               only way on was a reach for Tab or the mouse.
+                               ⚑ Tab is untouched; this adds a second way, it
+                               does not replace one.
+                               ⚑ The text is SELECTED on arrival, so typing
+                               overwrites a prefilled value rather than appending
+                               to it — a shared corner arrives with its number
+                               already there. */
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return;
+                              e.preventDefault();
+                              const next = valueInputRefs.current[vi + 1];
+                              if (next) next.select();
+                              else confirmDataValue();
+                            }}
                             autoFocus={vi === 0}
                             placeholder={vf.label}
+                            title={vf.label}
                             style={{ width: 46 }}
                           />
                         ))}
@@ -6497,6 +6586,21 @@ export function Workspace() {
                 </span>
                 <span data-testid="heatmap-grid-summary">{heatmapGridSummary(heatmapShownGrid)}</span>
               </button>
+              {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID — outside the
+                  fold-out, because it is the answer to "did you measure this or
+                  make it up?" and that question is live the moment a grid
+                  appears. It sat INSIDE the fold-out, so a detected grid and an
+                  overlaid one looked identical unless you went looking. Same
+                  rule as drawing nothing until something is measured: the
+                  provenance travels with the thing, or it is not provenance. */}
+              {heatmapDetectMessage && (
+                <span
+                  data-testid="heatmap-detect-message"
+                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
+                >
+                  {heatmapDetectMessage}
+                </span>
+              )}
               {heatmapPanelOpen && (
               <HeatmapCard
                 gridSize={
@@ -6508,6 +6612,7 @@ export function Workspace() {
                     : null
                 }
                 onDetect={runHeatmapDetect}
+                onOverlayEvenGrid={overlayEvenHeatmapGrid}
                 onRead={runHeatmapRead}
                 onAddColumnBoundary={() => addHeatmapDivider('x')}
                 onAddRowBoundary={() => addHeatmapDivider('y')}
@@ -6531,7 +6636,6 @@ export function Workspace() {
                 onCommitPendingEdit={commitPendingEdit}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
                 yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
-                detectMessage={heatmapDetectMessage}
                 summary={heatmapSummary}
                 error={heatmapError}
                 canRead={session.isCalibrated()}

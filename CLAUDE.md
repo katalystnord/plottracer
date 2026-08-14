@@ -55,6 +55,28 @@ else is subordinate to them.
   (`docs/competitor-data-panel-study.md`), WPD, Engauge, StarryDigitizer. ⚑
   **LabPlot sits on BOTH sides** — it digitizes AND it plots — which is why it
   has repeatedly been the most informative single source.
+  ⚑⚑ **THE DIMENSIONAL TAXONOMY *IS* THE ANSWER TO (a)** — David, 2026-08-14 —
+  which is why it predicts the record shape instead of merely describing charts.
+  N×1D because a radar needs N independent scales; **1.5D** because a bar needs a
+  category coordinate AND a value with EXTENT; 2D for two coordinates; **2.5D**
+  because a heatmap needs two coordinate vectors AND a value array on a third
+  axis. One day a genuine 3D. **So the standing check is: does our record supply
+  exactly what a generator requires? If not, the model or the thinking is
+  wrong** — however healthy the exports look.
+  ⚑ **IT HAS EXACTLY TWO FAILURE MODES**, which is what makes it cheap to run:
+  a **CENTRE where the generator needs an EXTENT** (`shading='flat'` refuses
+  centres; unequal cells cannot be recovered from them), and a **COORDINATE
+  DERIVED where it should have been MEASURED**.
+  ✅ **AUDITED 2026-08-14, all twelve types: eleven correlate.** The one failure
+  is **Line** (`categorical`) — it stores a value and *derives* its category from
+  left-to-right capture order, so a library handed our record could not place the
+  points. That is a model that cannot generate its own figure, not a tidying job;
+  see the v2.3 roadmap entry. ⚑ Ternary storing all THREE components rather than
+  two plus a derived third is the model correlating BETTER than the naive
+  signature — it preserves the measured closure error, the same reason pie never
+  forces closure to 100%. ⚑ Spider spoke DIRECTION is deliberately not stored:
+  a radar spaces axes evenly by convention, so the axis NAME is the coordinate
+  and the angle is presentation (David).
   ⚠️ **v2.2 ran this on the record and NOT on the workflow, and that is exactly
   where it broke.** The answer was sitting in the same sweep: a plotting library
   asks for a 2-D array plus coordinate vectors plus a colormap — two banded axes
@@ -122,6 +144,45 @@ design's cases become named tests" — and it did not fire.
    because it was written by the mind that already knew the answer. This gate is
    what turns "could Parallel Universe David do it?" from a judgement call into a
    test-authoring constraint.
+
+### ⚑⚑ THE FIVE PATTERNS BEHIND v2.2's DEFECTS — ask these, not the symptoms
+
+David, after two days of testing, asked for *"the deeper underlying patterns
+that should be fixed instead of surface things."* Twenty-odd findings collapse
+into five. Each question below would have caught several before they were built.
+
+1. **Does this belong to the TYPE, or to an AXIS? If an axis, EVERY axis gets
+   it.** The single largest cause. A heatmap is 2.5D and its third axis is an
+   AXIS, not a property of a cell — so it gets a kind, a scale, bands, ticks,
+   markers and refusals like the other two. Collapsing a dimension into an
+   attribute produced: the grid existing only on a category axis; the tick
+   convention hidden unless categorical; a cell's value read as an OVERRIDE
+   needing provenance when it is simply a coordinate on axis 3 (editing it moves
+   the datum ALONG THE KEY, exactly as editing y moves a point); a colour key
+   with no markers; a selected cell that shows two of its three coordinates.
+2. **What already does this job, and why is it not being used?** Already the
+   REUSE rule below — but v2.2 shows its cost compounds: `dividerHandles` beside
+   `categoryTickMarkers`, count boxes beside the declared count, a grid colour of
+   its own, and single-cell selection beside the app's marquee + Shift
+   multi-select that has existed since v1.2.
+3. ⚑⚑ **Are we DRAWING or REPORTING something we did not MEASURE?** The grid was
+   divided evenly the moment a count was known and drawn as confidently as a
+   measured one; on any figure with unequal columns it is visibly wrong, so the
+   tool looked broken on every use. David: *"it will look like we have gotten it
+   wrong every single time. We show it AFTER."* Tenet 9 in its plainest form —
+   the COUNT was declared by the user, the POSITIONS were ours. **Assert only
+   what was measured; everything else is OFFERED.** And a detected grid must not
+   look identical to a generated one.
+4. **Is a CONSTRAINED gesture bound to its constraint ON SCREEN?** Dragging
+   mutates a Konva node; React re-applies only props whose VALUE CHANGED — so
+   every constrained handle drifts off its axis and stays there while the model
+   is perfectly correct. The picture lies and the data does not, which is the
+   worst pairing. Fixed in the renderer, for bars too.
+5. **Does the flow have an ENDING, and do refusals fire AT the gesture?** There
+   is nothing to press to say "done" — folding the card is tribal knowledge. The
+   shared-corners mis-click is refused eight steps later as a parallel-axes
+   error rather than at the click. Detection returns NOTHING rather than
+   proposing the boundaries it did find.
 
 ⚠️ **Where intuition used to cover this.** Spider, pie and bar were verifiable by
 eye — a slice's angle or a bar's height is either right or visibly wrong, so

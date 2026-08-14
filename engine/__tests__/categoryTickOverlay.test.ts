@@ -87,7 +87,11 @@ describe('the drag handles', () => {
     const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
     const ticks = markers.filter((m) => categoryTickIndexFromId(m.id) !== null);
     expect(ticks).toHaveLength(2);
-    expect(ticks[0]).toMatchObject({ id: 'categoryTick0', x: 225, y: 500, draggable: true });
+    // ⚑ The handle stands off at the OUTER END of its tick, not on the axis
+    // line: it stays bound to the axis by the mark itself, and on a heatmap —
+    // where two axes meet at the plot corner — it is what stops an x boundary
+    // and a y boundary at the origin landing on the same pixel.
+    expect(ticks[0]).toMatchObject({ id: 'categoryTick0', x: 225, y: 514, draggable: true });
     expect(ticks[1]!.id).toBe('categoryTick1');
     expect(markers.every((m) => m.color === CATEGORY_TICK_COLOR)).toBe(true);
   });

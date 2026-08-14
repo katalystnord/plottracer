@@ -43,6 +43,7 @@ export interface HeatmapCardProps {
    * exists even before reading any cells. */
   gridSize: { columns: number; rows: number } | null;
   onDetect: () => void;
+  onOverlayEvenGrid: () => void;
   onRead: () => void;
   /** Add a boundary on one axis — it lands in the middle of the widest cell,
    * which is where a boundary detection missed almost always belongs. */
@@ -69,7 +70,6 @@ export interface HeatmapCardProps {
   yLabelCoverage: string;
 
   /** Detection's own report — agreement, a miss, or why nothing could be read. */
-  detectMessage: string;
   /** The read-out summary, and the cells themselves. */
   summary: string;
   error: string | null;
@@ -79,6 +79,7 @@ export interface HeatmapCardProps {
 export function HeatmapCard({
   gridSize,
   onDetect,
+  onOverlayEvenGrid,
   onRead,
   onAddColumnBoundary,
   onAddRowBoundary,
@@ -91,7 +92,6 @@ export function HeatmapCard({
   onCommitPendingEdit,
   xLabelCoverage,
   yLabelCoverage,
-  detectMessage,
   summary,
   error,
   canRead,
@@ -111,9 +111,27 @@ export function HeatmapCard({
             ? `${gridSize.columns} columns × ${gridSize.rows} rows, from the calibration — drag a boundary to adjust`
             : 'Calibrate the axes to see the grid.'}
         </span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>
             Detect grid
+          </button>
+          {/* ⚑⚑ ASKED FOR, NEVER ASSERTED. An even lattice used to appear the
+              moment a count was known — geometry we invented, drawn as
+              confidently as one read off the figure, and visibly wrong on any
+              figure whose columns are unequal. David: *"it will look like we
+              have gotten it wrong every single time. We show it AFTER."*
+              ⚑ It still has to be REACHABLE, because a continuous field draws no
+              boundaries to detect and a sampling lattice is the honest answer
+              there — so it becomes a button the user presses, and the message it
+              leaves says the boundaries are not measured. */}
+          <button
+            type="button"
+            data-testid="heatmap-overlay-even"
+            onClick={onOverlayEvenGrid}
+            disabled={!canRead}
+            title="Lay an evenly spaced grid over the plot — for a continuous field with no drawn cells. These boundaries are chosen, not measured."
+          >
+            Overlay even grid
           </button>
           <button type="button" data-testid="heatmap-read" onClick={onRead} disabled={!canRead}>
             Read cells
@@ -219,11 +237,6 @@ export function HeatmapCard({
               </span>
             )}
           </>
-        )}
-        {detectMessage && (
-          <span data-testid="heatmap-detect-message" style={{ color: theme.color.text.secondary }}>
-            {detectMessage}
-          </span>
         )}
         {error && (
           <span data-testid="heatmap-error" style={{ color: theme.color.error }}>

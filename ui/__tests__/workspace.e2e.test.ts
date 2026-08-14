@@ -8083,6 +8083,17 @@ describe('heatmap capture (v2.2)', () => {
     await clickAt(lx, ly);
   }
 
+  /**
+   * How far a boundary's grab handle stands off its axis, on screen.
+   *
+   * ⚑ It sits at the OUTER END of its tick mark (`TICK_LENGTH` in
+   * `categoryTickOverlay.ts`), which is what keeps it visibly BOUND to the axis
+   * — the mark joins them — and what stops an x boundary and a y boundary at the
+   * plot's corner landing on the same pixel. Almost exactly where the retired
+   * `dividerHandles` put its floating dot, but attached to something now.
+   */
+  const HANDLE_STANDOFF = 14;
+
   /** The eight clicks of a heatmap calibration, at the figure's own pixels. */
   /** The Cells panel opens as a MATRIX (David: a matrix presented as a table
    * "is just a mess"), so a test that counts one-row-per-cell has to say so. */
@@ -8291,9 +8302,9 @@ describe('heatmap capture (v2.2)', () => {
     // retired `dividerHandles` had no tick mark to stand off from; a boundary is
     // drawn as a TICK now, by the same overlay a bar chart's category axis uses,
     // so the handle sits where the mark is.
-    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly);
+    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly + HANDLE_STANDOFF);
     await page.mouse.down();
-    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly, { steps: 8 });
+    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly + HANDLE_STANDOFF, { steps: 8 });
     await page.mouse.up();
     await page.waitForTimeout(400);
 
@@ -8362,7 +8373,7 @@ describe('heatmap capture (v2.2)', () => {
     // Click the x-divider handle at the calibrated left edge (data x = 0).
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
     await refreshCanvasBox();
-    await clickAt(left.lx, left.ly); // the tick itself, not 16px below it
+    await clickAt(left.lx, left.ly + HANDLE_STANDOFF); // the handle at the tick's end
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = 0\.0/);
 
@@ -8608,11 +8619,113 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(300);
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
     await refreshCanvasBox();
-    await clickAt(left.lx, left.ly); // the tick itself, not 16px below it
+    await clickAt(left.lx, left.ly + HANDLE_STANDOFF); // the handle at the tick's end
     await page.waitForTimeout(200);
     const remove = page.getByTestId('heatmap-remove-boundary');
     expect(await remove.isDisabled()).toBe(true);
     expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
+  });
+
+  it('P4 — a dragged boundary STAYS ON ITS AXIS, not where the mouse let go', async () => {
+    // ⚑⚑ David: *"Why are the tick marks not bound to the axis???"* Dragging
+    // mutates the Konva node's position, but React re-applies only a prop whose
+    // VALUE CHANGED — and the model CONSTRAINS the drag (an x-divider keeps only
+    // the drop's x). So the perpendicular coordinate never changes in state, is
+    // never re-applied, and the handle stays wherever the mouse let go, off the
+    // axis, while the model is perfectly correct. The picture lies and the data
+    // does not.
+    //
+    // ⚑ The same defect is on the bar chart's category ticks and has been since
+    // v2.1 — it just reads as sloppiness on a horizontal axis instead of as
+    // obviously wrong against a grid. The fix is in the renderer, so this covers
+    // every constrained handle in the app.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.waitForTimeout(400);
+
+    const axisY = truth.frame.x1.y;
+    // ⚑ truth.grid.x is in DATA units; imageToLocal takes IMAGE pixels. Convert
+    // through the frame the figure was calibrated on, as the drag test above does.
+    const px = (dataX: number) =>
+      truth.frame.x1.x +
+      ((truth.frame.x2.x - truth.frame.x1.x) * (dataX - truth.frame.x1.value)) /
+        (truth.frame.x2.value - truth.frame.x1.value);
+    const before = await imageToLocal(px(truth.grid.x[1]!), axisY);
+    await refreshCanvasBox();
+    // ⚑⚑ NOTHING IS SELECTED FIRST. An earlier version clicked a handle before
+    // dragging, and selection PERSISTS — so the "is anything selected?" check
+    // was answered by that first click no matter where the later one landed.
+    // The assertion measured its own setup.
+    //
+    // A move the model ACCEPTS re-renders, and the new x drags the node back
+    // into place by accident. A move it REFUSES changes no state at all, so
+    // nothing re-renders and the handle simply stays where the mouse let go.
+    // Dragging past a neighbour is refused — `moveDivider` will not let a
+    // boundary cross another.
+    const past = await imageToLocal(px(truth.grid.x[3]! + 1), axisY);
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + before.lx, canvasBox.y + before.ly + HANDLE_STANDOFF);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + past.lx, canvasBox.y + past.ly + 60, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+
+    // THE DECISIVE ASSERTION: click where the mouse let go. If the handle stayed
+    // there — 60px off its own axis — that click selects it.
+    await refreshCanvasBox();
+    await clickAt(past.lx, past.ly + 60);
+    await page.waitForTimeout(250);
+    expect(await page.getByTestId('heatmap-selected-boundary').count()).toBe(0);
+
+    // …and it is back on the axis, where a click still finds it. That also
+    // covers the other half: the handle sits ON the tick, not 16px below it.
+    await refreshCanvasBox();
+    await clickAt(before.lx, before.ly + HANDLE_STANDOFF);
+    await page.waitForTimeout(250);
+    expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary/);
+    // The refusal held, so the grid is unchanged.
+    expect(await page.getByTestId('heatmap-grid-summary').textContent()).toMatch(/5 × 4 cells/);
+  });
+
+  it('lets ENTER walk a two-field step, without reaching for Tab', async () => {
+    // ⚑⚑ David: *"when I just pressed enter, I want it to jump to the box...
+    // I can press tab (do not remove that capability) but it is not as
+    // intuitive."* A heatmap axis's second click asks for TWO numbers — the
+    // coordinate and the band count — and Enter used to be swallowed: confirm
+    // refuses while a required field is blank, so the key did nothing and the
+    // only way on was Tab or the mouse.
+    await resetWorkspace('heatmap');
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
+    await page.keyboard.type(String(truth.frame.x1.value));
+    await page.keyboard.press('Enter'); // one field: Enter CONFIRMS
+    await page.waitForTimeout(200);
+    expect(await textOf('calibration-bar')).toMatch(/1\/8/);
+
+    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y);
+    await page.keyboard.type(String(truth.frame.x2.value));
+    await page.keyboard.press('Enter'); // two fields: Enter ADVANCES
+    await page.waitForTimeout(150);
+    // …to the count box, which now has the focus and takes what is typed next.
+    await page.keyboard.type(String(truth.grid.x.length - 1));
+    expect(await page.getByTestId('data-value-input-1').inputValue()).toBe(
+      String(truth.grid.x.length - 1)
+    );
+    await page.keyboard.press('Enter'); // last field: Enter CONFIRMS
+    await page.waitForTimeout(200);
+    expect(await textOf('calibration-bar')).toMatch(/2\/8/);
+  });
+
+  it('still walks the same step with TAB, which was never the problem', async () => {
+    // ⚑ The companion assertion: Enter gained a job, Tab did not lose one.
+    await resetWorkspace('heatmap');
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
+    await page.keyboard.type(String(truth.frame.x1.value));
+    await page.getByTestId('confirm-data-value').click();
+    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y);
+    await page.keyboard.type(String(truth.frame.x2.value));
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('5');
+    expect(await page.getByTestId('data-value-input-1').inputValue()).toBe('5');
   });
 
   it('reports a miss instead of inventing boundaries', async () => {

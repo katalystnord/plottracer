@@ -147,10 +147,20 @@ export function categoryTickMarkers({
         kind: 'calibration' as const,
         radius: 5,
       }));
+  // ⚑⚑ THE HANDLE SITS AT THE OUTER END OF ITS TICK, not on the axis line.
+  // Two reasons, and the second is a defect the first would have hidden:
+  //  · it stays visibly BOUND to the axis — the mark connects it — where the
+  //    retired heatmap handles floated 16px away with nothing joining them;
+  //  · and on a heatmap BOTH axes meet at the plot's corner, so an x boundary
+  //    and a y boundary at the origin land on the SAME PIXEL. A click there
+  //    picked whichever came first. Standing each handle off along its own
+  //    axis's outward normal separates them by construction.
+  const n = outwardNormal(edges);
+  const stand = n ?? { x: 0, y: 0 };
   const ticks: CanvasMarker[] = tickPoints.map((p, i) => ({
     id: tickId(i),
-    x: p.x,
-    y: p.y,
+    x: p.x + stand.x * TICK_LENGTH,
+    y: p.y + stand.y * TICK_LENGTH,
     label: '',
     color,
     draggable: true,

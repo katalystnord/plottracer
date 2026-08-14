@@ -80,3 +80,4 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
     expect(categoryAxisGlyphs(bar)[0]).toHaveLength(1 + 2 + 2);
   });
 });
+

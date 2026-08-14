@@ -1335,13 +1335,37 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   );
 
   const onMarkerDragEndInternal = useCallback(
-    (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
+    (id: string, e: Konva.KonvaEventObject<DragEvent>, at: { x: number; y: number }) => {
       // A Ctrl+Left pan that happened to start on this marker armed a shape drag
       // (button 0); onDragStart stopped it, which fires this dragend. Never report
       // it as a move -- the point must not shift because the user panned over it.
       if (dragStartRef.current?.panning) return;
       const imagePoint = screenToImage(view, e.target.x(), e.target.y());
       onMarkerDragEnd?.(id, imagePoint.x, imagePoint.y);
+      // ⚑⚑ PUT THE NODE BACK WHERE THE MODEL LAST HAD IT, and let the re-render
+      // move it to wherever the model now says. David: *"Why are the tick marks
+      // not bound to the axis???"*
+      //
+      // Dragging MUTATES the Konva node's position, but React re-applies only a
+      // prop whose VALUE CHANGED. Every CONSTRAINED handle therefore drifts and
+      // STAYS drifted: a heatmap x-divider keeps only the drop's x, a category
+      // tick is projected onto its axis line, so the perpendicular coordinate
+      // never changes in state and is never re-applied. Worse on a REFUSED move
+      // -- a boundary dragged past its neighbour, or a spline-DERIVED sample
+      // that is not writable -- where NO state changes at all, nothing
+      // re-renders, and the marker simply stays where the mouse let go. The
+      // picture lies and the data does not.
+      //
+      // The reset takes the PROP position, not `e.target` at dragend -- that is
+      // the DROPPED position, so resetting to it is a no-op. The first version
+      // of this fix did exactly that, passed two tests, and fixed nothing.
+      //
+      // HERE, not in either branch: the calibration reticle and the data marker
+      // both call this, so bars, category ticks, heatmap dividers and refused
+      // data-point moves are covered once. The bar chart has had this since
+      // v2.1 -- it just reads as sloppiness on a horizontal axis rather than as
+      // obviously wrong against a grid.
+      e.target.position(at);
     },
     [view, onMarkerDragEnd]
   );
@@ -1643,7 +1667,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
                           onDragStart={cancelDragIfPanning}
                           onDragMove={(e) => setHover({ x: e.target.x(), y: e.target.y() })}
-                          onDragEnd={(e) => onMarkerDragEndInternal(point.id, e)}
+                          onDragEnd={(e) => onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY })}
                         >
                           <Circle radius={12} fill="#000000" opacity={0} listening={interactive} />
                           {point.selected && (
@@ -1723,7 +1747,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         // dragged marker's live position into `hover` so the loupe
                         // tracks the point being moved (checkpoint 58).
                         onDragMove={(e) => setHover({ x: e.target.x(), y: e.target.y() })}
-                        onDragEnd={(e) => onMarkerDragEndInternal(point.id, e)}
+                        onDragEnd={(e) => onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY })}
                       />
                       {(() => {
                         const lp = labelPlacement(screenX, screenY, 8, awayOf(point));

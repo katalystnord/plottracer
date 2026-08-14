@@ -545,10 +545,15 @@ export function heatmapAxisOverlays(
     const towardsInside = normal.x * (inside.x - a.x) + normal.y * (inside.y - a.y);
     return towardsInside > 0 ? [b, a] : [a, b];
   };
-  const farCorner = axes.dataToPixel(xHi, yHi);
-  const nearCorner = axes.dataToPixel(xLo, yLo);
-  const xEdges = orient(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xHi, yLo), farCorner);
-  const yEdges = orient(axes.dataToPixel(xHi, yLo), axes.dataToPixel(xHi, yHi), nearCorner);
+  // ⚑⚑ EACH AXIS SITS ON ITS OWN EDGE OF THE PLOT: x along y = yLo, y along
+  // x = xLo — the two edges the figure prints its ticks against. Building the y
+  // axis at xHi put its handles down the RIGHT-HAND side while the figure's row
+  // labels were on the left, which is where David saw them. The interior corner
+  // is the OPPOSITE one in each case, so the marks lean away from the cells.
+  const insideOfX = axes.dataToPixel(xLo, yHi);
+  const insideOfY = axes.dataToPixel(xHi, yLo);
+  const xEdges = orient(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xHi, yLo), insideOfX);
+  const yEdges = orient(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xLo, yHi), insideOfY);
   const build = (
     edges: readonly [{ x: number; y: number }, { x: number; y: number }],
     points: { x: number; y: number }[],
@@ -560,7 +565,7 @@ export function heatmapAxisOverlays(
 
   return {
     x: build(xEdges, xs.map((x) => axes.dataToPixel(x, yLo)), 'hmx'),
-    y: build(yEdges, ys.map((y) => axes.dataToPixel(xHi, y)), 'hmy'),
+    y: build(yEdges, ys.map((y) => axes.dataToPixel(xLo, y)), 'hmy'),
   };
 }
 
@@ -743,13 +748,25 @@ export function detectGrid(
     const report = reconcileWithCount(candidates, count);
     const proposed = proposeDividers(candidates, count);
     if (proposed === null) {
-      // ⚑ A miss is REPORTED, never filled in. A grid with a boundary missing
-      // looks exactly like a grid, and its cells are silently twice as wide as
-      // the figure's.
+      // ⚑⚑ THE BOUNDARIES THAT WERE MEASURED ARE KEPT; the missing ones are not
+      // invented. This used to return NOTHING, on the argument that *"a grid
+      // with a boundary missing looks exactly like a grid, and its cells are
+      // silently twice as wide as the figure's."* The argument is right and the
+      // remedy was wrong: discarding three correct measurements to avoid an
+      // invisible error trades a measurement for a blank. The error is made
+      // VISIBLE instead — the grid carries fewer cells than the declared count,
+      // and the sentence says how many are missing, so the shortfall is on
+      // screen twice over.
+      //
+      // ⚑ David: *"Why is the detection not working anymore?"* Before a count
+      // was declared on every axis (case A1), a value axis took the
+      // unconstrained path and proposed everything it found. Making the count
+      // universal sent every axis down the checked path, where one faint rule
+      // turned a good proposal into nothing at all.
       notes.push(
-        `Found ${report.found} of the ${report.expected} boundaries needed for ${count} ${label} — place the missing ones by hand.`
+        `Found ${report.found} of the ${report.expected} boundaries needed for ${count} ${label} — the ${report.found} are placed, add the missing ${report.missing} by hand.`
       );
-      return null;
+      return toData(proposeAllDividers(candidates), lo, hi);
     }
     notes.push(
       report.agrees
