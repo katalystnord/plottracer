@@ -1366,7 +1366,7 @@ describe('Workspace: Map axes', () => {
     // not about which origin is default. Checkpoint 68 corrected the default to
     // bottom-left to match WPD (its own <select> lists Bottom Left first) --
     // that default has its own coverage in the checkpoint-68 block below.
-    await page.getByTestId('calib-option-origin').selectOption('top-left');
+    await page.getByTestId('calib-choice-origin-top-left').check();
     expect(await textOf('tips-bar')).toMatch(/1\/2 — P1/);
 
     await clickAt(100, 300); // P1: click alone advances the step
@@ -1398,7 +1398,7 @@ describe('Workspace: Map axes', () => {
 
   it('dragging the P2 handle re-calibrates live', async () => {
     await resetWorkspace('map');
-    await page.getByTestId('calib-option-origin').selectOption('top-left'); // see the note above
+    await page.getByTestId('calib-choice-origin-top-left').check(); // see the note above
     await calibrateMapStandard();
 
     const view = await getViewState();
@@ -6047,9 +6047,14 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     // Both were silent divergences: we forced 'day' and 'top-left' while WPD's
     // own controls default to week / bottom-left.
     await resetWorkspace('ccr');
-    expect(await page.getByTestId('calib-option-rotationTime').inputValue()).toBe('week');
+    // ⚑ Read off the RADIO that is checked. Both defaults are now visible on the
+    // card without opening anything, which is the point of the change — a
+    // dropdown showed the default and hid the alternative.
+    expect(await page.getByTestId('calib-choice-rotationTime-week').isChecked()).toBe(true);
+    expect(await page.getByTestId('calib-choice-rotationTime-day').isChecked()).toBe(false);
     await resetWorkspace('map');
-    expect(await page.getByTestId('calib-option-origin').inputValue()).toBe('bottom-left');
+    expect(await page.getByTestId('calib-choice-origin-bottom-left').isChecked()).toBe(true);
+    expect(await page.getByTestId('calib-choice-origin-top-left').isChecked()).toBe(false);
   });
 
   it('offers every axes type its own options — none left hardcoded', async () => {
@@ -6065,6 +6070,19 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       ternary: ['isRange100', 'isNormal'],
       map: ['origin', 'units'],
       ccr: ['rotationTime', 'rotationDirection'],
+      // ⚑ ADDED 2026-08-14. The heatmap was never in this list — the same gap
+      // that let Box Plot silently inherit Bar's options, which is the reason
+      // the list exists. It carries the most options of any type, and four of
+      // them are the axis-kind CHOICES, so a regression here is a walk that
+      // asks the wrong questions.
+      // ⚑ The ORDER matters and is asserted: inside a group, everything before
+      // the first `newRow` option shares that axis's line. So the list is also
+      // the card's layout, one axis at a time.
+      heatmap: [
+        'xIsCategory', 'isLogX', 'xTicksCentred',
+        'yIsCategory', 'isLogY', 'yTicksCentred',
+        'keyIsCategory', 'isLogValue', 'skipRotation',
+      ],
     };
     for (const [type, keys] of Object.entries(expected)) {
       await resetWorkspace(type as 'xy');
@@ -8085,7 +8103,7 @@ describe('heatmap capture (v2.2)', () => {
   /** The same walk with Y declared CATEGORICAL: the row edge takes no value and
    * the far edge carries the COUNT, so no coordinate is ever typed for it. */
   async function calibrateHeatmapCategorical() {
-    await page.getByText('Y is categories', { exact: true }).click();
+    await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(150);
     for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
@@ -8553,8 +8571,8 @@ describe('heatmap capture (v2.2)', () => {
     // exactly the plot box, so its two opposite corners carry all four x/y
     // points — two clicks and two counts instead of four clicks and four values.
     await resetWorkspace('heatmap');
-    await page.getByText('X is categories', { exact: true }).click();
-    await page.getByText('Y is categories', { exact: true }).click();
+    await page.getByTestId('calib-choice-xIsCategory-true').check();
+    await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(200);
     // The checkbox says what it will do, built from the pairings the type
     // declares rather than a sentence naming one of them.

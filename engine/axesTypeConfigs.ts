@@ -198,6 +198,28 @@ export interface GlobalFieldInfo {
 export interface AxesOptionVisibility {
   /** Shown only while this other option's checkbox is on. */
   onlyWhen?: string;
+  /**
+   * Which row this option belongs on, as a heading the user reads.
+   *
+   * ⚑⚑ DECLARED BY THE TYPE, because which options belong together is a fact
+   * about the FIGURE, not about the card. A heatmap has three axes and each has
+   * the same kind of properties, so one row per axis says so on screen — and
+   * `Log X` stops being a loose flag in a row of unrelated checkboxes and
+   * becomes a property of the X axis, where it belongs.
+   *
+   * Ungrouped options keep the single flowing row every other type has today.
+   */
+  group?: string;
+  /**
+   * Start this option on a NEW LINE within its group.
+   *
+   * ⚑ Declared rather than inferred from width, because it is a statement about
+   * MEANING: the tick convention belongs to its axis but answers a different
+   * question, so it reads as a continuation line under it rather than as more
+   * things on the same row. It is also what keeps the row inside the card —
+   * David: *"we need to get this to fit on the calibration card width."*
+   */
+  newRow?: boolean;
 }
 
 export type AxesOption =
@@ -1149,8 +1171,25 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // calibrated as value × value, so a categorical figure forced the user to
     // invent numeric coordinates it never printed: the tool demanding
     // fabricated data, which is tenet 9 broken by the prompt itself.
-    { key: 'xIsCategory', label: 'X is categories', kind: 'checkbox', default: false },
-    { key: 'yIsCategory', label: 'Y is categories', kind: 'checkbox', default: false },
+    // ⚑⚑ RADIOS, VIA THE EXISTING `choice` KIND — not a new option type, and not
+    // a checkbox. A checkbox names ONE of two states: unchecked "X is
+    // categories" never says the axis IS a value axis, you infer it from
+    // absence. For a choice that changes what the walk ASKS YOU TO CLICK, the
+    // current state has to be readable rather than inferable — and the default
+    // becomes SHOWN and overrulable, which is the distinction tenet 9 already
+    // draws between a default and an invention. David: *"radio buttons... so
+    // that you can clearly see them, and select only one."*
+    //
+    // ⚑ The two are INDEPENDENT, one group each. An axis is Values or
+    // Categories; but BOTH axes may be Categories — gene × sample, confusion
+    // matrices, correlation grids. A single group choosing WHICH axis is
+    // categorical would look tidier and would silently delete half the type.
+    { key: 'xIsCategory', label: '', group: 'X axis', kind: 'choice', default: 'false',
+      choices: [{ value: 'false', label: 'Values' }, { value: 'true', label: 'Categories' }] },
+    { key: 'isLogX', label: 'Log', group: 'X axis', kind: 'checkbox', default: false },
+    { key: 'yIsCategory', label: '', group: 'Y axis', kind: 'choice', default: 'false',
+      choices: [{ value: 'false', label: 'Values' }, { value: 'true', label: 'Categories' }] },
+    { key: 'isLogY', label: 'Log', group: 'Y axis', kind: 'checkbox', default: false },
     // ⚑⚑ WHERE THE FIGURE PRINTS ITS TICKS, which decides what the two clicks
     // MEAN. David: *"for some of them, the tick markers actually sit centred in
     // category mode, and the edge of boundaries are in between, right?"* Right,
@@ -1170,13 +1209,33 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // at −1…13 under the other; every cell's recorded bounds move and nothing on
     // screen looks wrong. Neither is rare — matplotlib's `imshow` labels cell
     // centres, `pcolormesh` labels boundaries.
-    { key: 'xTicksCentred', label: 'X ticks at band centres', kind: 'checkbox', default: false },
-    { key: 'yTicksCentred', label: 'Y ticks at band centres', kind: 'checkbox', default: false },
-    { key: 'isLogX', label: 'Log X', kind: 'checkbox', default: false },
-    { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
-    // ⚑ The key's own log option, and it belongs beside the other two rather
-    // than anywhere special: a log colour scale is the ordinary log axis.
-    { key: 'isLogValue', label: 'Log colour scale', kind: 'checkbox', default: false },
+    // ⚑ ORDER IS THE LAYOUT inside a group: everything before the first
+    // `newRow` shares the axis's own line, so each axis reads "kind, then log"
+    // with its tick convention hanging underneath.
+    // ⚑ The same shape, so the same control — and it is the question v2.1's
+    // category ticks already render as two radios, with the reason written on
+    // that control: *"both readings have to be visible without a click, because
+    // the user is being asked which one their figure prints."*
+    { key: 'xTicksCentred', label: 'ticks at', group: 'X axis', newRow: true, kind: 'choice', default: 'false',
+      choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
+    { key: 'yTicksCentred', label: 'ticks at', group: 'Y axis', newRow: true, kind: 'choice', default: 'false',
+      choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
+    // ⚑⚑ THE THIRD AXIS GETS ITS OWN ROW, with the word COLOUR on it — David:
+    // *"that also captures the word colour on that row, which was what I was
+    // after."* A log colour scale is the ordinary log axis, so it reads exactly
+    // as the other two do. The row is short today; it is where the key's own
+    // Values/Categories goes when a discrete key stops being refused.
+    // ⚑⚑ THE THIRD AXIS IS AN AXIS, so it is asked the same question as the
+    // other two. A discrete key — significance bands, cluster IDs, land cover,
+    // oncoprint mutation types — maps a colour to a LABEL rather than a number,
+    // and those figures exist in quantity. v2.2 REFUSES them, but the refusal
+    // now comes from a declared axis kind the user can see and choose, not from
+    // a branch buried in the sampler. Nothing here is unreachable: picking
+    // Categories is a real state that produces a real refusal, naming what it
+    // would cost.
+    { key: 'keyIsCategory', label: '', group: 'Colour key', kind: 'choice', default: 'false',
+      choices: [{ value: 'false', label: 'Values' }, { value: 'true', label: 'Categories' }] },
+    { key: 'isLogValue', label: 'Log', group: 'Colour key', kind: 'checkbox', default: false },
     { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
   ],
   /**
@@ -1321,6 +1380,9 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       if (Number.isInteger(n) && n < 2) {
         return `Ticks at band centres need at least two ${noun} — with one, both clicks would be the same centre. Click the outer edges instead, or say how many ${noun} the figure really has.`;
       }
+    }
+    if (optionBool(options, 'keyIsCategory')) {
+      return 'A colour key drawn as discrete bands identifies a BAND — a range — not a value, and PlotTracer will not report a number the figure does not contain. v2.2 reads continuous ramps only: read these cells against the key by eye, or set the colour key back to Values if its ramp is continuous.';
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);

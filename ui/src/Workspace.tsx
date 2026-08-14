@@ -39,6 +39,7 @@ import {
   type CategoryMarkError,
 } from '../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../core/categoryAxis.js';
+import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
@@ -5639,6 +5640,89 @@ export function Workspace() {
   // used -- an axis/category/box the figure prints illegibly is still real --
   // so unnamed reads as a dash, exactly like a value nobody recorded, and
   // looks like the rest of the table until clicked.
+  /**
+   * One calibration option, whatever kind it is. Lifted out of the options block
+   * unchanged so that the ARRANGEMENT can be declared per type (see
+   * `AxesOptionVisibility.group`) without any control being rendered a second
+   * way. There is exactly one place that draws a checkbox, a radio group and a
+   * text field, and this is it.
+   */
+  function renderOptions(opts: readonly AxesOption[]) {
+    return opts.map((opt) =>
+                opt.kind === 'checkbox' ? (
+                  <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      data-testid={`calib-option-${opt.key}`}
+                      checked={axesOptions[opt.key] === 'true'}
+                      onChange={(e) => setAxesOption(opt.key, String(e.target.checked))}
+                    />
+                    {opt.label}
+                  </label>
+                ) : opt.kind === 'choice' ? (
+                  /* ⚑⚑ RADIOS, NOT A DROPDOWN — the rule v2.1's category ticks
+                     already wrote down: *"both readings have to be visible
+                     without a click, because the user is being asked which one
+                     their figure prints."* A `<select>` hides the alternative
+                     until opened, so the current state reads as a fact rather
+                     than as one of two answers. David: *"radio buttons... so
+                     that you can clearly see them, and select only one."*
+
+                     ⚑ NO "three or more falls back to a select" BRANCH. Every
+                     `choice` in the config table has exactly two options, so
+                     that branch could not fire — and a guard that cannot fire is
+                     the shape this codebase has been bitten by five times. When
+                     a third option first appears, it can be decided with a real
+                     case in front of us.
+
+                     ⚑ The `name` scopes exclusivity to this option, which is
+                     what keeps X and Y independent: an axis is Values OR
+                     Categories, but BOTH axes may be Categories — that is the
+                     commonest heatmap there is. */
+                  <span key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span>{opt.label}</span>
+                    {/* ⚑ THE GROUP keeps `calib-option-<key>`, because that is how
+                        every option kind is identified and how the
+                        "each type offers its own options" inventory finds them.
+                        The individual radios take their own prefix rather than
+                        `calib-option-<key>-<value>`, which would make one option
+                        answer that inventory two or three times — and the values
+                        themselves contain hyphens (`bottom-left`), so the key
+                        could not be recovered by trimming. */}
+                    <fieldset
+                      data-testid={`calib-option-${opt.key}`}
+                      style={{ border: 'none', margin: 0, padding: 0, display: 'inline-flex', alignItems: 'center', gap: 10 }}
+                    >
+                      {opt.choices.map((c) => (
+                        <label key={c.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            name={`calib-option-${opt.key}`}
+                            data-testid={`calib-choice-${opt.key}-${c.value}`}
+                            checked={(axesOptions[opt.key] ?? opt.default) === c.value}
+                            onChange={() => setAxesOption(opt.key, c.value)}
+                          />
+                          <span style={{ whiteSpace: 'nowrap' }}>{c.label}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  </span>
+                ) : (
+                  <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {opt.label}
+                    <input
+                      type="text"
+                      data-testid={`calib-option-${opt.key}`}
+                      value={axesOptions[opt.key] ?? ''}
+                      placeholder={opt.placeholder}
+                      onChange={(e) => setAxesOption(opt.key, e.target.value)}
+                      style={{ fontSize: 12, width: 70 }}
+                    />
+                  </label>
+                )
+    );
+  }
+
   function renderEditableName(
     index: number,
     rawName: string,
@@ -6738,54 +6822,54 @@ export function Workspace() {
               data-testid="axes-options"
               style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 12, color: theme.color.text.secondary }}
             >
-              {config
-                .options!
-                // ⚑ An option that cannot change anything is not shown: the tick
-                // convention means nothing until its axis is declared
-                // categorical. Same rule as disabling Grid Removal without an
-                // image — do not present a control whose outcome is decided.
-                .filter((opt) => opt.onlyWhen === undefined || axesOptions[opt.onlyWhen] === 'true')
-                .map((opt) =>
-                opt.kind === 'checkbox' ? (
-                  <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      data-testid={`calib-option-${opt.key}`}
-                      checked={axesOptions[opt.key] === 'true'}
-                      onChange={(e) => setAxesOption(opt.key, String(e.target.checked))}
-                    />
-                    {opt.label}
-                  </label>
-                ) : opt.kind === 'choice' ? (
-                  <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {opt.label}
-                    <select
-                      data-testid={`calib-option-${opt.key}`}
-                      value={axesOptions[opt.key] ?? opt.default}
-                      onChange={(e) => setAxesOption(opt.key, e.target.value)}
-                      style={{ fontSize: 12 }}
-                    >
-                      {opt.choices.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : (
-                  <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {opt.label}
-                    <input
-                      type="text"
-                      data-testid={`calib-option-${opt.key}`}
-                      value={axesOptions[opt.key] ?? ''}
-                      placeholder={opt.placeholder}
-                      onChange={(e) => setAxesOption(opt.key, e.target.value)}
-                      style={{ fontSize: 12, width: 70 }}
-                    />
-                  </label>
-                )
-              )}
+              {(() => {
+                // ⚑⚑ ONE ROW PER AXIS, WHERE THE TYPE ASKS FOR IT. A heatmap has
+                // three axes and each has the same kind of properties, so the
+                // card says so: the row IS the axis, and everything on it
+                // belongs to that axis. Types that declare no `group` keep the
+                // single flowing row they have today — nothing else moves.
+                //
+                // ⚑ Rendering is unchanged per control; only the arrangement is
+                // read from the declaration. The grouping is a fact about the
+                // FIGURE, so the type owns it.
+                const shown = config.options!.filter(
+                  (opt) => opt.onlyWhen === undefined || axesOptions[opt.onlyWhen] === 'true'
+                );
+                const groups = [...new Set(shown.map((o) => o.group).filter(Boolean))] as string[];
+                if (groups.length === 0) return renderOptions(shown);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+                    {groups.map((g) => {
+                      // ⚑ A group is one or more LINES: `newRow` starts a new one.
+                      // The first carries the axis name; the rest are indented by
+                      // a spacer of the same width, so the continuation reads as
+                      // belonging to the axis above it without repeating it.
+                      const lines: AxesOption[][] = [];
+                      for (const opt of shown.filter((o) => o.group === g)) {
+                        if (opt.newRow || lines.length === 0) lines.push([opt]);
+                        else lines[lines.length - 1]!.push(opt);
+                      }
+                      const slug = g.replace(/\s+/g, '-').toLowerCase();
+                      return lines.map((line, i) => (
+                        <div key={`${g}-${i}`} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                          <span
+                            {...(i === 0 ? { 'data-testid': `axes-option-group-${slug}` } : {})}
+                            style={{ minWidth: 74, fontWeight: i === 0 ? 600 : 400 }}
+                          >
+                            {i === 0 ? g : ''}
+                          </span>
+                          {renderOptions(line)}
+                        </div>
+                      ));
+                    })}
+                    {shown.some((o) => !o.group) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                        {renderOptions(shown.filter((o) => !o.group))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
           {/* Global calibration fields (e.g. Circular Chart Recorder's "Chart
