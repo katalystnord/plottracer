@@ -189,21 +189,52 @@ export function heatmapBounds(
   if (values.some((v) => !Number.isFinite(v))) return null;
   const [x1, x2, y1, y2] = values as [number, number, number, number];
   const meta = axes.getMetadata();
+  const counts = heatmapBandCounts(axes);
   /**
-   * ⚑⚑ A CATEGORY AXIS SPANS ITS WHOLE ORDINAL RANGE, whatever was clicked. Two
-   * CENTRED ticks are half a band inside each edge, so the calibrated values run
-   * 0.5…N-0.5 while the grid still has to cover 0…N — reading the clicked values
-   * as the extent would drop half a band off each end and shift every boundary.
-   * The count is recovered from the convention the calibration recorded.
+   * ⚑⚑ THE CLICKS ARE NOT THE PLOT BOX unless the figure marks boundaries, and
+   * that is true of BOTH axis kinds. A centred tick sits half a band inside the
+   * edge, so the grid has to reach half a band further out than what was
+   * clicked; reading the clicked values as the extent drops half a band off each
+   * end and shifts every boundary between them.
+   *
+   * ⚑ The two kinds differ only in what the numbers ARE. A category axis was
+   * given an ordinal frame by `buildAxes`, so its clicks land at 0.5…N-0.5 and
+   * the grid is simply 0…N. A value axis keeps the coordinates the user typed,
+   * so the half-band is computed from them — and the CALIBRATION is untouched
+   * either way: x=0 is still at that pixel, only the grid's extent moves.
+   *
+   * ⚑ This used to run for category axes ONLY, which is the same wrong branch
+   * that gave a measured axis no grid at all (case A1). A value axis has bands,
+   * so it has a convention.
    */
-  const spanOf = (lo: number, hi: number, kindKey: string, tickKey: string): [number, number] => {
-    if (meta[kindKey] !== 'category') return [Math.min(lo, hi), Math.max(lo, hi)];
-    const width = Math.abs(hi - lo);
-    const count = meta[tickKey] === 'centred' ? Math.round(width) + 1 : Math.round(width);
-    return [0, Math.max(1, count)];
+  const spanOf = (
+    lo: number,
+    hi: number,
+    kindKey: string,
+    tickKey: string,
+    count: number
+  ): [number, number] | null => {
+    const centred = meta[tickKey] === 'centred';
+    if (meta[kindKey] === 'category') {
+      const width = Math.abs(hi - lo);
+      const bands = centred ? Math.round(width) + 1 : Math.round(width);
+      return [0, Math.max(1, bands)];
+    }
+    const min = Math.min(lo, hi);
+    const max = Math.max(lo, hi);
+    if (!centred) return [min, max];
+    // ⚑ REFUSED rather than divided by zero: two centres need two bands, and
+    // `checkValues` says so in words before the walk ever gets here. Returning
+    // an infinite plot box would be a calibration that cannot fail.
+    if (!Number.isInteger(count) || count < 2) return null;
+    const halfBand = (max - min) / (count - 1) / 2;
+    return [min - halfBand, max + halfBand];
   };
-  const [xMin, xMax] = spanOf(x1, x2, 'heatmapXKind', 'heatmapXTicks');
-  const [yMin, yMax] = spanOf(y1, y2, 'heatmapYKind', 'heatmapYTicks');
+  const xSpan = spanOf(x1, x2, 'heatmapXKind', 'heatmapXTicks', counts.columns);
+  const ySpan = spanOf(y1, y2, 'heatmapYKind', 'heatmapYTicks', counts.rows);
+  if (!xSpan || !ySpan) return null;
+  const [xMin, xMax] = xSpan;
+  const [yMin, yMax] = ySpan;
   return { xMin, xMax, yMin, yMax };
 }
 

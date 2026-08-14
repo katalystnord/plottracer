@@ -1159,8 +1159,19 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // between them. Asking for the outer EDGE of the first band on a figure that
     // marks only centres is asking the user to eyeball something unprinted —
     // when the thing they can actually see is the tick itself.
-    { key: 'xTicksCentred', label: 'X ticks at category centres', kind: 'checkbox', default: false, onlyWhen: 'xIsCategory' },
-    { key: 'yTicksCentred', label: 'Y ticks at category centres', kind: 'checkbox', default: false, onlyWhen: 'yIsCategory' },
+    // ⚑⚑ ASKED OF BOTH AXIS KINDS. This was declared `onlyWhen: 'xIsCategory'`,
+    // which is the SAME wrong branch that gave a measured axis no grid: a value
+    // axis has bands too (case A1), so it has the same question — were the two
+    // clicks band CENTRES or band BOUNDARIES? David: *"we want to make it
+    // VISUALLY coherent for the user, when they are setting value tick markers
+    // also?"*
+    // ⚑ IT IS A WRONG READING, NOT A PREFERENCE. Clicking x=0 and x=12 on a
+    // seven-column figure puts the boundaries at 0…12 under one convention and
+    // at −1…13 under the other; every cell's recorded bounds move and nothing on
+    // screen looks wrong. Neither is rare — matplotlib's `imshow` labels cell
+    // centres, `pcolormesh` labels boundaries.
+    { key: 'xTicksCentred', label: 'X ticks at band centres', kind: 'checkbox', default: false },
+    { key: 'yTicksCentred', label: 'Y ticks at band centres', kind: 'checkbox', default: false },
     { key: 'isLogX', label: 'Log X', kind: 'checkbox', default: false },
     { key: 'isLogY', label: 'Log Y', kind: 'checkbox', default: false },
     // ⚑ The key's own log option, and it belongs beside the other two rather
@@ -1294,6 +1305,22 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     for (const [index, noun] of [[1, 'columns'], [3, 'rows']] as const) {
       const problem = countProblem(index, noun);
       if (problem) return problem;
+    }
+    // ⚑ A CENTRED CLICK NEEDS A BAND TO BE THE CENTRE OF, and two of them need
+    // two bands. With one band the two clicks are the same centre, so the half-
+    // band the grid extends by is (hi - lo) / 0 — an infinite plot box reported
+    // as a successful calibration.
+    for (const [index, noun, option] of [
+      [1, 'columns', 'xTicksCentred'],
+      [3, 'rows', 'yTicksCentred'],
+    ] as const) {
+      if (!optionBool(options, option)) continue;
+      const raw = String((cal.getPoint(index) as { dz?: unknown } | null)?.dz ?? '');
+      if (raw.trim() === '') continue;
+      const n = parseFloat(raw);
+      if (Number.isInteger(n) && n < 2) {
+        return `Ticks at band centres need at least two ${noun} — with one, both clicks would be the same centre. Click the outer edges instead, or say how many ${noun} the figure really has.`;
+      }
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);

@@ -164,3 +164,67 @@ describe('the count is a declaration, and a bad one is refused', () => {
     expect(s.runCalibration()).toBe(false);
   });
 });
+
+describe('B4 — a MEASURED axis says where its clicks landed too', () => {
+  /**
+   * ⚑⚑ THE SAME WRONG BRANCH, IN A SECOND PLACE. David, on the layout:
+   * *"we want to make it VISUALLY coherent for the user, when they are setting
+   * value tick markers also?"* Right — and the reason it was not is that the
+   * tick convention is declared `onlyWhen: 'xIsCategory'`, so a measured axis
+   * cannot say whether its two clicks were band CENTRES or band BOUNDARIES.
+   * It now has bands (case A1), so it has the question.
+   *
+   * ⚑ IT IS A WRONG READING, NOT A UI NICETY. Clicking x=0 and x=14 on a
+   * 7-column figure gives boundaries at 0,2,…,14 if those were edges, and a
+   * grid running −1.17…15.17 if they were centres. Every cell's recorded
+   * x_min/x_max moves, and nothing on screen looks wrong. Neither convention is
+   * rare: matplotlib's `imshow` labels cell centres, `pcolormesh` labels
+   * boundaries.
+   *
+   * ⚑ THE CALIBRATION IS UNTOUCHED EITHER WAY — x=0 is still at that pixel.
+   * Only the GRID extent changes, which is the two-layer model doing its job.
+   */
+  it('extends the grid half a band past clicks that marked CENTRES', () => {
+    const s = walk(
+      { xTicksCentred: 'true' },
+      { x1: ['0'], x2: ['12', '7'], y1: ['0'], y2: ['6', '5'] }
+    );
+    const { x } = dividersOf(s);
+    // Seven columns whose FIRST and LAST centres are 0 and 12: six gaps, so a
+    // band is 2 wide and the plot box runs −1 … 13.
+    expect(x).toHaveLength(8);
+    expect(x[0]).toBeCloseTo(-1, 9);
+    expect(x[7]).toBeCloseTo(13, 9);
+  });
+
+  it('takes the clicks as the boundaries under the other convention', () => {
+    const s = walk({}, { x1: ['0'], x2: ['12', '7'], y1: ['0'], y2: ['6', '5'] });
+    const { x } = dividersOf(s);
+    expect(x[0]).toBeCloseTo(0, 9);
+    expect(x[7]).toBeCloseTo(12, 9);
+  });
+
+  it('offers the choice on a measured axis at all', () => {
+    // The control was hidden behind `onlyWhen: 'xIsCategory'`, so the question
+    // could not be answered on the axis kind that now needs it most.
+    const ticks = (HEATMAP_AXES_CONFIG.options ?? []).find((o) => o.key === 'xTicksCentred')!;
+    expect((ticks as { onlyWhen?: string }).onlyWhen).toBeUndefined();
+    // …and its label no longer says "category", because the question never was.
+    expect(ticks.label).not.toMatch(/categor/i);
+  });
+
+  it('REFUSES centred clicks on a single band, which mark nothing', () => {
+    // One band has one centre, so two clicks at different coordinates cannot
+    // both be it. Half a band of a band that has no width is not a number.
+    const s = walk(
+      { xTicksCentred: 'true' },
+      { x1: ['0'], x2: ['12', '7'], y1: ['0'], y2: ['6', '5'] }
+    );
+    const bad = walk(
+      { xTicksCentred: 'true' },
+      { x1: ['0'], x2: ['12', '1'], y1: ['0'], y2: ['6', '5'] }
+    );
+    expect(s.runCalibration()).toBe(true);
+    expect(bad.runCalibration()).toBe(false);
+  });
+});

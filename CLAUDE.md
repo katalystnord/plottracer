@@ -29,8 +29,40 @@ else is subordinate to them.
    secondary to recording and belongs downstream — or nowhere.
 10. **We seek the simplest, most robust solution that carries the least
     interpretation or modelling** needed to achieve Tenet 1.
+11. **We model in both directions before we build.** Before implementing a model
+    we establish (a) what the **REVERSE** model needs — what a consumer would
+    require to regenerate the figure from our record — and (b) whether anyone
+    has **already established a model** for the thing we are about to model. We
+    take the learnings from both.
 
 **Using them**
+- **Tenet 11 is the design check for any RECORD**, and it has paid twice.
+  Reverse: the heatmap record was tested by regenerating the hardest figure
+  (unequal cells, both axes continuous) from the record alone — max difference
+  **0.0**, recovered edges exact, while a centres-only record was wrong by up to
+  0.375 data units. Prior art: **matplotlib settled bounds-vs-centres by
+  itself** — `shading='flat'` REQUIRES n+1 edges and refuses centres, so a
+  record carrying only centres fails against a real consumer. The bar model came
+  the same way, by lifting the chart libraries' models in reverse.
+  ⚑ **The two halves cover for each other.** Heatmaps have essentially NO prior
+  art among digitizers — but the generating libraries have a model, and that is
+  where (b) was answered when (a) had no peer to compare against.
+  ⚑⚑ **IT APPLIES TO THE WORKFLOW TOO, and the reverse direction is the same
+  trick**: for a record, the reverse is *what a library needs to REGENERATE the
+  figure*; for a workflow, it is *how a tool that CREATES this figure ASKS the
+  user for the same information*. Both sweeps are already project practice — 22
+  tools surveyed for pie, the plotdigitizer data-panel study
+  (`docs/competitor-data-panel-study.md`), WPD, Engauge, StarryDigitizer. ⚑
+  **LabPlot sits on BOTH sides** — it digitizes AND it plots — which is why it
+  has repeatedly been the most informative single source.
+  ⚠️ **v2.2 ran this on the record and NOT on the workflow, and that is exactly
+  where it broke.** The answer was sitting in the same sweep: a plotting library
+  asks for a 2-D array plus coordinate vectors plus a colormap — two banded axes
+  and a colour axis — and `shading='flat'`'s demand for n+1 edges is the SAME
+  fact appearing on the workflow side as *"you must say where the boundaries
+  are."* The record half was applied and passed; the workflow half was not run.
+  So: a green reverse test on the record is not evidence the FEATURE is right —
+  it is evidence that half the tenet was satisfied.
 - **Tenet 1 is the yardstick.** Grade any change by "does this help graph in →
   reliable data out?"
 - **Tenets 9 + 10 are the design check for any capture feature:** am I recording
