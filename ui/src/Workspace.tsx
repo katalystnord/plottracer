@@ -28,7 +28,6 @@ import {
   CATEGORY_PANEL_HINT,
   CATEGORY_TICK_DRAG_HINT,
   CONVENTION_LABELS,
-  CATEGORY_TICK_COLOR,
   categoryAxisGlyphs,
   categoryPanelSummary,
   categoryPanelView,
@@ -40,6 +39,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../core/categoryAxis.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
+import type { GlyphSegment } from '../../engine/histogramGlyph.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
@@ -212,7 +212,7 @@ import {
   buildColorScale,
   describeDivider,
   detectGrid,
-  dividerHandles,
+  heatmapAxisOverlays,
   dragDivider,
   gridFromAxes,
   gridToAxes,
@@ -634,7 +634,6 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  * paler shade of my own choosing made it a different-looking thing that behaves
  * identically, and it was harder to see into the bargain.
  */
-const HEATMAP_GRID_COLOR = CATEGORY_TICK_COLOR;
 
 const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   XY_AXES_CONFIG,
@@ -5222,21 +5221,40 @@ export function Workspace() {
    * data units and the user has to find it among a dozen identical squares. The
    * card and the canvas are one gesture, so the pick has to be visible in both.
    */
-  const heatmapHandles = useMemo<CanvasMarker[]>(() => {
-    if (!heatmapShownGrid) return [];
+  const heatmapOverlays = useMemo(() => {
+    if (!heatmapShownGrid) return null;
     const axesNow = session.getAxes();
-    if (!axesNow) return [];
-    return dividerHandles(heatmapShownGrid, axesNow).map((h) => ({
-      id: h.id,
-      x: h.x,
-      y: h.y,
-      label: '',
-      color: HEATMAP_GRID_COLOR,
-      draggable: true,
-      kind: 'calibration' as const,
-      radius: h.id === selectedDividerId ? 7 : 5,
-    }));
-  }, [heatmapShownGrid, selectedDividerId, session]);
+    return axesNow ? heatmapAxisOverlays(heatmapShownGrid, axesNow) : null;
+  }, [heatmapShownGrid, session, version]);
+
+  /**
+   * The grid's boundaries as TICK MARKS — the marked axis a bar chart already
+   * draws, not a row of dots.
+   *
+   * ⚑⚑ David, twice: *"We still have points and not selectable tick markers
+   * that we said that we were going to reuse from bar tick characterisation.
+   * We said that we were going to stop inventing new things and REUSE things
+   * that we already have."* The old `dividerHandles` produced bare markers 16px
+   * outside the plot and borrowed only the COLOUR from v2.1's category ticks —
+   * no axis line, no tick marks, a second mechanism for a solved problem.
+   *
+   * ⚑ THE SELECTED ONE IS STILL DRAWN BIGGER, because the card names a boundary
+   * in data units and the user has to find it among a dozen identical marks.
+   */
+  const heatmapGridGlyphs = useMemo<GlyphSegment[][]>(
+    () =>
+      heatmapOverlays
+        ? [...categoryAxisGlyphs(heatmapOverlays.x), ...categoryAxisGlyphs(heatmapOverlays.y)]
+        : [],
+    [heatmapOverlays]
+  );
+
+  const heatmapHandles = useMemo<CanvasMarker[]>(() => {
+    if (!heatmapOverlays) return [];
+    return [...categoryTickMarkers(heatmapOverlays.x), ...categoryTickMarkers(heatmapOverlays.y)].map(
+      (m) => ({ ...m, radius: m.id === selectedDividerId ? 7 : 4 })
+    );
+  }, [heatmapOverlays, selectedDividerId]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -5523,9 +5541,13 @@ export function Workspace() {
         : markers,
     [markers, categoryMarkers, heatmapHandles]
   );
+  /** ⚑ ONE GLYPH LAYER, three contributors — a histogram's bins, a bar chart's
+   * marked category axis, and a heatmap's grid. The third joined here rather
+   * than getting a layer of its own, because it IS the second thing: the same
+   * `categoryAxisGlyphs`, fed a different axis. */
   const allBinGlyphs = useMemo(
-    () => (categoryGlyphs.length > 0 ? [...binGlyphs, ...categoryGlyphs] : binGlyphs),
-    [binGlyphs, categoryGlyphs]
+    () => [...binGlyphs, ...categoryGlyphs, ...heatmapGridGlyphs],
+    [binGlyphs, categoryGlyphs, heatmapGridGlyphs]
   );
 
   const seriesLines = useMemo<SeriesLine[]>(

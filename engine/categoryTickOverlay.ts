@@ -55,6 +55,23 @@ function outwardNormal(
 export interface CategoryOverlayInput {
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint] | null;
   tickPoints: readonly CategoryAxisPoint[];
+  /**
+   * Draw the two ends as their own labelled, non-draggable marks.
+   *
+   * ⚑⚑ TRUE FOR A BAR CHART, FALSE FOR A HEATMAP, and the difference is real
+   * rather than cosmetic. A bar chart's axis edges are FROZEN: every tick is a
+   * function of them, so dragging one rescales the lot — they are a different
+   * kind of thing and are marked as one. A heatmap's outer boundaries are
+   * ORDINARY DIVIDERS that drag like any other (the two-layer model: the
+   * CALIBRATION is the axis, the grid merely derives from it), so marking them
+   * separately would assert a distinction the model does not make.
+   */
+  markEnds?: boolean;
+  /** Identity for tick `i`. Defaults to v2.1's `categoryTick<i>`; a heatmap
+   * brings `hmx:3`, which is what its drag handler answers to. */
+  tickId?: (index: number) => string;
+  /** Overrides the violet, for a caller whose marks mean something else. */
+  color?: string;
 }
 
 /**
@@ -63,7 +80,11 @@ export interface CategoryOverlayInput {
  * Empty when no axis is marked — an unmarked session draws nothing, which is
  * what makes the whole feature invisible until someone asks for it.
  */
-export function categoryAxisGlyphs({ edges, tickPoints }: CategoryOverlayInput): GlyphSegment[][] {
+export function categoryAxisGlyphs({
+  edges,
+  tickPoints,
+  markEnds = true,
+}: CategoryOverlayInput): GlyphSegment[][] {
   if (!edges) return [];
   const n = outwardNormal(edges);
   if (!n) return [];
@@ -74,10 +95,12 @@ export function categoryAxisGlyphs({ edges, tickPoints }: CategoryOverlayInput):
   };
   // The edges are drawn across the axis, the ticks only outward from it — so an
   // end never reads as one more category divider.
-  const ends: GlyphSegment[] = [edges[0], edges[1]].map((p) => ({
-    from: { x: p.x - n.x * EDGE_LENGTH, y: p.y - n.y * EDGE_LENGTH },
-    to: { x: p.x + n.x * EDGE_LENGTH, y: p.y + n.y * EDGE_LENGTH },
-  }));
+  const ends: GlyphSegment[] = markEnds
+    ? [edges[0], edges[1]].map((p) => ({
+        from: { x: p.x - n.x * EDGE_LENGTH, y: p.y - n.y * EDGE_LENGTH },
+        to: { x: p.x + n.x * EDGE_LENGTH, y: p.y + n.y * EDGE_LENGTH },
+      }))
+    : [];
   const ticks: GlyphSegment[] = tickPoints.map((p) => ({
     from: { x: p.x, y: p.y },
     to: { x: p.x + n.x * TICK_LENGTH, y: p.y + n.y * TICK_LENGTH },
@@ -94,7 +117,13 @@ export function categoryAxisGlyphs({ edges, tickPoints }: CategoryOverlayInput):
  * from the fold-out, where it can say so first. A handle here would make the
  * destructive gesture the easiest one to reach.
  */
-export function categoryTickMarkers({ edges, tickPoints }: CategoryOverlayInput): CanvasMarker[] {
+export function categoryTickMarkers({
+  edges,
+  tickPoints,
+  markEnds = true,
+  tickId = (i) => `categoryTick${i}`,
+  color = CATEGORY_TICK_COLOR,
+}: CategoryOverlayInput): CanvasMarker[] {
   if (!edges) return [];
   // ⚑ The two EDGES get a visible, LABELLED, non-draggable mark. Drawing them
   // only as glyph segments made them invisible in practice: the segments carry
@@ -106,22 +135,24 @@ export function categoryTickMarkers({ edges, tickPoints }: CategoryOverlayInput)
   // Not draggable, and that stays deliberate: every tick is a function of these
   // two, so dragging one rescales the lot and discards any the user adjusted.
   // Visible is not the same as grabbable, and the labels say which is which.
-  const ends: CanvasMarker[] = [
-    { id: 'categoryAxisStart', x: edges[0].x, y: edges[0].y, label: 'Categories start' },
-    { id: 'categoryAxisEnd', x: edges[1].x, y: edges[1].y, label: 'Categories end' },
-  ].map((m) => ({
-    ...m,
-    color: CATEGORY_TICK_COLOR,
-    draggable: false,
-    kind: 'calibration' as const,
-    radius: 5,
-  }));
+  const ends: CanvasMarker[] = !markEnds
+    ? []
+    : [
+        { id: 'categoryAxisStart', x: edges[0].x, y: edges[0].y, label: 'Categories start' },
+        { id: 'categoryAxisEnd', x: edges[1].x, y: edges[1].y, label: 'Categories end' },
+      ].map((m) => ({
+        ...m,
+        color,
+        draggable: false,
+        kind: 'calibration' as const,
+        radius: 5,
+      }));
   const ticks: CanvasMarker[] = tickPoints.map((p, i) => ({
-    id: `categoryTick${i}`,
+    id: tickId(i),
     x: p.x,
     y: p.y,
     label: '',
-    color: CATEGORY_TICK_COLOR,
+    color,
     draggable: true,
     kind: 'calibration' as const,
     radius: 4,

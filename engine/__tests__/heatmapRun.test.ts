@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { categoryAxisGlyphs } from '../categoryTickOverlay.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { readPng } from './helpers/readPng.js';
@@ -9,7 +10,7 @@ import {
   buildColorScale,
   describeDivider,
   detectGrid,
-  dividerHandles,
+  heatmapAxisOverlays,
   dragDivider,
   initialGrid,
   isDividerHandle,
@@ -384,28 +385,40 @@ describe('dragging a divider', () => {
   const upright = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 300 - y * 10 }) };
   const grid = { xDividers: [0, 4, 10], yDividers: [0, 20] };
 
-  it('puts one handle on every divider, OUTSIDE the plot', () => {
-    const handles = dividerHandles(grid, upright);
-    expect(handles.map((h) => h.id)).toEqual(['hmx:0', 'hmx:1', 'hmx:2', 'hmy:0', 'hmy:1']);
-    // x handles sit below the plot's bottom edge (y = 300), not on it.
-    expect(handles[0]).toEqual({ id: 'hmx:0', x: 100, y: 316 });
-    expect(handles[1]!.x).toBe(220); // the divider at data x = 4
-    // y handles sit to the LEFT of the left edge (x = 100).
-    expect(handles[3]).toEqual({ id: 'hmy:0', x: 84, y: 300 });
+  it('puts one tick on every divider, and none anywhere else', () => {
+    // ⚑ The handles this used to check are now the SHARED category-tick overlay
+    // (`heatmapAxisOverlays` -> `categoryTickOverlay.ts`), so what survives here
+    // is the geometry this file owns: which dividers become ticks, and where.
+    const { x, y } = heatmapAxisOverlays(grid, upright);
+    expect(x.tickPoints.map((p) => p.x)).toEqual([100, 220, 400]);
+    expect(y.tickPoints.map((p) => p.y)).toEqual([300, 100]);
+    // On the axis, NOT offset — the overlay adds its own standoff, which is what
+    // makes the mark read as a tick instead of a floating dot.
+    expect(x.tickPoints[0]).toEqual({ x: 100, y: 300 });
   });
 
   it('works out which way is OUT from the axes, not from the screen', () => {
-    // ⚑ A figure calibrated upside down has its own idea of outward. Handles
+    // ⚑ A figure calibrated upside down has its own idea of outward, and marks
     // that assumed "down and left" would sit INSIDE the plot on exactly the
-    // charts that are hardest to read already.
+    // charts that are hardest to read already. The direction now comes from the
+    // EDGES handed to the overlay, so this asserts the edges are the plot's own.
     const flipped = { dataToPixel: (x: number, y: number) => ({ x: 100 + x * 30, y: 100 + y * 10 }) };
-    const handles = dividerHandles(grid, flipped);
-    // The plot's y = 0 edge is now at the TOP, so its handles go ABOVE it.
-    expect(handles[0]!.y).toBe(84);
+    const upFirst = heatmapAxisOverlays(grid, upright).x.edges!;
+    const downFirst = heatmapAxisOverlays(grid, flipped).x.edges!;
+    // Same axis line either way; the figure's own y=0 edge, wherever it landed.
+    expect(upFirst[0]!.y).toBe(300);
+    expect(downFirst[0]!.y).toBe(100);
+    // …and the tick marks follow it, drawn away from the plot in both cases.
+    const [up] = categoryAxisGlyphs(heatmapAxisOverlays(grid, upright).x);
+    const [down] = categoryAxisGlyphs(heatmapAxisOverlays(grid, flipped).x);
+    expect(up![1]!.to.y).toBeGreaterThan(up![1]!.from.y); // downward, below the plot
+    expect(down![1]!.to.y).toBeLessThan(down![1]!.from.y); // upward, above it
   });
 
   it('is empty for a grid that is not a grid', () => {
-    expect(dividerHandles({ xDividers: [1], yDividers: [0, 5] }, upright)).toEqual([]);
+    const { x } = heatmapAxisOverlays({ xDividers: [1], yDividers: [0, 5] }, upright);
+    expect(x.edges).toBeNull();
+    expect(x.tickPoints).toEqual([]);
   });
 
   it('tells a grid handle from a data point', () => {

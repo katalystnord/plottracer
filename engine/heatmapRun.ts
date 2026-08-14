@@ -39,6 +39,7 @@ import {
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
 import { checkDividers, equalDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import type { CategoryOverlayInput } from './categoryTickOverlay.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
 
@@ -490,59 +491,77 @@ export function labelsForCells(
 }
 
 /**
- * A draggable handle for one divider, in image pixels.
+ * Each axis of the grid, as the SAME overlay a bar chart's category axis draws.
  *
- * ⚑ THE HANDLES SIT OUTSIDE THE PLOT, on the axis the divider belongs to. Put
- * them on the line itself and they cover the cells the user is trying to read —
- * and a heatmap is nothing BUT the thing they would cover. Off the edge, the
- * grid stays legible while it is being adjusted, which is the only time its
- * exact position matters.
- */
-export interface DividerHandle {
-  /** `hmx:3` / `hmy:0` — the axis and the index, so a drag knows what it moved. */
-  id: string;
-  x: number;
-  y: number;
-}
-
-/** How far outside the plot box a handle sits, in pixels. */
-const HANDLE_OFFSET_PX = 16;
-
-/**
- * Where to draw a grab handle for every divider.
+ * ⚑⚑ David, twice: *"We still have points and not selectable tick markers that
+ * we said that we were going to reuse from bar tick characterisation."* The
+ * heatmap drew its own marker dots outside the plot and borrowed only the
+ * COLOUR from v2.1's category ticks — no axis line, no tick marks, a second
+ * mechanism for a solved problem. This hands the same geometry to
+ * `categoryTickOverlay.ts`, so a boundary looks and behaves like the tick it is.
  *
- * ⚑ The offset direction is COMPUTED from the axes rather than assumed to be
- * "down" and "left": a figure calibrated upside down, or a rotated scan, has its
- * own idea of which way is out of the plot, and handles that ignored it would
- * sit inside the figure on exactly the charts that are hardest to read already.
+ * ⚑ THE POINTS SIT ON THE AXIS, not offset. The overlay computes its own
+ * standoff along the outward normal — which is also where the retired handles'
+ * hardcoded 16px went, and why their offset direction had to be worked out here
+ * a second time.
+ *
+ * ⚑ EVERY divider is a tick and none is an "end". A bar chart freezes its two
+ * edges because every tick is a function of them; a heatmap's outer boundaries
+ * are ordinary dividers, so `markEnds` is off and they drag like the rest.
  */
-export function dividerHandles(grid: HeatmapState, axes: PixelProjector): DividerHandle[] {
+export function heatmapAxisOverlays(
+  grid: HeatmapState,
+  axes: PixelProjector
+): { x: CategoryOverlayInput; y: CategoryOverlayInput } {
   const xs = checkDividers(grid.xDividers).dividers;
   const ys = checkDividers(grid.yDividers).dividers;
-  if (xs === null || ys === null) return [];
-  const [yLo, yHi] = [ys[0]!, ys[ys.length - 1]!];
-  const [xLo, xHi] = [xs[0]!, xs[xs.length - 1]!];
+  const empty: CategoryOverlayInput = { edges: null, tickPoints: [], markEnds: false };
+  if (xs === null || ys === null) return { x: empty, y: empty };
+  const xLo = xs[0]!;
+  const yLo = ys[0]!;
+  const xHi = xs[xs.length - 1]!;
+  const yHi = ys[ys.length - 1]!;
+  const finite = (p: { x: number; y: number }) => Number.isFinite(p.x) && Number.isFinite(p.y);
 
-  const outward = (from: { x: number; y: number }, towards: { x: number; y: number }) => {
-    const dx = from.x - towards.x;
-    const dy = from.y - towards.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (!Number.isFinite(len) || len === 0) return { x: 0, y: 0 };
-    return { x: (dx / len) * HANDLE_OFFSET_PX, y: (dy / len) * HANDLE_OFFSET_PX };
+  /**
+   * The axis runs along the plot's own edge — but WHICH WAY IS OUT still has to
+   * be computed, not assumed.
+   *
+   * ⚑⚑ `outwardNormal` takes its direction from the edge ORDER: it sends a
+   * left-to-right axis's ticks downward, which is where an upright figure prints
+   * them. A figure calibrated upside down, or a rotated scan, has its own idea
+   * of outward — and marks that ignored it would sit INSIDE the plot on exactly
+   * the charts that are hardest to read already. So the edges are ORDERED here
+   * against a point known to be inside the figure: if the normal would point at
+   * it, they are swapped. Caught by the flipped-figure test, which the retired
+   * handles carried and which the shared overlay alone does not.
+   */
+  const orient = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    inside: { x: number; y: number }
+  ): readonly [{ x: number; y: number }, { x: number; y: number }] => {
+    const normal = { x: -(b.y - a.y), y: b.x - a.x };
+    const towardsInside = normal.x * (inside.x - a.x) + normal.y * (inside.y - a.y);
+    return towardsInside > 0 ? [b, a] : [a, b];
   };
+  const farCorner = axes.dataToPixel(xHi, yHi);
+  const nearCorner = axes.dataToPixel(xLo, yLo);
+  const xEdges = orient(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xHi, yLo), farCorner);
+  const yEdges = orient(axes.dataToPixel(xHi, yLo), axes.dataToPixel(xHi, yHi), nearCorner);
+  const build = (
+    edges: readonly [{ x: number; y: number }, { x: number; y: number }],
+    points: { x: number; y: number }[],
+    prefix: 'hmx' | 'hmy'
+  ): CategoryOverlayInput =>
+    edges.every(finite) && points.every(finite)
+      ? { edges: [edges[0], edges[1]], tickPoints: points, markEnds: false, tickId: (i) => `${prefix}:${i}` }
+      : empty;
 
-  const handles: DividerHandle[] = [];
-  const xOut = outward(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xLo, yHi));
-  xs.forEach((x, i) => {
-    const p = axes.dataToPixel(x, yLo);
-    handles.push({ id: `hmx:${i}`, x: p.x + xOut.x, y: p.y + xOut.y });
-  });
-  const yOut = outward(axes.dataToPixel(xLo, yLo), axes.dataToPixel(xHi, yLo));
-  ys.forEach((y, i) => {
-    const p = axes.dataToPixel(xLo, y);
-    handles.push({ id: `hmy:${i}`, x: p.x + yOut.x, y: p.y + yOut.y });
-  });
-  return handles.filter((h) => Number.isFinite(h.x) && Number.isFinite(h.y));
+  return {
+    x: build(xEdges, xs.map((x) => axes.dataToPixel(x, yLo)), 'hmx'),
+    y: build(yEdges, ys.map((y) => axes.dataToPixel(xHi, y)), 'hmy'),
+  };
 }
 
 /** Is this a grid handle, as opposed to a data point or a calibration reticle? */

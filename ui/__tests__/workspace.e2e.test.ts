@@ -8287,10 +8287,13 @@ describe('heatmap capture (v2.2)', () => {
       axisY
     );
     await refreshCanvasBox();
-    // +16px down the screen: where dividerHandles() puts the grab dot.
-    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly + 16);
+    // ⚑ ON the axis. The grab dot used to float 16px below it, because the
+    // retired `dividerHandles` had no tick mark to stand off from; a boundary is
+    // drawn as a TICK now, by the same overlay a bar chart's category axis uses,
+    // so the handle sits where the mark is.
+    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly);
     await page.mouse.down();
-    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly + 16, { steps: 8 });
+    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly, { steps: 8 });
     await page.mouse.up();
     await page.waitForTimeout(400);
 
@@ -8359,7 +8362,7 @@ describe('heatmap capture (v2.2)', () => {
     // Click the x-divider handle at the calibrated left edge (data x = 0).
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
     await refreshCanvasBox();
-    await clickAt(left.lx, left.ly + 16);
+    await clickAt(left.lx, left.ly); // the tick itself, not 16px below it
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = 0\.0/);
 
@@ -8605,7 +8608,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(300);
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
     await refreshCanvasBox();
-    await clickAt(left.lx, left.ly + 16);
+    await clickAt(left.lx, left.ly); // the tick itself, not 16px below it
     await page.waitForTimeout(200);
     const remove = page.getByTestId('heatmap-remove-boundary');
     expect(await remove.isDisabled()).toBe(true);
