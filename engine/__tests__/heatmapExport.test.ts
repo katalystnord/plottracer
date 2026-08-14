@@ -23,9 +23,9 @@ import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.j
 function axes(): XYAxes {
   const cal = new Calibration();
   cal.addPoint(100, 300, '0', '');
-  cal.addPoint(400, 300, '10', '');
+  cal.addPoint(400, 300, '10', '', '5');
   cal.addPoint(100, 300, '', '0');
-  cal.addPoint(100, 100, '', '20');
+  cal.addPoint(100, 100, '', '20', '4');
   const a = new XYAxes();
   expect(a.calibrate(cal, false, false, true)).toBe(true);
   return a;
@@ -273,9 +273,9 @@ describe('the export ROUTES a heatmap session to those sections', () => {
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
     const walk: Array<[number, number, string[]]> = [
       [100, 300, ['0']],
-      [400, 300, ['10']],
+      [400, 300, ['10', '5']],
       [100, 300, ['0']],
-      [100, 100, ['20']],
+      [100, 100, ['20', '4']],
       [120, 420, []],
       [380, 420, []],
       [150, 420, ['5']],

@@ -29,10 +29,6 @@ export interface HeatmapCardProps {
   /** Columns and rows the user says the figure has — a CHECK on detection, never
    * a target. Blank means "no declaration", and detection then offers whatever
    * it found. */
-  columns: string;
-  rows: string;
-  onColumnsChange: (value: string) => void;
-  onRowsChange: (value: string) => void;
   /**
    * The count ALREADY DECLARED at calibration, per axis, or null for a value
    * axis that never declared one.
@@ -43,8 +39,6 @@ export interface HeatmapCardProps {
    * the box is replaced by what it already knows. Two fields for one fact is how
    * his 5 met a typo'd 6 and detection refused the whole grid.
    */
-  declaredColumns: number | null;
-  declaredRows: number | null;
   /** How many boundaries the grid currently holds, so the user can see the grid
    * exists even before reading any cells. */
   gridSize: { columns: number; rows: number } | null;
@@ -83,12 +77,6 @@ export interface HeatmapCardProps {
 }
 
 export function HeatmapCard({
-  columns,
-  rows,
-  onColumnsChange,
-  onRowsChange,
-  declaredColumns,
-  declaredRows,
   gridSize,
   onDetect,
   onRead,
@@ -113,45 +101,16 @@ export function HeatmapCard({
         data-testid="heatmap-card"
         style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
       >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {declaredColumns === null ? (
-            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              Columns
-              <input
-                data-testid="heatmap-columns"
-                value={columns}
-                onChange={(e) => onColumnsChange(e.target.value)}
-                inputMode="numeric"
-                style={{ width: 46 }}
-              />
-            </label>
-          ) : (
-            <span data-testid="heatmap-declared-columns">
-              Columns: <b>{declaredColumns}</b> — from the calibration
-            </span>
-          )}
-          {declaredRows === null ? (
-            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              Rows
-              <input
-                data-testid="heatmap-rows"
-                value={rows}
-                onChange={(e) => onRowsChange(e.target.value)}
-                inputMode="numeric"
-                style={{ width: 46 }}
-              />
-            </label>
-          ) : (
-            <span data-testid="heatmap-declared-rows">
-              Rows: <b>{declaredRows}</b> — from the calibration
-            </span>
-          )}
-        </div>
-        {(declaredColumns === null || declaredRows === null) && (
-          <span style={{ color: theme.color.text.legend }}>
-            Leave blank to take whatever the figure shows.
-          </span>
-        )}
+        {/* ⚑⚑ NO COUNT BOXES. How many columns and rows the figure has is
+            declared ONCE, in the calibration walk, for a measured axis exactly
+            as for a named one. These inputs existed because a value axis was
+            never asked — so the panel asked again, and the two answers could
+            disagree. The declaration is shown here, never re-collected. */}
+        <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
+          {gridSize
+            ? `${gridSize.columns} columns × ${gridSize.rows} rows, from the calibration — drag a boundary to adjust`
+            : 'Calibrate the axes to see the grid.'}
+        </span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>
             Detect grid
@@ -160,11 +119,6 @@ export function HeatmapCard({
             Read cells
           </button>
         </div>
-        {gridSize && (
-          <span data-testid="heatmap-grid-size" style={{ color: theme.color.text.secondary }}>
-            Grid: {gridSize.columns} × {gridSize.rows} cells
-          </span>
-        )}
         {/* ⚑⚑ THE HAND `detectGrid` KEEPS TELLING THE USER TO USE. When detection
             finds every rule the figure draws but one, it refuses to fill the miss
             in and says "place the missing ones by hand" — and until now there was

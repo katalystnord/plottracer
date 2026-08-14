@@ -31,9 +31,9 @@ function calibratedSession(options: Record<string, string> = {}): CalibrationSes
   for (const [key, value] of Object.entries(options)) s.setOption(key, value);
   const walk: Array<[number, number, string[]]> = [
     [100, 300, ['0']],
-    [400, 300, ['10']],
+    [400, 300, ['10', '5']],
     [100, 300, ['0']],
-    [100, 100, ['20']],
+    [100, 100, ['20', '4']],
     [120, 420, []],
     [380, 420, []],
     [150, 420, ['5']],

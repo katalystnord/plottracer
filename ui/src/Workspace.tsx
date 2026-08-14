@@ -216,6 +216,7 @@ import {
   gridFromAxes,
   gridToAxes,
   heatmapAxisKinds,
+  heatmapBandCounts,
   heatmapGridSummary,
   heatmapBounds as heatmapBounds_,
   initialGridFor,
@@ -1109,8 +1110,11 @@ export function Workspace() {
   /** The cell the user picked, in grid indices — the one thing tying a row of
    * the results to the square it was read from. */
   const [selectedCell, setSelectedCell] = useState<{ col: number; row: number } | null>(null);
-  const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | null>(null);
-  const [editingHeatmapYName, setEditingHeatmapYName] = useState<number | null>(null);
+  // ⚑ Keyed by the rendered COPY, not the band — the long form shows a band's
+  // name once per cell, and one editor per copy fights itself for focus. See
+  // `renderEditableName`'s `editKey`.
+  const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | string | null>(null);
+  const [editingHeatmapYName, setEditingHeatmapYName] = useState<number | string | null>(null);
   const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
   const [categoryCountInput, setCategoryCountInput] = useState('');
   const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
@@ -1163,8 +1167,6 @@ export function Workspace() {
    * THAT boundary. Its own state rather than `activeHandleKey`, which is cleared
    * on anything that is not a placed calibration point (see the guard effect). */
   const [selectedDividerId, setSelectedDividerId] = useState<string | null>(null);
-  const [heatmapColumns, setHeatmapColumns] = useState('');
-  const [heatmapRows, setHeatmapRows] = useState('');
   /**
    * What the figure PRINTS along each axis, as the user typed it.
    *
@@ -1792,11 +1794,6 @@ export function Workspace() {
    * nowhere once the last calibration value is typed. */
   const heatmapActive = axesTypeId === HEATMAP_AXES_CONFIG.id;
 
-  const declaredCount = (raw: string): number | undefined => {
-    const n = Number(raw.trim());
-    return raw.trim() !== '' && Number.isInteger(n) && n > 0 ? n : undefined;
-  };
-
   /**
    * The grid as the user sees it: what has been recorded, or — before anything
    * has — the one cell a finished calibration already implies.
@@ -1824,38 +1821,35 @@ export function Workspace() {
   );
 
   /**
-   * The counts the CALIBRATION already declared, per axis — null on a value
-   * axis, which never declared one.
+   * The band counts the CALIBRATION declared, per axis.
    *
    * ⚑ David: *"Why do I have to FIRST tell it that there are 5 rows in the
-   * calibration, and then 5 again? That should carry over."* The ordinal frame a
-   * category axis is built on runs 0…N, so N IS the count; asking for it a
-   * second time invited the two to disagree, and a typo'd 6 against a declared 5
-   * made detection refuse the whole grid.
+   * calibration, and then 5 again? That should carry over."* It does — the walk
+   * asks once, for BOTH axis kinds, and this is the only reader.
+   *
+   * ⚑⚑ IT NO LONGER RETURNS NULL FOR A VALUE AXIS. That null is what the grid
+   * panel's own Columns/Rows boxes existed to fill, which made two places to
+   * answer one question — and only one of them was reachable on a numeric axis.
    */
-  const heatmapDeclared = useMemo<{ columns: number | null; rows: number | null }>(() => {
-    const bounds = heatmapBounds();
-    const kinds = heatmapKinds();
-    if (!bounds) return { columns: null, rows: null };
-    return {
-      columns: kinds.x === 'category' ? Math.max(1, Math.round(bounds.xMax - bounds.xMin)) : null,
-      rows: kinds.y === 'category' ? Math.max(1, Math.round(bounds.yMax - bounds.yMin)) : null,
-    };
+  const heatmapCounts = useCallback((): { columns: number; rows: number } => {
+    const axes = sessionRef.current.getAxes();
+    if (!axes) return { columns: NaN, rows: NaN };
+    return heatmapBandCounts(axes as unknown as HeatmapFrameCarrier);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heatmapBounds, heatmapKinds, session, version]);
+  }, [session, version]);
 
   const heatmapShownGrid = useMemo<HeatmapState | null>(() => {
     if (!heatmapActive) return null;
     if (heatmapGrid !== null) return heatmapGrid;
     if (!session.isCalibrated()) return null;
     const bounds = heatmapBounds();
-    return bounds === null ? null : initialGridFor(bounds, heatmapKinds());
+    return bounds === null ? null : initialGridFor(bounds, heatmapCounts());
     // `version` is the only signal React has that the ref-held session mutated,
     // so it is listed deliberately even though the body does not read it —
     // without it this would freeze at "not calibrated yet" (see the same note
     // above the memo block further down).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heatmapActive, heatmapBounds, heatmapKinds, heatmapGrid, session, version]);
+  }, [heatmapActive, heatmapBounds, heatmapCounts, heatmapGrid, session, version]);
 
   /**
    * Set the grid, and put it where a save and an undo will both find it.
@@ -2061,10 +2055,15 @@ export function Workspace() {
       setHeatmapError('Finish the calibration first — the grid is measured against it.');
       return;
     }
-    const start = heatmapShownGrid ?? initialGridFor(bounds, heatmapKinds());
+    const start = heatmapShownGrid ?? initialGridFor(bounds, heatmapCounts());
     // ⚑ A declared category count is the check; the box is only for a value axis.
-    const columns = heatmapDeclared.columns ?? declaredCount(heatmapColumns);
-    const rows = heatmapDeclared.rows ?? declaredCount(heatmapRows);
+    // ⚑ Detection is CHECKED against the declaration, never a second way to
+    // make one: the walk asked how many columns and rows the figure has, and
+    // that number is what tells detection when to stop and when to report a
+    // miss. Same rule v2.1's category ticks set.
+    const declared = heatmapCounts();
+    const columns = Number.isInteger(declared.columns) ? declared.columns : undefined;
+    const rows = Number.isInteger(declared.rows) ? declared.rows : undefined;
     const result = detectGrid({ data: img.data, width: img.width, height: img.height }, axes, start, {
       ...(columns !== undefined ? { columns } : {}),
       ...(rows !== undefined ? { rows } : {}),
@@ -2074,7 +2073,7 @@ export function Workspace() {
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
     if (result.grid !== null) applyHeatmapGrid(result.grid);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapDeclared, heatmapKinds, heatmapShownGrid, heatmapColumns, heatmapRows]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts, heatmapShownGrid]);
 
   const runHeatmapRead = useCallback(() => {
     setHeatmapError(null);
@@ -2097,13 +2096,13 @@ export function Workspace() {
       setHeatmapSummary('');
       return;
     }
-    const grid = heatmapShownGrid ?? initialGridFor(bounds, heatmapKinds());
+    const grid = heatmapShownGrid ?? initialGridFor(bounds, heatmapCounts());
     const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes), heatmapKinds());
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapLabels, heatmapShownGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 
   /**
    * The picked cell's four corners, for the canvas.
@@ -5643,8 +5642,8 @@ export function Workspace() {
   function renderEditableName(
     index: number,
     rawName: string,
-    editingIndex: number | null,
-    setEditingIndex: (i: number | null) => void,
+    editingIndex: number | string | null,
+    setEditingIndex: (i: never) => void,
     onChange: (index: number, name: string) => void,
     testId: string,
     placeholder: string,
@@ -5652,21 +5651,32 @@ export function Workspace() {
     width: number,
     /** What an UNNAMED one reads as at rest, where a dash would leave the row
      * unidentifiable — see `EditableNameProps.emptyDisplay`. */
-    emptyDisplay?: string
+    emptyDisplay?: string,
+    /**
+     * Which RENDERED COPY this is, when one thing appears in more than one place.
+     *
+     * ⚑⚑ THE LONG FORM REPEATS A BAND'S NAME ONCE PER CELL, so keying the editor
+     * on the band alone mounted one `autoFocus` input per copy — each blurring
+     * the last, and `onBlur` closes the editor. The name became impossible to
+     * open the moment a band spanned more than one row, which is every heatmap
+     * now that a MEASURED axis has bands too (case A1). Identity is the copy;
+     * the edit still writes to the band.
+     */
+    editKey: number | string = index
   ) {
     return (
       <EditableName
-        editing={editingIndex === index}
+        editing={editingIndex === editKey}
         name={rawName}
         {...(emptyDisplay === undefined ? {} : { emptyDisplay })}
         testId={testId}
         placeholder={placeholder}
         title={title}
         width={width}
-        onStartEdit={() => setEditingIndex(index)}
+        onStartEdit={() => setEditingIndex(editKey as never)}
         onChange={(name) => onChange(index, name)}
         onFinish={() => {
-          setEditingIndex(null);
+          setEditingIndex(null as never);
           commitPendingEdit();
         }}
       />
@@ -5729,22 +5739,22 @@ export function Workspace() {
    * and what the export writes, so the table agrees with the file before anyone
    * types a thing.
    */
-  const renderHeatmapXName = (bandIndex: number, name: string, ordinal: number) =>
+  const renderHeatmapXName = (bandIndex: number, name: string, ordinal: number, copy?: string) =>
     renderEditableName(
       bandIndex, name, editingHeatmapXName, setEditingHeatmapXName,
       (i, v) => setHeatmapCategoryName('x', i, v),
       `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
       'Click to name this column, as the figure prints it', 90,
-      ordinal.toPrecision(4)
+      ordinal.toPrecision(4), copy ?? bandIndex
     );
 
-  const renderHeatmapYName = (bandIndex: number, name: string, ordinal: number) =>
+  const renderHeatmapYName = (bandIndex: number, name: string, ordinal: number, copy?: string) =>
     renderEditableName(
       bandIndex, name, editingHeatmapYName, setEditingHeatmapYName,
       (i, v) => setHeatmapCategoryName('y', i, v),
       `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
       'Click to name this row, as the figure prints it', 90,
-      ordinal.toPrecision(4)
+      ordinal.toPrecision(4), copy ?? bandIndex
     );
 
   const renderEditableTupleLabel = (tupleIndex: number, rawLabel: string) =>
@@ -6383,12 +6393,6 @@ export function Workspace() {
               </button>
               {heatmapPanelOpen && (
               <HeatmapCard
-                columns={heatmapColumns}
-                rows={heatmapRows}
-                onColumnsChange={setHeatmapColumns}
-                onRowsChange={setHeatmapRows}
-                declaredColumns={heatmapDeclared.columns}
-                declaredRows={heatmapDeclared.rows}
                 gridSize={
                   heatmapShownGrid
                     ? {

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readPng } from './helpers/readPng.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
-import { buildColorScale, detectGrid, heatmapBounds as heatmapBoundsOf, initialGrid, initialGridFor, readHeatmapCells } from '../heatmapRun.js';
+import { buildColorScale, detectGrid, heatmapBounds as heatmapBoundsOf, initialGrid, heatmapBandCounts, initialGridFor, readHeatmapCells } from '../heatmapRun.js';
 import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.js';
 import type { PlacedCalibPoint } from '../calibrationSession.js';
 
@@ -265,7 +265,7 @@ describe('the SAME figure read through a CATEGORY calibration', () => {
     const { truth } = sample('heatmap-assay-log');
     const session = categorySession(6, 5);
     const axes = session.getAxes()!;
-    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, heatmapBandCounts(axes as never));
     expect([...grid.xDividers]).toEqual(truth.grid.x);
     expect([...grid.yDividers]).toEqual(truth.grid.y);
   });
@@ -275,7 +275,7 @@ describe('the SAME figure read through a CATEGORY calibration', () => {
     const session = categorySession(6, 5);
     const axes = session.getAxes()!;
     const { scale } = buildColorScale(placed, image, true);
-    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, heatmapBandCounts(axes as never));
     const { rows, error } = readHeatmapCells(image, axes, grid, scale!, undefined, {
       x: 'category',
       y: 'category',
@@ -298,7 +298,7 @@ describe('the SAME figure read through a CATEGORY calibration', () => {
     const session = categorySession(6, 5);
     const axes = session.getAxes()!;
     const { scale } = buildColorScale(placed, image, true);
-    const grid = initialGridFor(heatmapBoundsOf(axes)!, { x: 'category', y: 'category' });
+    const grid = initialGridFor(heatmapBoundsOf(axes)!, heatmapBandCounts(axes as never));
     const { rows } = readHeatmapCells(image, axes, grid, scale!, undefined, { x: 'category', y: 'category' });
     expect(rows[0]!.xIsCategory).toBe(true);
     expect(rows[0]!.yIsCategory).toBe(true);

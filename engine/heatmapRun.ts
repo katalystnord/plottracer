@@ -208,30 +208,47 @@ export function heatmapBounds(
 }
 
 /**
- * The grid a fresh heatmap starts with — and on a CATEGORY axis it is not one
- * cell but every declared band.
+ * How many bands each axis DECLARES, read from the calibration.
  *
- * ⚑⚑ THE COUNT IS ALREADY A DECLARATION, so the bands are declared, not
- * guessed. A user who has said "12 columns" has told us where every boundary is
- * on an evenly-drawn categorical axis, and making them press Detect or drag
- * twelve dividers into place would be asking twice for something already
- * answered. They stay ordinary adjustable dividers, so an unevenly drawn figure
- * is still expressible — the count is a starting point, exactly as
- * `equalDividers` has always been.
+ * ⚑⚑ ONE QUESTION, ONE SLOT, BOTH KINDS. The count lives in `dz` of each axis's
+ * second point whether the axis is named or measured — see the heatmap config's
+ * `fixedSteps`. It used to live in `dx` for a category axis and nowhere at all
+ * for a value axis, which is precisely why a measured axis could not be asked
+ * how many columns it had, and therefore never got a grid.
+ */
+export function heatmapBandCounts(axes: HeatmapFrameCarrier): { columns: number; rows: number } {
+  const cal = axes.calibration;
+  const at = (index: number): number => {
+    const raw = (cal?.getPoint(index) as { dz?: unknown } | null)?.dz ?? '';
+    return parseFloat(String(raw));
+  };
+  return { columns: at(1), rows: at(3) };
+}
+
+/**
+ * The grid a fresh heatmap starts with: every declared band, on BOTH axes.
+ *
+ * ⚑⚑ IT DOES NOT ASK WHAT THE AXIS MEANS, and that is the whole correction.
+ * This function used to read `HeatmapAxisKinds` and give a VALUE axis
+ * `[lo, hi]` — one cell spanning the entire figure, no dividers, nothing to
+ * select and nothing to drag. "Is the axis category or value" decides what
+ * INDEXES the columns, names or numbers; it never decided whether there are
+ * columns. A continuous field is still drawn as a matrix of cells.
+ *
+ * ⚑ THE COUNT IS A STARTING POINT, NOT A MODEL. What comes out is an ordinary
+ * divider list, individually adjustable from the moment it exists, so an
+ * unevenly drawn figure stays first-class — nothing downstream can tell an
+ * evenly generated grid from a hand-placed one.
  */
 export function initialGridFor(
   bounds: { xMin: number; xMax: number; yMin: number; yMax: number },
-  kinds: HeatmapAxisKinds
+  counts: { columns: number; rows: number }
 ): HeatmapState {
-  const bandsFor = (lo: number, hi: number, category: boolean): number[] => {
-    if (!category) return [lo, hi];
-    // The ordinal frame runs 0…N, so its width IS the number of bands.
-    const count = Math.round(hi - lo);
-    return equalDividers(lo, hi, count) ?? [lo, hi];
-  };
+  const bandsFor = (lo: number, hi: number, count: number): number[] =>
+    equalDividers(lo, hi, count) ?? [lo, hi];
   return {
-    xDividers: bandsFor(bounds.xMin, bounds.xMax, kinds.x === 'category'),
-    yDividers: bandsFor(bounds.yMin, bounds.yMax, kinds.y === 'category'),
+    xDividers: bandsFor(bounds.xMin, bounds.xMax, counts.columns),
+    yDividers: bandsFor(bounds.yMin, bounds.yMax, counts.rows),
   };
 }
 

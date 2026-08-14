@@ -55,8 +55,8 @@ export interface HeatmapCellsTableProps {
    * band, not to the cell — which is exactly what the bar table does when
    * naming a category shared by several series.
    */
-  renderXName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
-  renderYName?: (bandIndex: number, name: string, ordinal: number) => ReactNode;
+  renderXName?: (bandIndex: number, name: string, ordinal: number, copy?: string) => ReactNode;
+  renderYName?: (bandIndex: number, name: string, ordinal: number, copy?: string) => ReactNode;
   /**
    * The cell picked on the figure or here — the two are one selection.
    *
@@ -268,12 +268,12 @@ function LongView({ cells, renderXName, renderYName, selectedCell, onSelectCell 
                   not something to type over. */}
               <td style={{ paddingRight: 8 }}>
                 {cell.xIsCategory && renderXName
-                  ? renderXName(cell.col, cell.xLabel, cell.xCentre)
+                  ? renderXName(cell.col, cell.xLabel, cell.xCentre, `x${cell.col}@${cell.col}-${cell.row}`)
                   : cell.xLabel || num(cell.xCentre, 4)}
               </td>
               <td style={{ paddingRight: 8 }}>
                 {cell.yIsCategory && renderYName
-                  ? renderYName(cell.row, cell.yLabel, cell.yCentre)
+                  ? renderYName(cell.row, cell.yLabel, cell.yCentre, `y${cell.row}@${cell.col}-${cell.row}`)
                   : cell.yLabel || num(cell.yCentre, 4)}
               </td>
               <td style={{ paddingRight: 8 }}>{num(cell.value, 5)}</td>

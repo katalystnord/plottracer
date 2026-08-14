@@ -8090,11 +8090,13 @@ describe('heatmap capture (v2.2)', () => {
     for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
-      await confirmValue(String(p.value));
+      await confirmValues(
+        step === 'x2' ? [String(p.value), String(truth.grid.x.length - 1)] : [String(p.value)]
+      );
     }
     await clickImagePixel(truth.frame.y1.x, truth.frame.y1.y);
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
-    await confirmValue('4'); // four rows on this figure
+    await confirmValue('4'); // four rows on this figure — a named axis types only the count
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
     await clickImagePixel(truth.key.to.x, truth.key.to.y);
     for (const tick of truth.key.ticks) {
@@ -8106,11 +8108,36 @@ describe('heatmap capture (v2.2)', () => {
     await openHeatmapGrid();
   }
 
-  async function calibrateHeatmap() {
+  /** The walk, declaring the given band counts rather than the figure's own. */
+  async function calibrateHeatmapDeclaring(columns: string, rows: string) {
+    const bands: Record<string, string> = { x2: columns, y2: rows };
     for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
-      await confirmValue(String(p.value));
+      await confirmValues(
+        step === 'x2' || step === 'y2' ? [String(p.value), bands[step]!] : [String(p.value)]
+      );
+    }
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(200);
+    await openHeatmapGrid();
+  }
+
+  async function calibrateHeatmap() {
+    // ⚑ Each axis's SECOND click now declares how many bands the figure has, on
+    // a measured axis exactly as on a named one — a heatmap is a matrix either
+    // way. The bundled figure is 5 columns × 4 rows, read off its own truth.
+    const bands = { x2: String(truth.grid.x.length - 1), y2: String(truth.grid.y.length - 1) };
+    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+      const p = truth.frame[step];
+      await clickImagePixel(p.x, p.y);
+      await confirmValues(step === 'x2' || step === 'y2' ? [String(p.value), bands[step]] : [String(p.value)]);
     }
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
     await clickImagePixel(truth.key.to.x, truth.key.to.y);
@@ -8187,12 +8214,10 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
     // The user says how many cells the figure has — a CHECK on detection.
-    await page.getByTestId('heatmap-columns').fill('5');
-    await page.getByTestId('heatmap-rows').fill('4');
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-detect-message')).toMatch(/5 columns/);
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
 
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
@@ -8226,8 +8251,6 @@ describe('heatmap capture (v2.2)', () => {
     // proposes; this is the half where the user decides.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
-    await page.getByTestId('heatmap-columns').fill('5');
-    await page.getByTestId('heatmap-rows').fill('4');
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
@@ -8268,17 +8291,15 @@ describe('heatmap capture (v2.2)', () => {
     // existed. Both halves are driven here, through the card the user sees.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
-    await page.getByTestId('heatmap-columns').fill('5');
-    await page.getByTestId('heatmap-rows').fill('4');
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
     await showHeatmapTable();
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
 
     await page.getByTestId('heatmap-add-column').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 6 × 4 cells');
+    expect(await textOf('heatmap-declared-grid')).toMatch(/6 columns × 4 rows/);
     // The new boundary announces WHERE it went, in the figure's own units — a
     // cell that silently split somewhere in a six-column grid is a change the
     // user has to hunt for.
@@ -8294,13 +8315,13 @@ describe('heatmap capture (v2.2)', () => {
 
     await page.getByTestId('heatmap-remove-boundary').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 4 cells');
+    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
     expect(await page.getByTestId('heatmap-row').count()).toBe(20);
 
     // A row boundary is the same gesture on the other axis, and the card says so.
     await page.getByTestId('heatmap-add-row').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 5 × 5 cells');
+    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 5 rows/);
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Row boundary at y = /);
   });
 
@@ -8311,7 +8332,11 @@ describe('heatmap capture (v2.2)', () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-grid-size')).toBe('Grid: 1 × 1 cells');
+    // ⚑⚑ CASE A1. This asserted `Grid: 1 × 1 cells` — the defect as its own
+    // premise. A value×value heatmap got ONE cell spanning the whole figure,
+    // because the grid was gated on an axis being categorical. The figure has
+    // 5 columns and 4 rows and says so in the walk, whichever way it is indexed.
+    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
 
     // Click the x-divider handle at the calibrated left edge (data x = 0).
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
@@ -8320,12 +8345,14 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = 0\.0/);
 
-    // ⚑ THE REFUSAL IS READ BEFORE IT FIRES. This axis is down to the two
-    // boundaries that ARE the grid, so Remove is disabled and carries the
-    // reason — a button that fails on click teaches nothing.
+    // ⚑ Removable, because a five-column axis has six boundaries to spare. This
+    // used to assert the opposite — the axis was down to the two boundaries that
+    // ARE the grid — which was only ever true because a measured axis got no
+    // bands at all (case A1). The refusal at the real floor is covered by
+    // `removeDividerHandle`'s own unit tests, where the floor can be reached
+    // without twelve clicks.
     const remove = page.getByTestId('heatmap-remove-boundary');
-    expect(await remove.isDisabled()).toBe(true);
-    expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
+    expect(await remove.isDisabled()).toBe(false);
   });
 
   it('NAMES the columns, and the names travel into the export beside the bounds', async () => {
@@ -8336,8 +8363,6 @@ describe('heatmap capture (v2.2)', () => {
     // a real file, because that file is the product.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
-    await page.getByTestId('heatmap-columns').fill('5');
-    await page.getByTestId('heatmap-rows').fill('4');
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(400);
@@ -8451,9 +8476,23 @@ describe('heatmap capture (v2.2)', () => {
     // figure, which is the highest cell index. `EditableName` reuses one testid
     // for the resting span and the open input, so it has to be the exact band.
     const topBand = 3; // four rows on this figure
-    await page.getByTestId(`heatmap-y-name-${topBand}`).click();
+    // ⚑ SCOPED TO ONE TABLE ROW. The long form repeats a band's name once per
+    // cell — five copies now that a measured x axis has bands of its own (case
+    // A1), where it used to have exactly one. And `EditableName` reuses one
+    // testid for the resting span and the open input, so the row is the only
+    // thing that makes either unambiguous.
+    // ⚑⚑ THE MULTI-COPY CASE IS THE POINT, so it is asserted rather than assumed.
+    // Keying the editor on the BAND mounted one autoFocus input per copy, each
+    // blurring the last, and onBlur closes the editor — the name could not be
+    // opened at all. Invisible until a measured x axis had bands of its own
+    // (case A1); before that every band appeared in exactly one row.
+    expect(await page.getByTestId(`heatmap-y-name-${topBand}`).count()).toBeGreaterThan(1);
+    const nameCell = last.getByTestId(`heatmap-y-name-${topBand}`);
+    await nameCell.scrollIntoViewIfNeeded();
+    await nameCell.click();
     await page.waitForTimeout(200);
-    const editor = page.getByTestId(`heatmap-y-name-${topBand}`);
+    expect(await page.locator(`input[data-testid="heatmap-y-name-${topBand}"]`).count()).toBe(1);
+    const editor = last.locator(`input[data-testid="heatmap-y-name-${topBand}"]`);
     await editor.fill('RENAMED');
     await editor.press('Enter');
     await page.waitForTimeout(300);
@@ -8538,10 +8577,30 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('tips-bar')).toMatch(/colour key/i);
   });
 
-  it('reports a miss instead of inventing boundaries', async () => {
+  it('says WHY Remove is unavailable at the floor, before it is pressed', async () => {
+    // ⚑ The model's refusal is unit-tested (`removeDividerHandle`); this is the
+    // half only the screen can show — a disabled button carrying its reason,
+    // because a button that fails on click teaches nothing. Declaring one
+    // column and one row is the cheapest way to stand on the floor.
     await resetWorkspace('heatmap');
-    await calibrateHeatmap();
-    await page.getByTestId('heatmap-columns').fill('9');
+    await calibrateHeatmapDeclaring('1', '1');
+    await page.waitForTimeout(300);
+    const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);
+    await refreshCanvasBox();
+    await clickAt(left.lx, left.ly + 16);
+    await page.waitForTimeout(200);
+    const remove = page.getByTestId('heatmap-remove-boundary');
+    expect(await remove.isDisabled()).toBe(true);
+    expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
+  });
+
+  it('reports a miss instead of inventing boundaries', async () => {
+    // ⚑ The DECLARATION is what detection is measured against, and it is made in
+    // the walk now rather than in a box on the panel. Declaring nine columns on
+    // a five-column figure is how the mismatch is reached: detection must say it
+    // fell short, never relax until the count is satisfied.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmapDeclaring('9', '4');
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-detect-message')).toMatch(/Found 4 of the 8 boundaries/);

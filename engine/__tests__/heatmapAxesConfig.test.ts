@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS, commonOriginReuse } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
-import { heatmapBounds, initialGridFor } from '../heatmapRun.js';
+import { heatmapBounds, heatmapBandCounts, initialGridFor } from '../heatmapRun.js';
 import { Calibration } from '../../core/calibration.js';
 
 /**
@@ -22,9 +22,9 @@ import { Calibration } from '../../core/calibration.js';
 /** The eight clicks, with the value each step collects (empty = none). */
 const WALK: Array<[number, number, string[]]> = [
   [100, 300, ['0']], // x1
-  [400, 300, ['10']], // x2
+  [400, 300, ['10', '5']], // x2 — coordinate, then how many COLUMNS
   [100, 300, ['0']], // y1
-  [100, 100, ['20']], // y2
+  [100, 100, ['20', '4']], // y2 — coordinate, then how many ROWS
   [120, 420, []], // k1 — the strip's left end
   [380, 420, []], // k2 — its right end
   [150, 420, ['5']], // kv1 — a labelled tick
@@ -229,7 +229,7 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
       [100, 300, []],        // x start edge — a click, nothing to type
       [400, 300, ['5']],     // x end edge + "5 columns"
       [100, 300, ['0']],
-      [100, 100, ['20']],
+      [100, 100, ['20', '4']], // y stays MEASURED — coordinate, then rows
       [120, 420, []],
       [380, 420, []],
       [150, 420, ['5']],
@@ -254,7 +254,7 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
   it('records WHICH axes are ordinals, so a reopened file does not ask again', () => {
     const s = categoricalSession();
     for (const [px, py, values] of [
-      [100, 300, []], [400, 300, ['4']], [100, 300, ['0']], [100, 100, ['20']],
+      [100, 300, []], [400, 300, ['4']], [100, 300, ['0']], [100, 100, ['20', '4']],
       [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
     ] as Array<[number, number, string[]]>) {
       s.handleCalibrationClick(px, py);
@@ -269,11 +269,11 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
   });
 
   it('REFUSES a count that is not a whole number of categories', () => {
-    const cal = new Calibration();
-    cal.addPoint(100, 300, '', '');
-    cal.addPoint(400, 300, '2.5', '');
-    cal.addPoint(100, 300, '', '0');
-    cal.addPoint(100, 100, '', '20');
+    const cal = new Calibration(3);
+    cal.addPoint(100, 300, '', '', '');
+    cal.addPoint(400, 300, '', '', '2.5'); // the COUNT, in its own slot
+    cal.addPoint(100, 300, '', '0', '');
+    cal.addPoint(100, 100, '', '20', '4');
     const problem = HEATMAP_AXES_CONFIG.checkValues!(cal, { xIsCategory: 'true' }, {});
     expect(problem).toMatch(/whole number/i);
     // ⚑ And the refusal names where the NAMES go, because "2.5 columns" is
@@ -281,7 +281,7 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
     expect(problem).toMatch(/names are typed later/i);
     // Zero is not a grid either.
     expect(HEATMAP_AXES_CONFIG.checkValues!(
-      (() => { const c = new Calibration(); c.addPoint(100, 300, '', ''); c.addPoint(400, 300, '0', ''); c.addPoint(100, 300, '', '0'); c.addPoint(100, 100, '', '20'); return c; })(),
+      (() => { const c = new Calibration(3); c.addPoint(100, 300, '', '', ''); c.addPoint(400, 300, '', '', '0'); c.addPoint(100, 300, '', '0', ''); c.addPoint(100, 100, '', '20', '4'); return c; })(),
       { xIsCategory: 'true' },
       {}
     )).toMatch(/whole number/i);
@@ -299,7 +299,7 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
   it('never takes the LOG of an ordinal, whatever the option says', () => {
     const s = categoricalSession({ isLogX: 'true' });
     for (const [px, py, values] of [
-      [100, 300, []], [400, 300, ['3']], [100, 300, ['0']], [100, 100, ['20']],
+      [100, 300, []], [400, 300, ['3']], [100, 300, ['0']], [100, 100, ['20', '4']],
       [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
     ] as Array<[number, number, string[]]>) {
       s.handleCalibrationClick(px, py);
@@ -334,7 +334,7 @@ describe('the TICK CONVENTION — centred marks vs boundary marks', () => {
       [firstPx, 300, []],
       [lastPx, 300, [count]],
       [100, 300, ['0']],
-      [100, 100, ['20']],
+      [100, 100, ['20', '4']], // y stays MEASURED — coordinate, then rows
       [120, 420, []],
       [380, 420, []],
       [150, 420, ['5']],
@@ -382,7 +382,7 @@ describe('the TICK CONVENTION — centred marks vs boundary marks', () => {
     const bounds = heatmapBounds(centres.getAxes()! as never)!;
     expect(bounds.xMin).toBe(0);
     expect(bounds.xMax).toBe(5);
-    const grid = initialGridFor(bounds, { x: 'category', y: 'value' });
+    const grid = initialGridFor(bounds, heatmapBandCounts(centres.getAxes()! as never));
     expect([...grid.xDividers]).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
@@ -416,7 +416,7 @@ describe('the SHARED CORNERS of a heatmap’s plot box', () => {
     s.handleCalibrationClick(100, 300);
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(400, 300);
-    s.confirmCalibrationValues(['10']);
+    s.confirmCalibrationValues(['10', '5']); // coordinate, then columns
     expect(s.getCurrentStep()!.key).toBe('y1');
     expect(s.reuseStepPixel('x1')).toBe(true);
     // Placed AND advanced — not sitting on a step that can never be confirmed.

@@ -1083,12 +1083,12 @@ function heatmapIndexFrame(
   yCentred = false
 ): Calibration | string {
   if (!xCategory && !yCategory) return cal;
-  const count = (index: number, axis: 'dx' | 'dy'): number => {
+  const count = (index: number, axis: 'dx' | 'dy' | 'dz'): number => {
     const raw = cal.getPoint(index)?.[axis] ?? '';
     return parseFloat(String(raw));
   };
-  const columns = xCategory ? count(1, 'dx') : NaN;
-  const rows = yCategory ? count(3, 'dy') : NaN;
+  const columns = xCategory ? count(1, 'dz') : NaN;
+  const rows = yCategory ? count(3, 'dz') : NaN;
   if (xCategory && !(Number.isInteger(columns) && columns >= 1)) {
     return 'Enter how many COLUMNS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
   }
@@ -1116,7 +1116,12 @@ function heatmapIndexFrame(
     if (xCategory && i === 1) dx = xHi;
     if (yCategory && i === 2) dy = yLo;
     if (yCategory && i === 3) dy = yHi;
-    next.addPoint(p.px, p.py, dx, dy);
+    // ⚑⚑ THE THIRD SLOT RIDES ALONG. This rebuild used to copy dx and dy only,
+    // which silently dropped every axis's declared BAND COUNT on the way to the
+    // axes — bounds arrived intact and the grid came back as one cell, the same
+    // symptom as having no count at all. A copy that omits a slot is a copy that
+    // will be wrong the moment the model grows one.
+    next.addPoint(p.px, p.py, dx, dy, (p as { dz?: number | string }).dz ?? '');
   }
   return next;
 }
@@ -1127,6 +1132,12 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   axesKind: 'xy',
   exportShape: 'heatmap',
   dataDim: 2,
+  // ⚑ THREE SLOTS, so each axis's second point can carry BOTH its coordinate
+  // and its band count. `dz` is a slot, not a Z axis (Spider stores an axis
+  // NAME in it) — here it holds how many columns / rows the figure has, which
+  // is the one number a person reads straight off a heatmap whichever way its
+  // axes are indexed.
+  calibrationDimensions: 3,
   valueLabels: ['X', 'Y'],
   globalFields: [],
   autoExtractKind: 'none',
@@ -1196,11 +1207,15 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
             ...step,
             label: axis === 'x' ? (centred ? 'Last column' : 'X end') : centred ? 'Last row' : 'Y end',
             prompt: lastPrompt,
+            // ⚑ `dz`, the same slot the value axis's count uses. A category
+            // axis has no coordinate competing for `dx`, which is why the count
+            // used to live there — but two kinds answering one question into
+            // two different slots is what made the value axis unaskable.
             valueFields: [
               {
-                key: step.key,
+                key: `${step.key}n`,
                 label: axis === 'x' ? 'Columns' : 'Rows',
-                field: axis === 'x' ? 'dx' : 'dy',
+                field: 'dz',
               },
             ],
           };
@@ -1236,9 +1251,16 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
   fixedSteps: [
     { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
-    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
+    // ⚑⚑ THE COORDINATE AND THE BAND COUNT, on the same click. A heatmap is a
+    // MATRIX however its axes are indexed, so a MEASURED axis has columns
+    // exactly as a named one does — David: *"we need to have column and row
+    // number markers even if they are not categories."* The count went in `dz`
+    // for BOTH kinds rather than `dx` for one and nowhere for the other: `dx`
+    // now always means the coordinate or nothing, and the two kinds answer
+    // "how many bands" into one slot instead of two.
+    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value, then say how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
     { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
-    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
+    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value, then say how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
     { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Drag across the colour key from one corner to the opposite one — or click one corner now and the other next', valueFields: [], labelBelow: true },
     { key: 'k2', label: 'Opposite corner', color: '#a87fd4', prompt: 'Click the OPPOSITE corner of the colour key', valueFields: [], labelBelow: true },
     { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },
@@ -1257,20 +1279,20 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // `buildAxes` — the same rule at both entrances. A count of 0, 2.5 or "many"
     // would otherwise reach the axes as a frame width and produce a grid with a
     // fractional number of bands.
-    const countProblem = (index: number, axis: 'dx' | 'dy', noun: string): string | null => {
-      const raw = String(cal.getPoint(index)?.[axis] ?? '');
+    const countProblem = (index: number, noun: string): string | null => {
+      const raw = String((cal.getPoint(index) as { dz?: unknown } | null)?.dz ?? '');
       if (raw.trim() === '') return null; // still typing; the walk says what is missing
       const n = parseFloat(raw);
       return Number.isInteger(n) && n >= 1
         ? null
         : `The number of ${noun} must be a whole number, 1 or more — count them off the figure. Their names are typed later, in the Heatmap card.`;
     };
-    if (optionBool(options, 'xIsCategory')) {
-      const problem = countProblem(1, 'dx', 'columns');
-      if (problem) return problem;
-    }
-    if (optionBool(options, 'yIsCategory')) {
-      const problem = countProblem(3, 'dy', 'rows');
+    // ⚑⚑ CHECKED FOR BOTH AXIS KINDS, from one slot. A measured axis declares
+    // how many columns the figure has exactly as a named one does — a heatmap
+    // is a matrix either way — so the rule cannot be gated on `xIsCategory`.
+    // Gating it there is the same mistake that left a value axis with no grid.
+    for (const [index, noun] of [[1, 'columns'], [3, 'rows']] as const) {
+      const problem = countProblem(index, noun);
       if (problem) return problem;
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
