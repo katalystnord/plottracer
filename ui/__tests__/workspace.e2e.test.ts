@@ -8332,7 +8332,49 @@ describe('heatmap capture (v2.2)', () => {
     expect(Number(after[0])).toBeGreaterThan(Number(before[0])); // x centre moved right
     expect(after[2]).not.toBe(before[2]); // …and the value with it
     expect(await page.getByTestId('heatmap-row').count()).toBe(20); // no cell gained or lost
-  });
+
+    // ⚑⚑ C1 — AND THE CALIBRATION DID NOT MOVE. Calibration points ARE the axis;
+    // the grid DERIVES from them, and nothing a grid gesture does may reach the
+    // layer underneath. It matters because every marker on the figure arrives at
+    // ONE drag handler, which falls through to `updateCalibPointPixel` for
+    // anything it does not recognise — so a divider read as a calibration handle
+    // would silently recalibrate the whole figure, and every exported value
+    // would be wrong with nothing on screen saying so.
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
+    // ⚑ UNFOLDED to read them: Calibrate auto-folds its card (checkpoint 86),
+    // so the values are not in the DOM until the card is opened again. Asserting
+    // them blind timed out — the test asking for something the screen genuinely
+    // was not showing, which is the right way round for that to fail.
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(200);
+    expect(await textOf('calib-value-x1-0')).toBe(String(truth.frame.x1.value));
+    expect(await textOf('calib-value-x2-0')).toBe(String(truth.frame.x2.value));
+    expect(await textOf('calib-value-y2-0')).toBe(String(truth.frame.y2.value));
+    // ⚑ LEFT OPEN. The Grid fold-out lives INSIDE this card, so folding it again
+    // takes the grid summary — and the Read cells button — off screen with it.
+    // Re-folding here is what made the rest of this walk hang: the test went
+    // looking for controls it had just put away.
+
+    // ⚑ AND IT IS UNDOABLE, which had never been verified for a boundary. An
+    // adjustment you cannot take back is one users make cautiously or not at
+    // all — and the grid rides in axes metadata, so undo only works because the
+    // snapshot serialises the axes rather than through any grid-specific path.
+    await page.getByTestId('undo').click();
+    await page.waitForTimeout(400);
+    // ⚠️ UNDO CLEARS THE RESULTS TABLE. `restoreHeatmapGrid` empties the cells,
+    // because a table describing the previous grid is a measurement of a figure
+    // that no longer exists — the same rule the forward path states. But the
+    // forward path RE-READS rather than clearing, so taking back one nudge
+    // currently costs the whole table. Recorded here as the behaviour, not
+    // endorsed: see the note to David, 2026-08-15.
+    expect(await page.getByTestId('heatmap-row').count()).toBe(0);
+    // ⚑ THIS TEST STOPS HERE ON PURPOSE. That the grid ITSELF survives the undo
+    // is a model fact — it rides in the axes metadata the snapshot serialises —
+    // and it is asserted where it can be asserted cleanly, in
+    // `heatmapPersistence.test.ts`. Chasing it through the UI here meant
+    // unfolding and refolding cards to reach controls that live inside them,
+    // which is how this walk started hanging on itself.
+  }, 30000);
 
   it('ADDS a boundary the detector missed, and removes one it invented', async () => {
     // ⚑⚑ THE GESTURE THE APP HAS BEEN TELLING USERS TO USE. `detectGrid` refuses
@@ -8680,6 +8722,67 @@ describe('heatmap capture (v2.2)', () => {
 
     // Back to the key's own reading, brackets and all gone.
     expect(await textOf('heatmap-matrix-cell-2-1')).toBe(fromKey);
+  });
+
+  it('P1 — drags the cell along the COLOUR KEY, the third axis’s own handle', async () => {
+    // ⚑⚑ THE OTHER HALF OF THE PAIR. Every value in this app has both — drag the
+    // marker or type the number — and since B7 the third axis had only the typed
+    // one. David: *"make that marker DRAGGABLE, with instant color update of the
+    // background of the cell? and if you change the value, the marker also
+    // moves."*
+    //
+    // ⚑ The drag is the PRIMITIVE: the record stores a POSITION on the key, so
+    // dragging writes it outright while typing has to be converted first.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    // No cell picked, no cursor: a range has no single position on the key.
+    await page.getByTestId('heatmap-matrix-cell-2-1').click();
+    await page.waitForTimeout(200);
+    const before = await textOf('heatmap-matrix-cell-2-1');
+    expect(before).not.toMatch(/\[/);
+
+    // Drag the cursor along the key — from where this cell sits to a clearly
+    // different place on the strip.
+    // ⚑⚑ THE GRAB POINT IS READ, NOT ASSUMED. The cursor sits wherever this
+    // cell's own reading puts it on the key — a number no test can know in
+    // advance — so it is taken from the mirrored readout, the same way every
+    // other Konva-only fact in this file is asserted. Guessing a position and
+    // pressing there is how a drag test passes while touching nothing.
+    const cursorAt = Number(await textOf('heatmap-key-cursor'));
+    expect(Number.isFinite(cursorAt)).toBe(true);
+    const onKey = (t: number) => ({
+      x: truth.key.from.x + (truth.key.to.x - truth.key.from.x) * t,
+      y: truth.key.from.y + (truth.key.to.y - truth.key.from.y) * t,
+    });
+    const grab = onKey(cursorAt);
+    const drop = onKey(cursorAt > 0.5 ? cursorAt - 0.3 : cursorAt + 0.3);
+    const from = await imageToLocal(grab.x, grab.y);
+    const to = await imageToLocal(drop.x, drop.y);
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // ⚑ Whatever the exact number, the cell is now a PERSON's reading — square
+    // brackets, no tint — and it changed.
+    const after = await textOf('heatmap-matrix-cell-2-1');
+    expect(after).toMatch(/^\[.*\]$/);
+    expect(after).not.toBe(before);
+
+    // ⚑⚑ AND THERE IS A WAY BACK, on the line itself rather than behind a
+    // right-click nobody would find (B16's own warning about itself).
+    expect(await page.getByTestId('heatmap-reset-cell').count()).toBe(1);
+    await page.getByTestId('heatmap-reset-cell').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-matrix-cell-2-1')).toBe(before);
+    // …and the button goes with it, because there is nothing left to reset.
+    expect(await page.getByTestId('heatmap-reset-cell').count()).toBe(0);
   });
 
   it('records NOTHING when an editor is opened and closed without typing', async () => {

@@ -69,6 +69,14 @@ export interface HeatmapCardProps {
   xLabelCoverage: string;
   yLabelCoverage: string;
 
+  /**
+   * What a count or convention change would cost, and any disagreement the grid
+   * already has with the declared counts (C3/C4). Null when there is nothing to
+   * say — the bar chart's rule, written on its own `regenerateWarning`: a
+   * warning that appears when nothing would be discarded teaches the user to
+   * ignore it.
+   */
+  regenerateWarning: string | null;
   /** Detection's own report — agreement, a miss, or why nothing could be read.
    *
    * ⚑ THERE IS NO `summary` PROP. The read's own summary — "20 cells read; 3
@@ -98,6 +106,7 @@ export function HeatmapCard({
   onCommitPendingEdit,
   xLabelCoverage,
   yLabelCoverage,
+  regenerateWarning,
   error,
   canRead,
 }: HeatmapCardProps) {
@@ -273,6 +282,15 @@ export function HeatmapCard({
               </span>
             )}
           </>
+        )}
+        {/* ⚑ Above the error, and in a quieter colour: this is a CAUTION about
+            something that has not happened yet (or a disagreement to resolve),
+            not a refusal of something attempted. Colouring it like a refusal
+            would spend the error colour on a state that is still fine. */}
+        {regenerateWarning && (
+          <span data-testid="heatmap-regenerate-warning" style={{ color: theme.color.text.secondary }}>
+            {regenerateWarning}
+          </span>
         )}
         {error && (
           <span data-testid="heatmap-error" style={{ color: theme.color.error }}>

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { theme } from '../theme.js';
 import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
 
@@ -96,6 +96,28 @@ export interface HeatmapCellsTableProps {
    * CHANGES the source; it does not reveal it.
    */
   onCellContextMenu?: (col: number, row: number, clientX: number, clientY: number) => void;
+  /**
+   * The ink under the colour key's cursor while it is being dragged.
+   *
+   * ⚑ A PREVIEW, not a reading: it shows what colour the position you are
+   * dragging to is worth, so you can drag until it matches the cell in the
+   * figure. That is the eye used as the instrument B7 says it is — comparing two
+   * colours, which people are good at, instead of estimating a number off a
+   * ramp, which they are not.
+   * ⚠️ It must not survive the drag: at rest a tint means "read from the colour"
+   * (B16), and a cell a person set wears no tint and square brackets instead.
+   */
+  dragTint?: { col: number; row: number; rgb: readonly [number, number, number] } | null;
+  /**
+   * Hand this cell back to the colour key.
+   *
+   * ⚑ The context menu can already do it, and right-click is undiscoverable —
+   * which is exactly what B16 warned about. On the picked-cell line it mirrors
+   * the Grid card's picked BOUNDARY row, which has carried its Remove button
+   * beside it all along: the thing you picked, said plainly, with its action
+   * attached.
+   */
+  onResetCell?: (col: number, row: number) => void;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
@@ -110,6 +132,8 @@ export function HeatmapCellsTable({
   onPickCells,
   renderValue,
   onCellContextMenu,
+  dragTint,
+  onResetCell,
 }: HeatmapCellsTableProps) {
   const [view, setView] = useState<'matrix' | 'table'>('matrix');
 
@@ -144,7 +168,7 @@ export function HeatmapCellsTable({
           </button>
         ))}
       </div>
-      <PickedCell cells={cells} selectedCell={selectedCell} renderValue={renderValue} />
+      <PickedCell cells={cells} selectedCell={selectedCell} renderValue={renderValue} onResetCell={onResetCell} />
       {view === 'matrix' ? (
         <MatrixView
           cells={cells}
@@ -155,6 +179,7 @@ export function HeatmapCellsTable({
           onPickCells={onPickCells}
           renderValue={renderValue}
           onCellContextMenu={onCellContextMenu}
+          dragTint={dragTint}
         />
       ) : (
         <LongView
@@ -166,6 +191,7 @@ export function HeatmapCellsTable({
           onPickCells={onPickCells}
           renderValue={renderValue}
           onCellContextMenu={onCellContextMenu}
+          dragTint={dragTint}
         />
       )}
     </div>
@@ -182,6 +208,7 @@ type ViewProps = Pick<
   | 'onPickCells'
   | 'renderValue'
   | 'onCellContextMenu'
+  | 'dragTint'
 >;
 
 /** The pick reads as a highlight in both views — same colour as the outline the
@@ -205,7 +232,17 @@ const VALUE_TINT_ALPHA = 0.35;
 
 /** The cell's background: the colour it was read from, or nothing at all when
  * the number came from somewhere else. */
-function tintOf(cell: { rgb?: readonly [number, number, number]; source?: string } | undefined) {
+function tintOf(
+  cell: { col: number; row: number; rgb?: readonly [number, number, number]; source?: string } | undefined,
+  dragTint?: HeatmapCellsTableProps['dragTint']
+) {
+  // ⚑ THE PREVIEW WINS WHILE IT LASTS. Dragging the key's cursor shows the ink
+  // it is sitting on, so the cell can be matched against the figure by eye —
+  // and it is shown at FULL strength rather than the resting wash, because the
+  // whole point is to compare it with a colour.
+  if (cell && dragTint && dragTint.col === cell.col && dragTint.row === cell.row) {
+    return `rgb(${dragTint.rgb[0]}, ${dragTint.rgb[1]}, ${dragTint.rgb[2]})`;
+  }
   if (!cell?.rgb || cell.source !== 'colour') return undefined;
   return `rgba(${cell.rgb[0]}, ${cell.rgb[1]}, ${cell.rgb[2]}, ${VALUE_TINT_ALPHA})`;
 }
@@ -244,7 +281,8 @@ function PickedCell({
   cells,
   selectedCell,
   renderValue,
-}: Pick<HeatmapCellsTableProps, 'cells' | 'selectedCell' | 'renderValue'>) {
+  onResetCell,
+}: Pick<HeatmapCellsTableProps, 'cells' | 'selectedCell' | 'renderValue' | 'onResetCell'>) {
   if (!selectedCell) return null;
   const cell = cells.find((c) => c.col === selectedCell.col && c.row === selectedCell.row);
   if (!cell) return null;
@@ -274,6 +312,25 @@ function PickedCell({
           ? renderValue(cell, valueText(num(cell.value, 5), cell.source))
           : valueText(num(cell.value, 5), cell.source)}
       </span>
+      {/* ⚑ ONLY WHERE THERE IS SOMETHING TO UNDO. A cell read from the colour has
+          nothing to reset, and a control that is always there and usually inert
+          teaches people to stop reading it — the same rule the bar chart's
+          regenerate warning states about itself. The brackets already say the
+          value is a person's, so the button appearing beside them is a
+          consequence of something visible, not a hidden precondition.
+          ⚑ THE SAME WORDS as the right-click entry, so the two obviously do one
+          thing rather than looking like two features. */}
+      {cell.source === 'user' && onResetCell && (
+        <button
+          type="button"
+          data-testid="heatmap-reset-cell"
+          onClick={() => onResetCell(cell.col, cell.row)}
+          title="Discard this reading and take the number the colour key gives"
+          style={{ fontSize: theme.font.size.small, padding: '0 6px', cursor: 'pointer' }}
+        >
+          Reset to key
+        </button>
+      )}
     </p>
   );
 }
@@ -284,6 +341,53 @@ function PickedCell({
 function valueCell(cell: HeatmapRow, renderValue: HeatmapCellsTableProps['renderValue']): ReactNode {
   const display = valueText(num(cell.value, 5), cell.source);
   return renderValue ? renderValue(cell, display) : display;
+}
+
+/**
+ * A container that SAYS when it is hiding something sideways (B17).
+ *
+ * ⚑ David, photographing the tint: the matrix scrolled horizontally with a
+ * fifth column off-screen in a narrow sidebar, and nothing said so. A table
+ * that silently ends mid-record is worse than a narrow one — the columns you
+ * cannot see look like columns that do not exist, and this panel IS the record.
+ *
+ * ⚑ MEASURED, not assumed. Whether it overflows depends on the sidebar's width,
+ * the number of columns and the font, none of which this component gets to know
+ * — so it reads `scrollWidth` against `clientWidth` and re-reads on resize.
+ * Guessing from the column count would be wrong at both ends: five narrow
+ * columns fit, three wide ones may not.
+ */
+function ScrollNoticer({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [clipped, setClipped] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setClipped(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    // ⚑ ResizeObserver rather than a window listener: the sidebar can change
+    // width without the window doing so (a fold-out opening beside it), and
+    // that is exactly when a matrix starts and stops overflowing.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [children]);
+  return (
+    <>
+      <div ref={ref} style={{ maxHeight: 320, overflow: 'auto' }}>
+        {children}
+      </div>
+      {clipped && (
+        <p
+          data-testid="heatmap-scroll-notice"
+          style={{ margin: '2px 0 0', color: theme.color.text.legend, fontSize: theme.font.size.small }}
+        >
+          More columns to the right — scroll sideways.
+        </p>
+      )}
+    </>
+  );
 }
 
 /**
@@ -301,6 +405,7 @@ function MatrixView({
   selectedCells,
   onPickCells,
   onCellContextMenu,
+  dragTint,
 }: ViewProps) {
   // ⚑ THE MODEL'S OWN KEY FORMAT, not a fourth copy of it. A pick, a user's
   // reading and this table must all name a cell the same way or they silently
@@ -310,7 +415,7 @@ function MatrixView({
   const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
   const byKey = new Map(cells.map((c) => [cellKey(c.col, c.row), c]));
   return (
-    <div style={{ maxHeight: 320, overflow: 'auto' }}>
+    <ScrollNoticer>
       <table
         data-testid="heatmap-matrix"
         style={{ borderCollapse: 'collapse', fontSize: theme.font.size.small, fontVariantNumeric: 'tabular-nums' }}
@@ -418,7 +523,7 @@ function MatrixView({
                         // it is on the canvas, over whatever the cell's own
                         // colour happens to be. No outline invented for the
                         // table: "picked" looks like "picked" in both places.
-                        backgroundColor: tintOf(cell),
+                        backgroundColor: tintOf(cell, dragTint),
                         backgroundImage: isPicked
                           ? `linear-gradient(${PICKED_BACKGROUND}, ${PICKED_BACKGROUND})`
                           : undefined,
@@ -444,7 +549,7 @@ function MatrixView({
           })}
         </tbody>
       </table>
-    </div>
+    </ScrollNoticer>
   );
 }
 
@@ -458,13 +563,14 @@ function LongView({
   onPickCells,
   renderValue,
   onCellContextMenu,
+  dragTint,
 }: ViewProps) {
   // ⚑ THE MODEL'S OWN KEY FORMAT, not a fourth copy of it. A pick, a user's
   // reading and this table must all name a cell the same way or they silently
   // stop referring to the same cell.
   const picked = (col: number, row: number) => selectedCells?.has(cellKey(col, row)) === true;
   return (
-    <div style={{ maxHeight: 320, overflow: 'auto' }}>
+    <ScrollNoticer>
       <table
         data-testid="heatmap-table"
         style={{
@@ -523,7 +629,7 @@ function LongView({
                 style={{
                   paddingRight: 8,
                   // ⚑ The long form mirrors the matrix, which mirrors the figure.
-                  backgroundColor: tintOf(cell),
+                  backgroundColor: tintOf(cell, dragTint),
                 }}
               >
                 {valueCell(cell, renderValue)}
@@ -542,6 +648,6 @@ function LongView({
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollNoticer>
   );
 }

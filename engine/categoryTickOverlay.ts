@@ -164,7 +164,18 @@ export function categoryTickMarkers({
     label: '',
     color,
     draggable: true,
-    kind: 'calibration' as const,
+    // ⚑⚑ AN AID, NOT A PRECISE REFERENCE. These used to be `calibration`, which
+    // draws the crosshair reticle that exists — in its own comment — "so an axis
+    // handle reads as a precise reference, not a data dot". A divider is the
+    // opposite: something you drag onto the figure's own rule by eye. Drawing
+    // both alike claimed a nudged boundary had a calibration point's authority,
+    // and invited the calibration point to be dragged as casually as a divider.
+    // The two-layer model made visible — the axis is calibrated, the grid
+    // DERIVES from it.
+    // ⚑ It also separates the pair that COINCIDE under the `edge` convention
+    // (B1/B2): a derived end sitting on its calibration point was two identical
+    // marks on one pixel, indistinguishable by construction.
+    kind: 'aid' as const,
     radius: 4,
   }));
   return [...ends, ...ticks];

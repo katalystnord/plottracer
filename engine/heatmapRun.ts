@@ -456,6 +456,34 @@ export function setCellReading(
   return { readings: { ...readings, [cellKey(col, row)]: t }, error: null };
 }
 
+/**
+ * Record what the user read in one cell, from a POSITION on the key.
+ *
+ * ⚑⚑ THE PRIMITIVE OF THE PAIR. The record stores a position, so dragging the
+ * key's marker writes it outright while a typed number has to be converted
+ * first — `setCellReading` is the derived half, not this one. Every other axis
+ * in the app has had both gestures since v1.3 ("I should be able to both edit
+ * the number OR move the point on the axis"); the third axis had only the typed
+ * one until the key grew a marker.
+ *
+ * ⚑ A POSITION PAST THE LABELLED TICKS IS ACCEPTED, deliberately. The printed
+ * labels are almost never at the very ends of the ramp, so most keys extend
+ * beyond them — the same reason `valueAtPosition` extrapolates rather than
+ * clamping. Refusing here would put the extremes of the figure out of the
+ * gesture's reach, and the extremes are usually the point of the figure.
+ */
+export function setCellReadingAt(
+  readings: HeatmapCellReadings,
+  col: number,
+  row: number,
+  t: number
+): { readings: HeatmapCellReadings; error: string | null } {
+  if (!Number.isFinite(t)) {
+    return { readings, error: 'That is not a position on the colour key.' };
+  }
+  return { readings: { ...readings, [cellKey(col, row)]: t }, error: null };
+}
+
 /** Hand the cell back to the colour key. */
 export function clearCellReading(
   readings: HeatmapCellReadings,
@@ -577,8 +605,71 @@ export function labelsToAxes(axes: MetadataCarrier, labels: HeatmapLabels): void
  * category ticks do — and like that one, its summary is on screen the moment
  * the axes are calibrated, so nobody has to know the feature exists to find it.
  */
+/**
+ * What a count or convention change would cost, said while it can still be
+ * avoided — and any disagreement the grid has with the declaration (C3/C4).
+ *
+ * ⚑⚑ THE SENTENCE IS THE BAR CHART'S, because the situation is. v2.1's category
+ * ticks carry `regenerateWarning` with the rule written on it: *"Only ever shown
+ * when there is something to lose. A warning that appears when nothing would be
+ * discarded teaches the user to ignore it."* Same rule, same shape, no second
+ * mechanism.
+ *
+ * ⚑ NO STORED `_adjusted` FLAG, unlike `BandedAxis`. A bar's ticks can only be
+ * generated and then dragged, so "did you adjust them?" is the whole question.
+ * A heatmap's grid can also be DETECTED — read off the figure's own rules — and
+ * a detected grid is exactly as much of a loss as a dragged one. So the question
+ * here is "is there a grid to lose?", which the grid itself answers.
+ *
+ * ⚑⚑ AND A DISAGREEMENT IS REPORTED, NOT RESOLVED. Changing the declared count
+ * leaves the grid describing a frame that no longer exists — five columns of
+ * boundaries under a calibration that now says six. Rebuilding silently would
+ * throw away measured boundaries; keeping it silently leaves the two disagreeing
+ * with nothing on screen saying so. Tenet 9: say what is, and let the user
+ * choose. Null when there is nothing to warn about.
+ */
+export function heatmapRegenerateWarning(
+  grid: HeatmapState | null,
+  declared: { columns: number; rows: number }
+): string | null {
+  if (grid === null) return null;
+  const columns = Math.max(0, grid.xDividers.length - 1);
+  const rows = Math.max(0, grid.yDividers.length - 1);
+  const parts = [
+    'Changing the number of columns or rows, or the tick convention, rebuilds this grid and discards the boundaries it has.',
+  ];
+  // ⚑ A count nobody has declared yet is not a disagreement. Mid-walk a value
+  // axis has no number at all, and NaN formatted into a sentence would read as
+  // "the calibration declares NaN".
+  const mismatch = (found: number, want: number, noun: string): string | null =>
+    Number.isFinite(want) && want !== found
+      ? `The grid has ${found} ${noun} but the calibration declares ${want}.`
+      : null;
+  const disagreements = [
+    mismatch(columns, declared.columns, 'columns'),
+    mismatch(rows, declared.rows, 'rows'),
+  ].filter((s): s is string => s !== null);
+  // The disagreement comes FIRST: it describes what is wrong now, where the
+  // caution describes what a future action would cost.
+  return [...disagreements, ...parts].join(' ');
+}
+
 export function heatmapGridSummary(grid: HeatmapState | null): string {
-  if (grid === null) return 'Grid — calibrate the axes first';
+  // ⚑⚑ B14 — THE PRECONDITION, SAID BEFORE THE WORK IS DONE. A radial heatmap
+  // (`holoviews` RadialHeatMap: concentric rings and angular bands, and per its
+  // own docs "no rectangular plot box with corners") calibrates as a rectangle
+  // without complaint and then reads confident nonsense out of every cell.
+  //
+  // ⚠️ IT CANNOT BE DETECTED, so it cannot honestly be REFUSED: three clicks on
+  // a polar figure are three ordinary points, the transform is non-degenerate,
+  // and nothing in the pixels tells it apart from a rotated rectangular plot. A
+  // "looks polar to me" test would be interpretation of the kind tenet 9 keeps
+  // out, and a wrong one would block real figures. Naming the requirement is the
+  // honest half — and it costs a user eight clicks to learn it any other way.
+  //
+  // ⚑ Only while there is nothing to lose. Once a grid exists this line's job is
+  // to report it; a caveat that never goes away is one nobody reads.
+  if (grid === null) return 'Grid — needs a rectangular grid of cells; calibrate the axes first';
   const columns = Math.max(0, grid.xDividers.length - 1);
   const rows = Math.max(0, grid.yDividers.length - 1);
   return `Grid — ${columns} × ${rows} cells`;
@@ -950,6 +1041,22 @@ export interface HeatmapRow {
    * MEASUREMENT, which is why it belongs in the record.
    */
   source?: 'colour' | 'user' | 'ocr';
+  /**
+   * WHERE THIS CELL SITS ON THE COLOUR KEY, in the strip's own 0..1 frame.
+   *
+   * ⚑⚑ THE THIRD COORDINATE. A row has always carried `xCentre` and `yCentre` —
+   * where the cell sits on the first two axes — and reported the third as a
+   * NUMBER only. A heatmap is 2.5D: this is a coordinate exactly as those are,
+   * and it is the one the whole figure exists to convey. Without it nothing can
+   * draw a cell's value as a POSITION, which is what the key's marker needs and
+   * what makes "editing a cell moves it along the key" something you can watch.
+   *
+   * ⚑ One number whichever instrument produced it: a colour-read cell comes back
+   * through `positionAtValue` (exact for a monotone scale), a user-read one
+   * reports the position that WAS stored — so the marker cannot drift from where
+   * the user put it. Null when the cell has no reading to place.
+   */
+  keyPosition: number | null;
   low: number | null;
   high: number | null;
   /** How far the cell's colour sat off the key's ramp, in RGB units. */
@@ -1067,6 +1174,13 @@ export function readHeatmapCells(
       xCentre: cell.xCentre,
       yCentre: cell.yCentre,
       value: mine ? mineValue : cell.reading?.value ?? null,
+      // ⚑ The stored position exactly where there is one; otherwise back through
+      // the same inverse the value came out of, so the two always agree.
+      keyPosition: mine
+        ? t!
+        : cell.reading === null
+          ? null
+          : positionAtValue(scale, cell.reading.value),
       // ⚑ Carried through so the table can tint the cell with what was sampled.
       // ⚑ Only where the colour IS the reading: the tint is the evidence for the
       // number beside it, so a cell a person read must not wear the colour's.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS, XY_AXES_CONFIG, commonOriginReuse } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
-import { heatmapBounds, heatmapBandCounts, initialGridFor } from '../heatmapRun.js';
+import { heatmapBounds, heatmapBandCounts, heatmapGridSummary, initialGridFor } from '../heatmapRun.js';
 import { Calibration } from '../../core/calibration.js';
 
 /**
@@ -754,5 +754,39 @@ describe('B12 — three-point calibration', () => {
     });
     expect(s.runCalibration()).toBe(false);
     expect(s.getCalibrationError()).toMatch(/parallel/i);
+  });
+});
+
+/**
+ * B14 — RADIAL HEATMAPS: a KNOWING limitation, said before the work is done.
+ *
+ * ⚑⚑ `holoviews` RadialHeatMap is a first-class element in a mainstream
+ * library: polar, concentric rings, `radius_inner`, angular bands, and per its
+ * own docs **"no rectangular plot box with corners"**. Calibrated as a
+ * rectangle it produces confident nonsense — three clicks land fine, the
+ * transform builds fine, and every cell reads a number that means nothing.
+ *
+ * ⚠️ THE PLAN SAID "REFUSE". THAT IS NOT HONESTLY AVAILABLE. A refusal needs a
+ * detector, and there is none: three points on a polar figure are three
+ * perfectly ordinary points, the transform is non-degenerate, and nothing in
+ * the pixels distinguishes them from a rotated rectangular plot. Inventing a
+ * "looks polar to me" test would be interpretation of exactly the kind tenet 9
+ * exists to keep out — and a WRONG refusal would block real figures.
+ *
+ * ⚑ So what is available, and what this asserts, is the honest half: the
+ * precondition is STATED where a heatmap user is working, before they have
+ * spent eight clicks on it. Naming a limitation is not the same as detecting
+ * it, and the difference is written here so nobody later reads a green test as
+ * "radial heatmaps are handled".
+ */
+describe('B14 — a heatmap says it needs a rectangular grid', () => {
+  it('says so BEFORE the axes are calibrated, when there is still nothing to lose', () => {
+    expect(heatmapGridSummary(null)).toMatch(/rectangular/i);
+  });
+
+  it('stops saying it once there is a grid, because the moment has passed', () => {
+    // ⚑ A caveat that never goes away is a caveat nobody reads. Once the figure
+    // is calibrated and gridded, the line's job is to report the grid.
+    expect(heatmapGridSummary({ xDividers: [0, 1, 2], yDividers: [0, 1] })).toBe('Grid — 2 × 1 cells');
   });
 });

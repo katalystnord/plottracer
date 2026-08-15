@@ -508,6 +508,14 @@ a fact about the ink, and usually the reason you looked twice.*
 
 ### What PlotTracer will not do here
 
+- **A radial (polar) heatmap** — concentric rings and angular bands, as
+  `holoviews`' RadialHeatMap draws them — **cannot be read.** Its own
+  documentation puts it plainly: there is no rectangular plot box with corners.
+  PlotTracer cannot *detect* this and so cannot refuse it: three clicks on a
+  polar figure are three perfectly ordinary points, and the calibration will
+  build without complaint and then report a confident number for every cell that
+  means nothing. **This one is on you to spot** — which is why the Grid line says
+  a heatmap needs a rectangular grid of cells before you start clicking.
 - **A key drawn as a handful of discrete bands** (significance levels, cluster
   IDs, land cover) is **refused, and says why**. A colour on such a key
   identifies a band — a range — and not a value; the number that could be

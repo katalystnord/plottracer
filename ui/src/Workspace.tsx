@@ -222,6 +222,7 @@ import {
   heatmapAxisKinds,
   heatmapBandCounts,
   heatmapGridSummary,
+  heatmapRegenerateWarning,
   heatmapBounds as heatmapBounds_,
   initialGridFor,
   isDividerHandle,
@@ -234,6 +235,7 @@ import {
   readingsToAxes,
   removeDividerHandle,
   setCellReading,
+  setCellReadingAt,
   NO_HEATMAP_CELL_READINGS,
   type HeatmapAxisKinds,
   type HeatmapCellReadings,
@@ -1169,6 +1171,27 @@ export function Workspace() {
    * AT the gesture.
    */
   const [heatmapValueError, setHeatmapValueError] = useState<string | null>(null);
+  /**
+   * The colour under the key's cursor WHILE it is being dragged.
+   *
+   * ⚑⚑ THE PREVIEW IS AN INSTRUMENT, not decoration. You drag until the swatch
+   * matches the cell in the figure — which turns B7's whole justification
+   * ("their eye is the better instrument") into a gesture, because an eye
+   * comparing two colours is far more sensitive than an eye estimating a number
+   * off a ramp.
+   * ⚑ It is the ACTUAL INK under the cursor, read straight from the image — not
+   * a colour computed from the ramp — so the preview cannot disagree with the
+   * key it is sitting on.
+   * ⚠️ NEVER ON THE FIGURE. The figure is the immutable record and everything
+   * floats above it (David, confirming: *"the preview lands on the table cell
+   * and the marker, never on the image"*).
+   * ⚑ And only WHILE dragging: at rest a tint means "read from the colour"
+   * (B16), so a user-set cell settles back to plain-with-brackets rather than
+   * quietly wearing the sampler's badge.
+   */
+  const [heatmapDragTint, setHeatmapDragTint] = useState<
+    { col: number; row: number; rgb: readonly [number, number, number] } | null
+  >(null);
   /** The single pick, for everything that still means "the one cell in hand" —
    * the readout, the canvas outline, the value the card names. Null unless
    * exactly one is picked, because "which cell?" has no answer for a range. */
@@ -5481,6 +5504,87 @@ export function Workspace() {
   const dataPointRoles = useMemo(() => session.getDataPointRoles(), [session, version]);
   const canSortNN = useMemo(() => session.canSortByNearestNeighbour(), [session, version]);
   const placedPoints = useMemo(() => session.getPlacedPoints(), [session, version]);
+
+  /**
+   * The key's cursor: where the picked cell sits on the colour key, and the
+   * strip it slides along.
+   *
+   * ⚑ Built from the row's OWN `keyPosition` — the third coordinate the record
+   * now carries — so typing a value moves the marker with no sync code at all.
+   * One source of truth; the marker cannot drift from the number beside it.
+   *
+   * ⚑ Null unless exactly one cell is picked, matching the picked-cell line: a
+   * range has no single position on the key, and drawing one would name a cell
+   * the user did not choose.
+   */
+  const heatmapKeyCursor = useMemo(() => {
+    if (!heatmapActive || !selectedCell) return null;
+    const cell = heatmapCells.find((c) => c.col === selectedCell.col && c.row === selectedCell.row);
+    if (!cell || cell.keyPosition === null) return null;
+    const k1 = placedPoints['k1'];
+    const k2 = placedPoints['k2'];
+    if (!k1 || !k2) return null;
+    return {
+      from: { x: k1.px, y: k1.py },
+      to: { x: k2.px, y: k2.py },
+      t: cell.keyPosition,
+    };
+  }, [heatmapActive, selectedCell, heatmapCells, placedPoints]);
+
+  /**
+   * The cursor moved: show the ink under it, on the TABLE cell.
+   *
+   * ⚑ One pixel read, not a re-sample of the whole strip — the colour a position
+   * on the key is worth IS the ink at that position, so there is nothing to
+   * compute and nothing that could disagree with the figure.
+   */
+  const previewKeyCursor = useCallback(
+    (t: number) => {
+      if (!selectedCell) return;
+      const img = imageCanvasRef.current?.getImageData();
+      const k1 = placedPoints['k1'];
+      const k2 = placedPoints['k2'];
+      if (!img || !k1 || !k2) return;
+      const px = Math.round(k1.px + (k2.px - k1.px) * t);
+      const py = Math.round(k1.py + (k2.py - k1.py) * t);
+      if (px < 0 || py < 0 || px >= img.width || py >= img.height) return;
+      const i = (py * img.width + px) * 4;
+      setHeatmapDragTint({
+        col: selectedCell.col,
+        row: selectedCell.row,
+        rgb: [img.data[i]!, img.data[i + 1]!, img.data[i + 2]!] as const,
+      });
+    },
+    [placedPoints, selectedCell]
+  );
+
+  /**
+   * The cursor was dropped: record the position it landed on.
+   *
+   * ⚑⚑ THE DRAG IS THE PRIMITIVE. The record stores a POSITION on the key, so
+   * this writes it outright — where typing a number has to be converted first.
+   * It is the same gesture as sliding a data point along its axis, on the axis
+   * a heatmap keeps its values on.
+   */
+  const commitKeyCursor = useCallback(
+    (t: number) => {
+      setHeatmapDragTint(null);
+      if (!selectedCell) return;
+      const { readings, error } = setCellReadingAt(
+        heatmapCellReadings,
+        selectedCell.col,
+        selectedCell.row,
+        t
+      );
+      if (error !== null) {
+        setHeatmapValueError(error);
+        return;
+      }
+      applyHeatmapCellReadings(readings);
+    },
+    [applyHeatmapCellReadings, heatmapCellReadings, selectedCell]
+  );
+
   // ⚑ The step list the whole UI walks (v1.4). Memoized here rather than called
   // inline because for a repeating type `getSteps()` BUILDS its array, so a fresh
   // identity every render silently disabled the memoization of everything
@@ -7019,6 +7123,7 @@ export function Workspace() {
                   applyHeatmapLabels(x, y);
                 }}
                 onCommitPendingEdit={commitPendingEdit}
+                regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid, heatmapCounts())}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
                 yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
                 error={heatmapError}
@@ -7849,6 +7954,9 @@ export function Workspace() {
           challengeReveal={challengeReveal}
           gridOverlay={heatmapOverlay}
           gridSelection={heatmapSelectionOutline}
+          keyCursor={heatmapKeyCursor}
+          onKeyCursorDrag={previewKeyCursor}
+          onKeyCursorDragEnd={commitKeyCursor}
           calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
@@ -8042,7 +8150,7 @@ export function Workspace() {
                 setCtxMenu(null);
               }}
             >
-              Use number from key
+              Reset to key
             </MenuItem>,
             <MenuItem
               key="mine"
@@ -8277,6 +8385,14 @@ export function Workspace() {
                 </span>
                 {/* ⚑ How MANY are picked, which the single-cell readout above
                     cannot say: "which cell?" has no answer for a range. */}
+                {/* ⚑ The key's cursor is Konva, so nothing else can assert it
+                    exists or where it sits — the same precedent as
+                    series-line-runs and calib-preview-segments beside it. Its
+                    POSITION is what a test needs, because the handle sits
+                    wherever the picked cell's own reading puts it. */}
+                <span data-testid="heatmap-key-cursor" style={{ display: 'none' }}>
+                  {heatmapKeyCursor ? heatmapKeyCursor.t.toFixed(4) : ''}
+                </span>
                 <span data-testid="heatmap-selected-count" style={{ display: 'none' }}>
                   {selectedCells.size > 1 ? `${selectedCells.size} cells` : ''}
                 </span>
@@ -8388,6 +8504,8 @@ export function Workspace() {
               onPickCells={pickCells}
               renderValue={renderHeatmapValue}
               onCellContextMenu={handleHeatmapCellContextMenu}
+              dragTint={heatmapDragTint}
+              onResetCell={readCellFromKey}
             />
             </>
           ) : isHistogram ? (

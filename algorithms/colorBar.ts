@@ -440,7 +440,17 @@ export function sampleColorBar(
  *
  * Returns null for a degenerate strip, which `sampleColorBar` cannot produce.
  */
-export function positionOnStrip(strip: ColorBarStrip, point: Point2D): number | null {
+export function positionOnStrip(
+  /**
+   * ⚑ Only the two ENDS are read, so the parameter is widened to them. The
+   * heatmap's key cursor has to project a pointer onto the same line — both to
+   * CONSTRAIN the drag on screen and to report the position for the record — and
+   * two projections that must agree is exactly the shape this project keeps
+   * getting bitten by. One function, both jobs.
+   */
+  strip: ColorBarStrip | { from: Point2D; to: Point2D },
+  point: Point2D
+): number | null {
   const dx = strip.to.x - strip.from.x;
   const dy = strip.to.y - strip.from.y;
   const len2 = dx * dx + dy * dy;

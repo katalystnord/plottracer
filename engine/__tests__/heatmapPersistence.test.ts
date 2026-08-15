@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, GRAPH_TYPE_METADATA_KEY } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
-import { gridFromAxes, gridToAxes, labelsFromAxes, labelsToAxes, type HeatmapState } from '../heatmapRun.js';
+import { gridFromAxes, gridToAxes, labelsFromAxes, labelsToAxes, readingsFromAxes, readingsToAxes, type HeatmapState, type MetadataCarrier } from '../heatmapRun.js';
 
 /**
  * A heatmap has to SURVIVE A SAVE (v2.2) — the grid, the colour key, and which
@@ -183,5 +183,65 @@ describe('a heatmap survives a save', () => {
     const axes = session.getAxes()!;
     axes.setMetadata({ ...axes.getMetadata(), heatmapGrid: { x: [10, 0, 3], y: [5, 0] } });
     expect(gridFromAxes(axes)).toEqual({ xDividers: [0, 3, 10], yDividers: [0, 5] });
+  });
+});
+
+/**
+ * ⚑⚑ A RE-CALIBRATION MUST NOT SILENTLY EMPTY THE RECORD.
+ *
+ * `runCalibration()` ends with `this.axes = result.axes` — a BRAND-NEW axes
+ * object from `buildAxes`. Everything the heatmap keeps in axes metadata rides
+ * on the OLD one: the grid, the axis names, and the cells a person read
+ * themselves. Nothing copied them across, so any of these wiped all three:
+ *
+ *   · editing a calibration value (`setCalibrationValues` re-calibrates)
+ *   · nudging or dragging a calibration handle
+ *   · ticking an option once the axes exist (`setOption` re-calibrates)
+ *
+ * ⚠️ AND IT LOSES SILENTLY, WHICH IS WHY IT MATTERS. The Workspace holds the
+ * same values in React state, so the SCREEN still shows the grid and the
+ * corrected cells afterwards — while the axes a Save serialises no longer has
+ * them. The user sees their work; the file does not contain it.
+ *
+ * ⚑ Found while preparing C3/C4 (warn before a count change discards
+ * adjustments). There was no point warning about discarded adjustments while a
+ * far quieter path was discarding everything, unasked.
+ */
+describe('a re-calibration keeps what the axes was carrying', () => {
+  it('keeps the grid, the names AND the user’s own cell readings', () => {
+    const s = calibratedSession();
+    const axes = s.getAxes()! as unknown as MetadataCarrier;
+    gridToAxes(axes, { xDividers: [0, 1, 2.4, 5], yDividers: [0, 2, 4] });
+    labelsToAxes(axes, { x: ['BRCA1', 'TP53'], y: ['tumour'] });
+    readingsToAxes(axes, { '1,1': 0.42 });
+
+    // The quietest re-calibration there is: the same value typed again.
+    expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
+
+    const after = s.getAxes()! as unknown as MetadataCarrier;
+    expect(gridFromAxes(after)).toEqual({ xDividers: [0, 1, 2.4, 5], yDividers: [0, 2, 4] });
+    expect(labelsFromAxes(after)).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour'] });
+    expect(readingsFromAxes(after)).toEqual({ '1,1': 0.42 });
+  });
+
+  it('keeps them when an OPTION is toggled on a live calibration', () => {
+    // `setOption` re-calibrates as soon as the axes exist, so it is the same
+    // door by another name — and the one a user opens most casually.
+    const s = calibratedSession();
+    const axes = s.getAxes()! as unknown as MetadataCarrier;
+    readingsToAxes(axes, { '2,0': 0.7 });
+    s.setOption('isLogValue', 'false');
+    expect(readingsFromAxes(s.getAxes()! as unknown as MetadataCarrier)).toEqual({ '2,0': 0.7 });
+  });
+
+  it('still lets the new calibration stamp its own keys', () => {
+    // ⚑ The carry must not overwrite what `buildAxes` just wrote: the graph-type
+    // stamp is set on the NEW axes, and a blind copy of the old metadata over
+    // the top would restore a stale one. New wins where both have a key.
+    const s = calibratedSession();
+    expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
+    expect(
+      (s.getAxes()! as unknown as MetadataCarrier).getMetadata()[GRAPH_TYPE_METADATA_KEY]
+    ).toBe('heatmap');
   });
 });

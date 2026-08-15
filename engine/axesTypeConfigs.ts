@@ -55,6 +55,20 @@ export interface CalibratedAxes {
    * constraint" where it does not.
    */
   dataToPixel(x: number, y: number): { x: number; y: number };
+  /**
+   * The axes' own metadata bag — declared here on exactly the grounds
+   * `getAxesLabels` above was: all ten classes have always implemented it
+   * (`core/axes/types.ts:17`), it was simply never named as a requirement.
+   *
+   * ⚑ Naming it matters because part of the RECORD lives here for types whose
+   * data has no pixel to ride on — a heatmap's grid, its axis names, and the
+   * cells a person read themselves — and `runCalibration` has to carry that
+   * across when `buildAxes` hands back a new axes object. Reaching it through a
+   * cast would have hidden the requirement in the one place that must not lose
+   * it.
+   */
+  getMetadata(): Record<string, unknown>;
+  setMetadata(obj: Record<string, unknown>): void;
 }
 
 export interface CalibValueField {

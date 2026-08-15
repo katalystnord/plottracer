@@ -261,6 +261,21 @@ interface ImageCanvasProps {
    * colour.
    */
   gridSelection?: { x: number; y: number }[] | null;
+  /**
+   * The picked cell's position ON THE COLOUR KEY — the third axis's own marker.
+   *
+   * ⚑⚑ THE THIRD AXIS IS AN AXIS, so it gets a handle you can drag, exactly as
+   * x and y do. Everything else in this app has both halves — drag the marker or
+   * type the value — and the colour key had only the typed one. `from`/`to` are
+   * the strip's ends in IMAGE coordinates and `t` is where along it the cell
+   * sits; the cursor is drawn from those rather than from a pixel, so it follows
+   * the key when the figure is zoomed, panned or recalibrated.
+   */
+  keyCursor?: { from: { x: number; y: number }; to: { x: number; y: number }; t: number } | null;
+  /** Live, while the cursor is being dragged — for the colour preview. */
+  onKeyCursorDrag?: (t: number) => void;
+  /** Committed, on release. */
+  onKeyCursorDragEnd?: (t: number) => void;
   /** Check Calibration overlay (v0.8): the 4 image-space corners of the
    * calibrated axis box, drawn as a magenta rectangle so a user can see whether
    * it aligns with the plot's real axes. Null when off / not applicable. */
@@ -453,7 +468,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, onKeyCursorDrag, onKeyCursorDragEnd, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1700,6 +1715,56 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                       </Fragment>
                     );
                   }
+                  if (point.kind === 'aid') {
+                    // ⚑⚑ AN ADJUSTABLE AID, NOT A PRECISE REFERENCE. A category
+                    // tick or a heatmap grid boundary is something you drag onto
+                    // the figure's own rule; the reticle above was chosen to say
+                    // "precise reference". Drawing both alike claimed a boundary
+                    // nudged by eye had a calibration point's authority — and
+                    // invited the calibration point to be dragged as casually as
+                    // a divider. The two-layer model, made visible.
+                    //
+                    // ⚑ A SQUARE. Round is spoken for twice over (a data dot and
+                    // the reticle's ring), and the difference has to survive at
+                    // 4px. The invisible hit disc is the same trick the reticle
+                    // uses so a thin shape is still easy to grab.
+                    const r = point.radius ?? 4;
+                    return (
+                      <Group
+                        key={point.id}
+                        x={screenX}
+                        y={screenY}
+                        draggable={interactive}
+                        onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
+                        onDragStart={cancelDragIfPanning}
+                        onDragMove={(e) => setHover({ x: e.target.x(), y: e.target.y() })}
+                        onDragEnd={(e) => onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY })}
+                      >
+                        <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
+                        {point.selected && (
+                          <Rect
+                            x={-r - 3}
+                            y={-r - 3}
+                            width={(r + 3) * 2}
+                            height={(r + 3) * 2}
+                            stroke={theme.color.primary.main}
+                            strokeWidth={2.5}
+                            listening={false}
+                          />
+                        )}
+                        <Rect
+                          x={-r}
+                          y={-r}
+                          width={r * 2}
+                          height={r * 2}
+                          fill={point.color}
+                          stroke={theme.color.overlay.stroke}
+                          strokeWidth={1}
+                          listening={false}
+                        />
+                      </Group>
+                    );
+                  }
                   return (
                     <Fragment key={point.id}>
                       {point.selected && (
@@ -1879,6 +1944,73 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     listening={false}
                   />
                 )}
+                {/* ⚑⚑ THE COLOUR KEY'S OWN HANDLE (P1 + David's idea, 2026-08-15).
+                    A caliper straddling the strip: a rectangle with a tick out
+                    each side and a line down the middle marking the exact
+                    position. Deliberately none of the other three shapes — a
+                    reticle says "precise reference", a square says "grab and
+                    slide", a dot says "datum" — because this is a READING shown
+                    on an axis, and it has to be told apart from all of them at a
+                    glance.
+                    ⚑ The middle line is the SAME purple that already means
+                    "picked" in the matrix and on the cell outline, so the three
+                    read as one selection rather than three unrelated marks.
+                    ⚑⚑ CONSTRAINED TO THE STRIP, and bound to it ON SCREEN.
+                    `dragBoundFunc` projects the pointer onto the key's own line,
+                    so the handle cannot leave the axis it means something on —
+                    pattern 4, which cost v2.2 every constrained handle it had.
+                    The SAME projection reports the position for the record
+                    (`positionOnStrip`), so what is drawn and what is stored
+                    cannot disagree. */}
+                {keyCursor && (() => {
+                  const a = imageToScreen(view, keyCursor.from.x, keyCursor.from.y);
+                  const b = imageToScreen(view, keyCursor.to.x, keyCursor.to.y);
+                  const dx = b.x - a.x;
+                  const dy = b.y - a.y;
+                  const len = Math.hypot(dx, dy);
+                  if (!Number.isFinite(len) || len < 1) return null;
+                  const at = { x: a.x + dx * keyCursor.t, y: a.y + dy * keyCursor.t };
+                  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                  // Half-height of the caliper's body, in screen pixels: enough
+                  // to straddle a key of any drawn thickness without hiding it.
+                  const h = 9;
+                  const tOf = (pos: { x: number; y: number }) => {
+                    const along = ((pos.x - a.x) * dx + (pos.y - a.y) * dy) / (dx * dx + dy * dy);
+                    return along;
+                  };
+                  return (
+                    <Group
+                      x={at.x}
+                      y={at.y}
+                      rotation={angle}
+                      draggable
+                      dragBoundFunc={(pos) => {
+                        const along = Math.max(0, Math.min(1, tOf(pos)));
+                        return { x: a.x + dx * along, y: a.y + dy * along };
+                      }}
+                      onDragStart={cancelDragIfPanning}
+                      onDragMove={(e) => onKeyCursorDrag?.(tOf({ x: e.target.x(), y: e.target.y() }))}
+                      onDragEnd={(e) => onKeyCursorDragEnd?.(tOf({ x: e.target.x(), y: e.target.y() }))}
+                    >
+                      {/* An invisible grab disc, the same trick the reticle uses
+                          so thin strokes do not have to be hit exactly. */}
+                      <Circle radius={14} fill="#000000" opacity={0} />
+                      <Rect
+                        x={-5}
+                        y={-h}
+                        width={10}
+                        height={h * 2}
+                        fill="rgba(255, 255, 255, 0.75)"
+                        stroke={theme.color.overlay.stroke}
+                        strokeWidth={1}
+                        listening={false}
+                      />
+                      <Line points={[0, -h - 7, 0, -h]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
+                      <Line points={[0, h, 0, h + 7]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
+                      <Line points={[0, -h, 0, h]} stroke="rgb(124, 58, 237)" strokeWidth={2} listening={false} />
+                    </Group>
+                  );
+                })()}
                 {gridOverlay?.map((line, gi) =>
                   line.length > 1 ? (
                     <Line

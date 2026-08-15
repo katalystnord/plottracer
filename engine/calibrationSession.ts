@@ -4006,6 +4006,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return false;
     }
     this.calibrationError = null;
+    // ⚑⚑ WHAT THE OLD AXES WAS CARRYING COMES WITH IT. `buildAxes` returns a
+    // BRAND-NEW axes object, and several types keep part of the RECORD in axes
+    // metadata — a heatmap's grid, its axis names, and the cells a person read
+    // themselves — because none of those has a pixel to ride on and metadata
+    // already saves, reopens and undoes through `plotData`.
+    //
+    // ⚠️ Nothing copied it across, so every re-calibration emptied it: editing a
+    // calibration value, nudging a handle, or ticking an option once the axes
+    // exist (`setOption` re-calibrates below). And it lost SILENTLY, which is
+    // what makes it the worst kind: the UI holds the same values in its own
+    // state, so the screen went on showing the grid and the corrected cells
+    // while the axes a Save serialises no longer had them.
+    //
+    // ⚑ NEW WINS on a shared key. `buildAxes` stamps the graph type on the axes
+    // it just made; a blind copy over the top would restore a stale one.
+    const carried = this.axes?.getMetadata();
+    if (carried && Object.keys(carried).length > 0) {
+      result.axes.setMetadata({ ...carried, ...result.axes.getMetadata() });
+    }
     this.axes = result.axes;
     this.applyAxesDerivedSlots();
     return true;

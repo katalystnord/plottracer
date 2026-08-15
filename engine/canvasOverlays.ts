@@ -35,9 +35,24 @@ export interface CanvasMarker {
   /** The selected/"active" data point (checkpoint 58) — drawn with a highlight
    * ring so it stands out on the canvas as the one the trash button will delete. */
   selected?: boolean;
-  /** A calibration handle renders as a crosshair reticle rather than a filled
-   * dot (checkpoint 59), so axis references read as distinct from data points. */
-  kind?: 'calibration' | 'data';
+  /**
+   * A calibration handle renders as a crosshair reticle rather than a filled
+   * dot (checkpoint 59), so axis references read as distinct from data points.
+   *
+   * ⚑⚑ AND AN `aid` IS NEITHER. A category tick or a heatmap grid boundary is an
+   * ADJUSTABLE AID — a divider you are expected to drag until it sits on the
+   * figure's own rule — while the reticle was chosen to say "precise reference".
+   * Drawing both the same way told the user that a boundary they had nudged by
+   * eye carried the authority of a calibration point, and that the calibration
+   * point could be dragged as casually as a divider. Both halves are wrong, and
+   * it is the TWO-LAYER MODEL made visible: calibration points ARE the axis, the
+   * grid DERIVES from them.
+   *
+   * ⚑ A square, not a smaller circle: a data dot is round and a reticle is
+   * round, so roundness is already spoken for. Square reads as a grip, and the
+   * difference survives being 4px across.
+   */
+  kind?: 'calibration' | 'data' | 'aid';
   /**
    * A point in IMAGE coordinates to push this marker's label AWAY from.
    *

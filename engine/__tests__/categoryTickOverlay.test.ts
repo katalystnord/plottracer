@@ -298,3 +298,56 @@ describe('⚑ the two capabilities that were documented only in MANUAL (v2.1 aud
     expect(CATEGORY_TICK_DRAG_HINT.toLowerCase()).toContain('evenly spaced');
   });
 });
+
+/**
+ * A DIVIDER IS AN AID, NOT A PRECISE REFERENCE — and the drawing has to say so.
+ *
+ * ⚑⚑ Both a bar chart's category ticks and a heatmap's grid boundaries were
+ * marked `kind: 'calibration'`, which renders the CROSSHAIR RETICLE that exists,
+ * in its own words, "so an axis handle reads as a precise reference, not a data
+ * dot". A boundary you are expected to nudge onto the figure's own rule is the
+ * opposite of a precise reference. Drawing them alike made two false claims at
+ * once: that a divider adjusted by eye carries a calibration point's authority,
+ * and that a calibration point may be dragged as casually as a divider.
+ *
+ * ⚑ It is the TWO-LAYER MODEL made visible — calibration points ARE the axis,
+ * the grid DERIVES from them (agreed 2026-08-13) — which is why it is the same
+ * change on both types rather than a heatmap tweak.
+ *
+ * ⚑ B1/B2 fall out of the same distinction: under `edge` the derived end
+ * COINCIDES with the calibration point, and two marks on one pixel that look
+ * identical are indistinguishable by construction. They are now different
+ * shapes, so the pair reads as what it is.
+ */
+describe('the weight of a tick handle', () => {
+  const edges: [{ x: number; y: number }, { x: number; y: number }] = [
+    { x: 100, y: 300 },
+    { x: 400, y: 300 },
+  ];
+
+  it('draws a draggable divider as an AID, never as a calibration reticle', () => {
+    const markers = categoryTickMarkers({
+      edges,
+      tickPoints: [
+        { x: 160, y: 300 },
+        { x: 220, y: 300 },
+      ],
+      markEnds: false,
+    });
+    expect(markers).toHaveLength(2);
+    for (const m of markers) {
+      expect(m.draggable).toBe(true);
+      expect(m.kind, 'a divider must not wear the precise-reference reticle').toBe('aid');
+    }
+  });
+
+  it('keeps the AXIS ENDS as calibration marks, because that is what they are', () => {
+    // ⚑ The two edges are not adjustable — every tick is a function of them, and
+    // they are non-draggable for exactly that reason. They ARE references, so
+    // they keep the reference mark. The distinction is authority, not decoration.
+    const markers = categoryTickMarkers({ edges, tickPoints: [{ x: 160, y: 300 }] });
+    const ends = markers.filter((m) => m.draggable === false);
+    expect(ends).toHaveLength(2);
+    for (const m of ends) expect(m.kind).toBe('calibration');
+  });
+});

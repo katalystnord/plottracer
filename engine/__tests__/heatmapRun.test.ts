@@ -20,13 +20,16 @@ import {
   readHeatmapCells,
   readingsFromAxes,
   readingsToAxes,
+  heatmapRegenerateWarning,
   removeDividerHandle,
   setCellReading,
+  setCellReadingAt,
   NO_HEATMAP_CELL_READINGS,
   type HeatmapRow,
   type SourceImage,
 } from '../heatmapRun.js';
-import type { PlacedCalibPoint } from '../calibrationSession.js';
+import { HEATMAP_AXES_CONFIG, type PlacedCalibPoint } from '../calibrationSession.js';
+import { valueAtPosition } from '../../algorithms/colorScale.js';
 
 /**
  * The heatmap capture run, driven the way the CARD will drive it (v2.2, 3b).
@@ -446,6 +449,40 @@ describe('dragging a divider', () => {
     expect(isDividerHandle('hmx:')).toBe(false);
   });
 
+  /**
+   * C1 — DRAGGING A DIVIDER MOVES THE GRID AND NEVER THE CALIBRATION.
+   *
+   * ⚑⚑ IT IS THE ROUTER THAT DECIDES THIS, and the router is one predicate. Every
+   * marker on the figure — data points, calibration handles, category ticks and
+   * grid handles — arrives at ONE `handleMarkerDragEnd`, which asks
+   * `isDividerHandle` first and, if nothing else matches, falls through to
+   * `updateCalibPointPixel`. So a divider id that failed this predicate would be
+   * read as a calibration handle, and dragging a boundary would silently
+   * recalibrate the whole figure: every value in the export wrong, nothing on
+   * screen saying so.
+   *
+   * ⚑ The two layers that make it safe are asserted rather than assumed — the
+   * predicate never confuses the two id spaces (here), and the model refuses an
+   * id it does not hold (`updateCalibPointPixel`'s own test).
+   *
+   * ⚑ THE TWO-LAYER MODEL IS THE POINT: calibration points ARE the axis, and the
+   * grid DERIVES from them. Nothing a grid gesture does may reach the layer
+   * underneath it.
+   */
+  it('never mistakes a heatmap CALIBRATION step for a grid handle', () => {
+    // Every key the walk actually uses, taken from the config rather than
+    // retyped — a step added later is covered without anyone remembering to.
+    for (const step of HEATMAP_AXES_CONFIG.fixedSteps) {
+      expect(isDividerHandle(step.key), `${step.key} must not read as a divider`).toBe(false);
+    }
+    // …and the reverse: a divider is never mistaken for one of them.
+    const stepKeys = new Set(HEATMAP_AXES_CONFIG.fixedSteps.map((s) => s.key));
+    for (const id of ['hmx:0', 'hmy:0', 'hmx:11']) {
+      expect(stepKeys.has(id)).toBe(false);
+      expect(isDividerHandle(id)).toBe(true);
+    }
+  });
+
   it('moves the divider to where it was dropped', () => {
     expect(dragDivider(grid, 'hmx:1', { x: 7, y: 3 })).toEqual({
       xDividers: [0, 7, 10],
@@ -800,5 +837,196 @@ describe('the user’s readings, saved and reopened', () => {
     expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
     axes.setMetadata({ heatmapCellReadings: 'yes' });
     expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
+  });
+});
+
+/**
+ * C3 / C4 — SAY WHAT A COUNT OR CONVENTION CHANGE WILL COST, BEFORE IT COSTS IT.
+ *
+ * ⚑⚑ THE MIRROR ALREADY EXISTS. The bar chart's category ticks have carried this
+ * since v2.1 — `categoryPanelView`'s `regenerateWarning`, shown only when there
+ * is something to lose, with the note *"a warning that appears when nothing
+ * would be discarded teaches the user to ignore it."* Same sentence shape here,
+ * for the same reason, rather than a second mechanism.
+ *
+ * ⚑ NO NEW STORED FLAG. `BandedAxis` keeps an `_adjusted` boolean because a
+ * bar's ticks can only ever be GENERATED then dragged. A heatmap's grid can also
+ * be DETECTED — read off the figure's own rules — and a detected grid is exactly
+ * as much of a loss as a dragged one. So the question is not "did you adjust
+ * this?" but "is there a grid to lose?", which needs no state to answer.
+ *
+ * ⚑ And the DISAGREEMENT is reported rather than resolved: when the declared
+ * count and the grid's own count differ, the card says so and leaves the choice
+ * alone. Silently rebuilding would discard measured boundaries; silently keeping
+ * would leave a grid describing a frame that no longer exists. Tenet 9 — record
+ * what is, do not choose for the reader.
+ */
+describe('C3/C4 — the cost of a count or convention change, said first', () => {
+  it('warns only when there is a grid to lose', () => {
+    expect(heatmapRegenerateWarning(null, { columns: 5, rows: 4 })).toBeNull();
+    const warning = heatmapRegenerateWarning(
+      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
+      { columns: 5, rows: 4 }
+    );
+    expect(warning).toMatch(/count|number of columns/i);
+    expect(warning).toMatch(/tick|convention|centre/i);
+    // It names the LOSS, not merely the event.
+    expect(warning).toMatch(/discard|lose|rebuild/i);
+  });
+
+  it('REPORTS a grid that disagrees with the declared count, naming both numbers', () => {
+    // ⚑ The state a count change leaves behind: the calibration now says six
+    // columns, the grid still describes five, and nothing on screen said so.
+    const warning = heatmapRegenerateWarning(
+      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
+      { columns: 6, rows: 4 }
+    );
+    expect(warning).toMatch(/5/);
+    expect(warning).toMatch(/6/);
+    expect(warning).toMatch(/column/i);
+  });
+
+  it('reports a ROW disagreement too, not only a column one', () => {
+    // ⚑ Found by mutation elsewhere in this file: every count test used x,
+    // because the y branch was never exercised. A transposition would survive.
+    const warning = heatmapRegenerateWarning(
+      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
+      { columns: 5, rows: 7 }
+    );
+    expect(warning).toMatch(/row/i);
+    expect(warning).toMatch(/7/);
+  });
+
+  it('says nothing about a disagreement when the counts agree', () => {
+    const warning = heatmapRegenerateWarning(
+      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
+      { columns: 5, rows: 4 }
+    )!;
+    expect(warning).not.toMatch(/does not match|disagree/i);
+  });
+
+  it('is quiet about a count nobody has declared yet', () => {
+    // A value axis mid-walk has NaN counts; a warning built from those would
+    // read "the grid has 5 columns but the calibration declares NaN".
+    const warning = heatmapRegenerateWarning(
+      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
+      { columns: NaN, rows: NaN }
+    )!;
+    expect(warning).not.toMatch(/NaN/);
+  });
+});
+
+/**
+ * P1 — THE THIRD AXIS IS AN AXIS, so a cell carries its coordinate ON IT.
+ *
+ * ⚑⚑ A row has always carried `xCentre` and `yCentre` — where the cell sits on
+ * the first two axes — and then reported the third as a NUMBER only. But a
+ * heatmap is 2.5D: where the cell sits on the colour key is a coordinate exactly
+ * as the other two are, and it is the one the whole figure exists to convey.
+ * Without it nothing on screen can show a cell's value as a POSITION, which is
+ * what the key's own marker needs (David's idea, 2026-08-15) and what makes
+ * "editing a cell moves it along the key" something you can watch happen.
+ *
+ * ⚑ DERIVED THROUGH THE SAME INVERSE, not stored twice: a colour-read cell's
+ * position comes back through `positionAtValue`, which is exact for a monotone
+ * scale, and a user-read cell reports the position that WAS stored. One number,
+ * one meaning, whichever instrument produced it.
+ */
+describe('a cell’s coordinate on the colour key', () => {
+  function readable() {
+    const { fig, image, axes, placed } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    return { image, axes, scale: scale!, grid: { xDividers: fig.grid.x, yDividers: fig.grid.y } };
+  }
+  const cellAt = (rows: HeatmapRow[], col: number, row: number) =>
+    rows.find((r) => r.col === col && r.row === row)!;
+
+  it('reports WHERE on the key each cell was read, as a position', () => {
+    const { image, axes, grid, scale } = readable();
+    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    for (const row of rows) {
+      expect(row.keyPosition).not.toBeNull();
+      // A position on the strip's own 0..1 frame — the same frame the key's
+      // marker is drawn in and the same one a drag reports back.
+      expect(row.keyPosition!).toBeGreaterThan(-0.5);
+      expect(row.keyPosition!).toBeLessThan(1.5);
+    }
+    // ⚑ The position and the value agree, because both come from one scale:
+    // a hotter cell sits further along the key than a colder one.
+    const cold = cellAt(rows, 0, 0);
+    const hot = cellAt(rows, 4, 3);
+    expect(hot.value! > cold.value!).toBe(hot.keyPosition! > cold.keyPosition!);
+  });
+
+  it('gives a user-read cell back EXACTLY the position that was stored', () => {
+    // ⚑ No round trip through the number: what was stored is what is reported,
+    // so the marker cannot drift from where the user put it.
+    const { image, axes, grid, scale } = readable();
+    const readings = { '1,1': 0.375 };
+    const mine = cellAt(
+      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      1,
+      1
+    );
+    expect(mine.keyPosition).toBe(0.375);
+    expect(mine.source).toBe('user');
+  });
+
+  it('is null for a cell with no reading at all, so nothing is drawn for it', () => {
+    const { image, axes, scale } = readable();
+    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale).rows;
+    expect(rows[0]!.value).toBeNull();
+    expect(rows[0]!.keyPosition).toBeNull();
+  });
+});
+
+/**
+ * The DRAG half of B7 — setting a cell straight from a position on the key.
+ *
+ * ⚑⚑ THIS IS THE PRIMITIVE GESTURE, and typing is the derived one. The record
+ * stores a POSITION, so a drag writes it outright while a typed number has to be
+ * converted first. Every other axis in this app has had both halves since v1.3
+ * — drag the marker or type the value — and the third axis has had only the
+ * typed one.
+ */
+describe('setting a cell from a POSITION on the key', () => {
+  const scaleFor = () => {
+    const { image, placed } = scene();
+    return buildColorScale(placed, image, false).scale!;
+  };
+
+  it('records the position as given, with no number in between', () => {
+    const { readings, error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 2, 1, 0.625);
+    expect(error).toBeNull();
+    expect(readings).toEqual({ '2,1': 0.625 });
+  });
+
+  it('lands in the SAME record a typed value would, from the same place', () => {
+    // ⚑ The two halves must be one record, or the marker and the number would
+    // describe different cells. Drag to a position, read what value that is,
+    // type that value into a fresh record — same stored position.
+    const scale = scaleFor();
+    const dragged = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 2, 1, 0.625).readings;
+    const valueThere = valueAtPosition(scale, 0.625)!;
+    const typed = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 2, 1, String(valueThere)).readings;
+    expect(typed['2,1']).toBeCloseTo(dragged['2,1']!, 10);
+  });
+
+  it('refuses a position that is not a number, leaving the record alone', () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      const { readings, error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, bad);
+      expect(error).not.toBeNull();
+      expect(readings).toEqual(NO_HEATMAP_CELL_READINGS);
+    }
+  });
+
+  it('accepts a position beyond the labelled ticks, because the key extends past them', () => {
+    // ⚑ The printed labels are almost never at the very ends of the ramp, so the
+    // top and bottom of most keys lie OUTSIDE them — the same reason
+    // `valueAtPosition` extrapolates rather than clamping. Refusing here would
+    // make the extremes of a figure unreachable by the gesture, and the extremes
+    // are usually the point of the figure.
+    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, -0.2).error).toBeNull();
+    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, 1.2).error).toBeNull();
   });
 });
