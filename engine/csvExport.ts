@@ -74,6 +74,24 @@ export interface HeatmapExportCell {
    * Exported because it is the one warning the numbers cannot carry: a clipped
    * cell is exact, uniform, and wrong. */
   atKeyLimit?: boolean;
+  /**
+   * WHICH INSTRUMENT read this value (v2.2, B16).
+   *
+   * ⚑⚑ All three are MEASUREMENTS, and they fail in opposite ways: OCR reads ink
+   * as GLYPHS and fails discretely (right, or badly wrong); the colour reads it
+   * as a RAMP and fails continuously (small, silent); a person reads by eye and
+   * sees what both machines are blind to — a hatched cell, an asterisk over the
+   * fill, a texture the sampler averages away. A consumer treating an OCR'd 59
+   * and a colour-inverted 58.7 as the same kind of number is wrong about both,
+   * which is why this is a property of the VALUE and not a footnote.
+   *
+   * ⚑ NOT declared-versus-measured. Nothing here is invented; the record says
+   * which instrument, not whether to believe it.
+   *
+   * Absent means `colour`, which is how every cell was read before there was a
+   * second instrument.
+   */
+  source?: 'colour' | 'user' | 'ocr';
   /** What the figure PRINTS on each axis for this cell, where it prints a name
    * rather than a number (v2.2). Empty on a value axis. */
   xLabel?: string;
@@ -325,6 +343,11 @@ export function heatmapCellsSection(
       axisHeader(cells, 'x', 'width'),
       axisHeader(cells, 'y', 'height'),
       'value',
+      // ⚑ UNCONDITIONAL, unlike the label columns above. A missing `x label`
+      // column says plainly that nothing is named; a missing source column would
+      // say nothing at all and leave a reader assuming a default nobody told
+      // them. Evidence columns are always written here.
+      'value source',
       'value low',
       'value high',
       'colour offset',
@@ -351,6 +374,7 @@ export function heatmapCellsSection(
       // through the axes' own resolution would claim a precision from the wrong
       // instrument, so it is written as measured.
       c.value === null ? '' : c.value,
+      c.source ?? 'colour',
       c.low === null ? '' : c.low,
       c.high === null ? '' : c.high,
       c.distance === null ? '' : c.distance,
@@ -777,6 +801,11 @@ export function buildHeatmapJSON(
       xCentre: c.xCentre,
       yCentre: c.yCentre,
       value: c.value,
+      // ⚑ The machine-readable half of the source. The table's square brackets
+      // around `[59]` are the half that survives a paste into a spreadsheet;
+      // this is the half a program can read. Both channels, because they reach
+      // different readers.
+      valueSource: c.source ?? 'colour',
       // The evidence travels with the value, in the same object: the interval it
       // could not be told apart from, how far off the key its colour sat, and
       // how much of the cell actually was that colour.

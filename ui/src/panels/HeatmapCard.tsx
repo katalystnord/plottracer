@@ -1,4 +1,4 @@
-import { theme } from '../theme.js';
+import { endsCardButton, theme } from '../theme.js';
 
 /**
  * The heatmap's GRID DEFINITION — a fold-down on the calibration card (v2.2).
@@ -69,9 +69,15 @@ export interface HeatmapCardProps {
   xLabelCoverage: string;
   yLabelCoverage: string;
 
-  /** Detection's own report — agreement, a miss, or why nothing could be read. */
-  /** The read-out summary, and the cells themselves. */
-  summary: string;
+  /** Detection's own report — agreement, a miss, or why nothing could be read.
+   *
+   * ⚑ THERE IS NO `summary` PROP. The read's own summary — "20 cells read; 3
+   * need a look" — is a statement about the RECORD and renders beside it in the
+   * Cells panel, which is also the only place it can survive: pressing Read
+   * cells folds this card, so a summary rendered here would be filed away in a
+   * closed fold-out at the exact moment it became true. The ERROR stays,
+   * because a refusal belongs beside the button that produced it and a failed
+   * read does not fold anything. */
   error: string | null;
   canRead: boolean;
 }
@@ -92,7 +98,6 @@ export function HeatmapCard({
   onCommitPendingEdit,
   xLabelCoverage,
   yLabelCoverage,
-  summary,
   error,
   canRead,
 }: HeatmapCardProps) {
@@ -133,7 +138,38 @@ export function HeatmapCard({
           >
             Overlay even grid
           </button>
-          <button type="button" data-testid="heatmap-read" onClick={onRead} disabled={!canRead}>
+        </div>
+        {/* ⚑⚑ THE ENDING, AND IT LOOKS LIKE ONE. David: *"There is nothing
+            intuitive here to press to say 'done!'"* — and he was right in a
+            precise way: the card HAD a terminal action all along, sitting in a
+            row of three identical buttons where two of them are setup. Reading
+            the cells is what consumes the grid and produces the record, so it is
+            the end of this card's job; it just never looked or behaved like it.
+            ⚑⚑ THE MIRROR ALREADY EXISTED. The bar chart's category-ticks
+            fold-out — the panel this one was modelled on — has carried a teal
+            `Done` since v2.1, for the same reason recorded there: *"the only
+            exits on screen were 'Re-place axis' and 'Remove ticks' — both
+            destructive. The way out must never be the way to lose your work."*
+            This card was in exactly that state: Detect grid and Overlay even
+            grid both REGENERATE, discarding adjustments. So the same colour and
+            the same shape, on the button that already did the job.
+            ⚑ It FOLDS the card on success (David's call), which moves the eye to
+            the Cells panel where the record now is. Nothing is lost: the folded
+            line reads "Grid — 7 × 5 cells", and one click reopens it.
+            ⚑ CALLED WITH NOTHING, deliberately. `onRead` takes no arguments, and
+            handing it straight to onClick would pass React's mouse event into
+            whatever first parameter the handler grows later — which it has: the
+            read takes the user's own cell readings, and a SyntheticEvent
+            arriving there would be silently treated as them. */}
+        <div style={{ display: 'flex' }}>
+          <button
+            type="button"
+            data-testid="heatmap-read"
+            onClick={() => onRead()}
+            disabled={!canRead}
+            title="Read every cell through the colour key, and close this — the cells appear in the Cells panel"
+            style={endsCardButton(canRead)}
+          >
             Read cells
           </button>
         </div>
@@ -241,11 +277,6 @@ export function HeatmapCard({
         {error && (
           <span data-testid="heatmap-error" style={{ color: theme.color.error }}>
             {error}
-          </span>
-        )}
-        {summary && (
-          <span data-testid="heatmap-summary" style={{ color: theme.color.text.secondary }}>
-            {summary}
           </span>
         )}
     </div>

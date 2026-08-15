@@ -8250,7 +8250,14 @@ describe('heatmap capture (v2.2)', () => {
 
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-summary')).toBe('20 cells read, all clean.');
+    // ⚑⚑ READ CELLS IS THE ENDING, so it closes the card it finished — David's
+    // *"there is nothing intuitive here to press to say 'done!'"*, answered by
+    // the button that already did the job rather than by a second one beside
+    // it. The card's folded line still names the grid, so nothing is lost.
+    expect(await page.getByTestId('heatmap-card').count()).toBe(0);
+    // ⚑ And the count now lives with the RECORD, which is the only place it
+    // could survive that fold.
+    expect(await textOf('heatmap-cells-summary')).toBe('20 cells read, all clean.');
     // The matrix is what opens, and it is the figure's own shape: five columns
     // across, four rows down, so a reader can see which cell is which.
     expect(await page.getByTestId('heatmap-matrix-row').count()).toBe(4);
@@ -8327,6 +8334,11 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
     await showHeatmapTable();
+    // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
+    // The bulk name boxes and the boundary buttons live in that card, so a test
+    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // name is click-to-edit on the matrix header itself.
+    await openHeatmapGrid();
     expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
 
     await page.getByTestId('heatmap-add-column').click();
@@ -8399,6 +8411,11 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(400);
     await showHeatmapTable();
+    // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
+    // The bulk name boxes and the boundary buttons live in that card, so a test
+    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // name is click-to-edit on the matrix header itself.
+    await openHeatmapGrid();
 
     await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
@@ -8495,6 +8512,11 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(500);
     await showHeatmapTable();
+    // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
+    // The bulk name boxes and the boundary buttons live in that card, so a test
+    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // name is click-to-edit on the matrix header itself.
+    await openHeatmapGrid();
 
     // Name the rows top-down, then correct the TOP one from the table.
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
@@ -8577,6 +8599,100 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId(`heatmap-matrix-cell-${picked[0]}-${picked[1]}`).click();
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-selected-cell')).toBe('');
+  });
+
+  // ⚑ The name says what THIS test does. That an edited cell MOVES with the key
+  // is the design's own proof and it lives in `heatmapRun.test.ts`, where a
+  // recalibration is two lines instead of a second walk through the UI.
+  it('lets a person correct a cell, and hands it back to the key on demand', async () => {
+    // ⚑⚑ B7 + B16. David: *"there might be something in the color/patern/shape
+    // that a user can see and we can't"* — a hatched cell, an asterisk over the
+    // fill, a label bleeding into the colour. Their eye is the better instrument
+    // for those, so their number is a MEASUREMENT and goes into the record the
+    // way ours does: as a position on the third axis.
+    //
+    // ⚑ EVERY CLICK HERE IS ONE THE SCREEN OFFERS (gate 4). The value carries
+    // the same dashed click-to-edit underline every other typed value in the app
+    // has had since v1.3, and the cell SHOWS its source — so the right-click menu
+    // changes something already visible rather than revealing it.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    const fromKey = await textOf('heatmap-matrix-cell-2-1');
+    expect(fromKey).not.toBe('');
+    expect(fromKey).not.toMatch(/\[/); // read from the colour: no brackets
+
+    // ⚑⚑ CLICKING A MATRIX CELL SELECTS IT AND NOTHING ELSE. In this view the
+    // cell IS the value, so an editor opening here would eat the selection
+    // click — and, seeded with the current number, would commit it on blur and
+    // stamp a cell as user-read that nobody typed into. The picked-cell line is
+    // where the value can be corrected, and it appears BECAUSE of this click.
+    await page.getByTestId('heatmap-matrix-cell-2-1').click();
+    await page.waitForTimeout(200);
+    expect(await page.locator('input[data-testid="heatmap-value-edit-2-1"]').count()).toBe(0);
+    // ⚑ ALL THREE COORDINATES — a heatmap is 2.5D, and where the cell sits on
+    // the colour key is a coordinate exactly as its column and row are.
+    const picked = await textOf('heatmap-picked-cell');
+    expect(picked).toMatch(/C3/);
+    expect(picked).toMatch(/R2/);
+    expect(picked).toMatch(/value/);
+
+    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').click();
+    await page.waitForTimeout(200);
+    const editor = page.locator('input[data-testid="heatmap-value-edit-2-1"]');
+    expect(await editor.count()).toBe(1);
+    await editor.fill('59');
+    await editor.press('Enter');
+    await page.waitForTimeout(400);
+
+    // ⚑⚑ SQUARE brackets — the scholarly "editorially supplied", and the one
+    // channel that survives a paste into a spreadsheet. NOT round: `(59)` is
+    // accounting notation for MINUS 59, which Excel applies silently.
+    // ⚑ `59.000`, not `59`: what is stored is a POSITION on the key, so the
+    // number shown is read back through the scale at the table's own precision
+    // like every other cell. It is not the string that was typed, and after a
+    // recalibration it will not be the number that was typed either.
+    expect(await textOf('heatmap-matrix-cell-2-1')).toBe('[59.000]');
+    // …and nothing else moved.
+    expect(await textOf('heatmap-matrix-cell-1-1')).not.toMatch(/\[/);
+
+    // The right-click menu names both instruments, and offers the one this cell
+    // is NOT using.
+    await page.getByTestId('heatmap-matrix-cell-2-1').click({ button: 'right' });
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('ctx-heatmap-use-mine').textContent()).toMatch(/Edit my value/);
+    await page.getByTestId('ctx-heatmap-use-key').click();
+    await page.waitForTimeout(400);
+
+    // Back to the key's own reading, brackets and all gone.
+    expect(await textOf('heatmap-matrix-cell-2-1')).toBe(fromKey);
+  });
+
+  it('records NOTHING when an editor is opened and closed without typing', async () => {
+    // ⚑⚑ A GLANCE IS NOT A MEASUREMENT. The editor opens seeded with the number
+    // already there, so committing on blur wrote that number back as the user's
+    // own reading — a cell stamped user-read that nobody typed into, and in the
+    // file indistinguishable from one they did. Found by the suite, not by
+    // reasoning: it surfaced as a multi-select test losing its second cell.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    await page.getByTestId('heatmap-matrix-cell-2-1').click();
+    await page.waitForTimeout(150);
+    const before = await textOf('heatmap-matrix-cell-2-1');
+    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').click();
+    await page.waitForTimeout(150);
+    await page.locator('input[data-testid="heatmap-value-edit-2-1"]').press('Enter');
+    await page.waitForTimeout(300);
+
+    expect(await textOf('heatmap-matrix-cell-2-1')).toBe(before);
+    expect(before).not.toMatch(/\[/);
   });
 
   it('shares the ORIGIN only, and the walk still asks for the far Y point', async () => {

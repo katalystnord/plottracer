@@ -211,6 +211,8 @@ import { cellIndexAt, cellsOf } from '../../core/heatmapGrid.js';
 import {
   addDivider,
   buildColorScale,
+  cellKey,
+  clearCellReading,
   describeDivider,
   detectGrid,
   heatmapAxisOverlays,
@@ -228,8 +230,13 @@ import {
   labelsToAxes,
   type MetadataCarrier,
   readHeatmapCells,
+  readingsFromAxes,
+  readingsToAxes,
   removeDividerHandle,
+  setCellReading,
+  NO_HEATMAP_CELL_READINGS,
   type HeatmapAxisKinds,
+  type HeatmapCellReadings,
   type HeatmapFrameCarrier,
   type HeatmapLabels,
   type HeatmapRow,
@@ -253,7 +260,7 @@ import {
   slopeDeltas,
   measurementPixelValue,
 } from '../../core/measurementValues.js';
-import { theme, glassSurface } from './theme.js';
+import { theme, glassSurface, endsCardButton } from './theme.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -961,6 +968,10 @@ export function Workspace() {
     | { x: number; y: number; kind: 'point'; index: number }
     | { x: number; y: number; kind: 'measure'; id: string }
     | { x: number; y: number; kind: 'empty' }
+    // ⚑ THE SAME MENU, one more target (B16). A heatmap cell's menu says which
+    // instrument read it — and reusing this one means it opens, closes, escapes
+    // and anchors exactly like every other right-click in the app.
+    | { x: number; y: number; kind: 'heatmap-cell'; col: number; row: number }
     | null
   >(null);
   // The selected calibration handle (checkpoint 127): its step key (e.g. 'x1'),
@@ -1124,7 +1135,40 @@ export function Workspace() {
    * rather than a scan: a column pick on a large matrix adds hundreds at once.
    */
   const [selectedCells, setSelectedCells] = useState<ReadonlySet<string>>(new Set());
-  const cellKey = (col: number, row: number) => `${col},${row}`;
+  /**
+   * The cells the USER read, as positions on the colour key.
+   *
+   * ⚑⚑ A POSITION, NOT A NUMBER (B7). David: *"Heatmaps are a 2.5D graph type.
+   * The values are STORED ON THE THIRD AXIS. Changing a value in a cell MOVES
+   * THE VALUE on the third axis that records the value, and nothing else!"* So
+   * an edited cell travels with the key when the key is recalibrated, exactly as
+   * a data point travels with its axes — there is nothing here that a
+   * recalibration would leave behind disagreeing with its neighbours.
+   */
+  const [heatmapCellReadings, setHeatmapCellReadings] =
+    useState<HeatmapCellReadings>(NO_HEATMAP_CELL_READINGS);
+  /**
+   * The cell whose value is being typed into. Null unless one is.
+   *
+   * ⚑⚑ `seed` IS WHAT THE EDITOR OPENED WITH, and it is load-bearing: an editor
+   * that opens and closes without a keystroke must record NOTHING. Without it,
+   * committing on blur wrote the seeded number back as a reading, so merely
+   * looking at a cell stamped it as user-read — a measurement nobody took,
+   * indistinguishable in the file from one they did.
+   */
+  const [editingHeatmapValue, setEditingHeatmapValue] = useState<
+    { col: number; row: number; value: string; seed: string } | null
+  >(null);
+  /**
+   * Why the last typed cell value was refused.
+   *
+   * ⚑ BESIDE THE TABLE, not on the Heatmap card. The card is where the key and
+   * the grid are set up; the cell was typed into in the results panel, and a
+   * refusal that appears in a fold-out somewhere else is one the user never
+   * connects to the thing they just did. Pattern 5 in CLAUDE.md — refusals fire
+   * AT the gesture.
+   */
+  const [heatmapValueError, setHeatmapValueError] = useState<string | null>(null);
   /** The single pick, for everything that still means "the one cell in hand" —
    * the readout, the canvas outline, the value the card names. Null unless
    * exactly one is picked, because "which cell?" has no answer for a range. */
@@ -1986,6 +2030,13 @@ export function Workspace() {
     // ⚑ The names come back with the grid, through the same door. A reopened
     // heatmap whose columns lost their names would export the index numbers this
     // whole feature exists to replace — and it would do it silently.
+    // ⚑ And the user's OWN readings, through the same door for the same reason:
+    // a cell someone corrected by eye that came back reading the colour again
+    // would silently undo a measurement, and look exactly like a file that never
+    // held one.
+    setHeatmapCellReadings(
+      axes ? readingsFromAxes(axes as unknown as MetadataCarrier) : NO_HEATMAP_CELL_READINGS
+    );
     const stored = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
     // Back through the SAME mapping, which is its own inverse: the boxes show
     // the figure's reading order, the file holds the cell order.
@@ -2041,14 +2092,22 @@ export function Workspace() {
           sessionRef.current.getOptions()['isLogValue'] === 'true'
         );
         if (scale) {
-          const result = readHeatmapCells(image, axesNow, next, scale, labelsForCells(heatmapLabels, next, axesNow), heatmapKinds());
+          const result = readHeatmapCells(
+            image,
+            axesNow,
+            next,
+            scale,
+            labelsForCells(heatmapLabels, next, axesNow),
+            heatmapKinds(),
+            heatmapCellReadings
+          );
           setHeatmapCells(result.rows);
           setHeatmapSummary(result.summary);
         }
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length, heatmapKinds, heatmapLabels]
+    [applyHeatmapGrid, commit, heatmapCells.length, heatmapCellReadings, heatmapKinds, heatmapLabels]
   );
 
   const moveHeatmapDivider = useCallback(
@@ -2162,7 +2221,17 @@ export function Workspace() {
     );
   }, [applyHeatmapGrid, heatmapBounds, heatmapCounts]);
 
-  const runHeatmapRead = useCallback(() => {
+  /**
+   * Read the matrix.
+   *
+   * ⚑ ONE READ PATH, and the user's own readings are an argument to it rather
+   * than a pass over the result. `readHeatmapCells` applies them through the
+   * SAME `valueAtPosition` ours come out of, so their number and ours are
+   * comparable by construction — patching the rows afterwards would be a second
+   * transform, and the two would disagree the first time the key was
+   * recalibrated.
+   */
+  const runHeatmapRead = useCallback((readings: HeatmapCellReadings = heatmapCellReadings) => {
     setHeatmapError(null);
     const img = imageCanvasRef.current?.getImageData();
     const axes = sessionRef.current.getAxes();
@@ -2203,12 +2272,133 @@ export function Workspace() {
       );
       return;
     }
-    const result = readHeatmapCells(image, axes, grid, scale, labelsForCells(heatmapLabels, grid, axes), heatmapKinds());
+    const result = readHeatmapCells(
+      image,
+      axes,
+      grid,
+      scale,
+      labelsForCells(heatmapLabels, grid, axes),
+      heatmapKinds(),
+      readings
+    );
     applyHeatmapGrid(grid);
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapKinds, heatmapLabels, heatmapShownGrid]);
+    return result.error === null && result.rows.length > 0;
+  }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid]);
+
+  /**
+   * The Grid card's ENDING: read the cells, then close the card.
+   *
+   * ⚑⚑ ONLY THE BUTTON FOLDS. The same read runs when a boundary is dragged and
+   * when a cell is corrected — folding there would shut the card the user is
+   * working in, and the adjust-then-look loop is real (a drag re-reads by
+   * itself). So the fold belongs to the GESTURE that means "I am finished
+   * defining this grid", not to the reading.
+   *
+   * ⚑ AND ONLY ON SUCCESS. A refusal has to stay on screen beside the button
+   * that produced it; folding the card would file the sentence away in a closed
+   * fold-out, which is the "refusals fire AT the gesture" failure in mirror
+   * image.
+   */
+  const finishHeatmapGrid = useCallback(() => {
+    if (runHeatmapRead()) setHeatmapPanelOpen(false);
+  }, [runHeatmapRead]);
+
+  /**
+   * Record what the user read in a cell, and put it where a save and an undo
+   * will both find it.
+   *
+   * ⚑ THE SAME SHAPE AS `applyHeatmapGrid`, one line below it in spirit: state
+   * for the screen, axes metadata for the file, and the undo snapshot serializes
+   * the axes so this is undoable without a new snapshot field.
+   */
+  const applyHeatmapCellReadings = useCallback(
+    (next: HeatmapCellReadings) => {
+      setHeatmapCellReadings(next);
+      const axes = sessionRef.current.getAxes();
+      if (axes) readingsToAxes(axes as unknown as MetadataCarrier, next);
+      runHeatmapRead(next);
+      commit();
+    },
+    [commit, runHeatmapRead]
+  );
+
+  /**
+   * Commit the number the user typed into a cell.
+   *
+   * ⚑⚑ IT MOVES THE CELL ALONG THE COLOUR KEY — the third axis's inverse — which
+   * is the identical gesture to editing a data point's y, where `dataToPixel`
+   * repositions the point. `setCellReading` holds the refusal (a log key has no
+   * zero and no negative side), so the model refuses at the gesture and the
+   * sentence appears beside the table that was typed into.
+   */
+  const commitHeatmapValueEdit = useCallback(() => {
+    const edit = editingHeatmapValue;
+    setEditingHeatmapValue(null);
+    setHeatmapValueError(null);
+    if (!edit) return;
+    // ⚑ AN EDITOR THAT WAS OPENED AND CLOSED IS NOT A READING. Nothing was
+    // typed, so nothing is recorded, nothing is re-read and no undo entry is
+    // made — the alternative silently converted a glance into a measurement.
+    if (edit.value === edit.seed) return;
+    const img = imageCanvasRef.current?.getImageData();
+    const image = img ? { data: img.data, width: img.width, height: img.height } : null;
+    const { scale } = image
+      ? buildColorScale(
+          sessionRef.current.getPlacedPoints(),
+          image,
+          sessionRef.current.getOptions()['isLogValue'] === 'true'
+        )
+      : { scale: null };
+    // ⚑ SAID, not swallowed. There is no way to place a value on a key that
+    // cannot be read, and a typed number that simply vanished would look like
+    // the app ignoring the user — the failure mode this whole feature answers.
+    if (!scale) {
+      setHeatmapValueError(
+        'The colour key cannot be read, so there is no scale to place that value on — recalibrate the key first.'
+      );
+      return;
+    }
+    const { readings, error } = setCellReading(
+      heatmapCellReadings,
+      scale,
+      edit.col,
+      edit.row,
+      edit.value
+    );
+    if (error !== null) {
+      setHeatmapValueError(error);
+      return;
+    }
+    applyHeatmapCellReadings(readings);
+  }, [applyHeatmapCellReadings, editingHeatmapValue, heatmapCellReadings]);
+
+  /** Hand the cell back to the colour key — the other half of B16's menu.
+   * ⚑ NOT `useKeyReadingForCell`: a plain function whose name begins with "use"
+   * is a React hook as far as every lint rule and every reader is concerned. */
+  const readCellFromKey = useCallback(
+    (col: number, row: number) => {
+      applyHeatmapCellReadings(clearCellReading(heatmapCellReadings, col, row));
+    },
+    [applyHeatmapCellReadings, heatmapCellReadings]
+  );
+
+  /** Which instrument read this cell — read off the ROW, so the menu can never
+   * disagree with the number and the tint the user is looking at. */
+  const heatmapCellSourceAt = useCallback(
+    (col: number, row: number): 'colour' | 'user' | 'ocr' =>
+      heatmapCells.find((c) => c.col === col && c.row === row)?.source ?? 'colour',
+    [heatmapCells]
+  );
+
+  const handleHeatmapCellContextMenu = useCallback(
+    (col: number, row: number, clientX: number, clientY: number) => {
+      setCtxMenu({ x: clientX, y: clientY, kind: 'heatmap-cell', col, row });
+    },
+    []
+  );
 
   /**
    * The picked cell's four corners, for the canvas.
@@ -6028,6 +6218,45 @@ export function Workspace() {
       ordinal.toPrecision(4), copy ?? bandIndex
     );
 
+  /**
+   * One heatmap cell's VALUE — click to edit, exactly as the XY and spider
+   * tables' values have been since v1.3.
+   *
+   * ⚑⚑ THE TYPED TWIN OF A MEASUREMENT, and the same component that serves the
+   * other two: a person who can read a hatched cell we can only average is
+   * taking a reading, and it goes into the record the way ours does. The dashed
+   * underline is the whole affordance — nothing has to be known in advance for
+   * it to be found.
+   *
+   * ⚑ The seed is the number AS SHOWN, without its brackets: a user reopening
+   * their own value should not have to delete punctuation the table added.
+   */
+  const renderHeatmapValue = (cell: HeatmapRow, display: string) => {
+    const editing =
+      editingHeatmapValue?.col === cell.col && editingHeatmapValue.row === cell.row;
+    const seed = cell.value === null ? '' : String(cell.value);
+    return (
+      <EditableValue
+        editing={editing}
+        editValue={editingHeatmapValue?.value ?? ''}
+        display={display}
+        testIdEdit={`heatmap-value-edit-${cell.col}-${cell.row}`}
+        testIdValue={`heatmap-value-${cell.col}-${cell.row}`}
+        title="Click to edit — moves this cell along the colour key"
+        width={64}
+        align="right"
+        onStartEdit={() =>
+          setEditingHeatmapValue({ col: cell.col, row: cell.row, value: seed, seed })
+        }
+        onChange={(v) =>
+          setEditingHeatmapValue({ col: cell.col, row: cell.row, value: v, seed })
+        }
+        onCommit={commitHeatmapValueEdit}
+        onCancel={() => setEditingHeatmapValue(null)}
+      />
+    );
+  };
+
   const renderEditableTupleLabel = (tupleIndex: number, rawLabel: string) =>
     renderEditableName(
       tupleIndex, rawLabel, editingTupleLabel, setEditingTupleLabel, setTupleLabel,
@@ -6041,6 +6270,7 @@ export function Workspace() {
   const guidanceTip = buildGuidanceTip({
     canvasHasImage,
     heatmapHasGrid: heatmapShownGrid !== null,
+    heatmapHasCells: heatmapCells.length > 0,
     isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
     mode,
     figureCaptured,
@@ -6441,7 +6671,17 @@ export function Workspace() {
               {axes ? 'Calibrated ✓' : `${Object.keys(placedPoints).length}/${steps.length} set`}
             </span>
             {!isCalibrating && !axes && (
-              <button type="button" data-testid="run-calibration" onClick={runCalibration} style={{ marginLeft: 'auto', fontSize: 12, whiteSpace: 'nowrap' }}>
+              // ⛑ THE SAME TEAL AS THE OTHER TWO. This ends the calibration
+              // walk and auto-folds its card (checkpoint 86) — the identical
+              // role Done and Read cells play — and it was the plainest control
+              // in the panel while being the one every extracted value depends
+              // on. David spotted the inconsistency from the other end.
+              <button
+                type="button"
+                data-testid="run-calibration"
+                onClick={runCalibration}
+                style={{ marginLeft: 'auto', ...endsCardButton() }}
+              >
                 Calibrate
               </button>
             )}
@@ -6750,7 +6990,7 @@ export function Workspace() {
                 }
                 onDetect={runHeatmapDetect}
                 onOverlayEvenGrid={overlayEvenHeatmapGrid}
-                onRead={runHeatmapRead}
+                onRead={finishHeatmapGrid}
                 onAddColumnBoundary={() => addHeatmapDivider('x')}
                 onAddRowBoundary={() => addHeatmapDivider('y')}
                 selectedBoundary={selectedBoundary}
@@ -6773,7 +7013,6 @@ export function Workspace() {
                 onCommitPendingEdit={commitPendingEdit}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
                 yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
-                summary={heatmapSummary}
                 error={heatmapError}
                 canRead={session.isCalibrated()}
               />
@@ -7003,15 +7242,7 @@ export function Workspace() {
                           type="button"
                           data-testid="category-done"
                           onClick={() => setCategoryPanelOpen(false)}
-                          style={{
-                            fontSize: 12,
-                            border: `1px solid ${theme.color.primary.main}`,
-                            borderRadius: theme.border.radius.regular,
-                            background: theme.color.primary.main,
-                            color: '#fff',
-                            padding: '2px 12px',
-                            cursor: 'pointer',
-                          }}
+                          style={endsCardButton()}
                         >
                           Done
                         </button>
@@ -7783,6 +8014,50 @@ export function Workspace() {
               Delete measurement
             </MenuItem>
           )}
+          {/* ⚑⚑ B16 — WHICH INSTRUMENT READ THIS CELL. All three sources are
+              MEASUREMENTS and they fail in opposite ways, so this is a choice of
+              instrument, not a declared-versus-measured flag. Two entries today;
+              OCR lands as a THIRD one in v2.3 rather than as a retrofit of some
+              other mechanism.
+              ⚑ The menu CHANGES the source — the cell already SHOWS it, tinted
+              with the colour it was read from or bracketed where a person read
+              it, so nothing here has to be discovered to know what is going on. */}
+          {ctxMenu?.kind === 'heatmap-cell' && [
+            <MenuItem
+              key="key"
+              data-testid="ctx-heatmap-use-key"
+              // The current source is offered but not actionable: you cannot
+              // change a reading to the one it already is.
+              disabled={heatmapCellSourceAt(ctxMenu.col, ctxMenu.row) !== 'user'}
+              onClick={() => {
+                readCellFromKey(ctxMenu.col, ctxMenu.row);
+                setCtxMenu(null);
+              }}
+            >
+              Use number from key
+            </MenuItem>,
+            <MenuItem
+              key="mine"
+              data-testid="ctx-heatmap-use-mine"
+              onClick={() => {
+                const cell = heatmapCells.find(
+                  (c) => c.col === ctxMenu.col && c.row === ctxMenu.row
+                );
+                // ⚑ SET, not `pickCells`. A plain pick TOGGLES — clicking the
+                // one cell already picked clears it — which is right for a click
+                // on the table and wrong here: the menu names this cell, so
+                // choosing an entry from it can only ever mean "this one".
+                setSelectedCells(new Set([cellKey(ctxMenu.col, ctxMenu.row)]));
+                const seed = cell?.value == null ? '' : String(cell.value);
+                setEditingHeatmapValue({ col: ctxMenu.col, row: ctxMenu.row, value: seed, seed });
+                setCtxMenu(null);
+              }}
+            >
+              {heatmapCellSourceAt(ctxMenu.col, ctxMenu.row) === 'user'
+                ? 'Edit my value…'
+                : 'Use my value…'}
+            </MenuItem>,
+          ]}
           {ctxMenu?.kind === 'empty' && [
             <MenuItem
               key="fit"
@@ -8063,6 +8338,38 @@ export function Workspace() {
                the output in the same place as for the other graphs… else it
                becomes very confusing for the users, and extremely
                inconsistent"). The card keeps the INPUTS. */
+            <>
+            {/* ⚑⚑ THE COUNT LIVES WITH THE RECORD, not with the card that made
+                it. Read cells now FOLDS the Grid card, so a summary rendered
+                inside it would be filed away in a closed fold-out at the exact
+                moment it becomes true — and "20 cells read; 3 need a look" is
+                the one line that says whether to trust any of these numbers. It
+                is a statement about the OUTPUT, so it belongs where the output
+                is: the same input/output split the rail redesign settled and
+                this feature has now honoured three times.
+                ⚑ The ERROR stays on the card, because a refusal must sit beside
+                the button that produced it — and the card does not fold when
+                the read fails. */}
+            {heatmapSummary && (
+              <p
+                data-testid="heatmap-cells-summary"
+                style={{
+                  color: theme.color.text.secondary,
+                  fontSize: theme.font.size.small,
+                  margin: '0 0 4px',
+                }}
+              >
+                {heatmapSummary}
+              </p>
+            )}
+            {heatmapValueError && (
+              <p
+                data-testid="heatmap-value-error"
+                style={{ color: theme.color.error, fontSize: theme.font.size.small, margin: '0 0 4px' }}
+              >
+                {heatmapValueError}
+              </p>
+            )}
             <HeatmapCellsTable
               cells={heatmapCells}
               noCellsHint={noPointsHint}
@@ -8071,7 +8378,10 @@ export function Workspace() {
               selectedCell={selectedCell}
               selectedCells={selectedCells}
               onPickCells={pickCells}
+              renderValue={renderHeatmapValue}
+              onCellContextMenu={handleHeatmapCellContextMenu}
             />
+            </>
           ) : isHistogram ? (
             <HistogramBinsTable
               rows={tupleRows}

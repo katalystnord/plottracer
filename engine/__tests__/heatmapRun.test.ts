@@ -8,6 +8,7 @@ import { Calibration } from '../../core/calibration.js';
 import {
   addDivider,
   buildColorScale,
+  clearCellReading,
   describeDivider,
   detectGrid,
   heatmapAxisOverlays,
@@ -17,7 +18,12 @@ import {
   labelOrderReversed,
   labelsForCells,
   readHeatmapCells,
+  readingsFromAxes,
+  readingsToAxes,
   removeDividerHandle,
+  setCellReading,
+  NO_HEATMAP_CELL_READINGS,
+  type HeatmapRow,
   type SourceImage,
 } from '../heatmapRun.js';
 import type { PlacedCalibPoint } from '../calibrationSession.js';
@@ -588,5 +594,211 @@ describe('adding and removing a boundary', () => {
     // cell that started at 4 as the grid's new left edge, which is exactly what
     // a user cropping a stray column off the figure means to do.
     expect(removeDividerHandle(grid, 'hmx:0')!.xDividers).toEqual([4, 10]);
+  });
+});
+
+/**
+ * B7 / B16 — THE USER IS AN INSTRUMENT, and their reading is recorded the way
+ * ours is: as a POSITION ON THE THIRD AXIS.
+ *
+ * ⚑⚑ David, when I proposed an override carrying a declared-vs-measured flag:
+ * *"NO. And seriously NO. Heatmaps are a 2.5D graph type. The values are STORED
+ * ON THE THIRD AXIS. Changing a value in a cell MOVES THE VALUE on the third
+ * axis that records the value, and nothing else!"* So there is no new field to
+ * assert here — the whole design shows up as `moves when the key is
+ * recalibrated`, which a stored NUMBER cannot pass and a stored POSITION cannot
+ * fail. That test is the design.
+ *
+ * ⚑ Why it exists at all (David, same day): *"there might be something in the
+ * color/patern/shape that a user can see and we can't"* — a hatched cell, an
+ * asterisk over the fill, a label bleeding into the fill, a texture the modal
+ * sampler averages away. Their eye is the better instrument for those, and
+ * often the only one that can tell.
+ */
+describe('a user’s own reading of a cell', () => {
+  /** The figure, its grid, and the key — the state a user is looking at when
+   * they decide our number is wrong. */
+  function readable(log = false) {
+    const { fig, image, axes, placed } = scene();
+    const { scale } = buildColorScale(placed, image, log);
+    const grid = { xDividers: fig.grid.x, yDividers: fig.grid.y };
+    return { fig, image, axes, placed, grid, scale: scale! };
+  }
+  const cellAt = (rows: HeatmapRow[], col: number, row: number) =>
+    rows.find((r) => r.col === col && r.row === row)!;
+
+  it('a typed value moves the cell along the key', () => {
+    const { image, axes, grid, scale } = readable();
+    const before = cellAt(readHeatmapCells(image, axes, grid, scale).rows, 1, 1);
+    expect(before.source).toBe('colour');
+
+    const { readings, error } = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59');
+    expect(error).toBeNull();
+    const after = cellAt(
+      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      1,
+      1
+    );
+    expect(after.value).toBeCloseTo(59, 6);
+    expect(after.source).toBe('user');
+    // ⚑ AND NOTHING ELSE MOVED. The edit is one cell's coordinate on one axis.
+    expect(cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows, 0, 0).source).toBe(
+      'colour'
+    );
+  });
+
+  it('an edited cell MOVES when the key is recalibrated — a POSITION was stored, not a number', () => {
+    // ⚑⚑ THE TEST THAT IS THE DESIGN. Every position on this key is worth twice
+    // as much once both printed labels are read as twice what they were, so the
+    // user's cell must read 118 — exactly as a data point moves when its axes
+    // are recalibrated. A stored NUMBER would sit at 59 and quietly disagree
+    // with every other cell in the matrix, with nothing on screen saying which
+    // of them to trust.
+    const { image, axes, grid, placed } = readable();
+    const { scale } = buildColorScale(placed, image, false);
+    const { readings } = setCellReading(NO_HEATMAP_CELL_READINGS, scale!, 1, 1, '59');
+
+    const doubled = {
+      ...placed,
+      kv1: { ...placed.kv1!, values: [String(Number(placed.kv1!.values[0]) * 2)] },
+      kv2: { ...placed.kv2!, values: [String(Number(placed.kv2!.values[0]) * 2)] },
+    };
+    const recalibrated = buildColorScale(doubled, image, false).scale!;
+    const after = cellAt(
+      readHeatmapCells(image, axes, grid, recalibrated, undefined, undefined, readings).rows,
+      1,
+      1
+    );
+    expect(after.value).toBeCloseTo(118, 4);
+    expect(after.source).toBe('user');
+  });
+
+  it('refuses a value the LOG key cannot represent, at the gesture, keeping the reading it had', () => {
+    const { image, placed } = readable();
+    // A positive-labelled key read as logarithmic — the ordinary older-paper case.
+    const logged = {
+      ...placed,
+      kv1: { ...placed.kv1!, values: ['1'] },
+      kv2: { ...placed.kv2!, values: ['100'] },
+    };
+    const scale = buildColorScale(logged, image, true).scale!;
+    for (const typed of ['0', '-5', '', 'nine']) {
+      const { readings, error } = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, typed);
+      expect(error, `“${typed}” must be refused`).not.toBeNull();
+      expect(readings).toEqual(NO_HEATMAP_CELL_READINGS);
+    }
+    // …and a positive one is taken.
+    expect(setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '50').error).toBeNull();
+  });
+
+  it('gives the cell back to the key when the user’s reading is cleared', () => {
+    const { image, axes, grid, scale } = readable();
+    const mine = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
+    const cleared = clearCellReading(mine, 1, 1);
+    expect(cleared).toEqual(NO_HEATMAP_CELL_READINGS);
+    const back = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, cleared).rows, 1, 1);
+    const never = cellAt(readHeatmapCells(image, axes, grid, scale).rows, 1, 1);
+    expect(back.source).toBe('colour');
+    expect(back.value).toBeCloseTo(never.value!, 10);
+    expect(back.rgb).toEqual(never.rgb);
+  });
+
+  it('carries no COLOUR evidence for a value the colour did not produce', () => {
+    // ⚑ The interval, the distance off the ramp, the rivals and the clipping
+    // flag are all properties of inverting a COLOUR. A reading taken by eye has
+    // none of them, and inventing them — low = high = the typed number, say —
+    // would dress a bare assertion as a measured interval.
+    const { image, axes, grid, scale } = readable();
+    const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
+    const mine = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows, 1, 1);
+    expect(mine.low).toBeNull();
+    expect(mine.high).toBeNull();
+    expect(mine.distance).toBeNull();
+    expect(mine.rivalValues).toEqual([]);
+    expect(mine.atKeyLimit).toBe(false);
+  });
+
+  it('keeps what was measured of the PIXELS, which is why the user looked twice', () => {
+    // ⚑ Uniformity is a fact about the cell's ink, not about who read it: a
+    // hatched cell is still hatched after a person types the number they can see
+    // in it, and that is the evidence for the correction rather than something
+    // the correction disposes of. The colour-inversion warnings go; this stays.
+    const { image, axes, placed } = scene('heatmap-jet-jpeg.png');
+    const scale = buildColorScale(placed, image, false).scale!;
+    const grid = { xDividers: [0, 1, 3.5, 4, 6, 9], yDividers: [0, 2, 2.5, 5, 8] };
+    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const messy = rows.find((r) => /% of the cell/.test(r.warning))!;
+    expect(messy, 'the degraded figure must still have a non-uniform cell').toBeDefined();
+
+    const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, messy.col, messy.row, '59').readings;
+    const mine = cellAt(
+      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      messy.col,
+      messy.row
+    );
+    expect(mine.uniformity).toBeCloseTo(messy.uniformity, 10);
+    expect(mine.warning).toMatch(/% of the cell/);
+    expect(mine.warning).not.toMatch(/off the key|possible values|key’s limit/);
+  });
+
+  it('says nothing about a cell the grid no longer has', () => {
+    // A reading filed against column 4 of a five-column grid, after two columns
+    // were merged. It is not a row of the record any more, and nothing invents
+    // one for it.
+    const { image, axes, scale } = readable();
+    const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 4, 0, '59').readings;
+    const rows = readHeatmapCells(
+      image,
+      axes,
+      { xDividers: [0, 4, 9], yDividers: [0, 8] },
+      scale,
+      undefined,
+      undefined,
+      readings
+    ).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.source === 'colour')).toBe(true);
+  });
+});
+
+/** The user's readings are part of the record, so they save, reopen and undo
+ * through the same axes metadata the grid and the names ride in — and the load
+ * path validates them, because a file is an entrance to the model like any
+ * other. */
+describe('the user’s readings, saved and reopened', () => {
+  const carrier = () => {
+    let meta: Record<string, unknown> = {};
+    return {
+      getMetadata: () => meta,
+      setMetadata: (obj: Record<string, unknown>) => {
+        meta = obj;
+      },
+    };
+  };
+
+  it('rides in the axes metadata, and comes back the same', () => {
+    const axes = carrier();
+    readingsToAxes(axes, { '1,1': 0.25, '3,0': 0.75 });
+    expect(readingsFromAxes(axes)).toEqual({ '1,1': 0.25, '3,0': 0.75 });
+  });
+
+  it('writes NOTHING when the user has read nothing, rather than an empty record', () => {
+    const axes = carrier();
+    readingsToAxes(axes, { '1,1': 0.25 });
+    readingsToAxes(axes, NO_HEATMAP_CELL_READINGS);
+    expect(axes.getMetadata()).not.toHaveProperty('heatmapCellReadings');
+    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
+  });
+
+  it('refuses anything that is not a position at a cell', () => {
+    const axes = carrier();
+    axes.setMetadata({
+      heatmapCellReadings: { '1,1': 0.25, '2,2': 'high', '3,3': null, nowhere: 0.5, '4,-1': 0.5 },
+    });
+    expect(readingsFromAxes(axes)).toEqual({ '1,1': 0.25 });
+    axes.setMetadata({ heatmapCellReadings: [0.25] });
+    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
+    axes.setMetadata({ heatmapCellReadings: 'yes' });
+    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
   });
 });

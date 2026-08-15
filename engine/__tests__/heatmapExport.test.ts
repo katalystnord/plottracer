@@ -88,13 +88,21 @@ describe('heatmapCellsSection', () => {
       makeRounder(axes(), 'auto')
     );
     expect(section.header.slice(section.header.indexOf('value') + 1)).toEqual([
+      'value source',
       'value low',
       'value high',
       'colour offset',
       'uniformity',
       'at key limit',
     ]);
-    expect(section.rows[0]!.slice(section.header.indexOf('value') + 1)).toEqual([41, 44, 2.5, 0.75, '']);
+    expect(section.rows[0]!.slice(section.header.indexOf('value') + 1)).toEqual([
+      'colour',
+      41,
+      44,
+      2.5,
+      0.75,
+      '',
+    ]);
   });
 
   it('writes an unread cell EMPTY, never as zero', () => {
@@ -105,7 +113,18 @@ describe('heatmapCellsSection', () => {
       [cell({ value: null, low: null, high: null, distance: null, uniformity: 0 })],
       makeRounder(axes(), 'auto')
     );
-    expect(section.rows[0]!.slice(section.header.indexOf('value'))).toEqual(['', '', '', '', 0, '']);
+    // ⚑ The SOURCE still says `colour`: the colour is what was looked at, and
+    // finding no value there is the measurement. An empty source would say
+    // nothing was read, which is a different claim.
+    expect(section.rows[0]!.slice(section.header.indexOf('value'))).toEqual([
+      '',
+      'colour',
+      '',
+      '',
+      '',
+      0,
+      '',
+    ]);
     expect(section.rows[0]!.slice(0, 4)).toEqual([0, 1, 0, 2]);
   });
 
@@ -125,6 +144,40 @@ describe('heatmapCellsSection', () => {
     const section = heatmapCellsSection([cell({ atKeyLimit: true })], makeRounder(axes(), 'auto'));
     expect(section.rows[0]![section.header.indexOf('at key limit')]).toBe('yes');
     expect(JSON.parse(buildHeatmapJSON([cell({ atKeyLimit: true })])).cells[0].atKeyLimit).toBe(true);
+  });
+
+  it('says WHICH INSTRUMENT read every value, in every file', () => {
+    // ⚑⚑ B16. The three instruments fail in OPPOSITE ways — OCR reads ink as
+    // GLYPHS and fails discretely (right, or badly wrong); the colour reads it
+    // as a RAMP and fails continuously (small, silent); a person sees what both
+    // machines are blind to. A consumer treating an OCR'd 59 and a
+    // colour-inverted 58.7 as the same kind of number is wrong about both, so
+    // this is a fact about the VALUE and belongs beside it.
+    // ⚑ UNCONDITIONAL, unlike the label columns. A missing `x label` column says
+    // plainly that nothing is named; a missing source column would say nothing
+    // at all, and leave a reader to assume a default they were never told.
+    // Evidence columns are always written here — `uniformity` and `at key limit`
+    // set that precedent, and this is one of them.
+    const section = heatmapCellsSection(
+      [cell({ value: 42.5, source: 'colour' }), cell({ value: 59, source: 'user' })],
+      makeRounder(axes(), 'auto')
+    );
+    const at = section.header.indexOf('value source');
+    expect(at).toBeGreaterThan(section.header.indexOf('value'));
+    expect(section.rows.map((r) => r[at])).toEqual(['colour', 'user']);
+    // A cell whose row says nothing about its source was read the way every
+    // cell was read before a second instrument existed.
+    expect(heatmapCellsSection([cell({})], makeRounder(axes(), 'auto')).rows[0]![at]).toBe('colour');
+  });
+
+  it('carries the source into the JSON too — the machine-readable half', () => {
+    // ⚑ The bracket around `[59]` in the table is the half that survives a paste
+    // into a spreadsheet; this is the half a program can read. Both channels,
+    // because they reach different readers.
+    const doc = JSON.parse(
+      buildHeatmapJSON([cell({ value: 59, source: 'user' }), cell({ value: 42.5 })])
+    ) as { cells: Array<{ valueSource: string }> };
+    expect(doc.cells.map((c) => c.valueSource)).toEqual(['user', 'colour']);
   });
 
   it('renders through the ordinary table formats', () => {
@@ -234,6 +287,7 @@ describe('buildHeatmapJSON', () => {
       xCentre: 0.5,
       yCentre: 1,
       value: 10,
+      valueSource: 'colour',
       valueLow: 41,
       valueHigh: 44,
       colourOffset: 0,

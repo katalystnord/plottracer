@@ -409,7 +409,13 @@ unnamed cells keep their measured coordinates.
 
 ### Reading the cells
 
-**Read cells** fills the table. In a heatmap the colour *is* the value, so a
+**Read cells** is the end of the Grid card's job: it reads every cell through the
+colour key, fills the Cells panel and **closes the card behind it**. The folded
+line still reads *Grid — 7 × 5 cells*, so one click reopens it if you want to
+move a boundary or type names in bulk. (You never have to reopen it just to name
+a column — click the column's header in the matrix.)
+
+In a heatmap the colour *is* the value, so a
 wrong cell has no other symptom — no gap in a trace, no misplaced point — and
 every cell therefore reports its own evidence beside its number:
 
@@ -420,9 +426,54 @@ every cell therefore reports its own evidence beside its number:
 | *n*% of the cell | how much of the cell was actually the colour that was read |
 | at the key's limit | the colour is the key's extreme, so the figure may have **clipped** the value |
 
-The card says how many cells need a look. **A clipped cell is exact, uniform and
-wrong** — the figure stopped containing the number — and nothing but that
-warning can tell you.
+The Cells panel says how many need a look, above the matrix. **A clipped cell is
+exact, uniform and wrong** — the figure stopped containing the number — and
+nothing but that warning can tell you.
+
+Click a cell to pick it. The line above the matrix then names all three of its
+coordinates — its column, its row, and its value — and the figure highlights the
+square it was read from.
+
+### Correcting a cell
+
+**You are not the only instrument looking at the figure, and neither are we.** A
+hatched cell, an asterisk printed over the fill, a label bleeding into the
+colour, a texture the sampler averages away — your eye reads all of those better
+than a colour sampler does, and sometimes it is the only thing that can.
+
+So **pick the cell and type the number you can see** — into the value on the line
+above the matrix, or into the value column of the Table view. (In the matrix
+itself a cell *is* its value, so clicking one picks it rather than opening an
+editor.) The cell
+moves *along the colour key*: what is recorded is a position on that third axis,
+exactly as a data point's position is recorded on the X and Y axes. Recalibrate
+the key afterwards and your cell moves with it, together with every other cell in
+the matrix — it can never drift into quietly disagreeing with its neighbours.
+
+Every value therefore says which instrument read it, in the table and in the
+file:
+
+| | |
+|---|---|
+| **tinted with the figure's own colour** | read from the colour key |
+| **`[59]`**, in square brackets, no tint | read by you |
+
+The tint makes the matrix a miniature of the figure — a shadowed column shows as
+a darker band beside numbers that look perfectly reasonable — and a corrected
+cell reads as a hole in that pattern. The brackets are the convention from
+scholarly editing, where `[x]` means *editorially supplied*; they are also the
+half that survives a copy-paste into a spreadsheet, where the colour does not.
+
+**Right-click a cell** to switch it back to **Use number from key**, or to edit
+your own value again. A value you typed is a measurement, not an override: the
+export names its source in a `value source` column rather than hiding the
+difference, because a number read from a colour ramp and one read by eye go wrong
+in opposite ways.
+
+*A cell you read yourself carries no `range`, no colour offset and no clipping
+flag — those describe inverting a colour, and none of them is true of a reading
+taken by eye. How much of the cell was one flat colour is still reported: that is
+a fact about the ink, and usually the reason you looked twice.*
 
 ### What PlotTracer will not do here
 
@@ -438,14 +489,15 @@ warning can tell you.
 - **A regular hatch or stipple over the cells is a known limitation.** A pattern
   covering up to about a third of a cell is read correctly and flagged, but a
   dense regular pattern can line up with the sampling grid and be read as if it
-  were the cell's own colour. If your figure is hatched, treat the flagged cells
-  as unresolved and check them against the key by eye.
+  were the cell's own colour. If your figure is hatched, check the flagged cells
+  against the key by eye and type in what you read — see *Correcting a cell*
+  above.
 
 ### Export
 
 Cells export in two shapes, both written: **one row per cell** — `x min`,
-`x max`, `y min`, `y max`, `x centre`, `y centre`, `value` plus the evidence
-columns — and the **matrix** view for readers that want a 2-D array with
+`x max`, `y min`, `y max`, `x centre`, `y centre`, `value`, `value source` plus
+the evidence columns — and the **matrix** view for readers that want a 2-D array with
 coordinate vectors. Both are written because real consumers need each: some
 plotting libraries require *n+1* edges and refuse centres, others take centres.
 Where an axis is categorical the header says `(category index)` and the names

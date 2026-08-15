@@ -676,6 +676,33 @@ describe('autoExtractModesFor', () => {
 const barPlacing = (over: Partial<GuidanceTipInput> = {}): GuidanceTipInput =>
   base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', ...over });
 
+describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
+  const heatmap = (over: Partial<GuidanceTipInput> = {}): GuidanceTipInput =>
+    base({ mode: 'place-point', config: HEATMAP_AXES_CONFIG, ...over });
+
+  it('names the correction gesture ONLY once there are cells to correct', () => {
+    // ⚑ An invisible precondition is the failure mode this guards: naming a
+    // gesture the user cannot perform yet is worse than saying nothing, because
+    // they go looking for it. Before Read cells the table is empty and the
+    // sentence is about the grid.
+    const before = guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: false }));
+    expect(before).not.toMatch(/type over/i);
+    expect(before).toMatch(/boundary/i);
+
+    const after = guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true }));
+    expect(after).toMatch(/type over/i);
+  });
+
+  it('says the WAY BACK, because right-click is the half nothing else shows', () => {
+    // ⚑ Typing over a value is discoverable — the dashed underline every
+    // editable number in the app carries. Handing the cell back to the key is
+    // not, and a correction with no visible exit is a one-way door.
+    expect(guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true }))).toMatch(
+      /right-click/i
+    );
+  });
+});
+
 describe('⚑ the tips bar while the category axis is being marked (v2.1 audit)', () => {
   it('stops telling the user to drag a bar, because no click can capture one', () => {
     // Box capture stands down while the fold-out is asking for an edge, and a

@@ -111,3 +111,40 @@ export const glassSurface = {
   backdropFilter: 'blur(8px)',
   WebkitBackdropFilter: 'blur(8px)',
 } as const;
+
+/**
+ * The button that ENDS a card: teal, and the only emphasised control in it.
+ *
+ * ⚑⚑ THE RULE, IN ONE PLACE, because we were not following it. David, 2026-08-15:
+ * *"Do we not do that in some instances with the calibrate button too? Are we
+ * being inconsistent?"* We were. Three cards each have a terminal action and each
+ * had a different treatment:
+ *
+ *     Calibrate     ends the calibration walk    PLAIN, auto-folds its card
+ *     Done          ends the category ticks      TEAL,  folds its card
+ *     Read cells    ends the heatmap grid        PLAIN, folded nothing
+ *
+ * Calibrate is the most consequential action in the app — every extracted value
+ * depends on it — and it looked like the least. So: **the action that ends a
+ * card is teal and folds it**, said once here rather than as a style literal
+ * copied into a third call site.
+ *
+ * ⚑ NOT for a repeatable action inside a card. Curve Fit's `Fit` stays plain on
+ * purpose: you fit, look at the result, change the model and fit again. It is a
+ * step in a loop, not an ending, and emphasising it would say otherwise.
+ *
+ * `enabled: false` keeps the shape and drops the fill, so a control that is not
+ * yet available reads as the same button rather than a different one.
+ */
+export function endsCardButton(enabled = true) {
+  return {
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+    border: `1px solid ${enabled ? theme.color.primary.main : theme.color.border.regular}`,
+    borderRadius: theme.border.radius.regular,
+    background: enabled ? theme.color.primary.main : theme.color.background.primary,
+    color: enabled ? '#fff' : theme.color.text.legend,
+    padding: '2px 12px',
+    cursor: enabled ? 'pointer' : 'default',
+  } as const;
+}

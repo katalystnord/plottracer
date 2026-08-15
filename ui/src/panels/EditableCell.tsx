@@ -63,6 +63,11 @@ export function EditableValue({
           if (e.key === 'Enter') onCommit();
           else if (e.key === 'Escape') onCancel();
         }}
+        // The cell around this one SELECTS its row — the same rule `EditableName`
+        // below has always followed. Without it, clicking into the box you are
+        // already typing in re-fires that selection and toggles it back OFF,
+        // taking the canvas highlight with it mid-edit.
+        onClick={(e) => e.stopPropagation()}
         style={align ? { width, textAlign: align } : { width }}
       />
     );

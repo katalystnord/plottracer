@@ -48,6 +48,15 @@ export interface GuidanceTipInput {
    * detect a grid they already had, while the gesture for adjusting it was
    * written only inside a fold-out that is closed by default. */
   heatmapHasGrid?: boolean;
+  /**
+   * The cells have been READ, so there are values on screen to correct.
+   *
+   * ⚑ The correction gesture must not be named before it exists. A tips bar
+   * telling you to "type over a cell's value" while the table says "no cells
+   * yet" is an invisible precondition — the failure the Parallel Universe David
+   * test names outright — so the sentence changes when the state does.
+   */
+  heatmapHasCells?: boolean;
   mode: ToolMode;
   figureCaptured: boolean;
   eyedropper: null | 'grid' | 'series' | 'trace';
@@ -106,6 +115,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   const {
     canvasHasImage,
     heatmapHasGrid,
+    heatmapHasCells,
     mode,
     figureCaptured,
     eyedropper,
@@ -256,7 +266,15 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // fourth site, and caught by looking at a screenshot of the finished
       // feature rather than by any test.
       if (config.id === 'heatmap')
-        return heatmapHasGrid === true
+        return heatmapHasCells === true
+          ? // ⚑⚑ THE WAY BACK IS THE PART THAT NEEDS SAYING. Typing over a value
+            // is discoverable — every editable number in this app carries the
+            // same dashed underline — but the right-click that hands the cell
+            // back to the key is not, and a correction you cannot undo except
+            // through Ctrl+Z is a one-way door. This is the app's one constant
+            // place for "what do I do now?", so it is where the pair belongs.
+            'Type over a cell’s value to record what you can see; right-click it to go back to the key’s number. Drag a handle beside the figure to move a boundary.'
+          : heatmapHasGrid === true
           ? // ⚑⚑ THE GESTURE, SAID WHERE IT IS ALWAYS VISIBLE. The handles beside
             // the figure are draggable in every mode, but nothing on screen said
             // so once the grid fold-down was closed — David: *"you need to know

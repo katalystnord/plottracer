@@ -29,7 +29,12 @@
  */
 
 import { sampleColorBar, stripFromCorners, type ColorBarRefusal } from '../algorithms/colorBar.js';
-import { checkColorScale, type ColorScale } from '../algorithms/colorScale.js';
+import {
+  checkColorScale,
+  positionAtValue,
+  valueAtPosition,
+  type ColorScale,
+} from '../algorithms/colorScale.js';
 import {
   detectDividers,
   proposeAllDividers,
@@ -380,6 +385,119 @@ export const NO_HEATMAP_LABELS: HeatmapLabels = { x: [], y: [] };
 /** Beside the grid, for the same reason the grid is there: no pixel to ride on,
  * and axes metadata already saves, reopens and undoes through `plotData`. */
 const LABELS_METADATA_KEY = 'heatmapLabels';
+
+/**
+ * How a cell is named, everywhere: in the selection, in the user's readings, and
+ * in the table's own lookups.
+ *
+ * ⚑ ONE key format, exported rather than re-spelled. `Workspace` had its own
+ * `cellKey`, the table had two more inline, and the readings below would have
+ * made a fourth — four literals that must agree for a pick to highlight the cell
+ * it edits, with nothing to notice if one drifted.
+ */
+export function cellKey(col: number, row: number): string {
+  return `${col},${row}`;
+}
+
+/**
+ * The cells the USER read, as positions along the colour key.
+ *
+ * ⚑⚑ A POSITION, NOT A NUMBER, and that is the whole design. David: *"Heatmaps
+ * are a 2.5D graph type. The values are STORED ON THE THIRD AXIS. Changing a
+ * value in a cell MOVES THE VALUE on the third axis that records the value, and
+ * nothing else!"* So an edited cell travels with the key exactly as a data point
+ * travels with its axes: recalibrate the key and every cell in the matrix moves
+ * together, ours and theirs. A stored number would sit still and quietly
+ * disagree with the rest, and nothing on screen would say which to trust.
+ *
+ * ⚑ NO PROVENANCE FLAG HERE. The `source` a row carries is WHICH INSTRUMENT
+ * read it — colour, OCR, or a person — not declared-versus-measured. All three
+ * are measurements; membership of this record IS the answer, so there is nothing
+ * extra to store.
+ *
+ * Keyed by `cellKey`, in the key's own 0..1 frame.
+ */
+export type HeatmapCellReadings = Readonly<Record<string, number>>;
+
+export const NO_HEATMAP_CELL_READINGS: HeatmapCellReadings = {};
+
+/** Beside the grid and the names, for the same reason both are there. */
+const READINGS_METADATA_KEY = 'heatmapCellReadings';
+
+/**
+ * Record what the user read in one cell, from what they typed.
+ *
+ * ⚑ THE REFUSAL IS THE MODEL'S, at the gesture. `positionAtValue` is the third
+ * axis's inverse and it answers null for exactly the values the key cannot
+ * represent — a log key has no zero and no negative branch — which is the same
+ * shape as `dataToPixel` returning NaN for a log X axis asked for −5, refused
+ * where the user is looking rather than eight steps later.
+ */
+export function setCellReading(
+  readings: HeatmapCellReadings,
+  scale: ColorScale,
+  col: number,
+  row: number,
+  text: string
+): { readings: HeatmapCellReadings; error: string | null } {
+  const parsed = Number(text);
+  if (text.trim() === '' || !Number.isFinite(parsed)) {
+    return { readings, error: 'A cell’s value has to be a number.' };
+  }
+  const t = positionAtValue(scale, parsed);
+  if (t === null) {
+    return {
+      readings,
+      error: scale.log
+        ? 'A log colour key has no zero and no negative side — enter a positive number.'
+        : 'The colour key cannot place that value.',
+    };
+  }
+  return { readings: { ...readings, [cellKey(col, row)]: t }, error: null };
+}
+
+/** Hand the cell back to the colour key. */
+export function clearCellReading(
+  readings: HeatmapCellReadings,
+  col: number,
+  row: number
+): HeatmapCellReadings {
+  const next = { ...readings };
+  delete next[cellKey(col, row)];
+  return next;
+}
+
+/**
+ * Read the user's readings an axes is carrying.
+ *
+ * ⚑ VALIDATED, not trusted — a load-path entrance like `gridFromAxes`. A key
+ * that is not `col,row` or a value that is not a finite position is DROPPED
+ * rather than defaulted: a bad entry would otherwise land a number on a cell the
+ * user never touched, which is the one thing this record must never do.
+ */
+export function readingsFromAxes(axes: MetadataCarrier): HeatmapCellReadings {
+  const raw = axes.getMetadata()[READINGS_METADATA_KEY];
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return NO_HEATMAP_CELL_READINGS;
+  const kept: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d+,\d+$/.test(key)) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    kept[key] = value;
+  }
+  return kept;
+}
+
+/** Put them where a save will find them. Nothing read means no key at all,
+ * rather than a file saying "no readings" in a second way. */
+export function readingsToAxes(axes: MetadataCarrier, readings: HeatmapCellReadings): void {
+  const meta = { ...axes.getMetadata() };
+  if (Object.keys(readings).length === 0) {
+    delete meta[READINGS_METADATA_KEY];
+  } else {
+    meta[READINGS_METADATA_KEY] = { ...readings };
+  }
+  axes.setMetadata(meta);
+}
 
 /**
  * Does cell-index order run OPPOSITE to the way the figure is read?
@@ -864,15 +982,29 @@ export interface HeatmapRow {
  * caught a wrong reading whose colour sat exactly on the ramp. */
 const UNIFORMITY_WORTH_REPORTING = 0.999;
 
-function warningFor(cell: HeatmapCellReading): string {
+/**
+ * What is worth saying about a cell.
+ *
+ * ⚑⚑ TWO KINDS OF EVIDENCE, and `mine` is what separates them. The rivals, the
+ * distance off the ramp and the clipping flag are properties of INVERTING A
+ * COLOUR — they say nothing at all once a person has read the cell by eye, and
+ * repeating them beside their number would be a machine's doubts attached to
+ * someone else's measurement. Uniformity is a property of the CELL'S INK: a
+ * hatched cell is still hatched after it is read correctly, and it is the
+ * evidence for why the user looked twice rather than something the reading
+ * disposes of.
+ */
+function warningFor(cell: HeatmapCellReading, mine: boolean): string {
   if (cell.samples === 0) return 'Not on the image';
-  if (cell.reading === null) return 'No value — the colour key cannot be read';
   const parts: string[] = [];
-  if (cell.rivals.length > 0) parts.push(`${cell.rivals.length + 1} possible values`);
-  // ⚑ First among the soft warnings, because it is the one nothing else catches:
-  // a clipped cell is exact, uniform and wrong.
-  if (cell.atKeyLimit) parts.push('at the key’s limit — may be clipped');
-  if (cell.reading.distance > 0) parts.push(`colour ${cell.reading.distance.toFixed(1)} off the key`);
+  if (!mine) {
+    if (cell.reading === null) return 'No value — the colour key cannot be read';
+    if (cell.rivals.length > 0) parts.push(`${cell.rivals.length + 1} possible values`);
+    // ⚑ First among the soft warnings, because it is the one nothing else
+    // catches: a clipped cell is exact, uniform and wrong.
+    if (cell.atKeyLimit) parts.push('at the key’s limit — may be clipped');
+    if (cell.reading.distance > 0) parts.push(`colour ${cell.reading.distance.toFixed(1)} off the key`);
+  }
   if (cell.uniformity < UNIFORMITY_WORTH_REPORTING) {
     parts.push(`${Math.round(cell.uniformity * 100)}% of the cell`);
   }
@@ -901,7 +1033,10 @@ export function readHeatmapCells(
   grid: HeatmapState,
   scale: ColorScale,
   labels: HeatmapLabels = NO_HEATMAP_LABELS,
-  kinds: HeatmapAxisKinds = { x: 'value', y: 'value' }
+  kinds: HeatmapAxisKinds = { x: 'value', y: 'value' },
+  /** The cells the user read themselves — positions on the key, applied through
+   * the same inverse ours came out of. */
+  readings: HeatmapCellReadings = NO_HEATMAP_CELL_READINGS
 ): ReadHeatmapCellsResult {
   const cells = readHeatmap(
     image.data,
@@ -915,31 +1050,43 @@ export function readHeatmapCells(
   if (cells === null) {
     return { rows: [], summary: '', error: 'The grid needs at least one boundary on each axis.' };
   }
-  const rows = cells.map((cell) => ({
-    col: cell.col,
-    row: cell.row,
-    xMin: cell.xMin,
-    xMax: cell.xMax,
-    yMin: cell.yMin,
-    yMax: cell.yMax,
-    xCentre: cell.xCentre,
-    yCentre: cell.yCentre,
-    value: cell.reading?.value ?? null,
-    // ⚑ Carried through so the table can tint the cell with what was sampled.
-    ...(cell.rgb ? { rgb: [cell.rgb[0], cell.rgb[1], cell.rgb[2]] as const } : {}),
-    source: 'colour' as const,
-    low: cell.reading?.low ?? null,
-    high: cell.reading?.high ?? null,
-    distance: cell.reading?.distance ?? null,
-    uniformity: cell.uniformity,
-    rivalValues: cell.rivals.map((r) => r.value),
-    atKeyLimit: cell.atKeyLimit,
-    warning: warningFor(cell),
-    xLabel: labelAt(labels.x, cell.col),
-    yLabel: labelAt(labels.y, cell.row),
-    xIsCategory: kinds.x === 'category',
-    yIsCategory: kinds.y === 'category',
-  }));
+  const rows = cells.map((cell) => {
+    // ⚑ THE USER'S READING GOES THROUGH THE SAME TRANSFORM OURS DOES — one
+    // `valueAtPosition`, one key. That is what makes their number and ours
+    // comparable at all, and what makes both of them move when the key does.
+    const t = readings[cellKey(cell.col, cell.row)];
+    const mineValue = t === undefined ? null : valueAtPosition(scale, t);
+    const mine = mineValue !== null;
+    return {
+      col: cell.col,
+      row: cell.row,
+      xMin: cell.xMin,
+      xMax: cell.xMax,
+      yMin: cell.yMin,
+      yMax: cell.yMax,
+      xCentre: cell.xCentre,
+      yCentre: cell.yCentre,
+      value: mine ? mineValue : cell.reading?.value ?? null,
+      // ⚑ Carried through so the table can tint the cell with what was sampled.
+      // ⚑ Only where the colour IS the reading: the tint is the evidence for the
+      // number beside it, so a cell a person read must not wear the colour's.
+      ...(cell.rgb && !mine ? { rgb: [cell.rgb[0], cell.rgb[1], cell.rgb[2]] as const } : {}),
+      source: mine ? ('user' as const) : ('colour' as const),
+      // Null, not the typed number twice: a reading by eye has no measured
+      // interval, and `low = high = value` would dress a bare number as one.
+      low: mine ? null : cell.reading?.low ?? null,
+      high: mine ? null : cell.reading?.high ?? null,
+      distance: mine ? null : cell.reading?.distance ?? null,
+      uniformity: cell.uniformity,
+      rivalValues: mine ? [] : cell.rivals.map((r) => r.value),
+      atKeyLimit: mine ? false : cell.atKeyLimit,
+      warning: warningFor(cell, mine),
+      xLabel: labelAt(labels.x, cell.col),
+      yLabel: labelAt(labels.y, cell.row),
+      xIsCategory: kinds.x === 'category',
+      yIsCategory: kinds.y === 'category',
+    };
+  });
   const flagged = rows.filter((r) => r.warning !== '').length;
   const summary =
     flagged === 0

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { theme } from '../theme.js';
-import type { HeatmapRow } from '../../../engine/heatmapRun.js';
+import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
 
 /**
  * A heatmap's cells, IN THE DATA POINTS PANEL — the same place every other
@@ -72,11 +72,45 @@ export interface HeatmapCellsTableProps {
   selectedCells?: ReadonlySet<string>;
   /** Pick these keys; `additive` is Shift held. A header hands its whole band. */
   onPickCells?: (keys: readonly string[], additive: boolean) => void;
+  /**
+   * Click-to-edit the cell's VALUE — the typed twin of reading it off the key.
+   *
+   * ⚑⚑ WE ARE NEVER THE ONLY INSTRUMENT LOOKING AT THE FIGURE. David: *"there
+   * might be something in the color/patern/shape that a user can see and we
+   * can't."* A hatched cell, an asterisk over the fill, a printed label bleeding
+   * into the colour, a texture the modal sampler averages away — their eye is
+   * the better instrument for all of those, and often the only one that can
+   * tell. So this is not interpretation getting past tenet 9; it is a reading
+   * taken with a better instrument, recorded exactly the way ours is.
+   *
+   * ⚑ The caller is handed the DISPLAY STRING this table would have printed, so
+   * the brackets round a user's value are decided in one place whether or not
+   * the cell is editable.
+   */
+  renderValue?: (cell: HeatmapRow, display: string) => ReactNode;
+  /**
+   * Right-click a cell: which instrument's reading to use (B16).
+   *
+   * ⚑ Right-click ALONE would be undiscoverable, which is why the cell already
+   * SHOWS its source — tinted for the colour, bracketed for a person. The menu
+   * CHANGES the source; it does not reveal it.
+   */
+  onCellContextMenu?: (col: number, row: number, clientX: number, clientY: number) => void;
 }
 
 const num = (v: number | null, digits = 4): string => (v === null ? '—' : v.toPrecision(digits));
 
-export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName, selectedCell, selectedCells, onPickCells }: HeatmapCellsTableProps) {
+export function HeatmapCellsTable({
+  cells,
+  noCellsHint,
+  renderXName,
+  renderYName,
+  selectedCell,
+  selectedCells,
+  onPickCells,
+  renderValue,
+  onCellContextMenu,
+}: HeatmapCellsTableProps) {
   const [view, setView] = useState<'matrix' | 'table'>('matrix');
 
   if (cells.length === 0) {
@@ -110,6 +144,7 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
           </button>
         ))}
       </div>
+      <PickedCell cells={cells} selectedCell={selectedCell} renderValue={renderValue} />
       {view === 'matrix' ? (
         <MatrixView
           cells={cells}
@@ -118,6 +153,8 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
           selectedCell={selectedCell}
           selectedCells={selectedCells}
           onPickCells={onPickCells}
+          renderValue={renderValue}
+          onCellContextMenu={onCellContextMenu}
         />
       ) : (
         <LongView
@@ -127,6 +164,8 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
           selectedCell={selectedCell}
           selectedCells={selectedCells}
           onPickCells={onPickCells}
+          renderValue={renderValue}
+          onCellContextMenu={onCellContextMenu}
         />
       )}
     </div>
@@ -135,7 +174,14 @@ export function HeatmapCellsTable({ cells, noCellsHint, renderXName, renderYName
 
 type ViewProps = Pick<
   HeatmapCellsTableProps,
-  'cells' | 'renderXName' | 'renderYName' | 'selectedCell' | 'selectedCells' | 'onPickCells'
+  | 'cells'
+  | 'renderXName'
+  | 'renderYName'
+  | 'selectedCell'
+  | 'selectedCells'
+  | 'onPickCells'
+  | 'renderValue'
+  | 'onCellContextMenu'
 >;
 
 /** The pick reads as a highlight in both views — same colour as the outline the
@@ -181,6 +227,66 @@ function valueText(display: string, source?: string): string {
 }
 
 /**
+ * The cell in hand: all THREE of its coordinates, and its value editable.
+ *
+ * ⚑⚑ THE THIRD AXIS IS AN AXIS, so a picked cell that showed its column and its
+ * row and stopped was showing two coordinates out of three. A heatmap is 2.5D:
+ * where it sits on the COLOUR KEY is a coordinate exactly as x and y are, and it
+ * is the one the whole figure exists to convey.
+ *
+ * ⚑ IT MIRRORS THE PICKED BOUNDARY on the Grid card — "Column boundary at x =
+ * 3.5" beside the one thing you can do to it. Same shape here: the thing you
+ * picked, said plainly, with its action attached. Nothing new to learn, and it
+ * is the VISIBLE way to correct a cell from the matrix, where the cell itself
+ * cannot carry the gesture.
+ */
+function PickedCell({
+  cells,
+  selectedCell,
+  renderValue,
+}: Pick<HeatmapCellsTableProps, 'cells' | 'selectedCell' | 'renderValue'>) {
+  if (!selectedCell) return null;
+  const cell = cells.find((c) => c.col === selectedCell.col && c.row === selectedCell.row);
+  if (!cell) return null;
+  const band = (label: string, name: string, lo: number, hi: number) =>
+    `${label}${name ? ` “${name}”` : ''} (${num(lo, 3)} – ${num(hi, 3)})`;
+  return (
+    <p
+      data-testid="heatmap-picked-cell"
+      style={{
+        margin: '0 0 6px',
+        fontSize: theme.font.size.small,
+        color: theme.color.text.secondary,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        flexWrap: 'wrap',
+      }}
+    >
+      <span>
+        {band(`C${cell.col + 1}`, cell.xLabel, cell.xMin, cell.xMax)}
+        {' × '}
+        {band(`R${cell.row + 1}`, cell.yLabel, cell.yMin, cell.yMax)}
+      </span>
+      <span style={{ color: theme.color.text.primary }}>
+        value{' '}
+        {renderValue
+          ? renderValue(cell, valueText(num(cell.value, 5), cell.source))
+          : valueText(num(cell.value, 5), cell.source)}
+      </span>
+    </p>
+  );
+}
+
+/** The value as the two views print it: editable where the caller supplies an
+ * editor, plain text where it does not — decided once, so the matrix and the
+ * long form can never disagree about how a number reads. */
+function valueCell(cell: HeatmapRow, renderValue: HeatmapCellsTableProps['renderValue']): ReactNode {
+  const display = valueText(num(cell.value, 5), cell.source);
+  return renderValue ? renderValue(cell, display) : display;
+}
+
+/**
  * The figure's own shape: one cell per cell, names down the edges.
  *
  * ⚑⚑ ROWS RUN TOP-DOWN, which is the whole point of this view. Cell row 0 is
@@ -188,12 +294,21 @@ function valueText(display: string, source?: string): string {
  * the matrix upside down against the figure it came from, and "which category
  * belongs where" would be exactly as unanswerable as it was in the long form.
  */
-function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCells }: ViewProps) {
-  const key = (col: number, row: number) => `${col},${row}`;
-  const picked = (col: number, row: number) => selectedCells?.has(key(col, row)) === true;
+function MatrixView({
+  cells,
+  renderXName,
+  renderYName,
+  selectedCells,
+  onPickCells,
+  onCellContextMenu,
+}: ViewProps) {
+  // ⚑ THE MODEL'S OWN KEY FORMAT, not a fourth copy of it. A pick, a user's
+  // reading and this table must all name a cell the same way or they silently
+  // stop referring to the same cell.
+  const picked = (col: number, row: number) => selectedCells?.has(cellKey(col, row)) === true;
   const columns = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
   const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
-  const byKey = new Map(cells.map((c) => [`${c.col},${c.row}`, c]));
+  const byKey = new Map(cells.map((c) => [cellKey(c.col, c.row), c]));
   return (
     <div style={{ maxHeight: 320, overflow: 'auto' }}>
       <table
@@ -209,7 +324,7 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
                 <th
                   key={col}
                   data-testid={`heatmap-col-select-${col}`}
-                  onClick={(e) => onPickCells?.(rows.map((r) => key(col, r)), e.shiftKey)}
+                  onClick={(e) => onPickCells?.(rows.map((r) => cellKey(col, r)), e.shiftKey)}
                   title="Click to select this whole column — Shift to add it to the picked cells"
                   style={{
                     padding: '0 8px',
@@ -254,7 +369,7 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
               <tr key={row} data-testid="heatmap-matrix-row">
                 <th
                   data-testid={`heatmap-row-select-${row}`}
-                  onClick={(e) => onPickCells?.(columns.map((c) => key(c, row)), e.shiftKey)}
+                  onClick={(e) => onPickCells?.(columns.map((c) => cellKey(c, row)), e.shiftKey)}
                   title="Click to select this whole row — Shift to add it to the picked cells"
                   style={{
                     textAlign: 'left',
@@ -277,13 +392,18 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
                   )}
                 </th>
                 {columns.map((col) => {
-                  const cell = byKey.get(`${col},${row}`);
+                  const cell = byKey.get(cellKey(col, row));
                   const isPicked = picked(col, row);
                   return (
                     <td
                       key={col}
                       data-testid={`heatmap-matrix-cell-${col}-${row}`}
-                      onClick={(e) => onPickCells?.([key(col, row)], e.shiftKey)}
+                      onClick={(e) => onPickCells?.([cellKey(col, row)], e.shiftKey)}
+                      onContextMenu={(e) => {
+                        if (!cell || !onCellContextMenu) return;
+                        e.preventDefault();
+                        onCellContextMenu(col, row, e.clientX, e.clientY);
+                      }}
                       // ⚑ The evidence cannot fit in a matrix cell, so a flagged
                       // one is coloured and carries its note as a tooltip, and
                       // the Table view holds the full account. A matrix showing
@@ -305,6 +425,16 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
                         color: cell?.warning ? theme.color.error : undefined,
                       }}
                     >
+                      {/* ⚑⚑ NOT EDITABLE HERE, and that is a decision rather
+                          than an omission. In this view the cell IS the value,
+                          so "click to select" and "click to edit" are the same
+                          click — the trap that has bitten twice already, where a
+                          thing drawn on the target eats the press. Worse, an
+                          editor seeded with the current number commits it on
+                          blur, so a glance at a cell stamped it as user-read.
+                          ⚑ The value is edited where it has a COLUMN OF ITS OWN
+                          — the picked-cell line above and the Table view — which
+                          is the shape the XY spreadsheet has always used. */}
                       {cell ? valueText(num(cell.value, 5), cell.source) : ''}
                     </td>
                   );
@@ -320,9 +450,19 @@ function MatrixView({ cells, renderXName, renderYName, selectedCells, onPickCell
 
 /** One row per cell — the tidy/long form, and the only view with room for the
  * evidence that says whether to trust a value. */
-function LongView({ cells, renderXName, renderYName, selectedCells, onPickCells }: ViewProps) {
-  const key = (col: number, row: number) => `${col},${row}`;
-  const picked = (col: number, row: number) => selectedCells?.has(key(col, row)) === true;
+function LongView({
+  cells,
+  renderXName,
+  renderYName,
+  selectedCells,
+  onPickCells,
+  renderValue,
+  onCellContextMenu,
+}: ViewProps) {
+  // ⚑ THE MODEL'S OWN KEY FORMAT, not a fourth copy of it. A pick, a user's
+  // reading and this table must all name a cell the same way or they silently
+  // stop referring to the same cell.
+  const picked = (col: number, row: number) => selectedCells?.has(cellKey(col, row)) === true;
   return (
     <div style={{ maxHeight: 320, overflow: 'auto' }}>
       <table
@@ -351,7 +491,7 @@ function LongView({ cells, renderXName, renderYName, selectedCells, onPickCells 
             <tr
               key={`${cell.col}-${cell.row}`}
               data-testid="heatmap-row"
-              onClick={(e) => onPickCells?.([key(cell.col, cell.row)], e.shiftKey)}
+              onClick={(e) => onPickCells?.([cellKey(cell.col, cell.row)], e.shiftKey)}
               style={{
                 cursor: onPickCells ? 'pointer' : undefined,
                 background: picked(cell.col, cell.row) ? PICKED_BACKGROUND : undefined,
@@ -374,16 +514,28 @@ function LongView({ cells, renderXName, renderYName, selectedCells, onPickCells 
                   : cell.yLabel || num(cell.yCentre, 4)}
               </td>
               <td
+                data-testid={`heatmap-long-value-${cell.col}-${cell.row}`}
+                onContextMenu={(e) => {
+                  if (!onCellContextMenu) return;
+                  e.preventDefault();
+                  onCellContextMenu(cell.col, cell.row, e.clientX, e.clientY);
+                }}
                 style={{
                   paddingRight: 8,
                   // ⚑ The long form mirrors the matrix, which mirrors the figure.
                   backgroundColor: tintOf(cell),
                 }}
               >
-                {valueText(num(cell.value, 5), cell.source)}
+                {valueCell(cell, renderValue)}
               </td>
+              {/* ⚑ A DASH, not a bracketed pair, for a value a person read: the
+                  interval is what the COLOUR could not be told apart from, and a
+                  reading by eye has none. Printing `59 – 59` would dress a bare
+                  number as a measured interval. */}
               <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
-                {cell.value === null ? '—' : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}
+                {cell.low === null || cell.high === null
+                  ? '—'
+                  : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}
               </td>
               <td style={{ color: cell.warning ? theme.color.error : undefined }}>{cell.warning}</td>
             </tr>
