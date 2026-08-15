@@ -8123,7 +8123,9 @@ describe('heatmap capture (v2.2)', () => {
         step === 'x2' ? [String(p.value), String(truth.grid.x.length - 1)] : [String(p.value)]
       );
     }
-    await clickImagePixel(truth.frame.y1.x, truth.frame.y1.y);
+    // ⚑ B12 — NO Y1 CLICK. The lower-left corner is shared, and on a NAMED axis
+    // it takes no typed value either, so the walk places it and moves straight
+    // on. Three clicks describe the frame; this is the second and third.
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
     await confirmValue('4'); // four rows on this figure — a named axis types only the count
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
@@ -8140,13 +8142,15 @@ describe('heatmap capture (v2.2)', () => {
   /** The walk, declaring the given band counts rather than the figure's own. */
   async function calibrateHeatmapDeclaring(columns: string, rows: string) {
     const bands: Record<string, string> = { x2: columns, y2: rows };
-    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+    for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
-      await confirmValues(
-        step === 'x2' || step === 'y2' ? [String(p.value), bands[step]!] : [String(p.value)]
-      );
+      await confirmValues(step === 'x2' ? [String(p.value), bands[step]!] : [String(p.value)]);
     }
+    // ⚑ B12 — the shared corner arrives placed, with its value prefilled.
+    await confirmValue(String(truth.frame.y1.value));
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValues([String(truth.frame.y2.value), bands['y2']!]);
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
     await clickImagePixel(truth.key.to.x, truth.key.to.y);
     for (const tick of truth.key.ticks) {
@@ -8163,11 +8167,18 @@ describe('heatmap capture (v2.2)', () => {
     // a measured axis exactly as on a named one — a heatmap is a matrix either
     // way. The bundled figure is 5 columns × 4 rows, read off its own truth.
     const bands = { x2: String(truth.grid.x.length - 1), y2: String(truth.grid.y.length - 1) };
-    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+    // ⚑⚑ B12 — THREE CLICKS, not four. The figure's own truth says x1 and y1 are
+    // the SAME pixel (70.4, 281.32), which is what three-point calibration
+    // relies on and what every rectangular heatmap has: the two axes span one
+    // rectangle, so three of its corners carry the whole transform.
+    for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
-      await confirmValues(step === 'x2' || step === 'y2' ? [String(p.value), bands[step]] : [String(p.value)]);
+      await confirmValues(step === 'x2' ? [String(p.value), bands[step]] : [String(p.value)]);
     }
+    await confirmValue(String(truth.frame.y1.value));
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValues([String(truth.frame.y2.value), bands['y2']]);
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
     await clickImagePixel(truth.key.to.x, truth.key.to.y);
     for (const tick of truth.key.ticks) {
@@ -8695,35 +8706,57 @@ describe('heatmap capture (v2.2)', () => {
     expect(before).not.toMatch(/\[/);
   });
 
-  it('shares the ORIGIN only, and the walk still asks for the far Y point', async () => {
-    // ⚑⚑ REPLACES a test that asserted a geometrically impossible feature and
-    // could not have noticed. It drove two corner clicks, checked the walk had
-    // reached 4/8, and stopped — it NEVER CALLED Calibrate. Sharing both corners
-    // leaves the calibration with two distinct pixels, and two points cannot
-    // define a 2-D transform, so the axes come out parallel and the whole thing
-    // is refused. The walk advancing proved nothing about the result.
+  it('B12 — calibrates from THREE corners, with no checkbox to find and tick', async () => {
+    // ⚑⚑ THREE POINTS ARE THE AFFINE MINIMUM, so on a heatmap they are simply
+    // THE WALK. Two can never define a 2-D transform — which is what killed the
+    // share-both-corners feature — and four can be placed inconsistently, which
+    // is what the parallel-axes guard is for. The checkbox existed to fold a
+    // fourth click away; where three is the only sensible walk, unticking it
+    // could only ask for a worse one.
     //
-    // ⚑ David saw it on day one from the other side: *"the text for shared
-    // origin is misleading or incorrect"* and *"we are missing a data point
-    // out."* A data point IS missing.
+    // ⚑ David saw the old version from the other side on day one: *"the text for
+    // shared origin is misleading or incorrect"* and *"we are missing a data
+    // point out."* A data point WAS missing. Now none is, and nothing is asked.
     await resetWorkspace('heatmap');
     await page.getByTestId('calib-choice-xIsCategory-true').check();
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(200);
-    // ONE pairing now, so the sentence names one point rather than claiming two.
-    expect(await page.getByTestId('common-origin').locator('..').textContent()).toMatch(
-      /Common origin/
-    );
+    // Gone — an option nobody should choose is an option that should not be there.
+    expect(await page.getByTestId('common-origin').count()).toBe(0);
 
-    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y); // the origin corner
-    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y); // the far X point
+    // ⚑ THE PROMPT NAMES BOTH BANDS, so every click is fully described before it
+    // is made — the gate that a walkthrough test may only click what the screen
+    // tells it to. It must NOT say "where the axes meet": on `heatmap.2` they
+    // do not meet where a reader expects.
+    const first = await textOf('tips-bar');
+    expect(first).toMatch(/FIRST column/);
+    expect(first).toMatch(/FIRST row/);
+    expect(first).not.toMatch(/axes meet/i);
+
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y); // first column × first row
+    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y); // last column × first row
     await confirmValue('5'); // five columns
     await page.waitForTimeout(200);
 
-    // Y start came free from the shared origin — but the walk still asks for the
-    // far Y point, because without it there is no second direction to calibrate.
+    // The shared corner arrived without a click AND without a tick-box, so the
+    // walk is already asking for the third and last corner.
     expect(await textOf('calibration-bar')).toMatch(/3\/8/);
-    expect(await textOf('tips-bar')).toMatch(/row|Y end/i);
+    expect(await textOf('tips-bar')).toMatch(/LAST row/);
+
+    // ⚑⚑ AND IT CALIBRATES — the assertion the feature this replaces never made.
+    // Both of its tests stopped at a step count and never called Calibrate, so
+    // they proved a walk could be performed and nothing about the result.
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValue('4'); // four rows
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(250);
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
   });
 
   it('says WHY Remove is unavailable at the floor, before it is pressed', async () => {

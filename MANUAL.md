@@ -348,6 +348,31 @@ A heatmap is a **matrix**, not a set of points, so nothing on it is clicked as a
 data point. You calibrate the two axes and the colour key, put a **grid** over
 the cells, and PlotTracer reads every cell through the key.
 
+### Three clicks describe the frame
+
+A heatmap's two axes span exactly one rectangle, so **three of its corners carry
+the whole calibration** — there is no fourth click to make and no "common origin"
+box to tick. The walk asks for them by naming the bands they lie between:
+
+| | |
+|---|---|
+| **first column × first row** | the near corner |
+| **last column × first row** | across |
+| **first column × last row** | up |
+
+The second corner also asks **how many columns** the figure has, and the third
+**how many rows** — counted off the figure, in the same breath as the click.
+
+Three is not a shortcut, it is the exact number: two points can never define a
+2-D frame, and a fourth can contradict the other three. It also means a
+**rotated or skewed** figure — a scanned page, a photographed slide — calibrates
+with no extra work, because three points describe a parallelogram just as
+happily as a rectangle. The one arrangement that cannot work is three clicks in a
+**straight line**; that is refused, saying so.
+
+*Where the prompt says "the outer edge" or "the centre" of a band, it is telling
+you what your figure's own tick marks show — see the tick convention below.*
+
 ### Is each axis a category or a value?
 
 Ask it per axis — a heatmap can be category × category (a correlation or
@@ -356,12 +381,18 @@ time), or value × value (a continuous field). Tick **X is categories** and/or
 **Y is categories** on the Calibration card *before* you start clicking, because
 it changes what you are asked for.
 
-- **A value axis** asks for two points of known value, as any XY chart does.
-- **A category axis** asks for the two outer **edges** — where the first
-  category starts and the last one ends — and then for **how many categories
-  there are**. You never type a coordinate, because the figure never printed
-  one. The count is something you read off the figure by counting; the
-  positions it implies (0, 1, 2 …) are ordinals, and the export says so.
+The three clicks are the same three corners either way; what changes is only what
+you **type** at them.
+
+- **A value axis** asks for the coordinate at each of its two ends, as any XY
+  chart does, plus the band count.
+- **A category axis** asks for **no coordinate at all** — only for **how many
+  categories there are**, because the figure never printed a number to type. The
+  count is something you read off the figure by counting; the positions it
+  implies (0, 1, 2 …) are ordinals, and the export says so.
+
+Both axes are asked independently, so a category × value figure gets a prompt
+with one clause of each kind.
 
 ### The colour key
 

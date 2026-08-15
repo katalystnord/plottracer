@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS, commonOriginReuse } from '../calibrationSession.js';
+import { CalibrationSession, HEATMAP_AXES_CONFIG, HEATMAP_KEY_POINTS, XY_AXES_CONFIG, commonOriginReuse } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { heatmapBounds, heatmapBandCounts, initialGridFor } from '../heatmapRun.js';
 import { Calibration } from '../../core/calibration.js';
@@ -215,10 +215,10 @@ describe('a CATEGORY axis — the question a value axis cannot ask', () => {
     const x1 = steps.find((st) => st.key === 'x1')!;
     const x2 = steps.find((st) => st.key === 'x2')!;
     expect(x1.valueFields).toEqual([]);
-    expect(x1.prompt).toMatch(/outer edge of the FIRST column/);
+    expect(x1.prompt).toMatch(/outer EDGE of the FIRST column/);
     expect(x2.valueFields).toHaveLength(1);
     expect(x2.valueFields[0]!.label).toBe('Columns');
-    expect(x2.prompt).toMatch(/how many columns/);
+    expect(x2.prompt).toMatch(/how many COLUMNS/);
     // …and the y axis is untouched, because the two are declared independently.
     expect(steps.find((st) => st.key === 'y1')!.valueFields).toHaveLength(1);
   });
@@ -353,8 +353,11 @@ describe('the TICK CONVENTION — centred marks vs boundary marks', () => {
     s.setOption('xIsCategory', 'true');
     s.setOption('xTicksCentred', 'true');
     const steps = s.getSteps();
-    expect(steps.find((st) => st.key === 'x1')!.prompt).toMatch(/CENTRE of the first column/);
-    expect(steps.find((st) => st.key === 'x2')!.prompt).toMatch(/CENTRE of the last column/);
+    // ⚑ The ordinal is emphasised too, since B12: the same prompt now has to
+    // say WHICH corner as well as where on the band, because every frame click
+    // is located by both axes at once.
+    expect(steps.find((st) => st.key === 'x1')!.prompt).toMatch(/CENTRE of the FIRST column/);
+    expect(steps.find((st) => st.key === 'x2')!.prompt).toMatch(/CENTRE of the LAST column/);
     // …and still asks for the count on the second click, never a coordinate.
     expect(steps.find((st) => st.key === 'x2')!.valueFields[0]!.label).toBe('Columns');
   });
@@ -478,6 +481,277 @@ describe('the SHARED CORNERS of a heatmap’s plot box', () => {
       s.handleCalibrationClick(px, py);
       if (vals.length > 0) s.confirmCalibrationValues(vals);
     }
+    expect(s.runCalibration()).toBe(false);
+    expect(s.getCalibrationError()).toMatch(/parallel/i);
+  });
+});
+
+/**
+ * B12 — THREE-POINT CALIBRATION: the plot box, named by its corners.
+ *
+ * ⚑⚑ THE AFFINE MINIMUM. Two points can never define a 2-D transform — which is
+ * what killed the share-both-corners feature above — and four can be placed
+ * INCONSISTENTLY, which is what the parallel-axes guard exists for. Three is the
+ * exact number, and the walk should therefore ASK for three rather than offer a
+ * fourth and a checkbox to fold it away. Prior art: PlotDigitizer (HKUST).
+ *
+ * ⚑ NOT A NEW AXES MODEL. It is the single `commonOrigin` pairing every XY chart
+ * has always had, made UNCONDITIONAL for this type, plus prompts that name the
+ * arrangement directly. `XYAxes` keeps its four calibration points and its full
+ * 2x2 `a_mat`, which is why rotation and skew come free rather than being built.
+ *
+ * ⚠️ TWO THINGS THE PLAN DID NOT ANTICIPATE, both found by writing these cases:
+ *
+ *   1. THE PARALLEL-AXES GUARD STAYS. The plan said three-point calibration
+ *      "REMOVES the parallel-axes trigger". It does not: three points cannot be
+ *      inconsistent, but they CAN BE COLLINEAR, and then the x vector (LR-LL) is
+ *      parallel to the y vector (UL-LL) and there is no transform. The guard is
+ *      the last degeneracy three points still allow, so it is asserted here.
+ *
+ *   2. THE THREE POINTS ARE NOT ALWAYS THE PLOT BOX'S CORNERS. Under the
+ *      `centred` tick convention an axis's clicks land on band CENTRES, inset
+ *      from the box — so on a centred x axis the first point is at the first
+ *      COLUMN's centre, not at the box's edge. The three points are always the
+ *      corners of whatever rectangle the two conventions describe, which is why
+ *      the prompts name the two BANDS a corner belongs to ("where the FIRST
+ *      column meets the FIRST row") and let each axis's own clause say whether
+ *      that means an edge or a centre. Saying "the corner of the plot box"
+ *      outright would be wrong on every centred figure — and `heatmap.2`, which
+ *      bounds this feature, is exactly the figure where the axes do not meet
+ *      where you would expect (B14).
+ */
+describe('B12 — three-point calibration', () => {
+  /** The three corners of a plain, upright plot box. */
+  const LL: [number, number] = [100, 300];
+  const LR: [number, number] = [400, 300];
+  const UL: [number, number] = [100, 100];
+
+  /** The colour key's four clicks, which B12 does not touch. */
+  const KEY: Array<[number, number, string[]]> = [
+    [120, 420, []], [380, 420, []], [150, 420, ['5']], [350, 420, ['95']],
+  ];
+
+  /**
+   * Walk a heatmap from three corners, sharing the origin the way the app does.
+   *
+   * ⚑ It goes through `commonOriginReuse` with the checkbox OFF, because that is
+   * the claim: a heatmap shares its origin whether or not anything is ticked.
+   */
+  function walkThreePoint(
+    s: CalibrationSession<XYAxes>,
+    corners: { ll: [number, number]; lr: [number, number]; ul: [number, number] },
+    values: { x1: string[]; x2: string[]; y1: string[]; y2: string[] }
+  ) {
+    s.handleCalibrationClick(...corners.ll);
+    if (values.x1.length > 0) s.confirmCalibrationValues(values.x1);
+    s.handleCalibrationClick(...corners.lr);
+    if (values.x2.length > 0) s.confirmCalibrationValues(values.x2);
+    // The origin arrives without a click — and WITHOUT the checkbox.
+    const reuse = commonOriginReuse(
+      HEATMAP_AXES_CONFIG as never,
+      false,
+      'y1',
+      s.getPlacedPoints(),
+      s.getCurrentStep() ?? undefined
+    );
+    expect(reuse, 'a heatmap must share its origin unasked').not.toBeNull();
+    expect(s.reuseStepPixel('x1')).toBe(true);
+    if (values.y1.length > 0) s.confirmCalibrationValues(values.y1);
+    s.handleCalibrationClick(...corners.ul);
+    if (values.y2.length > 0) s.confirmCalibrationValues(values.y2);
+    for (const [px, py, vals] of KEY) {
+      s.handleCalibrationClick(px, py);
+      if (vals.length > 0) s.confirmCalibrationValues(vals);
+    }
+  }
+
+  it('shares the origin WITHOUT a checkbox — there is nothing to find and tick', () => {
+    // ⚑⚑ The checkbox existed to turn four clicks into three. Three-point
+    // calibration does that by construction, so the control becomes a way to
+    // ask for a WORSE walk — and an option nobody should choose is an option
+    // that should not be offered. On XY it stays: that type really does have
+    // figures whose axes do not meet.
+    expect(HEATMAP_AXES_CONFIG.commonOriginAlways).toBe(true);
+    expect(XY_AXES_CONFIG.commonOriginAlways).toBeUndefined();
+    // The observable half: reuse applies with the flag OFF.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.handleCalibrationClick(...LL);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(...LR);
+    s.confirmCalibrationValues(['10', '5']);
+    expect(
+      commonOriginReuse(HEATMAP_AXES_CONFIG as never, false, 'y1', s.getPlacedPoints(), s.getCurrentStep() ?? undefined)
+    ).toEqual({ from: 'x1', prefill: ['0'] });
+    // …and an XY chart still obeys the checkbox, so the flag is doing the work
+    // rather than the argument being ignored everywhere.
+    const xy = new CalibrationSession(XY_AXES_CONFIG);
+    xy.handleCalibrationClick(...LL);
+    xy.confirmCalibrationValues(['0']);
+    xy.handleCalibrationClick(...LR);
+    xy.confirmCalibrationValues(['10']);
+    expect(
+      commonOriginReuse(XY_AXES_CONFIG as never, false, 'y1', xy.getPlacedPoints(), xy.getCurrentStep() ?? undefined)
+    ).toBeNull();
+  });
+
+  it('names the two BANDS each corner belongs to, never "where the axes meet"', () => {
+    // ⚑ B14 bounds the wording: on `gplots::heatmap.2` the dendrograms occupy
+    // the top and left and the labels sit right and bottom, so the axes do NOT
+    // meet where a reader expects. The prompt has to name the figure's own
+    // structure — first/last column, first/last row — which is true on every
+    // heatmap including that one.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    const prompt = (key: string) => s.getSteps().find((st) => st.key === key)!.prompt;
+    expect(prompt('x1')).toMatch(/FIRST column/);
+    expect(prompt('x1')).toMatch(/FIRST row/);
+    expect(prompt('x2')).toMatch(/LAST column/);
+    expect(prompt('y2')).toMatch(/LAST row/);
+    for (const key of ['x1', 'x2', 'y1', 'y2']) {
+      expect(prompt(key), `${key} must not claim the axes meet`).not.toMatch(/axes meet/i);
+    }
+    // ⚑ And the shared corner SAYS it is the same corner again, rather than
+    // appearing as a step with no click and no explanation.
+    expect(prompt('y1')).toMatch(/same corner|again/i);
+  });
+
+  it('calibrates value × value from three clicks, and READS BACK correctly', () => {
+    // ⚑⚑ `runCalibration`, not "the walk advanced". The feature this replaces
+    // was verified by two tests that stopped at 4/8 and checked the step index —
+    // they proved a walk could be performed and nothing about whether its result
+    // could be used. This reads a known pixel back through the finished axes.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    walkThreePoint(s, { ll: LL, lr: LR, ul: UL }, {
+      x1: ['0'], x2: ['10', '5'], y1: ['0'], y2: ['20', '4'],
+    });
+    expect(s.runCalibration()).toBe(true);
+    const axes = s.getAxes() as XYAxes;
+    // LL is the origin; LR is x=10; UL is y=20 — read straight off the transform.
+    expect(axes.pixelToData(...LL)[0]).toBeCloseTo(0, 6);
+    expect(axes.pixelToData(...LL)[1]).toBeCloseTo(0, 6);
+    expect(axes.pixelToData(...LR)[0]).toBeCloseTo(10, 6);
+    expect(axes.pixelToData(...UL)[1]).toBeCloseTo(20, 6);
+  });
+
+  it('calibrates category × category from three clicks and two counts', () => {
+    // The commonest published heatmap: gene × sample, confusion matrix,
+    // correlation grid. Three clicks, two numbers, no invented coordinates.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    s.setOption('xIsCategory', 'true');
+    s.setOption('yIsCategory', 'true');
+    walkThreePoint(s, { ll: LL, lr: LR, ul: UL }, {
+      x1: [], x2: ['5'], y1: [], y2: ['4'],
+    });
+    expect(s.runCalibration()).toBe(true);
+    expect(heatmapBandCounts(s.getAxes() as never)).toEqual({ columns: 5, rows: 4 });
+  });
+
+  it('calibrates a ROTATED plot box, because three points ARE the affine minimum', () => {
+    // ⚑⚑ NOT BUILT, INHERITED. `XYAxes.pixelToData` is a full 2x2 matrix plus a
+    // translation, so a frame that is rotated (a scanned page) or skewed is
+    // already expressible — three points simply supply it. Asserted because
+    // "gains rotation for free" is a claim, and a claim with no test is a story.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    // The same box turned about 37°, so no edge is axis-aligned.
+    const rLL: [number, number] = [200, 300];
+    const rLR: [number, number] = [440, 120];
+    const rUL: [number, number] = [80, 140];
+    walkThreePoint(s, { ll: rLL, lr: rLR, ul: rUL }, {
+      x1: ['0'], x2: ['10', '5'], y1: ['0'], y2: ['20', '4'],
+    });
+    expect(s.runCalibration()).toBe(true);
+    const axes = s.getAxes() as XYAxes;
+    expect(axes.pixelToData(...rLL)[0]).toBeCloseTo(0, 6);
+    expect(axes.pixelToData(...rLR)[0]).toBeCloseTo(10, 6);
+    expect(axes.pixelToData(...rUL)[1]).toBeCloseTo(20, 6);
+    // ⚑ The corner OPPOSITE the origin falls where the parallelogram says, which
+    // is the half a rotation-blind, axis-aligned transform would get wrong.
+    const opposite: [number, number] = [rLR[0] + rUL[0] - rLL[0], rLR[1] + rUL[1] - rLL[1]];
+    expect(axes.pixelToData(...opposite)[0]).toBeCloseTo(10, 6);
+    expect(axes.pixelToData(...opposite)[1]).toBeCloseTo(20, 6);
+  });
+
+  /**
+   * ⚑⚑ EVERY CLICK IS SPECIFIED IN BOTH DIMENSIONS, whatever the axes are.
+   *
+   * Three-point calibration SHARES the first pixel between the x and y frames,
+   * so where that click lands matters vertically as well as horizontally. The
+   * category prompts used to name one axis only — *"Click the outer edge of the
+   * FIRST column"* — which says nothing about how high up to click, and the
+   * pixel it produces is half the Y calibration. That is a click the screen does
+   * not fully describe, which CLAUDE.md's fourth gate calls a UI defect found at
+   * the moment the test is written.
+   *
+   * So each prompt is TWO CLAUSES, one per axis, and each clause says what that
+   * axis's own kind and tick convention make visible: a band's outer EDGE, or
+   * the tick at its CENTRE.
+   */
+  describe('every prompt names BOTH bands, under every kind and convention', () => {
+    const promptsFor = (options: Record<string, string>) => {
+      const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+      for (const [k, v] of Object.entries(options)) s.setOption(k, v);
+      const steps = s.getSteps();
+      return (key: string) => steps.find((st) => st.key === key)!.prompt;
+    };
+
+    it('a CATEGORY axis still says which row the column is clicked at', () => {
+      const p = promptsFor({ xIsCategory: 'true', yIsCategory: 'true' });
+      expect(p('x1')).toMatch(/FIRST column/);
+      expect(p('x1')).toMatch(/FIRST row/);
+      expect(p('x2')).toMatch(/LAST column/);
+      expect(p('x2')).toMatch(/FIRST row/);
+      expect(p('y2')).toMatch(/FIRST column/);
+      expect(p('y2')).toMatch(/LAST row/);
+    });
+
+    it('says EDGE where the figure marks boundaries and CENTRE where it marks centres', () => {
+      // ⚑ It is a wrong READING, not a preference: clicking a centre when the
+      // prompt meant an edge moves every recorded boundary by half a band, and
+      // nothing on screen looks wrong afterwards.
+      const edges = promptsFor({ xIsCategory: 'true', xTicksCentred: 'false' });
+      expect(edges('x1')).toMatch(/outer edge of the FIRST column/i);
+      const centres = promptsFor({ xIsCategory: 'true', xTicksCentred: 'true' });
+      expect(centres('x1')).toMatch(/centre of the FIRST column/i);
+    });
+
+    it('reads each axis SEPARATELY, so a mixed figure gets a mixed sentence', () => {
+      // ⚑ The combination that a single per-axis rewrite cannot express: x marks
+      // centres, y marks boundaries. Both clauses are in the SAME prompt, so
+      // only a prompt built from two independent clauses can be right here.
+      const p = promptsFor({
+        xIsCategory: 'true', xTicksCentred: 'true',
+        yIsCategory: 'true', yTicksCentred: 'false',
+      });
+      expect(p('x1')).toMatch(/centre of the FIRST column/i);
+      expect(p('x1')).toMatch(/outer edge of the FIRST row/i);
+    });
+
+    it('keeps the COUNT on the far corner of each axis, both kinds', () => {
+      const fields = (options: Record<string, string>, key: string) => {
+        const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+        for (const [k, v] of Object.entries(options)) s.setOption(k, v);
+        return s.getSteps().find((st) => st.key === key)!.valueFields.map((f) => f.label);
+      };
+      // A category axis types only the count; a value axis types a coordinate
+      // AND the count — but both land on the same step and the same `dz` slot.
+      expect(fields({ xIsCategory: 'true' }, 'x2')).toEqual(['Columns']);
+      expect(fields({ yIsCategory: 'true' }, 'y2')).toEqual(['Rows']);
+      expect(fields({}, 'x2')).toEqual(['X', 'Columns']);
+      expect(fields({}, 'y2')).toEqual(['Y', 'Rows']);
+      // And the shared corner asks for nothing at all when both axes are named.
+      expect(fields({ xIsCategory: 'true' }, 'x1')).toEqual([]);
+      expect(fields({ yIsCategory: 'true' }, 'y1')).toEqual([]);
+    });
+  });
+
+  it('REFUSES three COLLINEAR clicks — the one degeneracy three points still allow', () => {
+    // ⚠️ THE PLAN SAID THIS GUARD COULD GO. It cannot. Three points cannot be
+    // INCONSISTENT, which is what four points risk — but put all three on one
+    // line and the x vector and the y vector are the same direction, so there is
+    // no 2-D transform to build. Same refusal, still reachable, still needed.
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    walkThreePoint(s, { ll: [100, 300], lr: [400, 300], ul: [250, 300] }, {
+      x1: ['0'], x2: ['10', '5'], y1: ['0'], y2: ['20', '4'],
+    });
     expect(s.runCalibration()).toBe(false);
     expect(s.getCalibrationError()).toMatch(/parallel/i);
   });

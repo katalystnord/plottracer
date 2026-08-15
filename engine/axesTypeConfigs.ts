@@ -521,7 +521,10 @@ export function commonOriginPairs(
 }
 
 export function commonOriginReuse(
-  config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin'>,
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin' | 'commonOriginAlways'>,
+  /** The checkbox. Ignored entirely by a type that declares
+   * `commonOriginAlways` — there is no checkbox on those, so there is no state
+   * for a caller to have got wrong. */
   enabled: boolean,
   nextStepKey: string | undefined,
   placed: Readonly<Record<string, unknown>>,
@@ -538,7 +541,7 @@ export function commonOriginReuse(
    */
   toStep?: Pick<CalibStepInfo, 'valueFields'>
 ): { from: string; prefill: string[] } | null {
-  if (!enabled) return null;
+  if (!enabled && config.commonOriginAlways !== true) return null;
   const shared = commonOriginPairs(config).find((pair) => pair.to === nextStepKey);
   if (!shared) return null;
   if (nextStepKey !== shared.to) return null;
@@ -802,6 +805,21 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * turns four calibration clicks into two on the commonest case there is.
    */
   commonOrigin?: CommonOriginPair | readonly CommonOriginPair[];
+  /**
+   * The origin is ALWAYS shared for this type, so no checkbox offers it (B12).
+   *
+   * ⚑⚑ THREE POINTS ARE THE AFFINE MINIMUM. On a heatmap the two axes span
+   * exactly one rectangle, so its three corners carry the whole transform —
+   * two points can never define one, and four can be placed INCONSISTENTLY,
+   * which is what the parallel-axes guard exists for. The checkbox existed to
+   * turn four clicks into three; when three is the only sensible walk, the
+   * control becomes a way to ask for a WORSE one, and an option nobody should
+   * choose is an option that should not be offered.
+   *
+   * ⚑ NOT for XY: that type genuinely has figures whose axes do not meet, so
+   * there the checkbox is a real question and stays.
+   */
+  commonOriginAlways?: boolean;
   /** Slots every dataset under this graph type is created with, so
    * tuple capture is the type's *inherent* shape rather than something the
    * user must first discover and switch on. Histogram's bins are the first
@@ -932,8 +950,24 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
   ],
   fixedSteps: [
+    // ⚑⚑ B12 — THE PROMPTS NAME THE FIGURE'S OWN STRUCTURE, not "the corner of
+    // the plot box" and never "where the axes meet". Two reasons, and both are
+    // figures we have in hand:
+    //   · under the CENTRED tick convention an axis's clicks land on band
+    //     CENTRES, inset from the box — so the first point is at the first
+    //     COLUMN's centre, not at any corner. Naming the two BANDS a point
+    //     belongs to is true under either convention, and each axis's own
+    //     clause (added by `stepsForOptions`) says whether that means an edge
+    //     or a centre.
+    //   · on `gplots::heatmap.2` the dendrograms occupy the top and left and
+    //     the labels sit right and bottom, so the axes do NOT meet where a
+    //     reader expects (B14).
     { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
+    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed —
+    // three-point calibration shares it — so this step asks only for the Y value
+    // that belongs to it. A step that arrived with no click and no explanation
+    // would read as the walk having skipped something.
     { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
     { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
   ],
@@ -1254,41 +1288,75 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
    * them as millimetres.
    */
   stepsForOptions(steps, options) {
-    const categorical = (axis: 'x' | 'y', step: CalibStepInfo): CalibStepInfo => {
+    /**
+     * What ONE axis makes visible at one end of itself.
+     *
+     * ⚑⚑ ONE CLAUSE PER AXIS, and the prompts are built by joining two of them.
+     * The four frame steps are the three corners of the rectangle the two axes
+     * describe, so EVERY one of them is located by BOTH axes at once — and
+     * three-point calibration shares the first pixel, which makes the vertical
+     * position of the "x" click part of the Y calibration. A prompt that named
+     * one axis only ("Click the outer edge of the FIRST column") left the other
+     * half of the click to be guessed.
+     *
+     * ⚑ It also removes the kind/convention branching that used to rewrite a
+     * whole step: an axis is CATEGORY or VALUE and marks BOUNDARIES or CENTRES,
+     * independently of the other axis, and all four combinations are published.
+     * Only a clause built per axis can say the mixed ones.
+     */
+    const clause = (axis: 'x' | 'y', end: 'first' | 'last'): string => {
       const noun = axis === 'x' ? 'column' : 'row';
-      const isFirst = step.key.endsWith('1');
+      const which = end === 'first' ? 'FIRST' : 'LAST';
       const centred = optionBool(options, axis === 'x' ? 'xTicksCentred' : 'yTicksCentred');
-      // ⚑ The click is aimed at what the FIGURE prints: a centred tick if it has
-      // them, the band's outer edge if the ticks sit on the boundaries.
-      const firstPrompt = centred
-        ? `Click the tick at the CENTRE of the first ${noun}`
-        : `Click the outer edge of the FIRST ${noun} — the start of the ${noun}s, not the middle of one`;
-      const lastPrompt = centred
-        ? `Click the tick at the CENTRE of the last ${noun}, then enter how many ${noun}s the figure has`
-        : `Click the outer edge of the LAST ${noun}, then enter how many ${noun}s the figure has`;
-      return isFirst
-        ? {
-            ...step,
-            label: axis === 'x' ? (centred ? 'First column' : 'X start') : centred ? 'First row' : 'Y start',
-            prompt: firstPrompt,
-            valueFields: [],
-          }
-        : {
-            ...step,
-            label: axis === 'x' ? (centred ? 'Last column' : 'X end') : centred ? 'Last row' : 'Y end',
-            prompt: lastPrompt,
-            // ⚑ `dz`, the same slot the value axis's count uses. A category
-            // axis has no coordinate competing for `dx`, which is why the count
-            // used to live there — but two kinds answering one question into
-            // two different slots is what made the value axis unaskable.
-            valueFields: [
-              {
-                key: `${step.key}n`,
-                label: axis === 'x' ? 'Columns' : 'Rows',
-                field: 'dz',
-              },
-            ],
-          };
+      // ⚑ Asked of BOTH axis kinds. A value axis has bands too (case A1), so it
+      // has the same question — were the two clicks band CENTRES or band
+      // BOUNDARIES? Clicking x=0 and x=12 on a seven-column figure puts the
+      // boundaries at 0…12 under one reading and −1…13 under the other; every
+      // cell's bounds move and nothing on screen looks wrong.
+      // ⚑ BOTH halves are emphasised, because both are reading-critical and they
+      // are different questions: WHICH band (which corner am I at) and WHERE on
+      // it (edge or centre — a wrong answer moves every recorded boundary by
+      // half a band, with nothing on screen looking wrong afterwards).
+      return centred
+        ? `the CENTRE of the ${which} ${noun}`
+        : `the outer EDGE of the ${which} ${noun}`;
+    };
+    /** The value half of a prompt: what, if anything, is typed at this corner. */
+    const asks = (axis: 'x' | 'y', end: 'first' | 'last'): string => {
+      const categorical = optionBool(options, axis === 'x' ? 'xIsCategory' : 'yIsCategory');
+      const countNoun = axis === 'x' ? 'COLUMNS' : 'ROWS';
+      const coord = axis.toUpperCase();
+      if (end === 'first') {
+        // ⚑ A category edge takes NO typed value at all — the same shape as the
+        // colour key's strip ends, and for the same reason: a click with nothing
+        // to type is the difference between recording where the ink is and
+        // inferring it.
+        return categorical ? '' : `, and enter the ${coord} value there`;
+      }
+      return categorical
+        ? `, then enter how many ${countNoun} the figure has`
+        : `, then enter its ${coord} value and how many ${countNoun} the figure has`;
+    };
+    const corner = (step: CalibStepInfo, x: 'first' | 'last', y: 'first' | 'last'): CalibStepInfo => {
+      const axis: 'x' | 'y' = step.key.startsWith('x') ? 'x' : 'y';
+      const end: 'first' | 'last' = step.key.endsWith('2') ? 'last' : 'first';
+      const label = `${x === 'first' ? 'First' : 'Last'} column × ${y === 'first' ? 'first' : 'last'} row`;
+      const categorical = optionBool(options, axis === 'x' ? 'xIsCategory' : 'yIsCategory');
+      return {
+        ...step,
+        // ⚑ The shared corner keeps its own label so the walk does not appear to
+        // ask for the same place twice without saying why.
+        label: step.key === 'y1' ? `${label} (Y)` : label,
+        prompt:
+          step.key === 'y1'
+            ? `The same corner again — enter the Y value where ${clause('x', 'first')} meets ${clause('y', 'first')}`
+            : `Click where ${clause('x', x)} meets ${clause('y', y)}${asks(axis, end)}`,
+        valueFields: categorical
+          ? end === 'first'
+            ? []
+            : [{ key: `${step.key}n`, label: axis === 'x' ? 'Columns' : 'Rows', field: 'dz' as const }]
+          : step.valueFields,
+      };
     };
     // ⚑⚑ A LOG KEY IS CALIBRATED FROM PRINTED TICKS, NOT FROM THE STRIP'S ENDS,
     // and the prompt has to say so before the click rather than after it. The
@@ -1304,13 +1372,17 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
           ? 'Click a LABELLED tick on the colour key — e.g. 10¹ — and enter the number printed there. A log key never reaches zero, so the strip’s ends usually carry no usable number.'
           : 'Click a SECOND labelled tick on the colour key and enter its number. Both must be positive: a log scale cannot pass through zero.',
     });
+    // ⚑⚑ THE THREE CORNERS, NAMED ONCE. x1 and y1 are the SAME pixel (B12's
+    // shared origin), which is why both read "first column × first row".
+    const CORNERS: Record<string, ['first' | 'last', 'first' | 'last']> = {
+      x1: ['first', 'first'],
+      x2: ['last', 'first'],
+      y1: ['first', 'first'],
+      y2: ['first', 'last'],
+    };
     return steps.map((step) => {
-      if (optionBool(options, 'xIsCategory') && (step.key === 'x1' || step.key === 'x2')) {
-        return categorical('x', step);
-      }
-      if (optionBool(options, 'yIsCategory') && (step.key === 'y1' || step.key === 'y2')) {
-        return categorical('y', step);
-      }
+      const at = CORNERS[step.key];
+      if (at) return corner(step, at[0], at[1]);
       if (optionBool(options, 'isLogValue') && (step.key === 'kv1' || step.key === 'kv2')) {
         return logKey(step);
       }
@@ -1339,6 +1411,18 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   // The ORIGIN pairing stays: x1 = y1 leaves three distinct pixels, which is the
   // long-standing shared-origin case every XY chart has had.
   commonOrigin: XY_COMMON_ORIGIN,
+  // ⚑⚑ B12 — AND IT IS NO LONGER A CHECKBOX. Three points are the affine
+  // minimum, so on a heatmap they are simply THE WALK: the checkbox could only
+  // ever be used to ask for a fourth click that adds nothing and can disagree
+  // with the other three. David: *"Why not?"* to doing this in v2.2 — and it is
+  // cheapest now, because after release every stored heatmap carries a walk that
+  // no longer exists.
+  // ⚠️ THE PARALLEL-AXES GUARD BELOW STAYS. Three points cannot be
+  // INCONSISTENT, but they CAN BE COLLINEAR — click the three "corners" along
+  // one line and the x vector and the y vector point the same way, so there is
+  // no 2-D transform. That is the last degeneracy three points still allow, and
+  // the plan's claim that this trigger could be removed was wrong.
+  commonOriginAlways: true,
   logScaleGuards: [
     { option: 'isLogX', points: [0, 1], field: 'dx', label: 'X', unless: 'xIsCategory' },
     { option: 'isLogY', points: [2, 3], field: 'dy', label: 'Y', unless: 'yIsCategory' },
@@ -1353,7 +1437,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   ],
   parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
   fixedSteps: [
-    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
+    { key: 'x1', label: 'First column × first row', color: '#e0a458', prompt: 'Click where the FIRST column meets the FIRST row, and enter the X value there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     // ⚑⚑ THE COORDINATE AND THE BAND COUNT, on the same click. A heatmap is a
     // MATRIX however its axes are indexed, so a MEASURED axis has columns
     // exactly as a named one does — David: *"we need to have column and row
@@ -1361,9 +1445,13 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // for BOTH kinds rather than `dx` for one and nowhere for the other: `dx`
     // now always means the coordinate or nothing, and the two kinds answer
     // "how many bands" into one slot instead of two.
-    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value, then say how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
-    { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
-    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value, then say how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
+    { key: 'x2', label: 'Last column × first row', color: '#e0a458', prompt: 'Click where the LAST column meets the FIRST row, then enter its X value and how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
+    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed —
+    // three-point calibration shares it — so this step asks only for the Y value
+    // that belongs to it. A step arriving with no click and no explanation would
+    // read as the walk having skipped something.
+    { key: 'y1', label: 'First column × first row (Y)', color: '#5fb4e0', prompt: 'The same corner again — enter the Y value where the FIRST column meets the FIRST row', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
+    { key: 'y2', label: 'First column × last row', color: '#5fb4e0', prompt: 'Click where the FIRST column meets the LAST row, then enter its Y value and how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
     { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Drag across the colour key from one corner to the opposite one — or click one corner now and the other next', valueFields: [], labelBelow: true },
     { key: 'k2', label: 'Opposite corner', color: '#a87fd4', prompt: 'Click the OPPOSITE corner of the colour key', valueFields: [], labelBelow: true },
     { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },

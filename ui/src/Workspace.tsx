@@ -6890,7 +6890,15 @@ export function Workspace() {
               </span>
             </div>
           )}
-          {figureCaptured && calibExpanded && config.commonOrigin && !axes && (
+          {/* ⚑⚑ NOT OFFERED WHERE IT IS ALWAYS ON (B12). A heatmap's two axes
+              span exactly one rectangle, so three of its corners carry the whole
+              transform — three points are the AFFINE MINIMUM. The checkbox
+              existed to fold a fourth click away; where three is the only
+              sensible walk, unticking it can only ask for a worse one, and an
+              option nobody should choose is an option that should not be there.
+              ⚑ XY keeps it: that type really does have figures whose axes do not
+              meet, so there it is a genuine question. */}
+          {figureCaptured && calibExpanded && config.commonOrigin && !config.commonOriginAlways && !axes && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: theme.color.text.secondary, cursor: 'pointer' }}>
               <input
                 type="checkbox"
