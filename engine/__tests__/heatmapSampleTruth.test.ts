@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readPng } from './helpers/readPng.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
-import { buildColorScale, detectGrid, heatmapBounds as heatmapBoundsOf, initialGrid, heatmapBandCounts, initialGridFor, readHeatmapCells } from '../heatmapRun.js';
+import { buildColorScale, detectGrid, heatmapBounds as heatmapBoundsOf, initialGrid, heatmapBandCounts, initialGridFor, readHeatmapCells, NO_HEATMAP_LABELS } from '../heatmapRun.js';
 import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.js';
 import type { PlacedCalibPoint } from '../calibrationSession.js';
 
@@ -89,7 +89,18 @@ function traceSample(name: string) {
     columns: truth.grid.x.length - 1,
     rows: truth.grid.y.length - 1,
   });
-  const read = readHeatmapCells(image, axes, detected.grid ?? initialGrid(bounds), scale!);
+  // ⚑ STATED, not defaulted. `kinds` only flags the coordinates as ordinals for
+  // the export — it cannot move a value — so value×value is right for a
+  // truth comparison. Writing it down is the point: this file compares against
+  // ground truth and had been asserting a default nobody chose.
+  const read = readHeatmapCells(
+    image,
+    axes,
+    detected.grid ?? initialGrid(bounds),
+    scale!,
+    NO_HEATMAP_LABELS,
+    { x: 'value', y: 'value' }
+  );
   return { truth, detected, read };
 }
 

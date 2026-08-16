@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { categoryAxisGlyphs, categoryTickMarkers } from '../categoryTickOverlay.js';
-import { heatmapAxisOverlays, readHeatmapCells } from '../heatmapRun.js';
+import { heatmapAxisOverlays, readHeatmapCells, NO_HEATMAP_LABELS } from '../heatmapRun.js';
 import type { PixelProjector } from '../../algorithms/heatmapRead.js';
 
 /**
@@ -111,7 +111,9 @@ function readOneCell() {
     { data, width, height },
     proj,
     { xDividers: [0, 1], yDividers: [0, 1] },
-    scale as never
+    scale as never,
+    NO_HEATMAP_LABELS,
+    { x: 'value', y: 'value' }
   );
   return rows[0]!;
 }

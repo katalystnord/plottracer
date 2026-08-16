@@ -1,22 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   CalibrationSession,
+  ALL_AXES_TYPE_CONFIGS,
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
   HEATMAP_AXES_CONFIG,
-  BAR_AXES_CONFIG,
-  CATEGORICAL_LINE_CONFIG,
-  BOX_PLOT_AXES_CONFIG,
-  POLAR_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
-  MAP_AXES_CONFIG,
-  CIRCULAR_CHART_RECORDER_AXES_CONFIG,
-  SPIDER_AXES_CONFIG,
-  PIE_AXES_CONFIG,
   calibrationCompatible,
   commonOriginPairs,
   commonOriginReuse,
-  type AxesTypeConfig,
   type CalibratedAxes,
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
@@ -634,10 +625,6 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  *  shape -- but the selected one stays a visible, grabbable dot so you can still
  *  pick a point off the curve. See engine/seriesLine.ts for the curve/scatter rule. */
 
-// Typed explicitly as AxesTypeConfig<CalibratedAxes>[] (not inferred via
-// `as const`) so .find() below returns a single covariant type instead of
-// a union of each config's own axes type -- see CalibratedAxes's doc
-// comment in engine/calibrationSession.ts for why that covariance holds.
 /** The heatmap grid's one colour, shared by the dashed lines on the canvas and
  * the handles that move them — so the thing you grab is visibly the thing that
  * moves. */
@@ -653,61 +640,11 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  * identically, and it was harder to see into the bargain.
  */
 
-const AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
-  XY_AXES_CONFIG,
-  // Sits next to XY because it *is* XY underneath (checkpoint 66) -- and
-  // directly above Bar because that adjacency is the point: a histogram looks
-  // like bars, so Bar is the tempting pick, but BarAxes yields a typed label
-  // plus one magnitude and no numeric x, silently losing the axis that makes a
-  // histogram a histogram. Offering the right entry by name is what stops that
-  // choice being a trap.
-  HISTOGRAM_AXES_CONFIG,
-  // Error bars are rail tool 6, not a graph type (checkpoint 79): you trace a
-  // curve and THEN add error to it. As a graph type the choice came *before* you
-  // started -- trace an XY curve, then want error, and you started over -- the
-  // first of the four problems docs/error-bars-design.md lists against the tuple
-  // model. The retired config was deleted outright in v1.5; see that commit.
-  BAR_AXES_CONFIG,
-  // Categorical-X line/scatter (checkpoint 101): BarAxes underneath (value-only
-  // calibration = "X is not numeric"), captured as points. Sits by Bar because
-  // it shares Bar's calibration; differs in that it plots points, not bars.
-  CATEGORICAL_LINE_CONFIG,
-  // Box Plot as a first-class type (checkpoint 107). BarAxes underneath, like
-  // the two above, and grouped with them for that reason. Was a hidden "Box Plot
-  // Groups" toggle on Bar (checkpoints 21-23) -- invisible to a first-time user,
-  // which CLAUDE.md flags as a keystone failure; promoting it to a named entry is
-  // correctness, not polish. Datasets auto-carry the Min/Q1/Median/Q3/Max groups.
-  BOX_PLOT_AXES_CONFIG,
-  // Heatmap (v2.2), closing the rectangular group rather than joining the bar
-  // family. The picker answers "what does my figure look like?", and a heatmap
-  // looks like neither a bar chart nor a scatter -- it is a grid of coloured
-  // cells. What it shares with everything above it is the FRAME: two ordinary
-  // axes at right angles, which is what it calibrates. So it sits last among
-  // the rectangular charts and first before the radial ones, which is exactly
-  // where a reader scanning for "mine has a colour key" stops looking.
-  HEATMAP_AXES_CONFIG,
-  POLAR_AXES_CONFIG,
-  // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a
-  // shared centre, and differs in the way that matters: Polar has ONE radial scale
-  // and a continuously measured angle, while a spider has N independent 1-D axes
-  // and no angle at all. Grouping them makes that the visible question at the
-  // moment of choosing -- the same job the Histogram/Bar adjacency does above.
-  SPIDER_AXES_CONFIG,
-  // Pie / donut (v1.6). Completes the radial group, and belongs here rather than
-  // beside Bar even though its RECORD is bar-shaped -- a category plus one
-  // magnitude. Someone arriving with a pie is looking for a circle, not thinking
-  // about what the record turns out to be; the dropdown answers "what does my
-  // figure look like?", which is why Histogram sits by Bar and Spider by Polar.
-  PIE_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
-  MAP_AXES_CONFIG,
-  CIRCULAR_CHART_RECORDER_AXES_CONFIG,
-];
 
 /** Bundled sample figures, one per graph type (checkpoint 46) -- Katalyst
  * Nord's own synthetic images, so free to ship. Opening one loads the image
  * and pre-selects its matching graph type, so a new user has a working
- * calibration target to explore. `axes` matches an AXES_TYPE_CONFIGS id. */
+ * calibration target to explore. `axes` matches an ALL_AXES_TYPE_CONFIGS id. */
 /** Data-export formats (v0.8): the three original plus PlotDigitizer-parity
  * additions. JSON has its own structured path; XLSX is a binary workbook
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
@@ -2627,7 +2564,7 @@ export function Workspace() {
       // the config, and pouring an XY snapshot into a Histogram session would
       if (sessionRef.current.getConfig().id !== snapshot.axesTypeId) {
         const cfg =
-          AXES_TYPE_CONFIGS.find((c) => c.id === snapshot.axesTypeId) ?? XY_AXES_CONFIG;
+          ALL_AXES_TYPE_CONFIGS.find((c) => c.id === snapshot.axesTypeId) ?? XY_AXES_CONFIG;
         sessionRef.current = new CalibrationSession(cfg);
         sessionRef.current.setImageHeight(imageHeightRef.current);
         setAxesTypeId(snapshot.axesTypeId);
@@ -2993,7 +2930,7 @@ export function Workspace() {
    */
   const changeAxesType = useCallback(
     (id: string) => {
-      const nextConfig = AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG;
+      const nextConfig = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG;
       const oldSession = sessionRef.current;
       const keep = oldSession.isCalibrated() && calibrationCompatible(oldSession.getConfig(), nextConfig);
       const inputs = keep ? oldSession.getCalibrationInputs() : null;
@@ -3023,7 +2960,7 @@ export function Workspace() {
       applyProvenance({}); // a new figure has its own (empty) origin
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
-      swapSession(id, new CalibrationSession(AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
+      swapSession(id, new CalibrationSession(ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
       setMode('calibrate');
       setCalibExpanded(true);
       history.reset(captureDoc(imageSrc));
@@ -4385,7 +4322,7 @@ export function Workspace() {
       measureScale?: MeasureScaleState | null;
       provenance?: Provenance;
     }): boolean => {
-      const nextConfig = AXES_TYPE_CONFIGS.find((c) => c.id === fig.configId);
+      const nextConfig = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === fig.configId);
       if (!nextConfig) {
         setProjectError(`Unsupported axes type: ${fig.configId}`);
         return false;
@@ -4705,7 +4642,7 @@ export function Workspace() {
    * multi-figure counterpart of loadCalibratedFigure's session install. */
   const buildFigureRecordFromDeserialized = useCallback(
     (f: DeserializedFigure, sharedSource: { bytes: Uint8Array; name?: string } | null): FigureRecord => {
-      const config = AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
+      const config = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
       s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis);
@@ -6670,7 +6607,7 @@ export function Workspace() {
             and this is a SETTING that governs how the axes are read. */}
         <TopBarGroup>
           <GraphTypeCardPicker
-            options={AXES_TYPE_CONFIGS}
+            options={ALL_AXES_TYPE_CONFIGS}
             value={axesTypeId}
             onChange={(id) => {
               if (id !== axesTypeId && confirmDiscardIfDirty()) changeAxesType(id);

@@ -32,6 +32,7 @@ import {
   setCellReading,
   setCellReadingAt,
   NO_HEATMAP_CELL_READINGS,
+  NO_HEATMAP_LABELS,
   type HeatmapRow,
   type HeatmapState,
   type SourceImage,
@@ -39,6 +40,21 @@ import {
 import { HEATMAP_AXES_CONFIG, type PlacedCalibPoint } from '../calibrationSession.js';
 import { valueAtPosition } from '../../algorithms/colorScale.js';
 import { colorAtPosition } from '../../algorithms/colorBar.js';
+
+/**
+ * ⚠️⚠️ THE SHARED FIXTURE IS A VALUE × VALUE FIGURE, and saying so out loud is
+ * the point. `readHeatmapCells` used to DEFAULT its `kinds` to exactly this, so
+ * every test here asserted against a value axis without anyone choosing one —
+ * and the day a function was written that could not survive a CATEGORY axis
+ * (`heatmapAxisSpans`, which read the typed calibration values), the whole file
+ * passed anyway. A fixture is blind to what it lacks; a NAMED constant at least
+ * makes the blindness visible.
+ * ⚑ Category coverage lives in `heatmapAxisCases.test.ts` and
+ * `heatmapTickMarkers.test.ts`, and the e2e's categorical walk is what actually
+ * caught the defect above.
+ */
+const VALUE_AXES = { x: 'value', y: 'value' } as const;
+
 
 /**
  * The heatmap capture run, driven the way the CARD will drive it (v2.2, 3b).
@@ -289,7 +305,7 @@ describe('readHeatmapCells', () => {
       columns: 5,
       rows: 4,
     });
-    const { rows, summary, error } = readHeatmapCells(image, axes, grid!, scale!);
+    const { rows, summary, error } = readHeatmapCells(image, axes, grid!, scale!, NO_HEATMAP_LABELS, VALUE_AXES);
     expect(error).toBeNull();
     expect(rows).toHaveLength(20);
     expect(summary).toBe('20 cells read, all clean.');
@@ -317,7 +333,9 @@ describe('readHeatmapCells', () => {
       image,
       axes,
       { xDividers: [0, 1, 3.5, 4, 6, 9], yDividers: [0, 2, 2.5, 5, 8] },
-      scale!
+      scale!,
+      NO_HEATMAP_LABELS,
+      VALUE_AXES
     );
     expect(summary).toMatch(/^20 cells read; \d+ need a look\.$/);
     expect(rows.filter((r) => r.warning !== '').length).toBeGreaterThan(10);
@@ -333,7 +351,9 @@ describe('readHeatmapCells', () => {
       image,
       axes,
       { xDividers: [0, 1, 3.5, 4, 6, 9], yDividers: [0, 2, 2.5, 5, 8] },
-      scale!
+      scale!,
+      NO_HEATMAP_LABELS,
+      VALUE_AXES
     );
     const first = rows[0]!;
     expect(first).toMatchObject({ col: 0, row: 0, xMin: 0, xMax: 1, yMin: 0, yMax: 2 });
@@ -351,7 +371,9 @@ describe('readHeatmapCells', () => {
       image,
       axes,
       { xDividers: [500, 600], yDividers: [500, 600] },
-      scale!
+      scale!,
+      NO_HEATMAP_LABELS,
+      VALUE_AXES
     );
     expect(rows[0]!.value).toBeNull();
     expect(rows[0]!.warning).toBe('Not on the image');
@@ -364,7 +386,7 @@ describe('readHeatmapCells', () => {
     const { scale } = buildColorScale(placed, image, false);
     // The bottom-left cell of this figure is its coldest; widen the grid to a
     // single cell so the read covers the key's extremes.
-    const { rows } = readHeatmapCells(image, axes, { xDividers: [0, 9], yDividers: [0, 8] }, scale!);
+    const { rows } = readHeatmapCells(image, axes, { xDividers: [0, 9], yDividers: [0, 8] }, scale!, NO_HEATMAP_LABELS, VALUE_AXES);
     expect(rows).toHaveLength(1);
     if (rows[0]!.atKeyLimit) expect(rows[0]!.warning).toMatch(/key’s limit/);
     // And whatever this particular cell does, the flag and the sentence agree.
@@ -377,10 +399,14 @@ describe('readHeatmapCells', () => {
     const { image, axes, placed, fig } = scene();
     const { scale } = buildColorScale(placed, image, false);
     const grid = { xDividers: fig.grid.x, yDividers: fig.grid.y };
-    const result = readHeatmapCells(image, axes, grid, scale!, {
-      x: ['BRCA1', 'TP53'],
-      y: ['tumour'],
-    });
+    const result = readHeatmapCells(
+      image,
+      axes,
+      grid,
+      scale!,
+      { x: ['BRCA1', 'TP53'], y: ['tumour'] },
+      VALUE_AXES
+    );
     const columns = fig.grid.x.length - 1;
     expect(result.rows[0]).toMatchObject({ col: 0, row: 0, xLabel: 'BRCA1', yLabel: 'tumour' });
     expect(result.rows[1]).toMatchObject({ col: 1, xLabel: 'TP53' });
@@ -395,14 +421,14 @@ describe('readHeatmapCells', () => {
   it('leaves every label empty when the figure names nothing', () => {
     const { image, axes, placed, fig } = scene();
     const { scale } = buildColorScale(placed, image, false);
-    const result = readHeatmapCells(image, axes, { xDividers: fig.grid.x, yDividers: fig.grid.y }, scale!);
+    const result = readHeatmapCells(image, axes, { xDividers: fig.grid.x, yDividers: fig.grid.y }, scale!, NO_HEATMAP_LABELS, VALUE_AXES);
     expect(result.rows.every((r) => r.xLabel === '' && r.yLabel === '')).toBe(true);
   });
 
   it('needs a grid before it can read anything', () => {
     const { image, axes, placed } = scene();
     const { scale } = buildColorScale(placed, image, false);
-    const result = readHeatmapCells(image, axes, { xDividers: [1], yDividers: [0, 8] }, scale!);
+    const result = readHeatmapCells(image, axes, { xDividers: [1], yDividers: [0, 8] }, scale!, NO_HEATMAP_LABELS, VALUE_AXES);
     expect(result.rows).toEqual([]);
     expect(result.error).toMatch(/at least one boundary/i);
   });
@@ -675,20 +701,20 @@ describe('a user’s own reading of a cell', () => {
 
   it('a typed value moves the cell along the key', () => {
     const { image, axes, grid, scale } = readable();
-    const before = cellAt(readHeatmapCells(image, axes, grid, scale).rows, 1, 1);
+    const before = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows, 1, 1);
     expect(before.source).toBe('colour');
 
     const { readings, error } = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59');
     expect(error).toBeNull();
     const after = cellAt(
-      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows,
       1,
       1
     );
     expect(after.value).toBeCloseTo(59, 6);
     expect(after.source).toBe('user');
     // ⚑ AND NOTHING ELSE MOVED. The edit is one cell's coordinate on one axis.
-    expect(cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows, 0, 0).source).toBe(
+    expect(cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows, 0, 0).source).toBe(
       'colour'
     );
   });
@@ -711,7 +737,7 @@ describe('a user’s own reading of a cell', () => {
     };
     const recalibrated = buildColorScale(doubled, image, false).scale!;
     const after = cellAt(
-      readHeatmapCells(image, axes, grid, recalibrated, undefined, undefined, readings).rows,
+      readHeatmapCells(image, axes, grid, recalibrated, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows,
       1,
       1
     );
@@ -742,8 +768,8 @@ describe('a user’s own reading of a cell', () => {
     const mine = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
     const cleared = clearCellReading(mine, 1, 1);
     expect(cleared).toEqual(NO_HEATMAP_CELL_READINGS);
-    const back = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, cleared).rows, 1, 1);
-    const never = cellAt(readHeatmapCells(image, axes, grid, scale).rows, 1, 1);
+    const back = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, cleared).rows, 1, 1);
+    const never = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows, 1, 1);
     expect(back.source).toBe('colour');
     expect(back.value).toBeCloseTo(never.value!, 10);
     expect(back.rgb).toEqual(never.rgb);
@@ -756,7 +782,7 @@ describe('a user’s own reading of a cell', () => {
     // would dress a bare assertion as a measured interval.
     const { image, axes, grid, scale } = readable();
     const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
-    const mine = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows, 1, 1);
+    const mine = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows, 1, 1);
     expect(mine.low).toBeNull();
     expect(mine.high).toBeNull();
     expect(mine.distance).toBeNull();
@@ -772,13 +798,13 @@ describe('a user’s own reading of a cell', () => {
     const { image, axes, placed } = scene('heatmap-jet-jpeg.png');
     const scale = buildColorScale(placed, image, false).scale!;
     const grid = { xDividers: [0, 1, 3.5, 4, 6, 9], yDividers: [0, 2, 2.5, 5, 8] };
-    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     const messy = rows.find((r) => /% of the cell/.test(r.warning))!;
     expect(messy, 'the degraded figure must still have a non-uniform cell').toBeDefined();
 
     const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, messy.col, messy.row, '59').readings;
     const mine = cellAt(
-      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows,
       messy.col,
       messy.row
     );
@@ -798,8 +824,8 @@ describe('a user’s own reading of a cell', () => {
       axes,
       { xDividers: [0, 4, 9], yDividers: [0, 8] },
       scale,
-      undefined,
-      undefined,
+      NO_HEATMAP_LABELS,
+      VALUE_AXES,
       readings
     ).rows;
     expect(rows).toHaveLength(2);
@@ -952,7 +978,7 @@ describe('a cell’s coordinate on the colour key', () => {
 
   it('reports WHERE on the key each cell was read, as a position', () => {
     const { image, axes, grid, scale } = readable();
-    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     for (const row of rows) {
       expect(row.keyPosition).not.toBeNull();
       // A position on the strip's own 0..1 frame — the same frame the key's
@@ -973,7 +999,7 @@ describe('a cell’s coordinate on the colour key', () => {
     const { image, axes, grid, scale } = readable();
     const readings = { '1,1': 0.375 };
     const mine = cellAt(
-      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows,
       1,
       1
     );
@@ -983,7 +1009,7 @@ describe('a cell’s coordinate on the colour key', () => {
 
   it('is null for a cell with no reading at all, so nothing is drawn for it', () => {
     const { image, axes, scale } = readable();
-    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale).rows;
+    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     expect(rows[0]!.value).toBeNull();
     expect(rows[0]!.keyPosition).toBeNull();
   });
@@ -1142,7 +1168,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
 
   it('gives every readable cell the key’s own colour at its position', () => {
     const { image, axes, grid, scale } = readable();
-    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     for (const row of rows) {
       expect(row.keyRgb).toBeDefined();
       // The definition, asserted against the key rather than restated: the
@@ -1159,7 +1185,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     const { image, axes, grid, scale } = readable();
     const readings = { '1,1': 0.375 };
     const mine = cellAt(
-      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows,
       1,
       1
     );
@@ -1172,8 +1198,8 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     // the colour is a FUNCTION of the number. Two different positions must give
     // two different inks on a real ramp.
     const { image, axes, grid, scale } = readable();
-    const low = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.1 }).rows, 1, 1);
-    const high = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.9 }).rows, 1, 1);
+    const low = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, { '1,1': 0.1 }).rows, 1, 1);
+    const high = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, { '1,1': 0.9 }).rows, 1, 1);
     expect(low.keyRgb).not.toEqual(high.keyRgb);
     expect(low.keyRgb).toEqual(colorAtPosition(scale.strip, 0.1));
     expect(high.keyRgb).toEqual(colorAtPosition(scale.strip, 0.9));
@@ -1184,7 +1210,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     // whose ink sat off the ramp in a colour corresponding to NO value anywhere
     // on the key. `keyRgb` cannot produce one: it is read off the ramp itself.
     const { image, axes, grid, scale } = readable();
-    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     const drawn = rows.filter((r) => r.keyRgb !== undefined);
     // ⚑ Or the loop below is vacuous and this test passes against its own defect.
     expect(drawn.length).toBe(rows.length);
@@ -1201,7 +1227,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
 
   it('leaves an unreadable cell with no colour at all, so nothing is drawn for it', () => {
     const { image, axes, scale } = readable();
-    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale).rows;
+    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     expect(rows[0]!.keyPosition).toBeNull();
     expect(rows[0]!.keyRgb).toBeUndefined();
   });
@@ -1211,7 +1237,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     // uniformity column report on the measurement, and they need the pixel that
     // was actually there. A user-read cell has no measured ink of its own.
     const { image, axes, grid, scale } = readable();
-    const rows = readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.375 }).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, { '1,1': 0.375 }).rows;
     expect(cellAt(rows, 0, 0).rgb).toBeDefined();
     expect(cellAt(rows, 1, 1).rgb).toBeUndefined();
     // And where both exist they are INDEPENDENT: evidence is not overwritten by
@@ -1224,7 +1250,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     // ⚑ This is what "absolute" buys: figure, caliper and matrix cannot
     // disagree, because all three are the same function of the same number.
     const { image, axes, grid, scale } = readable();
-    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     const cell = cellAt(rows, 0, 0);
     // A cell's position on the key does not move when the key's LABELS change,
     // so its drawn colour must not either — the value it reports does.
@@ -1235,7 +1261,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
         { ...scale.ticks[1], value: scale.ticks[1].value * 10 },
       ] as typeof scale.ticks,
     };
-    const after = cellAt(readHeatmapCells(image, axes, grid, relabelled).rows, 0, 0);
+    const after = cellAt(readHeatmapCells(image, axes, grid, relabelled, NO_HEATMAP_LABELS, VALUE_AXES).rows, 0, 0);
     // ⚑ Both defined, or `undefined === undefined` would satisfy this.
     expect(after.keyRgb).toBeDefined();
     expect(after.keyRgb).toEqual(cell.keyRgb);

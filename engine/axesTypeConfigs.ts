@@ -2557,3 +2557,85 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   },
 };
 
+/**
+ * ⚑⚑ EVERY GRAPH TYPE THERE IS — the one place a new type joins the app.
+ *
+ * ⚠️⚠️ IT USED TO LIVE IN `ui/src/Workspace.tsx`, PRIVATE, as the Graph-type
+ * dropdown's ordering. That is the reason the same defect kept arriving on every
+ * new type: **a type joined a UI picker list and joined NOTHING ELSE.** No test
+ * could iterate it, so every cross-type check hand-listed its types — and a
+ * hand-maintained list does not grow when you add a type. Even the Tenet-11
+ * generation audit "across all twelve types" was a manual sweep; it would not
+ * have noticed a thirteenth.
+ *
+ * David, 2026-08-16, after I re-derived "a heatmap always has a numeric scale"
+ * in the very file whose header condemns it: *"I do NOT want to come back to
+ * this problem for the next chart type, i.e. bubble graphs."* The way not to is
+ * to make membership AUTOMATIC — so this is exported, and the invariants that
+ * must hold for every type iterate it.
+ *
+ * ▶ THE ACCEPTANCE TEST FOR THAT CLAIM: adding a new config here should turn the
+ * board RED until its axis kinds and its export are handled. If a type can be
+ * added and everything stays green, the class is still open.
+ *
+ * ⚑ The ORDER is the picker's, and the comments below are about that — what a
+ * reader scanning for "mine looks like this" expects to find next to what.
+ * ⚑ `everyGraphType.test.ts` asserts this list against the module's OWN exports,
+ * so a config that exists but is not registered is a failure rather than an
+ * invisible omission — the same move `ADDS_POINT_ON_CLICK` makes for the click
+ * router, one level up.
+ */
+// ⚑ Typed explicitly as AxesTypeConfig<CalibratedAxes>[] (not inferred via
+// `as const`) so `.find()` returns a single covariant type instead of a union of
+// each config's own axes type -- see CalibratedAxes's doc comment in
+// engine/calibrationSession.ts for why that covariance holds.
+export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
+  XY_AXES_CONFIG,
+  // Sits next to XY because it *is* XY underneath (checkpoint 66) -- and
+  // directly above Bar because that adjacency is the point: a histogram looks
+  // like bars, so Bar is the tempting pick, but BarAxes yields a typed label
+  // plus one magnitude and no numeric x, silently losing the axis that makes a
+  // histogram a histogram. Offering the right entry by name is what stops that
+  // choice being a trap.
+  HISTOGRAM_AXES_CONFIG,
+  // Error bars are rail tool 6, not a graph type (checkpoint 79): you trace a
+  // curve and THEN add error to it. As a graph type the choice came *before* you
+  // started -- trace an XY curve, then want error, and you started over -- the
+  // first of the four problems docs/error-bars-design.md lists against the tuple
+  // model. The retired config was deleted outright in v1.5; see that commit.
+  BAR_AXES_CONFIG,
+  // Categorical-X line/scatter (checkpoint 101): BarAxes underneath (value-only
+  // calibration = "X is not numeric"), captured as points. Sits by Bar because
+  // it shares Bar's calibration; differs in that it plots points, not bars.
+  CATEGORICAL_LINE_CONFIG,
+  // Box Plot as a first-class type (checkpoint 107). BarAxes underneath, like
+  // the two above, and grouped with them for that reason. Was a hidden "Box Plot
+  // Groups" toggle on Bar (checkpoints 21-23) -- invisible to a first-time user,
+  // which CLAUDE.md flags as a keystone failure; promoting it to a named entry is
+  // correctness, not polish. Datasets auto-carry the Min/Q1/Median/Q3/Max groups.
+  BOX_PLOT_AXES_CONFIG,
+  // Heatmap (v2.2), closing the rectangular group rather than joining the bar
+  // family. The picker answers "what does my figure look like?", and a heatmap
+  // looks like neither a bar chart nor a scatter -- it is a grid of coloured
+  // cells. What it shares with everything above it is the FRAME: two ordinary
+  // axes at right angles, which is what it calibrates. So it sits last among
+  // the rectangular charts and first before the radial ones, which is exactly
+  // where a reader scanning for "mine has a colour key" stops looking.
+  HEATMAP_AXES_CONFIG,
+  POLAR_AXES_CONFIG,
+  // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a
+  // shared centre, and differs in the way that matters: Polar has ONE radial scale
+  // and a continuously measured angle, while a spider has N independent 1-D axes
+  // and no angle at all. Grouping them makes that the visible question at the
+  // moment of choosing -- the same job the Histogram/Bar adjacency does above.
+  SPIDER_AXES_CONFIG,
+  // Pie / donut (v1.6). Completes the radial group, and belongs here rather than
+  // beside Bar even though its RECORD is bar-shaped -- a category plus one
+  // magnitude. Someone arriving with a pie is looking for a circle, not thinking
+  // about what the record turns out to be; the dropdown answers "what does my
+  // figure look like?", which is why Histogram sits by Bar and Spider by Polar.
+  PIE_AXES_CONFIG,
+  TERNARY_AXES_CONFIG,
+  MAP_AXES_CONFIG,
+  CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+];

@@ -1431,7 +1431,21 @@ export function readHeatmapCells(
   grid: HeatmapState,
   scale: ColorScale,
   labels: HeatmapLabels = NO_HEATMAP_LABELS,
-  kinds: HeatmapAxisKinds = { x: 'value', y: 'value' },
+  /**
+   * ⚠️⚠️ REQUIRED, AND IT USED TO DEFAULT TO `{ x: 'value', y: 'value' }`.
+   *
+   * That default is one of the three places the premise *"a heatmap always has a
+   * numeric scale"* lived, and it is the quietest: a caller who never thought
+   * about axis kind got a value×value answer with no signal at all, and 7 of the
+   * call sites were taking it. Making it required turns an invisible assumption
+   * into a BUILD FAILURE, which is the only kind that stays fixed.
+   *
+   * ⚑ David, on why this matters past heatmaps: *"I do NOT want to come back to
+   * this problem for the next chart type, i.e. bubble graphs."* A default is how
+   * you come back to it — see `engine/__tests__/everyGraphType.test.ts` for the
+   * structural half of that answer.
+   */
+  kinds: HeatmapAxisKinds,
   /** The cells the user read themselves — positions on the key, applied through
    * the same inverse ours came out of. */
   readings: HeatmapCellReadings = NO_HEATMAP_CELL_READINGS
