@@ -4,6 +4,7 @@ import {
   MIN_RAMP_SPREAD,
   MIN_STRIP_LENGTH_PX,
   checkStripSamples,
+  colorAtPosition,
   stripFromCorners,
   countColorLevels,
   colorDistance,
@@ -612,6 +613,85 @@ describe('positionOnStrip', () => {
         { x: 10, y: 10 }
       )
     ).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ THE OTHER DIRECTION. `invertColor` answers "what value is this ink?";
+ * this answers "what ink is this value?" — and David's rule for v2.2 makes the
+ * second one the only one allowed to reach the screen: *"the colour / tint
+ * ALWAYS == a number… the colour we show is only its REPRESENTATION."*
+ */
+describe('colorAtPosition — the key read FORWARDS', () => {
+  it('returns a sample’s own colour at that sample’s own position', () => {
+    const strip = stripOf(greyRamp);
+    const at0 = colorAtPosition(strip, 0)!;
+    const at1 = colorAtPosition(strip, 1)!;
+    expect(at0).toEqual(strip.samples[0]!.rgb);
+    expect(at1).toEqual(strip.samples[strip.samples.length - 1]!.rgb);
+  });
+
+  it('interpolates BETWEEN two samples rather than snapping to the nearer one', () => {
+    // Snapping would quantise the rendered colour to the key's own sampling
+    // pitch, so two cells a hair apart in value would be drawn identically —
+    // which is the very confusion the mirroring is supposed to remove.
+    const strip: ColorBarStrip = {
+      samples: [
+        { t: 0, rgb: [0, 0, 0] },
+        { t: 1, rgb: [100, 200, 40] },
+      ],
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+      thickness: 1,
+    };
+    expect(colorAtPosition(strip, 0.5)).toEqual([50, 100, 20]);
+    expect(colorAtPosition(strip, 0.25)).toEqual([25, 50, 10]);
+  });
+
+  it('interpolates by POSITION, not by sample index — a key with transparent gaps is unevenly spaced', () => {
+    // `sampleColorBar` DROPS positions where every pixel was transparent rather
+    // than guessing them, so `samples` is not a uniform grid and walking it by
+    // index would place every colour wrong after the first gap.
+    const gappy: ColorBarStrip = {
+      samples: [
+        { t: 0, rgb: [0, 0, 0] },
+        { t: 0.9, rgb: [90, 90, 90] },
+        { t: 1, rgb: [100, 100, 100] },
+      ],
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+      thickness: 1,
+    };
+    // Half way along the STRIP is half way between the first two samples in
+    // position, not the midpoint of the three-sample list.
+    expect(colorAtPosition(gappy, 0.45)).toEqual([45, 45, 45]);
+  });
+
+  it('clamps past either end — the key has no ink beyond itself', () => {
+    // A cell can sit past an end (a clipped figure, or a value typed outside the
+    // key's span). It must still be DRAWN, and the only honest colour is the
+    // end's own — inventing an extrapolated one would show a colour the figure
+    // does not contain.
+    const strip = stripOf(greyRamp);
+    expect(colorAtPosition(strip, -0.4)).toEqual(colorAtPosition(strip, 0));
+    expect(colorAtPosition(strip, 1.7)).toEqual(colorAtPosition(strip, 1));
+  });
+
+  it('is null for a non-finite position or a strip with no samples', () => {
+    const strip = stripOf(greyRamp);
+    expect(colorAtPosition(strip, NaN)).toBeNull();
+    expect(colorAtPosition({ samples: [], from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, thickness: 1 }, 0.5)).toBeNull();
+  });
+
+  it('round-trips against invertColor: inverting the ink at t returns t', () => {
+    // The two directions are one model. If they disagree, the matrix and the
+    // figure disagree, which is exactly what "absolute mirroring" forbids.
+    const strip = stripOf(greyRamp);
+    for (const t of [0.1, 0.33, 0.5, 0.77, 0.95]) {
+      const ink = colorAtPosition(strip, t)!;
+      const back = invertColor(strip, ink)!;
+      expect(back.t).toBeCloseTo(t, 1);
+    }
   });
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { theme } from '../theme.js';
 import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
+import { textOn } from '../contrast.js';
 
 /**
  * A heatmap's cells, IN THE DATA POINTS PANEL — the same place every other
@@ -211,41 +212,74 @@ type ViewProps = Pick<
   | 'dragTint'
 >;
 
-/** The pick reads as a highlight in both views — same colour as the outline the
- * canvas draws, so the two are visibly one thing. */
+/** The pick, as an OUTLINE. Same purple and same mechanism the canvas draws, so
+ * the two are visibly one thing. */
+const PICKED_OUTLINE = '2px solid rgb(124, 58, 237)';
+/** Drawn INSIDE the cell's own box, so picking one cannot move any other. */
+const PICKED_OUTLINE_OFFSET = -2;
+
+/** A row highlight for the long view, where the row is not itself tinted — the
+ * value cell there paints its own opaque fill, so nothing mirrored is covered. */
 const PICKED_BACKGROUND = 'rgba(124, 58, 237, 0.18)';
 
 /**
- * How strongly a cell is tinted with the colour it was read from.
+ * The colour a cell is painted — a RENDERING of its number, at full strength.
  *
- * ⚑⚑ THE MATRIX MIRRORS THE FIGURE. David: *"Fill our cell with a color if it
- * derived from color, and no color if it is user set or OCR"* — the indicator is
- * the EVIDENCE, so nothing has to be learned, and a shadowed column shows up in
- * the table as a darker band beside numbers that look perfectly reasonable.
+ * ⚑⚑ ABSOLUTE MIRRORING. David, 2026-08-15: *"We need to have absolute MIRRORING
+ * of the colour between the heatmap, the draggable colour key, and the output
+ * matrix. That is the ground truth."*
  *
- * ⚑ A WASH rather than the full colour, so the numbers stay black and legible on
- * a dark palette — and so the picked highlight, which is itself translucent,
- * layers over it exactly as it does on the canvas. Same mechanism in both
- * places; no special case for the table.
+ * ⚠️ THIS REPLACES TWO EARLIER RULES AT ONCE, and both replacements are his.
+ *   1. It is `keyRgb` — the key's ink at the cell's position — NOT the sampled
+ *      pixel. *"The colour we show is only its REPRESENTATION… that is WHY it is
+ *      important that the colour follows the value, not the other way around."*
+ *      So a cell a person read is painted too, because the colour is a function
+ *      of the number and the number changed; provenance rides in the
+ *      `[brackets]` and the export's own column, where it always did.
+ *   2. It is FULL STRENGTH. The old `alpha 0.35` over white turned viridis's
+ *      darkest purple `rgb(68,1,84)` into a pale lavender `rgb(190,166,195)` —
+ *      David: *"They do not look like the same colours to my eyes on this
+ *      screen."* He was right, and the wash existed only as a workaround for
+ *      the missing half of B16 (text contrast), which is now built.
  */
-const VALUE_TINT_ALPHA = 0.35;
-
-/** The cell's background: the colour it was read from, or nothing at all when
- * the number came from somewhere else. */
 function tintOf(
-  cell: { col: number; row: number; rgb?: readonly [number, number, number]; source?: string } | undefined,
+  cell: { col: number; row: number; keyRgb?: readonly [number, number, number] } | undefined,
   dragTint?: HeatmapCellsTableProps['dragTint']
-) {
+): readonly [number, number, number] | undefined {
   // ⚑ THE PREVIEW WINS WHILE IT LASTS. Dragging the key's cursor shows the ink
-  // it is sitting on, so the cell can be matched against the figure by eye —
-  // and it is shown at FULL strength rather than the resting wash, because the
-  // whole point is to compare it with a colour.
+  // it is sitting on, so the cell can be matched against the figure by eye. It
+  // is the ACTUAL pixel under the cursor rather than a rendering, because the
+  // whole point of the gesture is to compare the figure with the key.
   if (cell && dragTint && dragTint.col === cell.col && dragTint.row === cell.row) {
-    return `rgb(${dragTint.rgb[0]}, ${dragTint.rgb[1]}, ${dragTint.rgb[2]})`;
+    return dragTint.rgb;
   }
-  if (!cell?.rgb || cell.source !== 'colour') return undefined;
-  return `rgba(${cell.rgb[0]}, ${cell.rgb[1]}, ${cell.rgb[2]}, ${VALUE_TINT_ALPHA})`;
+  return cell?.keyRgb;
 }
+
+const cssRgb = (rgb: readonly [number, number, number]) => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+/**
+ * How a tinted cell's text is coloured: from its FILL, never from a token.
+ *
+ * ⚑ The half of B16 that was recorded and never built — *"cell text contrast
+ * must follow the fill, or half the matrix is unreadable on a dark palette"* —
+ * and its absence is the whole reason the tint was weakened into something that
+ * no longer matched the figure. David settled it: *"we can have white text when
+ * needed too."* `textOn` picks whichever of black and white contrasts better,
+ * and a test sweeps the entire RGB cube to show that the winner always clears
+ * the WCAG AA floor, which is what makes a full-strength fill safe at all.
+ *
+ * ⚑⚑ A FLAGGED CELL KEEPS ITS FLAG WITHOUT FIGHTING THE FILL. Red text was
+ * legible on a pale wash and is not legible on viridis, so the flag moves into
+ * the same channel as the value: a trailing DAGGER, drawn in the ink that is
+ * legible by construction. Same reasoning the `[brackets]` already carry in this
+ * file — a mark made of TEXT survives every background, and a copy-paste.
+ * ⚠️ Deliberately NOT an asterisk: real heatmaps print asterisks over their own
+ * cells for significance, and a mark of ours that collides with one of theirs is
+ * worse than no mark.
+ */
+const FLAGGED_MARK = '†';
+
 
 /**
  * How a value reads, given where it came from.
@@ -438,7 +472,10 @@ function MatrixView({
                     cursor: onPickCells ? 'pointer' : undefined,
                     // ⚑ A band shows as picked only when ALL of it is, so a
                     // partial range never looks like a whole column.
-                    background: rows.every((r) => picked(col, r)) ? PICKED_BACKGROUND : undefined,
+                    // ⚑ The same outline the cells use, so a picked column and a
+                    // picked cell are visibly the same gesture.
+                    outline: rows.every((r) => picked(col, r)) ? PICKED_OUTLINE : undefined,
+                    outlineOffset: PICKED_OUTLINE_OFFSET,
                   }}
                 >
                   {/* ⚑⚑ THE HEADER IS THE COLUMN'S IDENTITY, not a coordinate.
@@ -482,7 +519,8 @@ function MatrixView({
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
                     cursor: onPickCells ? 'pointer' : undefined,
-                    background: columns.every((c) => picked(c, row)) ? PICKED_BACKGROUND : undefined,
+                    outline: columns.every((c) => picked(c, row)) ? PICKED_OUTLINE : undefined,
+                    outlineOffset: PICKED_OUTLINE_OFFSET,
                   }}
                 >
                   <span data-testid={`heatmap-row-head-${row}`}>{`R${row + 1}`}</span>{' '}
@@ -499,6 +537,7 @@ function MatrixView({
                 {columns.map((col) => {
                   const cell = byKey.get(cellKey(col, row));
                   const isPicked = picked(col, row);
+                  const fill = tintOf(cell, dragTint);
                   return (
                     <td
                       key={col}
@@ -519,15 +558,20 @@ function MatrixView({
                         padding: '0 8px',
                         textAlign: 'right',
                         cursor: onPickCells ? 'pointer' : undefined,
-                        // ⚑ THE SAME TRANSLUCENT HIGHLIGHT, LAYERED — exactly as
-                        // it is on the canvas, over whatever the cell's own
-                        // colour happens to be. No outline invented for the
-                        // table: "picked" looks like "picked" in both places.
-                        backgroundColor: tintOf(cell, dragTint),
-                        backgroundImage: isPicked
-                          ? `linear-gradient(${PICKED_BACKGROUND}, ${PICKED_BACKGROUND})`
-                          : undefined,
-                        color: cell?.warning ? theme.color.error : undefined,
+                        // ⚑⚑ THE CELL IS THE FIGURE'S COLOUR, FULL STRENGTH.
+                        backgroundColor: fill ? cssRgb(fill) : undefined,
+                        // ⚑⚑ AND THE PICK IS AN OUTLINE, NOT A WASH — the same
+                        // mechanism the canvas draws, and for the same reason it
+                        // has to be: a translucent highlight OVER the cell means
+                        // a picked cell is no longer the figure's colour, so the
+                        // one cell you are inspecting is the one that stops
+                        // mirroring. Inset, so picking cannot move anything.
+                        outline: isPicked ? PICKED_OUTLINE : undefined,
+                        outlineOffset: isPicked ? PICKED_OUTLINE_OFFSET : undefined,
+                        // ⚑ The fill decides the ink. Only an UNTINTED cell can
+                        // fall back to the error token — on a painted one, red
+                        // is illegible and the dagger carries the flag instead.
+                        color: fill ? textOn(fill) : cell?.warning ? theme.color.error : undefined,
                       }}
                     >
                       {/* ⚑⚑ NOT EDITABLE HERE, and that is a decision rather
@@ -541,6 +585,7 @@ function MatrixView({
                           — the picked-cell line above and the Table view — which
                           is the shape the XY spreadsheet has always used. */}
                       {cell ? valueText(num(cell.value, 5), cell.source) : ''}
+                      {cell?.warning ? FLAGGED_MARK : ''}
                     </td>
                   );
                 })}
@@ -628,8 +673,12 @@ function LongView({
                 }}
                 style={{
                   paddingRight: 8,
-                  // ⚑ The long form mirrors the matrix, which mirrors the figure.
-                  backgroundColor: tintOf(cell, dragTint),
+                  // ⚑ The long form mirrors the matrix, which mirrors the figure
+                  // — same function of the same number, so all three agree.
+                  ...(() => {
+                    const fill = tintOf(cell, dragTint);
+                    return fill ? { backgroundColor: cssRgb(fill), color: textOn(fill) } : {};
+                  })(),
                 }}
               >
                 {valueCell(cell, renderValue)}

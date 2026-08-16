@@ -28,7 +28,7 @@
  * they are not is written on `buildColorScale`.
  */
 
-import { sampleColorBar, stripFromCorners, type ColorBarRefusal } from '../algorithms/colorBar.js';
+import { colorAtPosition, sampleColorBar, stripFromCorners, type ColorBarRefusal } from '../algorithms/colorBar.js';
 import {
   checkColorScale,
   positionAtValue,
@@ -151,6 +151,71 @@ export function buildColorScale(
     default:
       return { scale, error: null };
   }
+}
+
+/**
+ * Every cell the Select tool's marquee caught.
+ *
+ * ⚑⚑ THE SAME RULE THE POINT MARQUEE USES, so Select means one thing in this
+ * app. That marquee tests each DATA POINT's pixel against the dragged box; this
+ * tests each CELL'S CENTRE pixel against the same box. Nothing new to learn, and
+ * a rotated or skewed figure is handled for free because the test happens in
+ * PIXEL space after the projection, exactly as it does for points.
+ *
+ * ⚑ WHY IT IS THE CENTRE and not the cell's overlap with the box: a marquee is
+ * a "grab what I dragged over" gesture, and requiring only overlap would grab a
+ * whole row from a box clipping its edge. The centre is the same standard a
+ * point is held to — the thing itself must be inside.
+ *
+ * ⚑ B6 asked for this (*"I cannot select a range of cells, or click cells on the
+ * heatmap"*) and v2.2 built multi-select in the TABLE only, then called it done.
+ */
+export function cellKeysInRect(
+  rows: readonly HeatmapRow[],
+  rect: { x: number; y: number; width: number; height: number },
+  toPixel: (x: number, y: number) => { x: number; y: number } | null
+): string[] {
+  const x0 = Math.min(rect.x, rect.x + rect.width);
+  const x1 = Math.max(rect.x, rect.x + rect.width);
+  const y0 = Math.min(rect.y, rect.y + rect.height);
+  const y1 = Math.max(rect.y, rect.y + rect.height);
+  const keys: string[] = [];
+  for (const row of rows) {
+    const p = toPixel(row.xCentre, row.yCentre);
+    if (p === null || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) keys.push(cellKey(row.col, row.row));
+  }
+  return keys;
+}
+
+/**
+ * Where the colour key's caliper rides, and how thick it is.
+ *
+ * ⚑⚑ THE SAME LINE THE SAMPLER READS, WHICH IS THE WHOLE POINT. `k1` and `k2`
+ * are OPPOSITE CORNERS of the key, so the line between them is the rectangle's
+ * DIAGONAL — and the caliper used to be drawn along it. That tilted the glyph by
+ * the diagonal's angle and let it drift from one long edge at low values to the
+ * other at high ones, which is both of David's complaints about it (*"it does
+ * not take the full width of the colour key, and that looks wrong"* … *"And it
+ * is a wrong angle too?"*) from a single cause.
+ *
+ * ⚠️ AND IT WAS THE TRAP THIS PROJECT KEEPS FALLING INTO: `buildColorScale`
+ * samples along `stripFromCorners(k1, k2)` — the CENTRELINE — so the position
+ * DRAWN and the position SAMPLED were measured along two different lines. The
+ * drag already reused `positionOnStrip`; the drawing was hand-rolled beside it.
+ * One function for both, so they cannot come apart.
+ *
+ * ⚑ THE THICKNESS IS MEASURED, not chosen. It comes from the user's own two
+ * corner clicks — the same measurement that replaced a hardcoded 5px sampling
+ * window — so the caliper spans the bar it is pointing at instead of floating on
+ * it as a fixed-size box. ⚠️ It is in IMAGE space; the overlay must scale it by
+ * the view's zoom like everything else it draws.
+ */
+export function keyCursorStrip(
+  k1: { px: number; py: number },
+  k2: { px: number; py: number }
+): { from: { x: number; y: number }; to: { x: number; y: number }; thickness: number } | null {
+  return stripFromCorners({ x: k1.px, y: k1.py }, { x: k2.px, y: k2.py });
 }
 
 /** The axes surface needed to read a heatmap's frame back — structural, so no
@@ -1028,6 +1093,35 @@ export interface HeatmapRow {
    */
   rgb?: readonly [number, number, number];
   /**
+   * THE COLOUR THIS CELL IS DRAWN IN — the key's own ink at `keyPosition`.
+   *
+   * ⚑⚑ NOT `rgb`, AND THE DISTINCTION IS THE WHOLE POINT. David, 2026-08-15:
+   * *"We need to have absolute MIRRORING of the colour between the heatmap, the
+   * draggable colour key, and the output matrix. That is the ground truth"* —
+   * and the direction that makes it reachable: *"the colour / tint ALWAYS == a
+   * number… the colour we show is only its REPRESENTATION. Hence that is WHY it
+   * is important that the colour follows the value, not the other way around."*
+   *
+   * So the two fields mean opposite things and neither can stand in for the
+   * other. `rgb` is the ink that was MEASURED — evidence, which `colour offset`
+   * and `uniformity` report on. `keyRgb` is the ink the key gives this value —
+   * representation, and the only one that may be DRAWN.
+   *
+   * What follows for free:
+   *   · a cell a person read (or OCR'd) gets its colour automatically, because
+   *     the colour is a function of the number and the number changed. There is
+   *     no provenance rule to write; the `[brackets]` carry that.
+   *   · the figure, the key's caliper and the matrix cannot disagree, because
+   *     all three are the same function of the same number.
+   *   · a cell whose ink sat OFF the ramp stops being painted in a colour that
+   *     corresponds to no value anywhere on the key — the one case where the old
+   *     tint showed something meaningless.
+   *
+   * Undefined exactly when `keyPosition` is null: with no position there is no
+   * colour to give it, and drawing one would invent a reading.
+   */
+  keyRgb?: readonly [number, number, number];
+  /**
    * WHICH INSTRUMENT read this cell.
    *
    * ⚑⚑ All three are measurements and they fail in opposite ways — OCR reads
@@ -1164,6 +1258,14 @@ export function readHeatmapCells(
     const t = readings[cellKey(cell.col, cell.row)];
     const mineValue = t === undefined ? null : valueAtPosition(scale, t);
     const mine = mineValue !== null;
+    // ⚑ Computed once, here, so the position and the colour drawn for it cannot
+    // come from two different places.
+    const keyPosition = mine
+      ? t!
+      : cell.reading === null
+        ? null
+        : positionAtValue(scale, cell.reading.value);
+    const keyRgb = keyPosition === null ? null : colorAtPosition(scale.strip, keyPosition);
     return {
       col: cell.col,
       row: cell.row,
@@ -1176,15 +1278,15 @@ export function readHeatmapCells(
       value: mine ? mineValue : cell.reading?.value ?? null,
       // ⚑ The stored position exactly where there is one; otherwise back through
       // the same inverse the value came out of, so the two always agree.
-      keyPosition: mine
-        ? t!
-        : cell.reading === null
-          ? null
-          : positionAtValue(scale, cell.reading.value),
-      // ⚑ Carried through so the table can tint the cell with what was sampled.
-      // ⚑ Only where the colour IS the reading: the tint is the evidence for the
-      // number beside it, so a cell a person read must not wear the colour's.
+      keyPosition,
+      // ⚑ EVIDENCE. The ink that was actually there, kept only where the colour
+      // WAS the reading — `colour offset` and `uniformity` report on it, and a
+      // cell a person read has no measured ink of its own. It is no longer a
+      // display input; see `keyRgb`.
       ...(cell.rgb && !mine ? { rgb: [cell.rgb[0], cell.rgb[1], cell.rgb[2]] as const } : {}),
+      // ⚑ REPRESENTATION, for every cell that has a position — whichever
+      // instrument produced it.
+      ...(keyRgb ? { keyRgb: [keyRgb[0], keyRgb[1], keyRgb[2]] as const } : {}),
       source: mine ? ('user' as const) : ('colour' as const),
       // Null, not the typed number twice: a reading by eye has no measured
       // interval, and `low = high = value` would dress a bare number as one.

@@ -57,6 +57,20 @@ export interface GuidanceTipInput {
    * test names outright — so the sentence changes when the state does.
    */
   heatmapHasCells?: boolean;
+  /**
+   * Exactly one cell is picked, so its CALIPER is on the colour key.
+   *
+   * ⚑⚑ THE NEWEST GESTURE AND THE LEAST GUESSABLE. Dragging a cell along the
+   * colour key is how its value is set on the third axis — the exact twin of
+   * sliding a data point along x or y — and nothing on screen said so. The tips
+   * bar named typing, right-clicking and dragging a boundary, and stopped.
+   *
+   * ⚑ Conditional rather than appended, because the caliper only EXISTS while a
+   * single cell is picked. Naming a gesture whose handle is not on screen is the
+   * invisible-precondition failure one step removed, and it keeps the sentence
+   * short enough to read.
+   */
+  heatmapCellPicked?: boolean;
   mode: ToolMode;
   figureCaptured: boolean;
   eyedropper: null | 'grid' | 'series' | 'trace';
@@ -116,6 +130,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     canvasHasImage,
     heatmapHasGrid,
     heatmapHasCells,
+    heatmapCellPicked,
     mode,
     figureCaptured,
     eyedropper,
@@ -273,7 +288,12 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
             // back to the key is not, and a correction you cannot undo except
             // through Ctrl+Z is a one-way door. This is the app's one constant
             // place for "what do I do now?", so it is where the pair belongs.
-            'Type over a cell’s value to record what you can see; right-click it to go back to the key’s number. Drag a handle beside the figure to move a boundary.'
+            // ⚑⚑ AND WHEN A CELL IS PICKED, ITS CALIPER IS ON THE KEY. That is
+            // the third axis's own drag handle — the twin of sliding a point
+            // along x or y — and it was the one gesture the bar never named.
+            (heatmapCellPicked === true
+              ? 'Drag the picked cell’s marker along the colour key to set its value, or type over the value itself; right-click it to go back to the key’s number.'
+              : 'Type over a cell’s value to record what you can see; right-click it to go back to the key’s number. Drag a handle beside the figure to move a boundary.')
           : heatmapHasGrid === true
           ? // ⚑⚑ THE GESTURE, SAID WHERE IT IS ALWAYS VISIBLE. The handles beside
             // the figure are draggable in every mode, but nothing on screen said
@@ -282,7 +302,14 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
             // one. Not obvious when you are setting the grids up."* The tips bar
             // is this app's one constant place for "what do I do now?", so the
             // answer belongs here rather than inside a panel you have to open.
-            'Drag a handle beside the figure to move a boundary, or click a cell to inspect it. The Grid fold-out on the Calibration card adds and removes boundaries.'
+            // ⚑⚑ NAME THE ACTION THAT FINISHES THE JOB, FIRST. This sentence
+            // told the user how to ADJUST the grid and never mentioned Read
+            // cells — so with `Calibrated ✓`, a grid drawn on the figure and a
+            // detection report all saying READY, the app's one constant place
+            // for "what do I do now?" answered with a side quest. David called
+            // the buried button a UI design fault; the tip was the half of it
+            // that cost nothing to fix.
+            'Press Read cells to record every cell through the colour key. Drag a handle beside the figure to move a boundary, or click a cell to inspect it.'
           : 'Use the Heatmap card to detect the grid and read the cells — a heatmap’s values come from its grid, not from clicking the figure.';
       return 'Click anywhere on the image to add a data point. Hold Space or drag the middle button to pan; scroll to zoom.';
     }

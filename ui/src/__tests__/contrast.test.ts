@@ -2,23 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { theme } from '../theme.js';
-
-/**
- * WCAG 2.x contrast ratio (relative luminance formula, §1.4.3/§1.4.11).
- * Small, self-contained rather than pulling in a library: this app has no
- * other consumer for it, and the formula is short and stable.
- */
-function relativeLuminance(hex: string): number {
-  const v = hex.replace('#', '');
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) / 255);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-  return 0.2126 * lin(r!) + 0.7152 * lin(g!) + 0.0722 * lin(b!);
-}
-
-function contrastRatio(a: string, b: string): number {
-  const [l1, l2] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-  return (l1! + 0.05) / (l2! + 0.05);
-}
+// ⚑ The formula used to live in this file. It moved to `../contrast.js` when
+// the heatmap matrix needed it at RUNTIME (a cell's fill is not known in
+// advance), and the test imports it rather than keeping a second copy — the
+// theme's tokens and the matrix's cells are now held to one implementation.
+import { INK_DARK, INK_LIGHT, contrastRatio, textOn } from '../contrast.js';
 
 /**
  * v2.0 pre-launch audit: two real WCAG contrast failures, plus the shared
@@ -70,5 +58,60 @@ describe('WCAG AA contrast (4.5:1 for normal text, 3:1 for large/UI components)'
   it('confirms the ORIGINAL defect would have failed, so this test could not pass vacuously', () => {
     expect(contrastRatio('#aeaeae', theme.color.background.primary)).toBeLessThan(4.5);
     expect(contrastRatio(theme.color.background.primary, theme.color.primary.clicked)).toBeLessThan(4.5);
+  });
+});
+
+/**
+ * ⚑⚑ THE HEATMAP MATRIX PAINTS ITS OWN BACKGROUNDS, so its text colour cannot
+ * be a token — it is decided per cell, from the fill the cell's VALUE earned.
+ * This is the half of B16 that was recorded and never built, and its absence is
+ * why the tint was weakened to a pale wash that no longer matched the figure.
+ */
+describe('textOn — which ink is legible on a cell painted by its own value', () => {
+  it('prints WHITE on a dark fill and BLACK on a light one', () => {
+    // viridis's two ends, which is the case David actually reported: its
+    // darkest purple washed out to a pale lavender rather than let white text in.
+    expect(textOn([68, 1, 84])).toBe(INK_LIGHT);
+    expect(textOn([253, 231, 37])).toBe(INK_DARK);
+    expect(textOn([255, 255, 255])).toBe(INK_DARK);
+    expect(textOn([0, 0, 0])).toBe(INK_LIGHT);
+  });
+
+  it('clears the WCAG AA floor on EVERY colour, which is what makes a full-strength tint safe', () => {
+    // ⚑ The property that matters is not "it picks sensibly" but "there is no
+    // fill on which the number becomes unreadable" — otherwise raising the tint
+    // trades a colour defect for a legibility one, which is the exact swap that
+    // produced the wash in the first place.
+    // ⚠️ A colour ramp is a 1-D path through this cube, so sweeping the ramp
+    // would test only the colours one colormap happens to use. The whole cube
+    // is what a real key can contain.
+    let worst = { ratio: 21, rgb: [0, 0, 0] as readonly [number, number, number] };
+    for (let r = 0; r <= 255; r += 15) {
+      for (let g = 0; g <= 255; g += 15) {
+        for (let b = 0; b <= 255; b += 15) {
+          const rgb = [r, g, b] as const;
+          const ratio = contrastRatio(rgb, textOn(rgb));
+          if (ratio < worst.ratio) worst = { ratio, rgb };
+        }
+      }
+    }
+    expect(worst.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('agrees with contrastRatio rather than deciding by a threshold of its own', () => {
+    // Two mechanisms that must agree is the shape this project keeps getting
+    // bitten by. `textOn` is defined AS the better ratio, and that is asserted
+    // rather than restated.
+    for (const rgb of [[68, 1, 84], [120, 120, 120], [253, 231, 37], [200, 30, 90]] as const) {
+      const picked = textOn(rgb);
+      const other = picked === INK_DARK ? INK_LIGHT : INK_DARK;
+      expect(contrastRatio(rgb, picked)).toBeGreaterThanOrEqual(contrastRatio(rgb, other));
+    }
+  });
+
+  it('reads a hex string and a triple as the same colour', () => {
+    expect(contrastRatio('#440154', INK_LIGHT)).toBeCloseTo(contrastRatio([68, 1, 84], INK_LIGHT), 10);
+    // Short form too, since theme tokens are written both ways.
+    expect(contrastRatio('#fff', INK_DARK)).toBeCloseTo(contrastRatio([255, 255, 255], INK_DARK), 10);
   });
 });

@@ -14,7 +14,9 @@ import {
   heatmapAxisOverlays,
   dragDivider,
   initialGrid,
+  cellKeysInRect,
   isDividerHandle,
+  keyCursorStrip,
   labelOrderReversed,
   labelsForCells,
   readHeatmapCells,
@@ -30,6 +32,7 @@ import {
 } from '../heatmapRun.js';
 import { HEATMAP_AXES_CONFIG, type PlacedCalibPoint } from '../calibrationSession.js';
 import { valueAtPosition } from '../../algorithms/colorScale.js';
+import { colorAtPosition } from '../../algorithms/colorBar.js';
 
 /**
  * The heatmap capture run, driven the way the CARD will drive it (v2.2, 3b).
@@ -977,6 +980,260 @@ describe('a cell’s coordinate on the colour key', () => {
     const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale).rows;
     expect(rows[0]!.value).toBeNull();
     expect(rows[0]!.keyPosition).toBeNull();
+  });
+});
+
+/**
+ * ⑧ — the second half. B6 asked to *"select a range of cells, or click cells on
+ * the heatmap"*, and v2.2 shipped multi-select in the TABLE only.
+ */
+describe('the marquee selects a RANGE of cells, the way it selects points', () => {
+  // A plain 10-px-per-unit projection, so what the test asserts is the RULE and
+  // not a fixture's arithmetic.
+  const toPixel = (x: number, y: number) => ({ x: x * 10, y: y * 10 });
+  const cell = (col: number, row: number, xCentre: number, yCentre: number) =>
+    ({ col, row, xCentre, yCentre }) as HeatmapRow;
+  const rows = [
+    cell(0, 0, 1, 1), // → (10, 10)
+    cell(1, 0, 2, 1), // → (20, 10)
+    cell(0, 1, 1, 2), // → (10, 20)
+    cell(1, 1, 2, 2), // → (20, 20)
+  ];
+
+  it('catches every cell whose centre falls inside the dragged box', () => {
+    expect(cellKeysInRect(rows, { x: 5, y: 5, width: 20, height: 10 }, toPixel)).toEqual(['0,0', '1,0']);
+    expect(cellKeysInRect(rows, { x: 5, y: 5, width: 20, height: 20 }, toPixel)).toEqual([
+      '0,0',
+      '1,0',
+      '0,1',
+      '1,1',
+    ]);
+  });
+
+  it('takes a box dragged in ANY direction, since a marquee has no handedness', () => {
+    // Dragged up-and-left: negative width and height, same two cells.
+    expect(cellKeysInRect(rows, { x: 25, y: 15, width: -20, height: -10 }, toPixel)).toEqual(['0,0', '1,0']);
+  });
+
+  it('catches nothing from a box over empty canvas, rather than the nearest cell', () => {
+    expect(cellKeysInRect(rows, { x: 200, y: 200, width: 50, height: 50 }, toPixel)).toEqual([]);
+  });
+
+  it('judges a cell by its CENTRE, so clipping a cell’s edge does not grab it', () => {
+    // A box reaching x=15 covers part of column 1's cell but not its centre at
+    // x=20. Overlap would grab the whole column from a box that brushed it.
+    expect(cellKeysInRect(rows, { x: 5, y: 5, width: 10, height: 10 }, toPixel)).toEqual(['0,0']);
+  });
+
+  it('skips a cell the axes cannot place, instead of selecting it at NaN', () => {
+    const broken = () => ({ x: NaN, y: NaN });
+    expect(cellKeysInRect(rows, { x: 0, y: 0, width: 1000, height: 1000 }, broken)).toEqual([]);
+    expect(cellKeysInRect(rows, { x: 0, y: 0, width: 1000, height: 1000 }, () => null)).toEqual([]);
+  });
+});
+
+/**
+ * ④ — the caliper's geometry. David saw two things wrong with it and they have
+ * one cause: it was drawn along the key's DIAGONAL, because `k1`/`k2` are
+ * opposite CORNERS.
+ */
+describe('the colour key’s caliper rides the strip, not the corners', () => {
+  const k1 = { px: 100, py: 500 };
+  const k2 = { px: 400, py: 540 }; // a horizontal key, 300 long and 40 thick
+
+  it('sits on the CENTRELINE, so it neither tilts nor drifts off the bar', () => {
+    const strip = keyCursorStrip(k1, k2)!;
+    // The old drawing ran corner to corner: y would have gone 500 → 540.
+    expect(strip.from.y).toBe(520);
+    expect(strip.to.y).toBe(520);
+    expect(strip.from.y).toBe(strip.to.y);
+    // Which is to say: no tilt. The diagonal's angle was ~7.6°, and that is
+    // exactly what showed on screen.
+    expect(Math.atan2(strip.to.y - strip.from.y, strip.to.x - strip.from.x)).toBe(0);
+  });
+
+  it('spans the thickness MEASURED from the user’s own two clicks, not a constant', () => {
+    // The glyph's half-height was a hardcoded `const h = 9`, so on a 40px key it
+    // covered less than half the bar.
+    const strip = keyCursorStrip(k1, k2)!;
+    expect(strip.thickness).toBe(24); // 40 × the 0.6 inset the sampler uses
+    // And it FOLLOWS the figure: a thinner key gets a thinner caliper.
+    expect(keyCursorStrip(k1, { px: 400, py: 510 })!.thickness).toBe(6);
+  });
+
+  it('⚑⚑ IS THE SAME GEOMETRY THE SAMPLER READS — drawn and stored cannot disagree', () => {
+    // The defect stated as a property. `buildColorScale` samples along
+    // `stripFromCorners(k1, k2)`; if the caliper is drawn along anything else,
+    // the position shown and the position recorded are measured on two
+    // different lines. Asserted against the scale the app actually builds,
+    // rather than against a restatement of the formula.
+    const { image, placed } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    const drawn = keyCursorStrip(placed['k1']!, placed['k2']!)!;
+    expect(drawn.from).toEqual(scale!.strip.from);
+    expect(drawn.to).toEqual(scale!.strip.to);
+    expect(drawn.thickness).toEqual(scale!.strip.thickness);
+  });
+
+  it('works for a VERTICAL key too, where the long axis is the other one', () => {
+    // Half the arithmetic is invisible on a horizontal key, and plenty of real
+    // colour keys are vertical.
+    const strip = keyCursorStrip({ px: 500, py: 100 }, { px: 540, py: 400 })!;
+    expect(strip.from.x).toBe(520);
+    expect(strip.to.x).toBe(520);
+    expect(strip.thickness).toBe(24);
+  });
+
+  it('⚠️ is the SAME strip whichever corner was clicked FIRST — the mirrored-caliper bug', () => {
+    // ⚑⚑ THIS WAS A VALUE DEFECT, not only a cosmetic one, and it took a second
+    // look to see it. `stripFromCorners` always returns min→max, so the strip's
+    // t=0 is the LEFT end however the user dragged. The old cursor was drawn and
+    // measured along the RAW `k1 → k2` line — so whenever k1 was not the min
+    // corner (a right-to-left or bottom-to-top drag across the key, which
+    // nothing in the walk discourages), the caliper was MIRRORED: drawn at the
+    // wrong end, and a drag reported t in the opposite frame from the one
+    // `valueAtPosition` reads it in. The cell would take the value from the far
+    // end of the key.
+    // ⚑ Only the CALIPER was affected — cells read from colour go through
+    // `invertColor(strip, …)`, which is in the strip's frame throughout. That is
+    // why the recorded values measured clean against ground truth.
+    const leftToRight = keyCursorStrip({ px: 100, py: 500 }, { px: 400, py: 540 });
+    const rightToLeft = keyCursorStrip({ px: 400, py: 540 }, { px: 100, py: 500 });
+    expect(rightToLeft).toEqual(leftToRight);
+    // And the other diagonal of the same rectangle, which is just as clickable.
+    expect(keyCursorStrip({ px: 400, py: 500 }, { px: 100, py: 540 })).toEqual(leftToRight);
+    // Vertical keys too, where the long axis is the other one.
+    const topDown = keyCursorStrip({ px: 500, py: 100 }, { px: 540, py: 400 });
+    expect(keyCursorStrip({ px: 540, py: 400 }, { px: 500, py: 100 })).toEqual(topDown);
+  });
+
+  it('refuses a degenerate pair rather than drawing a caliper nowhere', () => {
+    expect(keyCursorStrip({ px: NaN, py: 1 }, { px: 400, py: 500 })).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ ABSOLUTE MIRRORING — David, 2026-08-15: *"We need to have absolute
+ * MIRRORING of the colour between the heatmap, the draggable colour key, and the
+ * output matrix. That is the ground truth."*
+ *
+ * And the direction that makes it achievable at all: *"the colour / tint ALWAYS
+ * == a number… the colour we show is only its REPRESENTATION. Hence that is WHY
+ * it is important that the colour follows the value, not the other way around."*
+ *
+ * So a row carries TWO colours and they mean opposite things — `rgb` is the ink
+ * that was MEASURED (evidence), `keyRgb` is the ink the key gives that value
+ * (representation). Only the second may be drawn.
+ */
+describe('the colour a cell is DRAWN in follows its value, never the sampled ink', () => {
+  function readable() {
+    const { fig, image, axes, placed } = scene();
+    const { scale } = buildColorScale(placed, image, false);
+    return { image, axes, scale: scale!, grid: { xDividers: fig.grid.x, yDividers: fig.grid.y } };
+  }
+  const cellAt = (rows: HeatmapRow[], col: number, row: number) =>
+    rows.find((r) => r.col === col && r.row === row)!;
+
+  it('gives every readable cell the key’s own colour at its position', () => {
+    const { image, axes, grid, scale } = readable();
+    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    for (const row of rows) {
+      expect(row.keyRgb).toBeDefined();
+      // The definition, asserted against the key rather than restated: the
+      // drawn colour IS `key(keyPosition)`.
+      expect(row.keyRgb).toEqual(colorAtPosition(scale.strip, row.keyPosition!));
+    }
+  });
+
+  it('gives a USER-read cell a colour too — colour follows the value whichever instrument produced it', () => {
+    // ⚠️ THIS SUPERSEDES the earlier provenance rule ("no colour if it is user
+    // set"). Provenance moved to the `[brackets]` and the export's own column;
+    // the tint became pure representation, and a cell with a value and no
+    // colour would break the mirroring for exactly the cells a person corrected.
+    const { image, axes, grid, scale } = readable();
+    const readings = { '1,1': 0.375 };
+    const mine = cellAt(
+      readHeatmapCells(image, axes, grid, scale, undefined, undefined, readings).rows,
+      1,
+      1
+    );
+    expect(mine.source).toBe('user');
+    expect(mine.keyRgb).toEqual(colorAtPosition(scale.strip, 0.375));
+  });
+
+  it('moves a cell’s colour when its value is edited, with nothing to keep in sync', () => {
+    // "Change the value and the colour follows" needs no syncing code because
+    // the colour is a FUNCTION of the number. Two different positions must give
+    // two different inks on a real ramp.
+    const { image, axes, grid, scale } = readable();
+    const low = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.1 }).rows, 1, 1);
+    const high = cellAt(readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.9 }).rows, 1, 1);
+    expect(low.keyRgb).not.toEqual(high.keyRgb);
+    expect(low.keyRgb).toEqual(colorAtPosition(scale.strip, 0.1));
+    expect(high.keyRgb).toEqual(colorAtPosition(scale.strip, 0.9));
+  });
+
+  it('draws an OFF-RAMP cell in a colour the key actually contains', () => {
+    // ⚑ THE CONFLATION THIS FIXES. Tinting with the sampled pixel paints a cell
+    // whose ink sat off the ramp in a colour corresponding to NO value anywhere
+    // on the key. `keyRgb` cannot produce one: it is read off the ramp itself.
+    const { image, axes, grid, scale } = readable();
+    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const drawn = rows.filter((r) => r.keyRgb !== undefined);
+    // ⚑ Or the loop below is vacuous and this test passes against its own defect.
+    expect(drawn.length).toBe(rows.length);
+    for (const row of drawn) {
+      const onRamp = scale.strip.samples.some(
+        (s) =>
+          Math.abs(s.rgb[0] - row.keyRgb![0]) <= 1 &&
+          Math.abs(s.rgb[1] - row.keyRgb![1]) <= 1 &&
+          Math.abs(s.rgb[2] - row.keyRgb![2]) <= 1
+      );
+      expect(onRamp).toBe(true);
+    }
+  });
+
+  it('leaves an unreadable cell with no colour at all, so nothing is drawn for it', () => {
+    const { image, axes, scale } = readable();
+    const rows = readHeatmapCells(image, axes, { xDividers: [500, 600], yDividers: [500, 600] }, scale).rows;
+    expect(rows[0]!.keyPosition).toBeNull();
+    expect(rows[0]!.keyRgb).toBeUndefined();
+  });
+
+  it('keeps `rgb` as EVIDENCE — the measured ink, still only where the colour was the reading', () => {
+    // The two must not collapse into one field: `colour offset` and the
+    // uniformity column report on the measurement, and they need the pixel that
+    // was actually there. A user-read cell has no measured ink of its own.
+    const { image, axes, grid, scale } = readable();
+    const rows = readHeatmapCells(image, axes, grid, scale, undefined, undefined, { '1,1': 0.375 }).rows;
+    expect(cellAt(rows, 0, 0).rgb).toBeDefined();
+    expect(cellAt(rows, 1, 1).rgb).toBeUndefined();
+    // And where both exist they are INDEPENDENT: evidence is not overwritten by
+    // representation.
+    const measured = cellAt(rows, 0, 0);
+    expect(measured.keyRgb).toEqual(colorAtPosition(scale.strip, measured.keyPosition!));
+  });
+
+  it('moves every cell’s colour when the KEY is recalibrated, because all of them are one function of it', () => {
+    // ⚑ This is what "absolute" buys: figure, caliper and matrix cannot
+    // disagree, because all three are the same function of the same number.
+    const { image, axes, grid, scale } = readable();
+    const rows = readHeatmapCells(image, axes, grid, scale).rows;
+    const cell = cellAt(rows, 0, 0);
+    // A cell's position on the key does not move when the key's LABELS change,
+    // so its drawn colour must not either — the value it reports does.
+    const relabelled = {
+      ...scale,
+      ticks: [
+        { ...scale.ticks[0], value: scale.ticks[0].value * 10 },
+        { ...scale.ticks[1], value: scale.ticks[1].value * 10 },
+      ] as typeof scale.ticks,
+    };
+    const after = cellAt(readHeatmapCells(image, axes, grid, relabelled).rows, 0, 0);
+    // ⚑ Both defined, or `undefined === undefined` would satisfy this.
+    expect(after.keyRgb).toBeDefined();
+    expect(after.keyRgb).toEqual(cell.keyRgb);
+    expect(after.value).not.toBe(cell.value);
   });
 });
 

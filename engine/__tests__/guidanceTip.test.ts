@@ -693,6 +693,27 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
     expect(after).toMatch(/type over/i);
   });
 
+  /**
+   * ① — the other half of David's "UI design fault". A grid on screen, a
+   * detection report and `Calibrated ✓` all read as READY, and nothing named the
+   * action that turns the grid into a record.
+   */
+  it('names READ CELLS once a grid exists — the action that finishes the job', () => {
+    const ready = guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: false }));
+    expect(ready).toMatch(/read cells/i);
+    // ⚑ And FIRST: the adjusting gestures are a side quest at this moment, and
+    // a tip that opens with them answers a question nobody asked.
+    expect(ready.toLowerCase().indexOf('read cells')).toBeLessThan(
+      ready.toLowerCase().indexOf('boundary')
+    );
+  });
+
+  it('stops naming Read cells once the cells are read, so the tip moves on', () => {
+    expect(
+      guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true }))
+    ).not.toMatch(/read cells/i);
+  });
+
   it('says the WAY BACK, because right-click is the half nothing else shows', () => {
     // ⚑ Typing over a value is discoverable — the dashed underline every
     // editable number in the app carries. Handing the cell back to the key is
@@ -700,6 +721,30 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
     expect(guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true }))).toMatch(
       /right-click/i
     );
+  });
+
+  /**
+   * ③ — David's screenshot finding. The bar named typing, right-clicking and
+   * dragging a boundary, and never named the CALIPER: dragging a cell along the
+   * colour key, which is the newest gesture and the least guessable one.
+   */
+  it('names the COLOUR KEY drag once a cell is picked — the third axis’s own handle', () => {
+    const picked = guidanceTipBase(
+      heatmap({ heatmapHasGrid: true, heatmapHasCells: true, heatmapCellPicked: true })
+    );
+    expect(picked).toMatch(/colour key/i);
+    expect(picked).toMatch(/drag/i);
+    // The way back stays said — it is the half nothing else shows.
+    expect(picked).toMatch(/right-click/i);
+  });
+
+  it('does NOT name the caliper while no cell is picked, because it is not on screen', () => {
+    // ⚑ The same invisible-precondition rule as "type over a cell's value": the
+    // caliper exists only for a SINGLE picked cell, so naming it before then
+    // sends the user hunting for a handle that is not drawn.
+    expect(
+      guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true, heatmapCellPicked: false }))
+    ).not.toMatch(/colour key/i);
   });
 });
 

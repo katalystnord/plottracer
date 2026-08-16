@@ -85,7 +85,19 @@ export function routeCanvasClick({
   // intercepted by the marquee drag in ImageCanvas, so this rarely fires; when
   // it does, we clear rather than place. The user-facing clear paths are Esc and
   // an empty-space marquee, both advertised in the tips bar.
-  if (mode === 'select') return { kind: 'clear-selection' };
+  //
+  // ⚑⚑ EXCEPT ON A MATRIX TYPE, WHERE SELECT IS THE ONE TOOL THAT MUST SELECT.
+  // David, on the built 2.2.0: *"Nothing happens at all when I click a cell.
+  // With any selection tools."* `select-cell` lives at the bottom of this
+  // router, so it was reachable only through the FALLTHROUGH — and this branch
+  // returned first, clearing point state that a heatmap does not have while
+  // never touching the picked cells. The capability was real and bound to the
+  // control advertising the opposite: a hidden mode, and the tool that did work
+  // was Place Point, whose own tips bar says a heatmap's values do not come
+  // from clicking the figure.
+  if (mode === 'select') {
+    return readsCellsFromAGrid === true ? { kind: 'select-cell' } : { kind: 'clear-selection' };
+  }
   // Eraser removes a point on a MARKER click; a bare canvas click must not fall
   // through to addDataPoint.
   if (mode === 'eraser') return { kind: 'ignore' };

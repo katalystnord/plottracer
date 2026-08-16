@@ -1450,8 +1450,22 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     ['k1', 'k2'],
   ],
   parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
+  // ⚑⚑ SHORT LABELS, LONG PROMPTS — and they are two different jobs at two
+  // different sites. The LABEL is drawn on the canvas beside its marker; the
+  // PROMPT is a line of text on the calibration card. B12 replaced `X1`/`Y1`
+  // with `First column × first row`, and David's screenshot of the built app
+  // shows the result: the label runs across the plot and collides with the
+  // figure, the top-left one is clipped behind the calibration card, and the
+  // bottom-right reads `Last column × fi…`.
+  // ⚑ THE LESSON: the PROMPT had to name both bands, because a click on a
+  // matrix is located by BOTH axes and the old category prompt named only one.
+  // The LABEL did not, and both were changed together.
+  // ⚑ `C1`/`R1` rather than back to `X1`/`Y1`: they are just as short and they
+  // MIRROR the results matrix, whose column and row headers are literally `C1`
+  // and `R1`. The mark on the figure and the header in the table now say the
+  // same word for the same band.
   fixedSteps: [
-    { key: 'x1', label: 'First column × first row', color: '#e0a458', prompt: 'Click where the FIRST column meets the FIRST row, and enter the X value there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
+    { key: 'x1', label: 'C1 × R1', color: '#e0a458', prompt: 'Click where the FIRST column meets the FIRST row, and enter the X value there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     // ⚑⚑ THE COORDINATE AND THE BAND COUNT, on the same click. A heatmap is a
     // MATRIX however its axes are indexed, so a MEASURED axis has columns
     // exactly as a named one does — David: *"we need to have column and row
@@ -1459,13 +1473,13 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // for BOTH kinds rather than `dx` for one and nowhere for the other: `dx`
     // now always means the coordinate or nothing, and the two kinds answer
     // "how many bands" into one slot instead of two.
-    { key: 'x2', label: 'Last column × first row', color: '#e0a458', prompt: 'Click where the LAST column meets the FIRST row, then enter its X value and how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
+    { key: 'x2', label: 'Cn × R1', color: '#e0a458', prompt: 'Click where the LAST column meets the FIRST row, then enter its X value and how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
     // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed —
     // three-point calibration shares it — so this step asks only for the Y value
     // that belongs to it. A step arriving with no click and no explanation would
     // read as the walk having skipped something.
-    { key: 'y1', label: 'First column × first row (Y)', color: '#5fb4e0', prompt: 'The same corner again — enter the Y value where the FIRST column meets the FIRST row', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
-    { key: 'y2', label: 'First column × last row', color: '#5fb4e0', prompt: 'Click where the FIRST column meets the LAST row, then enter its Y value and how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
+    { key: 'y1', label: 'C1 × R1 (Y)', color: '#5fb4e0', prompt: 'The same corner again — enter the Y value where the FIRST column meets the FIRST row', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
+    { key: 'y2', label: 'C1 × Rn', color: '#5fb4e0', prompt: 'Click where the FIRST column meets the LAST row, then enter its Y value and how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
     { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Drag across the colour key from one corner to the opposite one — or click one corner now and the other next', valueFields: [], labelBelow: true },
     { key: 'k2', label: 'Opposite corner', color: '#a87fd4', prompt: 'Click the OPPOSITE corner of the colour key', valueFields: [], labelBelow: true },
     { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },

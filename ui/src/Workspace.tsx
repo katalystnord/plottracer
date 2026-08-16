@@ -230,6 +230,8 @@ import {
   labelsFromAxes,
   labelsToAxes,
   type MetadataCarrier,
+  cellKeysInRect,
+  keyCursorStrip,
   readHeatmapCells,
   readingsFromAxes,
   readingsToAxes,
@@ -2047,6 +2049,41 @@ export function Workspace() {
    * ⚑ `gridFromAxes` VALIDATES rather than trusts, so a hand-edited or
    * older-build file cannot install a grid the app would refuse to draw.
    */
+  /**
+   * Read every cell of a given grid, or say it cannot be done.
+   *
+   * ⚑ EXTRACTED so the FORWARD path and the UNDO path cannot drift apart. They
+   * had drifted: a grid edit re-read, and taking the same edit back CLEARED —
+   * so one undo cost the whole table. David chose symmetry: *"Re-read, matching
+   * the forward path."*
+   * ⚑ Takes the readings as an ARGUMENT rather than off state, because the undo
+   * path installs them in the same tick and React has not applied them yet.
+   */
+  const readCellsFor = useCallback(
+    (grid: HeatmapState, readings: HeatmapCellReadings) => {
+      const axesNow = sessionRef.current.getAxes();
+      const img = imageCanvasRef.current?.getImageData();
+      if (!axesNow || !img) return null;
+      const image = { data: img.data, width: img.width, height: img.height };
+      const { scale } = buildColorScale(
+        sessionRef.current.getPlacedPoints(),
+        image,
+        sessionRef.current.getOptions()['isLogValue'] === 'true'
+      );
+      if (!scale) return null;
+      return readHeatmapCells(
+        image,
+        axesNow,
+        grid,
+        scale,
+        labelsForCells(heatmapLabels, grid, axesNow),
+        heatmapKinds(),
+        readings
+      );
+    },
+    [heatmapKinds, heatmapLabels]
+  );
+
   const restoreHeatmapGrid = useCallback(() => {
     const axes = sessionRef.current.getAxes();
     setHeatmapGrid(axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null);
@@ -2057,9 +2094,10 @@ export function Workspace() {
     // a cell someone corrected by eye that came back reading the colour again
     // would silently undo a measurement, and look exactly like a file that never
     // held one.
-    setHeatmapCellReadings(
-      axes ? readingsFromAxes(axes as unknown as MetadataCarrier) : NO_HEATMAP_CELL_READINGS
-    );
+    const restoredReadings = axes
+      ? readingsFromAxes(axes as unknown as MetadataCarrier)
+      : NO_HEATMAP_CELL_READINGS;
+    setHeatmapCellReadings(restoredReadings);
     const stored = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
     // Back through the SAME mapping, which is its own inverse: the boxes show
     // the figure's reading order, the file holds the cell order.
@@ -2067,11 +2105,22 @@ export function Workspace() {
     const shown = restoredGrid && axes ? labelsForCells(stored, restoredGrid, axes) : stored;
     setHeatmapXLabels(formatLabelList(shown.x));
     setHeatmapYLabels(formatLabelList(shown.y));
-    setHeatmapCells([]);
-    setHeatmapSummary('');
+    // ⚑⚑ RE-READ, DON'T EMPTY. Undoing a divider nudge used to clear the whole
+    // results table, on the sound-sounding principle that a table describing the
+    // previous grid measures a figure that no longer exists. But the FORWARD
+    // path re-reads, so one undo cost strictly more than the edit it took back —
+    // including cells a person had read by hand. David: *"Re-read, matching the
+    // forward path."* The readings themselves survive either way (they are
+    // stored as positions on the key), but the table they belong to did not.
+    // ⚑ Falls back to empty exactly where a read is impossible — no image yet on
+    // the load path, or no colour key — which is the old behaviour, kept for the
+    // case that actually needed it.
+    const reread = restoredGrid ? readCellsFor(restoredGrid, restoredReadings) : null;
+    setHeatmapCells(reread?.rows ?? []);
+    setHeatmapSummary(reread?.summary ?? '');
     setHeatmapDetectMessage('');
     setHeatmapError(null);
-  }, []);
+  }, [readCellsFor]);
 
   /**
    * A divider was dragged. Move it, or leave everything exactly as it was.
@@ -2106,31 +2155,19 @@ export function Workspace() {
       if (!axesNow) return;
       setHeatmapDetectMessage('');
       applyHeatmapGrid(next);
-      const img = imageCanvasRef.current?.getImageData();
-      if (heatmapCells.length > 0 && img) {
-        const image = { data: img.data, width: img.width, height: img.height };
-        const { scale } = buildColorScale(
-          sessionRef.current.getPlacedPoints(),
-          image,
-          sessionRef.current.getOptions()['isLogValue'] === 'true'
-        );
-        if (scale) {
-          const result = readHeatmapCells(
-            image,
-            axesNow,
-            next,
-            scale,
-            labelsForCells(heatmapLabels, next, axesNow),
-            heatmapKinds(),
-            heatmapCellReadings
-          );
+      // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
+      // they drifted — this one re-read, the other emptied the table — so the
+      // symmetry is now structural rather than a thing to remember.
+      if (heatmapCells.length > 0) {
+        const result = readCellsFor(next, heatmapCellReadings);
+        if (result) {
           setHeatmapCells(result.rows);
           setHeatmapSummary(result.summary);
         }
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length, heatmapCellReadings, heatmapKinds, heatmapLabels]
+    [applyHeatmapGrid, commit, heatmapCells.length, heatmapCellReadings, readCellsFor]
   );
 
   const moveHeatmapDivider = useCallback(
@@ -3652,6 +3689,24 @@ export function Workspace() {
   // axis handle never grabs it (David: especially when selecting several).
   const handleSelectRect = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
+      // ⚑⚑ ON A MATRIX TYPE THE MARQUEE YIELDS CELLS, NOT POINT INDICES. A
+      // heatmap has no data points for a box to catch, so Select's flagship
+      // gesture caught nothing at all — the same hidden-mode defect as the bare
+      // click, one gesture along. `cellKeysInRect` applies the identical rule
+      // this function applies to points, so Select means one thing in this app.
+      if (heatmapActive) {
+        const axesNow = sessionRef.current.getAxes();
+        if (!axesNow) return;
+        setSelectedCells(
+          new Set(
+            cellKeysInRect(heatmapCells, rect, (x, y) =>
+              (axesNow as unknown as { dataToPixel?: (a: number, b: number) => { x: number; y: number } })
+                .dataToPixel?.(x, y) ?? null
+            )
+          )
+        );
+        return;
+      }
       const x0 = rect.x;
       const y0 = rect.y;
       const x1 = rect.x + rect.width;
@@ -3663,7 +3718,7 @@ export function Workspace() {
       setSelectedPointIndices(inside);
       setActivePointIndex(null);
     },
-    [session]
+    [heatmapActive, heatmapCells, session]
   );
 
   // The Select tool's LASSO (v1.1 #6): every active-series DATA point inside the
@@ -3672,6 +3727,22 @@ export function Workspace() {
   // them. The polygon arrives in image-pixel space (algorithms/geometry).
   const handleSelectLasso = useCallback(
     (polygon: { x: number; y: number }[]) => {
+      // ⚑ The marquee's twin, and it gets the same treatment: on a matrix type a
+      // loop encloses CELLS. Leaving one of the two gestures point-only would
+      // put the hidden mode back, one tool-option along.
+      if (heatmapActive) {
+        const axesNow = sessionRef.current.getAxes() as unknown as {
+          dataToPixel?: (a: number, b: number) => { x: number; y: number };
+        } | null;
+        if (!axesNow) return;
+        const keys = heatmapCells
+          .map((c) => ({ c, p: axesNow.dataToPixel?.(c.xCentre, c.yCentre) }))
+          .filter(({ p }) => p !== undefined && Number.isFinite(p.x) && Number.isFinite(p.y))
+          .filter(({ p }) => pointInPolygon(p!, polygon))
+          .map(({ c }) => cellKey(c.col, c.row));
+        setSelectedCells(new Set(keys));
+        return;
+      }
       const inside: number[] = [];
       session.getDataPoints().forEach((p, i) => {
         if (pointInPolygon({ x: p.px, y: p.py }, polygon)) inside.push(i);
@@ -3679,7 +3750,7 @@ export function Workspace() {
       setSelectedPointIndices(inside);
       setActivePointIndex(null);
     },
-    [session]
+    [heatmapActive, heatmapCells, session]
   );
 
   // Select a recorded measurement's vertex for keyboard nudge (checkpoint 128).
@@ -5524,11 +5595,13 @@ export function Workspace() {
     const k1 = placedPoints['k1'];
     const k2 = placedPoints['k2'];
     if (!k1 || !k2) return null;
-    return {
-      from: { x: k1.px, y: k1.py },
-      to: { x: k2.px, y: k2.py },
-      t: cell.keyPosition,
-    };
+    // ⚑⚑ THE STRIP, NOT THE CORNERS. `k1`/`k2` are opposite corners, so the line
+    // between them is the key's DIAGONAL — drawing on it tilted the caliper and
+    // let it drift off the bar, and it is not the line `buildColorScale` samples
+    // along. `keyCursorStrip` is that same line, and it measures the thickness.
+    const strip = keyCursorStrip(k1, k2);
+    if (strip === null) return null;
+    return { ...strip, t: cell.keyPosition };
   }, [heatmapActive, selectedCell, heatmapCells, placedPoints]);
 
   /**
@@ -6375,6 +6448,9 @@ export function Workspace() {
     canvasHasImage,
     heatmapHasGrid: heatmapShownGrid !== null,
     heatmapHasCells: heatmapCells.length > 0,
+    // ⚑ The caliper is drawn only for a SINGLE picked cell, and the tip names it
+    // only when it is there to be dragged — same source of truth as the marker.
+    heatmapCellPicked: selectedCell !== null,
     isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
     mode,
     figureCaptured,
@@ -7045,13 +7121,33 @@ export function Workspace() {
               data-testid="heatmap-grid-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
             >
+              {/* ⚑⚑ THE ACTION TRAVELS WITH THE GRID, exactly as its provenance
+                  does one block below. David, on the built 2.2.0: *"You now have
+                  to know that to HAVE to open the 'lower part' of the calibration
+                  card to be able to read the cells, even though everything looks
+                  ready. That is a UI design fault."* The screen said `Calibrated
+                  ✓`, `▶ Grid — 5 × 5 cells` and detection's own "5 columns,
+                  matching the 4 boundaries found" — everything reads READY — and
+                  the one action that finishes the job was inside a closed
+                  fold-out inside a closed card.
+                  ⚠️ AND THE "ENDING" FIX MADE IT WORSE: Read cells FOLDS the card
+                  behind it, so the second read was buried too. Fixing "the flow
+                  has no ending" created "the flow has no visible NEXT STEP", and
+                  the fix has to keep both properties at once.
+                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES — which
+                  is this feature's own established answer to an undiscoverable
+                  gesture, not a new one. `Reset to key` is already offered both
+                  on the picked-cell line and in the right-click menu, in the same
+                  words, because right-click alone could not be found. One handler,
+                  one label, one style; the fold-out keeps its ending and the
+                  header line carries the next step. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 type="button"
                 data-testid="heatmap-grid-toggle"
                 onClick={() => setHeatmapPanelOpen((open) => !open)}
                 title={heatmapPanelOpen ? 'Close the grid settings' : 'Open the grid settings'}
                 style={{
-                  alignSelf: 'flex-start',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 4,
@@ -7075,6 +7171,20 @@ export function Workspace() {
                 </span>
                 <span data-testid="heatmap-grid-summary">{heatmapGridSummary(heatmapShownGrid)}</span>
               </button>
+              {/* ⚑ Only once there IS a grid to read — the same gate the button
+                  inside the fold-out uses, so the two cannot get out of step. */}
+              {session.isCalibrated() && heatmapShownGrid && (
+                <button
+                  type="button"
+                  data-testid="heatmap-read-inline"
+                  onClick={() => finishHeatmapGrid()}
+                  title="Read every cell through the colour key — the cells appear in the Cells panel"
+                  style={endsCardButton(true)}
+                >
+                  Read cells
+                </button>
+              )}
+              </div>
               {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID — outside the
                   fold-out, because it is the answer to "did you measure this or
                   make it up?" and that question is live the moment a grid

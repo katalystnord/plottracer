@@ -459,6 +459,63 @@ export function positionOnStrip(
 }
 
 /**
+ * The ink the key carries at a position along it — the key read FORWARDS.
+ *
+ * ⚑⚑ WHY THIS EXISTS, and it is a rule rather than a convenience. David,
+ * 2026-08-15: *"the colour / tint ALWAYS == a number. The number is the
+ * important bit (from the calibration). The colour we show is only its
+ * REPRESENTATION."* So every colour this app DRAWS for a value must come from
+ * here, and never from the pixel that was sampled. `invertColor` is the
+ * measuring direction (ink → number); this is the drawing direction
+ * (number → ink), and keeping them as one model is what lets the figure, the
+ * colour key and the output matrix agree by construction instead of by
+ * inspection.
+ *
+ * ⚑ IT ALSO REMOVES A REAL CONFLATION. A cell whose ink sat OFF the ramp used to
+ * be drawn in that off-ramp colour — a colour corresponding to NO VALUE anywhere
+ * on the key. Rendering `key(value)` cannot produce one; how far the ink sat off
+ * the ramp stays reported, as evidence, in its own column.
+ *
+ * INTERPOLATED between the bracketing samples, not snapped to the nearer one:
+ * snapping would quantise the drawn colour to the key's own sampling pitch, so
+ * two cells a hair apart in value would be drawn identically — the confusion the
+ * mirroring exists to remove.
+ *
+ * CLAMPED past either end, because the key has no ink beyond itself. A cell can
+ * sit past an end (a clipped figure, or a value typed outside the key's span)
+ * and it must still be drawn; the end's own colour is the only honest answer,
+ * where an extrapolated one would show a colour the figure does not contain.
+ */
+export function colorAtPosition(
+  strip: ColorBarStrip | { samples: readonly ColorBarSample[] },
+  t: number
+): RGB | null {
+  const s = strip.samples;
+  if (s.length === 0 || !Number.isFinite(t)) return null;
+  const first = s[0]!;
+  const last = s[s.length - 1]!;
+  if (t <= first.t) return first.rgb;
+  if (t >= last.t) return last.rgb;
+  // ⚑ By POSITION, not by index. `sampleColorBar` DROPS fully transparent
+  // positions rather than guessing them, so `samples` is not a uniform grid and
+  // stepping through it by index would place every colour after a gap wrong.
+  let hi = 1;
+  while (hi < s.length - 1 && s[hi]!.t < t) hi++;
+  const a = s[hi - 1]!;
+  const b = s[hi]!;
+  const span = b.t - a.t;
+  // Two samples recorded at the same position: no interval to divide by, and
+  // either one is as good an answer as the other.
+  if (span <= 0) return a.rgb;
+  const f = (t - a.t) / span;
+  return [
+    Math.round(a.rgb[0] + (b.rgb[0] - a.rgb[0]) * f),
+    Math.round(a.rgb[1] + (b.rgb[1] - a.rgb[1]) * f),
+    Math.round(a.rgb[2] + (b.rgb[2] - a.rgb[2]) * f),
+  ];
+}
+
+/**
  * One stretch of the key that a queried colour is consistent with.
  *
  * `t` is the best position within it; `tLow..tHigh` is how far that reading

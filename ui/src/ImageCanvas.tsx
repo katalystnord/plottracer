@@ -270,8 +270,17 @@ interface ImageCanvasProps {
    * the strip's ends in IMAGE coordinates and `t` is where along it the cell
    * sits; the cursor is drawn from those rather than from a pixel, so it follows
    * the key when the figure is zoomed, panned or recalibrated.
+   *
+   * ⚠️ `from`/`to` must be the strip's CENTRELINE, not the two corner clicks —
+   * `keyCursorStrip` is the one place that decides, and it is the same line the
+   * sampler reads. `thickness` is the bar's measured depth, in IMAGE units.
    */
-  keyCursor?: { from: { x: number; y: number }; to: { x: number; y: number }; t: number } | null;
+  keyCursor?: {
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+    t: number;
+    thickness: number;
+  } | null;
   /** Live, while the cursor is being dragged — for the colour preview. */
   onKeyCursorDrag?: (t: number) => void;
   /** Committed, on release. */
@@ -489,6 +498,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  /** The colour key's caliper is being dragged, so the loupe is PINNED to it and
+   * stays visible even over a card (David: *"otherwise it is really difficult to
+   * see what colour you are selecting"*). */
+  const [keyCursorDragging, setKeyCursorDragging] = useState(false);
   // `panning` distinguishes a view-pan gesture (Pan tool, Ctrl+Left, or middle
   // button) from a plain-left tool press that is only tracked for click-vs-drag
   // detection. onMouseMove pans only when panning is true; endDrag places a point
@@ -1937,10 +1950,16 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     closed
                     stroke={GRID_OVERLAY_COLOR}
                     strokeWidth={2.5}
-                    // ⚑ A wash rather than a solid fill: the cell's COLOUR is
-                    // the datum being inspected, so covering it would hide the
-                    // thing the selection is asking about.
-                    fill="rgba(124, 58, 237, 0.18)"
+                    // ⚑⚑ AN OUTLINE, WITH NO FILL AT ALL. This was a translucent
+                    // wash, on the reasoning that a wash covers the cell's colour
+                    // less than a solid fill would. Taken one step further that
+                    // argument ends here: the cell's COLOUR IS the datum being
+                    // inspected, so tinting it AT ALL means the one cell the user
+                    // picked is the one cell that no longer matches the figure —
+                    // and the matrix, which mirrors it, would disagree too.
+                    // David: *"absolute MIRRORING… That is the ground truth."*
+                    // ⚑ The table's pick is now the same outline, so "picked"
+                    // looks like "picked" in both places without being told.
                     listening={false}
                   />
                 )}
@@ -1971,9 +1990,20 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   if (!Number.isFinite(len) || len < 1) return null;
                   const at = { x: a.x + dx * keyCursor.t, y: a.y + dy * keyCursor.t };
                   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-                  // Half-height of the caliper's body, in screen pixels: enough
-                  // to straddle a key of any drawn thickness without hiding it.
-                  const h = 9;
+                  // ⚑⚑ HALF THE MEASURED THICKNESS, NOT A CONSTANT. This was a
+                  // hardcoded `9`, so on a key of any real depth the caliper read
+                  // as a small box floating ON the bar rather than a caliper
+                  // STRADDLING it (David: *"it does not take the full width of
+                  // the colour key, and that looks wrong"*). The thickness comes
+                  // from the user's own two corner clicks — the same measurement
+                  // the sampler uses — and it is in IMAGE space, so it scales
+                  // with the view like everything else the overlay draws.
+                  // ⚑ THE PATTERN, three times in one day: a CONSTANT standing
+                  // where a MEASUREMENT already exists.
+                  const h = Math.max(5, (keyCursor.thickness * view.scale) / 2);
+                  // How far the ticks project beyond the bar, so the ends of the
+                  // caliper stay visible against the ink it is sitting on.
+                  const tick = Math.max(5, h * 0.5);
                   const tOf = (pos: { x: number; y: number }) => {
                     const along = ((pos.x - a.x) * dx + (pos.y - a.y) * dy) / (dx * dx + dy * dy);
                     return along;
@@ -1988,9 +2018,37 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         const along = Math.max(0, Math.min(1, tOf(pos)));
                         return { x: a.x + dx * along, y: a.y + dy * along };
                       }}
-                      onDragStart={cancelDragIfPanning}
-                      onDragMove={(e) => onKeyCursorDrag?.(tOf({ x: e.target.x(), y: e.target.y() }))}
-                      onDragEnd={(e) => onKeyCursorDragEnd?.(tOf({ x: e.target.x(), y: e.target.y() }))}
+                      onDragStart={(e) => {
+                        cancelDragIfPanning(e);
+                        setKeyCursorDragging(true);
+                      }}
+                      // ⚑⚑ PIN THE LOUPE TO THE CALIPER FOR THE DURATION OF THE
+                      // DRAG. David: *"we should hijack the loupe when dragging
+                      // the colour key marker, and pin it as part of the drag.
+                      // Otherwise it is really difficult to see what colour you
+                      // are selecting."* Right, and it matters more here than
+                      // anywhere else in the app: the key is a thin band at 1:1
+                      // and the user is being asked to MATCH A COLOUR BY EYE,
+                      // which is the instrument B7 says their eye is.
+                      // ⚑ THE MECHANISM ALREADY EXISTS, twenty lines up: a
+                      // dragged data marker feeds its live position into `hover`
+                      // for exactly this reason (Konva captures the pointer, so
+                      // the Stage's own onMouseMove stops firing and the loupe
+                      // would freeze). Same two lines, same reason — not a
+                      // second way of driving the loupe.
+                      // ⚑ Nothing new to composite: the loupe already draws the
+                      // Konva overlay over the magnified image, so it magnifies
+                      // the caliper too — which is only useful now that the
+                      // caliper is a FRAME rather than a filled white box that
+                      // hid the very colour it points at.
+                      onDragMove={(e) => {
+                        setHover({ x: e.target.x(), y: e.target.y() });
+                        onKeyCursorDrag?.(tOf({ x: e.target.x(), y: e.target.y() }));
+                      }}
+                      onDragEnd={(e) => {
+                        setKeyCursorDragging(false);
+                        onKeyCursorDragEnd?.(tOf({ x: e.target.x(), y: e.target.y() }));
+                      }}
                     >
                       {/* An invisible grab disc, the same trick the reticle uses
                           so thin strokes do not have to be hit exactly. */}
@@ -2000,13 +2058,18 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         y={-h}
                         width={10}
                         height={h * 2}
-                        fill="rgba(255, 255, 255, 0.75)"
+                        // ⚑⚑ A FRAME, NOT A FILLED BOX. It used to be painted
+                        // white, so the caliper HID THE VERY COLOUR IT POINTS AT
+                        // — and it is magnified in the loupe, where that is most
+                        // of what you see. Open, the key's own ink shows through
+                        // with the purple line marking the position, which is
+                        // the comparison the whole gesture exists for.
                         stroke={theme.color.overlay.stroke}
-                        strokeWidth={1}
+                        strokeWidth={1.5}
                         listening={false}
                       />
-                      <Line points={[0, -h - 7, 0, -h]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
-                      <Line points={[0, h, 0, h + 7]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
+                      <Line points={[0, -h - tick, 0, -h]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
+                      <Line points={[0, h, 0, h + tick]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
                       <Line points={[0, -h, 0, h]} stroke="rgb(124, 58, 237)" strokeWidth={2} listening={false} />
                     </Group>
                   );
@@ -2220,13 +2283,19 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           // the card. Uses the card's OWN rect (not `avoidRect`, which unions in
           // the full-height rail), so hovering the plot below the card still shows
           // the loupe.
-          !(
-            loupeHideRect &&
-            hover.x >= loupeHideRect.left &&
-            hover.x <= loupeHideRect.left + loupeHideRect.width &&
-            hover.y >= loupeHideRect.top &&
-            hover.y <= loupeHideRect.top + loupeHideRect.height
-          ) && (
+          // ⚑⚑ A PINNED CALIPER DRAG OUTRANKS THE HIDE. The colour key is
+          // routinely drawn where a card overlaps it, and vanishing mid-drag is
+          // worst exactly when the loupe is most needed — the user is matching a
+          // colour by eye and cannot see the band at 1:1. The hide exists for a
+          // cursor RESTING over a card, which is not what this is.
+          (keyCursorDragging ||
+            !(
+              loupeHideRect &&
+              hover.x >= loupeHideRect.left &&
+              hover.x <= loupeHideRect.left + loupeHideRect.width &&
+              hover.y >= loupeHideRect.top &&
+              hover.y <= loupeHideRect.top + loupeHideRect.height
+            )) && (
             <Loupe
               image={image}
               view={view}

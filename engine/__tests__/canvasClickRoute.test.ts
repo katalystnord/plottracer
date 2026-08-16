@@ -134,7 +134,39 @@ describe('a type whose record is a MATRIX', () => {
     ).toEqual({ kind: 'select-cell' });
   });
 
-  it('changes ONLY the fallthrough — every other mode keeps its meaning', () => {
+  /**
+   * ⚑⚑ 🔴 THE TOOL NAMED **SELECT** MUST SELECT. David, driving the built 2.2.0
+   * package: *"Nothing happens at all when I click a cell. With any selection
+   * tools."*
+   *
+   * `select-cell` sat LAST in the router, so it was reachable only when every
+   * earlier check fell through — and the only mode that does is `place-point`.
+   * `select` returned `clear-selection`, which clears POINT state and never
+   * touches the picked cells, so a cell click under the Select tool was a
+   * literal no-op. A HIDDEN MODE in CLAUDE.md's exact sense: the capability was
+   * real but bound to the control advertising the opposite, while the tool that
+   * did work — Place Point — has a tips bar saying *"a heatmap's values come
+   * from its grid, not from clicking the figure."*
+   *
+   * ⚑ AND IT IS WHY THE OLD e2e PASSED: `resetWorkspace` leaves the mode at
+   * place-point and the test never picked up a tool, so it exercised the one
+   * route a user is least likely to be in.
+   */
+  it('🔴 SELECTS A CELL under the Select tool — the tool whose whole name is that', () => {
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'select', figureCaptured: true, readsCellsFromAGrid: true })
+    ).toEqual({ kind: 'select-cell' });
+  });
+
+  it('still CLEARS on a select-mode click for every type that has points to clear', () => {
+    // The heatmap is the only type whose Select had nothing to do; everywhere
+    // else the clear is the advertised behaviour and must not move.
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'select', figureCaptured: true })
+    ).toEqual({ kind: 'clear-selection' });
+  });
+
+  it('changes only the FALLTHROUGH and SELECT — every other mode keeps its meaning', () => {
     const matrix = { eyedropper: null, figureCaptured: true, readsCellsFromAGrid: true } as const;
     expect(routeCanvasClick({ ...matrix, mode: 'pan' })).toEqual({ kind: 'ignore' });
     expect(routeCanvasClick({ ...matrix, mode: 'measure' })).toEqual({ kind: 'measure' });
@@ -143,6 +175,16 @@ describe('a type whose record is a MATRIX', () => {
     expect(
       routeCanvasClick({ ...matrix, mode: 'place-point', eyedropper: 'series' })
     ).toEqual({ kind: 'sample-colour', target: 'series' });
+  });
+
+  it('never ADDS A POINT on a matrix type, whichever tool is in hand', () => {
+    // The property that matters stated once, over every mode, rather than as a
+    // list of modes that happens to agree with the router today.
+    for (const mode of ALL_MODES) {
+      expect(
+        routeCanvasClick({ eyedropper: null, mode, figureCaptured: true, readsCellsFromAGrid: true }).kind
+      ).not.toBe('add-point');
+    }
   });
 
   it('leaves every other graph type adding points as before', () => {
