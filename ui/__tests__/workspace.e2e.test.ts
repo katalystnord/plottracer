@@ -8361,19 +8361,22 @@ describe('heatmap capture (v2.2)', () => {
     // snapshot serialises the axes rather than through any grid-specific path.
     await page.getByTestId('undo').click();
     await page.waitForTimeout(400);
-    // ⚠️ UNDO CLEARS THE RESULTS TABLE. `restoreHeatmapGrid` empties the cells,
-    // because a table describing the previous grid is a measurement of a figure
-    // that no longer exists — the same rule the forward path states. But the
-    // forward path RE-READS rather than clearing, so taking back one nudge
-    // currently costs the whole table. Recorded here as the behaviour, not
-    // endorsed: see the note to David, 2026-08-15.
-    expect(await page.getByTestId('heatmap-row').count()).toBe(0);
-    // ⚑ THIS TEST STOPS HERE ON PURPOSE. That the grid ITSELF survives the undo
-    // is a model fact — it rides in the axes metadata the snapshot serialises —
-    // and it is asserted where it can be asserted cleanly, in
-    // `heatmapPersistence.test.ts`. Chasing it through the UI here meant
-    // unfolding and refolding cards to reach controls that live inside them,
-    // which is how this walk started hanging on itself.
+    // ⚑⚑ UNDO RE-READS THE TABLE AGAINST THE RESTORED GRID, matching the forward
+    // path (David, 2026-08-16: *"Re-read, matching the forward path"*).
+    //
+    // ⚠️⚠️ THIS ASSERTION USED TO READ `.toBe(0)` — "undo clears the results
+    // table" — and its own comment said it was "recorded as the behaviour, not
+    // endorsed". It was worse than that: it PASSED FOR THE WRONG REASON. The
+    // table was empty because the undo was LOSING THE GRID, so there was nothing
+    // to re-read from — which is exactly the defect David hit on the built
+    // package (*"undo removed the whole grid. :-O"*). The test had written that
+    // defect down as expected behaviour, and went green on it for a release.
+    // ⚑ It only surfaced once detection started taking its own snapshot, so undo
+    // had a grid to land on. A test that asserts an absence will happily agree
+    // with the wrong cause.
+    expect(await page.getByTestId('heatmap-row').count()).toBe(20);
+    // And the grid itself survived, which is the half the user actually sees.
+    expect(await textOf('heatmap-grid-summary')).toMatch(/cells/i);
   }, 30000);
 
   it('ADDS a boundary the detector missed, and removes one it invented', async () => {
@@ -8548,6 +8551,48 @@ describe('heatmap capture (v2.2)', () => {
     ).toBe(0);
     // The panel names what it holds, as it already does for a histogram's bins.
     expect(await textOf('data-points-heading')).toBe('Cells');
+  });
+
+  it('⚑⚑ UNDO takes back the READ, not the whole grid — the two are separate steps', async () => {
+    // ⚠️ DAVID, 2026-08-16, on the built package: *"undo removed the whole grid.
+    // :-O"* — and he was right. Neither `Detect grid` nor `Read cells` took an
+    // undo snapshot, so the two actions that produce the ENTIRE heatmap record
+    // were invisible to undo. One Ctrl+Z jumped back past both of them, to the
+    // last calibration step, and the grid went with it.
+    //
+    // ⚑ Only EDITING a divider and CORRECTING a cell ever committed. The
+    // asymmetry is the tell: adjusting the record was undoable, CREATING it was
+    // not.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await openHeatmapGrid();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(300);
+    const detected = await textOf('heatmap-grid-summary');
+    expect(detected).toMatch(/cells/i);
+
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    // ⚑ The MATRIX is the default view, so that is what a read produces.
+    expect(await page.getByTestId('heatmap-matrix-row').count()).toBeGreaterThan(0);
+
+    // ONE undo takes back the READ, and only the read. The grid is still there,
+    // because detecting it was its own step.
+    await page.getByTestId('undo').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-grid-summary'), 'the grid must survive an undo').toBe(detected);
+
+    // ⚑ THE CELLS COME BACK WITH IT, and that is the OTHER rule working, not a
+    // failure: restoring a grid RE-READS its cells rather than emptying the
+    // table (David, 2026-08-16: *"Re-read, matching the forward path"*). So
+    // undoing a read is visually a no-op — what the snapshot buys is that undo
+    // has somewhere to LAND between "grid detected" and "calibration finished",
+    // instead of stepping over both.
+    expect(await page.getByTestId('heatmap-matrix-row').count()).toBeGreaterThan(0);
+
+    // And the grid is still readable afterwards — the dead end David hit, where
+    // the grid was gone and Read cells was therefore disabled.
+    expect(await page.getByTestId('heatmap-read').isEnabled()).toBe(true);
   });
 
   it('lets a CATEGORY name be edited in the table, on the band it belongs to', async () => {

@@ -2266,8 +2266,18 @@ export function Workspace() {
     // ⚑ A refused detection leaves the PREVIOUS grid alone. Replacing it with
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
-    if (result.grid !== null) applyHeatmapGrid(result.grid);
-  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts, heatmapShownGrid]);
+    // ⚑⚑ AND IT IS AN UNDO STEP. David, on the built package: *"undo removed the
+    // whole grid. :-O"* — because detection took no snapshot, so a Ctrl+Z after
+    // reading jumped back past the detection to the last calibration step and
+    // the grid went with it.
+    // ⚑ THE ASYMMETRY WAS THE TELL: EDITING a divider committed, and CREATING
+    // the grid did not. Adjusting the record was undoable while making it was
+    // invisible — so undo could only ever take back more than the user did.
+    if (result.grid !== null) {
+      applyHeatmapGrid(result.grid);
+      commit();
+    }
+  }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts, heatmapShownGrid]);
 
   /**
    * Lay an evenly spaced grid over the plot, because the user asked for one.
@@ -2288,10 +2298,13 @@ export function Workspace() {
     }
     setHeatmapError(null);
     applyHeatmapGrid(initialGridFor(bounds, counts));
+    // ⚑ Its own undo step, for the same reason detection is one: laying a
+    // lattice is a change to the record, so taking it back must not cost more.
+    commit();
     setHeatmapDetectMessage(
       `Even ${counts.columns} × ${counts.rows} grid laid over the plot — these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`
     );
-  }, [applyHeatmapGrid, heatmapBounds, heatmapCounts]);
+  }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts]);
 
   /**
    * Read the matrix.
@@ -2375,8 +2388,17 @@ export function Workspace() {
    * image.
    */
   const finishHeatmapGrid = useCallback(() => {
-    if (runHeatmapRead()) setHeatmapPanelOpen(false);
-  }, [runHeatmapRead]);
+    if (runHeatmapRead()) {
+      setHeatmapPanelOpen(false);
+      // ⚑⚑ THE READ IS ITS OWN UNDO STEP. It produces the entire table, and it
+      // took no snapshot — so undo had nothing to land on between "grid
+      // detected" and "calibration finished", and took the grid with it.
+      // ⚑ Committed HERE rather than inside `runHeatmapRead`, because that same
+      // read runs on every divider drag and every corrected cell, and both of
+      // those already commit. One gesture, one entry.
+      commit();
+    }
+  }, [commit, runHeatmapRead]);
 
   /**
    * Record what the user read in a cell, and put it where a save and an undo
