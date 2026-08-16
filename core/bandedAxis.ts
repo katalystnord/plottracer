@@ -126,10 +126,46 @@ export function dividerParamsFrom(
  * is what a reader would say looking at the figure.
  */
 export function bandIndexForParam(t: number, dividers: readonly number[]): number | null {
+  return bandIndexIn(dividers, t, 'clamp');
+}
+
+/**
+ * ⚑⚑ THE ONE BAND LOOKUP, with its out-of-range policy NAMED at the call site.
+ *
+ * The v2.2 audit's reuse pass found this loop written out THREE times — here,
+ * in `core/heatmapGrid.ts`'s `bandOf`, and inline in `engine/barDetectRun.ts` —
+ * under TWO policies. Grepping for the name found nothing; grepping for the loop
+ * found all three.
+ *
+ * ⚑ THE FIRST TWO DISAGREE ON PURPOSE, and both said so. A bar sitting just past
+ * the last divider still belongs to the category a reader would name it, so the
+ * outermost bands are UNBOUNDED there. A point outside a matrix has no row at
+ * all, and inventing one would put a value in a cell the figure does not have.
+ * That difference is real and it survives; what did not survive is each site
+ * expressing it by writing the loop again.
+ *
+ * ⚠️ THE THIRD SITE NEVER STATED A CHOICE — and its clamp is why a legend
+ * swatch lands in a real category instead of being reported as unplaceable
+ * (v2.4, parked). Behaviour there is UNCHANGED by this consolidation; what
+ * changes is that the policy is now a word someone had to type, so the v2.4 fix
+ * is a one-word decision rather than an archaeology exercise.
+ *
+ * ⚑ `outside` has no default, deliberately. A default is how a policy gets taken
+ * without being chosen — the same lesson as `readHeatmapCells`'s `kinds`.
+ */
+export function bandIndexIn(
+  dividers: readonly number[],
+  v: number,
+  outside: 'clamp' | 'refuse'
+): number | null {
   const bands = dividers.length - 1;
-  if (bands < 1 || !Number.isFinite(t)) return null;
+  if (bands < 1 || !Number.isFinite(v)) return null;
+  // ⚑ The far edge belongs to the LAST band under both policies, so the end of a
+  // grid is not a gap — the loop's fallthrough is what delivers that, and the
+  // refusal below must not steal it.
+  if (outside === 'refuse' && (v < dividers[0]! || v > dividers[bands]!)) return null;
   for (let i = 0; i < bands; i++) {
-    if (t < dividers[i + 1]!) return i;
+    if (v < dividers[i + 1]!) return i;
   }
   return bands - 1;
 }

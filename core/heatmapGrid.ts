@@ -38,6 +38,8 @@
  * Pure: numbers in, numbers out. No image, no axes, no DOM.
  */
 
+import { bandIndexIn } from './bandedAxis.js';
+
 /** The least gap two dividers may have. Below this a cell has no interior to
  * sample and the two boundaries are the same boundary entered twice. */
 const DIVIDER_EPS = 1e-9;
@@ -273,13 +275,15 @@ function usableSpan(v1: number, v2: number): boolean {
   return Number.isFinite(v1) && Number.isFinite(v2) && v2 - v1 !== 0;
 }
 
-/** Which band of a sorted divider list holds `v`, or null if it is outside. The
- * last band includes its upper bound, so the grid's far edge is not a gap. */
+/**
+ * Which band of a sorted divider list holds `v`, or null if it is outside.
+ *
+ * ⚑ `refuse`, and the word is the point: a point outside the grid is outside the
+ * MATRIX — there is no row for it, and inventing one would put a value in a cell
+ * the figure does not have. `bandedAxis` takes `clamp` for a bar just past the
+ * last divider, which still belongs to the category a reader would name. The two
+ * ANSWERS differ on purpose; the LOOP no longer does.
+ */
 function bandOf(dividers: readonly number[], v: number): number | null {
-  if (!Number.isFinite(v)) return null;
-  if (v < dividers[0]! || v > dividers[dividers.length - 1]!) return null;
-  for (let i = 0; i < dividers.length - 1; i++) {
-    if (v < dividers[i + 1]!) return i;
-  }
-  return dividers.length - 2;
+  return bandIndexIn(dividers, v, 'refuse');
 }

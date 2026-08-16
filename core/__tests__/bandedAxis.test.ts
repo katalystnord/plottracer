@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BandedAxis } from '../bandedAxis.js';
+import { BandedAxis,
+  bandIndexIn,
+  bandIndexForParam,
+} from '../bandedAxis.js';
 
 /**
  * A BANDED AXIS — the band mechanism, with no idea what the axis means (v2.2).
@@ -149,5 +152,66 @@ describe('a divider is dragged the same way whatever the axis means', () => {
     // past the plot box is not a category the figure does not have.
     expect(a.bandIndexAt({ x: 50, y: 500 })).toBe(0);
     expect(a.bandIndexAt({ x: 900, y: 500 })).toBe(3);
+  });
+});
+
+/**
+ * ⚑⚑ ONE ALGORITHM, THREE IMPLEMENTATIONS, TWO POLICIES — found by the v2.2
+ * audit's reuse pass, grepping for the LOOP rather than for a name.
+ *
+ *   core/bandedAxis.ts   bandIndexForParam   CLAMPS   (documented)
+ *   core/heatmapGrid.ts  bandOf              REFUSES  (documented)
+ *   engine/barDetectRun.ts (inline)          CLAMPS   (undocumented)
+ *
+ * ⚑ The first two DISAGREE ON PURPOSE and both say so: a bar just past the last
+ * divider still belongs to the category a reader would name, while a point
+ * outside a matrix has no row at all and inventing one would put a value in a
+ * cell the figure does not have. That difference is real and stays.
+ *
+ * ⚠️ THE THIRD SITE NEVER STATED A CHOICE, and its clamp is exactly why a legend
+ * swatch lands in "Category 4" instead of being reported as unplaceable. So the
+ * fix is not to pick one policy — it is to make every site NAME the one it wants,
+ * which turns an accident of which copy was reached for into a decision someone
+ * had to make.
+ */
+describe('bandIndexIn — the one band lookup, with its out-of-range policy named', () => {
+  const dividers = [0, 10, 20, 30];
+
+  it('finds the band a value falls in, under either policy', () => {
+    for (const outside of ['clamp', 'refuse'] as const) {
+      expect(bandIndexIn(dividers, 0, outside)).toBe(0);
+      expect(bandIndexIn(dividers, 9.9, outside)).toBe(0);
+      expect(bandIndexIn(dividers, 10, outside)).toBe(1);
+      expect(bandIndexIn(dividers, 25, outside)).toBe(2);
+    }
+  });
+
+  it('includes the far edge in the LAST band, so the end of the grid is not a gap', () => {
+    expect(bandIndexIn(dividers, 30, 'refuse')).toBe(2);
+    expect(bandIndexIn(dividers, 30, 'clamp')).toBe(2);
+  });
+
+  it('CLAMPS or REFUSES outside, and that is the only difference between them', () => {
+    expect(bandIndexIn(dividers, -5, 'clamp')).toBe(0);
+    expect(bandIndexIn(dividers, 99, 'clamp')).toBe(2);
+    expect(bandIndexIn(dividers, -5, 'refuse')).toBeNull();
+    expect(bandIndexIn(dividers, 99, 'refuse')).toBeNull();
+  });
+
+  it('refuses a non-finite value and a list that bounds no band, whichever policy', () => {
+    for (const outside of ['clamp', 'refuse'] as const) {
+      expect(bandIndexIn(dividers, Number.NaN, outside)).toBeNull();
+      expect(bandIndexIn([5], 5, outside)).toBeNull();
+      expect(bandIndexIn([], 0, outside)).toBeNull();
+    }
+  });
+
+  it('⚑ is what bandIndexForParam now IS — the wrapper cannot drift from it', () => {
+    // Asserted against the delegate rather than restated: the reason three copies
+    // existed is that each was written out longhand, so each could be edited
+    // alone. A wrapper that computes nothing cannot.
+    for (const t of [-0.5, 0, 0.25, 0.5, 1, 1.5, Number.NaN]) {
+      expect(bandIndexForParam(t, [0, 0.5, 1])).toBe(bandIndexIn([0, 0.5, 1], t, 'clamp'));
+    }
   });
 });

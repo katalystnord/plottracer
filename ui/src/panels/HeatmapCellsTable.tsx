@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { theme } from '../theme.js';
+import { theme, withAlpha } from '../theme.js';
+import { CATEGORY_TICK_COLOR } from '../../../engine/categoryTickOverlay.js';
 import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
 import { textOn } from '../contrast.js';
 
@@ -214,13 +215,13 @@ type ViewProps = Pick<
 
 /** The pick, as an OUTLINE. Same purple and same mechanism the canvas draws, so
  * the two are visibly one thing. */
-const PICKED_OUTLINE = '2px solid rgb(124, 58, 237)';
+const PICKED_OUTLINE = `2px solid ${CATEGORY_TICK_COLOR}`;
 /** Drawn INSIDE the cell's own box, so picking one cannot move any other. */
 const PICKED_OUTLINE_OFFSET = -2;
 
 /** A row highlight for the long view, where the row is not itself tinted — the
  * value cell there paints its own opaque fill, so nothing mirrored is covered. */
-const PICKED_BACKGROUND = 'rgba(124, 58, 237, 0.18)';
+const PICKED_BACKGROUND = withAlpha(CATEGORY_TICK_COLOR, 0.18);
 
 /**
  * The colour a cell is painted — a RENDERING of its number, at full strength.

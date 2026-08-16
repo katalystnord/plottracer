@@ -28,6 +28,7 @@ import {
   type ExpectationReport,
 } from '../algorithms/barSplit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
+import { bandIndexIn } from '../core/bandedAxis.js';
 
 export interface DetectedBarBox {
   /** The bbox's top-left corner, in the same continuous-pixel space
@@ -161,14 +162,16 @@ export function runBarDetect(
   // never detected at all is exactly as absent as one missing from inside a
   // merged run, and the user needs it named either way. Computed from the boxes
   // finally produced, so it cannot disagree with what was returned.
+  // ⚠️ `clamp` IS THE BEHAVIOUR THIS ALWAYS HAD, and it is now a word rather than
+  // an inline loop nobody had to think about. It is also the reason a legend's
+  // colour swatch lands in a real category instead of being reported as
+  // unplaceable: a shape past the last divider is assigned the nearest band.
+  // Deliberately UNCHANGED here — the phantom-bar defect is parked to v2.4 — but
+  // the fix is now a one-word decision instead of an archaeology exercise.
   const bandOf = (b: DetectedBarBox): number => {
     const lo = categoryAxis === 'x' ? b.start.x : b.start.y;
     const hi = categoryAxis === 'x' ? b.end.x : b.end.y;
-    const mid = (lo + hi) / 2;
-    for (let i = 0; i < dividers.length - 1; i++) {
-      if (mid < dividers[i + 1]!) return i;
-    }
-    return dividers.length - 2;
+    return bandIndexIn(dividers, (lo + hi) / 2, 'clamp') ?? dividers.length - 2;
   };
   const filled = new Set(boxes.map(bandOf));
   const emptyBands = Array.from({ length: dividers.length - 1 }, (_, i) => i).filter(

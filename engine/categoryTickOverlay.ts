@@ -29,12 +29,24 @@ const TICK_LENGTH = 14;
  * placed them, they are frozen, and every generated mark derives from them. */
 const EDGE_LENGTH = 11;
 
-/** Colour of the marked category axis, its ends and its ticks.
+/**
+ * ⚑⚑ THE STRUCTURE VIOLET — every mark the USER placed on the figure's frame.
+ * Category ticks and their axis ends, a heatmap's grid dividers, the bar
+ * drag-box, and the picked highlight in both the canvas and the results matrix.
  *
  * ⚑ Deliberately NOT the calibration amber. The category axis's first edge sits
  * on the very same pixel as P1, so borrowing P1's colour would put two different
- * kinds of thing in one place wearing one uniform. This is the violet the bar
- * drag-box already uses — the "bar structure" hue, which is what this is. */
+ * kinds of thing in one place wearing one uniform.
+ *
+ * ⚠️ THE COMMENT ALREADY SAID IT WAS SHARED — *"the violet the bar drag-box
+ * already uses"* — and the sharing was done by COPYING THE LITERAL. The v2.2
+ * audit found the same colour at SEVEN sites in THREE spellings (`#7c3aed`,
+ * `rgb(124, 58, 237)`, `rgba(…)`), with a second constant `GRID_OVERLAY_COLOR`
+ * of its own, while this exported one had a single consumer: itself. Grepping
+ * the NAME found nothing; grepping the VALUE found all seven.
+ * ⚑ So: import it, and build the translucent forms with `withAlpha` rather than
+ * writing the channels out again.
+ */
 export const CATEGORY_TICK_COLOR = '#7c3aed';
 
 /** The unit vector perpendicular to the axis, pointing away from the plot: down

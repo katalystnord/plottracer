@@ -1,3 +1,5 @@
+import { parseHex } from './contrast.js';
+
 /**
  * Design tokens for ui/ (checkpoint 31's light theme, restructured into a
  * nested object at checkpoint 33 -- see CLAUDE.md's "engine/ui rebuild —
@@ -153,4 +155,18 @@ export function endsCardButton(enabled = true) {
     padding: '3px 12px',
     cursor: enabled ? 'pointer' : 'default',
   } as const;
+}
+
+/**
+ * A token at partial opacity, built FROM the token rather than restated.
+ *
+ * ⚑ The v2.2 audit's first finding was one colour written seven ways, and the
+ * translucent forms were the worst of it: `rgba(124, 58, 237, 0.18)` shares no
+ * text with `#7c3aed`, so no search for the token could ever find it. Composing
+ * the alpha from the hex means the wash and the line cannot drift apart, and a
+ * grep for the token finds every use.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

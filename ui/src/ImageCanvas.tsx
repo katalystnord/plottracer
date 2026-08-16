@@ -21,7 +21,8 @@ import { bytesToBase64 } from '../../engine/projectContainer.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Loupe } from './Loupe.js';
-import { theme } from './theme.js';
+import { CATEGORY_TICK_COLOR } from '../../engine/categoryTickOverlay.js';
+import { theme, withAlpha } from './theme.js';
 
 // The formats PlotTracer can open, as a human-readable list for tooltips/hints.
 // The raster/vector types decode straight through Chromium's <img> (what
@@ -202,7 +203,12 @@ export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
  * dot you grab have to read as one thing, or the handle looks like a stray data
  * point — and a boundary placed on an axis is the same mechanism whether the
  * figure is a bar chart or a matrix, so it should not be a different colour. */
-const GRID_OVERLAY_COLOR = '#7c3aed';
+/** ⚑ THE SHARED STRUCTURE VIOLET, imported rather than restated. This was a
+ * SECOND constant holding the same hex as `CATEGORY_TICK_COLOR`, which is
+ * exactly the duplication the "reuse the tick graphics" instruction was about —
+ * the shapes were reused and the colour was copied. Kept as a local alias only
+ * so the many `GRID_OVERLAY_COLOR` uses below still read as "the grid's colour". */
+const GRID_OVERLAY_COLOR = CATEGORY_TICK_COLOR;
 
 interface ImageCanvasProps {
   /** Markers to overlay, in image-pixel space (not screen space). */
@@ -2070,7 +2076,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                       />
                       <Line points={[0, -h - tick, 0, -h]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
                       <Line points={[0, h, 0, h + tick]} stroke={theme.color.overlay.stroke} strokeWidth={2} listening={false} />
-                      <Line points={[0, -h, 0, h]} stroke="rgb(124, 58, 237)" strokeWidth={2} listening={false} />
+                      <Line points={[0, -h, 0, h]} stroke={CATEGORY_TICK_COLOR} strokeWidth={2} listening={false} />
                     </Group>
                   );
                 })()}
@@ -2222,10 +2228,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     y={Math.min(cropDragRef.current.y, cropCurrent.y)}
                     width={Math.abs(cropCurrent.x - cropDragRef.current.x)}
                     height={Math.abs(cropCurrent.y - cropDragRef.current.y)}
-                    stroke={boxMode ? '#7c3aed' : theme.color.primary.main}
+                    stroke={boxMode ? CATEGORY_TICK_COLOR : theme.color.primary.main}
                     strokeWidth={1.5}
                     dash={boxMode ? undefined : [6, 4]}
-                    fill={boxMode ? 'rgba(124, 58, 237, 0.15)' : 'rgba(22, 119, 130, 0.12)'}
+                    fill={boxMode ? withAlpha(CATEGORY_TICK_COLOR, 0.15) : 'rgba(22, 119, 130, 0.12)'}
                     listening={false}
                   />
                 ) : (
