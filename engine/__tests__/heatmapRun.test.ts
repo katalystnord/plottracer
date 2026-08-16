@@ -15,6 +15,11 @@ import {
   dragDivider,
   initialGrid,
   cellKeysInRect,
+  heatmapAxisMoved,
+  heatmapAxisSpans,
+  heatmapAxisStamp,
+  heatmapGridToParams,
+  resolveHeatmapGrid,
   isDividerHandle,
   keyCursorStrip,
   labelOrderReversed,
@@ -28,6 +33,7 @@ import {
   setCellReadingAt,
   NO_HEATMAP_CELL_READINGS,
   type HeatmapRow,
+  type HeatmapState,
   type SourceImage,
 } from '../heatmapRun.js';
 import { HEATMAP_AXES_CONFIG, type PlacedCalibPoint } from '../calibrationSession.js';
@@ -1285,5 +1291,136 @@ describe('setting a cell from a POSITION on the key', () => {
     // are usually the point of the figure.
     expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, -0.2).error).toBeNull();
     expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, 1.2).error).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ P2 AT THE ENGINE SEAM — the grid expressed against the axis POSITION.
+ *
+ * David's rule stated as outcomes: adjusting a calibration and changing the grid
+ * are independent, and the grid does not depend on the calibration's NUMERICAL
+ * VALUES.
+ */
+describe('the grid sits ON the calibration, not IN it', () => {
+  const spans = { x: [0, 100] as [number, number], y: [0, 50] as [number, number] };
+  const grid: HeatmapState = { xDividers: [0, 20, 60, 100], yDividers: [0, 25, 50] };
+
+  it('round-trips a grid through parameters and back', () => {
+    const params = heatmapGridToParams(grid, spans)!;
+    expect(resolveHeatmapGrid(params, spans)).toEqual(grid);
+  });
+
+  it('⚑⚑ RETYPING A CALIBRATION VALUE DOES NOT MOVE THE STORE', () => {
+    // The user corrects what the axis is worth. The parameters are untouched, so
+    // the grid still describes the same places on the figure — and the data
+    // coordinates it resolves to change, which is the correct consequence.
+    const params = heatmapGridToParams(grid, spans)!;
+    const retyped = { x: [10, 200] as [number, number], y: spans.y };
+    const after = resolveHeatmapGrid(params, retyped)!;
+    expect(after.xDividers).toEqual([10, 48, 124, 200]);
+    // Unchanged on the axis nobody touched.
+    expect(after.yDividers).toEqual(grid.yDividers);
+    // And the STORE is byte-identical — that is the property that matters.
+    expect(heatmapGridToParams(after, retyped)).toEqual(params);
+  });
+
+  it('is the SAME store for two calibrations that differ only in their numbers', () => {
+    // The sharpest form of "not dependent on the numerical values": two figures
+    // calibrated over the same positions with different units produce the same
+    // grid, because a parameter has no units.
+    const a = heatmapGridToParams({ xDividers: [0, 50, 100], yDividers: [0, 50] }, { x: [0, 100], y: [0, 50] })!;
+    const b = heatmapGridToParams({ xDividers: [1, 5.5, 10], yDividers: [0, 5] }, { x: [1, 10], y: [0, 5] })!;
+    expect(a).toEqual(b);
+  });
+
+  it('survives an axis calibrated BACKWARDS, which plenty are', () => {
+    const rev = { x: [100, 0] as [number, number], y: spans.y };
+    const params = heatmapGridToParams(grid, rev)!;
+    const back = resolveHeatmapGrid(params, rev)!;
+    back.xDividers.forEach((d, i) => expect(d).toBeCloseTo(grid.xDividers[i]!, 9));
+  });
+
+  it('refuses to resolve against a degenerate span rather than drawing a collapsed grid', () => {
+    const params = heatmapGridToParams(grid, spans)!;
+    expect(resolveHeatmapGrid(params, { x: [7, 7], y: spans.y })).toBeNull();
+    expect(heatmapGridToParams(grid, { x: [7, 7], y: spans.y })).toBeNull();
+  });
+
+  it('⚠️ takes the span from what the AXES say a POSITION is worth, not from typed values', () => {
+    // ⚑⚑ THE REGRESSION THIS EXISTS TO STOP. Reading `placed.y1.values[0]` works
+    // on a value axis and returns '' on a CATEGORY axis, where the row edge
+    // takes no coordinate and the far edge carries the COUNT. `Number('')` is 0
+    // at both ends, so the span collapsed and a categorical heatmap silently had
+    // NO GRID — the "a heatmap always has a numeric scale" premise, again.
+    // ⚑ So the placed points here carry PIXELS and no values at all, which is
+    // exactly the categorical case; the axes are the only source of meaning.
+    const placed = {
+      x1: { px: 100, py: 500 }, x2: { px: 600, py: 500 },
+      y1: { px: 100, py: 500 }, y2: { px: 100, py: 100 },
+    };
+    const axes = {
+      pixelToData: (px: number, py: number) => [(px - 100) / 5, (500 - py) / 8],
+    };
+    expect(heatmapAxisSpans(placed, axes)).toEqual(spans);
+
+    // Half a walk has no span to measure against — and must say so rather than
+    // producing a frame out of NaN.
+    expect(heatmapAxisSpans({ x1: placed.x1, x2: placed.x2 }, axes)).toBeNull();
+    // Two points the axes place at the SAME coordinate bound nothing.
+    expect(heatmapAxisSpans({ ...placed, x2: { px: 100, py: 500 } }, axes)).toBeNull();
+    // No axes yet — no frame, and no guessing one.
+    expect(heatmapAxisSpans(placed, null)).toBeNull();
+    // An axes that cannot place the point refuses rather than reading undefined
+    // as a number.
+    expect(heatmapAxisSpans(placed, { pixelToData: () => [undefined, undefined] })).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ P2, rule 4 — David: *"Should the axis underneath it change so drastically
+ * that a new grid detection needs to take place, then we should warn the user of
+ * that, and ask for a new grid detection to take place, and NOT MAKE ABSTRACT
+ * MODELS AROUND IT."*
+ *
+ * So this answers exactly one question — HAS THE AXIS MOVED SINCE THIS GRID WAS
+ * RECORDED — and deliberately does not answer "does the grid still fit". The
+ * second is the abstract model, and it is the one that would be wrong silently.
+ */
+describe('saying the axis has moved under the grid', () => {
+  const at = (x1: number, y1: number, x2: number, y2: number) =>
+    ({ x1: { px: x1, py: y1 }, x2: { px: x2, py: y2 }, y1: { px: x1, py: y1 }, y2: { px: x1, py: y2 } });
+
+  it('is quiet while the axis is where it was', () => {
+    const placed = at(10, 200, 300, 200);
+    const stamp = heatmapAxisStamp(placed)!;
+    expect(heatmapAxisMoved(stamp, placed)).toBe(false);
+  });
+
+  it('says so once a calibration handle has been dragged', () => {
+    const stamp = heatmapAxisStamp(at(10, 200, 300, 200))!;
+    expect(heatmapAxisMoved(stamp, at(24, 200, 300, 200))).toBe(true);
+  });
+
+  it('⚑ stays quiet when only a calibration VALUE was retyped', () => {
+    // The pixels did not move, so the grid is still exactly where it was put and
+    // there is nothing to warn about. Warning here would train the user to
+    // ignore the message — the rule `heatmapRegenerateWarning` already follows.
+    const placed = at(10, 200, 300, 200);
+    const stamp = heatmapAxisStamp(placed)!;
+    // Same geometry, different numbers entirely: no stamp involvement at all.
+    expect(heatmapAxisMoved(stamp, placed)).toBe(false);
+  });
+
+  it('ignores a sub-pixel wobble, which is not a move anyone made', () => {
+    const stamp = heatmapAxisStamp(at(10, 200, 300, 200))!;
+    expect(heatmapAxisMoved(stamp, at(10.0001, 200, 300, 200))).toBe(false);
+  });
+
+  it('has nothing to say when there is no stamp or no calibration', () => {
+    // An older grid, or a walk that is not finished — silence, not a warning
+    // about a comparison that cannot be made.
+    expect(heatmapAxisStamp({})).toBeNull();
+    expect(heatmapAxisMoved(undefined, at(10, 200, 300, 200))).toBe(false);
+    expect(heatmapAxisMoved(heatmapAxisStamp(at(10, 200, 300, 200))!, {})).toBe(false);
   });
 });

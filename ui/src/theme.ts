@@ -144,7 +144,13 @@ export function endsCardButton(enabled = true) {
     borderRadius: theme.border.radius.regular,
     background: enabled ? theme.color.primary.main : theme.color.background.primary,
     color: enabled ? '#fff' : theme.color.text.legend,
-    padding: '2px 12px',
+    // ⚑ SIZED TO MATCH THE ORDINARY CARD BUTTONS BESIDE IT (David: *"make the
+    // surviving Read cells button the same size and shape as the calibrate
+    // button… I think it is smaller right now."*). Those set `fontSize: 12` and
+    // take the UA's default padding on a 2px border; this one draws a 1px border,
+    // so it needs the extra pixel back or it reads as a smaller pill among them.
+    // The COLOUR still says "this one ends the card" — only the box matches.
+    padding: '3px 12px',
     cursor: enabled ? 'pointer' : 'default',
   } as const;
 }

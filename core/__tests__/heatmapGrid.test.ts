@@ -16,6 +16,8 @@ import {
   insertDivider,
   moveDivider,
   removeDivider,
+  gridParamsFrom,
+  dividersFromParams,
 } from '../heatmapGrid.js';
 
 describe('checkDividers', () => {
@@ -226,5 +228,80 @@ describe('cellIndexAt', () => {
   it('is null when the grid itself is unusable', () => {
     expect(cellIndexAt([0], ys, 0.5, 1)).toBeNull();
     expect(cellIndexAt(xs, [0], 0.5, 1)).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ P2 — THE GRID SITS ON THE CALIBRATION, NOT IN IT.
+ *
+ * David, 2026-08-16: *"Anything detected on the graph sits on TOP of the
+ * calibration… It has to sit on top of it and respect it, but not be a part of
+ * it. We should and need to be able to adjust the axis calibrations
+ * independently of changing the grid. The grid… is not dependent on the
+ * calibrated area's numerical values. The grid is not absolute, but in relation
+ * to the calibrated axis position."*
+ *
+ * ⚠️ THE RULE WAS ALREADY WRITTEN and this store ignored it. `core/bandedAxis.ts`
+ * says it outright — *"PARAMETER SPACE IS THE WHOLE TRICK… A store of ABSOLUTE
+ * coordinates — which is what the first heatmap grid used — cannot express it at
+ * all: a bare number cannot say whether it should follow the axis or stay where
+ * it was put."* It named this violator by name, in the same release.
+ */
+describe('a divider is a PARAMETER against the axis position, never an absolute', () => {
+  it('turns a data coordinate into a parameter, and back again', () => {
+    // 0 at the axis's first calibration point, 1 at its second — the same frame
+    // `core/bandedAxis.ts` uses for category ticks.
+    expect(gridParamsFrom([0, 25, 50, 100], 0, 100)).toEqual([0, 0.25, 0.5, 1]);
+    expect(dividersFromParams([0, 0.25, 0.5, 1], 0, 100)).toEqual([0, 25, 50, 100]);
+  });
+
+  it('round-trips through any calibration, including one that runs backwards', () => {
+    // A colour key may run high-to-low and so may an axis; nothing here may
+    // assume v1 < v2.
+    for (const [v1, v2] of [[0, 100], [100, 0], [-40, 60], [2, 3]] as const) {
+      const dividers = [v1, v1 + (v2 - v1) * 0.3, v1 + (v2 - v1) * 0.75, v2];
+      const params = gridParamsFrom(dividers, v1, v2)!;
+      const back = dividersFromParams(params, v1, v2)!;
+      back.forEach((d, i) => expect(d).toBeCloseTo(dividers[i]!, 9));
+    }
+  });
+
+  it('⚑⚑ IS UNCHANGED WHEN A CALIBRATION VALUE IS RETYPED — the grid does not depend on the numbers', () => {
+    // David's rule 3, stated as an outcome. The user placed the grid on ink and
+    // then corrected what the axis is worth. The PARAMETERS must not move, so
+    // the grid stays on the ink it was measured from.
+    const params = gridParamsFrom([0, 30, 100], 0, 100)!;
+    // Same pixels, different numbers: the axis now reads 10..200.
+    const redrawn = dividersFromParams(params, 10, 200)!;
+    // The DATA coordinates change, which is right — those pixels are now worth
+    // different numbers. The parameters, which are what is stored, did not.
+    expect(redrawn).toEqual([10, 67, 200]);
+    expect(gridParamsFrom(redrawn, 10, 200)).toEqual(params);
+  });
+
+  it('keeps a divider OUTSIDE the calibrated span outside it, rather than clamping', () => {
+    // The `centred` tick convention puts the calibration points on band CENTRES,
+    // so the outermost dividers sit half a band BEYOND them — a negative
+    // parameter and one past 1 are ordinary, not errors. Clamping would eat half
+    // a column at each end.
+    const params = gridParamsFrom([-12.5, 12.5, 112.5], 0, 100)!;
+    expect(params[0]!).toBeLessThan(0);
+    expect(params[2]!).toBeGreaterThan(1);
+    expect(dividersFromParams(params, 0, 100)).toEqual([-12.5, 12.5, 112.5]);
+  });
+
+  it('refuses a degenerate axis rather than dividing by nothing', () => {
+    // Two calibration points of equal value have no span, so no parameter
+    // exists. `bandedAxis` refuses the same case at the door for the same reason.
+    expect(gridParamsFrom([0, 50], 7, 7)).toBeNull();
+    expect(gridParamsFrom([0, 50], 0, NaN)).toBeNull();
+    expect(dividersFromParams([0, 1], 5, 5)).toBeNull();
+  });
+
+  it('refuses a divider list that is not one, at both doors', () => {
+    // The same rule `checkDividers` applies interactively — a store is another
+    // entrance to the model, and it gets the same guard.
+    expect(gridParamsFrom([Number.NaN, 1], 0, 100)).toBeNull();
+    expect(dividersFromParams([0, Number.POSITIVE_INFINITY], 0, 100)).toBeNull();
   });
 });

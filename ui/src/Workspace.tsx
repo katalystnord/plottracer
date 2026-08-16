@@ -231,6 +231,11 @@ import {
   labelsToAxes,
   type MetadataCarrier,
   cellKeysInRect,
+  heatmapAxisMoved,
+  heatmapAxisSpans,
+  heatmapAxisStamp,
+  heatmapGridToParams,
+  resolveHeatmapGrid,
   keyCursorStrip,
   readHeatmapCells,
   readingsFromAxes,
@@ -244,6 +249,7 @@ import {
   type HeatmapFrameCarrier,
   type HeatmapLabels,
   type HeatmapRow,
+  type HeatmapGridParams,
   type HeatmapState,
 } from '../../engine/heatmapRun.js';
 import { HeatmapCard } from './panels/HeatmapCard.js';
@@ -1281,7 +1287,14 @@ export function Workspace() {
    *
    * ⚑ Everything the buttons DO is in `engine/heatmapRun.ts`. What is left in
    * this file is which state to set. */
-  const [heatmapGrid, setHeatmapGrid] = useState<HeatmapState | null>(null);
+  /**
+   * ⚑⚑ THE GRID IS STORED AS PARAMETERS, not data coordinates — David's rule:
+   * *"The grid is not absolute, but in relation to the calibrated axis
+   * position."* Renamed along with the meaning, so every reader had to be
+   * revisited rather than silently keeping a number that now means something
+   * else. `heatmapShownGrid` resolves it for everything downstream.
+   */
+  const [heatmapGridParams, setHeatmapGridParams] = useState<HeatmapGridParams | null>(null);
   /** Which divider handle the user last clicked, so the card can offer to remove
    * THAT boundary. Its own state rather than `activeHandleKey`, which is cleared
    * on anything that is not a placed calibration point (see the guard effect). */
@@ -1962,7 +1975,15 @@ export function Workspace() {
 
   const heatmapShownGrid = useMemo<HeatmapState | null>(() => {
     if (!heatmapActive) return null;
-    if (heatmapGrid !== null) return heatmapGrid;
+    if (heatmapGridParams !== null) {
+      // ⚑ Resolved against the calibration IN FORCE, every render. Retype a
+      // calibration value and the parameters hold, so the grid stays on the ink
+      // and its data coordinates change; move a handle and the grid follows the
+      // axis. Neither needs a synchronisation pass, which is the whole reason
+      // the store is parametric.
+      const spans = heatmapAxisSpans(sessionRef.current.getPlacedPoints(), sessionRef.current.getAxes());
+      return spans === null ? null : resolveHeatmapGrid(heatmapGridParams, spans);
+    }
     if (!session.isCalibrated()) return null;
     // ⚑⚑ NO GRID UNTIL ONE HAS BEEN MEASURED. This used to fall back to an
     // evenly divided lattice the moment the count was known — geometry we
@@ -1981,7 +2002,23 @@ export function Workspace() {
     // without it this would freeze at "not calibrated yet" (see the same note
     // above the memo block further down).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heatmapActive, heatmapGrid, session, version]);
+  }, [heatmapActive, heatmapGridParams, session, version]);
+
+  /**
+   * Have the axes moved since this grid was recorded?
+   *
+   * ⚑ Compared against the STAMP the grid carries, not tracked as an event. A
+   * calibration point moves from two places (a drag and a keyboard nudge), and a
+   * flag set at the call sites would be the "model with more than one entrance"
+   * shape that the v2.1 audit found four times in one day. A stamp has one
+   * entrance and survives save, load and undo for free.
+   */
+  const heatmapAxisHasMoved = useMemo(() => {
+    if (!heatmapActive || heatmapGridParams === null) return false;
+    return heatmapAxisMoved(heatmapGridParams.axisAt, sessionRef.current.getPlacedPoints());
+    // `version` is how React learns the ref-held session mutated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heatmapActive, heatmapGridParams, version]);
 
   /**
    * Set the grid, and put it where a save and an undo will both find it.
@@ -1994,9 +2031,19 @@ export function Workspace() {
    * a grid edit undoable — without any new snapshot field.
    */
   const applyHeatmapGrid = useCallback((grid: HeatmapState | null) => {
-    setHeatmapGrid(grid);
+    // ⚑ Detection reads the INK and a dragged handle lands on a PIXEL, so both
+    // arrive in data coordinates. Converting here — at the one writer — is what
+    // keeps the store parametric without every caller having to know.
+    const placedNow = sessionRef.current.getPlacedPoints();
+    const spans = heatmapAxisSpans(placedNow, sessionRef.current.getAxes());
+    const base = grid === null || spans === null ? null : heatmapGridToParams(grid, spans);
+    // ⚑ Stamped where the axes SIT right now, so the app can later say "these
+    // have moved since" — the one thing David's rule 4 needs, and nothing more.
+    const stamp = heatmapAxisStamp(placedNow);
+    const params = base === null ? null : stamp ? { ...base, axisAt: stamp } : base;
+    setHeatmapGridParams(params);
     const axes = sessionRef.current.getAxes();
-    if (axes) gridToAxes(axes as unknown as MetadataCarrier, grid);
+    if (axes) gridToAxes(axes as unknown as MetadataCarrier, params);
   }, []);
 
   /**
@@ -2086,7 +2133,7 @@ export function Workspace() {
 
   const restoreHeatmapGrid = useCallback(() => {
     const axes = sessionRef.current.getAxes();
-    setHeatmapGrid(axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null);
+    setHeatmapGridParams(axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null);
     // ⚑ The names come back with the grid, through the same door. A reopened
     // heatmap whose columns lost their names would export the index numbers this
     // whole feature exists to replace — and it would do it silently.
@@ -2101,7 +2148,12 @@ export function Workspace() {
     const stored = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
     // Back through the SAME mapping, which is its own inverse: the boxes show
     // the figure's reading order, the file holds the cell order.
-    const restoredGrid = axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null;
+    const restoredParams = axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null;
+    // ⚑ The file holds PARAMETERS; the label and read helpers want the resolved
+    // data coordinates. Resolving here, once, keeps the single conversion point.
+    const restoreSpans = heatmapAxisSpans(sessionRef.current.getPlacedPoints(), sessionRef.current.getAxes());
+    const restoredGrid =
+      restoredParams && restoreSpans ? resolveHeatmapGrid(restoredParams, restoreSpans) : null;
     const shown = restoredGrid && axes ? labelsForCells(stored, restoredGrid, axes) : stored;
     setHeatmapXLabels(formatLabelList(shown.x));
     setHeatmapYLabels(formatLabelList(shown.y));
@@ -2905,7 +2957,7 @@ export function Workspace() {
       // away. A stale matrix left on screen is a measurement of a figure that no
       // longer exists — the same rule the Geometry card follows, and the reason
       // this clearing belongs in the SHARED swap rather than in one caller.
-      setHeatmapGrid(null);
+      setHeatmapGridParams(null);
       setHeatmapCells([]);
       setHeatmapDetectMessage('');
       setHeatmapSummary('');
@@ -7173,13 +7225,27 @@ export function Workspace() {
               </button>
               {/* ⚑ Only once there IS a grid to read — the same gate the button
                   inside the fold-out uses, so the two cannot get out of step. */}
-              {session.isCalibrated() && heatmapShownGrid && (
+              {/* ⚠️ DISABLED, NEVER ABSENT, when there is no grid to read yet.
+                  Gating this on `heatmapShownGrid` removed the button entirely
+                  before detection had found anything — which is the very defect
+                  this button exists to fix: the flow lost its visible next step
+                  again, one state earlier. A greyed control says "this is what
+                  comes next"; a missing one says nothing at all.
+                  ⚑ Same semantics the button inside the fold-out had (it was
+                  always rendered, `disabled={!canRead}`) — moving a control must
+                  not quietly change when it exists. */}
+              {session.isCalibrated() && (
                 <button
                   type="button"
-                  data-testid="heatmap-read-inline"
+                  data-testid="heatmap-read"
                   onClick={() => finishHeatmapGrid()}
-                  title="Read every cell through the colour key — the cells appear in the Cells panel"
-                  style={endsCardButton(true)}
+                  disabled={!heatmapShownGrid}
+                  title={
+                    heatmapShownGrid
+                      ? 'Read every cell through the colour key — the cells appear in the Cells panel'
+                      : 'Detect the grid first, or overlay an even one — there are no cells to read yet'
+                  }
+                  style={endsCardButton(!!heatmapShownGrid)}
                 >
                   Read cells
                 </button>
@@ -7200,6 +7266,28 @@ export function Workspace() {
                   {heatmapDetectMessage}
                 </span>
               )}
+              {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID — David's rule 4: *"should the
+                  axis underneath it change so drastically that a new grid
+                  detection needs to take place, then we should warn the user of
+                  that, and ask for a new grid detection to take place, and not
+                  make abstract models around it."*
+                  ⚑ It states the FACT (the axes moved), the CONSEQUENCE (the
+                  grid came with them, which is what a parametric store does) and
+                  the ACTION — and deliberately does NOT claim to know whether
+                  the grid still lines up. That judgement is the abstract model,
+                  and only the person looking at the figure can make it.
+                  ⚑ Outside the fold-out, beside the detect message, for the same
+                  reason that one is: it describes the grid, and the user may
+                  never open the card. */}
+              {heatmapAxisHasMoved && (
+                <span
+                  data-testid="heatmap-axis-moved"
+                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
+                >
+                  The axes have moved since this grid was recorded, so the grid moved with them.
+                  Detect the grid again if it no longer lines up with the figure.
+                </span>
+              )}
               {heatmapPanelOpen && (
               <HeatmapCard
                 gridSize={
@@ -7212,7 +7300,6 @@ export function Workspace() {
                 }
                 onDetect={runHeatmapDetect}
                 onOverlayEvenGrid={overlayEvenHeatmapGrid}
-                onRead={finishHeatmapGrid}
                 onAddColumnBoundary={() => addHeatmapDivider('x')}
                 onAddRowBoundary={() => addHeatmapDivider('y')}
                 selectedBoundary={selectedBoundary}

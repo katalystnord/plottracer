@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, GRAPH_TYPE_METADATA_KEY } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
-import { gridFromAxes, gridToAxes, labelsFromAxes, labelsToAxes, readingsFromAxes, readingsToAxes, type HeatmapState, type MetadataCarrier } from '../heatmapRun.js';
+import { gridFromAxes, gridToAxes, resolveHeatmapGrid, labelsFromAxes, labelsToAxes, readingsFromAxes, readingsToAxes, type HeatmapGridParams, type MetadataCarrier } from '../heatmapRun.js';
 
 /**
  * A heatmap has to SURVIVE A SAVE (v2.2) — the grid, the colour key, and which
@@ -111,12 +111,27 @@ describe('a heatmap survives a save', () => {
     expect(roundTrip(calibratedSession()).session.getOptions()['isLogValue']).toBe('false');
   });
 
-  it('carries the GRID through the file, in data coordinates', () => {
+  it('carries the GRID through the file, as PARAMETERS against the axis position', () => {
+    // ⚑⚑ P2. The file holds parameters, never absolute coordinates — David:
+    // *"The grid is not absolute, but in relation to the calibrated axis
+    // position."* So a reopened project draws its grid in the same PLACE on the
+    // figure whatever the axes are later corrected to say.
     const before = calibratedSession();
-    const grid: HeatmapState = { xDividers: [0, 1, 3.5, 10], yDividers: [0, 2, 20] };
+    const grid: HeatmapGridParams = { x: [0, 0.1, 0.35, 1], y: [0, 0.2, 1] };
     gridToAxes(before.getAxes()!, grid);
     const { session: after } = roundTrip(before);
     expect(gridFromAxes(after.getAxes()!)).toEqual(grid);
+  });
+
+  it('⚑ IGNORES an older build’s grid rather than reading it as parameters', () => {
+    // The two shapes are identical — a bare list per axis — so a v2.2 file's
+    // absolute coordinates would be read as parameters and every boundary would
+    // land somewhere wrong, silently. The key changed with the meaning, so an
+    // old grid is ABSENT instead of WRONG.
+    const s = calibratedSession();
+    const axes = s.getAxes()!;
+    axes.setMetadata({ ...axes.getMetadata(), heatmapGrid: { x: [0, 1, 3.5, 10], y: [0, 2, 20] } });
+    expect(gridFromAxes(axes)).toBeNull();
   });
 
   it('carries the axis NAMES through the file, beside the grid', () => {
@@ -153,10 +168,10 @@ describe('a heatmap survives a save', () => {
 
   it('clears the grid rather than writing one that is not a grid', () => {
     const session = calibratedSession();
-    gridToAxes(session.getAxes()!, { xDividers: [0, 5], yDividers: [0, 5] });
+    gridToAxes(session.getAxes()!, { x: [0, 1], y: [0, 1] });
     gridToAxes(session.getAxes()!, null);
     expect(gridFromAxes(session.getAxes()!)).toBeNull();
-    expect(session.getAxes()!.getMetadata()['heatmapGrid']).toBeUndefined();
+    expect(session.getAxes()!.getMetadata()['heatmapGridParams']).toBeUndefined();
   });
 
   it('REFUSES a grid from a file that the app would not let you draw', () => {
@@ -178,11 +193,21 @@ describe('a heatmap survives a save', () => {
     }
   });
 
-  it('sorts a grid that arrives out of order', () => {
+  it('sorts a grid that arrives out of order — at the door that RESOLVES it', () => {
+    // ⚑ The ordering guard moved with P2, and deliberately. `gridFromAxes` now
+    // reads PARAMETERS, where "ascending" is not yet meaningful: an axis
+    // calibrated backwards has parameters that ascend while its data
+    // coordinates descend. Sorting belongs where the numbers become dividers,
+    // which is `resolveHeatmapGrid` → `checkDividers` — the same rule the
+    // interactive path applies, applied once.
     const session = calibratedSession();
     const axes = session.getAxes()!;
-    axes.setMetadata({ ...axes.getMetadata(), heatmapGrid: { x: [10, 0, 3], y: [5, 0] } });
-    expect(gridFromAxes(axes)).toEqual({ xDividers: [0, 3, 10], yDividers: [0, 5] });
+    axes.setMetadata({ ...axes.getMetadata(), heatmapGridParams: { x: [1, 0, 0.3], y: [1, 0] } });
+    const params = gridFromAxes(axes)!;
+    expect(resolveHeatmapGrid(params, { x: [0, 10], y: [0, 5] })).toEqual({
+      xDividers: [0, 3, 10],
+      yDividers: [0, 5],
+    });
   });
 });
 
@@ -211,7 +236,7 @@ describe('a re-calibration keeps what the axes was carrying', () => {
   it('keeps the grid, the names AND the user’s own cell readings', () => {
     const s = calibratedSession();
     const axes = s.getAxes()! as unknown as MetadataCarrier;
-    gridToAxes(axes, { xDividers: [0, 1, 2.4, 5], yDividers: [0, 2, 4] });
+    gridToAxes(axes, { x: [0, 0.2, 0.48, 1], y: [0, 0.5, 1] });
     labelsToAxes(axes, { x: ['BRCA1', 'TP53'], y: ['tumour'] });
     readingsToAxes(axes, { '1,1': 0.42 });
 
@@ -219,7 +244,7 @@ describe('a re-calibration keeps what the axes was carrying', () => {
     expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
 
     const after = s.getAxes()! as unknown as MetadataCarrier;
-    expect(gridFromAxes(after)).toEqual({ xDividers: [0, 1, 2.4, 5], yDividers: [0, 2, 4] });
+    expect(gridFromAxes(after)).toEqual({ x: [0, 0.2, 0.48, 1], y: [0, 0.5, 1] });
     expect(labelsFromAxes(after)).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour'] });
     expect(readingsFromAxes(after)).toEqual({ '1,1': 0.42 });
   });

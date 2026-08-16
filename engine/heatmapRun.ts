@@ -43,7 +43,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers, equalDividers, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
 import type { CategoryOverlayInput } from './categoryTickOverlay.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
@@ -390,7 +390,188 @@ export function initialGrid(axesBounds: {
  * ⚑ Stored in DATA coordinates, like everything else about the grid, so it
  * survives a re-calibration or an image edit with its meaning intact.
  */
-const GRID_METADATA_KEY = 'heatmapGrid';
+/**
+ * ⚑ THE KEY CHANGED WITH THE MEANING. The numbers under it are PARAMETERS now,
+ * not data coordinates, and the two shapes are identical — a bare list per axis.
+ * A file written by an older build would therefore be read as a grid, silently,
+ * with every boundary in the wrong place. Renaming the key makes an old grid
+ * ABSENT instead of WRONG, which is the only safe way for the two to differ.
+ */
+const GRID_METADATA_KEY = 'heatmapGridParams';
+
+/**
+ * THE GRID'S STORE — a parameter per divider, per axis.
+ *
+ * ⚑⚑ Deliberately NOT named `xDividers`/`yDividers` like the resolved form. The
+ * numbers mean something different now, and a meaning that changes under an
+ * unchanged name is the quietest kind of defect: every call site keeps compiling
+ * and half of them are wrong. Two names, one conversion, no ambiguity.
+ */
+export interface HeatmapGridParams {
+  x: readonly number[];
+  y: readonly number[];
+  /** Where the axes SAT when this grid was recorded. Used only to say "the axis
+   * has moved since" — never to place anything. Absent on a grid recorded
+   * before the stamp existed, which simply means nothing to compare. */
+  axisAt?: HeatmapAxisStamp;
+}
+
+/**
+ * The axes surface the grid's parameter frame needs.
+ *
+ * ⚠️⚠️ `pixelToData`, NOT the typed values — and getting this wrong cost a
+ * regression on the day it was written. The first version read
+ * `placed['y1'].values[0]`, which is EMPTY on a CATEGORY axis: the row edge
+ * takes no coordinate and the far edge carries the COUNT instead. `Number('')`
+ * is 0, so both ends read 0, the span was degenerate, and a categorical heatmap
+ * silently had no grid at all.
+ *
+ * ⚑⚑ THAT IS "a heatmap always has a numeric scale" — the exact false premise
+ * that hid the missing category axis for a whole release — reintroduced in the
+ * same file on the same day its header was rewritten to condemn it. David had
+ * even said the right word: *"in relation to the calibrated axis POSITION."*
+ * Asking the axes what a POSITION is worth works for both kinds; reading what
+ * the user TYPED works only for one.
+ */
+export interface DataProjector {
+  pixelToData(px: number, py: number): readonly (number | undefined)[];
+}
+
+/** Where an axis's two calibration points SAT, in image pixels. */
+export interface HeatmapAxisStamp {
+  x: [{ px: number; py: number }, { px: number; py: number }];
+  y: [{ px: number; py: number }, { px: number; py: number }];
+}
+
+/** How far a calibration point may sit from where it was and still count as
+ * not having moved. Sub-pixel is float noise, not a gesture anybody made. */
+const AXIS_MOVED_EPS = 0.01;
+
+/**
+ * Where the axes were when a grid was recorded.
+ *
+ * ⚑ Stored WITH the grid and used for exactly one thing — answering "has the
+ * axis moved since?" — never to place anything. The grid's position comes from
+ * its parameters and the calibration in force; this is only how the app knows to
+ * SAY something.
+ */
+export function heatmapAxisStamp(
+  placed: Record<string, { px: number; py: number } | undefined>
+): HeatmapAxisStamp | null {
+  const p = (k: string) => placed[k];
+  const [x1, x2, y1, y2] = [p('x1'), p('x2'), p('y1'), p('y2')];
+  if (!x1 || !x2 || !y1 || !y2) return null;
+  const ok = (q: { px: number; py: number }) => Number.isFinite(q.px) && Number.isFinite(q.py);
+  if (![x1, x2, y1, y2].every(ok)) return null;
+  return {
+    x: [{ px: x1.px, py: x1.py }, { px: x2.px, py: x2.py }],
+    y: [{ px: y1.px, py: y1.py }, { px: y2.px, py: y2.py }],
+  };
+}
+
+/**
+ * Has the axis moved under the grid?
+ *
+ * ⚑⚑ THIS ANSWERS ONE QUESTION AND REFUSES THE OTHER. David: *"should the axis
+ * underneath it change so drastically that a new grid detection needs to take
+ * place, then we should warn the user of that, and ask for a new grid detection
+ * to take place, and NOT MAKE ABSTRACT MODELS AROUND IT."* So: did the
+ * calibration points move — a fact, measured. NOT "does the grid still fit the
+ * ink", which is the model, and which would be wrong silently on exactly the
+ * figures where it mattered.
+ *
+ * ⚑ A retyped VALUE moves no pixel, so it cannot fire this. That is right: the
+ * grid is still where it was put, and a warning with nothing behind it teaches
+ * the user to ignore the next one.
+ */
+export function heatmapAxisMoved(
+  stamp: HeatmapAxisStamp | undefined | null,
+  placed: Record<string, { px: number; py: number } | undefined>
+): boolean {
+  if (!stamp) return false;
+  const now = heatmapAxisStamp(placed);
+  if (now === null) return false;
+  const far = (a: { px: number; py: number }, b: { px: number; py: number }) =>
+    Math.abs(a.px - b.px) > AXIS_MOVED_EPS || Math.abs(a.py - b.py) > AXIS_MOVED_EPS;
+  return (
+    far(stamp.x[0], now.x[0]) || far(stamp.x[1], now.x[1]) ||
+    far(stamp.y[0], now.y[0]) || far(stamp.y[1], now.y[1])
+  );
+}
+
+/**
+ * The two calibration VALUES bounding each axis — the frame a parameter is
+ * measured in.
+ *
+ * ⚑ Read off the PLACED POINTS rather than the axes object, because that is
+ * where the user's own numbers live and it is what makes the grid independent of
+ * them: the span is used to CONVERT, never stored with the grid.
+ */
+export function heatmapAxisSpans(
+  placed: Record<string, { px: number; py: number } | undefined>,
+  axes: DataProjector | null
+): { x: [number, number]; y: [number, number] } | null {
+  if (!axes) return null;
+  const p = (k: string) => placed[k];
+  const [x1, x2, y1, y2] = [p('x1'), p('x2'), p('y1'), p('y2')];
+  if (!x1 || !x2 || !y1 || !y2) return null;
+  // ⚑ ASK THE AXES WHAT EACH CALIBRATION POSITION IS WORTH, rather than reading
+  // the number the user typed.
+  const at = (q: { px: number; py: number }, dim: 0 | 1): number => {
+    const d = axes.pixelToData(q.px, q.py);
+    const v = d[dim];
+    return v === undefined ? Number.NaN : v;
+  };
+  const spans = {
+    x: [at(x1, 0), at(x2, 0)] as [number, number],
+    y: [at(y1, 1), at(y2, 1)] as [number, number],
+  };
+  const ok = (s: [number, number]) => Number.isFinite(s[0]) && Number.isFinite(s[1]) && s[0] !== s[1];
+  return ok(spans.x) && ok(spans.y) ? spans : null;
+}
+
+/** Params → the data coordinates every geometry consumer already takes. Derived
+ * on each read, never stored. */
+export function resolveHeatmapGrid(
+  params: HeatmapGridParams,
+  spans: { x: [number, number]; y: [number, number] }
+): HeatmapState | null {
+  const xs = dividersFromParams(params.x, spans.x[0], spans.x[1]);
+  const ys = dividersFromParams(params.y, spans.y[0], spans.y[1]);
+  if (xs === null || ys === null) return null;
+  const cx = checkDividers(xs);
+  const cy = checkDividers(ys);
+  if (cx.dividers === null || cy.dividers === null) return null;
+  return { xDividers: cx.dividers, yDividers: cy.dividers };
+}
+
+/** The inverse, for the paths that still produce data coordinates — detection
+ * reads the ink, and a dragged handle lands on a pixel. */
+export function heatmapGridToParams(
+  grid: HeatmapState,
+  spans: { x: [number, number]; y: [number, number] }
+): HeatmapGridParams | null {
+  const x = gridParamsFrom(grid.xDividers, spans.x[0], spans.x[1]);
+  const y = gridParamsFrom(grid.yDividers, spans.y[0], spans.y[1]);
+  return x === null || y === null ? null : { x, y };
+}
+
+/** A stamp off a file, or null. Same discipline as the dividers beside it: a
+ * load path validates rather than trusts. */
+function stampFromUnknown(raw: unknown): HeatmapAxisStamp | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { x, y } = raw as { x?: unknown; y?: unknown };
+  const pair = (v: unknown): [{ px: number; py: number }, { px: number; py: number }] | null => {
+    if (!Array.isArray(v) || v.length !== 2) return null;
+    const pts = v.map((q) => ({ px: Number((q as { px?: unknown })?.px), py: Number((q as { py?: unknown })?.py) }));
+    return pts.every((q) => Number.isFinite(q.px) && Number.isFinite(q.py))
+      ? [pts[0]!, pts[1]!]
+      : null;
+  };
+  const px = pair(x);
+  const py = pair(y);
+  return px && py ? { x: px, y: py } : null;
+}
 
 /** The minimal axes surface this needs — structural, so no `core/axes` import. */
 export interface MetadataCarrier {
@@ -407,27 +588,43 @@ export interface MetadataCarrier {
  * applies, so a file cannot produce a grid the app would refuse to let you
  * draw.
  */
-export function gridFromAxes(axes: MetadataCarrier): HeatmapState | null {
+export function gridFromAxes(axes: MetadataCarrier): HeatmapGridParams | null {
   const raw = axes.getMetadata()[GRID_METADATA_KEY];
   if (typeof raw !== 'object' || raw === null) return null;
   const { x, y } = raw as { x?: unknown; y?: unknown };
   if (!Array.isArray(x) || !Array.isArray(y)) return null;
-  const xs = checkDividers(x.map(Number)).dividers;
-  const ys = checkDividers(y.map(Number)).dividers;
-  if (xs === null || ys === null) return null;
-  return { xDividers: xs, yDividers: ys };
+  const xs = x.map(Number);
+  const ys = y.map(Number);
+  // ⚑ Validated as a PARAMETER list, which is a weaker claim than a divider
+  // list: parameters legitimately run negative and past 1 (the `centred` tick
+  // convention puts the outermost boundaries half a band beyond the calibration
+  // points). What must hold is that they are numbers and that they bound at
+  // least one band. `checkDividers` applies to the RESOLVED form, at the door
+  // `resolveHeatmapGrid` guards.
+  if (xs.length < 2 || ys.length < 2) return null;
+  if (xs.some((v) => !Number.isFinite(v)) || ys.some((v) => !Number.isFinite(v))) return null;
+  // ⚑ The stamp is VALIDATED like everything else on this load path, and simply
+  // dropped when it is not one: a missing stamp means "nothing to compare",
+  // which is already a state this handles.
+  const rawStamp = (raw as { axisAt?: unknown }).axisAt;
+  const axisAt = stampFromUnknown(rawStamp);
+  return axisAt ? { x: xs, y: ys, axisAt } : { x: xs, y: ys };
 }
 
 /**
  * Put the grid where a save will find it. A null grid REMOVES the key rather
  * than writing an empty one, so a file never carries a grid that is not a grid.
  */
-export function gridToAxes(axes: MetadataCarrier, grid: HeatmapState | null): void {
+export function gridToAxes(axes: MetadataCarrier, grid: HeatmapGridParams | null): void {
   const meta = { ...axes.getMetadata() };
   if (grid === null) {
     delete meta[GRID_METADATA_KEY];
   } else {
-    meta[GRID_METADATA_KEY] = { x: [...grid.xDividers], y: [...grid.yDividers] };
+    meta[GRID_METADATA_KEY] = {
+      x: [...grid.x],
+      y: [...grid.y],
+      ...(grid.axisAt ? { axisAt: grid.axisAt } : {}),
+    };
   }
   axes.setMetadata(meta);
 }

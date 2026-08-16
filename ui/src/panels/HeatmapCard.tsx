@@ -1,4 +1,4 @@
-import { endsCardButton, theme } from '../theme.js';
+import { theme } from '../theme.js';
 
 /**
  * The heatmap's GRID DEFINITION — a fold-down on the calibration card (v2.2).
@@ -44,7 +44,6 @@ export interface HeatmapCardProps {
   gridSize: { columns: number; rows: number } | null;
   onDetect: () => void;
   onOverlayEvenGrid: () => void;
-  onRead: () => void;
   /** Add a boundary on one axis — it lands in the middle of the widest cell,
    * which is where a boundary detection missed almost always belongs. */
   onAddColumnBoundary: () => void;
@@ -94,7 +93,6 @@ export function HeatmapCard({
   gridSize,
   onDetect,
   onOverlayEvenGrid,
-  onRead,
   onAddColumnBoundary,
   onAddRowBoundary,
   selectedBoundary,
@@ -148,40 +146,24 @@ export function HeatmapCard({
             Overlay even grid
           </button>
         </div>
-        {/* ⚑⚑ THE ENDING, AND IT LOOKS LIKE ONE. David: *"There is nothing
-            intuitive here to press to say 'done!'"* — and he was right in a
-            precise way: the card HAD a terminal action all along, sitting in a
-            row of three identical buttons where two of them are setup. Reading
-            the cells is what consumes the grid and produces the record, so it is
-            the end of this card's job; it just never looked or behaved like it.
-            ⚑⚑ THE MIRROR ALREADY EXISTED. The bar chart's category-ticks
-            fold-out — the panel this one was modelled on — has carried a teal
-            `Done` since v2.1, for the same reason recorded there: *"the only
-            exits on screen were 'Re-place axis' and 'Remove ticks' — both
-            destructive. The way out must never be the way to lose your work."*
-            This card was in exactly that state: Detect grid and Overlay even
-            grid both REGENERATE, discarding adjustments. So the same colour and
-            the same shape, on the button that already did the job.
-            ⚑ It FOLDS the card on success (David's call), which moves the eye to
-            the Cells panel where the record now is. Nothing is lost: the folded
-            line reads "Grid — 7 × 5 cells", and one click reopens it.
-            ⚑ CALLED WITH NOTHING, deliberately. `onRead` takes no arguments, and
-            handing it straight to onClick would pass React's mouse event into
-            whatever first parameter the handler grows later — which it has: the
-            read takes the user's own cell readings, and a SyntheticEvent
-            arriving there would be silently treated as them. */}
-        <div style={{ display: 'flex' }}>
-          <button
-            type="button"
-            data-testid="heatmap-read"
-            onClick={() => onRead()}
-            disabled={!canRead}
-            title="Read every cell through the colour key, and close this — the cells appear in the Cells panel"
-            style={endsCardButton(canRead)}
-          >
-            Read cells
-          </button>
-        </div>
+        {/* ⚑⚑ READ CELLS IS NOT HERE ANY MORE — it lives on the Grid summary
+            line, outside this fold-out, and there is only ONE of it.
+            ⚑ It moved out because the flow had no visible next step: everything
+            on screen said READY while the action that finishes the job sat
+            inside a closed fold-out inside a closed card (David: *"that is a UI
+            design fault"*). It is not ALSO here because, with the card open,
+            two identical teal buttons sat eighty pixels apart — David: *"we now
+            still have the old red cells button there too. I think that old one
+            should go."*
+            ⚠️ AND MY ARGUMENT FOR KEEPING BOTH WAS WRONG. I cited `Reset to key`,
+            which is offered on the picked-cell line AND in the right-click menu.
+            That precedent does not apply: those two are never on screen at the
+            same time, and one of them is undiscoverable. These were both visible
+            at once, in one card. **The same action in two places is justified by
+            two different MOMENTS or SURFACES, never by two positions in one
+            view** — otherwise it is just the second-mechanism smell again.
+            ⚑ The ENDING survives the move: pressing it still folds the card, so
+            the eye goes to the Cells panel where the record now is. */}
         {/* ⚑⚑ THE HAND `detectGrid` KEEPS TELLING THE USER TO USE. When detection
             finds every rule the figure draws but one, it refuses to fill the miss
             in and says "place the missing ones by hand" — and until now there was

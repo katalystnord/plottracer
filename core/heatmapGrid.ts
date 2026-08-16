@@ -17,14 +17,23 @@
  * count, and it is the reason a decision made for BAR CHARTS is what makes
  * heatmaps expressible at all.
  *
- * ⚑ DIVIDERS ARE STORED IN DATA COORDINATES, not pixels and not parameters.
- * `core/categoryAxis.ts` stores its ticks as parameters between two clicked
- * edges, because a category axis has no numeric scale of its own to hang them
- * on. A heatmap always has one: its x and y are calibrated before any cell is
- * captured, so a boundary's data coordinate IS its identity. That makes the cell
- * record fall straight out of the grid with no conversion, and it survives an
- * image edit for the stronger reason — a rotation or a crop moves the pixels and
- * recalibrates the axes, and the data coordinate of a boundary does not change.
+ * ⚠️⚠️ THIS HEADER USED TO SAY *"DIVIDERS ARE STORED IN DATA COORDINATES, not
+ * pixels and not parameters"*, and argued it from *"a heatmap always has a
+ * numeric scale"* — the same false premise that hid the missing category axis
+ * for a whole release. It was wrong, and `core/bandedAxis.ts` had already
+ * written the correct rule AND named this store as the violator: *"a bare number
+ * cannot say whether it should follow the axis or stay where it was put."* Two
+ * headers contradicting each other inside one release, with nothing grading
+ * either. **A comment that restates a design you have not enforced is false
+ * evidence of compliance** — gate 3, and this is the case study.
+ *
+ * ⚑⚑ THE STORE IS PARAMETRIC — see `gridParamsFrom` below for the rule and what
+ * each kind of calibration change does. Data coordinates are DERIVED on every
+ * read from the calibration in force, never stored, so the two cannot drift.
+ * ⚑ The image-edit case the old header was defending still works, and for a
+ * better reason: the axis's own calibration points ride `transformAllPixels`
+ * like every other handle, so a grid expressed against them follows by
+ * construction, with no pass of its own to forget.
  *
  * Pure: numbers in, numbers out. No image, no axes, no DOM.
  */
@@ -193,6 +202,75 @@ export function cellIndexAt(
   const row = bandOf(ys.dividers, y);
   if (col === null || row === null) return null;
   return { col, row };
+}
+
+/**
+ * ⚑⚑ THE STORE IS A PARAMETER, NOT A COORDINATE — 0 at the axis's first
+ * calibration point, 1 at its second.
+ *
+ * David, 2026-08-16, stating it as a rule for every graph type: *"Anything
+ * detected on the graph sits on TOP of the calibration… It has to sit on top of
+ * it and respect it, but not be a part of it. We should and need to be able to
+ * adjust the axis calibrations independently of changing the grid. The grid (and
+ * the same for bar category tick marks, and blob outer limits) sits on the
+ * calibrated area, but is not dependent on the calibrated area's NUMERICAL
+ * VALUES. The grid is not absolute, but in relation to the calibrated axis
+ * POSITION."*
+ *
+ * ⚠️ THIS FILE'S HEADER USED TO ARGUE THE OPPOSITE, and it was wrong. It said a
+ * boundary's data coordinate IS its identity because a heatmap always has a
+ * numeric scale — which is the same false premise that hid the missing category
+ * axis for a release. `core/bandedAxis.ts` had already written the correct rule
+ * and NAMED this store as the thing that cannot express it: *"a bare number
+ * cannot say whether it should follow the axis or stay where it was put."*
+ * Two headers contradicting each other inside one release, with nothing grading
+ * either — which is what gate 3 exists for.
+ *
+ * ⚑ WHAT EACH CHANGE DOES, now that the store is a parameter:
+ *   · retype a calibration VALUE → the parameters do not move, so the grid stays
+ *     on the ink it was measured from and its data coordinates change, which is
+ *     right: those pixels are now worth different numbers.
+ *   · move a calibration POSITION → the axis moved, so the grid moves with it.
+ *     If that takes it off the ink, the app SAYS SO and offers a new detection.
+ *     ⚑⚑ David: *"not make abstract models around it."* There is deliberately no
+ *     per-divider provenance flag and no "does it still fit" computation.
+ *
+ * ⚑ Affine by construction, so this is the whole conversion: `bandedAxis`'s
+ * `paramAtPoint` does the same job in two dimensions, for an axis whose ends are
+ * clicked rather than calibrated.
+ */
+export function gridParamsFrom(
+  dividers: readonly number[],
+  v1: number,
+  v2: number
+): number[] | null {
+  if (!usableSpan(v1, v2)) return null;
+  if (dividers.some((d) => !Number.isFinite(d))) return null;
+  return dividers.map((d) => (d - v1) / (v2 - v1));
+}
+
+/** The inverse: what those parameters are worth under the calibration in force
+ * NOW. Derived on every read and never stored, so the two cannot drift apart. */
+export function dividersFromParams(
+  params: readonly number[],
+  v1: number,
+  v2: number
+): number[] | null {
+  if (!usableSpan(v1, v2)) return null;
+  if (params.some((t) => !Number.isFinite(t))) return null;
+  return params.map((t) => v1 + t * (v2 - v1));
+}
+
+/**
+ * Two calibration points with no span between them cannot define a parameter.
+ *
+ * ⚑ Refused rather than nudged: `bandedAxis`'s `paramAtPoint` guards the same
+ * degeneracy, and for the sharper reason recorded there — a span that underflows
+ * to zero divides to Infinity, which sails through any caller that only checks
+ * for NaN.
+ */
+function usableSpan(v1: number, v2: number): boolean {
+  return Number.isFinite(v1) && Number.isFinite(v2) && v2 - v1 !== 0;
 }
 
 /** Which band of a sorted divider list holds `v`, or null if it is outside. The
