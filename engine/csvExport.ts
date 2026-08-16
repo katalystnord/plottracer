@@ -58,6 +58,15 @@ export interface HeatmapKeyExport {
 }
 
 export interface HeatmapExportCell {
+  /** ⚑⚑ WHICH CELL THIS IS, 0-based, written to the file as `C1`/`R1`.
+   *
+   * ⚠️ IT WAS NOT HERE AT ALL. `HeatmapRow` has carried `col`/`row` all along
+   * and this type dropped them — so the identity was discarded exactly at the
+   * boundary to the file, and a value × value heatmap exported bounds with no
+   * way to say which cell was which. The v2.2 export audit found this was the
+   * only type missing identity. */
+  col: number;
+  row: number;
   xMin: number;
   xMax: number;
   yMin: number;
@@ -322,6 +331,26 @@ export function heatmapCellsSection(
       // remain true whatever the axis is called, so the name is added beside
       // them rather than in place of them (tenet 9: record, do not choose for
       // the reader).
+      // ⚑⚑ IDENTITY, UNCONDITIONALLY — David, 2026-08-16: *"Whatever is needed
+      // for a data set to be able to be used to create the same heatmap needs to
+      // be recorded by us. Even if something like axis identifier C1/R1 needs to
+      // be DERIVED. Whatever we export (for all types of graphs) needs to be
+      // usable as a basis for reconstructing the same graph."*
+      //
+      // ⚠️ The label columns below appear only when the axes are NAMED, so a
+      // value × value heatmap exported no identity at all: a reader got bounds
+      // and had to reconstruct which cell was which. The v2.2 audit's export
+      // pass found this was the ONLY type missing it — bar leads with
+      // `category`, spider carries `Axis`, and the flat types export their
+      // coordinates.
+      //
+      // ⚑ IT IS DERIVED, AND THAT IS FINE HERE. Inside the model a derived value
+      // stored twice DRIFTS, which is why a cell's colour is computed and never
+      // kept. In a FILE the consumer has no access to our derivation, so
+      // omitting it makes the data unusable. Opposite failure modes, opposite
+      // defaults, and the export is the boundary between them.
+      'column',
+      'row',
       ...(xNamed ? ['x label'] : []),
       ...(yNamed ? ['y label'] : []),
       axisHeader(cells, 'x', 'min'),
@@ -355,6 +384,11 @@ export function heatmapCellsSection(
       'at key limit',
     ],
     rows: cells.map((c) => [
+      // ⚑ 1-BASED, matching every place these appear on screen — the matrix
+      // headers, the picked-cell line and the long table all say `C1`, so the
+      // file saying `0` would be a fourth spelling of one thing.
+      `C${c.col + 1}`,
+      `R${c.row + 1}`,
       ...(xNamed ? [c.xLabel ?? ''] : []),
       ...(yNamed ? [c.yLabel ?? ''] : []),
       at(c.xMin, c, 0),

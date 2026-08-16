@@ -32,6 +32,8 @@ function axes(): XYAxes {
 }
 
 const cell = (over: Partial<HeatmapExportCell>): HeatmapExportCell => ({
+  col: 0,
+  row: 0,
   xMin: 0,
   xMax: 1,
   yMin: 0,
@@ -47,11 +49,15 @@ const cell = (over: Partial<HeatmapExportCell>): HeatmapExportCell => ({
 });
 
 /** Two columns × two rows, unequal, with distinct values. */
+/** ⚑ A 2 × 2 grid, and its cells now carry their OWN col/row rather than the
+ * factory's zeros. A fixture where every cell is `C1 R1` cannot see an identity
+ * column that is wrong — which is exactly the blindness that let the export ship
+ * without one. */
 const GRID: HeatmapExportCell[] = [
-  cell({ xMin: 0, xMax: 1, yMin: 0, yMax: 2, xCentre: 0.5, yCentre: 1, value: 10 }),
-  cell({ xMin: 1, xMax: 4, yMin: 0, yMax: 2, xCentre: 2.5, yCentre: 1, value: 20 }),
-  cell({ xMin: 0, xMax: 1, yMin: 2, yMax: 3, xCentre: 0.5, yCentre: 2.5, value: 30 }),
-  cell({ xMin: 1, xMax: 4, yMin: 2, yMax: 3, xCentre: 2.5, yCentre: 2.5, value: 40 }),
+  cell({ col: 0, row: 0, xMin: 0, xMax: 1, yMin: 0, yMax: 2, xCentre: 0.5, yCentre: 1, value: 10 }),
+  cell({ col: 1, row: 0, xMin: 1, xMax: 4, yMin: 0, yMax: 2, xCentre: 2.5, yCentre: 1, value: 20 }),
+  cell({ col: 0, row: 1, xMin: 0, xMax: 1, yMin: 2, yMax: 3, xCentre: 0.5, yCentre: 2.5, value: 30 }),
+  cell({ col: 1, row: 1, xMin: 1, xMax: 4, yMin: 2, yMax: 3, xCentre: 2.5, yCentre: 2.5, value: 40 }),
 ];
 
 describe('heatmapCellsSection', () => {
@@ -67,7 +73,8 @@ describe('heatmapCellsSection', () => {
     // where it applies; area is measured only in a mosaic, where geometry IS
     // the value.
     const section = heatmapCellsSection(GRID, makeRounder(axes(), 'auto'));
-    expect(section.header.slice(0, 9)).toEqual([
+    expect(section.header.slice(0, 2)).toEqual(['column', 'row']);
+    expect(section.header.slice(2, 11)).toEqual([
       'x min',
       'x max',
       'y min',
@@ -79,7 +86,7 @@ describe('heatmapCellsSection', () => {
       'value',
     ]);
     expect(section.rows).toHaveLength(4);
-    expect(section.rows[1]!.slice(0, 9)).toEqual([1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
+    expect(section.rows[1]!.slice(2, 11)).toEqual([1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
   it('carries the interval, the colour offset and the uniformity into the file', () => {
@@ -125,7 +132,10 @@ describe('heatmapCellsSection', () => {
       0,
       '',
     ]);
-    expect(section.rows[0]!.slice(0, 4)).toEqual([0, 1, 0, 2]);
+    // ⚑ Identity is written even for a cell with NO VALUE: the cell exists, and
+    // saying which one it is costs nothing. Bounds follow it.
+    expect(section.rows[0]!.slice(0, 2)).toEqual(['C1', 'R1']);
+    expect(section.rows[0]!.slice(2, 6)).toEqual([0, 1, 0, 2]);
   });
 
   it('does NOT round the value through the figure’s pixel resolution', () => {
@@ -229,18 +239,26 @@ describe('a NAMED axis — "the label is the coordinate"', () => {
     // called; the name is the coordinate a reader can rejoin to their own data.
     // Dropping either half breaks a real consumer.
     const section = heatmapCellsSection(NAMED, makeRounder(axes(), 'auto'));
-    expect(section.header.slice(0, 3)).toEqual(['x label', 'y label', 'x min']);
-    expect(section.rows[1]!.slice(0, 11)).toEqual(['TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
+    // ⚑ Identity FIRST, unconditionally, then the names where the figure prints them.
+    expect(section.header.slice(0, 4)).toEqual(['column', 'row', 'x label', 'y label']);
+    expect(section.rows[1]!.slice(0, 13)).toEqual(['C2', 'R1', 'TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
-  it('leaves a VALUE axis exactly as it was — no empty column appears', () => {
-    // ⚑ The histogram's `value error` rule: a column exists only when something
-    // fills it, so a value × value heatmap's file does not change shape because
-    // a feature it does not use was added.
-    expect(heatmapCellsSection(GRID, makeRounder(axes(), 'auto')).header[0]).toBe('x min');
+  it('leaves a VALUE axis with no NAME columns — but it still gets its identity', () => {
+    // ⚑ The histogram's `value error` rule still holds for the NAMES: a label
+    // column exists only when something fills it.
+    // ⚠️ IDENTITY IS THE EXCEPTION, and deliberately. Those columns used to be
+    // the only thing saying which cell a row was, so a value × value heatmap
+    // exported bounds and nothing else to join on — David: *"whatever we export
+    // needs to be usable as a basis for reconstructing the same graph."*
+    const valueOnly = heatmapCellsSection(GRID, makeRounder(axes(), 'auto'));
+    expect(valueOnly.header.slice(0, 3)).toEqual(['column', 'row', 'x min']);
+    expect(valueOnly.header).not.toContain('x label');
+    expect(valueOnly.header).not.toContain('y label');
+    expect(valueOnly.rows[3]!.slice(0, 2)).toEqual(['C2', 'R2']);
     // …and an axis named on ONE side only grows that side's column alone.
     const xOnly = NAMED.map((c) => ({ ...c, yLabel: '' }));
-    expect(heatmapCellsSection(xOnly, makeRounder(axes(), 'auto')).header.slice(0, 2)).toEqual(['x label', 'x min']);
+    expect(heatmapCellsSection(xOnly, makeRounder(axes(), 'auto')).header.slice(0, 4)).toEqual(['column', 'row', 'x label', 'x min']);
   });
 
   it('puts the names in the MATRIX headers, where there is only one slot', () => {

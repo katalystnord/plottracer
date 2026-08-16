@@ -256,6 +256,7 @@ import {
   measurementPixelValue,
 } from '../../core/measurementValues.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
+import { clampPanelWidth, readPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -971,7 +972,15 @@ export function Workspace() {
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
   // adjusts this width (fed to the shell grid as a CSS variable), clamped so it
   // can't swallow the canvas or shrink below the controls' minimum.
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  /**
+   * ⚑ REMEMBERED, not just widened. The rail was already resizable and reset to
+   * 320 on every launch, so dragging it wider was work the user redid each
+   * session — David: *"make the data out card a little wider by default to
+   * accommodate the wider datasets."* A bigger default alone would have left the
+   * forgetting intact one size along. `readPanelWidth` clamps, so a hand-edited
+   * entry cannot smuggle a width past the drag handle's own limits.
+   */
+  const [sidebarWidth, setSidebarWidth] = useState(readPanelWidth);
   // CSV export scope (checkpoint 60): the active series only (flat pixel-free
   // rows / Box Plot tuples) or every series side by side (spreadsheet columns).
   const [exportScope, setExportScope] = useState<'active' | 'all'>('active');
@@ -994,8 +1003,17 @@ export function Workspace() {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = sidebarWidth;
-      const onMove = (ev: MouseEvent) => setSidebarWidth(Math.max(260, Math.min(760, startWidth + (startX - ev.clientX))));
+      // ⚑ ONE CLAMP, shared with the store — the drag and the saved value cannot
+      // disagree about what a legal width is.
+      let latest = startWidth;
+      const onMove = (ev: MouseEvent) => {
+        latest = clampPanelWidth(startWidth + (startX - ev.clientX));
+        setSidebarWidth(latest);
+      };
       const onUp = () => {
+        // ⚑ Written on RELEASE, not per pixel: a drag is one decision, and
+        // localStorage on every mousemove is a write per frame.
+        writePanelWidth(latest);
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
       };

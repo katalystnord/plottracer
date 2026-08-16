@@ -628,6 +628,21 @@ function LongView({
       >
         <thead>
           <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
+            {/* ⚑⚑ IDENTITY BEFORE COORDINATE. David: *"the table format needs
+                C1, R1 markings also, else it is really difficult to read."* The
+                x and y columns are COORDINATES — a centre, or a name — so
+                nothing on a row said WHICH CELL it was, and the reader had to do
+                arithmetic to match a row to the matrix or the figure.
+                ⚑ THE SAME TOKENS the rest of the app uses: the matrix heads its
+                columns `C4`, and the picked-cell line reads
+                `C4 (6.00 – 8.99) × R4 (4.01 – 6.00)`. This view was the only one
+                staying silent, so it was harder to read than the matrix AND less
+                complete than the file we write from the same data.
+                ⚑ Coordinates do NOT replace identity: `C4` is what the cell IS,
+                `6.00 – 8.99` is where it sits. The matrix header shows both,
+                stacked — this shows both, side by side. */}
+            <th style={{ paddingRight: 8 }}>column</th>
+            <th style={{ paddingRight: 8 }}>row</th>
             <th style={{ paddingRight: 8 }}>x</th>
             <th style={{ paddingRight: 8 }}>y</th>
             <th style={{ paddingRight: 8 }}>value</th>
@@ -655,6 +670,8 @@ function LongView({
               {/* ⚑ Editable only where the coordinate IS a name. On a value
                   axis the cell shows a measured centre, and a measurement is
                   not something to type over. */}
+              <td style={{ paddingRight: 8, fontWeight: 600 }}>{`C${cell.col + 1}`}</td>
+              <td style={{ paddingRight: 8, fontWeight: 600 }}>{`R${cell.row + 1}`}</td>
               <td style={{ paddingRight: 8 }}>
                 {cell.xIsCategory && renderXName
                   ? renderXName(cell.col, cell.xLabel, cell.xCentre, `x${cell.col}@${cell.col}-${cell.row}`)

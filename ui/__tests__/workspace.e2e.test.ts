@@ -21,6 +21,7 @@
  * dev server.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { DEFAULT_PANEL_WIDTH } from '../src/panelWidth.js';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -5577,7 +5578,10 @@ describe('Workspace: resizable sidebar (checkpoint 60)', () => {
     await resetWorkspace('xy');
     const sidebarWidth = () =>
       page.locator('[style*="--sidebar-width"]').evaluate((el: HTMLElement) => el.style.getPropertyValue('--sidebar-width'));
-    expect(await sidebarWidth()).toBe('320px');
+    // ⚑ Asserted against the CONSTANT, not a literal, so raising the default is
+    // a one-line change rather than a hunt through the e2e — and so this cannot
+    // pass while the app and the store disagree about what the default is.
+    expect(await sidebarWidth()).toBe(`${DEFAULT_PANEL_WIDTH}px`);
 
     const handle = await page.getByTestId('sidebar-resize').boundingBox();
     if (!handle) throw new Error('resize handle has no bounding box');
@@ -5587,7 +5591,7 @@ describe('Workspace: resizable sidebar (checkpoint 60)', () => {
     await page.mouse.move(handle.x - 140, handle.y + 120, { steps: 6 });
     await page.mouse.up();
     await page.waitForTimeout(100);
-    expect(parseInt(await sidebarWidth(), 10)).toBeGreaterThan(420);
+    expect(parseInt(await sidebarWidth(), 10)).toBeGreaterThan(DEFAULT_PANEL_WIDTH + 100);
   });
 });
 
@@ -8285,10 +8289,16 @@ describe('heatmap capture (v2.2)', () => {
     // off by a fraction of an image pixel. Measured: 0.003 of a data unit on a
     // 9-unit axis, 0.04% — which is the precision a person clicking gets, and
     // the unit tests already pin the arithmetic exactly.
-    expect(Number(cells[0])).toBeCloseTo(0.5, 2); // x centre of a 0..1 column
-    expect(Number(cells[1])).toBeCloseTo(1, 2); // y centre of a 0..2 row
-    expect(Math.abs(Number(cells[2]) - first.value)).toBeLessThan(1.5);
-    expect(cells[4]).toBe(''); // no warning: the cell vouches for itself
+    // ⚑ The long view leads with IDENTITY (`column`, `row`) and then the
+    // coordinates — asserted here rather than silently skipped, so a shift in
+    // the column order fails with a reason instead of a NaN.
+    expect(cells.slice(0, 2)).toEqual(['C1', 'R1']);
+    expect(Number(cells[2])).toBeCloseTo(0.5, 2); // x centre of a 0..1 column
+    expect(Number(cells[3])).toBeCloseTo(1, 2); // y centre of a 0..2 row
+    // ⚑ The VALUE column, which is index 4 now that identity leads:
+    // column, row, x, y, value, range, note.
+    expect(Math.abs(Number(cells[4]) - first.value)).toBeLessThan(1.5);
+    expect(cells[6]).toBe(''); // the NOTE column: no warning, the cell vouches for itself
   });
 
   it('lets a divider be DRAGGED, and re-reads the cells it moved', async () => {
@@ -8329,8 +8339,11 @@ describe('heatmap capture (v2.2)', () => {
     // The cell got wider, and its value was re-read rather than left describing
     // the grid it used to have.
     const after = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
-    expect(Number(after[0])).toBeGreaterThan(Number(before[0])); // x centre moved right
-    expect(after[2]).not.toBe(before[2]); // …and the value with it
+    // ⚑ Columns 0 and 1 are the cell's identity, which must NOT move — it is the
+    // same cell, wider. That it stays `C1 R1` is half the assertion.
+    expect(after.slice(0, 2)).toEqual(['C1', 'R1']);
+    expect(Number(after[2])).toBeGreaterThan(Number(before[2])); // x centre moved right
+    expect(after[4]).not.toBe(before[4]); // …and the value with it
     expect(await page.getByTestId('heatmap-row').count()).toBe(20); // no cell gained or lost
 
     // ⚑⚑ C1 — AND THE CALIBRATION DID NOT MOVE. Calibration points ARE the axis;
@@ -8481,7 +8494,9 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-label-coverage')).toMatch(/Columns: 4 of 5 named/);
     // The table shows the name the moment it is typed, without re-reading.
     const first = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
-    expect(first[0]).toBe('BRCA1');
+    // ⚑ Identity leads; the NAME is the x coordinate's column, two along.
+    expect(first.slice(0, 2)).toEqual(['C1', 'R1']);
+    expect(first[2]).toBe('BRCA1');
 
     // ⚑⚑ THE ROW ORDER, which the v2.2 audit caught: the table is ordered by
     // cell index and cell row 0 is yMin — the BOTTOM of the figure — while a
@@ -8490,9 +8505,9 @@ describe('heatmap capture (v2.2)', () => {
     // the fix every row name was filed one-for-one against the wrong row, with
     // every value correct and nothing on screen saying so.
     const rowCount = await page.getByTestId('heatmap-row').count();
-    expect(first[1]).toBe('bottom');
+    expect(first[3]).toBe('bottom');
     const lastRow = await page.getByTestId('heatmap-row').nth(rowCount - 1).locator('td').allTextContents();
-    expect(lastRow[1]).toBe('top');
+    expect(lastRow[3]).toBe('top');
     // And the convention is stated on screen rather than left to be discovered.
     expect(await textOf('heatmap-label-direction')).toMatch(/top-left cell/);
 
@@ -8510,7 +8525,10 @@ describe('heatmap capture (v2.2)', () => {
     expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,x width,y height,value/);
     // ⚑ The first cell is col 0 / row 0 — the figure's BOTTOM-left — so it
     // carries the LAST row name typed. The order survives into the file.
-    expect(csv).toMatch(/^BRCA1,bottom,/m);
+    // ⚑ IDENTITY LEADS THE EXPORTED ROW TOO, unconditionally — David: *"whatever
+    // we export needs to be usable as a basis for reconstructing the same
+    // graph."* The names follow it where the figure prints them.
+    expect(csv).toMatch(/^C1,R1,BRCA1,bottom,/m);
     // A quoted name keeps its comma through the record AND through the CSV.
     expect(csv).toMatch(/"EGFR, mut"/);
     // The matrix's header row takes the names, where there is only one slot.
@@ -8622,7 +8640,7 @@ describe('heatmap capture (v2.2)', () => {
     const rows = await page.getByTestId('heatmap-row').count();
     // The LAST table row is the top of the figure — that is where "top" went.
     const last = page.getByTestId('heatmap-row').nth(rows - 1);
-    expect((await last.locator('td').allTextContents())[1]).toBe('top');
+    expect((await last.locator('td').allTextContents())[3]).toBe('top');
 
     // ⚑ The band index, not the table row: the last table row is the TOP of the
     // figure, which is the highest cell index. `EditableName` reuses one testid
@@ -8650,7 +8668,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(300);
 
     // It landed on the band that was clicked…
-    expect((await page.getByTestId('heatmap-row').nth(rows - 1).locator('td').allTextContents())[1]).toBe('RENAMED');
+    expect((await page.getByTestId('heatmap-row').nth(rows - 1).locator('td').allTextContents())[3]).toBe('RENAMED');
     // …and the typed list reads back in the SAME order, with only that one
     // changed — proof the edit went through the reading-order mapping and not
     // around it.
