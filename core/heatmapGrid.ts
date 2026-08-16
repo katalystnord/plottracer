@@ -38,7 +38,7 @@
  * Pure: numbers in, numbers out. No image, no axes, no DOM.
  */
 
-import { bandIndexIn } from './bandedAxis.js';
+import { bandIndexIn, paramOfSpan, valueOfSpan } from './bandedAxis.js';
 
 /** The least gap two dividers may have. Below this a cell has no interior to
  * sample and the two boundaries are the same boundary entered twice. */
@@ -248,7 +248,7 @@ export function gridParamsFrom(
 ): number[] | null {
   if (!usableSpan(v1, v2)) return null;
   if (dividers.some((d) => !Number.isFinite(d))) return null;
-  return dividers.map((d) => (d - v1) / (v2 - v1));
+  return dividers.map((d) => paramOfSpan(d, v1, v2));
 }
 
 /** The inverse: what those parameters are worth under the calibration in force
@@ -260,7 +260,7 @@ export function dividersFromParams(
 ): number[] | null {
   if (!usableSpan(v1, v2)) return null;
   if (params.some((t) => !Number.isFinite(t))) return null;
-  return params.map((t) => v1 + t * (v2 - v1));
+  return params.map((t) => valueOfSpan(t, v1, v2));
 }
 
 /**

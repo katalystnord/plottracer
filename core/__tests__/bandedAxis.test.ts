@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { BandedAxis,
   bandIndexIn,
   bandIndexForParam,
+  paramOfSpan,
+  valueOfSpan,
+  pointAtParam,
+  paramAtPoint,
 } from '../bandedAxis.js';
 
 /**
@@ -212,6 +216,67 @@ describe('bandIndexIn — the one band lookup, with its out-of-range policy name
     // alone. A wrapper that computes nothing cannot.
     for (const t of [-0.5, 0, 0.25, 0.5, 1, 1.5, Number.NaN]) {
       expect(bandIndexForParam(t, [0, 0.5, 1])).toBe(bandIndexIn([0, 0.5, 1], t, 'clamp'));
+    }
+  });
+});
+
+/**
+ * ⚑⚑ A3 — THE SCALAR CORE, shared rather than expressed twice.
+ *
+ * The v2.2 audit found "0 at one end, 1 at the other" written in two places:
+ * `paramAtPoint`/`pointAtParam` here, in 2-D image space, and
+ * `gridParamsFrom`/`dividersFromParams` in `core/heatmapGrid.ts`, in 1-D data
+ * space. They are not two ideas — the 1-D case IS the 2-D case with the
+ * perpendicular component absent — but nothing said so and nothing enforced it.
+ *
+ * ⚑ David chose to EXTRACT rather than to document (option C): a reason living
+ * only in a comment is exactly what produced this release's worst defect.
+ */
+describe('paramOfSpan / valueOfSpan — the affine core both frames now share', () => {
+  it('maps a value to its position along a span, and back', () => {
+    expect(paramOfSpan(25, 0, 100)).toBe(0.25);
+    expect(valueOfSpan(0.25, 0, 100)).toBe(25);
+  });
+
+  it('handles a span that runs BACKWARDS, which plenty of axes do', () => {
+    expect(paramOfSpan(75, 100, 0)).toBe(0.25);
+    expect(valueOfSpan(0.25, 100, 0)).toBe(75);
+  });
+
+  it('does not clamp — past an end is a real position, not an error', () => {
+    // The `centred` tick convention puts the outermost boundaries half a band
+    // BEYOND the calibration points, so negative parameters are ordinary.
+    expect(paramOfSpan(-10, 0, 100)).toBe(-0.1);
+    expect(valueOfSpan(1.5, 0, 100)).toBe(150);
+  });
+
+  it('is NaN for a span of nothing, rather than dividing to Infinity', () => {
+    // ⚑ The same degeneracy `paramAtPoint` guards, and for the reason recorded
+    // there: a span that underflows to zero divides to ±Infinity, which sails
+    // through any caller that only checks for NaN.
+    expect(paramOfSpan(5, 7, 7)).toBeNaN();
+  });
+
+  it('⚑⚑ AGREES WITH paramAtPoint FOR A POINT ON THE AXIS — the claim, enforced', () => {
+    // This is what replaces the comment. `paramAtPoint` is a PROJECTION and
+    // cannot compose from the scalar core (it must also handle points OFF the
+    // line) — so instead of asserting they share code, assert they share
+    // ANSWERS wherever both are defined. A divergence in either now fails here.
+    const edges = [{ x: 10, y: 20 }, { x: 110, y: 220 }] as const;
+    for (const t of [-0.3, 0, 0.25, 0.5, 1, 1.4]) {
+      const on = pointAtParam(edges, t);
+      expect(paramAtPoint(edges, on)).toBeCloseTo(paramOfSpan(on.x, edges[0].x, edges[1].x), 10);
+      expect(paramAtPoint(edges, on)).toBeCloseTo(t, 10);
+    }
+  });
+
+  it('⚑ pointAtParam IS valueOfSpan per component — asserted, not restated', () => {
+    const edges = [{ x: 10, y: 20 }, { x: 110, y: 220 }] as const;
+    for (const t of [0, 0.5, 1, 2]) {
+      expect(pointAtParam(edges, t)).toEqual({
+        x: valueOfSpan(t, edges[0].x, edges[1].x),
+        y: valueOfSpan(t, edges[0].y, edges[1].y),
+      });
     }
   });
 });

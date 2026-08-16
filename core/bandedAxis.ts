@@ -170,13 +170,54 @@ export function bandIndexIn(
   return bands - 1;
 }
 
+/**
+ * ⚑⚑ THE AFFINE CORE — a value's position along a span, and back.
+ *
+ * "0 at one end, 1 at the other" was expressed TWICE: here in 2-D image space
+ * (`paramAtPoint` / `pointAtParam`), and in `core/heatmapGrid.ts` in 1-D data
+ * space. They were never two ideas — **the 1-D case IS the 2-D case with the
+ * perpendicular component absent** — but nothing said so and nothing enforced
+ * it, which is how a heatmap grid ended up with a parameter frame of its own.
+ *
+ * ⚑ Extracted rather than merely documented (David's call): a reason that lives
+ * only in a comment is what produced this release's worst defect. `pointAtParam`
+ * is now literally `valueOfSpan` per component, and `heatmapGrid` composes these
+ * two directly.
+ *
+ * ⚠️ `paramAtPoint` CANNOT compose from these — it is a PROJECTION, because it
+ * must also place points that are OFF the axis. So instead of claiming they are
+ * the same code, a test asserts they give the same ANSWER wherever both are
+ * defined ("AGREES WITH paramAtPoint FOR A POINT ON THE AXIS"). That is the
+ * enforcement a comment could not provide.
+ *
+ * NOT CLAMPED, deliberately: under the `centred` tick convention the outermost
+ * boundaries sit half a band BEYOND the calibration points, so a negative
+ * parameter is ordinary rather than an error.
+ */
+export function paramOfSpan(v: number, from: number, to: number): number {
+  // ⚑ NaN, not Infinity, for a span of nothing — the same degeneracy
+  // `paramAtPoint` refuses, for the same reason recorded there: a span that
+  // underflows to zero divides to ±Infinity, which sails through any caller
+  // that only checks for NaN.
+  const span = to - from;
+  if (span === 0) return Number.NaN;
+  return (v - from) / span;
+}
+
+/** The inverse of `paramOfSpan`. */
+export function valueOfSpan(t: number, from: number, to: number): number {
+  return from + t * (to - from);
+}
+
 /** Where `t` sits in image coordinates, 0 at the first edge and 1 at the second. */
 export function pointAtParam(
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint],
   t: number
 ): CategoryAxisPoint {
+  // ⚑ The affine core, once per component — so this and the heatmap grid are
+  // the same arithmetic rather than two copies of it.
   const [a, b] = edges;
-  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+  return { x: valueOfSpan(t, a.x, b.x), y: valueOfSpan(t, a.y, b.y) };
 }
 
 /**

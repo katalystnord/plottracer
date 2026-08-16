@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 import {
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
@@ -45,19 +46,23 @@ import {
  * absent refusal.
  */
 
-const ALL: readonly AxesTypeConfig<CalibratedAxes>[] = [
-  XY_AXES_CONFIG,
-  HISTOGRAM_AXES_CONFIG,
-  BAR_AXES_CONFIG,
-  CATEGORICAL_LINE_CONFIG,
-  BOX_PLOT_AXES_CONFIG,
-  POLAR_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
-  MAP_AXES_CONFIG,
-  CIRCULAR_CHART_RECORDER_AXES_CONFIG,
-  SPIDER_AXES_CONFIG,
-  PIE_AXES_CONFIG,
-] as unknown as readonly AxesTypeConfig<CalibratedAxes>[];
+/**
+ * ⚑⚑ THE REGISTRY, not a list of its own — and the reason is sitting in this
+ * file's own history.
+ *
+ * ⚠️ This was a hand-written array of ELEVEN configs while the app had TWELVE:
+ * `HEATMAP_AXES_CONFIG` was never added, so the largest type this project has
+ * built escaped EVERY cross-cutting invariant below for the whole of v2.2 —
+ * silently, with the file green throughout.
+ *
+ * That is not a slip, it is the shape David named: *"I do NOT want to come back
+ * to this problem for the next chart type, i.e. bubble graphs."* A new type used
+ * to join a UI dropdown and join nothing else; a hand-maintained list does not
+ * grow when you add a type. Pointing this at `ALL_AXES_TYPE_CONFIGS` means a
+ * thirteenth is enrolled here the moment it is registered, and
+ * `everyGraphType.test.ts` makes registering it unavoidable.
+ */
+const ALL: readonly AxesTypeConfig<CalibratedAxes>[] = ALL_AXES_TYPE_CONFIGS;
 
 /** Every step key a config can produce, including a repeating group's first
  * unrolled instance (getSteps appends the index: `spoke` -> `spoke1`). */
@@ -163,7 +168,29 @@ describe('the config table — cross-cutting invariants', () => {
       expect(new Set(keys).size, `${c.id} has duplicate option keys`).toBe(keys.length);
       for (const o of c.options ?? []) {
         expect(o.key).not.toBe('');
-        expect(o.label, `${c.id}.${o.key} has a blank label`).not.toBe('');
+        // ⚑⚑ AN OPTION MUST BE IDENTIFIABLE ON SCREEN — which is not the same as
+        // "has a label of its own". A `choice` inside a GROUP is a radio row
+        // under the group's heading (`Workspace.tsx` renders one per distinct
+        // `group`), so `{ label: '', group: 'X axis', choices: [Values,
+        // Categories] }` is fully named: the heading says which axis and each
+        // choice says what it is. Demanding a label there would force a
+        // redundant word beside the heading.
+        //
+        // ⚠️ THIS TEST USED TO DEMAND A LABEL UNCONDITIONALLY, and the heatmap —
+        // the ONLY type using grouped choices — was absent from `ALL`, so the
+        // invariant never met the pattern it could not express. The list not
+        // growing is what kept a too-strong rule looking correct for a whole
+        // release.
+        const named = o.label !== '' || (o.group ?? '') !== '';
+        expect(named, `${c.id}.${o.key} is unnamed: no label and no group`).toBe(true);
+        // And a choice's own options are always named — that half is not
+        // negotiable, because those words ARE the control.
+        if (o.kind === 'choice') {
+          expect(o.choices.length, `${c.id}.${o.key} is a choice with nothing to choose`).toBeGreaterThan(1);
+          for (const ch of o.choices) {
+            expect(ch.label, `${c.id}.${o.key} has a blank choice value`).not.toBe('');
+          }
+        }
       }
     }
   });
@@ -313,8 +340,24 @@ describe('the config table — how many clicks each type asks for', () => {
       ccr: 5,
       pie: 0, // outline points are variable-length, collected without fixed steps
       spider: 1, // the shared origin; spokes come from the repeating group
+      // ⚑ Heatmap (v2.2): THREE for the frame — the affine minimum, since x1
+      // and y1 are the same corner — plus FOUR for the colour key (two opposite
+      // corners of the strip, then two labelled ticks on it), plus the second
+      // key corner. The key is the third AXIS, so it is calibrated like one.
+      // ⚠️ ABSENT UNTIL THE 2026-08-16 AUDIT: `ALL` was hand-written with
+      // eleven types while the app had twelve, so `expected['heatmap']` was
+      // `undefined` and this invariant never ran on the largest type in the
+      // release.
+      heatmap: 8,
     };
+    // ⚑ NO SILENT PASS FOR AN UNLISTED TYPE. `toBe(undefined)` would quietly
+    // succeed for any type missing from the table above — which is exactly how
+    // the heatmap escaped. A new type must be counted here, deliberately.
     for (const c of ALL) {
+      expect(
+        Object.prototype.hasOwnProperty.call(expected, c.id),
+        `${c.id} has no expected click count — add one deliberately`
+      ).toBe(true);
       expect(c.fixedSteps.length, `${c.id} asks for ${c.fixedSteps.length} fixed clicks`).toBe(expected[c.id]);
     }
   });
