@@ -189,7 +189,7 @@ import { BarAxes } from '../core/axes/bar.js';
 
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
-import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
+import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes } from '../core/plotData.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
@@ -459,6 +459,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * type simply never reads or writes it. Not a CalibratedAxes -- see
    * core/categoryAxis.ts for why. */
   private categoryAxis: CategoryAxis = new CategoryAxis();
+  /**
+   * ⚑⚑ THE HEATMAP'S RECORD — its grid, its axis NAMES, and the cells a person
+   * read themselves. A LAYER ON TOP OF THE CALIBRATION.
+   *
+   * David, 2026-08-16, as a rule for every type: *"Anything detected on the
+   * graph sits on TOP of the calibration… not be a part of it. We should and
+   * need to be able to adjust the axis calibrations independently."*
+   *
+   * ⚠️ It used to live in AXES METADATA, which is precisely why a
+   * re-calibration emptied it: `runCalibration` ends with
+   * `this.axes = result.axes`, a brand-new object. Held here, beside
+   * `categoryAxis` — the type that already got this right — the two are
+   * independent by construction and nothing has to be copied across.
+   */
+  private heatmapLayer: SerializedHeatmapLayer | null = null;
 
   /** How many times `config.repeatingStep` is currently unrolled — the spoke count
    * of the spider being calibrated. Meaningless (and left at 0) for every
@@ -1596,6 +1611,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.pendingApex = null;
   }
 
+  /**
+   * The heatmap's record — read and written as a whole.
+   *
+   * ⚑ A LAYER, not part of the calibration: adjusting the axes cannot touch it
+   * and it cannot touch them. Null for every type that is not a heatmap, and
+   * for a heatmap whose grid has not been read — which is not the same as an
+   * empty one.
+   */
+  getHeatmapLayer(): SerializedHeatmapLayer | null {
+    return this.heatmapLayer;
+  }
+
+  setHeatmapLayer(layer: SerializedHeatmapLayer | null): void {
+    this.heatmapLayer = layer;
+  }
+
   /** Switches which dataset new points/slot actions apply to.
    * No-op for an out-of-range index. */
   setActiveDataset(index: number): void {
@@ -1813,8 +1844,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * constructed session's own empty CategoryAxis has no relation to the one
    * the file's category names actually pointed at (found via the "round-trips
    * a Box Plot session" test, once usesCategoryAxis widened to cover it). */
-  loadCalibrated(axes: A, datasets: Dataset[], categoryAxis?: CategoryAxis): void {
+  loadCalibrated(
+    axes: A,
+    datasets: Dataset[],
+    categoryAxis?: CategoryAxis,
+    heatmapLayer?: SerializedHeatmapLayer | null
+  ): void {
     this.categoryAxis = categoryAxis ?? new CategoryAxis();
+    // ⚑ Explicit, not defaulted-to-keep: this is a LOAD, so a layer the caller
+    // did not supply means the file had none — and leaving the previous
+    // figure's grid in place is exactly the stale-state defect the clears
+    // above exist for.
+    this.heatmapLayer = heatmapLayer ?? null;
     this.placed = {};
     const cal = (axes as unknown as { calibration: Calibration | null }).calibration;
     // ⚑ THE SHAPE COMES FROM THE FILE, not from the config. A variable-length
@@ -4006,25 +4047,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return false;
     }
     this.calibrationError = null;
-    // ⚑⚑ WHAT THE OLD AXES WAS CARRYING COMES WITH IT. `buildAxes` returns a
-    // BRAND-NEW axes object, and several types keep part of the RECORD in axes
-    // metadata — a heatmap's grid, its axis names, and the cells a person read
-    // themselves — because none of those has a pixel to ride on and metadata
-    // already saves, reopens and undoes through `plotData`.
+    // ⚑⚑ NOTHING IS CARRIED ACROSS ANY MORE, and that is the point.
     //
-    // ⚠️ Nothing copied it across, so every re-calibration emptied it: editing a
-    // calibration value, nudging a handle, or ticking an option once the axes
-    // exist (`setOption` re-calibrates below). And it lost SILENTLY, which is
-    // what makes it the worst kind: the UI holds the same values in its own
-    // state, so the screen went on showing the grid and the corrected cells
-    // while the axes a Save serialises no longer had them.
+    // `buildAxes` returns a BRAND-NEW axes object, and this used to copy the old
+    // one's metadata onto it, because a heatmap kept part of its RECORD there —
+    // the grid, the axis names, and the cells a person read themselves — and a
+    // re-calibration silently emptied all three.
     //
-    // ⚑ NEW WINS on a shared key. `buildAxes` stamps the graph type on the axes
-    // it just made; a blind copy over the top would restore a stale one.
-    const carried = this.axes?.getMetadata();
-    if (carried && Object.keys(carried).length > 0) {
-      result.axes.setMetadata({ ...carried, ...result.axes.getMetadata() });
-    }
+    // That was a symptom fix. David, 2026-08-16: *"Anything detected on the
+    // graph sits on TOP of the calibration… it has to sit on top of it and
+    // respect it, but not be a part of it."* The record now lives on the SESSION
+    // (`heatmapLayer`), beside `categoryAxis`, so a re-calibration cannot reach
+    // it and there is nothing to copy.
+    //
+    // ⚑ MEASURED BEFORE DELETING, not assumed: with the carry disabled, exactly
+    // TWO tests failed out of 3,303 and both were the heatmap's record keys.
+    // Everything else in axes metadata — the graph-type stamp, pie's total and
+    // sweep, the heatmap's log flag, axis kinds and tick conventions — is
+    // DECLARED during calibration and rewritten by `buildAxes` on every build,
+    // so it survives without help. `pieCapture.test.ts`'s "KEEPS them across a
+    // RE-CALIBRATION, without anything copying them" is that measurement, kept.
     this.axes = result.axes;
     this.applyAxesDerivedSlots();
     return true;
@@ -4723,6 +4765,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.pendingExplodedTuple = null;
     this.pendingApex = null;
     this.categoryAxis = new CategoryAxis();
+    // ⚑ And the heatmap's record, for the same reason on the same sentence: a
+    // grid, names and hand-read cells describe the figure that just went away.
+    // "Discard every series and point" does not promise to keep them.
+    this.heatmapLayer = null;
   }
 
   /** Capture the whole mutable state for the undo stack (checkpoint 38, see
@@ -4743,6 +4789,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // unconditionally, same as `axes` above: non-bar types simply never read
     // or write it, so binding it costs nothing and there's no type to check.
     plotData.addCategoryAxis(this.categoryAxis);
+    // ⚑ THE FOURTH ENTRANCE. The note above records that the category axis was
+    // a third one the undo snapshot must not miss; the heatmap's record is the
+    // next, and it rides the same door so SAVE, LOAD and UNDO are one mechanism.
+    plotData.setHeatmapLayer(this.heatmapLayer);
     for (const entry of this.datasetEntries) {
       plotData.addDataset(entry.dataset);
       if (axes) plotData.setAxesForDataset(entry.dataset, axes);
@@ -4781,6 +4831,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // somehow predates this field entirely (never true in practice, since
     // captureState always adds one; defensive rather than assumed).
     this.categoryAxis = plotData.getCategoryAxisColl()[0] ?? new CategoryAxis();
+    this.heatmapLayer = plotData.getHeatmapLayer();
     // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
     // Restored BEFORE `placed` and `stepIndex` below, since both are read against
     // the step list this count decides. The other two entrances already handle it —

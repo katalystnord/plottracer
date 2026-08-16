@@ -42,7 +42,7 @@
  * second axes entry, or measurements -- still out of scope here).
  */
 
-import { PlotData, type SerializedPlotData, type AnyAxes } from '../core/plotData.js';
+import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
 import type { Dataset } from '../core/dataset.js';
 import { GRAPH_TYPE_METADATA_KEY } from './calibrationSession.js';
@@ -188,6 +188,11 @@ export interface DeserializedProject {
    * A fresh empty CategoryAxis for any file that predates this or a session
    * whose graph type never uses one. */
   categoryAxis: CategoryAxis;
+  /** The heatmap's RECORD (v2.2) — its grid, its axis names and the cells a
+   * person read themselves. Pass straight to `loadCalibrated`. Null for every
+   * type that is not a heatmap and for a heatmap whose grid was never read;
+   * it is a LAYER on the calibration, never part of it. */
+  heatmapLayer: SerializedHeatmapLayer | null;
   imageDataURL: string;
   imageFileName?: string;
   /** Measure results + scale (checkpoint 56); empty/null when the file predates
@@ -271,6 +276,12 @@ export function serializeProject<A extends CalibratedAxes>(
   // comment on the "round-trips a Box Plot session" test that caught it.)
   const hasCategoryAxis = categoryAxis.getCategoryCount() > 0;
   if (hasCategoryAxis) plotData.addCategoryAxis(categoryAxis);
+  // ⚑ The heatmap's RECORD — its grid, its axis names and the cells a person
+  // read themselves. A LAYER on top of the calibration (David, 2026-08-16), so
+  // it travels beside the category axis rather than inside the axes' metadata,
+  // and it follows the same omit-when-empty discipline: null for every type
+  // that is not a heatmap, so no other project's file changes at all.
+  plotData.setHeatmapLayer(session.getHeatmapLayer());
   for (const dataset of session.getDatasets()) {
     plotData.addDataset(dataset);
     plotData.setAxesForDataset(dataset, anyAxes);
@@ -349,6 +360,9 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // Falls back to a fresh empty one for any file predating this (every
     // file before v2.0), the same fallback loadCalibrated itself applies.
     categoryAxis: plotData.getCategoryAxisColl()[0] ?? new CategoryAxis(),
+    // Null for a file that carries none — which is every project that is not a
+    // heatmap, and every heatmap whose grid was never read.
+    heatmapLayer: plotData.getHeatmapLayer(),
     imageDataURL: data.image.dataURL,
     // Absent rather than explicitly undefined, matching readStamp below and
     // the writer at `image:` above -- a file with no remembered name has no

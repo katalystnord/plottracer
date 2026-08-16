@@ -73,6 +73,39 @@ describe('assembling a multi-figure project', () => {
     expect('error' in r && r.error).toContain('Broken one');
   });
 
+  it('⚑⚑ carries a heatmap\u2019s RECORD per figure, not just the calibration', () => {
+    // ⚑ The multi-figure path delegates to `serializeProject` per figure and
+    // converges on `deserializeProject`, so the layer travels BY CONSTRUCTION —
+    // which is exactly the kind of claim that has been wrong here before. The
+    // heatmap's grid, names and hand-read cells are a LAYER on the calibration
+    // (David, 2026-08-16), and a layer that reached the single-figure file but
+    // not the archive would lose a user's work silently on the one path where
+    // several figures are open at once.
+    // ⚑ PER FIGURE, deliberately: two heatmaps in one project must not share a
+    // grid, which is the failure a single shared layer would produce.
+    const a = figure('First');
+    const b = figure('Second');
+    a.session.setHeatmapLayer({ grid: { x: [0, 0.5, 1], y: [0, 1] }, readings: { '1,0': 0.25 } });
+    b.session.setHeatmapLayer({ labels: { x: ['BRCA1'], y: ['tumour'] } });
+
+    const opened = deserializeMultiFigureProject(JSON.parse(JSON.stringify(built([a, b]))));
+    if ('error' in opened) throw new Error(opened.error);
+
+    expect(opened.figures[0]!.heatmapLayer).toEqual({
+      grid: { x: [0, 0.5, 1], y: [0, 1] },
+      readings: { '1,0': 0.25 },
+    });
+    expect(opened.figures[1]!.heatmapLayer).toEqual({ labels: { x: ['BRCA1'], y: ['tumour'] } });
+  });
+
+  it('leaves every NON-heatmap figure\u2019s file untouched', () => {
+    // The layer is omitted when there is none, so an XY project's archive is the
+    // same bytes it was before this existed.
+    const opened = deserializeMultiFigureProject(JSON.parse(JSON.stringify(built([figure('Plain')]))));
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.figures[0]!.heatmapLayer).toBeNull();
+  });
+
   it('keeps the figures in the order given', () => {
     const file = built([figure('First'), figure('Second'), figure('Third')]);
     expect(file.figures.map((f) => f.name)).toEqual(['First', 'Second', 'Third']);

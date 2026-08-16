@@ -904,6 +904,37 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
     expect(session.getCalibrationError()).toMatch(/TOP FACE/);
   });
 
+  it('⚑⚑ KEEPS them across a RE-CALIBRATION, without anything copying them', () => {
+    // ⚠️ THE MEASUREMENT BEHIND DELETING THE METADATA CARRY.
+    // `runCalibration` ends with `this.axes = result.axes` — a brand-new axes —
+    // and a carry was added so a heatmap's RECORD (its grid, names and readings,
+    // which lived in axes metadata) survived. The audit asked what ELSE that
+    // carry was holding up, and the answer should be nothing: every other key in
+    // axes metadata is DECLARED during calibration and rewritten by `buildAxes`
+    // on every build.
+    //
+    // Pie is the type that tests that claim hardest — three keys, all typed by
+    // the user, none of them derived from a pixel. If they survive a second
+    // calibration, they survive because `buildAxes` writes them again, not
+    // because something copied them.
+    const session = pieAwaitingGlobals();
+    session.setGlobalFieldValue('total', '250');
+    session.setGlobalFieldValue('sweep', '180');
+    expect(session.runCalibration()).toBe(true);
+    const first = session.getAxes()!;
+
+    // Re-calibrate. The quietest kind: nothing about the input changed.
+    expect(session.runCalibration()).toBe(true);
+    const second = session.getAxes()!;
+    expect(second, 'runCalibration must build a NEW axes, or this proves nothing').not.toBe(first);
+
+    const meta = second.getMetadata();
+    expect(meta['pieTotal']).toBe('250');
+    expect(meta['pieSweep']).toBe('180');
+    expect(meta['pieTilted']).toBe('false');
+    expect(meta['graphType']).toBe('pie');
+  });
+
   it('stores the total and sweep as the STRINGS the user typed', () => {
     // They have no pixel to ride on, so the axes metadata is their only home in
     // the file. Re-formatting them would make the file say something the user

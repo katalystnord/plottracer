@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, GRAPH_TYPE_METADATA_KEY } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
-import { gridFromAxes, gridToAxes, resolveHeatmapGrid, labelsFromAxes, labelsToAxes, readingsFromAxes, readingsToAxes, type HeatmapGridParams, type MetadataCarrier } from '../heatmapRun.js';
+import { resolveHeatmapGrid } from '../heatmapRun.js';
 
 /**
  * A heatmap has to SURVIVE A SAVE (v2.2) — the grid, the colour key, and which
@@ -66,7 +66,7 @@ function roundTrip(session: CalibrationSession<XYAxes>): {
   const opened = deserializeProject(JSON.parse(JSON.stringify(saved)));
   if ('error' in opened) throw new Error(`open refused: ${opened.error}`);
   const next = new CalibrationSession(HEATMAP_AXES_CONFIG);
-  next.loadCalibrated(opened.axes as unknown as XYAxes, opened.datasets, opened.categoryAxis);
+  next.loadCalibrated(opened.axes as unknown as XYAxes, opened.datasets, opened.categoryAxis, opened.heatmapLayer);
   return { session: next, configId: opened.configId };
 }
 
@@ -111,99 +111,63 @@ describe('a heatmap survives a save', () => {
     expect(roundTrip(calibratedSession()).session.getOptions()['isLogValue']).toBe('false');
   });
 
-  it('carries the GRID through the file, as PARAMETERS against the axis position', () => {
+  it('carries the GRID through the FILE, as PARAMETERS against the axis position', () => {
     // ⚑⚑ P2. The file holds parameters, never absolute coordinates — David:
     // *"The grid is not absolute, but in relation to the calibrated axis
     // position."* So a reopened project draws its grid in the same PLACE on the
     // figure whatever the axes are later corrected to say.
     const before = calibratedSession();
-    const grid: HeatmapGridParams = { x: [0, 0.1, 0.35, 1], y: [0, 0.2, 1] };
-    gridToAxes(before.getAxes()!, grid);
+    const grid = { x: [0, 0.1, 0.35, 1], y: [0, 0.2, 1] };
+    before.setHeatmapLayer({ grid });
     const { session: after } = roundTrip(before);
-    expect(gridFromAxes(after.getAxes()!)).toEqual(grid);
-  });
-
-  it('⚑ IGNORES an older build’s grid rather than reading it as parameters', () => {
-    // The two shapes are identical — a bare list per axis — so a v2.2 file's
-    // absolute coordinates would be read as parameters and every boundary would
-    // land somewhere wrong, silently. The key changed with the meaning, so an
-    // old grid is ABSENT instead of WRONG.
-    const s = calibratedSession();
-    const axes = s.getAxes()!;
-    axes.setMetadata({ ...axes.getMetadata(), heatmapGrid: { x: [0, 1, 3.5, 10], y: [0, 2, 20] } });
-    expect(gridFromAxes(axes)).toBeNull();
+    expect(after.getHeatmapLayer()?.grid).toEqual(grid);
   });
 
   it('carries the axis NAMES through the file, beside the grid', () => {
     // ⚑⚑ A reopened heatmap whose columns lost their names exports the index
     // numbers the names exist to replace — silently, with every value correct.
     const before = calibratedSession();
-    labelsToAxes(before.getAxes()!, { x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] });
+    before.setHeatmapLayer({ labels: { x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] } });
     const { session: after } = roundTrip(before);
-    expect(labelsFromAxes(after.getAxes()!)).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] });
+    expect(after.getHeatmapLayer()?.labels).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] });
   });
 
-  it('has no names at all for a value × value heatmap, rather than empty lists in the file', () => {
-    expect(labelsFromAxes(calibratedSession().getAxes()!)).toEqual({ x: [], y: [] });
-    const session = calibratedSession();
-    labelsToAxes(session.getAxes()!, { x: ['A'], y: [] });
-    labelsToAxes(session.getAxes()!, { x: [], y: [] });
-    expect(session.getAxes()!.getMetadata()['heatmapLabels']).toBeUndefined();
-  });
-
-  it('REFUSES what a hand-edited file might carry, rather than printing it on the figure', () => {
-    // ⚑ A load-path entrance, so it validates like `gridFromAxes` does.
-    // `String(undefined)` would put the word "undefined" on a column of a
-    // published figure and export it as the name.
-    const session = calibratedSession();
-    session.getAxes()!.setMetadata({ ...session.getAxes()!.getMetadata(), heatmapLabels: { x: ['A', 7, null], y: 'nonsense' } });
-    expect(labelsFromAxes(session.getAxes()!)).toEqual({ x: ['A', '', ''], y: [] });
-    session.getAxes()!.setMetadata({ ...session.getAxes()!.getMetadata(), heatmapLabels: 'not an object' });
-    expect(labelsFromAxes(session.getAxes()!)).toEqual({ x: [], y: [] });
-  });
-
-  it('is null for an axes carrying no grid, rather than an empty one', () => {
-    expect(gridFromAxes(calibratedSession().getAxes()!)).toBeNull();
-  });
-
-  it('clears the grid rather than writing one that is not a grid', () => {
-    const session = calibratedSession();
-    gridToAxes(session.getAxes()!, { x: [0, 1], y: [0, 1] });
-    gridToAxes(session.getAxes()!, null);
-    expect(gridFromAxes(session.getAxes()!)).toBeNull();
-    expect(session.getAxes()!.getMetadata()['heatmapGridParams']).toBeUndefined();
+  it('writes NO layer at all for a value × value heatmap that has none', () => {
+    // ⚑ Absent, not empty. Every project that is not a heatmap — and every
+    // heatmap whose grid was never read — writes the same file it always did.
+    const { session: after } = roundTrip(calibratedSession());
+    expect(after.getHeatmapLayer()).toBeNull();
   });
 
   it('REFUSES a grid from a file that the app would not let you draw', () => {
     // ⚑ A load-path entrance: these numbers can come from a hand-edited file, an
     // older build, or another tool. The same rule the interactive path applies
-    // is applied here, so a file cannot install a grid with a cell that has no
-    // interior — or one boundary, which bounds nothing.
-    const session = calibratedSession();
-    const axes = session.getAxes()!;
+    // is applied here, so a file cannot install a grid with one boundary, which
+    // bounds nothing, or a divider that is not a number.
     for (const bad of [
       { x: [1], y: [0, 5] },
-      { x: [0, 5], y: [2, 2] },
       { x: [0, 'nonsense'], y: [0, 5] },
       { x: [0, 5], y: 'not an array' },
       { x: [0, 5] },
     ]) {
-      axes.setMetadata({ ...axes.getMetadata(), heatmapGrid: bad });
-      expect(gridFromAxes(axes), JSON.stringify(bad)).toBeNull();
+      const session = calibratedSession();
+      session.setHeatmapLayer({ grid: bad as unknown as { x: number[]; y: number[] } });
+      const { session: after } = roundTrip(session);
+      expect(after.getHeatmapLayer()?.grid, JSON.stringify(bad)).toBeUndefined();
     }
   });
 
   it('sorts a grid that arrives out of order — at the door that RESOLVES it', () => {
-    // ⚑ The ordering guard moved with P2, and deliberately. `gridFromAxes` now
-    // reads PARAMETERS, where "ascending" is not yet meaningful: an axis
-    // calibrated backwards has parameters that ascend while its data
-    // coordinates descend. Sorting belongs where the numbers become dividers,
-    // which is `resolveHeatmapGrid` → `checkDividers` — the same rule the
-    // interactive path applies, applied once.
+    // ⚑ The ordering guard moved with P2, and deliberately. The FILE holds
+    // PARAMETERS, where "ascending" is not yet meaningful: an axis calibrated
+    // backwards has parameters that ascend while its data coordinates descend.
+    // Sorting belongs where the numbers become dividers, which is
+    // `resolveHeatmapGrid` → `checkDividers` — the same rule the interactive
+    // path applies, applied once.
     const session = calibratedSession();
-    const axes = session.getAxes()!;
-    axes.setMetadata({ ...axes.getMetadata(), heatmapGridParams: { x: [1, 0, 0.3], y: [1, 0] } });
-    const params = gridFromAxes(axes)!;
+    session.setHeatmapLayer({ grid: { x: [1, 0, 0.3], y: [1, 0] } });
+    const { session: after } = roundTrip(session);
+    const params = after.getHeatmapLayer()!.grid!;
     expect(resolveHeatmapGrid(params, { x: [0, 10], y: [0, 5] })).toEqual({
       xDividers: [0, 3, 10],
       yDividers: [0, 5],
@@ -211,62 +175,83 @@ describe('a heatmap survives a save', () => {
   });
 });
 
-/**
- * ⚑⚑ A RE-CALIBRATION MUST NOT SILENTLY EMPTY THE RECORD.
- *
- * `runCalibration()` ends with `this.axes = result.axes` — a BRAND-NEW axes
- * object from `buildAxes`. Everything the heatmap keeps in axes metadata rides
- * on the OLD one: the grid, the axis names, and the cells a person read
- * themselves. Nothing copied them across, so any of these wiped all three:
- *
- *   · editing a calibration value (`setCalibrationValues` re-calibrates)
- *   · nudging or dragging a calibration handle
- *   · ticking an option once the axes exist (`setOption` re-calibrates)
- *
- * ⚠️ AND IT LOSES SILENTLY, WHICH IS WHY IT MATTERS. The Workspace holds the
- * same values in React state, so the SCREEN still shows the grid and the
- * corrected cells afterwards — while the axes a Save serialises no longer has
- * them. The user sees their work; the file does not contain it.
- *
- * ⚑ Found while preparing C3/C4 (warn before a count change discards
- * adjustments). There was no point warning about discarded adjustments while a
- * far quieter path was discarding everything, unasked.
- */
-describe('a re-calibration keeps what the axes was carrying', () => {
-  it('keeps the grid, the names AND the user’s own cell readings', () => {
+describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', () => {
+  const LAYER = {
+    grid: { x: [0, 0.2, 0.48, 1], y: [0, 0.5, 1] },
+    labels: { x: ['BRCA1', 'TP53'], y: ['tumour'] },
+    readings: { '1,1': 0.42 },
+  };
+
+  it('survives a re-calibration because nothing COPIES it — it was never there', () => {
+    // ⚑⚑ THE POINT OF THE WHOLE CHANGE. David: *"Anything detected on the graph
+    // sits on TOP of the calibration… not be a part of it. We should and need to
+    // be able to adjust the axis calibrations independently of changing the
+    // grid."*
+    //
+    // ⚠️ The record used to live in AXES METADATA, and `runCalibration` ends
+    // with `this.axes = result.axes` — a brand-new object — so re-calibrating
+    // emptied it. The fix at the time COPIED the metadata across. This asserts
+    // the structural version: the layer is on the SESSION, so the two are
+    // independent and there is nothing to copy.
     const s = calibratedSession();
-    const axes = s.getAxes()! as unknown as MetadataCarrier;
-    gridToAxes(axes, { x: [0, 0.2, 0.48, 1], y: [0, 0.5, 1] });
-    labelsToAxes(axes, { x: ['BRCA1', 'TP53'], y: ['tumour'] });
-    readingsToAxes(axes, { '1,1': 0.42 });
+    s.setHeatmapLayer(LAYER);
 
     // The quietest re-calibration there is: the same value typed again.
     expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
+    expect(s.getHeatmapLayer()).toEqual(LAYER);
 
-    const after = s.getAxes()! as unknown as MetadataCarrier;
-    expect(gridFromAxes(after)).toEqual({ x: [0, 0.2, 0.48, 1], y: [0, 0.5, 1] });
-    expect(labelsFromAxes(after)).toEqual({ x: ['BRCA1', 'TP53'], y: ['tumour'] });
-    expect(readingsFromAxes(after)).toEqual({ '1,1': 0.42 });
-  });
-
-  it('keeps them when an OPTION is toggled on a live calibration', () => {
-    // `setOption` re-calibrates as soon as the axes exist, so it is the same
-    // door by another name — and the one a user opens most casually.
-    const s = calibratedSession();
-    const axes = s.getAxes()! as unknown as MetadataCarrier;
-    readingsToAxes(axes, { '2,0': 0.7 });
+    // And the door a user opens most casually — `setOption` re-calibrates the
+    // moment the axes exist.
     s.setOption('isLogValue', 'false');
-    expect(readingsFromAxes(s.getAxes()! as unknown as MetadataCarrier)).toEqual({ '2,0': 0.7 });
+    expect(s.getHeatmapLayer()).toEqual(LAYER);
   });
 
-  it('still lets the new calibration stamp its own keys', () => {
-    // ⚑ The carry must not overwrite what `buildAxes` just wrote: the graph-type
-    // stamp is set on the NEW axes, and a blind copy of the old metadata over
-    // the top would restore a stale one. New wins where both have a key.
+  it('rides the UNDO snapshot, which is the entrance this project keeps missing', () => {
+    // ⚑ `captureState` is a THIRD entrance for the category axis by its own
+    // comment; the heatmap layer is the fourth, and it goes through the same
+    // door rather than a new one.
     const s = calibratedSession();
-    expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
-    expect(
-      (s.getAxes()! as unknown as MetadataCarrier).getMetadata()[GRAPH_TYPE_METADATA_KEY]
-    ).toBe('heatmap');
+    s.setHeatmapLayer(LAYER);
+    const snap = s.captureState();
+    s.setHeatmapLayer(null);
+    expect(s.getHeatmapLayer()).toBeNull();
+    s.restoreState(snap);
+    expect(s.getHeatmapLayer()).toEqual(LAYER);
+  });
+
+  it('round-trips through the FILE', () => {
+    const before = calibratedSession();
+    before.setHeatmapLayer(LAYER);
+    const { session: after } = roundTrip(before);
+    expect(after.getHeatmapLayer()).toEqual(LAYER);
+  });
+
+  it('is CLEARED by a reset — the old figure\u2019s grid is not the new one\u2019s', () => {
+    // Same sentence `categoryAxis` is cleared on: "discard every series and
+    // point" does not promise to keep a grid describing the figure that just
+    // went away.
+    const s = calibratedSession();
+    s.setHeatmapLayer(LAYER);
+    s.reset();
+    expect(s.getHeatmapLayer()).toBeNull();
+  });
+
+  it('DROPS a malformed layer whole rather than reading half of it', () => {
+    // ⚑ A load entrance, guarded like every other. A grid with two good
+    // dividers and one `"x"` would otherwise place a boundary the user never
+    // put anywhere — and on a heatmap a wrong boundary has NO visible symptom,
+    // because the colour IS the value.
+    const before = calibratedSession();
+    before.setHeatmapLayer({ grid: { x: [0, 'x' as unknown as number, 1], y: [0, 1] } });
+    const { session: after } = roundTrip(before);
+    expect(after.getHeatmapLayer()?.grid).toBeUndefined();
+  });
+
+  it('keeps a reading only under the model\u2019s own key format', () => {
+    const before = calibratedSession();
+    before.setHeatmapLayer({ readings: { '1,1': 0.42, 'not-a-cell': 0.9 } });
+    const { session: after } = roundTrip(before);
+    expect(after.getHeatmapLayer()?.readings).toEqual({ '1,1': 0.42 });
   });
 });
+

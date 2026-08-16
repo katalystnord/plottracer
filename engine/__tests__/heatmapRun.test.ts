@@ -25,8 +25,6 @@ import {
   labelOrderReversed,
   labelsForCells,
   readHeatmapCells,
-  readingsFromAxes,
-  readingsToAxes,
   heatmapRegenerateWarning,
   removeDividerHandle,
   setCellReading,
@@ -837,43 +835,6 @@ describe('a user’s own reading of a cell', () => {
  * through the same axes metadata the grid and the names ride in — and the load
  * path validates them, because a file is an entrance to the model like any
  * other. */
-describe('the user’s readings, saved and reopened', () => {
-  const carrier = () => {
-    let meta: Record<string, unknown> = {};
-    return {
-      getMetadata: () => meta,
-      setMetadata: (obj: Record<string, unknown>) => {
-        meta = obj;
-      },
-    };
-  };
-
-  it('rides in the axes metadata, and comes back the same', () => {
-    const axes = carrier();
-    readingsToAxes(axes, { '1,1': 0.25, '3,0': 0.75 });
-    expect(readingsFromAxes(axes)).toEqual({ '1,1': 0.25, '3,0': 0.75 });
-  });
-
-  it('writes NOTHING when the user has read nothing, rather than an empty record', () => {
-    const axes = carrier();
-    readingsToAxes(axes, { '1,1': 0.25 });
-    readingsToAxes(axes, NO_HEATMAP_CELL_READINGS);
-    expect(axes.getMetadata()).not.toHaveProperty('heatmapCellReadings');
-    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
-  });
-
-  it('refuses anything that is not a position at a cell', () => {
-    const axes = carrier();
-    axes.setMetadata({
-      heatmapCellReadings: { '1,1': 0.25, '2,2': 'high', '3,3': null, nowhere: 0.5, '4,-1': 0.5 },
-    });
-    expect(readingsFromAxes(axes)).toEqual({ '1,1': 0.25 });
-    axes.setMetadata({ heatmapCellReadings: [0.25] });
-    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
-    axes.setMetadata({ heatmapCellReadings: 'yes' });
-    expect(readingsFromAxes(axes)).toEqual(NO_HEATMAP_CELL_READINGS);
-  });
-});
 
 /**
  * C3 / C4 — SAY WHAT A COUNT OR CONVENTION CHANGE WILL COST, BEFORE IT COSTS IT.

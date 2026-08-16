@@ -390,14 +390,6 @@ export function initialGrid(axesBounds: {
  * ⚑ Stored in DATA coordinates, like everything else about the grid, so it
  * survives a re-calibration or an image edit with its meaning intact.
  */
-/**
- * ⚑ THE KEY CHANGED WITH THE MEANING. The numbers under it are PARAMETERS now,
- * not data coordinates, and the two shapes are identical — a bare list per axis.
- * A file written by an older build would therefore be read as a grid, silently,
- * with every boundary in the wrong place. Renaming the key makes an old grid
- * ABSENT instead of WRONG, which is the only safe way for the two to differ.
- */
-const GRID_METADATA_KEY = 'heatmapGridParams';
 
 /**
  * THE GRID'S STORE — a parameter per divider, per axis.
@@ -556,78 +548,9 @@ export function heatmapGridToParams(
   return x === null || y === null ? null : { x, y };
 }
 
-/** A stamp off a file, or null. Same discipline as the dividers beside it: a
- * load path validates rather than trusts. */
-function stampFromUnknown(raw: unknown): HeatmapAxisStamp | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const { x, y } = raw as { x?: unknown; y?: unknown };
-  const pair = (v: unknown): [{ px: number; py: number }, { px: number; py: number }] | null => {
-    if (!Array.isArray(v) || v.length !== 2) return null;
-    const pts = v.map((q) => ({ px: Number((q as { px?: unknown })?.px), py: Number((q as { py?: unknown })?.py) }));
-    return pts.every((q) => Number.isFinite(q.px) && Number.isFinite(q.py))
-      ? [pts[0]!, pts[1]!]
-      : null;
-  };
-  const px = pair(x);
-  const py = pair(y);
-  return px && py ? { x: px, y: py } : null;
-}
 
-/** The minimal axes surface this needs — structural, so no `core/axes` import. */
-export interface MetadataCarrier {
-  getMetadata(): Record<string, unknown>;
-  setMetadata(obj: Record<string, unknown>): void;
-}
 
-/**
- * Read the grid an axes is carrying, or null when it has none.
- *
- * ⚑ VALIDATED ON THE WAY OUT, not trusted. This is a load-path entrance: the
- * numbers come from a file a user may have edited, from an older build, or from
- * a different tool. `checkDividers` is the same rule the interactive path
- * applies, so a file cannot produce a grid the app would refuse to let you
- * draw.
- */
-export function gridFromAxes(axes: MetadataCarrier): HeatmapGridParams | null {
-  const raw = axes.getMetadata()[GRID_METADATA_KEY];
-  if (typeof raw !== 'object' || raw === null) return null;
-  const { x, y } = raw as { x?: unknown; y?: unknown };
-  if (!Array.isArray(x) || !Array.isArray(y)) return null;
-  const xs = x.map(Number);
-  const ys = y.map(Number);
-  // ⚑ Validated as a PARAMETER list, which is a weaker claim than a divider
-  // list: parameters legitimately run negative and past 1 (the `centred` tick
-  // convention puts the outermost boundaries half a band beyond the calibration
-  // points). What must hold is that they are numbers and that they bound at
-  // least one band. `checkDividers` applies to the RESOLVED form, at the door
-  // `resolveHeatmapGrid` guards.
-  if (xs.length < 2 || ys.length < 2) return null;
-  if (xs.some((v) => !Number.isFinite(v)) || ys.some((v) => !Number.isFinite(v))) return null;
-  // ⚑ The stamp is VALIDATED like everything else on this load path, and simply
-  // dropped when it is not one: a missing stamp means "nothing to compare",
-  // which is already a state this handles.
-  const rawStamp = (raw as { axisAt?: unknown }).axisAt;
-  const axisAt = stampFromUnknown(rawStamp);
-  return axisAt ? { x: xs, y: ys, axisAt } : { x: xs, y: ys };
-}
 
-/**
- * Put the grid where a save will find it. A null grid REMOVES the key rather
- * than writing an empty one, so a file never carries a grid that is not a grid.
- */
-export function gridToAxes(axes: MetadataCarrier, grid: HeatmapGridParams | null): void {
-  const meta = { ...axes.getMetadata() };
-  if (grid === null) {
-    delete meta[GRID_METADATA_KEY];
-  } else {
-    meta[GRID_METADATA_KEY] = {
-      x: [...grid.x],
-      y: [...grid.y],
-      ...(grid.axisAt ? { axisAt: grid.axisAt } : {}),
-    };
-  }
-  axes.setMetadata(meta);
-}
 
 /**
  * The names on the two axes, one list per axis, indexed by CELL.
@@ -644,9 +567,6 @@ export interface HeatmapLabels {
 
 export const NO_HEATMAP_LABELS: HeatmapLabels = { x: [], y: [] };
 
-/** Beside the grid, for the same reason the grid is there: no pixel to ride on,
- * and axes metadata already saves, reopens and undoes through `plotData`. */
-const LABELS_METADATA_KEY = 'heatmapLabels';
 
 /**
  * How a cell is named, everywhere: in the selection, in the user's readings, and
@@ -683,8 +603,6 @@ export type HeatmapCellReadings = Readonly<Record<string, number>>;
 
 export const NO_HEATMAP_CELL_READINGS: HeatmapCellReadings = {};
 
-/** Beside the grid and the names, for the same reason both are there. */
-const READINGS_METADATA_KEY = 'heatmapCellReadings';
 
 /**
  * Record what the user read in one cell, from what they typed.
@@ -757,37 +675,7 @@ export function clearCellReading(
   return next;
 }
 
-/**
- * Read the user's readings an axes is carrying.
- *
- * ⚑ VALIDATED, not trusted — a load-path entrance like `gridFromAxes`. A key
- * that is not `col,row` or a value that is not a finite position is DROPPED
- * rather than defaulted: a bad entry would otherwise land a number on a cell the
- * user never touched, which is the one thing this record must never do.
- */
-export function readingsFromAxes(axes: MetadataCarrier): HeatmapCellReadings {
-  const raw = axes.getMetadata()[READINGS_METADATA_KEY];
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return NO_HEATMAP_CELL_READINGS;
-  const kept: Record<string, number> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!/^\d+,\d+$/.test(key)) continue;
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-    kept[key] = value;
-  }
-  return kept;
-}
 
-/** Put them where a save will find them. Nothing read means no key at all,
- * rather than a file saying "no readings" in a second way. */
-export function readingsToAxes(axes: MetadataCarrier, readings: HeatmapCellReadings): void {
-  const meta = { ...axes.getMetadata() };
-  if (Object.keys(readings).length === 0) {
-    delete meta[READINGS_METADATA_KEY];
-  } else {
-    meta[READINGS_METADATA_KEY] = { ...readings };
-  }
-  axes.setMetadata(meta);
-}
 
 /**
  * Does cell-index order run OPPOSITE to the way the figure is read?
@@ -828,35 +716,7 @@ export function labelOrderReversed(
   };
 }
 
-/**
- * Read the labels an axes is carrying.
- *
- * ⚑ VALIDATED, not trusted — a load-path entrance like `gridFromAxes`. Anything
- * that is not a list of strings is no labels at all rather than a list with
- * holes of some other type in it: `String(undefined)` would put the word
- * "undefined" on a column of a published figure.
- */
-export function labelsFromAxes(axes: MetadataCarrier): HeatmapLabels {
-  const raw = axes.getMetadata()[LABELS_METADATA_KEY];
-  if (typeof raw !== 'object' || raw === null) return NO_HEATMAP_LABELS;
-  const { x, y } = raw as { x?: unknown; y?: unknown };
-  const list = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((s) => (typeof s === 'string' ? s : '')) : [];
-  return { x: list(x), y: list(y) };
-}
 
-/** Put the labels where a save will find them. Two empty lists REMOVE the key
- * rather than writing an empty record, so a value × value heatmap's file says
- * nothing about names instead of saying nothing twice. */
-export function labelsToAxes(axes: MetadataCarrier, labels: HeatmapLabels): void {
-  const meta = { ...axes.getMetadata() };
-  if (labels.x.length === 0 && labels.y.length === 0) {
-    delete meta[LABELS_METADATA_KEY];
-  } else {
-    meta[LABELS_METADATA_KEY] = { x: [...labels.x], y: [...labels.y] };
-  }
-  axes.setMetadata(meta);
-}
 
 /**
  * The one line the calibration card's fold-down shows when it is CLOSED.

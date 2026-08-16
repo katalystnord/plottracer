@@ -199,6 +199,7 @@ import { runBlobDetect } from '../../engine/blobDetectRun.js';
 import { runBarDetect } from '../../engine/barDetectRun.js';
 import { formatLabelList, labelCoverage, parseLabelList } from '../../core/heatmapLabels.js';
 import { cellIndexAt, cellsOf } from '../../core/heatmapGrid.js';
+import type { SerializedHeatmapLayer } from '../../core/plotData.js';
 import {
   addDivider,
   buildColorScale,
@@ -208,8 +209,6 @@ import {
   detectGrid,
   heatmapAxisOverlays,
   dragDivider,
-  gridFromAxes,
-  gridToAxes,
   heatmapAxisKinds,
   heatmapBandCounts,
   heatmapGridSummary,
@@ -218,9 +217,6 @@ import {
   initialGridFor,
   isDividerHandle,
   labelsForCells,
-  labelsFromAxes,
-  labelsToAxes,
-  type MetadataCarrier,
   cellKeysInRect,
   heatmapAxisMoved,
   heatmapAxisSpans,
@@ -229,8 +225,6 @@ import {
   resolveHeatmapGrid,
   keyCursorStrip,
   readHeatmapCells,
-  readingsFromAxes,
-  readingsToAxes,
   removeDividerHandle,
   setCellReading,
   setCellReadingAt,
@@ -1967,6 +1961,29 @@ export function Workspace() {
    * invisible. The undo snapshot serializes the axes, so this is also what makes
    * a grid edit undoable — without any new snapshot field.
    */
+  /**
+   * Change one part of the heatmap's record, leaving the rest alone.
+   *
+   * ⚑⚑ ONE PLACE, because the grid, the NAMES and the user's own readings are
+   * three parts of ONE layer and three writers used to reach three separate
+   * metadata keys. Merging here is what lets a name edit leave the grid alone
+   * without every caller knowing the layer's shape.
+   * ⚑ It lives on the SESSION, so a Save and an undo both find it through
+   * `captureState` — the door `categoryAxis` already uses. It is no longer in
+   * axes metadata, so re-calibrating cannot touch it and nothing has to copy it
+   * across (David: *"anything detected sits on TOP of the calibration"*).
+   */
+  const patchHeatmapLayer = useCallback((patch: Partial<SerializedHeatmapLayer>) => {
+    const current = sessionRef.current.getHeatmapLayer() ?? {};
+    const next: SerializedHeatmapLayer = { ...current, ...patch };
+    // An empty layer is NO layer — so a heatmap that has been cleared writes no
+    // key at all rather than an empty one, exactly as the grid already does.
+    for (const key of Object.keys(next) as (keyof SerializedHeatmapLayer)[]) {
+      if (next[key] === undefined) delete next[key];
+    }
+    sessionRef.current.setHeatmapLayer(Object.keys(next).length > 0 ? next : null);
+  }, []);
+
   const applyHeatmapGrid = useCallback((grid: HeatmapState | null) => {
     // ⚑ Detection reads the INK and a dragged handle lands on a PIXEL, so both
     // arrive in data coordinates. Converting here — at the one writer — is what
@@ -1979,9 +1996,14 @@ export function Workspace() {
     const stamp = heatmapAxisStamp(placedNow);
     const params = base === null ? null : stamp ? { ...base, axisAt: stamp } : base;
     setHeatmapGridParams(params);
-    const axes = sessionRef.current.getAxes();
-    if (axes) gridToAxes(axes as unknown as MetadataCarrier, params);
-  }, []);
+    // ⚑ Copied into plain arrays on the way into the record: the store is
+    // readonly by intent, and the serialized shape is what a file holds.
+    patchHeatmapLayer({
+      grid: params
+        ? { x: [...params.x], y: [...params.y], ...(params.axisAt ? { axisAt: params.axisAt } : {}) }
+        : undefined,
+    });
+  }, [patchHeatmapLayer]);
 
   /**
    * The axis NAMES, recorded where the grid is recorded.
@@ -2009,7 +2031,7 @@ export function Workspace() {
       // verbatim filed every name against the wrong row, silently.
       const typed: HeatmapLabels = { x: parseLabelList(xText), y: parseLabelList(yText) };
       const labels = labelsForCells(typed, grid, axes);
-      labelsToAxes(axes as unknown as MetadataCarrier, labels);
+      patchHeatmapLayer({ labels: { x: [...labels.x], y: [...labels.y] } });
       setHeatmapCells((prev) =>
         prev.map((row) => ({
           ...row,
@@ -2018,11 +2040,12 @@ export function Workspace() {
         }))
       );
     },
-    [heatmapShownGrid]
+    [heatmapShownGrid, patchHeatmapLayer]
   );
 
   /**
-   * Take the grid back OUT of the axes — the load path, and the undo path.
+   * Take the heatmap's record back OUT of the session — the load path, and the
+   * undo path.
    *
    * ⚑ TWO ENTRANCES, ONE CALL. A project file and an undo snapshot both arrive
    * as a serialized axes, so both restore the grid the same way. Without this
@@ -2070,22 +2093,22 @@ export function Workspace() {
 
   const restoreHeatmapGrid = useCallback(() => {
     const axes = sessionRef.current.getAxes();
-    setHeatmapGridParams(axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null);
-    // ⚑ The names come back with the grid, through the same door. A reopened
-    // heatmap whose columns lost their names would export the index numbers this
-    // whole feature exists to replace — and it would do it silently.
-    // ⚑ And the user's OWN readings, through the same door for the same reason:
-    // a cell someone corrected by eye that came back reading the colour again
-    // would silently undo a measurement, and look exactly like a file that never
-    // held one.
-    const restoredReadings = axes
-      ? readingsFromAxes(axes as unknown as MetadataCarrier)
-      : NO_HEATMAP_CELL_READINGS;
+    // ⚑⚑ ONE READ, of ONE LAYER. This used to be three reads of three axes
+    // metadata keys — which is what let a re-calibration empty all three at
+    // once. The grid, the names and the user's own readings are one record and
+    // they now come back together, from the session rather than from the axes.
+    const layer = sessionRef.current.getHeatmapLayer();
+    const restoredParams = layer?.grid ?? null;
+    setHeatmapGridParams(restoredParams);
+    // ⚑ The user's OWN readings come back with it: a cell someone corrected by
+    // eye that came back reading the colour again would silently undo a
+    // measurement, and look exactly like a file that never held one.
+    const restoredReadings = layer?.readings ?? NO_HEATMAP_CELL_READINGS;
     setHeatmapCellReadings(restoredReadings);
-    const stored = axes ? labelsFromAxes(axes as unknown as MetadataCarrier) : { x: [], y: [] };
-    // Back through the SAME mapping, which is its own inverse: the boxes show
-    // the figure's reading order, the file holds the cell order.
-    const restoredParams = axes ? gridFromAxes(axes as unknown as MetadataCarrier) : null;
+    // ⚑ And the names, for the same reason: a reopened heatmap whose columns
+    // lost their names would export the index numbers this whole feature exists
+    // to replace, silently.
+    const stored = layer?.labels ?? { x: [], y: [] };
     // ⚑ The file holds PARAMETERS; the label and read helpers want the resolved
     // data coordinates. Resolving here, once, keeps the single conversion point.
     const restoreSpans = heatmapAxisSpans(sessionRef.current.getPlacedPoints(), sessionRef.current.getAxes());
@@ -2366,12 +2389,11 @@ export function Workspace() {
   const applyHeatmapCellReadings = useCallback(
     (next: HeatmapCellReadings) => {
       setHeatmapCellReadings(next);
-      const axes = sessionRef.current.getAxes();
-      if (axes) readingsToAxes(axes as unknown as MetadataCarrier, next);
+      patchHeatmapLayer({ readings: { ...next } });
       runHeatmapRead(next);
       commit();
     },
-    [commit, runHeatmapRead]
+    [commit, patchHeatmapLayer, runHeatmapRead]
   );
 
   /**
@@ -4316,6 +4338,8 @@ export function Workspace() {
       axes: CalibratedAxes;
       datasets: Dataset[];
       categoryAxis?: CategoryAxis;
+      /** The heatmap's record, when the file carried one. */
+      heatmapLayer?: SerializedHeatmapLayer | null;
       imageDataURL: string;
       imageFileName?: string;
       measurements?: RecordedMeasurement[];
@@ -4330,7 +4354,7 @@ export function Workspace() {
       clearFiguresToSingle(); // a single-figure project / WPD import is one figure
       const newSession = new CalibrationSession(nextConfig);
       newSession.setImageHeight(imageHeightRef.current);
-      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis);
+      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer);
       sessionRef.current = newSession;
       setColorTraceRegion(null); // new figure's pixel space -> old trace region is stale (audit A1)
       // ⚑ The fold-out's own inputs are per-figure too. Without this the
@@ -4645,7 +4669,7 @@ export function Workspace() {
       const config = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
-      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis);
+      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis, f.heatmapLayer);
       return {
         id: ++figureIdRef.current,
         name: f.name,

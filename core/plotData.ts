@@ -186,6 +186,90 @@ export interface SerializedMeasurementData {
   data: number[][];
 }
 
+/**
+ * ⚑⚑ THE HEATMAP'S RECORD — the grid, the axis NAMES, and the cells a person
+ * read themselves. A LAYER ON TOP OF THE CALIBRATION, not part of it.
+ *
+ * David, 2026-08-16, as a rule for every graph type: *"Anything detected on the
+ * graph sits on TOP of the calibration… It has to sit on top of it and respect
+ * it, but not be a part of it. We should and need to be able to adjust the axis
+ * calibrations independently of changing the grid."*
+ *
+ * ⚠️ ALL THREE USED TO LIVE IN AXES METADATA, and that is what made a
+ * re-calibration silently empty them: `runCalibration` ends with
+ * `this.axes = result.axes`, a brand-new object. The fix at the time COPIED the
+ * metadata across; this is the fix that removes the need for a copy, because the
+ * record was never the calibration's to hold.
+ *
+ * ⚑ Mirrors `SerializedCategoryAxisData` deliberately — that is the precedent
+ * for a per-session thing that lives outside the axes and serialises in its own
+ * right, and the heatmap should have been built on it.
+ *
+ * ⚑ THE GRID IS PARAMETERS, not coordinates: 0 at an axis's first calibration
+ * point, 1 at its second. Resolution-independent, and a crop or rotation that
+ * moved the figure only had to move the calibration points.
+ */
+export interface SerializedHeatmapLayer {
+  /** Divider parameters per axis, and where the axes SAT when they were
+   * recorded — used only to say "these have moved since", never to place
+   * anything. */
+  grid?: {
+    x: number[];
+    y: number[];
+    axisAt?: {
+      x: [{ px: number; py: number }, { px: number; py: number }];
+      y: [{ px: number; py: number }, { px: number; py: number }];
+    };
+  };
+  /** One name per BAND, per axis. Empty lists are the norm — a value × value
+   * heatmap has nothing to name. */
+  labels?: { x: string[]; y: string[] };
+  /** `"col,row"` → position on the colour key, for cells a person read
+   * themselves. A POSITION, not a number, so a recalibrated key moves them. */
+  readings?: Record<string, number>;
+}
+
+/**
+ * A heatmap layer off a file, or null.
+ *
+ * ⚑ DROPPED WHOLE when malformed, never half-read. A grid with two good
+ * dividers and one `"x"` would otherwise place boundaries the user never put
+ * anywhere — and on a heatmap a wrong boundary has no visible symptom, because
+ * the colour IS the value.
+ */
+function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const src = raw as SerializedHeatmapLayer;
+  const out: SerializedHeatmapLayer = {};
+
+  const numbers = (v: unknown): number[] | null => {
+    if (!Array.isArray(v)) return null;
+    const ns = v.map(Number);
+    return ns.every((n) => Number.isFinite(n)) ? ns : null;
+  };
+  if (src.grid) {
+    const x = numbers(src.grid.x);
+    const y = numbers(src.grid.y);
+    // Two dividers bound one band — the smallest grid that is a grid.
+    if (x && y && x.length >= 2 && y.length >= 2) {
+      out.grid = { x, y, ...(src.grid.axisAt ? { axisAt: src.grid.axisAt } : {}) };
+    }
+  }
+  if (src.labels && Array.isArray(src.labels.x) && Array.isArray(src.labels.y)) {
+    out.labels = { x: src.labels.x.map(String), y: src.labels.y.map(String) };
+  }
+  if (src.readings && typeof src.readings === 'object') {
+    const kept: Record<string, number> = {};
+    for (const [key, v] of Object.entries(src.readings)) {
+      // The model's own key format, and a POSITION — anything else would land a
+      // number on a cell nobody touched.
+      if (/^\d+,\d+$/.test(key) && Number.isFinite(Number(v))) kept[key] = Number(v);
+    }
+    if (Object.keys(kept).length > 0) out.readings = kept;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export interface SerializedPlotData {
   version: [number, number];
   axesColl: SerializedAxesData[];
@@ -193,6 +277,9 @@ export interface SerializedPlotData {
   measurementColl: SerializedMeasurementData[];
   /** v2.0 groundwork, additive -- see SerializedCategoryAxisData. */
   categoryAxisColl?: SerializedCategoryAxisData[];
+  /** v2.2, additive -- see SerializedHeatmapLayer. Absent for every type that is
+   * not a heatmap, and for a heatmap whose grid has not been read yet. */
+  heatmapLayer?: SerializedHeatmapLayer;
   misc?: unknown;
 }
 
@@ -215,6 +302,7 @@ export class PlotData {
   private _gridDetectionData: unknown = null;
   private _categoryAxisColl: CategoryAxis[] = [];
   private _datasetCategoryAxisMap = new Map<Dataset, CategoryAxis | null>();
+  private _heatmapLayer: SerializedHeatmapLayer | null = null;
 
   reset(): void {
     this._axesColl = [];
@@ -225,6 +313,17 @@ export class PlotData {
     this._gridDetectionData = null;
     this._categoryAxisColl = [];
     this._datasetCategoryAxisMap = new Map();
+    this._heatmapLayer = null;
+  }
+
+  /** The heatmap's record. Null for every other type — and for a heatmap that
+   * has none yet, which is not the same as an empty one. */
+  setHeatmapLayer(layer: SerializedHeatmapLayer | null): void {
+    this._heatmapLayer = layer;
+  }
+
+  getHeatmapLayer(): SerializedHeatmapLayer | null {
+    return this._heatmapLayer;
   }
 
   setTopColors(topColors: unknown): void {
@@ -570,6 +669,12 @@ export class PlotData {
       }
     }
 
+    // v2.2 -- see SerializedHeatmapLayer. VALIDATED, not trusted: this is a load
+    // entrance, and the same rule the interactive path applies has to apply
+    // here. A malformed layer is DROPPED whole rather than half-read, because a
+    // half-read grid would place boundaries the user never put anywhere.
+    this._heatmapLayer = heatmapLayerFrom(data.heatmapLayer);
+
     // v2.0 groundwork, additive -- see SerializedCategoryAxisData. Read BEFORE
     // the dataset loop below, which looks these up by name to rebind.
     if (data.categoryAxisColl != null) {
@@ -821,6 +926,12 @@ export class PlotData {
       }
 
       data.axesColl.push(axData);
+    }
+
+    // v2.2, additive (see SerializedHeatmapLayer) -- written only when a
+    // heatmap actually has a record, so every other type's file is unchanged.
+    if (this._heatmapLayer !== null) {
+      data.heatmapLayer = this._heatmapLayer;
     }
 
     // v2.0 groundwork, additive (see SerializedCategoryAxisData) -- only
