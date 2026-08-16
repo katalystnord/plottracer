@@ -8504,7 +8504,7 @@ export function Workspace() {
           only when there's actually a placed pixel to reuse. */}
       {isCalibrating && mode === 'calibrate' && !pendingPixel && reusableSteps.length > 0 && (
         <div
-          data-testid="calib-prompt"
+          data-testid="calib-reuse-pixel"
           style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: theme.font.size.small }}
         >
           <span style={{ color: theme.color.text.legend }}>Reuse a placed pixel:</span>

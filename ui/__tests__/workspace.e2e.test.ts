@@ -52,6 +52,34 @@ const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
   ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
   : [];
 
+/**
+ * A THROWAWAY PROFILE FOR THE RUN.
+ *
+ * ⚑⚑ THE SUITE HAD NO PROFILE OF ITS OWN, so it ran against the developer's
+ * REAL PlotTracer user-data directory. Two live consequences: the run WROTE
+ * into his installed app's storage, and anything the app persists survived from
+ * one run to the next — a shared mutable fixture nobody declared.
+ *
+ * ⚑ The sidebar test found it the expensive way. It asserts the panel opens at
+ * its DEFAULT width, then drags the handle to ~563px — which v2.2 made
+ * PERSISTENT. So it passed on the first run, stored the width it had just
+ * dragged to, and failed on every run after, with no code change in between.
+ * A green board went red by itself, which is the worst way to learn this.
+ *
+ * ⚑ The rule: a test that only passes on a clean profile must be GIVEN a clean
+ * profile. Hoping for one makes every future persisted setting — recent files,
+ * window geometry, whatever v2.3 adds — a landmine for whichever test runs
+ * second. Fixed at the launch, not in the one test that happened to trip it.
+ */
+const E2E_USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-e2e-profile-'));
+process.on('exit', () => {
+  try {
+    fs.rmSync(E2E_USER_DATA, { recursive: true, force: true });
+  } catch {
+    // Best effort: a leftover temp profile is harmless, a throw here is not.
+  }
+});
+
 
 /** The bundled spider example's published ground truth — anchors in IMAGE pixels,
  * plus the values each series states. Read here so the spider trace can be checked
@@ -160,7 +188,7 @@ let dialogMessages: string[] = [];
 // masks/interferes with this. Slower (~70s vs ~50s) but reliable.
 beforeEach(async () => {
   app = await electron.launch({
-    args: [...OZONE_ARGS, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
+    args: [...OZONE_ARGS, `--user-data-dir=${E2E_USER_DATA}`, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
     cwd: REPO_ROOT,
     timeout: 30000,
     // WPD_E2E skips the dev DevTools, which -- docked to the side -- otherwise
@@ -8088,6 +8116,49 @@ describe('heatmap capture (v2.2)', () => {
   }
 
   /**
+   * The corner the card is asking for, in the card's own words.
+   *
+   * ⚑⚑ GATE 4 — A WALK MAY ONLY CLICK WHAT A PROMPT ON SCREEN NAMES. Every
+   * calibration walk in this file clicked coordinates the author already knew
+   * and never read the step text at all, which is exactly how v2.2's
+   * shared-corner defect survived: the prompt was present, non-blank and
+   * distinct from its siblings — the generic checks in `axesConfigTable` all
+   * pass — it simply named a corner no test ever looked at. Reading it here
+   * binds the words on screen to the pixel about to be clicked, so a prompt
+   * that sends the user somewhere else fails AT the step rather than eight
+   * steps later as a parallel-axes refusal.
+   *
+   * ⚑ THE TIPS BAR IS WHERE THE USER READS IT (checkpoint 57 moved it there),
+   * so that is what this asserts — not the config's string, which a unit test
+   * can check without proving anything reached the screen. `calib-prompt`
+   * sounds like the right target and is NOT: it labels the "Reuse a placed
+   * pixel" widget, and is now named `calib-reuse-pixel` so the next person
+   * does not lose the same half-hour.
+   *
+   * ⚑ THE MATCH IS CASE-SENSITIVE ON PURPOSE. The step's LABEL says "First
+   * column × first row" in title case while the PROMPT shouts "the outer EDGE
+   * of the FIRST column"; matching upper case pins the sentence the user is
+   * told to act on rather than the heading above it.
+   */
+  async function expectPromptNames(column: 'FIRST' | 'LAST', row: 'FIRST' | 'LAST') {
+    const prompt = (await page.getByTestId('tips-bar').textContent()) ?? '';
+    expect(prompt, `prompt should name the ${column} column`).toContain(`${column} column`);
+    expect(prompt, `prompt should name the ${row} row`).toContain(`${row} row`);
+  }
+
+  /**
+   * ⚑ AND THE WORDS ARE BOUND TO THE GEOMETRY, not merely to each other. The
+   * assertions above would sit happily on a prompt that named the corners
+   * consistently and WRONGLY, so the figure's own truth is asked which pixel
+   * each name belongs to: the LAST column is to the right of the FIRST, and the
+   * LAST row is higher up the page than the FIRST — screen y grows downward.
+   */
+  function expectCornersAgreeWithTheirNames() {
+    expect(truth.frame.x2.x).toBeGreaterThan(truth.frame.x1.x);
+    expect(truth.frame.y2.y).toBeLessThan(truth.frame.x1.y);
+  }
+
+  /**
    * How far a boundary's grab handle stands off its axis, on screen.
    *
    * ⚑ It sits at the OUTER END of its tick mark (`TICK_LENGTH` in
@@ -8120,13 +8191,16 @@ describe('heatmap capture (v2.2)', () => {
   async function calibrateHeatmapCategorical() {
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(150);
+    expectCornersAgreeWithTheirNames();
     for (const step of ['x1', 'x2'] as const) {
+      await expectPromptNames(step === 'x1' ? 'FIRST' : 'LAST', 'FIRST');
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
       await confirmValues(
         step === 'x2' ? [String(p.value), String(truth.grid.x.length - 1)] : [String(p.value)]
       );
     }
+    await expectPromptNames('FIRST', 'LAST');
     // ⚑ B12 — NO Y1 CLICK. The lower-left corner is shared, and on a NAMED axis
     // it takes no typed value either, so the walk places it and moves straight
     // on. Three clicks describe the frame; this is the second and third.
@@ -8175,12 +8249,24 @@ describe('heatmap capture (v2.2)', () => {
     // the SAME pixel (70.4, 281.32), which is what three-point calibration
     // relies on and what every rectangular heatmap has: the two axes span one
     // rectangle, so three of its corners carry the whole transform.
+    expectCornersAgreeWithTheirNames();
     for (const step of ['x1', 'x2'] as const) {
+      await expectPromptNames(step === 'x1' ? 'FIRST' : 'LAST', 'FIRST');
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
       await confirmValues(step === 'x2' ? [String(p.value), bands[step]] : [String(p.value)]);
     }
+    // ⚑⚑ NOT ASSERTED AT THE SHARED CORNER, AND THAT IS A FINDING, NOT AN
+    // OMISSION. y1 arrives PRE-PLACED, so `hasPendingPixel` is true the moment
+    // the step opens — and `guidanceTip` drops the prompt entirely in that
+    // state, showing only "Enter the <label> value, then press Confirm". So the
+    // sentence written for the walk's most confusing step ("The same corner
+    // again — enter the Y value where …") never reaches the screen at all.
+    // Gate 4 governs CLICKS and this step has none, so the walk asserts the
+    // three clicks below; the dead prompt is logged for v2.3 rather than
+    // papered over with an assertion of what is merely there.
     await confirmValue(String(truth.frame.y1.value));
+    await expectPromptNames('FIRST', 'LAST');
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
     await confirmValues([String(truth.frame.y2.value), bands['y2']]);
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
@@ -8409,6 +8495,13 @@ describe('heatmap capture (v2.2)', () => {
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
     expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
+    // ⚑⚑ THE MESSAGE IS THERE FIRST, asserted so its DISAPPEARANCE below means
+    // something. Without this the `.toBe(0)` at the end of this test would pass
+    // just as happily if detection had stopped reporting at all — an absence
+    // with no positive counterpart agrees with the wrong cause, which is how a
+    // sibling test spent a release asserting a defect (see the undo note in
+    // "lets a divider be DRAGGED").
+    expect(await textOf('heatmap-detect-message')).toMatch(/columns/i);
 
     await page.getByTestId('heatmap-add-column').click();
     await page.waitForTimeout(300);
