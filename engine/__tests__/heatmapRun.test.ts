@@ -37,7 +37,7 @@ import {
 } from '../heatmapRun.js';
 import { HEATMAP_AXES_CONFIG, type PlacedCalibPoint } from '../calibrationSession.js';
 import { valueAtPosition } from '../../algorithms/colorScale.js';
-import { colorAtPosition } from '../../algorithms/colorBar.js';
+import { colorAtPosition, positionOnStrip } from '../../algorithms/colorBar.js';
 
 /**
  * ⚠️⚠️ THE SHARED FIXTURE IS A VALUE × VALUE FIGURE, and saying so out loud is
@@ -1270,14 +1270,24 @@ describe('setting a cell from a POSITION on the key', () => {
     }
   });
 
-  it('accepts a position beyond the labelled ticks, because the key extends past them', () => {
-    // ⚑ The printed labels are almost never at the very ends of the ramp, so the
-    // top and bottom of most keys lie OUTSIDE them — the same reason
-    // `valueAtPosition` extrapolates rather than clamping. Refusing here would
-    // make the extremes of a figure unreachable by the gesture, and the extremes
-    // are usually the point of the figure.
-    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, -0.2).error).toBeNull();
-    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, 1.2).error).toBeNull();
+  it('⚠️ refuses a position past the END OF THE STRIP — the correction to this very test', () => {
+    // ⚑⚑ THIS TEST'S COMMENT WAS RIGHT AND ITS NUMBERS WERE WRONG, which is the
+    // gate-3 pattern inside a test rather than a source comment. It said —
+    // correctly — *"the printed labels are almost never at the very ends of the
+    // ramp, so the top and bottom of most keys lie OUTSIDE them"*, and then
+    // asserted with t = -0.2 and t = 1.2. Those are outside the STRIP, not
+    // outside the TICKS. It conflated the calibration with the calibrated area.
+    //
+    // David, 2026-08-16: *"We have CALIBRATED ends of the colour key. All we are
+    // doing is setting KNOWN VALUES at 100 and 700… Anything that wants to go
+    // OUTSIDE of the calibrated area is out of bounds."*
+    //
+    // ⚑ The requirement the old comment names is real and is kept — see
+    // "ACCEPTS A VALUE BEYOND A LABELLED TICK" below, which tests it with
+    // positions taken from the scale's own ticks rather than from two numbers
+    // that happen to be greater than one.
+    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, -0.2).error).toMatch(/colour key/i);
+    expect(setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, 1.2).error).toMatch(/colour key/i);
   });
 });
 
@@ -1409,5 +1419,80 @@ describe('saying the axis has moved under the grid', () => {
     expect(heatmapAxisStamp({})).toBeNull();
     expect(heatmapAxisMoved(undefined, at(10, 200, 300, 200))).toBe(false);
     expect(heatmapAxisMoved(heatmapAxisStamp(at(10, 200, 300, 200))!, {})).toBe(false);
+  });
+});
+
+/**
+ * ⚑⚑ THE COLOUR KEY IS AN AXIS, AND ITS CALIBRATED AREA IS THE STRIP.
+ *
+ * David, 2026-08-16, correcting me: *"We have CALIBRATED ends of the colour key.
+ * All we are doing is setting KNOWN VALUES at 100 and 700. And we are
+ * interpolating everything in between. We can do the same to the ENDS OF THE
+ * CALIBRATED AREA. Anything that wants to go OUTSIDE of the calibrated area is
+ * out of bounds."*
+ *
+ * ⚠️ I HAD THE BOUNDARY IN THE WRONG PLACE and built a whole design question on
+ * it — whether to hatch or flag a cell "past the end of the key", where "the
+ * key" meant the two LABELLED TICKS. They are not the edge. They are the
+ * calibration, exactly as x1 and x2 are on an axis, and the plot area extends
+ * past them.
+ *
+ * ⚑ So the rule is the one every other axis already has: the CALIBRATED AREA
+ * bounds the reading. For the key that area is the strip the user dragged out,
+ * `k1 → k2`, which is `t` in 0..1. Inside it every position has REAL SAMPLED
+ * INK, including past a labelled tick. Outside it there is no ink at all.
+ */
+describe('a reading is bounded by the STRIP, not by the labelled ticks', () => {
+  const scaleFor = () => {
+    const { image, placed } = scene();
+    return buildColorScale(placed, image, false).scale!;
+  };
+
+  it('accepts the ends of the strip themselves — they are IN the calibrated area', () => {
+    for (const t of [0, 1]) {
+      const { error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 1, 1, t);
+      expect(error, `t=${t} is on the strip`).toBeNull();
+    }
+  });
+
+  it('REFUSES a position past either end of the strip, naming what is missing', () => {
+    for (const t of [-0.01, -3, 1.01, 4]) {
+      const { readings, error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 1, 1, t);
+      expect(error, `t=${t}`).toMatch(/colour key/i);
+      // ⚑ And it must not record anything: a refusal that still writes is worse
+      // than no refusal, because the number looks accepted.
+      expect(readings).toEqual(NO_HEATMAP_CELL_READINGS);
+    }
+  });
+
+  it('⚑⚑ ACCEPTS A VALUE BEYOND A LABELLED TICK, because the ink is still there', () => {
+    // THE CASE THE CORRECTION SAVES. The ticks are two known points on the
+    // strip, not its ends — so a figure whose key is labelled 100 and 700 with
+    // ink continuing past the 700 mark can legitimately read higher than 700,
+    // and that colour was really sampled. Refusing it would refuse a real
+    // reading off a real figure.
+    const scale = scaleFor();
+    const tickPositions = scale.ticks.map((tick) => positionOnStrip(scale.strip, tick.point)!);
+    const hi = Math.max(...tickPositions);
+    expect(hi, 'the fixture must have ink past its last tick, or this proves nothing').toBeLessThan(1);
+
+    // A position between the last tick and the end of the strip.
+    const beyond = (hi + 1) / 2;
+    const { error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, beyond);
+    expect(error).toBeNull();
+    // And it is worth MORE than the labelled tick — extrapolated, but off ink we
+    // actually measured.
+    const outer = scale.ticks[tickPositions[0]! > tickPositions[1]! ? 0 : 1]!.value;
+    expect(Math.abs(valueAtPosition(scale, beyond)!)).toBeGreaterThan(Math.abs(outer) * 0.999);
+  });
+
+  it('refuses a TYPED value whose position falls off the strip', () => {
+    // The typed twin of the drag, through the same bound — a guard on one
+    // entrance only is the shape this project keeps getting bitten by.
+    const scale = scaleFor();
+    const wild = valueAtPosition(scale, 5)!;
+    const { readings, error } = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, String(wild));
+    expect(error).toMatch(/colour key/i);
+    expect(readings).toEqual(NO_HEATMAP_CELL_READINGS);
   });
 });

@@ -625,6 +625,16 @@ export function setCellReading(
     return { readings, error: 'A cell’s value has to be a number.' };
   }
   const t = positionAtValue(scale, parsed);
+  // ⚑ THE TYPED TWIN GOES THROUGH THE SAME BOUND. A guard on one entrance only
+  // is the shape this project keeps getting bitten by — and this is the entrance
+  // that can actually reach past the strip, since the drag is clamped on screen.
+  if (t !== null && (t < 0 || t > 1)) {
+    return {
+      readings,
+      error:
+        'The colour key does not reach that value — it runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
+    };
+  }
   if (t === null) {
     return {
       readings,
@@ -660,6 +670,24 @@ export function setCellReadingAt(
 ): { readings: HeatmapCellReadings; error: string | null } {
   if (!Number.isFinite(t)) {
     return { readings, error: 'That is not a position on the colour key.' };
+  }
+  // ⚑⚑ THE CALIBRATED AREA BOUNDS THE READING — the same rule every other axis
+  // has. David, 2026-08-16: *"We have CALIBRATED ends of the colour key. All we
+  // are doing is setting KNOWN VALUES at 100 and 700… Anything that wants to go
+  // OUTSIDE of the calibrated area is out of bounds."*
+  //
+  // ⚠️ The area is the STRIP the user dragged out (`k1 → k2`, which is 0..1
+  // here), NOT the two labelled ticks. The ticks are the calibration, exactly as
+  // x1 and x2 are on an axis, and the plot extends past them: a key labelled 100
+  // and 700 whose ink continues beyond the 700 mark can legitimately read
+  // higher, off ink that was really sampled. Bounding at the ticks would refuse
+  // a real reading of a real figure.
+  if (t < 0 || t > 1) {
+    return {
+      readings,
+      error:
+        'That is past the end of the colour key — the key runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
+    };
   }
   return { readings: { ...readings, [cellKey(col, row)]: t }, error: null };
 }
