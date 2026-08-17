@@ -66,13 +66,8 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
  * was a per-dataset "where do my error slots begin" field, which is state that
  * can disagree with the thing it describes.
  */
-export function errorSlotBase(slotCount: number): number {
+function errorSlotBase(slotCount: number): number {
   return slotCount - ERROR_ROLES.length;
-}
-
-/** True when this slot list ends in a full set of error slots. */
-export function hasErrorSlots(slotNames: readonly string[]): boolean {
-  return slotNames.length > ERROR_ROLES.length;
 }
 
 /**

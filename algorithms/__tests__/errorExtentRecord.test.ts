@@ -21,7 +21,7 @@
  * concept — see BAR_INTERVAL_SLOTS / BOX_PLOT_SLOTS for the precedent.
  */
 import { describe, it, expect } from 'vitest';
-import { ERROR_ROLES, matchCapToDatum, type ErrorRole } from '../errorBar.js';
+import { ERROR_ROLES, matchCapToDatum, resolveErrorBars, type ErrorRole } from '../errorBar.js';
 import {
   ERROR_EXTENT_SLOTS,
   slotForRole,
@@ -233,6 +233,113 @@ describe('error bars on a series that ALREADY has slots — a bar chart', () => 
     ]);
     // No name offered when none was given -- never a default (LabPlot's ±30).
     expect(errorSlotNames('  ')).toEqual(['Value', 'upper', 'lower', 'left', 'right']);
+  });
+});
+
+describe('a confidence band is the same record at higher density', () => {
+  /**
+   * ⚑⚑ DAVID, 2026-08-17: *"One day, we might have continuous error / uncertainty
+   * lines for line graphs too. And that too needs to align with what we do here
+   * now."* So this is the tenet-11 check on the record BEFORE the capture path
+   * hardens around it — asked now, while changing the answer is still cheap.
+   *
+   * The error design already committed to the shape: *"a confidence band is the
+   * same relation at higher density"*. These tests ask whether that is true of
+   * the record we are building, and — more usefully — whether it was ever true
+   * of the one we are replacing.
+   */
+  const BAND_POINTS = 200;
+
+  function band() {
+    // A dense traced curve, each sample carrying an upper and a lower reading.
+    const points: { x: number; y: number }[] = [];
+    const tuples: (number | null)[][] = [];
+    for (let i = 0; i < BAND_POINTS; i++) {
+      const x = i * 0.05; // 200 samples across a narrow x range, as a real band is
+      const datum = points.push({ x, y: Math.sin(x) }) - 1;
+      const upper = points.push({ x, y: Math.sin(x) + 0.2 }) - 1;
+      const lower = points.push({ x, y: Math.sin(x) - 0.2 }) - 1;
+      tuples.push([datum, upper, lower, null, null]);
+    }
+    return { points, tuples };
+  }
+
+  it('every sample of a 200-point band keeps its own upper and lower', () => {
+    const { points, tuples } = band();
+    const bars = errorBarsFromTuples(tuples, lookup(points));
+    expect(bars).toHaveLength(BAND_POINTS);
+    for (let i = 0; i < BAND_POINTS; i++) {
+      expect(bars[i]!.yUpper).toBeCloseTo(bars[i]!.y! + 0.2, 10);
+      expect(bars[i]!.yLower).toBeCloseTo(bars[i]!.y! - 0.2, 10);
+    }
+  });
+
+  it('⚑ an independently-traced boundary SILENTLY LOSES readings under the old model', () => {
+    // ⚠️ MY FIRST VERSION OF THIS TEST CLAIMED nearest-x would MIS-ASSIGN a
+    // traced band, and measured 0 mismatches — a nudge below half the sample
+    // spacing still finds the right datum. The real failure is not assignment,
+    // it is COLLAPSE, and it only shows when the boundary carries its own
+    // sampling (which a traced curve does).
+    //
+    // `resolveErrorBars` emits one bar per DATUM and lets the nearest cap claim
+    // each field; every other cap for that datum is DROPPED — deliberately, since
+    // averaging would fabricate a position no one clicked. So a boundary traced
+    // at 500 samples over 200 data points reports 200 readings and discards 300,
+    // with nothing saying so.
+    const { points, tuples } = band();
+    const datums = tuples.map((t) => points[t[0] as number]!);
+    const traced: { x: number; y: number }[] = [];
+    for (let i = 0; i < 500; i++) {
+      const x = (i / 500) * (BAND_POINTS * 0.05);
+      traced.push({ x, y: Math.sin(x) + 0.2 });
+    }
+    const resolved = resolveErrorBars(datums, [{ role: 'upper', caps: traced }]);
+    const carried = resolved.filter((b) => b.yUpper !== undefined).length;
+    expect(resolved).toHaveLength(BAND_POINTS);
+    expect(carried).toBeLessThanOrEqual(BAND_POINTS);
+    expect(traced.length - carried, '300 traced readings vanish').toBeGreaterThan(250);
+  });
+
+  it('⚑⚑ the tuple record has the SAME per-datum limit, but cannot lose a reading silently', () => {
+    // The honest conclusion, and the one that matters for the future feature:
+    // BOTH models are per-datum, so "a band is the same relation at higher
+    // density" holds only when the band is sampled AT the data points. What
+    // changes is the failure mode. Under the old model a surplus cap is accepted
+    // and then quietly discarded at read time. In the tuple record there is
+    // simply no slot to put it in — the reading cannot be entered at all, so the
+    // limit is enforced at capture where the user can see it, instead of applied
+    // silently at export.
+    //
+    // ⇒ An independently-traced uncertainty BOUNDARY is therefore a different
+    // record (a curve bound to a series), not this one at higher density. That
+    // is a real decision for whoever builds it; what this record guarantees is
+    // that it will not pretend to hold it.
+    const { points, tuples } = band();
+    expect(tuples.every((t) => t.length === ERROR_EXTENT_SLOTS.length)).toBe(true);
+    const bars = errorBarsFromTuples(tuples, lookup(points));
+    expect(bars).toHaveLength(BAND_POINTS);
+    expect(bars.filter((b) => b.yUpper !== undefined)).toHaveLength(BAND_POINTS);
+  });
+
+  it('a band and a sparse error bar are the SAME record, not two features', () => {
+    // "Only some points carry error needs no support at all" -- here that is a
+    // tuple whose extent slots are null, sitting beside tuples that have them.
+    const points = [
+      { x: 0, y: 1 },
+      { x: 0, y: 2 }, // an upper for point 0 only
+      { x: 1, y: 3 }, // a bare datum, no error recorded
+      { x: 2, y: 5 },
+      { x: 2, y: 6 },
+    ];
+    const bars = errorBarsFromTuples(
+      [
+        [0, 1, null, null, null],
+        [2, null, null, null, null],
+        [3, 4, null, null, null],
+      ],
+      lookup(points)
+    );
+    expect(bars.map((b) => b.yUpper)).toEqual([2, undefined, 6]);
   });
 });
 
