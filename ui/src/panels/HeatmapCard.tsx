@@ -175,14 +175,24 @@ export function HeatmapCard({
         {gridSize && (
           <>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button type="button" data-testid="heatmap-add-column" onClick={onAddColumnBoundary}>
+              <button
+                type="button"
+                data-testid="heatmap-add-column"
+                onClick={onAddColumnBoundary}
+                title="Adds a boundary in the widest cell. Drag a handle beside the figure to move one; click a handle to remove it."
+              >
                 + Column boundary
               </button>
-              <button type="button" data-testid="heatmap-add-row" onClick={onAddRowBoundary}>
+              <button
+                type="button"
+                data-testid="heatmap-add-row"
+                onClick={onAddRowBoundary}
+                title="Adds a boundary in the tallest cell. Drag a handle beside the figure to move one; click a handle to remove it."
+              >
                 + Row boundary
               </button>
             </div>
-            {selectedBoundary ? (
+            {selectedBoundary && (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span data-testid="heatmap-selected-boundary" style={{ color: theme.color.text.secondary }}>
                   {selectedBoundary.axis === 'x' ? 'Column' : 'Row'} boundary at{' '}
@@ -202,10 +212,6 @@ export function HeatmapCard({
                   Remove
                 </button>
               </div>
-            ) : (
-              <span style={{ color: theme.color.text.legend }}>
-                Drag a handle beside the figure to move a boundary; click one to remove it.
-              </span>
             )}
             {/* ⚑⚑ "THE LABEL IS THE COORDINATE." A heatmap's axes are each
                 independently a CATEGORY or a VALUE, and all four combinations are
@@ -227,7 +233,7 @@ export function HeatmapCard({
                 value={xLabels}
                 onChange={(e) => onLabelsChange(e.target.value, yLabels)}
                 onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated"
+                placeholder="names, comma separated — left → right"
                 style={{ flex: 1, minWidth: 0 }}
               />
             </label>
@@ -238,29 +244,15 @@ export function HeatmapCard({
                 value={yLabels}
                 onChange={(e) => onLabelsChange(xLabels, e.target.value)}
                 onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated"
+                placeholder="names, comma separated — top → bottom"
                 style={{ flex: 1, minWidth: 0 }}
               />
             </label>
-            {/* ⚑ THE CONVENTION, SAID OUT LOUD rather than left to be discovered
-                from an export. It is a constant and not a computed direction
-                because the mapping GUARANTEES it: `labelsForCells` measures
-                which way the cell indices run and flips the typed list to suit,
-                so the first name is the top-left cell on an ordinary figure, on
-                one calibrated upside down, and on a rotated scan alike. */}
-            <span data-testid="heatmap-label-direction" style={{ color: theme.color.text.legend }}>
-              First name = the figure’s top-left cell; columns left → right, rows top → bottom.
-            </span>
-            {xLabelCoverage || yLabelCoverage ? (
+            {(xLabelCoverage || yLabelCoverage) && (
               <span data-testid="heatmap-label-coverage" style={{ color: theme.color.text.secondary }}>
                 {[xLabelCoverage && `Columns: ${xLabelCoverage}`, yLabelCoverage && `Rows: ${yLabelCoverage}`]
                   .filter(Boolean)
                   .join('. ')}
-              </span>
-            ) : (
-              <span style={{ color: theme.color.text.legend }}>
-                Name the columns and rows if the figure prints names rather than numbers — they
-                travel with the values into the export.
               </span>
             )}
           </>

@@ -8609,8 +8609,13 @@ describe('heatmap capture (v2.2)', () => {
     expect(first[3]).toBe('bottom');
     const lastRow = await page.getByTestId('heatmap-row').nth(rowCount - 1).locator('td').allTextContents();
     expect(lastRow[3]).toBe('top');
-    // And the convention is stated on screen rather than left to be discovered.
-    expect(await textOf('heatmap-label-direction')).toMatch(/top-left cell/);
+    // ⚑ And the convention is still stated on screen — but IN the field it
+    // governs rather than as a sentence beneath it (v2.3, E6). A placeholder
+    // reading "left → right" is read at the moment of typing; a line of prose
+    // under two boxes is read never, and it was one of four such lines on this
+    // card. The fact survived; the paragraph did not.
+    expect(await page.getByTestId('heatmap-x-labels').getAttribute('placeholder')).toMatch(/left → right/);
+    expect(await page.getByTestId('heatmap-y-labels').getAttribute('placeholder')).toMatch(/top → bottom/);
 
     const csvPath = heatmapTempFile('csv');
     await stubHeatmapSaveDialog(csvPath);
