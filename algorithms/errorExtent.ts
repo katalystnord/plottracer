@@ -49,14 +49,65 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
   ...ERROR_ROLES.map((role) => role.charAt(0).toUpperCase() + role.slice(1)),
 ];
 
-/** Which tuple slot a role's cap occupies. Slot 0 is the datum, so roles start at 1. */
-export function slotForRole(role: ErrorRole): number {
-  return ERROR_ROLES.indexOf(role) + 1;
+/**
+ * ⚑⚑ THE ERROR SLOTS ARE ALWAYS THE LAST FOUR, AND THAT IS THE WHOLE MAPPING.
+ *
+ * Error bars are not an XY feature — `captureErrorCap`'s own header says the
+ * gesture *"works on all 7 graph types, including error on a bar plot"*. A bar
+ * series ALREADY has tuples (`['Bar start', 'Bar end']`), so a fixed role→slot
+ * table of 1..4 would have written an upper cap straight over 'Bar end' and
+ * reported the bar's far corner as its error. Appending instead means the
+ * offset is derivable from the slot list itself:
+ *
+ *     XY   ['Value', 'Upper', 'Lower', 'Left', 'Right']           roles at 1..4
+ *     Bar  ['Bar start', 'Bar end', 'Upper', 'Lower', … ]         roles at 2..5
+ *
+ * ⚑ Derivable, so nothing new has to be stored or serialized — the alternative
+ * was a per-dataset "where do my error slots begin" field, which is state that
+ * can disagree with the thing it describes.
+ */
+export function errorSlotBase(slotCount: number): number {
+  return slotCount - ERROR_ROLES.length;
 }
 
-/** The role a slot carries, or null for slot 0 — the datum, which is no one's extent. */
-export function roleForSlot(slot: number): ErrorRole | null {
-  return slot === 0 ? null : ERROR_ROLES[slot - 1] ?? null;
+/** True when this slot list ends in a full set of error slots. */
+export function hasErrorSlots(slotNames: readonly string[]): boolean {
+  return slotNames.length > ERROR_ROLES.length;
+}
+
+/**
+ * Which tuple slot a role's cap occupies, in a tuple of `slotCount` members.
+ * Defaults to the plain XY shape so the common call reads unchanged.
+ */
+export function slotForRole(role: ErrorRole, slotCount: number = ERROR_EXTENT_SLOTS.length): number {
+  return errorSlotBase(slotCount) + ERROR_ROLES.indexOf(role);
+}
+
+/** The role a slot carries, or null when the slot is one of the type's OWN
+ * members (a datum, a bar corner) rather than an extent. */
+export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS.length): ErrorRole | null {
+  const offset = slot - errorSlotBase(slotCount);
+  return offset < 0 ? null : ERROR_ROLES[offset] ?? null;
+}
+
+/**
+ * The slot names a series takes on when error bars are added to it: its own
+ * members, then one per role.
+ *
+ * ⚑ THE ROLE SLOTS CARRY THE USER'S OWN WORD, and that is where the meaning of
+ * the error went. The original design refused an `errorKind` field on purpose —
+ * *"the kind is not in the geometry, it is in the figure's caption, so we could
+ * only ask the user to type it, and asking means offering a default, which is
+ * LabPlot's ±30 all over again"* — and put the meaning in the NAME of the error
+ * series the user wrote ("SD", "SEM", "CI95"). Folding caps into the datum's
+ * record removes that series, so without this the meaning would have been lost
+ * in the refactor: a column headed 'Upper' says nothing about what it measures.
+ * The user still names the concept exactly once, still gets no default, and the
+ * columns read 'SD upper' / 'SD lower' in the table and in the export.
+ */
+export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Value']): string[] {
+  const label = base.trim();
+  return [...ownSlots, ...ERROR_ROLES.map((role) => (label ? `${label} ${role}` : role))];
 }
 
 /** The `ErrorBarPoint` field each role writes. Mirrors `errorBar.ts`'s ROLE_FIELD;
@@ -86,7 +137,10 @@ const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'> = 
  */
 export function errorBarsFromTuples(
   tuples: readonly (readonly (number | null)[])[],
-  pointAt: (pixelIndex: number) => { x: number; y: number } | null
+  pointAt: (pixelIndex: number) => { x: number; y: number } | null,
+  /** How many members a tuple has, so the error slots can be found at its END.
+   * Defaults to the plain XY shape. On a bar series this is 6, not 5. */
+  slotCount: number = ERROR_EXTENT_SLOTS.length
 ): ErrorBarPoint[] {
   const bars: ErrorBarPoint[] = [];
   for (const tuple of tuples) {
@@ -97,7 +151,7 @@ export function errorBarsFromTuples(
 
     const bar: ErrorBarPoint = { x: datum.x, y: datum.y };
     for (const role of ERROR_ROLES) {
-      const member = tuple[slotForRole(role)];
+      const member = tuple[slotForRole(role, slotCount)];
       if (member === null || member === undefined) continue;
       const cap = pointAt(member);
       if (!cap) continue; // a slot pointing at a pixel that is gone records nothing

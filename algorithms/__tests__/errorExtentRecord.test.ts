@@ -26,6 +26,7 @@ import {
   ERROR_EXTENT_SLOTS,
   slotForRole,
   roleForSlot,
+  errorSlotNames,
   errorBarsFromTuples,
 } from '../errorExtent.js';
 
@@ -188,6 +189,50 @@ describe('all four roles land in their own field', () => {
       const written = (['yUpper', 'yLower', 'xLeft', 'xRight'] as const).filter((f) => bar![f] !== undefined);
       expect(written, `${role} wrote ${written.join('+')}`).toEqual([fieldOf[role]]);
     }
+  });
+});
+
+describe('error bars on a series that ALREADY has slots — a bar chart', () => {
+  it("an upper cap does not overwrite the bar's far corner", () => {
+    // ⚑⚑ THE COLLISION THAT MADE THE MAPPING DERIVED. `captureErrorCap` works on
+    // all seven graph types, "including error on a bar plot" — and a bar series
+    // already owns slots 0 and 1 ('Bar start', 'Bar end'). A fixed role table of
+    // 1..4 would have written the upper cap over 'Bar end', so the record would
+    // have reported the BAR'S OWN far corner as its error bar: a wrong number
+    // that looks entirely plausible, on the type where the value IS an extent.
+    const barSlots = ['Bar start', 'Bar end', 'SD upper', 'SD lower', 'SD left', 'SD right'];
+    expect(slotForRole('upper', barSlots.length)).toBe(2); // NOT 1
+    expect(roleForSlot(1, barSlots.length)).toBeNull(); // 'Bar end' is no one's extent
+    expect(roleForSlot(0, barSlots.length)).toBeNull();
+
+    const points = [
+      { x: 1, y: 0 }, // 0: bar start
+      { x: 1, y: 10 }, // 1: bar end -- the bar's own top
+      { x: 1, y: 12 }, // 2: SD upper
+      { x: 1, y: 8 }, // 3: SD lower
+    ];
+    const [bar] = errorBarsFromTuples([[0, 1, 2, 3, null, null]], lookup(points), barSlots.length);
+    expect(bar).toMatchObject({ x: 1, y: 0, yUpper: 12, yLower: 8 });
+    // The bar's own top (10) must not appear as an error reading anywhere.
+    expect(bar!.yUpper).not.toBe(10);
+  });
+
+  it('the slot names keep the user\'s own word for what the error IS', () => {
+    // The original design deliberately refused an `errorKind` field and put the
+    // meaning in the series NAME the user writes. Folding caps into the datum
+    // removes that series, so the word moves to the columns instead -- otherwise
+    // the refactor would quietly discard whether a bar is SD, SEM or CI95.
+    expect(errorSlotNames('SD')).toEqual(['Value', 'SD upper', 'SD lower', 'SD left', 'SD right']);
+    expect(errorSlotNames('CI95', ['Bar start', 'Bar end'])).toEqual([
+      'Bar start',
+      'Bar end',
+      'CI95 upper',
+      'CI95 lower',
+      'CI95 left',
+      'CI95 right',
+    ]);
+    // No name offered when none was given -- never a default (LabPlot's ±30).
+    expect(errorSlotNames('  ')).toEqual(['Value', 'upper', 'lower', 'left', 'right']);
   });
 });
 
