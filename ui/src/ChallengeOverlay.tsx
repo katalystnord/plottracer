@@ -25,7 +25,7 @@ export interface ChallengeOverlayProps {
   roundStartMs: number;
   lastScore: RoundScore | null;
   totalAdjusted: number;
-  highScores: HighScore[];
+  highScores: readonly HighScore[];
   qualifies: boolean;
   onConfirmStart: () => void;
   onCancel: () => void;

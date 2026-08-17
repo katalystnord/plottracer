@@ -31,7 +31,7 @@ export function readHighScores(): HighScore[] {
 }
 
 /** Would an adjusted time make the board (a top-N time, or the board isn't full)? */
-export function qualifies(adjustedSeconds: number, board: HighScore[] = readHighScores()): boolean {
+export function qualifies(adjustedSeconds: number, board: readonly HighScore[] = readHighScores()): boolean {
   if (board.length < MAX_HIGH_SCORES) return true;
   return adjustedSeconds < board[board.length - 1]!.adjustedSeconds;
 }

@@ -92,7 +92,7 @@ import {
 import { MeasureCard, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
-import { ChallengeOverlay, type ChallengePhase } from './ChallengeOverlay.js';
+import { ChallengeOverlay } from './ChallengeOverlay.js';
 import { MeasurementsCard } from './panels/MeasurementsCard.js';
 import { CurveFitCard } from './panels/CurveFitCard.js';
 import { GeometryCard } from './panels/GeometryCard.js';
@@ -114,15 +114,9 @@ import { SeriesPanel } from './panels/SeriesPanel.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
 import { CHALLENGE_META, CHALLENGE_IDS } from './challengeExamples.js';
-import { readHighScores, qualifies as scoreQualifies, insertHighScore, type HighScore } from './challengeScores.js';
-import {
-  drawGradedRounds,
-  calibrationInputsFromAnchors,
-  scoreCompletedRound,
-  challengeRevealFor,
-  type ChallengeExample,
-} from '../../engine/traceChallenge.js';
-import { type RoundScore } from '../../algorithms/challengeScore.js';
+import { qualifies as scoreQualifies } from './challengeScores.js';
+import { type ChallengeExample } from '../../engine/traceChallenge.js';
+import { useTraceChallenge, type TraceChallengeHost } from './games/useTraceChallenge.js';
 import {
   applyImageEditOp,
   cropImage,
@@ -1310,15 +1304,9 @@ export function Workspace() {
   // it is reachable two ways rather than one.
   const [helpOverlayOpen, setHelpOverlayOpen] = useState(false);
 
-  // --- Trace Challenge (v1.2 game). `gamePhase` null = not playing; it's
-  // orthogonal to `mode` (a round runs in place-point mode). Round setup +
-  // scoring live in the callbacks below; the UI is ./ChallengeOverlay.tsx. ---
-  const [gamePhase, setGamePhase] = useState<ChallengePhase | null>(null);
-  const [roundQueue, setRoundQueue] = useState<ChallengeExample[]>([]);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [roundStartMs, setRoundStartMs] = useState(0);
-  const [roundScores, setRoundScores] = useState<RoundScore[]>([]);
-  const [highScores, setHighScores] = useState<HighScore[]>([]);
+  // The Trace Challenge's own state lives in ui/src/games/useTraceChallenge.ts
+  // (`game`, set up further down once its host's callbacks exist). `game.phase`
+  // null = not playing; it's orthogonal to `mode` -- a round runs in place-point.
   // Which datapoint-table value cell is mid-edit (checkpoint 39). Editing a
   // value and moving the point are two views of one thing: on commit the
   // point is repositioned via the axes' inverse transform. Kept as the raw
@@ -3221,116 +3209,31 @@ export function Workspace() {
     []
   );
 
-  // Load one round: fetch the example image, PRE-CALIBRATE from its committed
-  // anchors (the player never clicks the axes), drop into place-point, start the
-  // clock. Manual-only tracing is enforced by the rail gate + this mode.
-  const loadRound = useCallback(
-    async (ex: ChallengeExample) => {
-      setRoundStartMs(0); // clock reads 0:00 while this round loads; real start stamped at the end
-      const dataURL = await fetch(ex.imageSrc)
-        .then((r) => r.blob())
-        .then(
-          (blob) =>
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(reader.error);
-              reader.readAsDataURL(blob);
-            })
-        );
-      closePdf();
-      resetDocument(ex.axesConfigId, dataURL); // fresh session (swapSession updates sessionRef); sets figureCaptured=false
-      const inputs = calibrationInputsFromAnchors(ex.truth.calibration);
-      // ⚑ Grow the REPEATING step first. A spider's six spokes and a pie's four
-      // outline points are steps that do not exist until asked for, and a session
-      // sitting at the step minimum silently keeps only the first three placed
-      // points -- a calibration that looks adopted and is a different figure.
-      while (sessionRef.current.getRepeatCount() < (inputs.repeatCount ?? 0)) {
-        if (!sessionRef.current.addRepeat()) break;
-      }
-      // ⚑ The boolean matters. A truth file whose anchors no longer calibrate
-      // yields a round that LOOKS playable, records points with no data, and
-      // scores as all-misses -- with the one surface carrying the reason
-      // (`getCalibrationError`) folded away on the next line.
-      const adopted = sessionRef.current.adoptCalibration(inputs);
-      if (!adopted) setCalibExpanded(true);
-      imageCanvasRef.current?.loadImageFromSrc(dataURL, ex.name);
-      // The example IS the whole figure-of-record: capture it (a no-op crop) so the
-      // player can place points -- without this, capture stays pending and every
-      // click is blocked ("Frame the whole figure... press Capture").
-      setFigureCaptured(true);
-      // the player didn't calibrate -- don't clutter/occlude with the calib card,
-      // unless the adoption failed, in which case that card is the explanation
-      if (adopted) setCalibExpanded(false);
-      setMode('place-point');
-      setRoundStartMs(Date.now());
-      bump();
-    },
-    [resetDocument, closePdf, bump]
+  // Everything a game may ask of the workspace, in one place -- see
+  // ui/src/games/useTraceChallenge.ts for why the list itself is the point.
+  const gameHost = useMemo<TraceChallengeHost>(
+    () => ({
+      session: () => sessionRef.current,
+      resetDocument: (axesConfigId, dataURL) => resetDocument(axesConfigId, dataURL),
+      closePdf: () => closePdf(),
+      clearFiguresToSingle: () => clearFiguresToSingle(),
+      confirmDiscardIfDirty: () => confirmDiscardIfDirty(),
+      loadImage: (dataURL, name) => imageCanvasRef.current?.loadImageFromSrc(dataURL, name),
+      clearImage: () => imageCanvasRef.current?.clearImage(),
+      setFigureCaptured: (captured) => setFigureCaptured(captured),
+      setCalibrationExpanded: (expanded) => setCalibExpanded(expanded),
+      setMode: (m) => setMode(m),
+      bump: () => bump(),
+    }),
+    [resetDocument, closePdf, clearFiguresToSingle, confirmDiscardIfDirty, bump]
   );
 
-  const startChallenge = useCallback(() => {
-    if (!confirmDiscardIfDirty()) return;
-    // ⚑ WEIGHTED, not uniform (David, 2026-08-10): two easy, one medium, one
-    // hard. The pool spans a factor of ten in clicks -- 61 for the stress-strain
-    // curve against 6 for a spider -- and the scoring currency is TIME, so a
-    // uniform draw made one playthrough's score incomparable with another's.
-    const rounds = drawGradedRounds(challengePool, (r) => r.grade);
-    if (rounds.length === 0) return;
-    setRoundQueue(rounds);
-    setRoundIndex(0);
-    setRoundScores([]);
-    setHighScores(readHighScores());
-    setGamePhase('intro');
-  }, [confirmDiscardIfDirty, challengePool]);
-
-  const beginRounds = useCallback(() => {
-    setRoundIndex(0);
-    setRoundScores([]);
-    setGamePhase('playing');
-    if (roundQueue[0]) void loadRound(roundQueue[0]);
-  }, [roundQueue, loadRound]);
-
-  const finishRound = useCallback(() => {
-    const ex = roundQueue[roundIndex];
-    if (!ex) return;
-    const rawSeconds = Math.max(0, (Date.now() - roundStartMs) / 1000);
-    // Reading the player's extraction and grading it is PURE, and lives in
-    // engine/traceChallenge.ts so it can be tested -- see
-    // engine/__tests__/traceChallengeRoundOutcome.test.ts. It was here, where
-    // nothing could reach it.
-    setRoundScores((prev) => [...prev, scoreCompletedRound(sessionRef.current, ex, rawSeconds)]);
-    setGamePhase('reveal');
-  }, [roundQueue, roundIndex, roundStartMs]);
-
-  const nextRound = useCallback(() => {
-    const next = roundIndex + 1;
-    if (next < roundQueue.length) {
-      setRoundIndex(next);
-      setGamePhase('playing');
-      if (roundQueue[next]) void loadRound(roundQueue[next]);
-    } else {
-      setGamePhase('results');
-    }
-  }, [roundIndex, roundQueue, loadRound]);
-
-  const saveHighScore = useCallback(
-    (name: string) => {
-      const total = roundScores.reduce((s, r) => s + r.adjustedSeconds, 0);
-      setHighScores(insertHighScore(name, total));
-    },
-    [roundScores]
+  const game = useTraceChallenge(
+    challengePool,
+    gameHost,
+    (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } } | null) ?? null
   );
-
-  const finishChallenge = useCallback(() => {
-    setGamePhase(null);
-    setRoundQueue([]);
-    setRoundIndex(0);
-    setRoundScores([]);
-    clearFiguresToSingle();
-    resetDocument(XY_AXES_CONFIG.id);
-    imageCanvasRef.current?.clearImage(); // back to the blank "Open an image" opening state
-  }, [clearFiguresToSingle, resetDocument]);
+  const gamePhase = game.phase;
 
   // NB: the round timer lives INSIDE the HUD (ChallengeOverlay), ticking off
   // `roundStartMs`, so it re-renders only the HUD -- not the whole Workspace every
@@ -6008,19 +5911,6 @@ export function Workspace() {
     };
   }, [geometryResult, geometryState, config, session]);
 
-  // Trace Challenge reveal (v1.2): the round's TRUE answer projected to pixels for
-  // the on-figure overlay. Curves -> dashed polylines; scatter -> hollow markers.
-  const challengeReveal = useMemo(() => {
-    if (gamePhase !== 'reveal') return null;
-    const ex = roundQueue[roundIndex];
-    if (!ex) return null;
-    // Which families project through the axes and which are pixel-native is the
-    // MODEL's business, so the decision lives in engine/traceChallenge.ts.
-    return challengeRevealFor(
-      ex,
-      (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } } | null) ?? null
-    );
-  }, [gamePhase, roundQueue, roundIndex, axes]);
 
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
 
@@ -6777,7 +6667,7 @@ export function Workspace() {
           <HelpMenu
             onOpenHelpOverlay={() => setHelpOverlayOpen(true)}
             onOpenExample={(ex) => void openExample(ex)}
-            onStartChallenge={startChallenge}
+            onStartChallenge={game.start}
             appVersion={__APP_VERSION__}
           />
         </TopBarGroup>
@@ -8145,7 +8035,7 @@ export function Workspace() {
           // stays. (v2.0 audit, round 2.)
           onCurveFitClick={curveFitState && mode === 'pan' ? openCurveFitPanel : undefined}
           geometryOverlay={geometryOverlay}
-          challengeReveal={challengeReveal}
+          challengeReveal={game.reveal}
           gridOverlay={heatmapOverlay}
           gridSelection={heatmapSelectionOutline}
           keyCursor={heatmapKeyCursor}
@@ -9079,23 +8969,23 @@ export function Workspace() {
         </div>
       )}
       {helpOverlayOpen && <HelpOverlay onClose={() => setHelpOverlayOpen(false)} manualUrl={MANUAL_URL} />}
-      {gamePhase && (
+      {game.phase && (
         <ChallengeOverlay
-          phase={gamePhase}
-          roundIndex={roundIndex}
-          roundCount={roundQueue.length}
-          instruction={roundQueue[roundIndex]?.instruction ?? ''}
-          roundStartMs={roundStartMs}
-          lastScore={roundScores[roundScores.length - 1] ?? null}
-          totalAdjusted={roundScores.reduce((s, r) => s + r.adjustedSeconds, 0)}
-          highScores={highScores}
-          qualifies={gamePhase === 'results' && scoreQualifies(roundScores.reduce((s, r) => s + r.adjustedSeconds, 0), highScores)}
-          onConfirmStart={beginRounds}
-          onCancel={finishChallenge}
-          onDone={finishRound}
-          onNext={nextRound}
-          onSaveHighScore={saveHighScore}
-          onFinish={finishChallenge}
+          phase={game.phase}
+          roundIndex={game.roundIndex}
+          roundCount={game.roundCount}
+          instruction={game.instruction}
+          roundStartMs={game.roundStartMs}
+          lastScore={game.lastScore}
+          totalAdjusted={game.totalAdjusted}
+          highScores={game.highScores}
+          qualifies={game.phase === 'results' && scoreQualifies(game.totalAdjusted, game.highScores)}
+          onConfirmStart={game.begin}
+          onCancel={game.finish}
+          onDone={game.finishRound}
+          onNext={game.nextRound}
+          onSaveHighScore={game.saveHighScore}
+          onFinish={game.finish}
         />
       )}
     </AppShell>
