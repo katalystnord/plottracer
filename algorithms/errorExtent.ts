@@ -71,6 +71,36 @@ function errorSlotBase(slotCount: number): number {
 }
 
 /**
+ * Does this slot list END IN a full set of error slots?
+ *
+ * ⚑⚑ IT ASKS THE NAMES, NOT THE COUNT, AND A BOX PLOT IS WHY. Counting was the
+ * obvious test — "more slots than a type needs means the extras are error
+ * slots" — and it is wrong on the type that would have suffered most: a Box Plot
+ * has FIVE slots, `['Min', 'Q1', 'Median', 'Q3', 'Max']`, so a count-based check
+ * puts the error base at 1 and reads **Q1, Median, Q3 and Max as upper, lower,
+ * left and right**. Every box in the figure would then export its quartiles as
+ * error bars, silently, with plausible magnitudes.
+ *
+ * The names are a reliable inverse because they are not free text: slot names
+ * come from the type's config, and the only user-supplied part is the error base
+ * ("SD"), which `errorSlotNames` places as a PREFIX. So the last four slots
+ * carry the role words as their final token exactly when error slots are
+ * present.
+ *
+ * ⚑ Deliberately no persisted "where do my error slots start" field: that is
+ * state which can disagree with the slot list it describes, and it would have to
+ * survive the project file, an import, and every undo.
+ */
+export function hasErrorSlots(slotNames: readonly string[]): boolean {
+  if (slotNames.length < ERROR_ROLES.length + 1) return false; // no room for a datum plus four
+  const tail = slotNames.slice(errorSlotBase(slotNames.length));
+  return tail.every((name, i) => {
+    const words = name.trim().toLowerCase().split(/\s+/);
+    return words[words.length - 1] === ERROR_ROLES[i];
+  });
+}
+
+/**
  * Which tuple slot a role's cap occupies, in a tuple of `slotCount` members.
  * Defaults to the plain XY shape so the common call reads unchanged.
  */
