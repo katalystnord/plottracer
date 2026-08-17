@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { keySpanFromClicks } from '../heatmapRun.js';
 import { valueAtParam } from '../../algorithms/colorScale.js';
+import { roundToResolution } from '../../core/exportPrecision.js';
 
 /**
  * ⚑⚑ WHAT THE COLOUR KEY READS AT ITS TWO ENDS — the third axis's extent, on
@@ -73,6 +74,61 @@ describe('⚑⚑ the colour key reports the extent it was calibrated to', () => 
     // Runs along the bar's length, not corner-to-corner (which is its diagonal).
     expect(span.strip.to.x - span.strip.from.x).toBeCloseTo(K2.px - K1.px, 0);
     expect(span.strip.thickness).toBeGreaterThan(0);
+  });
+});
+
+describe('⚑⚑ the extent is reported to the precision the PIXELS support', () => {
+  /**
+   * David, on a key printed 0…100 whose extent read `-0.04515`: *"I think we
+   * should round the numbers in the colour key calibration to something
+   * reasonable."* Five decimals off a ~1,030-pixel bar claims a precision the
+   * ink does not have — the tool asserting more than it measured, which is the
+   * same tenet-9 line as drawing a boundary nobody placed.
+   *
+   * ⚑ The rule is the exports' own: round so the last kept digit sits at half a
+   * pixel's resolution. What the key needed was only its OWN resolution, since
+   * a colour key is not a spatial axis and no `pixelToData` describes it.
+   */
+  const round = (v: number, halfStep: number): number => roundToResolution(v, halfStep);
+
+  it('a 0…100 key on a ~1000px bar reports hundredths, not hundred-thousandths', () => {
+    // His figure: Engagement (%), ticks at 20 and 80, strip running 0…100.
+    const k1 = { px: 265, py: 1010 };
+    const k2 = { px: 1295, py: 1055 };
+    const kv1 = { px: 471, py: 1032, values: ['20'] };
+    const kv2 = { px: 1089, py: 1032, values: ['80'] };
+    const span = keySpanFromClicks(k1, k2, kv1, kv2, false)!;
+    expect(span).not.toBeNull();
+    // Full precision is still what the model holds…
+    expect(Math.abs(span.from)).toBeLessThan(0.5);
+    // …and the resolution says how much of it was ever measured.
+    const shown = round(span.from, span.halfStep);
+    expect(String(shown).replace('-', '').split('.')[1]?.length ?? 0).toBeLessThanOrEqual(2);
+  });
+
+  it('the step is HALF A PIXEL of value, so a longer bar earns more digits', () => {
+    // ⚑ Not a fixed number of decimals: the same span measured on a bar twice as
+    // long genuinely resolves twice as finely, and a constant would either throw
+    // that away or invent it on a short one.
+    const short = keySpanFromClicks(
+      { px: 0, py: 100 }, { px: 100, py: 110 },
+      { px: 20, py: 105, values: ['0'] }, { px: 80, py: 105, values: ['100'] }, false
+    )!;
+    const long = keySpanFromClicks(
+      { px: 0, py: 100 }, { px: 1000, py: 110 },
+      { px: 200, py: 105, values: ['0'] }, { px: 800, py: 105, values: ['100'] }, false
+    )!;
+    expect(long.halfStep).toBeLessThan(short.halfStep);
+    // Same span, ten times the pixels.
+    expect(short.halfStep / long.halfStep).toBeCloseTo(10, 0);
+  });
+
+  it('refuses to round by a step it could not measure', () => {
+    // `roundToResolution` returns the value UNCHANGED on a non-finite or
+    // non-positive step — full precision, never coerced toward zero, which was
+    // "the whole bug" its own comment records.
+    expect(round(1.23456789, NaN)).toBe(1.23456789);
+    expect(round(1.23456789, 0)).toBe(1.23456789);
   });
 });
 

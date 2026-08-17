@@ -22,7 +22,8 @@ import type { CropRect } from '../../engine/imageEdit.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Loupe } from './Loupe.js';
 import { CATEGORY_TICK_COLOR } from '../../engine/categoryTickOverlay.js';
-import { fmtNum } from './format.js';
+import { fmtValue } from './format.js';
+import { roundToResolution } from '../../core/exportPrecision.js';
 import { theme, withAlpha } from './theme.js';
 
 // The formats PlotTracer can open, as a human-readable list for tooltips/hints.
@@ -321,6 +322,11 @@ interface ImageCanvasProps {
   keySpan?: {
     from: number;
     to: number;
+    /** Half a pixel's worth of value along the strip — the finest increment this
+     * key can resolve, so the readout rounds to it rather than printing digits
+     * the pixels never supported. Measured in `keySpanFromClicks`; APPLIED here,
+     * because formatting stays in ui/. */
+    halfStep: number;
     strip: { from: { x: number; y: number }; to: { x: number; y: number }; thickness: number };
   } | null;
   /** Live, while the cursor is being dragged — for the colour preview. */
@@ -2060,7 +2066,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         y={a.y - uy * gap - H / 2}
                         width={W}
                         align="right"
-                        text={fmtNum(keySpan.from)}
+                        text={fmtValue(roundToResolution(keySpan.from, keySpan.halfStep))}
                         fontSize={12}
                         fontFamily="system-ui, sans-serif"
                         fill={theme.color.overlay.stroke}
@@ -2071,7 +2077,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         y={b.y + uy * gap - H / 2}
                         width={W}
                         align="left"
-                        text={fmtNum(keySpan.to)}
+                        text={fmtValue(roundToResolution(keySpan.to, keySpan.halfStep))}
                         fontSize={12}
                         fontFamily="system-ui, sans-serif"
                         fill={theme.color.overlay.stroke}

@@ -259,7 +259,34 @@ export function keySpanFromClicks(
   kv1: { px: number; py: number; values: readonly string[] },
   kv2: { px: number; py: number; values: readonly string[] },
   log: boolean
-): { from: number; to: number; strip: { from: Point2D; to: Point2D; thickness: number } } | null {
+): {
+  from: number;
+  to: number;
+  /**
+   * The smallest increment this key can actually resolve — half a pixel's worth
+   * of value at the strip's ends, in data units.
+   *
+   * ⚑⚑ REPORTED, NOT APPLIED. David, on a key printed 0…100 whose extent read
+   * `-0.04515`: *"I think we should round the numbers in the colour key
+   * calibration to something reasonable."* Quite — five decimals on a reading
+   * sampled off a 1,030-pixel bar claims a precision the pixels do not have,
+   * and the tool asserting more than it measured is the same tenet-9 line as
+   * drawing a boundary nobody placed.
+   *
+   * ⚑ The RULE is the one the exports already use: `roundToResolution`, "so its
+   * last kept digit sits at the resolution", where the resolution is half a
+   * pixel because a digitized reading cannot be finer than the pixels it came
+   * from. What is new here is only the resolution for THIS axis, which no
+   * `pixelToData` can supply — the colour key is not a spatial axis, so its
+   * gradient is value-per-pixel-along-the-strip.
+   *
+   * ⚑ The DECISION lives here and the FORMATTING stays in `ui/`, which is the
+   * line `core/measurementValues.ts` draws: a module that returned "−0.05" as a
+   * STRING would make a rounded display the only copy of the value.
+   */
+  halfStep: number;
+  strip: { from: Point2D; to: Point2D; thickness: number };
+} | null {
   const strip = keyCursorStrip(k1, k2);
   if (strip === null) return null;
   const ta = positionOnStrip(strip, { x: kv1.px, y: kv1.py });
@@ -271,7 +298,13 @@ export function keySpanFromClicks(
   const from = valueAtParam(0, ta, tb, va, vb, log);
   const to = valueAtParam(1, ta, tb, va, vb, log);
   if (from === null || to === null) return null;
-  return { from, to, strip };
+  // ⚑ Half a pixel's worth of value, measured along the strip the user marked.
+  // On a LOG key the value-per-pixel varies along the ramp, so this is the
+  // coarsest of the two ends — the honest one to round both by, since rounding
+  // the fine end by the coarse step never claims more than was measured.
+  const lengthPx = Math.hypot(strip.to.x - strip.from.x, strip.to.y - strip.from.y);
+  const halfStep = lengthPx > 0 ? Math.abs(to - from) / (2 * lengthPx) : NaN;
+  return { from, to, halfStep, strip };
 }
 
 /** The axes surface needed to read a heatmap's frame back — structural, so no
