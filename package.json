@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "pretest": "npm run ui:build",
     "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && npm run ui:typecheck",
     "ui:dev": "vite --config ui/vite.config.ts",

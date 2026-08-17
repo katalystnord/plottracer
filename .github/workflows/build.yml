@@ -26,7 +26,7 @@ jobs:
   # tools/git-hooks/pre-commit is the fast local half; this is the half that
   # survives a fresh clone and `git commit --no-verify`.
   check:
-    name: Typecheck and lint
+    name: Typecheck, lint and unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,22 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      # ⚑⚑ UNTIL 2026-08-17 THIS PIPELINE NEVER RAN A TEST. A tag could be
+      # pushed, built and PUBLISHED with the whole board unexecuted anywhere but
+      # the maintainer's own machine — and the local pre-commit hook only
+      # typechecks, which `--no-verify` walks past. 3,600-odd tests in about a
+      # minute is the cheapest gate this project has ever been offered.
+      # ⚑ Unit only, and NOT because the rest does not matter: the e2e suites
+      # drive a real Electron app on a virtual display and take ~22 minutes.
+      # Running them here would trade a fast trustworthy gate for a slow flaky
+      # one. **So this proves the pure layers, not the app** — his hands on the
+      # built package remain the only instrument pointing outward, and the local
+      # `npm test` remains the only one that drives the real thing.
+      # ⚑ The split is `vitest.unit.config.ts`, which excludes by the pattern
+      # `*.e2e.test.ts` rather than by a list — and `e2eContainment.test.ts`
+      # enforces that every Electron-launching file is named that way, so a new
+      # one cannot escape the pattern the way it would escape a list.
+      - run: npm run test:unit
 
   build:
     needs: check

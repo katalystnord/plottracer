@@ -84,6 +84,20 @@ describe('⚑⚑ MEMBERSHIP — every e2e that launches Electron uses the one ga
     expect(launchers.length).toBeGreaterThanOrEqual(3);
   });
 
+  it.each(launchers)('%s is named *.e2e.test.ts, so the unit board can exclude it by PATTERN', (file) => {
+    // ⚑⚑ CI runs `vitest.unit.config.ts`, which drops `**/*.e2e.test.ts` — a
+    // pattern, not a list. This is what makes the pattern COMPLETE rather than
+    // merely conventional: a fifth Electron file called `smokeTest.ts` would
+    // otherwise be silently included, launch a real app on a hosted runner with
+    // no display, and fail the release build for a reason nobody would guess.
+    // ⚑ The rule is here rather than in the config because this is the file that
+    // already knows who the launchers are, by their import rather than by name.
+    // ⚑ It is also the exact mistake made by hand on 2026-08-17 — a suite run
+    // excluded ONE e2e file by name and the other two launched onto the
+    // developer's screen. A hand-listed exclusion does not grow.
+    expect(file.endsWith('.e2e.test.ts')).toBe(true);
+  });
+
   it.each(launchers)('%s asks the shared gate where its windows go', (file) => {
     const src = fs.readFileSync(path.join(DIR, file), 'utf8');
     expect(src).toContain("from './e2eContainment.js'");
