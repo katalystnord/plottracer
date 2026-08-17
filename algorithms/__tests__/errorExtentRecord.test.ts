@@ -29,6 +29,7 @@ import {
   errorSlotNames,
   hasErrorSlots,
   errorBarsFromTuples,
+  deltasFromBar,
 } from '../errorExtent.js';
 
 /**
@@ -418,5 +419,51 @@ describe('an orphaned cap is inexpressible', () => {
 
   it('an empty record reports nothing rather than throwing', () => {
     expect(errorBarsFromTuples([], lookup([]))).toEqual([]);
+  });
+});
+
+
+describe('the DELTA projection — what Python takes, from what R takes', () => {
+  it('signs by ROLE: upper/right positive, lower/left negative', () => {
+    // So the two columns of an asymmetric bar can be told apart at a glance.
+    const d = deltasFromBar({ x: 5, y: 10, yUpper: 12, yLower: 7, xLeft: 4, xRight: 5.5 });
+    expect(d).toEqual({ yUpper: 2, yLower: -3, xLeft: -1, xRight: 0.5 });
+  });
+
+  it('⚠️ an absent side is OMITTED, never zero', () => {
+    // ⚑⚑ THE MEASURED REASON THE ABSOLUTES ARE THE RECORD. In the delta form
+    // "no lower bound" and "a lower bound of size zero" are the same number.
+    // matplotlib CRASHES on NaN in yerr and silently accepts 0 — drawing a cap
+    // sitting exactly on the value. Emitting 0 here would turn a measurement we
+    // never took into one that looks entirely plausible.
+    const d = deltasFromBar({ x: 5, y: 10, yUpper: 12 });
+    expect(d).toEqual({ yUpper: 2 });
+    expect('yLower' in d, 'an absent lower must not appear at all').toBe(false);
+  });
+
+  it('a genuinely ZERO error is still reported, because it was measured', () => {
+    // The mirror case, and the reason omission has to mean "absent" rather than
+    // "small": a cap the user really did place on the value is a claim of
+    // perfect certainty, and it must survive as one.
+    const d = deltasFromBar({ x: 5, y: 10, yUpper: 10 });
+    expect(d.yUpper).toBe(0);
+    expect('yUpper' in d).toBe(true);
+  });
+
+  it('a datum with no y reports no y-deltas rather than NaN', () => {
+    const d = deltasFromBar({ x: 5, yUpper: 12, yLower: 7 });
+    expect(d.yUpper).toBeUndefined();
+    expect(d.yLower).toBeUndefined();
+  });
+
+  it('round-trips: absolute = value + delta, for every role', () => {
+    // The two forms must describe the same figure, or a consumer picking one
+    // gets a different chart from a consumer picking the other.
+    const bar = { x: 5, y: 10, yUpper: 12, yLower: 7, xLeft: 4, xRight: 5.5 };
+    const d = deltasFromBar(bar);
+    expect(bar.y + d.yUpper!).toBeCloseTo(bar.yUpper, 10);
+    expect(bar.y + d.yLower!).toBeCloseTo(bar.yLower, 10);
+    expect(bar.x + d.xLeft!).toBeCloseTo(bar.xLeft, 10);
+    expect(bar.x + d.xRight!).toBeCloseTo(bar.xRight, 10);
   });
 });

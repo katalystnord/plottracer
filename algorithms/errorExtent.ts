@@ -186,3 +186,46 @@ export function errorBarsFromTuples(
   }
   return bars;
 }
+
+/** A datum's error as SIGNED OFFSETS from its own value — the `yerr` form. */
+export interface ErrorDeltas {
+  yUpper?: number;
+  yLower?: number;
+  xLeft?: number;
+  xRight?: number;
+}
+
+/**
+ * Turn one resolved `ErrorBarPoint` into the delta form.
+ *
+ * ⚑⚑ WHY BOTH FORMS EXIST, MEASURED 2026-08-17 (`docs/generator-input-formats.md`):
+ * **Python wants deltas and R wants absolutes.** `errorbar(y=[10,20,30],
+ * yerr=[1,2,3])` draws its first bar from 9 to 11, so `yerr` is an offset;
+ * `geom_errorbar(aes(ymin, ymax))` takes the positions outright. Carrying both
+ * means neither consumer has to do arithmetic on the record.
+ *
+ * ⚑ SIGNED BY ROLE, not by magnitude — `upper`/`right` positive, `lower`/`left`
+ * negative — so the two columns of an asymmetric bar can be told apart at a
+ * glance. (matplotlib itself refuses negative `yerr`, taking direction from
+ * which ROW a magnitude sits in; our column is labelled, so the sign is free
+ * information rather than a contradiction.)
+ *
+ * ⚠️⚠️ AN ABSENT SIDE IS OMITTED, NEVER ZERO, and this is the whole reason the
+ * ABSOLUTES are the record and these are a projection. In the delta form "no
+ * lower bound" and "a lower bound of size zero" are the same number — measured:
+ * matplotlib CRASHES on `NaN` in `yerr` and silently accepts `0`, drawing a cap
+ * sitting exactly on the value. A record shaped like this would make a
+ * measurement we never took indistinguishable from one we did, and it would look
+ * entirely plausible. So the projection stays lossy-by-omission rather than
+ * lying, even though that leaves a matplotlib consumer a decision to make.
+ */
+export function deltasFromBar(bar: ErrorBarPoint): ErrorDeltas {
+  const out: ErrorDeltas = {};
+  if (bar.y !== undefined) {
+    if (bar.yUpper !== undefined) out.yUpper = bar.yUpper - bar.y;
+    if (bar.yLower !== undefined) out.yLower = bar.yLower - bar.y;
+  }
+  if (bar.xLeft !== undefined) out.xLeft = bar.xLeft - bar.x;
+  if (bar.xRight !== undefined) out.xRight = bar.xRight - bar.x;
+  return out;
+}
