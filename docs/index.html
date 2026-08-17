@@ -8,7 +8,7 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer — turn any graph back into data">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
-<meta property="og:image" content="https://plottracer.com/assets/shot-hero.png">
+<meta property="og:image" content="https://plottracer.com/assets/shot-heatmap.png">
 <meta property="og:url" content="https://plottracer.com/">
 <link rel="canonical" href="https://plottracer.com/">
 <meta name="twitter:card" content="summary_large_image">
@@ -403,10 +403,10 @@
 <section class="hero-shot">
   <div class="wrap">
     <div class="frame">
-      <img class="shot" src="assets/shot-hero.png" width="2888" height="1888"
-        alt="The PlotTracer desktop app: a cumulative-release curve being traced with the Guide-points auto-extract tool, the extracted points listed in the right panel, calibrated XY axes, a cursor zoom loupe, and the tool rail down the left.">
+      <img class="shot" src="assets/shot-heatmap.png" width="2924" height="1888"
+        alt="The PlotTracer desktop app reading a heatmap: a five-by-five grid of treatment against time, its column boundaries detected from the figure's own rules and visibly unequal, all 25 cells read through the calibrated colour key, and the extracted matrix in the right panel with each row named and each column showing the range it spans.">
     </div>
-    <p class="cap">The actual app — calibrate, trace, and export, all on one canvas.</p>
+    <p class="cap">Heatmaps — every cell read through a calibrated colour key, on boundaries measured from the figure itself.</p>
   </div>
 </section>
 
@@ -490,9 +490,9 @@
     </div>
     <div class="shots">
       <figure class="shot-card" style="grid-column: 1 / -1;">
-        <img class="shot" src="assets/shot-bar.png" width="2888" height="1888"
-          alt="A floating bar chart in PlotTracer being captured — monthly temperature ranges, each bar recorded by dragging corner to corner so both of its ends are measured, bars that cross zero kept whole, the categories named down the right panel beside each bar's span, and the ninth bar half-dragged.">
-        <figcaption><b>Floating bars, measured end to end.</b> Both corners are recorded, so a bar reports its own span rather than a single baseline-relative number — and a range that crosses zero stays one bar instead of being split at the axis.</figcaption>
+        <img class="shot" src="assets/shot-hero.png" width="2888" height="1888"
+          alt="The PlotTracer desktop app: a cumulative-release curve being traced with the Guide-points auto-extract tool, the extracted points listed in the right panel, calibrated XY axes, a cursor zoom loupe, and the tool rail down the left.">
+        <figcaption><b>Curves, from a few guide points.</b> Click a handful of anchors along one curve and the rest fills in between them, even where four dash-coded formulations cross. The panel marks every derived point in italics and the export marks them <code>interpolated</code>, so what you read off the figure and what the spline worked out are never the same claim.</figcaption>
       </figure>
       <figure class="shot-card">
         <img class="shot" src="assets/shot-scatter-fit.png" width="2888" height="1888"
@@ -500,9 +500,9 @@
         <figcaption><b>Scatter &amp; curve fit.</b> Fit a model through the points — the fit exports as its own block, never mixed into the record.</figcaption>
       </figure>
       <figure class="shot-card">
-        <img class="shot" src="assets/shot-errorbars.png" width="3034" height="1888"
-          alt="A plot in PlotTracer with error bars captured on the data points.">
-        <figcaption><b>Error &amp; uncertainty.</b> Place each cap where the figure actually draws it — asymmetric and all. The tool says up front that the second cap starts as a mirror rather than a measurement, and which series to pick to move it.</figcaption>
+        <img class="shot" src="assets/shot-errorbars.png" width="2888" height="1888"
+          alt="A plot in PlotTracer — time to failure against applied stress with 95% confidence intervals — where each point's upper and lower caps are captured separately, and the data panel lists the two deltas side by side: +360.87 above and −208.70 below on the first point, unequal all the way down.">
+        <figcaption><b>Error &amp; uncertainty.</b> Place each cap where the figure actually draws it — asymmetric and all. Here a 95% CI runs +360.87 above the point and −208.70 below it, and both are recorded as measured rather than one being assumed from the other. The tool says up front that the second cap starts as a mirror rather than a measurement, and which series to pick to move it.</figcaption>
       </figure>
       <figure class="shot-card">
         <img class="shot" src="assets/shot-histogram.png" width="2888" height="1888"
@@ -520,14 +520,14 @@
         <figcaption><b>Pie &amp; donut — including the slice pulled out.</b> The centre is <em>fitted</em> from the outline rather than clicked, which is what makes a donut, an exploded slice and a tilted 3D top face readable at all. Sectors are reported as measured — these five sum to 99.77%, not a tidied 100.</figcaption>
       </figure>
       <figure class="shot-card">
-        <img class="shot" src="assets/shot-polar.png" width="2888" height="1888"
-          alt="A polar plot in PlotTracer — diffusion rate against angle — traced all the way round, with the extracted readings listed in the right panel as r and theta rather than converted to x and y.">
-        <figcaption><b>Polar — read as r and &theta;.</b> The origin plus one known radius calibrates the whole plane, and the readings come back in the figure&rsquo;s own coordinates rather than converted to x and y behind your back.</figcaption>
-      </figure>
-      <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-boxplot.png" width="3034" height="1888"
           alt="A box-and-whisker plot in PlotTracer with quartiles captured per category.">
         <figcaption><b>Box plots.</b> Quartiles and whiskers captured per category, named and exported side by side. Ternary, map, circular chart recorders and categorical-X line charts are calibrated the way each figure draws them too.</figcaption>
+      </figure>
+      <figure class="shot-card" style="grid-column: 1 / -1;">
+        <img class="shot" src="assets/shot-bar.png" width="2888" height="1888"
+          alt="A floating bar chart in PlotTracer being captured — monthly temperature ranges, each bar recorded by dragging corner to corner so both of its ends are measured, bars that cross zero kept whole, the categories named down the right panel beside each bar's span, and the ninth bar half-dragged.">
+        <figcaption><b>Floating bars, measured end to end.</b> Both corners are recorded, so a bar reports its own span rather than a single baseline-relative number — and a range that crosses zero stays one bar instead of being split at the axis.</figcaption>
       </figure>
     </div>
   </div>
@@ -578,7 +578,7 @@
         <span class="label">Spider / radar</span>
       </div>
       <div class="glyph">
-        <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="56" cy="38" r="25"/></g><path class="g-teal" d="M56 13 L 56 38 L 79 28" fill="none"/><path class="g-teal" d="M56 38 L 34 51" fill="none"/><path class="g-amber" d="M86 47 m -21 12 a 24 24 0 0 0 21 -25 L 65 47 Z" fill="none"/></svg>
+        <svg viewBox="0 0 120 74"><g class="g-axis"><circle cx="56" cy="38" r="25"/></g><path class="g-teal" d="M56 13 L 56 38 L 79 28" fill="none"/><path class="g-teal" d="M56 38 L 34 51" fill="none"/><path class="g-amber" d="M64 46 L80 51.8 A17 17 0 0 1 69.8 62 Z" fill="none"/></svg>
         <span class="label">Pie / donut</span>
       </div>
       <div class="glyph">
