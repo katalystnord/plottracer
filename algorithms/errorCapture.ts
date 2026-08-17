@@ -149,10 +149,28 @@ export function capFreeDirection(
   const datum = axes.pixelToData(datumPixel.x, datumPixel.y);
   const dx = datum[0];
   const dy = datum[1];
-  // A 1-D axes (Bar's pixelToData returns `[value]`) has no second value to
-  // step, so it cannot describe the direction either.
-  if (dx === undefined || dy === undefined || !Number.isFinite(dx) || !Number.isFinite(dy)) {
-    return null;
+  if (dx === undefined || !Number.isFinite(dx)) return null;
+
+  // ⚑⚑ A 1-D AXES CAN STILL SAY WHICH WAY ITS VALUE RUNS (v2.3). This used to
+  // give up here: Bar's `pixelToData` returns `[value]`, so `dy` is undefined and
+  // the function returned null — leaving every cap on a bar chart, and every
+  // other 1-D type, UNCONSTRAINED. Measured, that was 5 of 12 types where a
+  // DIAGONAL cap could be recorded, against David's *"there cannot be one in
+  // between"*.
+  //
+  // But a 1-D axes has a perfectly good `dataToPixel`, and stepping its ONE value
+  // is the same probe this function already runs — Bar answers `(0, -1)` on a
+  // screen-aligned chart and follows the tilt on a rotated one. Nothing new is
+  // measured or assumed; the existing mechanism simply had a dimensionality
+  // assumption baked into it.
+  //
+  // ⚑ EVERY ROLE ALIGNS TO THE VALUE AXIS HERE, whatever the drag was called.
+  // A 1-D axes HAS only that axis, so on a horizontal bar chart a drag that
+  // `roleFromDrag` names `right` still runs along the value axis — the role
+  // names a SIDE, and the axis is a fact about the chart.
+  if (dy === undefined || !Number.isFinite(dy)) {
+    const step = Math.max(Math.abs(dx) * 0.01, 1e-6);
+    return unitBetween(axes.dataToPixel(dx, 0), axes.dataToPixel(dx + step, 0));
   }
 
   const along = freeAxisFor(role);
@@ -165,12 +183,16 @@ export function capFreeDirection(
       ? axes.dataToPixel(dx, dy + step)
       : axes.dataToPixel(dx + step, dy);
   const here = axes.dataToPixel(dx, dy);
-  if (![stepped.x, stepped.y, here.x, here.y].every(Number.isFinite)) return null;
+  return unitBetween(here, stepped);
+}
 
+/** The unit vector from `here` to `stepped`, or null when the step went nowhere
+ * (a stub `dataToPixel` maps every value to the same pixel) or off the rails. */
+function unitBetween(here: Point2D, stepped: Point2D): Point2D | null {
+  if (![stepped.x, stepped.y, here.x, here.y].every(Number.isFinite)) return null;
   const vx = stepped.x - here.x;
   const vy = stepped.y - here.y;
   const length = Math.hypot(vx, vy);
-  // A stub maps every value to the same pixel, so the step moves nowhere.
   if (length < 1e-9) return null;
   return { x: vx / length, y: vy / length };
 }

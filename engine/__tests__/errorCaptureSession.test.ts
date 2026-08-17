@@ -467,14 +467,23 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(session.errorCapDragLine(0, 0)).toBeNull();
   });
 
-  it('leaves a cap on a BAR chart unconstrained rather than disabling it', () => {
-    // Bar's pixelToData returns [value] -- one dimension, so the axes cannot
-    // say which way the value axis runs and capFreeDirection returns null.
-    // ⚑ That null must degrade to "drag freely", never to "cannot drag". An
-    // earlier draft of capFreeDirection probed in order to GATE the feature and
-    // would have refused error bars on bar charts outright; this test pins the
-    // difference, which is invisible from the return value alone (both are null
-    // -- what matters is that captureErrorCap still worked).
+  it('CONSTRAINS a cap on a BAR chart — and still lets it be placed at all', () => {
+    // ⚠️ UPDATED 2026-08-17. This used to assert the opposite: Bar's
+    // `pixelToData` returns `[value]`, so `capFreeDirection` gave up on the
+    // missing second coordinate and every cap on a bar chart was UNCONSTRAINED.
+    // Measured across the type table, that was 5 of 12 types where a DIAGONAL
+    // cap could be recorded — against David's *"error bars align with an axis,
+    // either horizontal or vertical; there cannot be one in between"*
+    // (2026-08-17), and he asked for it closed.
+    //
+    // ⚑ A 1-D axes CAN say which way its value runs: stepping its single value
+    // through `dataToPixel` is the same probe, and Bar answers (0,-1) here. The
+    // dimensionality assumption was in the probe, not in the chart.
+    //
+    // ⚑ THE HALF THAT STILL MATTERS IS KEPT. An earlier draft of
+    // capFreeDirection probed in order to GATE the feature and would have
+    // REFUSED error bars on bar charts outright. A constraint must never become
+    // a refusal, so this still asserts that the capture succeeds.
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     const steps: Array<[number, number, string[]]> = [
       [100, 250, ['0']],
@@ -496,9 +505,12 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
       })
     ).toBeNull();
 
-    // The cap EXISTS and is a real cap -- it simply has no axis-lock.
+    // The cap EXISTS -- the constraint did not become a refusal...
     expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1);
-    expect(session.errorCapDragLine(1, 0)).toBeNull();
+    // ...and it is now axis-locked, along the value axis this chart calibrated.
+    const line = session.errorCapDragLine(1, 0);
+    expect(line, 'a bar chart can now say which way its value runs').not.toBeNull();
+    expect(Math.abs(line!.direction.x), 'vertical value axis: no x component').toBeLessThan(1e-6);
   });
 
   it('⚑ adjusting a cap afterwards keeps it ON the bar', () => {
