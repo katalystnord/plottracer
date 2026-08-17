@@ -1,0 +1,139 @@
+/**
+ * WHAT THE CALIBRATION CARD SHOWS — decided here, rendered in `ui/`.
+ *
+ * ⚑⚑ WHY THIS FILE EXISTS. David, 2026-08-17: *"the biggest aim here is
+ * CONSISTENCY across all code, and moving code out to where it can be tested."*
+ * The card's decisions lived as conditions inside `Workspace.tsx` — 21
+ * `heatmapActive` branches alone — where **mutation testing cannot see them at
+ * all** and the only other instrument is an 18-minute Electron run. So they
+ * diverged: three graph types grew three different second stages, three endings
+ * and three folded lines, each locally reasonable.
+ *
+ * This is the `refactor 4` method, applied to a card instead of a hook: move the
+ * BODY into a pure engine function and leave the component rendering it. Every
+ * case below is a unit test that runs in milliseconds.
+ *
+ * ⚑⚑ THE MODEL — every calibrated type is TWO STAGES:
+ *   1. calibrate the axes, ending with **Calibrate**;
+ *   2. read what those axes make readable, ending with **Read cells** /
+ *      **Read categories**.
+ * A type with no second stage (XY, polar, ternary, map, CCR, spider, pie,
+ * histogram) simply finishes at stage 1. Which types have one is DECLARED
+ * (`AxesTypeConfig.secondStage`), never asked by id.
+ *
+ * ⚑⚑ ONE AT A TIME WHILE WORKING, BOTH AT ONCE WHEN REVIEWING. David: *"when we
+ * are running the calibration we see them one at the time"* and *"if we unfold
+ * the calibrated calibration card, we see both steps information at once."*
+ * Those are not in tension: unfolding a FINISHED card is a different act from
+ * unfolding a WORKING one. While you work, the card is a WORKSPACE and shows the
+ * step you are on; once done it is a RECORD and shows everything it recorded.
+ */
+
+/** Which stage the card is in. */
+export type CardStage =
+  /** No figure captured — nothing to calibrate yet. */
+  | 'capture'
+  /** Walking the calibration steps. */
+  | 'calibrating'
+  /** Axes calibrated; the second stage is unfinished. */
+  | 'second-stage'
+  /** Everything this type asks for is done. */
+  | 'done';
+
+export interface CalibrationCardInput {
+  /** The type's declared second stage, or undefined if it has none. */
+  secondStage?: { label: string; ending: string } | undefined;
+  figureCaptured: boolean;
+  calibrated: boolean;
+  /** How many calibration points are placed, and how many the walk asks for. */
+  placed: number;
+  steps: number;
+  /** Has the second stage produced its reading? False when there is no second
+   * stage — the card is done at calibration. */
+  secondStageComplete: boolean;
+  /** What the second stage reports once complete — "25 cells read". Blank until
+   * then. Supplied by the caller, which is the only thing that has it. */
+  secondStageSummary?: string;
+  /** Has the user opened the card? A FINISHED card is folded by default. */
+  expanded: boolean;
+}
+
+export interface CalibrationCardModel {
+  stage: CardStage;
+  /** The single line a folded, finished card shows. */
+  foldedLine: {
+    title: string;
+    /** "Calibrated ✓", or "3/8 set" while walking. */
+    status: string;
+    /** "25 cells read ✓", or null for a type with no second stage. */
+    secondStage: string | null;
+  };
+  /** Which sections the body shows. Both true only on a finished, unfolded card
+   * — the review view. */
+  showsWalk: boolean;
+  showsSecondStage: boolean;
+  /** The button that ends the CURRENT stage, or null when there is nothing to
+   * end. Its words come from the type, because reading CELLS through a colour
+   * key and reading CATEGORIES off an axis are not the same measurement. */
+  ending: string | null;
+}
+
+/**
+ * The card, from the session's own state.
+ *
+ * ⚑ Pure: no React, no DOM, no session object — just the facts the card turns
+ * on. That is what lets every case below be a millisecond-long unit test rather
+ * than a screenshot.
+ */
+export function calibrationCardModel(input: CalibrationCardInput): CalibrationCardModel {
+  const {
+    secondStage,
+    figureCaptured,
+    calibrated,
+    placed,
+    steps,
+    secondStageComplete,
+    secondStageSummary,
+    expanded,
+  } = input;
+
+  const stage: CardStage = !figureCaptured
+    ? 'capture'
+    : !calibrated
+      ? 'calibrating'
+      : secondStage && !secondStageComplete
+        ? 'second-stage'
+        : 'done';
+
+  // ⚑ A type with no second stage is DONE at calibration — it never enters
+  // 'second-stage', so it cannot show a stage it does not have.
+  const done = stage === 'done';
+
+  return {
+    stage,
+    foldedLine: {
+      title: 'Calibration',
+      status: calibrated ? 'Calibrated ✓' : `${placed}/${steps} set`,
+      // ⚑ Only once the stage has actually produced something. A label with no
+      // reading behind it would assert work that has not happened — the same
+      // rule that stops a generated grid being drawn like a measured one.
+      secondStage:
+        secondStage && secondStageComplete
+          ? `${secondStageSummary ?? secondStage.label} ✓`
+          : null,
+    },
+    // ⚑⚑ ONE AT A TIME WHILE WORKING, BOTH WHEN REVIEWING. The walk shows while
+    // walking; the second stage shows while in it; a FINISHED card that the user
+    // opens shows both, because at that point it is a record rather than a
+    // workspace.
+    showsWalk: stage === 'calibrating' || (done && expanded),
+    showsSecondStage:
+      stage === 'second-stage' || (done && expanded && secondStage !== undefined),
+    ending:
+      stage === 'calibrating'
+        ? 'Calibrate'
+        : stage === 'second-stage'
+          ? (secondStage?.ending ?? null)
+          : null,
+  };
+}

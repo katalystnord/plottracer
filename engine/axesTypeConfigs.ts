@@ -794,6 +794,41 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   categoryTicks?: { originStep: string };
   /**
+   * ⚑⚑ THE SECOND STAGE — what this type reads once its axes are calibrated.
+   *
+   * David, 2026-08-17: *"It is a two step process. First calibrate the axis,
+   * then read the categorical marks based on these axis. The first one should
+   * end with a Calibrate button, the second should end with a Read categories
+   * or Read cells."*
+   *
+   * ⚑⚑ IT IS A SHAPE THE CODE ALREADY HAD AND NEVER NAMED, which is exactly why
+   * its three instances diverged. `categoryTicks` was a declared capability read
+   * in ONE place (`calibrationSession.ts`) and could not drift. The heatmap's
+   * grid was `axesTypeId === HEATMAP_AXES_CONFIG.id` followed by **21**
+   * `heatmapActive` branches through `Workspace.tsx` — so the newest type became
+   * the least declared one, and grew its own fold-out, its own ending and its own
+   * folded line. That is the v2.2 audit's own finding (*"a graph type joined a
+   * dropdown and joined nothing else"*) recurring one layer up: the registry was
+   * fixed, the UI was not.
+   *
+   * ⚑ So a type DECLARES its second stage or has none, and the card renders from
+   * the declaration. A thirteenth type gets the shape by declaring one field
+   * instead of by being remembered.
+   *
+   * ⚑ `ending` is the button's own words because they are not interchangeable:
+   * a heatmap reads CELLS through a colour key, a bar chart reads CATEGORIES off
+   * an axis. Same shape, different measurement, and the button should say which.
+   *
+   * Absent = the calibration IS the whole card: XY, polar, ternary, map, CCR,
+   * spider, pie, histogram all finish at Calibrate.
+   */
+  secondStage?: {
+    /** What the stage is called on the folded line — "Grid", "Categories". */
+    label: string;
+    /** The button that ENDS it — "Read cells", "Read categories". */
+    ending: string;
+  };
+  /**
    * Rewrite the walk when an OPTION changes what a step is asking for.
    *
    * ⚑⚑ A heatmap's axes are each independently a CATEGORY or a VALUE, and the
@@ -1200,6 +1235,9 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'heatmap',
   label: 'Heatmap',
   axesKind: 'xy',
+  // ⚑ Stage 2: the grid, read through the colour key. Was 21 hardcoded
+  // `heatmapActive` branches in Workspace.tsx before it was declared.
+  secondStage: { label: 'Grid', ending: 'Read cells' },
   exportShape: 'heatmap',
   dataDim: 2,
   // ⚑ THREE SLOTS, so each axis's second point can carry BOTH its coordinate
@@ -1696,6 +1734,9 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
   categoryTicks: { originStep: 'p1' },
+  // ⚑ Stage 2: the category ticks this type marks after its value axis
+  // is calibrated — the same shape the heatmap's grid has.
+  secondStage: { label: 'Categories', ending: 'Read categories' },
   tupleNoun: 'bar',
   tupleMembers: 'object',
   derivedTupleValue: {
@@ -1868,6 +1909,9 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   defaultSlots: BOX_PLOT_SLOTS,
   // Shares Bar's fixedSteps (below), so the same seed step.
   categoryTicks: { originStep: 'p1' },
+  // ⚑ Stage 2: the category ticks this type marks after its value axis
+  // is calibrated — the same shape the heatmap's grid has.
+  secondStage: { label: 'Categories', ending: 'Read categories' },
   tupleNoun: 'box',
   // Shares Bar's calibration and guards -- reusing the arrays keeps them from
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
