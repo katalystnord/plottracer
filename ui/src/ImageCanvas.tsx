@@ -333,10 +333,6 @@ interface ImageCanvasProps {
   onKeyCursorDrag?: (t: number) => void;
   /** Committed, on release. */
   onKeyCursorDragEnd?: (t: number) => void;
-  /** Check Calibration overlay (v0.8): the 4 image-space corners of the
-   * calibrated axis box, drawn as a magenta rectangle so a user can see whether
-   * it aligns with the plot's real axes. Null when off / not applicable. */
-  calibrationCheckBox?: { x: number; y: number }[] | null;
   /** On-canvas measurement drawings (distance/angle/area/slope + the in-progress
    * one), in image-pixel space. */
   measureOverlays?: MeasureOverlay[];
@@ -525,7 +521,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2213,22 +2209,6 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   const s = imageToScreen(view, p.x, p.y);
                   return <Circle key={`ch-mark-${mi}`} x={s.x} y={s.y} radius={6} stroke="#2e9e5b" strokeWidth={2} listening={false} />;
                 })}
-                {/* Check Calibration (v0.8): the calibrated axis box in magenta.
-                    Closed quad; distinct from the green fit line and blue series
-                    so it reads as "the calibration's own frame". */}
-                {calibrationCheckBox && calibrationCheckBox.length === 4 && (
-                  <Line
-                    points={calibrationCheckBox.flatMap((p) => {
-                      const s = imageToScreen(view, p.x, p.y);
-                      return [s.x, s.y];
-                    })}
-                    stroke="#e000e0"
-                    strokeWidth={2}
-                    dash={[8, 4]}
-                    closed
-                    listening={false}
-                  />
-                )}
                 {measureOverlays?.map((o) => {
                   const scr = o.points.map((p) => imageToScreen(view, p.x, p.y));
                   const lbl = imageToScreen(view, o.labelAt.x, o.labelAt.y);

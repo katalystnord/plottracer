@@ -488,20 +488,6 @@ describe('Workspace: XY axes', () => {
     await expectRow([5, 5]);
   });
 
-  it('Check Calibration appears once calibrated and toggles the axis-box overlay (v0.8)', async () => {
-    await resetWorkspace('xy');
-    // Not offered before calibration -- there is no box to draw.
-    expect(await page.getByTestId('check-calibration').count()).toBe(0);
-    await calibrateXYStandard();
-    const check = page.getByTestId('check-calibration');
-    await check.waitFor({ state: 'visible' });
-    expect(await check.getAttribute('aria-pressed')).toBe('false');
-    await check.click();
-    expect(await check.getAttribute('aria-pressed')).toBe('true');
-    await check.click();
-    expect(await check.getAttribute('aria-pressed')).toBe('false');
-  });
-
   it('registers the next calibration click even when it lands on an already-placed handle (shared X1/Y1 origin)', async () => {
     // Regression test for the checkpoint 12 bug: a mousedown landing on a
     // draggable marker used to be swallowed instead of registering as the

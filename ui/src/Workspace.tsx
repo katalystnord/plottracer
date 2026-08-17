@@ -190,7 +190,6 @@ import {
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
-import { calibrationCheckBox } from '../../engine/calibrationCheck.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
@@ -6073,28 +6072,6 @@ export function Workspace() {
   }, [gamePhase, roundQueue, roundIndex, axes]);
 
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
-  // the toggle is on. `version` is a dep so dragging a calibration handle (which
-  // re-runs calibration) re-projects the box live. Whether these axes CAN
-  // produce a box (XY only) is decided by calibrationCheckBox returning null,
-  // which also gates the toggle button below (a capability gate, not `id==='xy'`
-  // -- histogram/error-bar build a real XYAxes and check just fine).
-  // v0.8 audit #4 (checkCalib persists across Reset) was CONSIDERED and left as
-  // is: the overlay is already null while !axes, so nothing wrong shows; and if
-  // the toggle stays on, re-calibrating simply draws the NEW calibration's box,
-  // which is a useful verify, not a bug. Cosmetic, no data impact -- deliberate.
-  const [checkCalib, setCheckCalib] = useState(false);
-  const calibrationCheckOverlay = useMemo(
-    () => (checkCalib && axes ? calibrationCheckBox(axes) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [checkCalib, axes, version]
-  );
-  // Whether a calibration-check box is possible at all (XY-underlying axes) --
-  // gates the toggle button so it never appears where it can only do nothing.
-  const canCheckCalibration = useMemo(
-    () => !!axes && calibrationCheckBox(axes) !== null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [axes, version]
-  );
 
   // Committed measurement drawings, plus the in-progress one (a lone dot after
   // the first click) while the ruler tool is active.
@@ -6969,36 +6946,11 @@ export function Workspace() {
                 Calibrate
               </button>
             )}
-            {/* Check calibration (v0.8): toggle the magenta calibrated-axis-box
-                overlay. Shown once calibrated on XY-underlying axes -- a visual
-                verify ("does the box hug the plot's frame?"), no data touched. */}
-            {axes && canCheckCalibration && (
-              <button
-                type="button"
-                data-testid="check-calibration"
-                onClick={() => setCheckCalib((v) => !v)}
-                aria-pressed={checkCalib}
-                title="Draw the calibrated axis box on the image — it should line up with the plot's own axes. Toggle off to hide."
-                style={{
-                  marginLeft: 'auto',
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  border: `1px solid ${checkCalib ? theme.color.primary.main : theme.color.border.regular}`,
-                  borderRadius: theme.border.radius.regular,
-                  background: checkCalib ? theme.color.primary.main : theme.color.background.primary,
-                  color: checkCalib ? '#fff' : theme.color.text.primary,
-                  cursor: 'pointer',
-                  padding: '2px 8px',
-                }}
-              >
-                Check calibration
-              </button>
-            )}
             <button
               type="button"
               data-testid="reset-calibration"
               onClick={reset}
-              style={{ marginLeft: axes && canCheckCalibration ? 6 : !isCalibrating && !axes ? 6 : 'auto', fontSize: 12, whiteSpace: 'nowrap' }}
+              style={{ marginLeft: !isCalibrating && !axes ? 6 : 'auto', fontSize: 12, whiteSpace: 'nowrap' }}
             >
               Reset calibration
             </button>
@@ -8207,7 +8159,6 @@ export function Workspace() {
           keySpan={heatmapKeySpan}
           onKeyCursorDrag={previewKeyCursor}
           onKeyCursorDragEnd={commitKeyCursor}
-          calibrationCheckBox={calibrationCheckOverlay}
           measureOverlays={measureOverlays}
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
           selectedMeasureVertex={activeMeasure}
