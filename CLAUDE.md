@@ -44,9 +44,13 @@ else is subordinate to them.
   itself** — `shading='flat'` REQUIRES n+1 edges and refuses centres, so a
   record carrying only centres fails against a real consumer. The bar model came
   the same way, by lifting the chart libraries' models in reverse.
-  ⚑ **The two halves cover for each other.** Heatmaps have essentially NO prior
-  art among digitizers — but the generating libraries have a model, and that is
-  where (b) was answered when (a) had no peer to compare against.
+  ⚑ **The two halves cover for each other.** No digitizer exposes a heatmap MODEL
+  to compare a record against — but the generating libraries have one, and that is
+  where (b) was answered when (a) had no peer.
+  ⚠️ **"No prior art" is the wrong way to say that, and saying it cost a sweep** —
+  see the correction under *WHEN WE ARE FIRST*. Hand-methods for heatmaps do
+  exist (ImageJ and similar) and were never surveyed, because an unfalsifiable
+  claim closed the question instead of opening it.
   ⚑⚑ **IT APPLIES TO THE WORKFLOW TOO, and the reverse direction is the same
   trick**: for a record, the reverse is *what a library needs to REGENERATE the
   figure*; for a workflow, it is *how a tool that CREATES this figure ASKS the
@@ -241,13 +245,29 @@ wherever the reading cannot be eyeballed.
 
 Every earlier type had something outside this project pushing back: bar had WPD's
 model, the chart libraries lifted in reverse, and 32 published figures; pie had 22
-surveyed tools. The heatmap has **no prior art at all** — no digitizer does this —
-while being the largest type by prevalence (406,986 articles). Nobody built it
-because it is hard, not because it does not matter. So all three correctives are
-absent together:
+surveyed tools. The heatmap had **no digitizer to survey** while being the largest
+type by prevalence (406,986 articles). Nobody built it coherently because it is
+hard, not because it does not matter. So all three correctives are absent
+together:
+
+⚠️ **CORRECTED 2026-08-17 — this used to say "no prior art at all", and that was
+an overstatement that got as far as a published release page.** David: *"There
+have been a few attempts before, and some manual routes, via for example ImageJ.
+But no coherent digitizer has done the job before."* The true claim is narrower
+and still worth making: no *coherent workflow* existed, and no digitizer's MODEL
+was available to measure ours against.
+⚑⚑ **AND THE OVERSTATEMENT COST A SWEEP.** Tenet 11(b) asks whether anyone has
+already established a model for the thing we are about to model. "No prior art"
+answered that question by assertion and closed it — so the **manual routes were
+never surveyed**, and a workflow people actually perform by hand is exactly the
+kind of source 11(b) exists to find. ▶ **The lesson is about the SHAPE of the
+claim:** "nobody has done this" is unfalsifiable from inside the project and ends
+enquiry, where "no tool exposes a model we can compare records against" is
+checkable and leaves the hand-methods still worth reading. Say the checkable one.
 
 - **the eye** — colour is the value, so a wrong cell is silent;
-- **prior art** — nothing to measure against, or to differ from deliberately;
+- **prior art** — no digitizer's model to measure against or differ from
+  deliberately (the hand-methods are worth reading, but they publish no record);
 - **a round-trippable workflow** — the RECORD can be validated by construction
   (regenerate the figure from it: max difference 0.0), and was. **A GESTURE
   CANNOT BE.** There is no reverse test for "click the second corner."
