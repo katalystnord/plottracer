@@ -72,6 +72,18 @@ export interface CalibrationCardModel {
    * — the review view. */
   showsWalk: boolean;
   showsSecondStage: boolean;
+  /**
+   * Whether to NAME the second stage even when its controls are not shown.
+   *
+   * ⚑⚑ ONE STAGE AT A TIME MUST NOT MEAN A HIDDEN NEXT STEP. The card's own
+   * history records the cost: gating the stage's button on having something to
+   * read *"removed the button entirely before detection had found anything —
+   * the flow lost its visible next step again, one state earlier. A greyed
+   * control says 'this is what comes next'; a missing one says nothing at
+   * all."* So while you are still calibrating, the second stage is NAMED and
+   * disabled; only its controls wait.
+   */
+  showsSecondStageHeader: boolean;
   /** The button that ends the CURRENT stage, or null when there is nothing to
    * end. Its words come from the type, because reading CELLS through a colour
    * key and reading CATEGORIES off an axis are not the same measurement. */
@@ -129,10 +141,25 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
     showsWalk: stage === 'calibrating' || (done && expanded),
     showsSecondStage:
       stage === 'second-stage' || (done && expanded && secondStage !== undefined),
+    // ⚑ Named from the moment there is a card to name it on, so the next step is
+    // never invisible — see the field's own note.
+    // ⚑⚑ VISIBLE WHILE YOU ARE IN IT, folded card or not. Calibrating AUTO-FOLDS
+    // the card (the walk's own ending), and stage 2 is the step you are on the
+    // moment that happens — so requiring `expanded` here hid the current step
+    // behind the fold that had just closed on the previous one. Named while
+    // calibrating too, but only with the card open, because then it is a
+    // preview rather than the step you are on.
+    showsSecondStageHeader:
+      secondStage !== undefined && (stage === 'second-stage' || (stage !== 'capture' && expanded)),
+    // ⚑⚑ AND A FINISHED CARD YOU HAVE OPENED OFFERS IT AGAIN. Folded, there is
+    // nothing to end — the line is a record. But you opened it in order to
+    // change something, and without the action that is the dead end this card
+    // already fixed once: *"the grid was gone and Read cells was therefore
+    // disabled."* Re-reading is the whole point of the review view.
     ending:
       stage === 'calibrating'
         ? 'Calibrate'
-        : stage === 'second-stage'
+        : stage === 'second-stage' || (done && expanded && secondStage !== undefined)
           ? (secondStage?.ending ?? null)
           : null,
   };

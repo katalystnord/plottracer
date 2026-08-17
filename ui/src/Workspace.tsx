@@ -256,6 +256,7 @@ import {
   measurementPixelValue,
 } from '../../core/measurementValues.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
+import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
 import { clampPanelWidth, readPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
@@ -1075,7 +1076,6 @@ export function Workspace() {
    * with, like the category-tick panel: its summary line is on screen from the
    * start, so the feature is discoverable without the card growing over the
    * figure before anyone has asked it to. */
-  const [heatmapPanelOpen, setHeatmapPanelOpen] = useState(false);
   /** Which band's name is being typed, per axis — the same one-at-a-time editor
    * the bar chart's category column uses. */
   /** The cell the user picked, in grid indices — the one thing tying a row of
@@ -2427,7 +2427,12 @@ export function Workspace() {
    */
   const finishHeatmapGrid = useCallback(() => {
     if (runHeatmapRead()) {
-      setHeatmapPanelOpen(false);
+      // ⚑⚑ THE ENDING FOLDS THE CARD, not a fold-out inside it. Read cells is
+      // stage 2's ending and the card has ONE fold now, so finishing collapses
+      // the whole two-stage card to its single line — which is the behaviour
+      // David asked for and, before this, the reason the grid panel had a fold
+      // of its own at all.
+      setCalibExpanded(false);
       // ⚑⚑ THE READ IS ITS OWN UNDO STEP. It produces the entire table, and it
       // took no snapshot — so undo had nothing to land on between "grid
       // detected" and "calibration finished", and took the grid with it.
@@ -5766,6 +5771,39 @@ export function Workspace() {
   // identity every render silently disabled the memoization of everything
   // downstream of it (caught by the compiler lint, not by eye).
   const steps = useMemo(() => session.getSteps(), [session, version]);
+
+  /**
+   * WHAT THE CALIBRATION CARD SHOWS — decided in `engine/`, rendered here.
+   *
+   * ⚑⚑ THE COMPONENT NO LONGER DECIDES. Which stage you are in, what the folded
+   * line says and what ends the current stage all come from
+   * `calibrationCardModel`, where 24 unit tests reach them in milliseconds. The
+   * same decisions as conditions in this file were invisible to mutation testing
+   * and reachable only by an 18-minute Electron run — which is why three graph
+   * types grew three different second stages.
+   *
+   * ⚑ `secondStageComplete` is the one fact only this component has: whether the
+   * stage has produced anything. A heatmap has cells; a categorical type has tick
+   * geometry. Same question, asked of whichever the type declares.
+   */
+  const secondStageComplete = heatmapActive
+    ? heatmapCells.length > 0
+    : session.supportsCategoryTicks()
+      ? session.getCategoryAxis().hasGeometry()
+      : false;
+  const secondStageSummary = heatmapActive
+    ? `${heatmapCells.length} cells read`
+    : `${session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0} categories`;
+  const cardModel = calibrationCardModel({
+    ...(config.secondStage ? { secondStage: config.secondStage } : {}),
+    figureCaptured,
+    calibrated: !!axes,
+    placed: Object.keys(placedPoints).length,
+    steps: steps.length,
+    secondStageComplete,
+    secondStageSummary,
+    expanded: calibExpanded,
+  });
   // The spider table: one ROW per axis, one COLUMN per series (David, 2026-07-27).
   const spiderTable = useMemo(() => session.getSpiderTable(), [session, version]);
   // The bar table: one ROW per category, one COLUMN per series (v2.0), the
@@ -6931,6 +6969,23 @@ export function Workspace() {
             >
               {axes ? 'Calibrated ✓' : `${Object.keys(placedPoints).length}/${steps.length} set`}
             </span>
+            {/* ⚑⚑ THE SECOND STAGE'S OWN STATUS, on the same line. David's
+                design: a finished card is ONE row — "Calibration · Calibrated ✓
+                · 20 cells read ✓ · Reset calibration". It appears only once the
+                stage has actually produced a reading, so the line never claims
+                work that has not happened. */}
+            {cardModel.foldedLine.secondStage && (
+              <span
+                data-testid="second-stage-status"
+                style={{
+                  fontSize: theme.font.size.small,
+                  whiteSpace: 'nowrap',
+                  color: theme.color.primary.main,
+                }}
+              >
+                {cardModel.foldedLine.secondStage}
+              </span>
+            )}
             {!isCalibrating && !axes && (
               // ⛑ THE SAME TEAL AS THE OTHER TWO. This ends the calibration
               // walk and auto-folds its card (checkpoint 86) — the identical
@@ -7172,168 +7227,11 @@ export function Workspace() {
               figure to see makes the window bigger, and that is their call. A
               fixed display size is authoritative about CONTENT and only
               suggestive about LAYOUT — the harness is not the judge of this. */}
-          {heatmapActive && (
-            <div
-              data-testid="heatmap-grid-panel"
-              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
-            >
-              {/* ⚑⚑ THE ACTION TRAVELS WITH THE GRID, exactly as its provenance
-                  does one block below. David, on the built 2.2.0: *"You now have
-                  to know that to HAVE to open the 'lower part' of the calibration
-                  card to be able to read the cells, even though everything looks
-                  ready. That is a UI design fault."* The screen said `Calibrated
-                  ✓`, `▶ Grid — 5 × 5 cells` and detection's own "5 columns,
-                  matching the 4 boundaries found" — everything reads READY — and
-                  the one action that finishes the job was inside a closed
-                  fold-out inside a closed card.
-                  ⚠️ AND THE "ENDING" FIX MADE IT WORSE: Read cells FOLDS the card
-                  behind it, so the second read was buried too. Fixing "the flow
-                  has no ending" created "the flow has no visible NEXT STEP", and
-                  the fix has to keep both properties at once.
-                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES — which
-                  is this feature's own established answer to an undiscoverable
-                  gesture, not a new one. `Reset to key` is already offered both
-                  on the picked-cell line and in the right-click menu, in the same
-                  words, because right-click alone could not be found. One handler,
-                  one label, one style; the fold-out keeps its ending and the
-                  header line carries the next step. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                type="button"
-                data-testid="heatmap-grid-toggle"
-                onClick={() => setHeatmapPanelOpen((open) => !open)}
-                title={heatmapPanelOpen ? 'Close the grid settings' : 'Open the grid settings'}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  font: 'inherit',
-                  color: theme.color.text.secondary,
-                  cursor: 'pointer',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    color: theme.color.text.secondary,
-                    transform: heatmapPanelOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                    transition: 'transform 0.15s',
-                  }}
-                >
-                  <ChevronDownIcon />
-                </span>
-                <span data-testid="heatmap-grid-summary">{heatmapGridSummary(heatmapShownGrid)}</span>
-              </button>
-              {/* ⚑ Only once there IS a grid to read — the same gate the button
-                  inside the fold-out uses, so the two cannot get out of step. */}
-              {/* ⚠️ DISABLED, NEVER ABSENT, when there is no grid to read yet.
-                  Gating this on `heatmapShownGrid` removed the button entirely
-                  before detection had found anything — which is the very defect
-                  this button exists to fix: the flow lost its visible next step
-                  again, one state earlier. A greyed control says "this is what
-                  comes next"; a missing one says nothing at all.
-                  ⚑ Same semantics the button inside the fold-out had (it was
-                  always rendered, `disabled={!canRead}`) — moving a control must
-                  not quietly change when it exists. */}
-              {session.isCalibrated() && (
-                <button
-                  type="button"
-                  data-testid="heatmap-read"
-                  onClick={() => finishHeatmapGrid()}
-                  disabled={!heatmapShownGrid}
-                  title={
-                    heatmapShownGrid
-                      ? 'Read every cell through the colour key — the cells appear in the Cells panel'
-                      : 'Detect the grid first, or overlay an even one — there are no cells to read yet'
-                  }
-                  style={endsCardButton(!!heatmapShownGrid)}
-                >
-                  Read cells
-                </button>
-              )}
-              </div>
-              {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID — outside the
-                  fold-out, because it is the answer to "did you measure this or
-                  make it up?" and that question is live the moment a grid
-                  appears. It sat INSIDE the fold-out, so a detected grid and an
-                  overlaid one looked identical unless you went looking. Same
-                  rule as drawing nothing until something is measured: the
-                  provenance travels with the thing, or it is not provenance. */}
-              {heatmapDetectMessage && (
-                <span
-                  data-testid="heatmap-detect-message"
-                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
-                >
-                  {heatmapDetectMessage}
-                </span>
-              )}
-              {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID — David's rule 4: *"should the
-                  axis underneath it change so drastically that a new grid
-                  detection needs to take place, then we should warn the user of
-                  that, and ask for a new grid detection to take place, and not
-                  make abstract models around it."*
-                  ⚑ It states the FACT (the axes moved), the CONSEQUENCE (the
-                  grid came with them, which is what a parametric store does) and
-                  the ACTION — and deliberately does NOT claim to know whether
-                  the grid still lines up. That judgement is the abstract model,
-                  and only the person looking at the figure can make it.
-                  ⚑ Outside the fold-out, beside the detect message, for the same
-                  reason that one is: it describes the grid, and the user may
-                  never open the card. */}
-              {heatmapAxisHasMoved && (
-                <span
-                  data-testid="heatmap-axis-moved"
-                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
-                >
-                  The axes have moved since this grid was recorded, so the grid moved with them.
-                  Detect the grid again if it no longer lines up with the figure.
-                </span>
-              )}
-              {heatmapPanelOpen && (
-              <HeatmapCard
-                gridSize={
-                  heatmapShownGrid
-                    ? {
-                        columns: Math.max(0, heatmapShownGrid.xDividers.length - 1),
-                        rows: Math.max(0, heatmapShownGrid.yDividers.length - 1),
-                      }
-                    : null
-                }
-                onDetect={runHeatmapDetect}
-                onOverlayEvenGrid={overlayEvenHeatmapGrid}
-                onAddColumnBoundary={() => addHeatmapDivider('x')}
-                onAddRowBoundary={() => addHeatmapDivider('y')}
-                selectedBoundary={selectedBoundary}
-                onRemoveBoundary={removeHeatmapDivider}
-                canRemoveBoundary={
-                  selectedBoundary !== null &&
-                  heatmapShownGrid !== null &&
-                  (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
-                }
-                xLabels={heatmapXLabels}
-                yLabels={heatmapYLabels}
-                onLabelsChange={(x, y) => {
-                  // ⚑ A text edit: marked pending here and committed on blur, the same
-                  // rule every other text field follows. Without it the names were in
-                  // no snapshot at all, and an undo of an unrelated action discarded
-                  // everything typed, with no redo to get it back.
-                  markPendingEdit();
-                  applyHeatmapLabels(x, y);
-                }}
-                onCommitPendingEdit={commitPendingEdit}
-                regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid, heatmapCounts())}
-                xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
-                yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
-                error={heatmapError}
-                canRead={session.isCalibrated()}
-              />
-
-              )}
-            </div>
-          )}
+          {/* ⚑⚑ ONLY WHILE THE SECOND STAGE IS SHOWING — the model decides, not
+              `heatmapActive`. A finished card stops offering "Read cells" for
+              cells it has already read; unfolding a finished card brings the
+              whole stage back, because at that point the card is a record
+              rather than a workspace. */}
           {/* v2.1 CATEGORY TICKS. A fold-out on the calibration card, not a step
               in the walk: a bar chart still calibrates in two clicks, a
               single-series chart never needs any of this, and nobody has to know
@@ -7678,6 +7576,172 @@ export function Workspace() {
                   </div>
                 );
               })()}
+            </div>
+          )}
+          {/* ⚑⚑ STAGE 2 COMES AFTER STAGE 1, because a review view should read
+              in the order the work was done: calibrate the axes, then read what
+              those axes make readable. It used to render ABOVE the axis options
+              that belong to stage 1, so an unfolded card showed the second step
+              before the first one's settings. */}
+          {heatmapActive && cardModel.showsSecondStageHeader && (
+            <div
+              data-testid="heatmap-grid-panel"
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
+            >
+              {/* ⚑⚑ THE ACTION TRAVELS WITH THE GRID, exactly as its provenance
+                  does one block below. David, on the built 2.2.0: *"You now have
+                  to know that to HAVE to open the 'lower part' of the calibration
+                  card to be able to read the cells, even though everything looks
+                  ready. That is a UI design fault."* The screen said `Calibrated
+                  ✓`, `▶ Grid — 5 × 5 cells` and detection's own "5 columns,
+                  matching the 4 boundaries found" — everything reads READY — and
+                  the one action that finishes the job was inside a closed
+                  fold-out inside a closed card.
+                  ⚠️ AND THE "ENDING" FIX MADE IT WORSE: Read cells FOLDS the card
+                  behind it, so the second read was buried too. Fixing "the flow
+                  has no ending" created "the flow has no visible NEXT STEP", and
+                  the fix has to keep both properties at once.
+                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES — which
+                  is this feature's own established answer to an undiscoverable
+                  gesture, not a new one. `Reset to key` is already offered both
+                  on the picked-cell line and in the right-click menu, in the same
+                  words, because right-click alone could not be found. One handler,
+                  one label, one style; the fold-out keeps its ending and the
+                  header line carries the next step. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* ⚑⚑ NO SECOND TRIANGLE. The card has ONE fold — David's design: the
+                  whole two-stage process folds to one row, and unfolding it shows
+                  both stages at once. A nested fold-out meant the user had to open
+                  two things to see what one card had recorded, and it is how the
+                  bulk name boxes came to be hidden behind a fold nobody opened. */}
+              <span
+                data-testid="heatmap-grid-summary"
+                style={{ color: theme.color.text.secondary }}
+              >
+                {heatmapGridSummary(heatmapShownGrid)}
+              </span>
+              {/* ⚑ Only once there IS a grid to read — the same gate the button
+                  inside the fold-out uses, so the two cannot get out of step. */}
+              {/* ⚠️ DISABLED, NEVER ABSENT, when there is no grid to read yet.
+                  Gating this on `heatmapShownGrid` removed the button entirely
+                  before detection had found anything — which is the very defect
+                  this button exists to fix: the flow lost its visible next step
+                  again, one state earlier. A greyed control says "this is what
+                  comes next"; a missing one says nothing at all.
+                  ⚑ Same semantics the button inside the fold-out had (it was
+                  always rendered, `disabled={!canRead}`) — moving a control must
+                  not quietly change when it exists. */}
+                            {/* ⚑⚑ THE MODEL DECIDES WHETHER THERE IS ANYTHING TO END. A card
+                  whose cells are already read offers no "Read cells" — the
+                  ending belongs to the stage you are IN, and on a finished card
+                  you are past it. Wired to `cardModel.ending` rather than to a
+                  condition of its own, so the button and the model that governs
+                  it cannot drift apart. */}
+              {/* ⚑⚑ ONLY IN THE SECOND STAGE. Gating on `ending !== null` was
+                  wrong and the screenshot said so: during stage 1 the ending is
+                  "Calibrate", so this button borrowed stage 1's word AND kept
+                  stage 2's handler — a control labelled for one step that
+                  performed another. The stage is the gate; the ending is only
+                  its label. */}
+              {cardModel.ending !== null && cardModel.stage !== 'calibrating' && (
+                <button
+                  type="button"
+                  data-testid="heatmap-read"
+                  onClick={() => finishHeatmapGrid()}
+                  disabled={!heatmapShownGrid}
+                  title={
+                    heatmapShownGrid
+                      ? 'Read every cell through the colour key — the cells appear in the Cells panel'
+                      : 'Detect the grid first, or overlay an even one — there are no cells to read yet'
+                  }
+                  style={endsCardButton(!!heatmapShownGrid)}
+                >
+                  {cardModel.ending}
+                </button>
+              )}
+              </div>
+              {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID — outside the
+                  fold-out, because it is the answer to "did you measure this or
+                  make it up?" and that question is live the moment a grid
+                  appears. It sat INSIDE the fold-out, so a detected grid and an
+                  overlaid one looked identical unless you went looking. Same
+                  rule as drawing nothing until something is measured: the
+                  provenance travels with the thing, or it is not provenance. */}
+              {heatmapDetectMessage && (
+                <span
+                  data-testid="heatmap-detect-message"
+                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
+                >
+                  {heatmapDetectMessage}
+                </span>
+              )}
+              {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID — David's rule 4: *"should the
+                  axis underneath it change so drastically that a new grid
+                  detection needs to take place, then we should warn the user of
+                  that, and ask for a new grid detection to take place, and not
+                  make abstract models around it."*
+                  ⚑ It states the FACT (the axes moved), the CONSEQUENCE (the
+                  grid came with them, which is what a parametric store does) and
+                  the ACTION — and deliberately does NOT claim to know whether
+                  the grid still lines up. That judgement is the abstract model,
+                  and only the person looking at the figure can make it.
+                  ⚑ Outside the fold-out, beside the detect message, for the same
+                  reason that one is: it describes the grid, and the user may
+                  never open the card. */}
+              {heatmapAxisHasMoved && (
+                <span
+                  data-testid="heatmap-axis-moved"
+                  style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
+                >
+                  The axes have moved since this grid was recorded, so the grid moved with them.
+                  Detect the grid again if it no longer lines up with the figure.
+                </span>
+              )}
+              {/* ⚑⚑ THE STAGE'S CONTROLS follow the STAGE; the row above only
+                  NAMES it. While you are still calibrating the grid is named and
+                  disabled — "this is what comes next" — and its controls wait.
+                  Removing the name entirely is the defect this card already
+                  fixed once: *"the flow lost its visible next step again."* */}
+              {cardModel.showsSecondStage && (
+              <HeatmapCard
+                gridSize={
+                  heatmapShownGrid
+                    ? {
+                        columns: Math.max(0, heatmapShownGrid.xDividers.length - 1),
+                        rows: Math.max(0, heatmapShownGrid.yDividers.length - 1),
+                      }
+                    : null
+                }
+                onDetect={runHeatmapDetect}
+                onOverlayEvenGrid={overlayEvenHeatmapGrid}
+                onAddColumnBoundary={() => addHeatmapDivider('x')}
+                onAddRowBoundary={() => addHeatmapDivider('y')}
+                selectedBoundary={selectedBoundary}
+                onRemoveBoundary={removeHeatmapDivider}
+                canRemoveBoundary={
+                  selectedBoundary !== null &&
+                  heatmapShownGrid !== null &&
+                  (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
+                }
+                xLabels={heatmapXLabels}
+                yLabels={heatmapYLabels}
+                onLabelsChange={(x, y) => {
+                  // ⚑ A text edit: marked pending here and committed on blur, the same
+                  // rule every other text field follows. Without it the names were in
+                  // no snapshot at all, and an undo of an unrelated action discarded
+                  // everything typed, with no redo to get it back.
+                  markPendingEdit();
+                  applyHeatmapLabels(x, y);
+                }}
+                onCommitPendingEdit={commitPendingEdit}
+                regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid, heatmapCounts())}
+                xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
+                yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
+                error={heatmapError}
+                canRead={session.isCalibrated()}
+              />
+
+              )}
             </div>
           )}
           {/* Global calibration fields (e.g. Circular Chart Recorder's "Chart

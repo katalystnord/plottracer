@@ -82,6 +82,61 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
   });
 });
 
+describe('⚑⚑ one stage at a time is NOT a hidden next step', () => {
+  it('names the second stage while you are still calibrating, without its controls', () => {
+    // The card's own history: gating the stage's button on having something to
+    // read "removed the button entirely before detection had found anything —
+    // the flow lost its visible next step again". A greyed control says what
+    // comes next; a missing one says nothing.
+    const m = calibrationCardModel({ ...base, secondStage: GRID });
+    expect(m.showsSecondStageHeader).toBe(true);
+    expect(m.showsSecondStage).toBe(false);
+  });
+
+  it('⚑⚑ stays visible while you are IN it, even with the card folded', () => {
+    // Finishing the walk auto-folds the card, and stage 2 is the step you are on
+    // the instant that happens. Requiring the card to be open would hide the
+    // current step behind a fold that just closed on the previous one.
+    const m = calibrationCardModel({
+      ...base, secondStage: GRID, calibrated: true, expanded: false,
+    });
+    expect(m.stage).toBe('second-stage');
+    expect(m.showsSecondStageHeader).toBe(true);
+    expect(m.showsSecondStage).toBe(true);
+  });
+
+  it('a type with no second stage never names one', () => {
+    expect(calibrationCardModel({ ...base }).showsSecondStageHeader).toBe(false);
+  });
+
+  it('and nothing is named before there is a figure to calibrate', () => {
+    const m = calibrationCardModel({ ...base, secondStage: GRID, figureCaptured: false });
+    expect(m.showsSecondStageHeader).toBe(false);
+  });
+});
+
+describe('⚑⚑ a finished card you OPEN can still act', () => {
+  it('offers the second stage’s ending again in the review view', () => {
+    // Folded there is nothing to end. But you opened it to change something, and
+    // an opened card with no action is the dead end this card already fixed
+    // once: "the grid was gone and Read cells was therefore disabled."
+    const m = calibrationCardModel({
+      ...base, secondStage: GRID, calibrated: true,
+      secondStageComplete: true, expanded: true,
+    });
+    expect(m.stage).toBe('done');
+    expect(m.ending).toBe('Read cells');
+  });
+
+  it('and the FOLDED line still has nothing to end', () => {
+    const m = calibrationCardModel({
+      ...base, secondStage: GRID, calibrated: true,
+      secondStageComplete: true, expanded: false,
+    });
+    expect(m.ending).toBeNull();
+  });
+});
+
 describe('a type with NO second stage finishes at calibration', () => {
   it('is DONE the moment it is calibrated — it never enters a stage it lacks', () => {
     const m = calibrationCardModel({ ...base, calibrated: true, expanded: false });

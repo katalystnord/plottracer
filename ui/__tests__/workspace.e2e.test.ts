@@ -8161,10 +8161,19 @@ describe('heatmap capture (v2.2)', () => {
 
   /** Open the grid fold-down on the calibration card — the inputs live there
    * now, beside the calibration that defines them. */
+  /**
+   * Make the grid section visible.
+   *
+   * ⚑⚑ THE CARD HAS ONE FOLD NOW (v2.3, E2). The grid used to be a fold-out
+   * INSIDE the calibration card, so this clicked its own triangle; the whole
+   * two-stage card now folds as one, so the way to see stage 2 is to unfold the
+   * card. A user opening two things to see what one card recorded is exactly how
+   * the bulk name boxes ended up hidden behind a fold nobody opened.
+   */
   async function openHeatmapGrid() {
     if ((await page.getByTestId('heatmap-detect').count()) === 0) {
-      await page.getByTestId('heatmap-grid-toggle').click();
-      await page.waitForTimeout(150);
+      await page.getByTestId('calib-fold').click();
+      await page.waitForTimeout(200);
     }
   }
 
@@ -8690,6 +8699,13 @@ describe('heatmap capture (v2.2)', () => {
     // because detecting it was its own step.
     await page.getByTestId('undo').click();
     await page.waitForTimeout(400);
+    // ⚑ OPENED TO LOOK (v2.3, E2). Reading the cells folds the card to its one
+    // line — "Calibration · Calibrated ✓ · 20 cells read ✓" — and undo re-reads
+    // them, so the card is still FINISHED and still folded. The grid's own
+    // summary lives inside the card now, not beside it, so inspecting it means
+    // opening the card. That is the design, not a regression: a finished card
+    // reports what it recorded, and the detail is one click away.
+    await openHeatmapGrid();
     expect(await textOf('heatmap-grid-summary'), 'the grid must survive an undo').toBe(detected);
 
     // ⚑ THE CELLS COME BACK WITH IT, and that is the OTHER rule working, not a
