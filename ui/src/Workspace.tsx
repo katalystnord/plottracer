@@ -2280,7 +2280,11 @@ export function Workspace() {
       ...(columns !== undefined ? { columns } : {}),
       ...(rows !== undefined ? { rows } : {}),
     });
-    setHeatmapDetectMessage(result.message);
+    // ⚑ Held and set AFTER the grid change below, because the edit path CLEARS
+    // this — correctly, since an edit invalidates the previous report.
+    // Detection's own report is the one thing that survives its own grid change,
+    // being a statement about that change.
+    const message = result.message;
     // ⚑ A refused detection leaves the PREVIOUS grid alone. Replacing it with
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
@@ -2292,10 +2296,18 @@ export function Workspace() {
     // the grid did not. Adjusting the record was undoable while making it was
     // invisible — so undo could only ever take back more than the user did.
     if (result.grid !== null) {
-      applyHeatmapGrid(result.grid);
-      commit();
+      // ⚑⚑ THROUGH THE EDIT PATH, BECAUSE DETECT IS A GRID CHANGE. This called
+      // the raw `applyHeatmapGrid`, which stores the grid and nothing else — so
+      // a table already read went on describing the grid it was read from.
+      // Invisible whenever detection returned the SAME grid, and glaring the
+      // moment it did not: David saw "Grid — 5 × 4 cells" beside a matrix of 12.
+      // ⚑ The rule was already written on the path that gets it right: *"A report
+      // of a measurement that no longer describes the grid is not stale wording,
+      // it is a wrong statement."* One rule, two callers, one not using it.
+      applyHeatmapGridEdit(result.grid);
     }
-  }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts, heatmapShownGrid]);
+    setHeatmapDetectMessage(message);
+  }, [applyHeatmapGridEdit, heatmapBounds, heatmapCounts, heatmapShownGrid]);
 
   /**
    * Lay an evenly spaced grid over the plot, because the user asked for one.

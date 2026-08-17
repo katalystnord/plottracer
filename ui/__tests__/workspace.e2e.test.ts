@@ -8329,6 +8329,41 @@ describe('heatmap capture (v2.2)', () => {
     expect(walk).toMatch(/Key value 1/);
   });
 
+  it('⚑⚑ DETECT re-reads, so the table never describes a grid that is gone', async () => {
+    // David, on the built package: a card reporting "Grid — 5 × 4 cells" beside a
+    // matrix of 12. The grid had changed AFTER the read, and the table went on
+    // describing the grid it was read from.
+    //
+    // ⚑ THE RULE ALREADY EXISTED, on the path that gets it right.
+    // `applyHeatmapGridEdit` — every boundary edit — clears the report and
+    // re-reads, and says why: *"A report of a measurement that no longer
+    // describes the grid is not stale wording, it is a wrong statement."*
+    // Detect called the RAW `applyHeatmapGrid` and skipped it. One rule, two
+    // callers, one of them not using it — the shape this whole release keeps
+    // finding.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(250);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
+
+    // Change the grid: a boundary edit re-reads, so the table follows it.
+    await openHeatmapGrid();
+    await page.getByTestId('heatmap-add-column').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-declared-grid')).toMatch(/6 columns/);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/24 cells read/);
+
+    // …and DETECT is a grid change too. Before this fix the table stayed at 24
+    // while the card said 5 × 4 — a measurement of a grid that no longer existed.
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(500);
+    expect(await textOf('heatmap-grid-summary')).toMatch(/5 × 4 cells/);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
+  });
+
   it('detects the grid and reads the matrix, matching the figure’s own values', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
