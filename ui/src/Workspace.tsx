@@ -2389,6 +2389,26 @@ export function Workspace() {
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
+    // ⚑⚑ E1 — DETECTION'S REPORT RETIRES WHEN THE CELLS ARE READ. "5 columns,
+    // matching the 4 boundaries found" describes the step BEFORE this one, and
+    // `result.summary` beside it describes the figure better ("25 cells read,
+    // all clean"). Leaving it up is a card still reporting a proposal after the
+    // proposal has been acted on.
+    //
+    // ⚑ THE SAME RULE ADDING A BOUNDARY ALREADY FOLLOWS, one step later —
+    // *"the user overruled the proposal; the proposal stops describing the
+    // grid."* Here the user did not overrule it, they USED it, which retires it
+    // just as completely.
+    //
+    // ⚑ It is not tidiness. By this point both fold-outs are collapsed and the
+    // message still sits ON the figure, over the plot's top-left corner, with no
+    // fold to hide in — so until now there was no way to dismiss it at all.
+    // David, on the built package: *"it would be nice to be able to collapse the
+    // calibration card more at this stage, when its work is done."*
+    //
+    // ⚑ In the SHARED read rather than in the button, so the boundary-drag and
+    // undo paths retire it too — the same reasoning that put the re-read here.
+    setHeatmapDetectMessage('');
     return result.error === null && result.rows.length > 0;
   }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 

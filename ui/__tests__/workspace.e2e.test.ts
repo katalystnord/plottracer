@@ -8355,6 +8355,16 @@ describe('heatmap capture (v2.2)', () => {
     // ⚑ And the count now lives with the RECORD, which is the only place it
     // could survive that fold.
     expect(await textOf('heatmap-cells-summary')).toBe('20 cells read, all clean.');
+    // ⚑⚑ E1 — AND DETECTION'S REPORT RETIRES WITH IT. "5 columns, matching the 4
+    // boundaries found" describes a step the user is now two steps past, and the
+    // summary beside it says the same figure better. It is the SAME rule adding
+    // a boundary already follows ("the user overruled the proposal; the proposal
+    // stops describing the grid") applied one step later: a read supersedes the
+    // proposal it was read through.
+    // ⚑ It matters more than tidiness. Both fold-outs are collapsed by now and
+    // the message still sits ON the figure, over the plot's top-left corner —
+    // there is no fold for it to hide in, so it cannot be dismissed at all.
+    expect(await page.getByTestId('heatmap-detect-message').count()).toBe(0);
     // The matrix is what opens, and it is the figure's own shape: five columns
     // across, four rows down, so a reader can see which cell is which.
     expect(await page.getByTestId('heatmap-matrix-row').count()).toBe(4);
@@ -8497,6 +8507,13 @@ describe('heatmap capture (v2.2)', () => {
     // with no positive counterpart agrees with the wrong cause, which is how a
     // sibling test spent a release asserting a defect (see the undo note in
     // "lets a divider be DRAGGED").
+    // ⚑⚑ RE-DETECTED HERE ON PURPOSE (E1, v2.3). The read above now retires
+    // detection's report, so by this point it is already gone — and an absence
+    // that was true before the gesture proves nothing ABOUT the gesture. Running
+    // detection again restores the message, so the assertion below is once more
+    // about ADDING A BOUNDARY rather than about the read that preceded it.
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(200);
     expect(await textOf('heatmap-detect-message')).toMatch(/columns/i);
 
     await page.getByTestId('heatmap-add-column').click();
