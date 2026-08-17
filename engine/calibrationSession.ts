@@ -1149,6 +1149,30 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * If this pixel is a CAP in one of the series' own tuples, which role it plays
+   * and which pixel is its datum. Null for a datum, for a pixel in no tuple, and
+   * for a series that records no error.
+   *
+   * ⚑ A lookup, not a search: the tuple already says. That is the whole
+   * difference between this and every cap↔datum question asked before it.
+   */
+  private capRoleInTuples(
+    ds: Dataset,
+    pixelIndex: number
+  ): { role: ErrorRole; datumPixelIndex: number } | null {
+    const slots = ds.getSlotNames();
+    if (!hasErrorSlots(slots)) return null;
+    for (const tuple of ds.getAllTuples()) {
+      const datumPixelIndex = tuple[0];
+      if (datumPixelIndex == null) continue;
+      for (const role of ERROR_ROLES) {
+        if (tuple[slotForRole(role, slots.length)] === pixelIndex) return { role, datumPixelIndex };
+      }
+    }
+    return null;
+  }
+
+  /**
    * The pixel-space line an existing error point may be dragged along, or null
    * if it is unconstrained (an ordinary point, or an axes that cannot say).
    *
@@ -1160,6 +1184,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     : { origin: { x: number; y: number }; direction: { x: number; y: number } } | null {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry || !this.axes) return null;
+
+    // ⚑⚑ WHERE THE PAIRING IS STORED, THE RE-PARENTING DEFECT CANNOT HAPPEN.
+    // The tuple names this cap's datum outright, so a cap dragged past its
+    // neighbour stays anchored to its own point -- David's 2026-08-04 case,
+    // where a cap 100px from its datum but 58px from the next one claimed the
+    // neighbour and jumped onto that bar, taking its delta with it. Not a better
+    // match rule: no match rule.
+    const own = this.capRoleInTuples(entry.dataset, pointIndex);
+    if (own) {
+      const datum = entry.dataset.getPixel(own.datumPixelIndex);
+      if (!datum) return null;
+      const origin = { x: datum.x, y: datum.y };
+      const direction = capFreeDirection(this.axes, origin, own.role);
+      return direction ? { origin, direction } : null;
+    }
+
     const relation = getErrorRelation(entry.dataset);
     if (!relation) return null;
     const cap = entry.dataset.getPixel(pointIndex);
