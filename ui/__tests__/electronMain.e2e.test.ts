@@ -23,21 +23,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 
+import { ozoneArgs } from './e2eContainment.js';
+
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-// ⚑ CONTAINMENT: the ozone platform must be a launch ARGUMENT, not an env hint and
-// not appendSwitch inside the entry -- both are applied after the platform is
-// chosen, so the app lands on the developer's real screen. See the long note in
-// workspace.e2e.test.ts; verified by counting the windows that appear on :99.
-const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
-  ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
-  : [];
+// ⚑ CONTAINMENT — see `./e2eContainment.ts`. THIS is the file that landed on
+// David's screen on 2026-08-17: a suite run excluded `workspace.e2e.test.ts` by
+// name and this one launched anyway, because the gate treated an absent
+// variable as permission. It now refuses, AT the launch below.
 
 const SAMPLE_IMAGE = path.join(REPO_ROOT, 'samples/xy-stress-strain.png');
 
 async function launchProductionApp(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
-    args: [...OZONE_ARGS, path.join(REPO_ROOT, 'ui/electron-main.cjs')],
+    args: [...ozoneArgs(), path.join(REPO_ROOT, 'ui/electron-main.cjs')],
     cwd: REPO_ROOT,
     timeout: 30000,
   });

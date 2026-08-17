@@ -15,16 +15,15 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import path from 'node:path';
 
+import { ozoneArgs } from './e2eContainment.js';
+
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const RUN = process.env['SPIDER_SHOT'] === '1';
 
-// ⚑ CONTAINMENT: the ozone platform must be a launch ARGUMENT, not an env hint and
-// not appendSwitch inside the entry -- both are applied after the platform is
-// chosen, so the app lands on the developer's real screen. See the long note in
-// workspace.e2e.test.ts; verified by counting the windows that appear on :99.
-const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
-  ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
-  : [];
+// ⚑ CONTAINMENT — see `./e2eContainment.ts`. This harness EXISTS to grab a
+// frame off the virtual display, so an undeclared run is doubly wrong here.
+// ⚑ Asked AT the launch, not at module scope: this file is SKIPPED unless
+// SPIDER_SHOT=1, and a harness that never launches must not refuse.
 
 
 let app: ElectronApplication;
@@ -33,7 +32,7 @@ let page: Page;
 describe.runIf(RUN)('spider screenshot harness', () => {
   beforeEach(async () => {
     app = await electron.launch({
-      args: [...OZONE_ARGS, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
+      args: [...ozoneArgs(), path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
       cwd: REPO_ROOT,
       timeout: 30000,
       env: { ...process.env, WPD_E2E: '1' },

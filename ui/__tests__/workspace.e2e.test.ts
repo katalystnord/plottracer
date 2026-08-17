@@ -36,21 +36,16 @@ import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG
 import { serializeProject } from '../../engine/projectFile.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
+import { ozoneArgs } from './e2eContainment.js';
+
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-// ⚑ CONTAINMENT — the ozone platform must be a launch ARGUMENT (2026-07-27).
-// This machine is the developer's only one: a run that takes over the screen stops
-// him working, so "headless" is a hard requirement, not a courtesy. Three things
-// that look like they should contain it DO NOT:
-//   - `xvfb-run` alone (Ozone prefers Wayland and ignores DISPLAY),
-//   - unsetting WAYLAND_DISPLAY (Ozone finds the socket via XDG_RUNTIME_DIR),
-//   - ELECTRON_OZONE_PLATFORM_HINT=x11, and `app.commandLine.appendSwitch` inside
-//     the entry -- both too late; the platform is chosen before the entry runs.
-// Measured, not assumed: with this argument the app creates its windows on :99;
-// without it, :99 stays empty and the windows are on the real screen.
-const OZONE_ARGS = process.env['PLOTTRACER_OZONE_PLATFORM']
-  ? [`--ozone-platform=${process.env['PLOTTRACER_OZONE_PLATFORM']}`]
-  : [];
+// ⚑ CONTAINMENT — where this run's windows go, decided in ONE place for all
+// three Electron e2e files (`./e2eContainment.ts`, which holds the reasoning:
+// why it must be a launch ARGUMENT, the three things that look like containment
+// and are not, and why an undeclared run now REFUSES instead of launching).
+// ⚑ Called AT the launch, not at module scope: a refusal fires at the gesture it
+// refuses, so a harness that never launches never refuses.
 
 /**
  * A THROWAWAY PROFILE FOR THE RUN.
@@ -213,7 +208,7 @@ let dialogMessages: string[] = [];
 // masks/interferes with this. Slower (~70s vs ~50s) but reliable.
 beforeEach(async () => {
   app = await electron.launch({
-    args: [...OZONE_ARGS, `--user-data-dir=${E2E_USER_DATA}`, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
+    args: [...ozoneArgs(), `--user-data-dir=${E2E_USER_DATA}`, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
     cwd: REPO_ROOT,
     timeout: 30000,
     // WPD_E2E skips the dev DevTools, which -- docked to the side -- otherwise
