@@ -223,19 +223,53 @@ export function positionAtValue(scale: ColorScale, value: number): number | null
   return ta + ((value - a.value) / (b.value - a.value)) * (tb - ta);
 }
 
+/**
+ * THE KEY'S SCALE, and the only expression of it: what a position `t` along the
+ * strip is worth, given two labelled ticks at `ta`/`tb` worth `va`/`vb`.
+ *
+ * ⚑⚑ EXTRACTED so a second caller cannot write the formula out again. The
+ * colour key's calibrated EXTENT is wanted on screen the moment the key is
+ * calibrated — before any cell is read, and therefore before any strip has been
+ * sampled — and computing it needs exactly this and no image. Restating
+ * `exp(la + u*(lb-la))` in `ui/` would have been the v2.2 audit's own finding
+ * A2 all over again: one idea, several copies, and nothing to keep their
+ * policies in step.
+ *
+ * ⚑ It EXTRAPOLATES on purpose, outside `ta`…`tb`. The printed labels are
+ * almost never at the very ends of the ramp, so the top and bottom of most keys
+ * lie beyond them — and there is real sampled ink out there. The bound that
+ * matters is the STRIP the user marked, which is enforced where readings are
+ * taken, not here.
+ */
+export function valueAtParam(
+  t: number,
+  ta: number,
+  tb: number,
+  va: number,
+  vb: number,
+  log: boolean
+): number | null {
+  if (!Number.isFinite(t) || !Number.isFinite(ta) || !Number.isFinite(tb)) return null;
+  if (tb === ta) return null;
+  const u = (t - ta) / (tb - ta);
+  if (log) {
+    // A log scale has no negative branch and log(0) is -Infinity; a key whose
+    // labels straddle or touch zero cannot be logarithmic at all.
+    if (!(va > 0) || !(vb > 0)) return null;
+    const la = Math.log(va);
+    const lb = Math.log(vb);
+    return Math.exp(la + u * (lb - la));
+  }
+  return va + u * (vb - va);
+}
+
 export function valueAtPosition(scale: ColorScale, t: number): number | null {
   if (!Number.isFinite(t)) return null;
   if (checkColorScale(scale) !== null) return null;
   const [a, b] = scale.ticks;
   const ta = positionOnStrip(scale.strip, a.point)!;
   const tb = positionOnStrip(scale.strip, b.point)!;
-  const u = (t - ta) / (tb - ta);
-  if (scale.log) {
-    const la = Math.log(a.value);
-    const lb = Math.log(b.value);
-    return Math.exp(la + u * (lb - la));
-  }
-  return a.value + u * (b.value - a.value);
+  return valueAtParam(t, ta, tb, a.value, b.value, scale.log);
 }
 
 /**

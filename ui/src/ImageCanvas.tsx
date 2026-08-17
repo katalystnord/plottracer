@@ -22,6 +22,7 @@ import type { CropRect } from '../../engine/imageEdit.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Loupe } from './Loupe.js';
 import { CATEGORY_TICK_COLOR } from '../../engine/categoryTickOverlay.js';
+import { fmtNum } from './format.js';
 import { theme, withAlpha } from './theme.js';
 
 // The formats PlotTracer can open, as a human-readable list for tooltips/hints.
@@ -287,6 +288,41 @@ interface ImageCanvasProps {
     t: number;
     thickness: number;
   } | null;
+  /**
+   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS — the third axis's calibrated
+   * extent, printed on the key itself.
+   *
+   * ⚑⚑ WHY IT IS ON SCREEN AT ALL (2026-08-17). These two numbers were already
+   * computed, already held, and already written into every export as the
+   * `Colour key` section — and shown nowhere. David calibrated a key printed
+   * `10¹`/`10²` without ticking **Log**, so the key was read LINEARLY, exactly
+   * as instructed, and thirty cells came out on a span of **−38 … 169**: several
+   * of them negative, for an IC50, which cannot be. Nothing objected, because
+   * nothing was wrong — a linear key that goes negative is a perfectly legal
+   * diverging key. With **Log** ticked the same figure reads **3 … 589**.
+   *
+   * ⚑⚑ The two spans are unmistakable side by side, and they are available the
+   * moment the key is calibrated — BEFORE a single cell is read. That is the
+   * whole of the fix: not a new measurement, a number we already had, put where
+   * the choice that decides it is made.
+   *
+   * ⚠️ NUMBERS ONLY — nothing is flagged, and a zero crossing least of all.
+   * David: *"There can easily be instances where crossing zero is perfectly
+   * reasonable. Just think of temperature on a heatmap."* Quite: the bundled
+   * example's own key is *Peak temperature (°C)*, and anomaly maps, elevation
+   * and log-fold change all cross zero as a matter of course. A warning that
+   * fires on ordinary figures teaches the user to ignore it — the bar chart's
+   * `regenerateWarning` rule, and tenet 9 besides. We report the extent we
+   * measured and let the reader do the reading.
+   *
+   * ⚑ `strip` is the CENTRELINE, from the same `keyCursorStrip` the cursor above
+   * uses, so the two cannot disagree about where the key is.
+   */
+  keySpan?: {
+    from: number;
+    to: number;
+    strip: { from: { x: number; y: number }; to: { x: number; y: number }; thickness: number };
+  } | null;
   /** Live, while the cursor is being dragged — for the colour preview. */
   onKeyCursorDrag?: (t: number) => void;
   /** Committed, on release. */
@@ -483,7 +519,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, onKeyCursorDrag, onKeyCursorDragEnd, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, calibrationCheckBox, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1987,6 +2023,63 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     The SAME projection reports the position for the record
                     (`positionOnStrip`), so what is drawn and what is stored
                     cannot disagree. */}
+                {/* ⚑⚑ THE KEY'S CALIBRATED EXTENT, at the ends of the key. See
+                    the `keySpan` prop for why these two numbers are on screen —
+                    they were computed and exported all along and shown nowhere,
+                    which is how a linear reading of a log key produced thirty
+                    plausible cells and a negative floor nobody could see.
+                    ⚑ Drawn from the SAME strip centreline as the cursor above,
+                    so the extent and the reading cannot disagree about where the
+                    key is, and it follows zoom, pan and recalibration for free.
+                    ⚑ Placed OUTSIDE each end, along the key's own direction, so
+                    it never covers the ramp it describes — the caliper already
+                    learned that lesson ("the caliper HID THE VERY COLOUR IT
+                    POINTS AT"). Non-interactive: it is a readout, not a handle. */}
+                {keySpan && (() => {
+                  const a = imageToScreen(view, keySpan.strip.from.x, keySpan.strip.from.y);
+                  const b = imageToScreen(view, keySpan.strip.to.x, keySpan.strip.to.y);
+                  const dx = b.x - a.x;
+                  const dy = b.y - a.y;
+                  const len = Math.hypot(dx, dy);
+                  if (!Number.isFinite(len) || len < 1) return null;
+                  const ux = dx / len;
+                  const uy = dy / len;
+                  // Clear of the bar's own depth, so a thick key does not sit on
+                  // its own numbers. The thickness is the user's own two corner
+                  // clicks, in IMAGE units, so it scales with the view exactly
+                  // as the caliper's does.
+                  // ⚑ The minimum clears the step's own marker label ("Key
+                  // corner" / "Opposite corner"), which sits at the same end.
+                  const gap = Math.max(16, (keySpan.strip.thickness * view.scale) / 2 + 10);
+                  const W = 120;
+                  const H = 14;
+                  return (
+                    <Fragment key="key-span">
+                      <KonvaText
+                        x={a.x - ux * gap - W}
+                        y={a.y - uy * gap - H / 2}
+                        width={W}
+                        align="right"
+                        text={fmtNum(keySpan.from)}
+                        fontSize={12}
+                        fontFamily="system-ui, sans-serif"
+                        fill={theme.color.overlay.stroke}
+                        listening={false}
+                      />
+                      <KonvaText
+                        x={b.x + ux * gap}
+                        y={b.y + uy * gap - H / 2}
+                        width={W}
+                        align="left"
+                        text={fmtNum(keySpan.to)}
+                        fontSize={12}
+                        fontFamily="system-ui, sans-serif"
+                        fill={theme.color.overlay.stroke}
+                        listening={false}
+                      />
+                    </Fragment>
+                  );
+                })()}
                 {keyCursor && (() => {
                   const a = imageToScreen(view, keyCursor.from.x, keyCursor.from.y);
                   const b = imageToScreen(view, keyCursor.to.x, keyCursor.to.y);

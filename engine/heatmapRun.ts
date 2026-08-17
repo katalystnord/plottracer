@@ -28,10 +28,18 @@
  * they are not is written on `buildColorScale`.
  */
 
-import { colorAtPosition, sampleColorBar, stripFromCorners, type ColorBarRefusal } from '../algorithms/colorBar.js';
+import {
+  colorAtPosition,
+  positionOnStrip,
+  sampleColorBar,
+  stripFromCorners,
+  type ColorBarRefusal,
+  type Point2D,
+} from '../algorithms/colorBar.js';
 import {
   checkColorScale,
   positionAtValue,
+  valueAtParam,
   valueAtPosition,
   type ColorScale,
 } from '../algorithms/colorScale.js';
@@ -216,6 +224,54 @@ export function keyCursorStrip(
   k2: { px: number; py: number }
 ): { from: { x: number; y: number }; to: { x: number; y: number }; thickness: number } | null {
   return stripFromCorners({ x: k1.px, y: k1.py }, { x: k2.px, y: k2.py });
+}
+
+/**
+ * WHAT THE COLOUR KEY READS AT ITS TWO ENDS, from the four key clicks alone.
+ *
+ * ⚑⚑ WHY THIS EXISTS (2026-08-17). These two numbers have always been in the
+ * export — `heatmapKeyRef` writes them as the `Colour key` section — but they
+ * were computed in `readCellsFor`, i.e. only once the cells had been read, and
+ * they were shown nowhere at all. David calibrated a key printed `10¹`/`10²`
+ * without ticking **Log**; it was read linearly, exactly as instructed, and
+ * thirty cells came out on a span of **−38 … 169**, several of them negative
+ * for an IC50. Nothing was wrong, so nothing objected. With **Log** the same
+ * key reads **3 … 589**. The two are unmistakable side by side — but only if
+ * they are on screen BEFORE the cells are read, which is what this is for.
+ *
+ * ⚑⚑ NO IMAGE, DELIBERATELY. The extent is pure geometry: where the two
+ * labelled ticks project onto the strip, what they are worth, and whether the
+ * scale is log. Sampling the ramp is what a READING needs, not what the ENDS
+ * need — so this can run the instant the fourth click lands, and it is testable
+ * without an Electron run, which nothing in `ui/` is.
+ *
+ * ⚑ `valueAtParam` is the same scale the readings come out of, extracted rather
+ * than restated. Finding A2 of this release was one idea in three copies with
+ * silently different policies; this is the same idea refusing a second copy.
+ *
+ * Null when the key is not fully clicked, when the corners describe no strip,
+ * when a tick value is not a number, when the two ticks coincide along the
+ * strip, or when a log key's labels are not both positive.
+ */
+export function keySpanFromClicks(
+  k1: { px: number; py: number },
+  k2: { px: number; py: number },
+  kv1: { px: number; py: number; values: readonly string[] },
+  kv2: { px: number; py: number; values: readonly string[] },
+  log: boolean
+): { from: number; to: number; strip: { from: Point2D; to: Point2D; thickness: number } } | null {
+  const strip = keyCursorStrip(k1, k2);
+  if (strip === null) return null;
+  const ta = positionOnStrip(strip, { x: kv1.px, y: kv1.py });
+  const tb = positionOnStrip(strip, { x: kv2.px, y: kv2.py });
+  if (ta === null || tb === null) return null;
+  const va = Number(kv1.values[0]);
+  const vb = Number(kv2.values[0]);
+  if (!Number.isFinite(va) || !Number.isFinite(vb)) return null;
+  const from = valueAtParam(0, ta, tb, va, vb, log);
+  const to = valueAtParam(1, ta, tb, va, vb, log);
+  if (from === null || to === null) return null;
+  return { from, to, strip };
 }
 
 /** The axes surface needed to read a heatmap's frame back — structural, so no

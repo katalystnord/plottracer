@@ -224,6 +224,7 @@ import {
   heatmapGridToParams,
   resolveHeatmapGrid,
   keyCursorStrip,
+  keySpanFromClicks,
   readHeatmapCells,
   removeDividerHandle,
   setCellReading,
@@ -5658,6 +5659,36 @@ export function Workspace() {
   }, [heatmapActive, selectedCell, heatmapCells, placedPoints]);
 
   /**
+   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS — computed as soon as the key is
+   * calibrated, which is the whole point of it.
+   *
+   * ⚑⚑ THESE NUMBERS ALREADY EXISTED. `heatmapKeyRef` has carried
+   * `{ from, to, log }` into every export as the `Colour key` section since
+   * v2.2 — but it is filled in `readCellsFor`, i.e. AFTER the cells are read,
+   * which is after the damage. The same two calls a few hundred lines up
+   * (`valueAtPosition(scale, 0)` / `(scale, 1)`) run here the moment the four
+   * key clicks are down, so the extent is on screen while the user is still
+   * deciding what the key IS. See ImageCanvas's `keySpan` for the morning that
+   * prompted it.
+   *
+   * ⚑ NO IMAGE, so this is an ordinary memo: `keySpanFromClicks` is pure
+   * geometry over the four key clicks, and it uses the same `valueAtParam` the
+   * readings come out of. Sampling the ramp is what a READING needs; the ENDS
+   * need only where the labelled ticks sit along the strip and what they say.
+   * Every decision is in `engine/heatmapRun.ts` where a unit test can reach it —
+   * nothing in `ui/` is reachable by anything but an 18-minute Electron run.
+   */
+  const heatmapKeySpan = useMemo(() => {
+    if (!heatmapActive) return null;
+    const k1 = placedPoints['k1'];
+    const k2 = placedPoints['k2'];
+    const kv1 = placedPoints['kv1'];
+    const kv2 = placedPoints['kv2'];
+    if (!k1 || !k2 || !kv1 || !kv2) return null;
+    return keySpanFromClicks(k1, k2, kv1, kv2, session.getOptions()['isLogValue'] === 'true');
+  }, [heatmapActive, placedPoints, session, version]);
+
+  /**
    * The cursor moved: show the ink under it, on the TABLE cell.
    *
    * ⚑ One pixel read, not a re-sample of the whole strip — the colour a position
@@ -8153,6 +8184,7 @@ export function Workspace() {
           gridOverlay={heatmapOverlay}
           gridSelection={heatmapSelectionOutline}
           keyCursor={heatmapKeyCursor}
+          keySpan={heatmapKeySpan}
           onKeyCursorDrag={previewKeyCursor}
           onKeyCursorDragEnd={commitKeyCursor}
           calibrationCheckBox={calibrationCheckOverlay}
