@@ -44,6 +44,35 @@ import { bandIndexIn, paramOfSpan, valueOfSpan } from './bandedAxis.js';
  * sample and the two boundaries are the same boundary entered twice. */
 const DIVIDER_EPS = 1e-9;
 
+/**
+ * Is `t` a position ON the colour key — that is, on the strip itself?
+ *
+ * ⚑⚑ THE THIRD AXIS'S BOUND, IN ONE PLACE, because the model has THREE
+ * entrances and each one had to be told separately. A user drags the key's
+ * marker (`setCellReadingAt`), types a number that is converted to a position
+ * (`setCellReading`), or opens a project file — and until 2026-08-17 the file
+ * checked only that the value was a finite number. A hand-edited or foreign
+ * project could therefore land a cell anywhere along an infinite key, and
+ * `valueAtPosition` extrapolates a position of 5 into a perfectly ordinary
+ * number attributed to ink that does not exist. In a type where colour IS the
+ * value, that has no other symptom.
+ *
+ * ⚠️ THE BOUND IS THE STRIP (`k1 → k2`, which is 0..1), NOT THE LABELLED TICKS.
+ * The ticks are the calibration, exactly as x1 and x2 are on an axis, and the
+ * ramp runs past them: a key labelled 100 and 700 whose ink continues beyond
+ * the 700 mark can legitimately read higher, off ink that was really sampled.
+ * Bounding at the ticks would refuse a real reading of a real figure.
+ *
+ * ⚑ Lives in `core/` so `core/plotData.ts` (the load entrance) and
+ * `engine/heatmapRun.ts` (the two interactive ones) can share it. `core/` never
+ * imports `algorithms/` or `engine/`, and this keeps it that way — the
+ * alternative was the same rule written out twice, which is finding A2 of this
+ * release in miniature.
+ */
+export function isPositionOnKey(t: number): boolean {
+  return Number.isFinite(t) && t >= 0 && t <= 1;
+}
+
 /** One cell of the grid, in data coordinates. */
 export interface HeatmapCell {
   col: number;

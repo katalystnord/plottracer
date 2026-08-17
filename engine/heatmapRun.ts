@@ -51,7 +51,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, isPositionOnKey, moveDivider, removeDivider } from '../core/heatmapGrid.js';
 import type { CategoryOverlayInput } from './categoryTickOverlay.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
@@ -738,7 +738,12 @@ export function setCellReadingAt(
   // and 700 whose ink continues beyond the 700 mark can legitimately read
   // higher, off ink that was really sampled. Bounding at the ticks would refuse
   // a real reading of a real figure.
-  if (t < 0 || t > 1) {
+  // ⚑ `isPositionOnKey` is the same predicate the LOAD path uses (core/
+  // heatmapGrid.ts). It lives in core/ so all three entrances — this drag, the
+  // typed twin above, and a project file — share one expression of the bound
+  // rather than three that can drift. The file's copy was missing entirely
+  // until the v2.2 audit's pass 5 went looking.
+  if (!isPositionOnKey(t)) {
     return {
       readings,
       error:

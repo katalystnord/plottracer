@@ -253,5 +253,33 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     const { session: after } = roundTrip(before);
     expect(after.getHeatmapLayer()?.readings).toEqual({ '1,1': 0.42 });
   });
+
+  it('\u2691\u2691 keeps a reading only if it is ON the colour key \u2014 the file is an ENTRANCE too', () => {
+    // \u2691\u2691 THE THIRD ENTRANCE. Both interactive paths bound a reading to the strip
+    // and say so \u2014 `setCellReadingAt` ("that is past the end of the colour key
+    // \u2014 the key runs between the two corners you marked, and there is no ink
+    // beyond them to read a colour from") and `setCellReading` through
+    // `positionAtValue`. The FILE checked only that the key looked like a cell
+    // and the value was a finite number, so a hand-edited or foreign project
+    // could land a cell anywhere along an infinite key.
+    //
+    // \u2691 Why it matters more here than almost anywhere: a position of 5 is
+    // extrapolated by `valueAtPosition` into a perfectly ordinary-looking
+    // number, attributed to ink that does not exist, in a type where colour IS
+    // the value and a wrong cell has no other symptom. Finding A5 fixed "one
+    // line at two entrances" and there were three.
+    //
+    // \u2691 DROPPED, not clamped: the cell then falls back to what its own COLOUR
+    // says, which is a real measurement off real ink \u2014 the same thing
+    // `clearCellReading` means by "hand the cell back to the colour key".
+    // Clamping would invent a reading at the strip's end that nobody took.
+    const before = calibratedSession();
+    before.setHeatmapLayer({
+      readings: { '1,1': 0.42, '2,2': 5, '3,3': -0.001, '4,4': 0, '5,5': 1 },
+    });
+    const { session: after } = roundTrip(before);
+    // The two ENDS are legitimate positions on the strip and must survive.
+    expect(after.getHeatmapLayer()?.readings).toEqual({ '1,1': 0.42, '4,4': 0, '5,5': 1 });
+  });
 });
 

@@ -39,6 +39,7 @@
  */
 
 import { Calibration } from './calibration.js';
+import { isPositionOnKey } from './heatmapGrid.js';
 import { Dataset, type PixelMetadata } from './dataset.js';
 import { Color } from './color.js';
 import { XYAxes } from './axes/xy.js';
@@ -261,9 +262,21 @@ function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
   if (src.readings && typeof src.readings === 'object') {
     const kept: Record<string, number> = {};
     for (const [key, v] of Object.entries(src.readings)) {
-      // The model's own key format, and a POSITION — anything else would land a
-      // number on a cell nobody touched.
-      if (/^\d+,\d+$/.test(key) && Number.isFinite(Number(v))) kept[key] = Number(v);
+      // The model's own key format, and a POSITION ON THE KEY — anything else
+      // would land a number on a cell nobody touched, or on a stretch of key
+      // that has no ink.
+      //
+      // ⚑⚑ THE RANGE CHECK WAS MISSING UNTIL 2026-08-17 (v2.2 audit pass 5).
+      // Both interactive entrances refuse a position off the strip and say why;
+      // this one asked only for a finite number, so a hand-edited or foreign
+      // file could carry `5` and have it extrapolated into an ordinary-looking
+      // value attributed to ink that does not exist. Finding A5 fixed "one line
+      // at two entrances" — and there were three.
+      //
+      // ⚑ DROPPED, not clamped. The cell then falls back to what its own COLOUR
+      // says, which is a real measurement off real ink; clamping would invent a
+      // reading at the strip's end that nobody took.
+      if (/^\d+,\d+$/.test(key) && isPositionOnKey(Number(v))) kept[key] = Number(v);
     }
     if (Object.keys(kept).length > 0) out.readings = kept;
   }
