@@ -9106,13 +9106,26 @@ describe('heatmap capture (v2.2)', () => {
     // calibrated yet, and the app asking for a value he could not change.
     await resetWorkspace('heatmap');
     const bands = { x2: '5', y2: '4' } as Record<string, string>;
-    for (const step of ['x1', 'x2', 'y1', 'y2'] as const) {
+    // ⚑⚑ THREE CLICKS, NOT FOUR — corrected 2026-08-17 (v2.2 audit pass 5).
+    // This walked x1, x2, y1, y2 with a click each, which is the walk B12
+    // REPLACED: y1 is the shared corner and arrives PRE-PLACED, so no prompt
+    // ever asks for that click. It passed anyway, because x1 and y1 are the
+    // same pixel in this figure — so the stray click landed on the point that
+    // was already there and changed nothing.
+    // ⚑ That is gate 4 exactly: *a walkthrough test may only click what a prompt
+    // on screen tells it to click.* A test clicking a step the user never
+    // clicks is not testing the user's walk, and it would keep passing on a
+    // figure where the two corners were NOT the same pixel — right up until it
+    // silently stopped meaning anything.
+    for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
-      await confirmValues(
-        step === 'x2' || step === 'y2' ? [String(p.value), bands[step]!] : [String(p.value)]
-      );
+      await confirmValues(step === 'x2' ? [String(p.value), bands[step]!] : [String(p.value)]);
     }
+    // The shared corner: placed already, value prefilled, confirm only.
+    await confirmValue(String(truth.frame.y1.value));
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValues([String(truth.frame.y2.value), bands['y2']!]);
     await page.waitForTimeout(200);
 
     // The last column's declared count, as typed.
