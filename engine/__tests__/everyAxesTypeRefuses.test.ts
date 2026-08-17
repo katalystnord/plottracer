@@ -1,22 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  XY_AXES_CONFIG,
-  HISTOGRAM_AXES_CONFIG,
-  BAR_AXES_CONFIG,
-  CATEGORICAL_LINE_CONFIG,
-  BOX_PLOT_AXES_CONFIG,
-  POLAR_AXES_CONFIG,
-  SPIDER_AXES_CONFIG,
-  PIE_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
-  MAP_AXES_CONFIG,
-  CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+  ALL_AXES_TYPE_CONFIGS,
   CalibrationSession,
   type AxesTypeConfig,
   type CalibratedAxes,
 } from '../calibrationSession.js';
 import { Calibration } from '../../core/calibration.js';
 import { BarAxes } from '../../core/axes/bar.js';
+import { ALL_TYPES, labelOf, clickHealthy, calibratedHealthy } from './fixtures/anyType.js';
 
 /**
  * ⚑⚑ EVERY graph type must be ABLE to refuse — the class-wide regression test.
@@ -38,22 +29,18 @@ import { BarAxes } from '../../core/axes/bar.js';
  * ⚑ It is deliberately about the ANSWER, not the words: each type phrases its
  * refusal differently and should. What must never happen is `true` on input
  * that cannot produce a reading.
+ *
+ * ⚠️⚠️ THIS FILE SAID "EVERY" AND MEANT ELEVEN (found 2026-08-17, v2.2 audit
+ * pass 4). The list above was hand-written, so the HEATMAP — the largest type
+ * this project has built — was never asked whether it can refuse anything, for
+ * the whole of v2.2, green throughout. That is A6 (`axesConfigTable.test.ts`
+ * listing eleven of twelve) arriving in a SECOND file: pass 1 fixed the
+ * instance and nobody swept for the shape, which is precisely what
+ * "a found bug is a search query, not a ticket closed" warns about.
+ * ⚑ A hand-maintained list does not grow when you add a type. So this now
+ * iterates `ALL_AXES_TYPE_CONFIGS` (via `fixtures/anyType.ts`), and a type with
+ * no declared pixel layout FAILS rather than being skipped.
  */
-
-/** Every type the graph-type picker offers, in its own order. */
-const ALL_TYPES: Array<[string, AxesTypeConfig<CalibratedAxes>]> = [
-  ['XY', XY_AXES_CONFIG],
-  ['Histogram', HISTOGRAM_AXES_CONFIG],
-  ['Bar', BAR_AXES_CONFIG],
-  ['Line (categorical)', CATEGORICAL_LINE_CONFIG],
-  ['Box Plot', BOX_PLOT_AXES_CONFIG],
-  ['Polar', POLAR_AXES_CONFIG],
-  ['Spider / Radar', SPIDER_AXES_CONFIG],
-  ['Pie / Donut', PIE_AXES_CONFIG],
-  ['Ternary', TERNARY_AXES_CONFIG],
-  ['Map', MAP_AXES_CONFIG],
-  ['Circular Chart Recorder', CIRCULAR_CHART_RECORDER_AXES_CONFIG],
-] as unknown as Array<[string, AxesTypeConfig<CalibratedAxes>]>;
 
 /**
  * Click every calibration step of `config` at ONE pixel, giving every value
@@ -76,7 +63,8 @@ function calibrateAllAtOnePoint(config: AxesTypeConfig<CalibratedAxes>, value: s
 }
 
 describe('a calibration with every point on ONE pixel is refused', () => {
-  for (const [name, config] of ALL_TYPES) {
+  for (const [id, config] of ALL_TYPES) {
+    const name = labelOf(id);
     it(`${name} refuses it, rather than reporting success`, () => {
       // Not about the wording — about the answer. A type that says yes here
       // has an axes class that cannot fail, which is the defect this file
@@ -86,55 +74,12 @@ describe('a calibration with every point on ONE pixel is refused', () => {
   }
 });
 
-/**
- * A NON-DEGENERATE pixel layout for each type — a real L for XY, a real
- * triangle for Ternary, three distinct radii for Polar, and so on.
- *
- * ⚑ WHY THIS TABLE EXISTS. The first version of this file walked every click
- * along one diagonal. For XY that trips `parallelAxisGuard` before any VALUE
- * is read, so the "identical values are refused" case passed without ever
- * testing values — and the property it claimed was false: XY happily accepted
- * two identical X values and read one constant forever. The round-2 audit
- * fleet caught it. A degenerate-input test must be degenerate in exactly ONE
- * way, or it proves nothing about the way it names.
- */
-const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
-  XY: [[100, 400], [500, 400], [100, 400], [100, 100]],
-  Histogram: [[100, 400], [500, 400], [100, 400], [100, 100]],
-  Bar: [[300, 500], [300, 100]],
-  'Line (categorical)': [[300, 500], [300, 100]],
-  'Box Plot': [[300, 500], [300, 100]],
-  Polar: [[300, 300], [400, 300], [500, 300]],
-  'Spider / Radar': [[300, 300], [450, 300], [300, 150], [150, 300]],
-  'Pie / Donut': [[450, 300], [300, 450], [150, 300], [300, 150], [406, 406]],
-  Ternary: [[100, 400], [400, 400], [250, 150]],
-  Map: [[100, 100], [300, 100]],
-  // Two genuinely CURVED arcs: the pen arc on a circle centred (150,300) r=100,
-  // then the chart arc on one centred (300,300) r=250, sharing t0r2.
-  // ⚑ The first version put all five on one vertical line, which is collinear
-  // -- so it was a degenerate fixture masquerading as the healthy control, and
-  // it went red the moment CCR learned to refuse a collinear arc.
-  'Circular Chart Recorder': [[250, 300], [150, 200], [50, 300], [300, 50], [550, 300]],
-};
-
 /** Click `config`'s steps at the healthy pixels, giving every value `value`. */
-function calibrateAt(
-  name: string,
+const calibrateAt = (
+  id: string,
   config: AxesTypeConfig<CalibratedAxes>,
   value: string
-): CalibrationSession<CalibratedAxes> {
-  const session = new CalibrationSession(config);
-  const pixels = HEALTHY_PIXELS[name]!;
-  for (let i = 0; i < 40; i++) {
-    const step = session.getCurrentStep();
-    if (!step) break;
-    const [px, py] = pixels[Math.min(i, pixels.length - 1)]!;
-    session.handleCalibrationClick(px, py);
-    session.confirmCalibrationValues(step.valueFields.map(() => value));
-  }
-  for (const gf of config.globalFields) session.setGlobalFieldValue(gf.key, value);
-  return session;
-}
+): CalibrationSession<CalibratedAxes> => clickHealthy(id, config, () => value, value);
 
 describe('a calibration whose values are all IDENTICAL is refused', () => {
   // A zero-length scale: every reading afterwards is the same constant whatever
@@ -146,11 +91,21 @@ describe('a calibration whose values are all IDENTICAL is refused', () => {
   // all -- three corners; an origin and a length; a ring of outline points
   // whose total and sweep are separate global fields. "Identical values" has
   // no meaning for them, so the all-on-one-pixel case above is their test.
-  const valued = ALL_TYPES.filter(([name]) => !['Ternary', 'Map', 'Pie / Donut'].includes(name));
+  const VALUELESS_CLICKS = ['ternary', 'map', 'pie'];
+  const valued = ALL_TYPES.filter(([id]) => !VALUELESS_CLICKS.includes(id));
 
-  for (const [name, config] of valued) {
-    it(`${name} refuses identical values on a healthy pixel layout`, () => {
-      expect(calibrateAt(name, config, '5').runCalibration()).toBe(false);
+  it('is not vacuous — the exclusions above name types that EXIST', () => {
+    // ⚑ An exclusion list keyed by a string nobody checks is how a filter goes
+    // quiet: rename a type's id and the exclusion silently stops matching (or,
+    // worse, keeps matching nothing while reading as deliberate).
+    const ids = ALL_AXES_TYPE_CONFIGS.map((c) => c.id);
+    for (const id of VALUELESS_CLICKS) expect(ids).toContain(id);
+    expect(valued.length).toBe(ALL_TYPES.length - VALUELESS_CLICKS.length);
+  });
+
+  for (const [id, config] of valued) {
+    it(`${labelOf(id)} refuses identical values on a healthy pixel layout`, () => {
+      expect(calibrateAt(id, config, '5').runCalibration()).toBe(false);
     });
   }
 });
@@ -160,27 +115,12 @@ describe('the healthy calibrations still succeed — the guard must not over-rea
   // `return false` planted in any of the other seven classes would have passed
   // all of this file's refusal assertions. An anti-vacuity control that covers
   // part of the set leaves the rest of the set unproven.
-  const ascending = (name: string, i: number): string => {
-    // Distinct, ascending, positive values -- valid for a log scale too, and
-    // for a radius. Pie/CCR take their own globals below.
-    void name;
-    return String((i + 1) * 10);
-  };
-
-  for (const [name, config] of ALL_TYPES) {
-    it(`${name} calibrates from healthy pixels and distinct values`, () => {
-      const session = new CalibrationSession(config);
-      const pixels = HEALTHY_PIXELS[name]!;
-      let n = 0;
-      for (let i = 0; i < 40; i++) {
-        const step = session.getCurrentStep();
-        if (!step) break;
-        const [px, py] = pixels[Math.min(i, pixels.length - 1)]!;
-        session.handleCalibrationClick(px, py);
-        session.confirmCalibrationValues(step.valueFields.map(() => ascending(name, n++)));
-      }
-      for (const gf of config.globalFields) session.setGlobalFieldValue(gf.key, '100');
-      expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
+  for (const [id, config] of ALL_TYPES) {
+    it(`${labelOf(id)} calibrates from healthy pixels and distinct values`, () => {
+      // ⚑ `calibratedHealthy` asserts the success itself — distinct ascending
+      // values (10, 20, 30…), valid on a log scale and as a radius — and reports
+      // the type's own refusal message if it says no.
+      calibratedHealthy(id, config);
     });
   }
 });
