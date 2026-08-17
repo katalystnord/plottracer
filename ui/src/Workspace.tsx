@@ -6514,7 +6514,15 @@ export function Workspace() {
       (i, v) => setHeatmapCategoryName('x', i, v),
       `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
       'Click to name this column, as the figure prints it', 90,
-      ordinal.toPrecision(4), copy ?? bandIndex
+      // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
+      // `0.4991` — its band-centre ordinal to four decimals — which is
+      // indistinguishable from a MEASURED coordinate, on the one type where
+      // that distinction has no other symptom. David read it as the value axis
+      // having lost its numbers. The header already says `C1`, so the decimal
+      // identified nothing and impersonated something.
+      // ⚑ It also made the heatmap the only type doing this: spider axes and bar
+      // categories have always shown the shared em dash when unnamed.
+      undefined, copy ?? bandIndex
     );
 
   const renderHeatmapYName = (bandIndex: number, name: string, ordinal: number, copy?: string) =>
@@ -6523,7 +6531,15 @@ export function Workspace() {
       (i, v) => setHeatmapCategoryName('y', i, v),
       `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
       'Click to name this row, as the figure prints it', 90,
-      ordinal.toPrecision(4), copy ?? bandIndex
+      // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
+      // `0.4991` — its band-centre ordinal to four decimals — which is
+      // indistinguishable from a MEASURED coordinate, on the one type where
+      // that distinction has no other symptom. David read it as the value axis
+      // having lost its numbers. The header already says `R1`, so the decimal
+      // identified nothing and impersonated something.
+      // ⚑ It also made the heatmap the only type doing this: spider axes and bar
+      // categories have always shown the shared em dash when unnamed.
+      undefined, copy ?? bandIndex
     );
 
   /**

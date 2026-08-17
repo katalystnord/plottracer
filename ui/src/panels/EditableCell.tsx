@@ -9,6 +9,17 @@ import { theme } from '../theme.js';
  * like the rest of the table, and an unnamed one reads as a dash exactly like a
  * value nobody recorded. The dashed underline is the whole affordance.
  *
+ * ⚑⚑ AND IT HAS TO BE VISIBLE AT 100% (v2.3, E3). It was drawn in
+ * `border.hover` — #dddddd, the FAINTEST colour in the palette, and a HOVER
+ * token used for a resting state — under text in `text.legend`, the colour this
+ * app uses for inert hints. So the one editable control on a heatmap band
+ * advertised itself in two colours that both mean "not interactive". David,
+ * looking straight at it: *"I'm testing now, and no, I cannot see that I can."*
+ * Then, told where to click, it worked first time. Legible at 3× magnification
+ * is not legible.
+ * ⚑ Now `border.regular`. The component's own claim — that the underline IS the
+ * affordance — is only true if the underline can be seen.
+ *
  * ⚑ ONE component per kind, not one per CALL SITE. `EditableValue` serves both
  * the XY table and the spider table, which had hand-rolled the same input/span
  * pair with different testid prefixes and widths; `EditableName` serves all
@@ -77,7 +88,7 @@ export function EditableValue({
       data-testid={testIdValue}
       onClick={onStartEdit}
       title={title}
-      style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
+      style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.regular}` }}
     >
       {display}
     </span>
@@ -144,7 +155,7 @@ export function EditableName({
       data-testid={testId}
       onClick={onStartEdit}
       title={title}
-      style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.hover}` }}
+      style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.regular}` }}
     >
       {name === '' ? (
         <span style={{ color: theme.color.text.legend }}>{emptyDisplay ?? '—'}</span>
