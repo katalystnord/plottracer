@@ -70,11 +70,11 @@ describe('one accessor answers for every way an error is stored', () => {
     // third shape (a band) arrives.
     const s = session();
     const ds = s.getDatasets()[0]!;
-    const datum = ds.addPixel(200, 200); // (5, 5)
+    const slots = errorSlotNames('SD');
+    ds.addPixel(200, 200); // (5, 5) -- the datum, placed BEFORE error was thought of
+    ds.adoptSlots(slots); // ...which is the point: error is added afterwards
     const cap = ds.addPixel(200, 160); // (5, 7)
-    ds.adoptSlots(errorSlotNames('SD'));
-    ds.addTuple(datum);
-    ds.addToTupleAt(0, slotForRole('upper', errorSlotNames('SD').length), cap);
+    ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
 
     const bars = s.getResolvedErrorBars(0);
     expect(bars).toHaveLength(1);
@@ -95,14 +95,41 @@ describe('one accessor answers for every way an error is stored', () => {
 
     const newWay = session();
     const ds = newWay.getDatasets()[0]!;
-    const datum = ds.addPixel(200, 200);
-    const cap = ds.addPixel(200, 160);
     const slots = errorSlotNames('SD');
+    ds.addPixel(200, 200);
     ds.adoptSlots(slots);
-    ds.addTuple(datum);
+    const cap = ds.addPixel(200, 160);
     ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
 
     expect(newWay.getResolvedErrorBars(0)).toEqual(oldWay.getResolvedErrorBars(0));
+  });
+
+  it('⚑ ORDER MATTERS: a cap pixel added BEFORE slots are adopted becomes a phantom datum', () => {
+    // ⚠️ Found by writing this suite's setup the wrong way round, and worth
+    // pinning because the capture path must not repeat it. `adoptSlots` wraps
+    // EVERY existing pixel into a tuple of its own -- that is exactly what makes
+    // "add error to points you already placed" safe. But a cap pixel added
+    // BEFORE that call is just a pixel, so it gets wrapped too and shows up as a
+    // second data point with an error bar of its own.
+    //
+    // ⇒ `captureErrorCap` must adopt slots FIRST (wrapping the real data
+    // points), THEN add the cap pixel and file it into its datum's tuple.
+    const wrong = session();
+    const dsW = wrong.getDatasets()[0]!;
+    const slots = errorSlotNames('SD');
+    dsW.addPixel(200, 200);
+    const capW = dsW.addPixel(200, 160); // cap added too early
+    dsW.adoptSlots(slots);
+    dsW.addToTupleAt(0, slotForRole('upper', slots.length), capW);
+    expect(wrong.getResolvedErrorBars(0), 'the cap became its own datum').toHaveLength(2);
+
+    const right = session();
+    const dsR = right.getDatasets()[0]!;
+    dsR.addPixel(200, 200);
+    dsR.adoptSlots(slots); // adopt FIRST
+    const capR = dsR.addPixel(200, 160);
+    dsR.addToTupleAt(0, slotForRole('upper', slots.length), capR);
+    expect(right.getResolvedErrorBars(0)).toHaveLength(1);
   });
 
   it('a series with no error at all still answers, with its points and no fields', () => {
@@ -124,11 +151,10 @@ describe('one accessor answers for every way an error is stored', () => {
     // geometric guess.
     const s = session();
     const ds = s.getDatasets()[0]!;
-    const datum = ds.addPixel(200, 200); // (5, 5)
-    const cap = ds.addPixel(200, 160); // (5, 7) -- the recorded one
     const slots = errorSlotNames('SD');
+    ds.addPixel(200, 200); // (5, 5)
     ds.adoptSlots(slots);
-    ds.addTuple(datum);
+    const cap = ds.addPixel(200, 160); // (5, 7) -- the recorded one
     ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
 
     const strayIndex = s.addDataset('SD upper');

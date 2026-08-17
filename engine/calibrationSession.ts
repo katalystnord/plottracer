@@ -205,6 +205,7 @@ import {
   type ErrorCapSeries,
   type ErrorRole,
 } from '../algorithms/errorBar.js';
+import { hasErrorSlots, errorBarsFromTuples } from '../algorithms/errorExtent.js';
 import {
   capFreeDirection,
   constrainCap,
@@ -847,6 +848,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const v = axes.pixelToData(p.x, p.y);
         return { x: v[0]!, y: v[1]! };
       });
+
+    // ⚑⚑ THE STORED PAIRING WINS, AND THIS IS THE ONLY PLACE THAT CHOOSES.
+    // A series whose own tuples carry the extents (v2.3's B4) says outright
+    // WHICH cap belongs to which datum. The related-series path below can only
+    // GUESS -- nearest along one axis -- so where the record knows, the guess
+    // must not get a vote. A half-converted import can legitimately hold both.
+    const slots = entry.dataset.getSlotNames();
+    if (hasErrorSlots(slots)) {
+      const points = toData(entry.dataset);
+      return errorBarsFromTuples(entry.dataset.getAllTuples(), (i) => points[i] ?? null, slots.length);
+    }
+
+    // The IMPORT-BOUNDARY path: a WPD file, or any of ours written before B4,
+    // carries caps as separate related series with no per-point pairing, and
+    // geometry is the only way to recover it (tenet 6 -- a foreign model
+    // translated at the edge). It is no longer how WE record error.
     const caps: ErrorCapSeries[] = errorSeriesFor(this.getDatasets(), entry.dataset.name).map(
       ({ dataset, role }) => ({ role, caps: toData(dataset) })
     );

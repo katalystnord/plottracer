@@ -27,6 +27,7 @@ import {
   slotForRole,
   roleForSlot,
   errorSlotNames,
+  hasErrorSlots,
   errorBarsFromTuples,
 } from '../errorExtent.js';
 
@@ -189,6 +190,42 @@ describe('all four roles land in their own field', () => {
       const written = (['yUpper', 'yLower', 'xLeft', 'xRight'] as const).filter((f) => bar![f] !== undefined);
       expect(written, `${role} wrote ${written.join('+')}`).toEqual([fieldOf[role]]);
     }
+  });
+});
+
+describe('recognising error slots — and NOT mistaking a box plot for them', () => {
+  it('a BOX PLOT is not read as carrying error slots', () => {
+    // ⚑⚑ THE TRAP THAT MADE THIS CHECK ASK THE NAMES. Counting was the obvious
+    // test -- "more slots than the type needs means the extras are error slots"
+    // -- and a Box Plot has FIVE: ['Min','Q1','Median','Q3','Max']. Under a
+    // count-based rule the error base lands at 1, so Q1, Median, Q3 and Max are
+    // read as upper, lower, left and right, and every box in the figure exports
+    // its QUARTILES as error bars. Silently, with plausible magnitudes, on a
+    // type where those numbers look exactly like what an error bar would say.
+    expect(hasErrorSlots(['Min', 'Q1', 'Median', 'Q3', 'Max'])).toBe(false);
+  });
+
+  it('the other slotted types are not mistaken either', () => {
+    expect(hasErrorSlots(['Bar start', 'Bar end'])).toBe(false);
+    expect(hasErrorSlots(['Bin start', 'Bin end'])).toBe(false);
+    expect(hasErrorSlots(['Sector start', 'Sector end'])).toBe(false);
+    expect(hasErrorSlots([])).toBe(false);
+  });
+
+  it('recognises error slots on a plain series and on an already-slotted one', () => {
+    expect(hasErrorSlots(errorSlotNames('SD'))).toBe(true);
+    expect(hasErrorSlots(errorSlotNames('SD', ['Bar start', 'Bar end']))).toBe(true);
+    expect(hasErrorSlots(errorSlotNames(''))).toBe(true); // unnamed still recognisable
+  });
+
+  it('a PARTIAL tail is not enough — all four roles or none', () => {
+    // Half a set would put the base in the wrong place and shift every role.
+    expect(hasErrorSlots(['Value', 'SD upper', 'SD lower'])).toBe(false);
+    expect(hasErrorSlots(['Value', 'SD upper', 'SD lower', 'SD left'])).toBe(false);
+  });
+
+  it('the roles must be in ORDER, not merely present', () => {
+    expect(hasErrorSlots(['Value', 'SD lower', 'SD upper', 'SD left', 'SD right'])).toBe(false);
   });
 });
 
