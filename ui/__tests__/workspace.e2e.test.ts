@@ -37,6 +37,7 @@ import { serializeProject } from '../../engine/projectFile.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
 import { ozoneArgs } from './e2eContainment.js';
+import { freshProfile } from './e2eProfile.js';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
@@ -66,39 +67,14 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
  * window geometry, whatever v2.3 adds — a landmine for whichever test runs
  * second. Fixed at the launch, not in the one test that happened to trip it.
  */
-const E2E_PROFILE_PREFIX = 'plottracer-e2e-profile-';
-
 /**
- * ⚑⚑ SWEPT AT START, NOT AT EXIT — the first version of this cleaned up in a
- * `process.on('exit')` hook and leaked NINE profiles at 2 MB each in one
- * evening, because that hook does not reliably run under vitest's worker pool.
- * The start of a run is the one moment a process can actually control, so the
- * sweep happens there. Same shape as the bug this whole block exists to fix:
- * state that outlives the run, unnoticed because nothing fails.
- *
- * ⚑ Still `mkdtemp` rather than one fixed path, so two overlapping runs (a
- * subset while a full board is going — routine here) cannot share a profile and
- * corrupt each other. The sweep only reaps siblings older than six hours, which
- * no live run ever is.
+ * ⚑ The sweep and the mkdtemp live in `./e2eProfile.ts`, which holds the
+ * reasoning: why it is swept at START rather than at exit, and why the clock is
+ * an ARGUMENT — this block leaked twice, the second time because it read /tmp's
+ * mtime instead of the time, which no test could reach while it was a
+ * module-scope side effect here.
  */
-const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-try {
-  const now = fs.statSync(os.tmpdir()).mtimeMs;
-  for (const entry of fs.readdirSync(os.tmpdir())) {
-    if (!entry.startsWith(E2E_PROFILE_PREFIX)) continue;
-    const stale = path.join(os.tmpdir(), entry);
-    try {
-      if (now - fs.statSync(stale).mtimeMs > SIX_HOURS_MS) {
-        fs.rmSync(stale, { recursive: true, force: true });
-      }
-    } catch {
-      // A profile that vanished under us, or one another run owns. Not ours to mind.
-    }
-  }
-} catch {
-  // No temp dir to sweep is not a reason to fail the suite.
-}
-const E2E_USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), E2E_PROFILE_PREFIX));
+const E2E_USER_DATA = freshProfile();
 
 
 /** The bundled spider example's published ground truth — anchors in IMAGE pixels,
