@@ -180,6 +180,7 @@ function labelPlacement(
  * beside the renderer. Re-exported here so every existing import site is
  * unchanged. */
 import type { CanvasMarker, SeriesLine } from '../../engine/canvasOverlays.js';
+import type { ChallengeReveal } from '../../engine/traceChallenge.js';
 export type { CanvasMarker, SeriesLine };
 
 /** An on-canvas measurement drawing (checkpoint: measure). Geometry is in
@@ -248,7 +249,7 @@ interface ImageCanvasProps {
    * end of a round, in image-pixel space. `curves` are dashed polylines (one per
    * truth series); `markers` are hollow dots for a scatter's true points. Display
    * only (listening=false). */
-  challengeReveal?: { curves: { x: number; y: number }[][]; markers: { x: number; y: number }[] } | null;
+  challengeReveal?: ChallengeReveal | null;
   /**
    * The heatmap grid (v2.2): one polyline per divider, in image-pixel space.
    *

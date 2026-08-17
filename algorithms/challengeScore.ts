@@ -98,33 +98,80 @@ export function interpY(sortedByX: readonly Pt[], x: number): number | null {
 }
 
 interface CurveFit {
-  /** Mean |Δy|/yRange over the user's in-domain points (1 when none land in domain). */
+  /** Mean |Δy|/yRange, measured in BOTH directions (see `fitCurveSeries`).
+   * 1 when the two curves have no overlap to compare over. */
   errorFrac: number;
   /** Fraction of the truth x-span the user did NOT cover (0 = fully spanned). */
   coverageFrac: number;
 }
 
-/** Score one user series against one truth curve. */
-function fitCurveSeries(user: readonly Pt[], truth: readonly Pt[], r: AxisRanges): CurveFit {
-  const sorted = [...truth].sort((a, b) => a.x - b.x);
-  const tXmin = sorted[0]!.x;
-  const tXmax = sorted[sorted.length - 1]!.x;
-  const tSpan = tXmax - tXmin || 1;
-
+/** Mean |Δy|/yRange of `samples` against the polyline `line`, over the samples
+ * that fall inside the line's x domain. `null` when none do — the caller decides
+ * what an empty comparison means in its direction. */
+function meanDeviation(samples: readonly Pt[], line: readonly Pt[], yRange: number): number | null {
   let sum = 0;
   let n = 0;
+  for (const p of samples) {
+    const y = interpY(line, p.x);
+    if (y !== null) {
+      sum += Math.abs(p.y - y) / yRange;
+      n++;
+    }
+  }
+  return n > 0 ? sum / n : null;
+}
+
+/**
+ * Score one user series against one truth curve.
+ *
+ * ⚑⚑ THE DEVIATION IS MEASURED IN BOTH DIRECTIONS, AND THAT IS THE WHOLE POINT.
+ *
+ * This function used to sample only one way — the TRUTH interpolated at each
+ * USER x — so the error was computed exclusively where the player CHOSE TO
+ * CLICK. Every point they placed was on the curve, therefore the error was zero,
+ * therefore the score was perfect. `coverageFrac` did not catch it either: it
+ * measures the x-SPAN (min to max) and says nothing about what happens between
+ * the ends.
+ *
+ * ⇒ **Two clicks, one at each end of the curve, scored EXACTLY the same as a
+ * flawless 61-click trace** — while taking a fraction of the time, and the game
+ * ranks on time. The optimal strategy was to trace as little as possible. A
+ * round whose truth peaks at y=71 between the endpoints was won by drawing the
+ * straight line that misses the peak entirely, with a penalty of 0.000.
+ *
+ * The two directions catch different lies and neither is redundant:
+ *   - **user → truth** — is each point the player placed actually ON the curve?
+ *     Catches a click in the wrong place.
+ *   - **truth → user** — does the player's polyline reproduce the curve's SHAPE?
+ *     Catches structure skipped between clicks. This is the missing half.
+ *
+ * Averaging them keeps a perfect trace at exactly 0 (both directions are 0) and
+ * leaves a uniformly-wrong trace unchanged (both directions agree), so only the
+ * under-sampling case moves — which is the case that was wrong.
+ *
+ * ⚑ Truth samples outside the user's x span are SKIPPED rather than charged:
+ * that gap is what `coverageFrac` already prices, and charging it here as well
+ * would tax the same omission twice.
+ */
+function fitCurveSeries(user: readonly Pt[], truth: readonly Pt[], r: AxisRanges): CurveFit {
+  const sortedT = [...truth].sort((a, b) => a.x - b.x);
+  const sortedU = [...user].sort((a, b) => a.x - b.x);
+  const tXmin = sortedT[0]!.x;
+  const tXmax = sortedT[sortedT.length - 1]!.x;
+  const tSpan = tXmax - tXmin || 1;
+
   let uXmin = Infinity;
   let uXmax = -Infinity;
   for (const p of user) {
-    const ty = interpY(sorted, p.x);
-    if (ty !== null) {
-      sum += Math.abs(p.y - ty) / r.yRange;
-      n++;
-    }
     if (p.x < uXmin) uXmin = p.x;
     if (p.x > uXmax) uXmax = p.x;
   }
-  const errorFrac = n > 0 ? sum / n : 1;
+
+  const userToTruth = meanDeviation(sortedU, sortedT, r.yRange);
+  const truthToUser = meanDeviation(sortedT, sortedU, r.yRange);
+  const both = [userToTruth, truthToUser].filter((d): d is number => d !== null);
+  const errorFrac = both.length > 0 ? both.reduce((s, d) => s + d, 0) / both.length : 1;
+
   const covered = user.length > 0 ? (Math.min(uXmax, tXmax) - Math.max(uXmin, tXmin)) / tSpan : 0;
   const coverageFrac = 1 - Math.min(1, Math.max(0, covered));
   return { errorFrac, coverageFrac };

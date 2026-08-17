@@ -149,3 +149,68 @@ describe('scoreOrderedRound — bar / box families', () => {
     expect(s.breakdown.matchedCount).toBe(1);
   });
 });
+
+describe('a curve must be traced, not merely spanned', () => {
+  /**
+   * ⚑⚑ THE UNDER-SAMPLING EXPLOIT. `fitCurveSeries` measured deviation in ONE
+   * direction — the truth interpolated at each USER x — so the error was only
+   * ever sampled where the player chose to click. Two clicks, one at each end,
+   * put both of them exactly on the curve (error 0) and spanned the full x range
+   * (coverage 0), scoring a flat zero penalty. The game ranks on TIME, so the
+   * winning strategy was to trace as little as possible.
+   *
+   * These cases are named for what a PLAYER does, not for the function.
+   */
+  const R: AxisRanges = { xRange: 10, yRange: 100 };
+  // A peak at x=4 that a straight endpoint-to-endpoint line cannot pass through.
+  const PEAKED: Pt[][] = [[{ x: 1, y: 12 }, { x: 4, y: 71 }, { x: 9, y: 33 }]];
+
+  it('clicking only the two endpoints does NOT score as a perfect trace', () => {
+    const endpointsOnly = scoreRound('curve', [[{ x: 1, y: 12 }, { x: 9, y: 33 }]], PEAKED, R, 10);
+    const perfect = scoreRound('curve', PEAKED, PEAKED, R, 10);
+    expect(perfect.penaltySeconds).toBeCloseTo(0, 6);
+    expect(endpointsOnly.penaltySeconds).toBeGreaterThan(0);
+    expect(endpointsOnly.adjustedSeconds).toBeGreaterThan(perfect.adjustedSeconds);
+  });
+
+  it('the penalty is proportional to the shape actually missed', () => {
+    // The straight line reads 19.875 at x=4 where the truth is 71 -> 0.51125 of
+    // the y range, averaged over three truth samples and then over the two
+    // directions (the user's own two points sit exactly on the curve, so that
+    // direction contributes 0).
+    const s = scoreRound('curve', [[{ x: 1, y: 12 }, { x: 9, y: 33 }]], PEAKED, R, 10);
+    expect(s.breakdown.meanErrorFrac).toBeCloseTo(0.51125 / 3 / 2, 6);
+  });
+
+  it('a trace that follows the shape beats one that cuts the corner', () => {
+    const follows = scoreRound('curve', [[{ x: 1, y: 12 }, { x: 4, y: 68 }, { x: 9, y: 33 }]], PEAKED, R, 10);
+    const cuts = scoreRound('curve', [[{ x: 1, y: 12 }, { x: 9, y: 33 }]], PEAKED, R, 10);
+    expect(follows.adjustedSeconds).toBeLessThan(cuts.adjustedSeconds);
+  });
+
+  it('a perfect trace still scores exactly zero penalty', () => {
+    // The fix must not tax an honest trace: both directions are 0, so the mean is 0.
+    const s = scoreRound('curve', PEAKED, PEAKED, R, 10);
+    expect(s.penaltySeconds).toBeCloseTo(0, 6);
+    expect(s.adjustedSeconds).toBeCloseTo(10, 6);
+  });
+
+  it('a uniformly wrong trace is charged the same as before the fix', () => {
+    // Both directions agree when the user's points share the truth's x values,
+    // so this case is untouched -- the change is confined to under-sampling.
+    const s = scoreRound('curve', [[{ x: 1, y: 90 }, { x: 4, y: 5 }, { x: 9, y: 99 }]], PEAKED, R, 10);
+    expect(s.breakdown.meanErrorFrac).toBeCloseTo(0.7, 6);
+  });
+
+  it('extra clicks BETWEEN the truth points are not punished for being extra', () => {
+    // Denser sampling along the same shape must not cost anything -- otherwise
+    // the fix would just invert the exploit and reward under-tracing's opposite.
+    const dense: Pt[] = [];
+    for (let x = 1; x <= 9; x += 0.5) {
+      const y = x <= 4 ? 12 + ((x - 1) / 3) * 59 : 71 - ((x - 4) / 5) * 38;
+      dense.push({ x, y });
+    }
+    const s = scoreRound('curve', [dense], PEAKED, R, 10);
+    expect(s.penaltySeconds).toBeCloseTo(0, 6);
+  });
+});

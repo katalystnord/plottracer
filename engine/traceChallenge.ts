@@ -9,6 +9,7 @@
  * stays asset-free so it unit-tests in plain node.
  */
 import type { Pt, AxisRanges } from '../algorithms/challengeScore.js';
+import { scoreRound, scoreOrderedRound, type RoundScore } from '../algorithms/challengeScore.js';
 
 /** How a round is captured + scored. `curve`/`scatter` map to `scoreRound`;
  * `histogram` is scored as a scatter over (bin-centre, value); `bar`/`box` use
@@ -457,4 +458,174 @@ export function drawRounds<T>(pool: readonly T[], target: number, rng: () => num
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
   return a.slice(0, Math.max(0, Math.min(target, a.length)));
+}
+
+/**
+ * What a finished round reads off the live session, in DATA space — the same
+ * values the CSV export carries. Declared as the four reads the scorer actually
+ * needs rather than as `CalibrationSession`, so this module stays free of the
+ * session (and unit-tests against a literal).
+ */
+export interface ChallengeSessionReader {
+  getAllDatasetsData(): readonly { readonly points: readonly { readonly data?: readonly number[] | null }[] }[];
+  getHistogramBins(): readonly ({ readonly binStart: number; readonly binEnd: number; readonly value: number } | null)[];
+  getSpiderTable(): { readonly columns: readonly { readonly values: readonly (number | null)[] }[] };
+  getTupleRows(): readonly ChallengeScoredTupleRow[];
+}
+
+/**
+ * A tuple row as the SCORER reads it: `ChallengeTupleRow`'s pixel + derived
+ * value, plus each point's `data`, which only the box branch needs (its five
+ * slots are the reading, not the tuple's single derived value).
+ *
+ * ⚑ Declared outright rather than as `ChallengeTupleRow & {…}`: intersecting two
+ * array types leaves `points` resolving to the FIRST member's element type, so
+ * `data` silently vanished and the box branch stopped compiling.
+ */
+export interface ChallengeScoredTupleRow {
+  readonly points: readonly ({ readonly px: number; readonly data?: readonly number[] | null } | null)[];
+  readonly derived: number | null;
+}
+
+/**
+ * Score a completed round: read the player's extraction per family and grade it
+ * against the round's truth.
+ *
+ * ⚑⚑ THE SWITCH IS EXHAUSTIVE ON PURPOSE, and that is the whole reason this
+ * moved out of `Workspace.tsx`. It lived there as an `if / else if / … / else`
+ * chain whose FINAL `else` was box-plot — so the eighth family, whenever one is
+ * added, would compile clean and be silently scored as a box. Nothing would
+ * throw, nothing would fail, and the number would just be wrong. The
+ * `never`-typed default turns that into a compile error at the moment the union
+ * grows, which is the same registry-driven-membership rule the axes types get:
+ * a new member cannot escape by being forgotten.
+ *
+ * ⚑ Every branch's REASONING is already recorded on the helper it calls
+ * (`derivedTupleItems` for why bar/pie score per tuple and not per click,
+ * `truthSpiderPoints` for why a spider is a scatter over spoke index). Kept
+ * there rather than duplicated here.
+ */
+export function scoreCompletedRound(
+  reader: ChallengeSessionReader,
+  ex: ChallengeExample,
+  rawSeconds: number
+): RoundScore {
+  switch (ex.family) {
+    case 'curve':
+    case 'scatter': {
+      const userSeries = reader
+        .getAllDatasetsData()
+        .map((ds) => ds.points.filter((p) => p.data).map((p) => ({ x: p.data![0]!, y: p.data![1]! })))
+        .filter((s) => s.length > 0); // empty series aren't spurious curves
+      return scoreRound(ex.family, userSeries, truthSeriesPoints(ex.truth), truthAxisRanges(ex.truth), rawSeconds);
+    }
+    case 'histogram': {
+      // Each captured bin -> (bin-centre, value); scored as a scatter (has an x axis).
+      const userPts = reader
+        .getHistogramBins()
+        .flatMap((b) => (b ? [{ x: (b.binStart + b.binEnd) / 2, y: b.value }] : []));
+      return scoreRound('scatter', [userPts], [truthHistogramPoints(ex.truth)], truthAxisRanges(ex.truth), rawSeconds);
+    }
+    case 'spider': {
+      const values = reader.getSpiderTable().columns[0]?.values ?? [];
+      return scoreRound(
+        'scatter',
+        [spiderUserPoints(values, ex.truth)],
+        [truthSpiderPoints(ex.truth)],
+        spiderAxisRanges(ex.truth),
+        rawSeconds
+      );
+    }
+    case 'pie': {
+      const items = derivedTupleItems(reader.getTupleRows(), 'capture');
+      return scoreOrderedRound(items, truthPieValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
+    }
+    case 'bar': {
+      const items = derivedTupleItems(reader.getTupleRows(), 'left-to-right');
+      return scoreOrderedRound(items, truthBarValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
+    }
+    case 'box': {
+      // Complete 5-point tuples only (Min,Q1,Median,Q3,Max order), ranked by px.
+      const tuples = reader
+        .getTupleRows()
+        .map((t) =>
+          t.points.some((p) => !p || !p.data)
+            ? null
+            : { px: t.points.reduce((s, p) => s + p!.px, 0) / t.points.length, vals: t.points.map((p) => p!.data![0]!) }
+        )
+        .filter((x): x is { px: number; vals: number[] } => x !== null)
+        .sort((a, b) => a.px - b.px);
+      return scoreOrderedRound(
+        tuples.map((t) => t.vals),
+        truthBoxValues(ex.truth),
+        truthValueRange(ex.truth),
+        rawSeconds
+      );
+    }
+    default: {
+      const unhandled: never = ex.family;
+      throw new Error(`Trace Challenge: no scoring for family ${String(unhandled)}`);
+    }
+  }
+}
+
+/** The truth answer drawn on the figure, in IMAGE PIXELS. */
+export interface ChallengeReveal {
+  readonly curves: readonly { x: number; y: number }[][];
+  readonly markers: readonly { x: number; y: number }[];
+}
+
+/**
+ * The round's TRUE answer projected for the on-figure overlay: curves become
+ * dashed polylines, scatter becomes hollow markers.
+ *
+ * ⚑ Two different sources, and the split is the MODEL showing through rather
+ * than a shortcut. Curve/scatter/histogram have an x calibration, so their truth
+ * is PROJECTED through `dataToPixel`. Spider and pie have no such projection —
+ * a spoke's true point interpolates between the two anchors it was calibrated
+ * from, and a pie's true edges are stored outright — so they are revealed from
+ * RECORDED PIXELS in the truth file. Bar and box have no x calibration either,
+ * so a value can only be drawn as a horizontal line at its own height.
+ *
+ * `xy` is null when the axes are not calibrated; the projected families then
+ * have nothing to draw and return null, while the pixel-native ones still do.
+ */
+export function challengeRevealFor(
+  ex: ChallengeExample,
+  xy: { dataToPixel(x: number, y: number): { x: number; y: number } } | null
+): ChallengeReveal | null {
+  if (ex.family === 'curve' || ex.family === 'scatter' || ex.family === 'histogram') {
+    if (!xy) return null;
+    if (ex.family === 'histogram') {
+      return { curves: [], markers: truthHistogramPoints(ex.truth).map((p) => xy.dataToPixel(p.x, p.y)) };
+    }
+    const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(Number(p.x), Number(p.y))));
+    return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
+  }
+  if (ex.family === 'spider') {
+    const pts = (ex.truth.series[0]?.points ?? []).map((p, i) =>
+      spiderPointAt(ex.truth.calibration, ex.truth, i, Number(p.value))
+    );
+    const ring = pts.filter((q): q is { x: number; y: number } => q !== null);
+    // The closed profile, plus each true reading as its own marker -- the ring
+    // shows the shape, the markers show where each answer sat on its axis.
+    return { curves: ring.length > 1 ? [[...ring, ring[0]!]] : [], markers: ring };
+  }
+  if (ex.family === 'pie') {
+    return { curves: pieRevealRays(ex.truth.calibration.slices ?? []), markers: [] };
+  }
+  // bar/box: draw the true values as horizontal lines from the value-axis anchors
+  // (bar: each value; box: each median).
+  const cal = ex.truth.calibration;
+  const x0 = singleAnchor(cal, 'p1')?.px ?? 0;
+  const x1 = cal.imageWidth - 20;
+  const hline = (value: number) => [
+    { x: x0, y: valueToPy(cal, value) },
+    { x: x1, y: valueToPy(cal, value) },
+  ];
+  const curves =
+    ex.family === 'bar'
+      ? truthBarValues(ex.truth).map((v) => hline(v[0]!))
+      : truthBoxValues(ex.truth).map((v) => hline(v[2]!)); // box: median line
+  return { curves, markers: [] };
 }

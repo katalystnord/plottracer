@@ -118,24 +118,11 @@ import { readHighScores, qualifies as scoreQualifies, insertHighScore, type High
 import {
   drawGradedRounds,
   calibrationInputsFromAnchors,
-  truthAxisRanges,
-  truthValueRange,
-  truthSeriesPoints,
-  truthHistogramPoints,
-  truthBarValues,
-  truthSpiderPoints,
-  spiderUserPoints,
-  spiderAxisRanges,
-  spiderPointAt,
-  truthPieValues,
-  derivedTupleItems,
-  pieRevealRays,
-  singleAnchor,
-  truthBoxValues,
-  valueToPy,
+  scoreCompletedRound,
+  challengeRevealFor,
   type ChallengeExample,
 } from '../../engine/traceChallenge.js';
-import { scoreRound, scoreOrderedRound, type RoundScore } from '../../algorithms/challengeScore.js';
+import { type RoundScore } from '../../algorithms/challengeScore.js';
 import {
   applyImageEditOp,
   cropImage,
@@ -3308,63 +3295,11 @@ export function Workspace() {
     const ex = roundQueue[roundIndex];
     if (!ex) return;
     const rawSeconds = Math.max(0, (Date.now() - roundStartMs) / 1000);
-    const session = sessionRef.current;
-    // Read the player's extraction in DATA space (the same values the CSV export
-    // carries) per family, and score it against truth.
-    let score: RoundScore;
-    if (ex.family === 'curve' || ex.family === 'scatter') {
-      const userSeries = session
-        .getAllDatasetsData()
-        .map((ds) => ds.points.filter((p) => p.data).map((p) => ({ x: p.data![0]!, y: p.data![1]! })))
-        .filter((s) => s.length > 0); // empty series aren't spurious curves
-      score = scoreRound(ex.family, userSeries, truthSeriesPoints(ex.truth), truthAxisRanges(ex.truth), rawSeconds);
-    } else if (ex.family === 'histogram') {
-      // Each captured bin -> (bin-centre, value); scored as a scatter (has an x axis).
-      const userPts = session
-        .getHistogramBins()
-        .flatMap((b) => (b ? [{ x: (b.binStart + b.binEnd) / 2, y: b.value }] : []));
-      score = scoreRound('scatter', [userPts], [truthHistogramPoints(ex.truth)], truthAxisRanges(ex.truth), rawSeconds);
-    } else if (ex.family === 'spider') {
-      // ⚑ Scored as a SCATTER over (spoke index, value as a fraction of that
-      // spoke). The index is the x coordinate, so a spoke left empty is a MISS on
-      // that spoke instead of shifting every later reading onto the wrong axis --
-      // see truthSpiderPoints for why the ordered scorer is wrong here.
-      const values = session.getSpiderTable().columns[0]?.values ?? [];
-      score = scoreRound(
-        'scatter',
-        [spiderUserPoints(values, ex.truth)],
-        [truthSpiderPoints(ex.truth)],
-        spiderAxisRanges(ex.truth),
-        rawSeconds
-      );
-    } else if (ex.family === 'pie') {
-      // The slice's value is DERIVED from its two boundaries, so the tuple's own
-      // `derived` is the reading -- neither member is the number being scored.
-      // Order is capture order, which the instruction pins to 12 o'clock.
-      const items = derivedTupleItems(session.getTupleRows(), 'capture');
-      score = scoreOrderedRound(items, truthPieValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
-    } else if (ex.family === 'bar') {
-      // ⚑ One value per TUPLE, ranked left-to-right -- not one per PIXEL. A bar
-      // is a two-slot interval captured as a drag-box, so the dataset holds two
-      // corners per bar and the reading is the tuple's derived value. Reading
-      // pixels charged ~193 seconds on a flawless six-bar trace and only scored
-      // "right" for a player who single-clicked, which captures no bar at all.
-      const items = derivedTupleItems(session.getTupleRows(), 'left-to-right');
-      score = scoreOrderedRound(items, truthBarValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
-    } else {
-      // box: complete 5-point tuples only (Min,Q1,Median,Q3,Max order), ranked by px.
-      const tuples = session
-        .getTupleRows()
-        .map((t) =>
-          t.points.some((p) => !p || !p.data)
-            ? null
-            : { px: t.points.reduce((s, p) => s + p!.px, 0) / t.points.length, vals: t.points.map((p) => p!.data![0]!) }
-        )
-        .filter((x): x is { px: number; vals: number[] } => x !== null)
-        .sort((a, b) => a.px - b.px);
-      score = scoreOrderedRound(tuples.map((t) => t.vals), truthBoxValues(ex.truth), truthValueRange(ex.truth), rawSeconds);
-    }
-    setRoundScores((prev) => [...prev, score]);
+    // Reading the player's extraction and grading it is PURE, and lives in
+    // engine/traceChallenge.ts so it can be tested -- see
+    // engine/__tests__/traceChallengeRoundOutcome.test.ts. It was here, where
+    // nothing could reach it.
+    setRoundScores((prev) => [...prev, scoreCompletedRound(sessionRef.current, ex, rawSeconds)]);
     setGamePhase('reveal');
   }, [roundQueue, roundIndex, roundStartMs]);
 
@@ -6079,46 +6014,12 @@ export function Workspace() {
     if (gamePhase !== 'reveal') return null;
     const ex = roundQueue[roundIndex];
     if (!ex) return null;
-    // Curve/scatter/histogram have an x axis -> project the truth via dataToPixel.
-    if (ex.family === 'curve' || ex.family === 'scatter' || ex.family === 'histogram') {
-      if (!axes) return null;
-      const xy = axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } };
-      if (ex.family === 'histogram') {
-        return { curves: [], markers: truthHistogramPoints(ex.truth).map((p) => xy.dataToPixel(p.x, p.y)) };
-      }
-      const seriesPx = ex.truth.series.map((s) => s.points.map((p) => xy.dataToPixel(Number(p.x), Number(p.y))));
-      return ex.family === 'scatter' ? { curves: [], markers: seriesPx.flat() } : { curves: seriesPx, markers: [] };
-    }
-    // ⚑ Spider and pie are revealed from RECORDED PIXELS in the truth file, not
-    // from a projection: a spoke's true point interpolates between the two
-    // anchors it was calibrated from, and a pie's true edges are stored outright.
-    if (ex.family === 'spider') {
-      const pts = (ex.truth.series[0]?.points ?? []).map((p, i) =>
-        spiderPointAt(ex.truth.calibration, ex.truth, i, Number(p.value))
-      );
-      const ring = pts.filter((q): q is { x: number; y: number } => q !== null);
-      // The closed profile, plus each true reading as its own marker -- the ring
-      // shows the shape, the markers show where each answer sat on its axis.
-      return { curves: ring.length > 1 ? [[...ring, ring[0]!]] : [], markers: ring };
-    }
-    if (ex.family === 'pie') {
-      const slices = ex.truth.calibration.slices ?? [];
-      return { curves: pieRevealRays(slices), markers: [] };
-    }
-    // bar/box have no x calibration -> draw the true values as horizontal lines
-    // from the value-axis anchors (bar: each value; box: each median).
-    const cal = ex.truth.calibration;
-    const x0 = singleAnchor(cal, 'p1')?.px ?? 0;
-    const x1 = cal.imageWidth - 20;
-    const hline = (value: number) => [
-      { x: x0, y: valueToPy(cal, value) },
-      { x: x1, y: valueToPy(cal, value) },
-    ];
-    const curves =
-      ex.family === 'bar'
-        ? truthBarValues(ex.truth).map((v) => hline(v[0]!))
-        : truthBoxValues(ex.truth).map((v) => hline(v[2]!)); // box: median line
-    return { curves, markers: [] };
+    // Which families project through the axes and which are pixel-native is the
+    // MODEL's business, so the decision lives in engine/traceChallenge.ts.
+    return challengeRevealFor(
+      ex,
+      (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } } | null) ?? null
+    );
   }, [gamePhase, roundQueue, roundIndex, axes]);
 
   // Check Calibration overlay (v0.8): the calibrated axis box, drawn only while
