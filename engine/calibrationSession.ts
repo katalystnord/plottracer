@@ -200,12 +200,13 @@ import { computeWhiskerGlyph } from './errorBarGlyph.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
 import {
   matchCapToDatum,
+  ERROR_ROLES,
   resolveErrorBars,
   type ErrorBarPoint,
   type ErrorCapSeries,
   type ErrorRole,
 } from '../algorithms/errorBar.js';
-import { hasErrorSlots, errorBarsFromTuples } from '../algorithms/errorExtent.js';
+import { hasErrorSlots, errorBarsFromTuples, slotForRole } from '../algorithms/errorExtent.js';
 import {
   capFreeDirection,
   constrainCap,
@@ -1036,6 +1037,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
     const whiskers: GlyphSegment[][] = [];
     for (const entry of this.datasetEntries) {
+      // ⚑⚑ THE STORED PAIRING NEEDS NO MATCHING AT ALL. Where the extents live in
+      // the datum's own tuple (v2.3 B4), the tuple SAYS which cap belongs to
+      // which datum, so the drawing and the record cannot disagree -- neither of
+      // them is inferring anything. Checkpoint 85 had to force these two onto one
+      // matching rule precisely because both were guessing; this removes the
+      // guess rather than aligning it.
+      const slots = entry.dataset.getSlotNames();
+      if (hasErrorSlots(slots)) {
+        const pixels = entry.dataset.getAllPixels();
+        for (const tuple of entry.dataset.getAllTuples()) {
+          const datumIndex = tuple[0];
+          if (datumIndex == null) continue;
+          const datum = pixels[datumIndex];
+          if (!datum) continue;
+          for (const role of ERROR_ROLES) {
+            const capIndex = tuple[slotForRole(role, slots.length)];
+            if (capIndex == null) continue;
+            const cap = pixels[capIndex];
+            if (!cap) continue;
+            whiskers.push(computeWhiskerGlyph({ x: datum.x, y: datum.y }, { x: cap.x, y: cap.y }));
+          }
+        }
+        continue;
+      }
+
       const relation = getErrorRelation(entry.dataset);
       if (!relation) continue;
       const target = this.datasetEntries.find((e) => e.dataset.name === relation.of);
