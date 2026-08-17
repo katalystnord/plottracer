@@ -238,6 +238,49 @@ export class Dataset {
     this._groupNames = pointGroups;
   }
 
+  /**
+   * Turn slots ON for a series that may already hold points, wrapping each
+   * existing pixel into a tuple of its own so nothing is stranded.
+   *
+   * ⚑⚑ THIS IS THE LabPlot FAILURE MODE, AND IT IS WHY THE METHOD EXISTS.
+   * David, 2026-08-17: *"points needed to be Errorplots from the beginning, and
+   * if they were not, you lost whatever points you had placed. We want
+   * flexibility — you should be able to place points, and then ADD error bars to
+   * them."*
+   *
+   * ⚠️ `setSlotNames` ALONE DOES EXACTLY WHAT HE DESCRIBES. Measured: seven plain
+   * points, then slot names set, gives `count = 7`, `hasSlots = true`,
+   * `tuples = 0`. The pixels are still in storage, so from the inside nothing
+   * looks wrong — but `hasSlots` is what selects the TUPLE table (zero rows) and
+   * what makes `getExportShape()` return `'tuples'` (an empty CSV). Seven
+   * measured points, present in memory and absent from both the screen and the
+   * file, with nothing reporting it. Worse than losing them, because it is
+   * silent.
+   *
+   * ⚑ ADOPTING IS NOT MEASURING. Every extent slot is left null: turning on the
+   * capability must not invent a cap, because a zero-height error bar is a claim
+   * about the figure and an absent one is not (tenet 9).
+   *
+   * ⚑ A SERIES THAT IS ALREADY SLOTTED IS LEFT ALONE. Its tuples encode a real
+   * pairing whose nulls mean "not captured yet" — rebuilding one-tuple-per-pixel
+   * would tear a two-corner bar into two half bars. That also makes this
+   * idempotent, which it must be: the UI cannot be trusted to ask exactly once
+   * across a second cap, a reload, or an undo round trip.
+   *
+   * ⚑ It lives HERE rather than in the session because guards belong in the
+   * model, and the model has more than one entrance.
+   */
+  adoptSlots(pointGroups: string[]): void {
+    const alreadySlotted = this._tuples.length > 0;
+    this._groupNames = pointGroups;
+    if (alreadySlotted) return;
+    this._tuples = this._dataPoints.map((_, pixelIndex) => {
+      const tuple: (number | null)[] = new Array(pointGroups.length).fill(null);
+      tuple[0] = pixelIndex;
+      return tuple;
+    });
+  }
+
   hasSlots(): boolean {
     return this._groupNames.length > 0;
   }
