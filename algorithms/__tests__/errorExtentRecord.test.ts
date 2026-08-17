@@ -310,10 +310,26 @@ describe('a confidence band is the same record at higher density', () => {
     // limit is enforced at capture where the user can see it, instead of applied
     // silently at export.
     //
-    // ⇒ An independently-traced uncertainty BOUNDARY is therefore a different
-    // record (a curve bound to a series), not this one at higher density. That
-    // is a real decision for whoever builds it; what this record guarantees is
-    // that it will not pretend to hold it.
+    // ⇒ An independently-traced uncertainty BOUNDARY is therefore a DIFFERENT
+    // KIND OF RECORD, BUT A RELATED ONE — David's correction, 2026-08-17, and it
+    // is load-bearing rather than a nicety. "A different record" licenses a
+    // fresh apparatus built from scratch, which is the thing this whole theme is
+    // an argument against. "Related" says what must stay SHARED:
+    //
+    //   · THE SAME QUANTITY, sampled differently. A per-datum extent is the
+    //     DISCRETE case; a band is the CONTINUOUS case of the same uncertainty
+    //     about the same value on the same axis. Not inheritance — sampling.
+    //   · THE SAME FOUR ROLES. A band has an upper and a lower boundary; those
+    //     are `ERROR_ROLES`, not new vocabulary.
+    //   · THE SAME USER WORD. "SD" / "CI95" means the same thing on both, so it
+    //     comes from the same place (`errorSlotNames`), with no default on either.
+    //   · THEY MUST AGREE WHERE THEY OVERLAP. A band queried AT a datum's
+    //     coordinate must report what that datum's extent reports. That is a
+    //     testable invariant the day both exist, and it is the reason to write
+    //     this down now rather than discover it later.
+    //
+    // What this record guarantees meanwhile is only that it will not PRETEND to
+    // hold a boundary sampled at its own density.
     const { points, tuples } = band();
     expect(tuples.every((t) => t.length === ERROR_EXTENT_SLOTS.length)).toBe(true);
     const bars = errorBarsFromTuples(tuples, lookup(points));
