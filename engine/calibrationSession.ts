@@ -1149,6 +1149,49 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * Remove a datum's error bars, leaving the datum. Returns false when there was
+   * nothing to remove.
+   *
+   * ⚑⚑ THIS IS NOT A MODE BEING SWITCHED OFF. In the tuple record a point whose
+   * extent slots are all null IS a plain point — identical to one that never
+   * carried error — so there is no error-ness left over to turn off and no flag
+   * to clear. David asked for *"functionality to add and REMOVE a error bar to a
+   * point"*; the model makes REMOVE mean exactly "clear its extents".
+   *
+   * ⚑ The cap PIXELS are removed, not merely unlinked. Nulling the slot alone
+   * would leave them floating on the canvas with no datum under them — which is
+   * the orphaned-cap defect that started this whole rework, recreated in a new
+   * place. High index to low, refreshing after each removal, the same contract
+   * `removeTuple` honours.
+   *
+   * ⛔ Deliberately does NOT drop the series' error slots when the last cap goes.
+   * The columns are the user's own word for what the error is, and a series that
+   * had error and now has none is still a series they intend to record error on
+   * — silently renaming its columns back would be the tool deciding it knew
+   * better.
+   */
+  removeErrorFromDatum(datasetIndex: number, tupleIndex: number): boolean {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry) return false;
+    const ds = entry.dataset;
+    const slots = ds.getSlotNames();
+    if (!hasErrorSlots(slots)) return false;
+    const tuple = ds.getAllTuples()[tupleIndex];
+    if (!tuple) return false;
+
+    const capPixels = ERROR_ROLES.map((role) => tuple[slotForRole(role, slots.length)])
+      .filter((i): i is number => i !== null && i !== undefined)
+      .sort((a, b) => b - a);
+    if (capPixels.length === 0) return false;
+
+    for (const index of capPixels) {
+      ds.removePixelAtIndex(index);
+      ds.refreshTuplesAfterPixelRemoval(index);
+    }
+    return true;
+  }
+
+  /**
    * If this pixel is a CAP in one of the series' own tuples, which role it plays
    * and which pixel is its datum. Null for a datum, for a pixel in no tuple, and
    * for a series that records no error.
