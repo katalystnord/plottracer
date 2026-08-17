@@ -1,7 +1,7 @@
 {
   "name": "plottracer",
   "version": "2.3.0",
-  "description": "Offline scientific plot digitizer — based on WebPlotDigitizer v5.3 (AGPL-3.0)",
+  "description": "Offline scientific plot digitizer — calibration engine extracted from WebPlotDigitizer by Ankit Rohatgi (AGPL-3.0)",
   "main": "ui/electron-main.cjs",
   "desktopName": "io.katalystnord.plottracer.desktop",
   "scripts": {
