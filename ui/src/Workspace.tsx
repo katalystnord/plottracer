@@ -8090,7 +8090,7 @@ export function Workspace() {
             // the edge -- so box capture stands down for exactly that moment.
             // Caught by the e2e; no unit test could have seen it.
             (mode === 'place-point' &&
-              config.id === 'bar' &&
+              !!config.capturesAsBox &&
               eyedropper === null &&
               !isMarkingCategoryAxis(categoryPanel)) ||
             // ⚑⚑ THE COLOUR KEY IS DRAGGED CORNER TO CORNER (v2.2), and it is the
@@ -8362,7 +8362,7 @@ export function Workspace() {
         infos={datasetInfos}
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}
-        isBar={config.id === 'bar'}
+        supportsStackGroups={!!config.supportsStackGroups}
         nameDraft={nameDraft}
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}
@@ -8543,7 +8543,7 @@ export function Workspace() {
                 </div>
               )}
             </div>
-          {heatmapActive ? (
+          {config.outputPanel === 'heatmap' ? (
             /* ⚑ A heatmap's record goes where every other type's record goes.
                It first lived inside the Heatmap card, which left the panel a
                user actually looks at saying "No points yet" while the real
@@ -8597,14 +8597,14 @@ export function Workspace() {
               onResetCell={readCellFromKey}
             />
             </>
-          ) : isHistogram ? (
+          ) : config.outputPanel === 'bins' ? (
             <HistogramBinsTable
               rows={tupleRows}
               bins={histogramBins}
               tupleNoun={tupleNoun}
               onRemoveTuple={removeTuple}
             />
-          ) : config.axesKind === 'spider' && axes ? (
+          ) : config.outputPanel === 'spider' && axes ? (
             <SpiderTable
               table={spiderTable}
               activeSeriesIndex={activeDatasetIndex}
@@ -8626,7 +8626,7 @@ export function Workspace() {
               renderAxisName={renderEditableAxisName}
               renderValue={renderEditableSpiderValue}
             />
-          ) : config.id === 'bar' && axes ? (
+          ) : config.outputPanel === 'bar' && axes ? (
             <BarTable
               table={barTable}
               activeSeriesIndex={activeDatasetIndex}

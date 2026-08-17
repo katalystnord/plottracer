@@ -770,6 +770,61 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   exportShape?: 'flat' | 'tuples' | 'bins' | 'heatmap';
 
+  /**
+   * Which data panel this type shows below the figure (v2.3) — the READ side of
+   * `exportShape`, and declared for the same reason it is.
+   *
+   * - `'heatmap'` — the Cells matrix, tinted with the figure's own colours.
+   * - `'bins'` — histogram bins, as true edges.
+   * - `'spider'` — one row per spoke, the N×1D record.
+   * - `'bar'` — category + value per bar, with the stack/group columns.
+   * - undefined — the generic choice: the tuple table when the SERIES has slots,
+   *   otherwise the flat spreadsheet.
+   *
+   * ⚑⚑ WHY DECLARED. The cascade asked FIVE different kinds of question to pick
+   * between six panels: `heatmapActive` and `isHistogram` (id checks, each named
+   * once), `config.axesKind === 'spider'` (a CLASS question), `config.id ===
+   * 'bar'` (a TYPE question) and `hasSlots` (a SERIES question). Four of those
+   * are the same question — *which panel does this TYPE show?* — asked four ways,
+   * so a reader could not tell whether `config.id === 'bar'` was a legitimate
+   * type question or the axesKind conflation the note above warns about. It was
+   * legitimate; nothing in the code said so.
+   *
+   * ⚠️ `hasSlots` is deliberately NOT folded in. That one is genuinely a
+   * question about the SERIES, not the type — question 1 of the three above —
+   * and it varies at runtime. Declaring it would be exactly the conflation this
+   * field exists to remove.
+   */
+  outputPanel?: 'heatmap' | 'bins' | 'spider' | 'bar';
+
+  /**
+   * This type's datum is captured as a DRAG-BOX — two opposite corners of a
+   * rectangle — rather than as a click (v2.3).
+   *
+   * ⚑ BAR ONLY, AND THIS IS A MODEL DISTINCTION RATHER THAN A GESTURE
+   * PREFERENCE. A bar's two points are OPPOSITE corners, because a bar's value
+   * is an EXTENT — base to top. A histogram bin's two points SHARE THE TOP EDGE,
+   * because *"a bin's height is one measurement, not an extent"* (the note on
+   * `HISTOGRAM_AXES_CONFIG.autoExtractKind`). The drag-box exists to capture two
+   * opposite corners of a rectangle, so it does not model a bin at all — its
+   * rubber band would be a degenerate flat strip, and the capture model was
+   * settled with David on 2026-07-15 for reasons still recorded in
+   * `algorithms/histogram.ts`: two top corners survive bins that do not tile,
+   * and keep each bin independent so a misclick spoils ONE bin rather than a
+   * contiguous walk.
+   */
+  capturesAsBox?: boolean;
+
+  /**
+   * Series in this type can be grouped into STACKS (v2.3) — the "Stack group"
+   * field on the series panel.
+   *
+   * ⚑ Bar only, and genuinely so: a stack is an ordered sequence of bar
+   * segments, and no other graph type has that shape. Declared rather than asked
+   * as `config.id === 'bar'` because that is the sentence above, in code.
+   */
+  supportsStackGroups?: boolean;
+
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
    *   1. "Does this SERIES have slots?" -> dataset.hasSlots(). Structural.
@@ -941,14 +996,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * the REUSE rule's exact shape, with the two halves of one feature sitting
    * four lines apart in the same file.
    *
-   * ⚑ Declared on XY ONLY, which preserves today's behaviour exactly. Whether
-   * Histogram should also qualify is a REAL question — it is a true `XYAxes`
-   * with a working `dataToPixel`, so the overlay would draw — but its group 0
-   * is "Bin start", so arc length along bin corners is as meaningless as the
-   * fit through them that `supportsCurveFit` refuses. That is David's call, not
-   * a silent side-effect of a refactor. The point of the capability is that the
-   * question can now be ASKED in one place instead of being buried in an `id`
-   * check at each call site.
+   * ⚑ XY ONLY, AND HISTOGRAM CANNOT JOIN IT — checked, not assumed. It looks
+   * like a candidate (a true `XYAxes` with a working `dataToPixel`, so the
+   * overlay would draw), but `runGeometry` REFUSES any dataset with slots
+   * outright — *"tuples of independent measurements, not a single traced
+   * curve"* — and a histogram's dataset has slots (`HISTOGRAM_SLOTS`,
+   * `hasSlots() === true`). Declaring it here would show the panel and have it
+   * report that refusal every time. The capability's value is that the question
+   * became askable in ONE place instead of being buried in an `id` check at
+   * each call site; asked there, the answer was already no.
    */
   supportsGeometry?: boolean;
   /** Log scales this type offers, and which entered values may not be zero
@@ -1116,6 +1172,7 @@ export const HISTOGRAM_SLOTS = ['Bin start', 'Bin end'] as const;
  */
 export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'histogram',
+  outputPanel: 'bins',
   label: 'Histogram',
   axesKind: 'xy',
   exportShape: 'bins',
@@ -1283,6 +1340,7 @@ function heatmapIndexFrame(
 
 export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   id: 'heatmap',
+  outputPanel: 'heatmap',
   label: 'Heatmap',
   axesKind: 'xy',
   // ⚑ Stage 2: the grid, read through the colour key. Was 21 hardcoded
@@ -1761,6 +1819,9 @@ function barCalibrationValueCheck(
 
 export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
+  outputPanel: 'bar',
+  capturesAsBox: true,
+  supportsStackGroups: true,
   label: 'Bar',
   axesKind: 'bar',
   // v2.0 Phase 7: a bounding box IS a bar's two measured ends, so unlike the
@@ -2342,6 +2403,7 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
  */
 export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   id: 'spider',
+  outputPanel: 'spider',
   label: 'Spider / Radar',
   axesKind: 'spider',
   autoExtractKind: 'along-axes',

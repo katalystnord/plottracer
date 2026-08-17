@@ -10,7 +10,11 @@ export interface SeriesPanelProps {
   activeInfo: DatasetInfo | undefined;
   activeIndex: number;
   /** This graph type is Bar, which is the only one offering stack groups. */
-  isBar: boolean;
+  /** This type's series can be grouped into stacks -- `supportsStackGroups` on
+   * the config. Named for the CAPABILITY, not the type: it used to be `isBar`,
+   * which asked WHICH TYPE for something that is a question about what the type
+   * can do. */
+  supportsStackGroups: boolean;
   /** The in-flight rename, or null when the field shows the stored name. */
   nameDraft: string | null;
   /** Why the draft name is refused — shown under the field. */
@@ -46,7 +50,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
     infos,
     activeInfo,
     activeIndex,
-    isBar,
+    supportsStackGroups,
     nameDraft,
     nameNotice,
     colorAnchor,
@@ -242,7 +246,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
           series. Same group name on two or more series = one visual stack;
           blank = not stacked. Bar-only: a stack is specifically an ordered
           sequence of bar segments, and no other graph type has that shape. */}
-      {activeInfo && isBar && (
+      {activeInfo && supportsStackGroups && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
           <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
             Stack group:

@@ -86,6 +86,38 @@ describe('the config table — cross-cutting invariants', () => {
     }
   });
 
+  it('⚑ every bespoke data panel is claimed by exactly one type', () => {
+    // ⚑⚑ A PANEL WITH TWO OWNERS IS A CASCADE BUG WAITING TO HAPPEN, and a panel
+    // with none is dead code. The cascade in Workspace.tsx is ordered, so two
+    // types claiming 'bar' would silently give the second one the first's table
+    // — the same shape as the v1.4 export defect, where a spider fell into the
+    // tuple-table branch and read values off the nearest ray.
+    const owners = new Map<string, string[]>();
+    for (const c of ALL) {
+      if (!c.outputPanel) continue;
+      owners.set(c.outputPanel, [...(owners.get(c.outputPanel) ?? []), c.id]);
+    }
+    for (const [panel, ids] of owners) {
+      expect(ids, `panel '${panel}' is claimed by ${ids.join(' and ')}`).toHaveLength(1);
+    }
+    // Every value the union offers is actually used -- a panel nothing renders
+    // is a branch that cannot be reached.
+    expect([...owners.keys()].sort()).toEqual(['bar', 'bins', 'heatmap', 'spider']);
+  });
+
+  it('⚑ a type declaring no panel falls to the GENERIC pair, and that is a series question', () => {
+    // The types without `outputPanel` get the tuple table when the SERIES has
+    // slots and the flat spreadsheet otherwise. That is question 1 of the three
+    // named on the config ("does this SERIES have slots?"), which is runtime and
+    // must NOT be answered from the type -- so the only thing to assert here is
+    // that they genuinely declare nothing rather than declaring a wrong panel.
+    const generic = ALL.filter((c) => !c.outputPanel).map((c) => c.id);
+    expect(generic, 'the generic branch must still serve someone').not.toHaveLength(0);
+    for (const c of ALL) {
+      if (generic.includes(c.id)) expect(c.outputPanel).toBeUndefined();
+    }
+  });
+
   it('⚑ a type that REFUSES auto-extract says why, in words a user can act on', () => {
     // ⚑⚑ THE REFUSAL AND ITS REASON ARE DECLARED TOGETHER, so they cannot drift.
     // This was a `config.id === 'boxplot' ? … : config.id === 'categorical' ? …`
