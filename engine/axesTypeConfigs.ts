@@ -718,9 +718,33 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * - `'none'` — refused, and this is a CORRECTNESS gate rather than a missing
    *   feature: every CURVE mechanism returns the MIDDLE of a filled shape, and
    *   a bar's value is its end, so the number produced was never the datum
-   *   (`59f94a6`). Histogram, Box Plot, categorical Line.
+   *   (`59f94a6`). Box Plot, categorical Line, Heatmap and Pie.
+   *   ⚠️ This list said "Histogram, Box Plot, categorical Line" until v2.3, and
+   *   all three parts were wrong: Histogram moved to `'bounding-box'` at v2.0
+   *   Phase 7, and Heatmap and Pie were added afterwards without touching the
+   *   sentence. A comment enumerating members is a second registry that nothing
+   *   checks — hence `autoExtractRefusal` below, which the type declares itself.
    */
   autoExtractKind?: 'curve' | 'along-axes' | 'bounding-box' | 'none';
+  /**
+   * WHY auto-extract is refused on this type, in the user's words — required
+   * whenever `autoExtractKind` is `'none'`, and meaningless otherwise.
+   *
+   * ⚑⚑ REFUSE WITH THE REQUIREMENT (v2.3). Box Plot and categorical Line each
+   * had a sentence explaining themselves; Heatmap and Pie fell through to
+   * *"Not available for this graph type"*, which tells the reader nothing they
+   * could act on — it names the refusal and withholds the reason, on the two
+   * types where the reason is the most interesting thing about them. That
+   * cascade lived in `Workspace.tsx` as `config.id === 'boxplot' ? … :
+   * config.id === 'categorical' ? … : <generic>`, so a new type joined the
+   * generic branch by DEFAULT and nothing anywhere said it had been forgotten.
+   *
+   * ⚑ Declared beside the refusal it explains, so the two cannot drift, and
+   * enforced by a registry test: a type that refuses auto-extract must say why.
+   * The v2.2 lesson in one field — the missing half is never the half that
+   * throws.
+   */
+  autoExtractRefusal?: string;
   /**
    * The SHAPE this type's data takes in an export file — declared, because the
    * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
@@ -902,6 +926,31 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * now could never execute. Histogram does NOT: its group 0 is "Bin start", so
    * a fit would run through bin corners, which means nothing. */
   supportsCurveFit?: boolean;
+  /**
+   * True when the Geometry panel's readings — arc length, area, curvature —
+   * mean anything for this type's points (v2.3).
+   *
+   * ⚑⚑ THE TWIN OF `supportsCurveFit`, AND IT WAS THE ONE LEFT BEHIND. Curve Fit
+   * and Geometry are the same pair of inline panels, introduced together at
+   * checkpoint 27 and described in one sentence in `Workspace.tsx` as *"both
+   * XY-axes-only"*. Checkpoint 73 turned Curve Fit's gate into the capability
+   * above, for the reason spelled out on `axesKind`: an IDENTITY question
+   * ("is this the xy config?") silently excludes the next type on the same
+   * class. Geometry kept `config.id === 'xy'` at both its sites. So the
+   * mechanism existed, one of the two siblings used it, and the other did not —
+   * the REUSE rule's exact shape, with the two halves of one feature sitting
+   * four lines apart in the same file.
+   *
+   * ⚑ Declared on XY ONLY, which preserves today's behaviour exactly. Whether
+   * Histogram should also qualify is a REAL question — it is a true `XYAxes`
+   * with a working `dataToPixel`, so the overlay would draw — but its group 0
+   * is "Bin start", so arc length along bin corners is as meaningless as the
+   * fit through them that `supportsCurveFit` refuses. That is David's call, not
+   * a silent side-effect of a refactor. The point of the capability is that the
+   * question can now be ASKED in one place instead of being buried in an `id`
+   * check at each call site.
+   */
+  supportsGeometry?: boolean;
   /** Log scales this type offers, and which entered values may not be zero
    * (checkpoint 72). Required for any `options` entry that makes a scale
    * logarithmic — see LogScaleGuard on why this is declared, not hardcoded. */
@@ -979,6 +1028,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   label: 'XY',
   axesKind: 'xy',
   supportsCurveFit: true,
+  supportsGeometry: true,
   dataDim: 2,
   valueLabels: ['X', 'Y'],
   globalFields: [],
@@ -1249,6 +1299,11 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   valueLabels: ['X', 'Y'],
   globalFields: [],
   autoExtractKind: 'none',
+  // ⚑ A cell's value is its COLOUR, and reading colour is what the Read
+  // cells walk already does across the whole grid -- so this is not a
+  // missing feature but a different button (v2.3).
+  autoExtractRefusal:
+    'Auto-extract looks for a curve or a blob; a heatmap cell’s value is its colour. Detect or place the grid, then Read cells.',
   options: [
     // ⚑⚑ THE QUESTION THE WHOLE TYPE TURNS ON, and it is asked FIRST because it
     // changes the walk. A heatmap's x and y are each independently a CATEGORY
@@ -1845,6 +1900,8 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   label: 'Line',
   axesKind: 'bar',
   autoExtractKind: 'none',
+  autoExtractRefusal:
+    'Auto-extract has nothing to trace here — each category is one click, not a curve or a blob. Place points by hand.',
   dataDim: 1,
   valueLabels: ['Value'],
   globalFields: [],
@@ -1903,6 +1960,8 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   axesKind: 'bar',
   exportShape: 'tuples',
   autoExtractKind: 'none',
+  autoExtractRefusal:
+    'Auto-extract can’t find a box’s five values from its colour — place its Min/Q1/Median/Q3/Max points by hand.',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
@@ -2441,6 +2500,11 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   // mechanism -- the same 1-D scan the spider runs along a spoke -- and it needs the
   // outline to exist first, which is why it waits for this flow rather than racing it.
   autoExtractKind: 'none',
+  // ⚑ The slice's reading is its two BOUNDARIES, not its fill: a filled
+  // wedge's centroid is not a datum, which is the same correctness gate
+  // the bar model made (v2.3).
+  autoExtractRefusal:
+    'Auto-extract finds a filled shape’s middle; a slice is measured by its two edges. Click each boundary in turn.',
   // One measured number per datum. WHICH slice it belongs to is the tuple's own
   // category name, not a second coordinate -- a pie is 1.5D, exactly like a bar.
   dataDim: 1,

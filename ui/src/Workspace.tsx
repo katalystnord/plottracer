@@ -365,10 +365,14 @@ import { HelpOverlay } from './HelpOverlay.js';
  * panels appear below the points table once calibrated --
  * "inline collapsible sections... not floating popups" per the Product #1
  * design doc, fixing the "bolted-on" feel of the current app's own popup-
- * based Curve Fit/Geometry windows. Both are XY-axes-only (gated on
- * `config.id === 'xy'`, matching the current app's own restriction --
- * BarAxes etc. have no numeric x-coordinate to regress against or working
- * dataToPixel to draw an overlay with). Curve Fit's result is persisted in
+ * based Curve Fit/Geometry windows. Both are XY-axes-only -- BarAxes etc. have
+ * no numeric x-coordinate to regress against or working dataToPixel to draw an
+ * overlay with -- and each now says so as a DECLARED CAPABILITY on the config
+ * (`supportsCurveFit`, `supportsGeometry`) rather than as a `config.id === 'xy'`
+ * test at the call site. ⚑ This sentence used to name that id check, and it
+ * outlived it by a release: checkpoint 73 converted Curve Fit and left Geometry
+ * behind, so the comment described one panel accurately and the other not at
+ * all, while reading as though it covered both. Curve Fit's result is persisted in
  * the dataset's own metadata (engine/curveFitPanel.ts's getCurveFitState/
  * setCurveFitState, read into `curveFitState` below) rather than local
  * component state, which means it survives an axes-type round-trip through
@@ -5812,7 +5816,7 @@ export function Workspace() {
   // recomputes it (or surfaces a stale/broken error) automatically -- `version`
   // bumps on every point change, the same dep curveFitState uses.
   const geometryState = useMemo(
-    () => (config.id === 'xy' && axes ? getGeometryState(session.getDataset()) : null),
+    () => (config.supportsGeometry && axes ? getGeometryState(session.getDataset()) : null),
     [session, version, config, axes]
   );
 
@@ -6490,7 +6494,7 @@ export function Workspace() {
 
   const geometryFlyout = (
     <GeometryFlyout
-      visible={config.id === 'xy'}
+      visible={!!config.supportsGeometry}
       disabled={!axes}
       closed={geometryState ? geometryState.closed : geometryClosed}
       onClosedChange={(v) => {
@@ -7778,18 +7782,19 @@ export function Workspace() {
             // BAR_AXES_CONFIG's autoExtractKind. Histogram joined it 2026-07-30 --
             // a bin's bounding box is the same shape, just read as top corners
             // rather than opposite ones (addBarDetectBoxes's own comment). Box
-            // Plot / categorical Line remain refused: neither has anything a
-            // colour trace could read as its own record (five letter-values; an
-            // ordinal click).
+            // Plot, categorical Line, Heatmap and Pie remain refused: none has
+            // anything a colour trace could read as its own record (five
+            // letter-values; an ordinal click; a cell whose value IS its colour;
+            // a slice measured by its two edges). ⚑ Each says so ITSELF now, via
+            // `autoExtractRefusal` -- this comment is description, not the gate.
             disabled={!axes || (config.autoExtractKind ?? 'curve') === 'none'}
             disabledReason={
               !axes
                 ? 'Calibrate the axes first'
-                : config.id === 'boxplot'
-                ? 'Auto-extract can’t find a box’s five values from its colour — place its Min/Q1/Median/Q3/Max points by hand.'
-                : config.id === 'categorical'
-                ? 'Auto-extract has nothing to trace here — each category is one click, not a curve or a blob. Place points by hand.'
-                : 'Not available for this graph type'
+                : // The type says why it refuses -- see `autoExtractRefusal`. This
+                  // was a `config.id === …` cascade in which a new type joined the
+                  // contentless generic branch by default.
+                  (config.autoExtractRefusal ?? 'Not available for this graph type')
             }
             onClick={toggleAutoExtract}
             foldout

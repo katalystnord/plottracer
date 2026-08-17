@@ -9090,6 +9090,34 @@ describe('heatmap capture (v2.2)', () => {
     expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
   });
 
+  it('a refused auto-extract says WHY on the button, not "Not available for this graph type"', async () => {
+    // ⚑⚑ REFUSE WITH THE REQUIREMENT. Heatmap and Pie declare `autoExtractKind:
+    // 'none'` and used to fall through a `config.id === …` cascade to the
+    // contentless generic sentence -- so the two types where the reason is the
+    // most interesting thing about them were the two that withheld it.
+    //
+    // The registry test (engine/__tests__/axesConfigTable.test.ts) proves every
+    // refusing type DECLARES a reason; this proves the declaration reaches the
+    // real button in the built app, which no unit test can see.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmapDeclaring('1', '1');
+    await page.waitForTimeout(200);
+    const wand = page.getByTestId('mode-auto-extract');
+    expect(await wand.isDisabled()).toBe(true);
+    // ⚑ BOTH surfaces, because a disabled <button> suppresses its own tooltip in
+    // Chromium: IconButton puts the visible tooltip on the WRAPPING SPAN and
+    // keeps `aria-label` on the button for assistive tech. Asserting only one
+    // would pass while the other silently carried nothing.
+    const spoken = await wand.getAttribute('aria-label');
+    const tooltip = await wand.locator('xpath=..').getAttribute('title');
+    for (const reason of [spoken, tooltip]) {
+      expect(reason, 'the reason reaches this surface at all').toBeTruthy();
+      expect(reason).not.toMatch(/not available for this graph type/i);
+      expect(reason).toMatch(/colour/i); // a cell's value IS its colour
+      expect(reason).toMatch(/Read cells/); // and it names what to do instead
+    }
+  });
+
   it('P4 — a dragged boundary STAYS ON ITS AXIS, not where the mouse let go', async () => {
     // ⚑⚑ David: *"Why are the tick marks not bound to the axis???"* Dragging
     // mutates the Konva node's position, but React re-applies only a prop whose

@@ -86,6 +86,29 @@ describe('the config table — cross-cutting invariants', () => {
     }
   });
 
+  it('⚑ a type that REFUSES auto-extract says why, in words a user can act on', () => {
+    // ⚑⚑ THE REFUSAL AND ITS REASON ARE DECLARED TOGETHER, so they cannot drift.
+    // This was a `config.id === 'boxplot' ? … : config.id === 'categorical' ? …`
+    // cascade in Workspace.tsx, which meant a type joined the contentless
+    // fallback -- "Not available for this graph type" -- by DEFAULT. Heatmap and
+    // Pie had already fallen into it, on the two types where the reason is the
+    // most interesting thing about them, and nothing anywhere reported it.
+    for (const c of ALL) {
+      if ((c.autoExtractKind ?? 'curve') !== 'none') {
+        expect(c.autoExtractRefusal, `${c.id} does not refuse auto-extract, so it must not explain a refusal`).toBeUndefined();
+        continue;
+      }
+      const reason = c.autoExtractRefusal;
+      expect(reason, `${c.id} refuses auto-extract without saying why`).toBeTruthy();
+      // "Refuse with the REQUIREMENT": naming the refusal is not enough, the
+      // sentence has to point at what the user should do instead.
+      expect(reason!.length, `${c.id}'s reason is too short to be a reason`).toBeGreaterThan(40);
+      expect(reason, `${c.id} restates the generic fallback instead of explaining`).not.toMatch(
+        /not available for this graph type/i
+      );
+    }
+  });
+
   it('⚑ every value column is named: valueLabels matches dataDim exactly', () => {
     // These labels ARE the on-screen table headers and the export headers. A
     // short list silently drops a column's name from every file.
