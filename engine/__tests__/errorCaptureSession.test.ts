@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import { getErrorRelation } from '../errorRelation.js';
+import { slotForRole, deltasFromBar } from '../../algorithms/errorExtent.js';
 
 /** The same 4-point setup the rest of engine/'s tests use: a pixel maps to data
  * as x = (px-100)/30, y = (250-py)/15. */
@@ -32,7 +33,14 @@ describe('captureErrorCap — the drag gesture', () => {
     return session;
   }
 
-  it('places the dragged cap AND its mirror, in two related series', () => {
+  it('places the dragged cap AND its mirror, on the datum\'s own record', () => {
+    // ⚠️ MIGRATED for v2.3's B4. This asserted the two RELATED SERIES the gesture
+    // used to create; the reading now lives in the datum's own tuple. The
+    // BEHAVIOUR asserted is unchanged — dragged cap where released, mirror
+    // reflected across the datum — and it is now read through the primitive
+    // rather than by reaching into `getDatasets()[1]`. That reaching is exactly
+    // why 25 tests here broke at once: 41 assertions went to storage and none
+    // through the primitive, the same diagnosis the production code had.
     const session = calibratedWithAPoint();
     expect(
       session.captureErrorCap({
@@ -43,17 +51,12 @@ describe('captureErrorCap — the drag gesture', () => {
       })
     ).toBeNull();
 
-    expect(names(session as never)).toEqual(['Sample A', 'SD upper', 'SD lower']);
+    expect(names(session as never), 'no series is spawned any more').toEqual(['Sample A']);
 
-    const upper = session.getDatasets()[1]!;
-    const lower = session.getDatasets()[2]!;
-    expect(getErrorRelation(upper)).toEqual({ role: 'upper', of: 'Sample A' });
-    expect(getErrorRelation(lower)).toEqual({ role: 'lower', of: 'Sample A' });
-
-    // The dragged cap is exactly where the user released. The mirror is
-    // reflected across the datum -- a starting position, nothing more.
-    expect(upper.getAllPixels()).toEqual([{ x: 200, y: 170, metadata: undefined }]);
-    expect(lower.getAllPixels()).toEqual([{ x: 200, y: 230, metadata: undefined }]);
+    const [bar] = session.getResolvedErrorBars(0);
+    expect(bar!.y).toBeCloseTo(3.333, 3);
+    expect(bar!.yUpper, 'the cap where the user released').toBeCloseTo(5.333, 3);
+    expect(bar!.yLower, 'the mirror, reflected across the datum').toBeCloseTo(1.333, 3);
   });
 
   it('leaves the DATA series active, not the error-cap series it creates', () => {
@@ -68,15 +71,17 @@ describe('captureErrorCap — the drag gesture', () => {
       capPixel: { x: 200, y: 170 },
       baseName: 'SD',
     });
-    // Active is restored to the target data series, not left on 'SD lower'.
+    // Active is restored to the target data series.
     expect(session.getActiveDatasetIndex()).toBe(0);
     expect(session.getDatasetInfos().find((i) => i.active)?.name).toBe('Sample A');
 
-    // Proof of the point: a following click adds a DATA point to 'Sample A',
-    // not another cap to the error series.
+    // ⚑ The trap it guarded against cannot arise now: the caps go INTO the
+    // target series, so there is no other series for "active" to be stolen by.
+    // The assertion stays because the gesture is documented to leave the user
+    // where they were, and that must not depend on it happening to be true.
     session.addDataPoint(260, 190);
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // Sample A grew
-    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // SD lower unchanged
+    expect(session.getResolvedErrorBars(0), 'the click added a DATA point').toHaveLength(2);
+    expect(session.getResolvedErrorBars(0)[1]!.yUpper, 'and not a cap').toBeUndefined();
   });
 
   it('works on a BAR chart — the case a data-space mirror would have refused', () => {
@@ -106,8 +111,10 @@ describe('captureErrorCap — the drag gesture', () => {
         baseName: 'SD',
       })
     ).toBeNull();
-    expect(names(session as never)).toEqual(['Bar A', 'SD upper', 'SD lower']);
-    expect(session.getDatasets()[2]!.getAllPixels()).toEqual([{ x: 150, y: 210, metadata: undefined }]);
+    expect(names(session as never), 'no series spawned on a bar chart either').toEqual(['Bar A']);
+    // The mirror is still reflected across the datum: 180 - 30 -> 210.
+    const pixels = session.getDatasets()[0]!.getAllPixels();
+    expect(pixels.some((p) => p.x === 150 && p.y === 210), 'the mirrored cap is recorded').toBe(true);
   });
 
   it('a horizontal drag records left/right instead', () => {
@@ -120,8 +127,12 @@ describe('captureErrorCap — the drag gesture', () => {
         baseName: 'CI',
       })
     ).toBeNull();
-    expect(names(session as never)).toEqual(['Sample A', 'CI right', 'CI left']);
-    expect(session.getDatasets()[2]!.getAllPixels()).toEqual([{ x: 170, y: 200, metadata: undefined }]);
+    expect(names(session as never)).toEqual(['Sample A']);
+    const [bar] = session.getResolvedErrorBars(0);
+    // x 0..10 over px 100..400: the release at 230 is 4.333, the mirror 2.333.
+    expect(bar!.xRight, 'a horizontal drag records RIGHT').toBeCloseTo(4.333, 3);
+    expect(bar!.xLeft, 'and mirrors to LEFT').toBeCloseTo(2.333, 3);
+    expect(bar!.yUpper, 'no vertical role is invented').toBeUndefined();
   });
 
   it('reuses the same pair of series across several bars', () => {
@@ -135,10 +146,11 @@ describe('captureErrorCap — the drag gesture', () => {
         session.captureErrorCap({ targetIndex: 0, datumPixel: d, capPixel: c, baseName: 'SD' })
       ).toBeNull();
     }
-    // Two bars, still exactly three series -- not four.
-    expect(names(session as never)).toEqual(['Sample A', 'SD upper', 'SD lower']);
-    expect(session.getDatasets()[1]!.getCount()).toBe(2);
-    expect(session.getDatasets()[2]!.getCount()).toBe(2);
+    // Two error bars, still exactly ONE series -- the point of the change.
+    expect(names(session as never)).toEqual(['Sample A']);
+    const bars = session.getResolvedErrorBars(0);
+    expect(bars).toHaveLength(2);
+    expect(bars.every((b) => b.yUpper !== undefined && b.yLower !== undefined)).toBe(true);
   });
 
   it('a moved cap stays moved — nothing re-symmetrizes the pair', () => {
@@ -152,8 +164,11 @@ describe('captureErrorCap — the drag gesture', () => {
       capPixel: { x: 200, y: 170 },
       baseName: 'SD',
     });
-    const lower = session.getDatasets()[2]!;
-    lower.setPixelAt(0, 200, 245); // user drags the lower cap far down
+    const ds = session.getDatasets()[0]!;
+    const slots = ds.getSlotNames();
+    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots.length)]!;
+    ds.setPixelAt(lowerPixel, 200, 245); // user drags the lower cap far down
+    const asymmetric = session.getResolvedErrorBars(0)[0]!.yLower!;
 
     session.addDataPoint(300, 150);
     session.captureErrorCap({
@@ -162,7 +177,10 @@ describe('captureErrorCap — the drag gesture', () => {
       capPixel: { x: 300, y: 130 },
       baseName: 'SD',
     });
-    expect(lower.getAllPixels()[0]).toMatchObject({ x: 200, y: 245 });
+    expect(session.getResolvedErrorBars(0)[0]!.yLower, 'the first bar is undisturbed').toBeCloseTo(
+      asymmetric,
+      6
+    );
   });
 
   it('refuses a zero-length drag rather than placing a degenerate bar', () => {
@@ -204,13 +222,23 @@ describe('captureErrorCap — the drag gesture', () => {
   });
 
   it('refuses to hijack an existing series that is not error for this target', () => {
+    // ⚠️ MIGRATED: the FIRST error kind now goes into the datum's tuple and
+    // creates no series, so there is no name to collide with. The refusal still
+    // matters on the FALLBACK path — a SECOND kind, which keeps the related-series
+    // storage — so the case is exercised there.
     const session = calibratedWithAPoint();
-    session.addDataset('SD upper'); // an ordinary series that happens to be named that
-    const refusal = session.captureErrorCap({
+    session.captureErrorCap({
       targetIndex: 0,
       datumPixel: { x: 200, y: 200 },
       capPixel: { x: 200, y: 170 },
       baseName: 'SD',
+    }); // SD -> the tuple
+    session.addDataset('95% CI upper'); // an ordinary series that happens to be named that
+    const refusal = session.captureErrorCap({
+      targetIndex: 0,
+      datumPixel: { x: 200, y: 200 },
+      capPixel: { x: 200, y: 150 },
+      baseName: '95% CI',
     });
     // Bookkeeping integrity, not a constraint on where points may go: silently
     // adopting the user's own series would put caps into data they placed for
@@ -219,6 +247,9 @@ describe('captureErrorCap — the drag gesture', () => {
   });
 
   it('a rename of the target follows through to the relation (checkpoint 77 cascade)', () => {
+    // ⚠️ MIGRATED for the same reason. A tuple-recorded kind needs no relation to
+    // retarget — the caps are IN the series being renamed — so the cascade is
+    // asserted where relations still exist: a second error kind.
     const session = calibratedWithAPoint();
     session.captureErrorCap({
       targetIndex: 0,
@@ -226,8 +257,21 @@ describe('captureErrorCap — the drag gesture', () => {
       capPixel: { x: 200, y: 170 },
       baseName: 'SD',
     });
+    expect(
+      session.captureErrorCap({
+        targetIndex: 0,
+        datumPixel: { x: 200, y: 200 },
+        capPixel: { x: 200, y: 140 },
+        baseName: '95% CI',
+      })
+    ).toBeNull();
     expect(session.renameDataset(0, 'Renamed')).toBeNull();
-    expect(getErrorRelation(session.getDatasets()[1]!)).toEqual({ role: 'upper', of: 'Renamed' });
+
+    const ci = session.getDatasets().find((d) => d.name.trim() === '95% CI upper')!;
+    expect(getErrorRelation(ci)).toEqual({ role: 'upper', of: 'Renamed' });
+    // ⚑ And the tuple-recorded kind survives the rename untouched, because it
+    // never depended on the name in the first place.
+    expect(session.getResolvedErrorBars(0)[0]!.yUpper).toBeCloseTo(5.333, 3);
   });
 });
 
@@ -266,28 +310,47 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   }
 
   it('cascade: deleting a data point takes its error bar (both caps), leaving the other point whole', () => {
+    // ⚠️ MIGRATED. The cascade is now STRUCTURAL — a datum and its caps are one
+    // tuple, so there is no second store that could survive the delete. It used
+    // to be a deliberate sweep across the related series, which is exactly the
+    // kind of arrangement that had already failed once: the trashcan left four
+    // orphaned caps on the canvas while the card stated the invariant in words.
     const session = twoPointsWithErrorBars();
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2);
-    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(2);
-    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(2);
+    expect(session.getResolvedErrorBars(0)).toHaveLength(2);
 
     session.setActiveDataset(0);
-    session.removeDataPoints([0]); // delete datum 0
+    session.removeTuple(0); // delete datum 0 and, with it, its extents
 
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // one datum left
-    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // its upper cap gone
-    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // its lower cap gone
-    expect(session.getDatasets()[0]!.getPixel(0)).toMatchObject({ x: 300, y: 150 }); // datum 1 survived
+    const bars = session.getResolvedErrorBars(0);
+    expect(bars, 'one datum left').toHaveLength(1);
+    expect(bars[0]!.x, 'datum 1 survived').toBeCloseTo(6.667, 3);
+    expect(bars[0]!.yUpper, 'and kept its own error whole').toBeDefined();
   });
 
-  it('pair: deleting a cap in an SD series removes the matched pair, leaving the data point', () => {
+  it('⚑ deleting ONE cap removes only it, so a one-sided bar is reachable', () => {
+    // ⚠️⚠️ A DELIBERATE CHANGE OF BEHAVIOUR, not a migration. Deleting a cap used
+    // to remove its matched PAIR ("a selected cap stands for its whole error
+    // bar", David 2026-07-22). That rule made a ONE-SIDED bar unreachable — and
+    // the app itself places the mirrored cap, so a user recording only an upper
+    // bound had no way to remove the lower one it invented for them.
+    //
+    // The two behaviours both survive; they swapped gestures:
+    //   · delete a cap        -> removes that cap        (this test)
+    //   · removeErrorFromDatum -> removes the whole bar  (errorRemoveFromDatum)
+    // which is the difference between "this bound is not in the figure" and
+    // "this point has no error bar".
     const session = twoPointsWithErrorBars();
-    session.setActiveDataset(1); // SD upper active
-    session.removeDataPoints([0]); // erase the first upper cap
+    const ds = session.getDatasets()[0]!;
+    const slots = ds.getSlotNames();
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
 
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // data points untouched
-    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // that upper cap gone
-    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(1); // its lower sibling gone too
+    session.setActiveDataset(0);
+    session.removeDataPoints([upperPixel]);
+
+    const bar = session.getResolvedErrorBars(0)[0]!;
+    expect(bar.yUpper, 'the upper is gone').toBeUndefined();
+    expect(bar.yLower, 'the lower remains — a one-sided bar').toBeDefined();
+    expect(session.getResolvedErrorBars(0), 'both data points untouched').toHaveLength(2);
   });
 
   // A point carrying TWO error-bar TYPES: an "SD" bar and a "95% CI" bar. The
@@ -305,24 +368,34 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     return session;
   }
 
-  it('deleting an SD cap leaves a separate 95% CI bar on the same datum untouched', () => {
+  it('the FIRST kind goes to the tuple and the SECOND to its own series', () => {
+    // ⚠️ MIGRATED. Storage was never the limit on how many error kinds a datum
+    // may carry -- any number of series may relate to one parent -- so the first
+    // kind is UPGRADED to a stored pairing and every further kind stays exactly
+    // where it was. Nothing is taken away.
+    //
+    // ⚑ Measured before settling for this: of 556,894 Europe PMC figure captions
+    // mentioning error bars, 40 say "inner/outer error bars" and 3 say "two sets
+    // of error bars" -- order one in ten thousand.
     const session = onePointWithTwoErrorTypes();
     const names = session.getDatasets().map((d) => d.name.trim());
-    const sdUpper = names.indexOf('SD upper');
-    const ciUpper = names.indexOf('95% CI upper');
-    const ciLower = names.indexOf('95% CI lower');
-    expect(sdUpper).toBeGreaterThan(0);
-    expect(ciUpper).toBeGreaterThan(0);
+    expect(names, 'SD is in the datum record, so no SD series').not.toContain('SD upper');
+    expect(names, 'the second kind keeps the related-series storage').toContain('95% CI upper');
+    expect(session.getResolvedErrorBars(0)[0]!.yUpper, 'SD is what resolves').toBeCloseTo(4.333, 3);
+  });
 
-    session.setActiveDataset(sdUpper); // delete via the SD series
-    session.removeDataPoints([0]);
+  it('deleting the SD cap leaves the separate 95% CI bar untouched', () => {
+    const session = onePointWithTwoErrorTypes();
+    const ds = session.getDatasets()[0]!;
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', ds.getSlotNames().length)]!;
+    const ciUpper = session.getDatasets().findIndex((d) => d.name.trim() === '95% CI upper');
 
-    // The SD pair is gone; the 95% CI bar for the same datum survives whole.
-    expect(session.getDatasets()[names.indexOf('SD upper')]!.getAllPixels()).toHaveLength(0);
-    expect(session.getDatasets()[names.indexOf('SD lower')]!.getAllPixels()).toHaveLength(0);
-    expect(session.getDatasets()[ciUpper]!.getAllPixels()).toHaveLength(1);
-    expect(session.getDatasets()[ciLower]!.getAllPixels()).toHaveLength(1);
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // data point untouched
+    session.setActiveDataset(0);
+    session.removeDataPoints([upperPixel]);
+
+    expect(session.getResolvedErrorBars(0)[0]!.yUpper, 'the SD upper is gone').toBeUndefined();
+    expect(session.getResolvedErrorBars(0), 'the data point is untouched').toHaveLength(1);
+    expect(session.getDatasets()[ciUpper]!.getAllPixels(), 'the CI bar survives').toHaveLength(1);
   });
 
   it('cascade still takes BOTH error-bar types when the data point itself is deleted', () => {
@@ -332,9 +405,12 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     session.setActiveDataset(0); // the parent data series
     session.removeDataPoints([0]); // delete the datum -> all its error bars go
 
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(0);
-    for (const n of ['SD upper', 'SD lower', '95% CI upper', '95% CI lower']) {
-      expect(session.getDatasets()[names.indexOf(n)]!.getAllPixels()).toHaveLength(0);
+    expect(session.getResolvedErrorBars(0), 'the datum and its tuple extents').toHaveLength(0);
+    for (const n of ['95% CI upper', '95% CI lower']) {
+      expect(
+        session.getDatasets()[names.indexOf(n)]!.getAllPixels(),
+        `${n} cascaded too`
+      ).toHaveLength(0);
     }
   });
 
@@ -347,36 +423,45 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     session.addDataPoint(200, 200); // datum 0
     session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 170 }, baseName: 'SD' }); // vertical
     session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 230, y: 200 }, baseName: 'SD' }); // horizontal
-    const names = session.getDatasets().map((d) => d.name.trim());
-    const vUpper = names.indexOf('SD upper');
-    const hRight = names.indexOf('SD right');
-    const hLeft = names.indexOf('SD left');
-    expect(vUpper).toBeGreaterThan(0);
-    expect(hRight).toBeGreaterThan(0); // horizontal arm exists
+    // ⚠️ MIGRATED: all four arms of one base now live in the SAME tuple, as four
+    // role slots — which is what makes their independence structural rather than
+    // a rule about which series to sweep.
+    const ds = session.getDatasets()[0]!;
+    const slots = ds.getSlotNames();
+    const before = session.getResolvedErrorBars(0)[0]!;
+    expect(before.yUpper, 'the vertical arm exists').toBeDefined();
+    expect(before.xRight, 'and so does the horizontal').toBeDefined();
 
-    session.setActiveDataset(vUpper); // delete via the vertical arm
-    session.removeDataPoints([0]);
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
+    session.setActiveDataset(0);
+    session.removeDataPoints([upperPixel]); // delete the vertical arm's upper cap
 
-    expect(session.getDatasets()[names.indexOf('SD upper')]!.getAllPixels()).toHaveLength(0);
-    expect(session.getDatasets()[names.indexOf('SD lower')]!.getAllPixels()).toHaveLength(0);
-    expect(session.getDatasets()[hRight]!.getAllPixels()).toHaveLength(1); // horizontal untouched
-    expect(session.getDatasets()[hLeft]!.getAllPixels()).toHaveLength(1);
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(1); // data point untouched
+    const after = session.getResolvedErrorBars(0)[0]!;
+    expect(after.yUpper, 'the vertical upper is gone').toBeUndefined();
+    expect(after.xRight, 'the horizontal arm is untouched').toBeCloseTo(before.xRight!, 6);
+    expect(after.xLeft).toBeCloseTo(before.xLeft!, 6);
+    expect(session.getResolvedErrorBars(0), 'data point untouched').toHaveLength(1);
   });
 
   it('deleting a cap when its sibling was already removed (asymmetric bar) drops just that cap, no throw', () => {
+    // ⚠️ MIGRATED. Under the tuple record this is simply a slot that is already
+    // null, which is the ordinary "not captured" state rather than a special
+    // case — so the throw this guarded against has nowhere to come from.
     const session = twoPointsWithErrorBars();
-    // getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower. Empty the lower
-    // series so datum 0 has only an upper cap -- an asymmetric, one-sided bar.
-    session.getDatasets()[2]!.removePixelAtIndex(1);
-    session.getDatasets()[2]!.removePixelAtIndex(0);
-    expect(session.getDatasets()[2]!.getAllPixels()).toHaveLength(0);
+    const ds = session.getDatasets()[0]!;
+    const slots = ds.getSlotNames();
+    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots.length)]!;
+    session.setActiveDataset(0);
+    session.removeDataPoints([lowerPixel]); // one-sided now: upper only
+    expect(session.getResolvedErrorBars(0)[0]!.yLower).toBeUndefined();
 
-    session.setActiveDataset(1); // SD upper active
-    session.removeDataPoints([0]); // delete the surviving upper cap of datum 0
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
+    expect(() => session.removeDataPoints([upperPixel])).not.toThrow();
 
-    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1); // datum 1's upper cap remains
-    expect(session.getDatasets()[0]!.getAllPixels()).toHaveLength(2); // data points untouched
+    const bars = session.getResolvedErrorBars(0);
+    expect(bars, 'both data points untouched').toHaveLength(2);
+    expect(bars[0]!.yUpper, 'datum 0 has no error left').toBeUndefined();
+    expect(bars[1]!.yUpper, "datum 1's bar is whole").toBeDefined();
   });
 });
 
@@ -402,13 +487,20 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
         baseName: 'SD',
       })
     ).toBeNull();
-    // getDatasets(): [0] Sample A, [1] SD upper, [2] SD lower
+    // ⚠️ MIGRATED for B4: the caps are now slots of 'Sample A' rather than two
+    // related series, so these tests address them by PIXEL INDEX in series 0.
     return session;
+  }
+
+  /** The pixel index of a role's cap on the first datum of series 0. */
+  function capPixel(session: { getDatasets(): { getAllTuples(): (number | null)[][]; getSlotNames(): string[] }[] }, role: 'upper' | 'lower' | 'left' | 'right') {
+    const ds = session.getDatasets()[0]!;
+    return ds.getAllTuples()[0]![slotForRole(role, ds.getSlotNames().length)]!;
   }
 
   it('locks an upper cap to the vertical through its own datum', () => {
     const session = calibratedWithACappedPoint();
-    const line = session.errorCapDragLine(1, 0);
+    const line = session.errorCapDragLine(0, capPixel(session, 'upper'));
     expect(line).not.toBeNull();
     // Origin is the DATUM, not the cap: the cap slides along the bar, and the
     // bar is anchored at the point it belongs to.
@@ -421,8 +513,8 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
 
   it('gives the lower cap the SAME line, so both caps slide along one bar', () => {
     const session = calibratedWithACappedPoint();
-    const upper = session.errorCapDragLine(1, 0)!;
-    const lower = session.errorCapDragLine(2, 0)!;
+    const upper = session.errorCapDragLine(0, capPixel(session, 'upper'))!;
+    const lower = session.errorCapDragLine(0, capPixel(session, 'lower'))!;
     expect(lower.origin.x).toBeCloseTo(upper.origin.x, 6);
     expect(lower.origin.y).toBeCloseTo(upper.origin.y, 6);
     // Same axis. (Direction is a ray; the lower cap sits on the far side of the
@@ -433,7 +525,7 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
 
   it('returns a UNIT direction, so ui/ can scale it without renormalising', () => {
     const session = calibratedWithACappedPoint();
-    const { direction } = session.errorCapDragLine(1, 0)!;
+    const { direction } = session.errorCapDragLine(0, capPixel(session, 'upper'))!;
     expect(Math.hypot(direction.x, direction.y)).toBeCloseTo(1, 9);
   });
 
@@ -456,15 +548,22 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(session.errorCapDragLine(1, -1)).toBeNull();
   });
 
-  it('stops constraining a cap once its datum series is removed', () => {
-    // removeDataset calls clearErrorRelationsTo, so the cap stops being a cap.
-    // Asserted through the public gesture rather than by reaching in, because
-    // this is the sequence a user can actually perform.
+  it('a cap cannot outlive its datum series at all', () => {
+    // ⚠️ MIGRATED, and the case has DISSOLVED rather than moved. It mattered
+    // because caps lived in their OWN series, which survived the deletion of the
+    // series they described — `clearErrorRelationsTo` then had to demote them so
+    // they stopped claiming to be caps. In the tuple record the caps ARE the
+    // series' own points, so removing it removes them: nothing is left to
+    // constrain, and nothing is left to demote.
     const session = calibratedWithACappedPoint();
-    expect(session.errorCapDragLine(1, 0)).not.toBeNull();
-    session.removeDataset(0); // remove 'Sample A'
-    // Indices shift down by one: SD upper is now 0.
-    expect(session.errorCapDragLine(0, 0)).toBeNull();
+    expect(session.errorCapDragLine(0, capPixel(session, 'upper'))).not.toBeNull();
+    // ⚑ Note it takes a SECOND series to even run this now: the capped series is
+    // the only one there is, and a session always keeps one.
+    session.addDataset('Sample B');
+    session.removeDataset(0); // remove 'Sample A', caps and all
+    expect(session.getDatasets().some((d) => d.name.trim() === 'Sample A')).toBe(false);
+    expect(session.getResolvedErrorBars(0), 'no cap outlived it').toHaveLength(0);
+    expect(session.errorCapDragLine(0, 0), 'nothing survives to be a cap').toBeNull();
   });
 
   it('CONSTRAINS a cap on a BAR chart — and still lets it be placed at all', () => {
@@ -506,9 +605,9 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     ).toBeNull();
 
     // The cap EXISTS -- the constraint did not become a refusal...
-    expect(session.getDatasets()[1]!.getAllPixels()).toHaveLength(1);
+    expect(session.getDatasets(), 'and no series was spawned for it').toHaveLength(1);
     // ...and it is now axis-locked, along the value axis this chart calibrated.
-    const line = session.errorCapDragLine(1, 0);
+    const line = session.errorCapDragLine(0, capPixel(session, 'upper'));
     expect(line, 'a bar chart can now say which way its value runs').not.toBeNull();
     expect(Math.abs(line!.direction.x), 'vertical value axis: no x component').toBeLessThan(1e-6);
   });
@@ -524,10 +623,11 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     // Same rule, same place, as the spider snap directly above it in that
     // method: a point that belongs to an axis stays on it however it is moved.
     const session = calibratedWithACappedPoint();
-    session.setActiveDataset(1); // SD upper -- the cap series
-    session.updateDataPointPixel(0, 260, 150); // dragged UP and sideways
+    session.setActiveDataset(0); // the caps are points of the data series now
+    const upper = capPixel(session, 'upper');
+    session.updateDataPointPixel(upper, 260, 150); // dragged UP and sideways
 
-    const cap = session.getDatasets()[1]!.getAllPixels()[0]!;
+    const cap = session.getDatasets()[0]!.getAllPixels()[upper]!;
     expect(cap.x).toBeCloseTo(200, 6); // the sideways part is discarded
     expect(cap.y).toBeCloseTo(150, 6); // free to slide along the bar
   });
@@ -570,7 +670,7 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
 
   it('⚑ resolves a cap to its OWN datum, not whichever datum is nearest as the crow flies', () => {
     const session = calibratedWithNeighbouringBars();
-    const line = session.errorCapDragLine(2, 0)!; // SD lower, A's cap
+    const line = session.errorCapDragLine(0, capPixel(session, 'lower'))!; // A's lower cap
     expect(line).not.toBeNull();
     expect(line.origin.x).toBeCloseTo(200, 6); // datum A, not datum B's 250
     expect(line.origin.y).toBeCloseTo(120, 6);
@@ -580,10 +680,11 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     // The symptom exactly as reported: grab the lower cap, drag it straight
     // down the bar it belongs to, and it snaps sideways onto the neighbour.
     const session = calibratedWithNeighbouringBars();
-    session.setActiveDataset(2); // SD lower -- the cap series
-    session.updateDataPointPixel(0, 200, 240);
+    session.setActiveDataset(0);
+    const lower = capPixel(session, 'lower'); // A's lower cap
+    session.updateDataPointPixel(lower, 200, 240);
 
-    const cap = session.getDatasets()[2]!.getAllPixels()[0]!;
+    const cap = session.getDatasets()[0]!.getAllPixels()[lower]!;
     expect(cap.x).toBeCloseTo(200, 6); // stays on A's bar; 250 is the defect
     expect(cap.y).toBeCloseTo(240, 6);
   });
@@ -593,10 +694,15 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     // against one datum and reported against another is a whisker whose drawing
     // contradicts its own number.
     const session = calibratedWithNeighbouringBars();
-    session.setActiveDataset(2);
-    session.updateDataPointPixel(0, 200, 240);
+    session.setActiveDataset(0);
+    session.updateDataPointPixel(capPixel(session, 'lower'), 200, 240);
     // 120px below datum A; y = (250-py)/15, so 120px = 8 units, signed by role.
-    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-8, 6);
+    // ⚠️ MIGRATED to the DELTA PROJECTION of the primitive: `getErrorCapDeltas`
+    // answers per error-cap SERIES, which a tuple-recorded kind does not have.
+    // The invariant is unchanged and now reads off the same object the drawing
+    // and the export do — which is the whole point of having a primitive.
+    const bar = session.getResolvedErrorBars(0)[0]!;
+    expect(deltasFromBar(bar).yLower).toBeCloseTo(-8, 6);
   });
 
   it('an ordinary point is still free to move in both axes', () => {
@@ -613,19 +719,25 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     // The numbers you would need to redraw the figure: x, y, -delta, +delta.
     // Datum at pixel (200,200) = data (3.333, 3.333); upper cap at (200,170).
     // y = (250-py)/15, so 30px up is +2 in value.
+    // ⚠️ MIGRATED to the delta PROJECTION of the primitive. `getErrorCapDeltas`
+    // answers per error-cap SERIES, which a tuple-recorded kind has none of;
+    // `deltasFromBar` derives the same numbers from the one object the drawing
+    // and the export also read.
     const session = calibratedWithACappedPoint();
-    expect(session.getErrorCapDeltas(1)[0]).toBeCloseTo(2, 6);  // SD upper
-    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-2, 6); // SD lower, mirrored
+    const d = deltasFromBar(session.getResolvedErrorBars(0)[0]!);
+    expect(d.yUpper).toBeCloseTo(2, 6);
+    expect(d.yLower).toBeCloseTo(-2, 6); // mirrored
   });
 
   it('signs by ROLE, not by magnitude, so an asymmetric bar reads apart', () => {
     // Move the lower cap so the bar is genuinely asymmetric, then both columns
     // must still be tellable apart by sign alone.
     const session = calibratedWithACappedPoint();
-    session.setActiveDataset(2); // SD lower
-    session.updateDataPointPixel(0, 200, 245); // 45px below the datum = -3
-    expect(session.getErrorCapDeltas(1)[0]).toBeCloseTo(2, 6);
-    expect(session.getErrorCapDeltas(2)[0]).toBeCloseTo(-3, 6);
+    session.setActiveDataset(0);
+    session.updateDataPointPixel(capPixel(session, 'lower'), 200, 245); // 45px below = -3
+    const d = deltasFromBar(session.getResolvedErrorBars(0)[0]!);
+    expect(d.yUpper).toBeCloseTo(2, 6);
+    expect(d.yLower).toBeCloseTo(-3, 6);
   });
 
   it('is EMPTY for a series that is not an error series — never zero', () => {
@@ -634,13 +746,14 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(session.getErrorCapDeltas(0)).toEqual([]);
   });
 
-  it('gives null for a cap that resolves to no datum', () => {
+  it('a cap with no datum reports nothing rather than a number', () => {
+    // ⚠️ MIGRATED, and the case has DISSOLVED: deleting the datum takes its
+    // extents with it, so a cap "resolving to no datum" is no longer a state the
+    // record can be in. That is the orphan defect made inexpressible.
     const session = calibratedWithACappedPoint();
-    // Empty the datum series, leaving the cap with nothing to resolve against.
     session.setActiveDataset(0);
-    session.removeDataPoints([0]);
-    const deltas = session.getErrorCapDeltas(1);
-    if (deltas.length > 0) expect(deltas[0]).toBeNull();
+    session.removeDataPoints([0]); // the datum, so the whole tuple
+    expect(session.getResolvedErrorBars(0)).toHaveLength(0);
   });
 
   // ⚑ NOT TESTED, and said plainly rather than left implied: the `!targetEntry`

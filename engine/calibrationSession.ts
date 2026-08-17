@@ -206,7 +206,12 @@ import {
   type ErrorCapSeries,
   type ErrorRole,
 } from '../algorithms/errorBar.js';
-import { hasErrorSlots, errorBarsFromTuples, slotForRole } from '../algorithms/errorExtent.js';
+import { hasErrorSlots, errorBarsFromTuples, slotForRole, errorSlotNames } from '../algorithms/errorExtent.js';
+
+/** How close a cap drag's start must be to a datum, in image pixels, to count as
+ * having started ON it. The UI snaps within 14px in canvas space; this is the
+ * model's own bound, so the guard does not depend on the UI having snapped. */
+const CAP_DATUM_MATCH_PX = 20;
 import {
   capFreeDirection,
   constrainCap,
@@ -969,30 +974,137 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!role) return 'Drag from a data point out to its error cap.';
 
     const base = opts.baseName.trim();
-    if (base.length === 0) return 'Name the error series first.';
+    if (base.length === 0) return 'Name the error first, so its columns can carry that name (e.g. SD).';
 
-    // The model's one constraint, where this axes can express it: the cap is
-    // pinned to the line its datum's value axis runs along. Null direction ->
-    // untouched, which is the right answer on the axes that cannot say.
+    // The model's one constraint: the cap is pinned to the line its datum's
+    // value axis runs along. Null direction -> untouched, which is the right
+    // answer on the axes that genuinely cannot say (polar, ternary, map, ccr,
+    // whose dataToPixel is still a stub).
     const direction = capFreeDirection(this.axes, opts.datumPixel, role);
     const cap = constrainCap(opts.datumPixel, opts.capPixel, direction);
 
-    const targetName = target.dataset.name;
-    const placed = this.addCapTo(base, role, targetName, cap);
-    if (placed) {
+    const ds = target.dataset;
+
+    // ⚑⚑ ADOPT SLOTS FIRST, ALWAYS. `adoptSlots` wraps every EXISTING pixel into
+    // a tuple of its own, which is what lets error be added to points placed
+    // long before anyone thought about error (David's LabPlot requirement).
+    // Doing it AFTER adding the cap pixel would wrap the CAP too, and it would
+    // appear as a second data point carrying an error bar of its own -- pinned
+    // by errorPrimitiveConvergence's ORDER MATTERS test, which found this by
+    // having its own setup the wrong way round.
+    //
+    // ⚑ Appended to whatever slots the type already owns, so a Bar series keeps
+    // 'Bar start'/'Bar end' and takes the roles after them.
+    //
+    // ⚑⚑ A SECOND ERROR KIND ON THE SAME SERIES GOES THE OLD WAY, deliberately.
+    // The tuple carries ONE set of roles, so it holds the FIRST kind the user
+    // named ("SD"). A later capture under a different name ("95% CI") falls
+    // through to `addCapTo`, which creates the related series it always did.
+    //
+    // Storage was never the limit here and this is not a restriction: any number
+    // of error series may relate to one parent, and that mechanism is untouched.
+    // The real ceiling is the RESOLVED PRIMITIVE — `ErrorBarPoint` has one
+    // `yUpper`, and `resolveErrorBars` arbitrates nearest-wins between two series
+    // claiming a role — and that ceiling predates this work entirely. So the
+    // first kind is UPGRADED to a stored pairing and every further kind stays
+    // exactly where it was, rather than anything being taken away.
+    //
+    // ⚠️ The first draft instead skipped adoption and wrote the second kind into
+    // the FIRST kind's slots — so a 95% CI reading was recorded under a column
+    // headed "SD upper". Silent mislabelling, and my own test pinned it as
+    // correct ("a second capture must not rename the columns"), which is right
+    // for another cap of the SAME kind and wrong for a different one.
+    //
+    // ⚑ Measured before settling for this: of 556,894 Europe PMC figure captions
+    // mentioning error bars, 40 say "inner/outer error bars" and 3 say "two sets
+    // of error bars" — order one in ten thousand. Captions pairing error bars
+    // with a SHADED BAND are 14,220, ~350× more common, and that is a second
+    // CARRIER rather than a second cap set.
+    const ownSlots = ds.getSlotNames();
+    const errorGoesInTuple = !hasErrorSlots(ownSlots) || errorSlotNames(base, []).every((n) => ownSlots.includes(n));
+    if (!errorGoesInTuple) {
+      const targetName = ds.name;
+      const placed = this.addCapTo(base, role, targetName, cap);
+      const mirror = placed
+        ? null
+        : this.addCapTo(base, oppositeRole(role), targetName, mirrorCap(opts.datumPixel, cap));
       this.switchActiveDataset(opts.targetIndex);
-      return placed;
+      return placed ?? mirror;
+    }
+    if (!hasErrorSlots(ownSlots)) {
+      ds.adoptSlots(errorSlotNames(base, ds.hasSlots() ? ownSlots : ['Value']));
+    }
+    const slots = ds.getSlotNames();
+
+    // Which datum was dragged from. The UI has already snapped the drag's start
+    // to a point of this series, so this is a lookup rather than a guess -- and
+    // an unmatched drag is REFUSED rather than inventing a datum to hang the
+    // extent off, because an extent with no carrier is not a measurement.
+    const tupleIndex = this.tupleIndexAtDatum(ds, opts.datumPixel);
+    if (tupleIndex < 0) return 'Drag from one of this series\' own data points out to its error cap.';
+
+    const write = (r: ErrorRole, at: { x: number; y: number }): void => {
+      const slot = slotForRole(r, slots.length);
+      const existing = ds.getAllTuples()[tupleIndex]?.[slot];
+      if (existing !== null && existing !== undefined) {
+        // Re-capture MOVES the cap. Adding a second pixel would leave the first
+        // floating in the series as a stray point that no tuple owns -- the
+        // orphan defect, in a new place.
+        ds.setPixelAt(existing, at.x, at.y);
+        return;
+      }
+      ds.addToTupleAt(tupleIndex, slot, ds.addPixel(at.x, at.y));
+    };
+
+    write(role, cap);
+    // ⚑⚑ THE MIRROR IS A STARTING POSITION, NOT A CONSTRAINT (David, 2026-07-16)
+    // — so it is only ever placed into an EMPTY slot. An asymmetric bar is just
+    // a bar whose cap you moved, and re-dragging the other side must not undo
+    // that.
+    //
+    // ⚠️ The first draft wrote the mirror unconditionally. Re-capturing the upper
+    // cap on a datum whose lower you had deliberately dragged out would have
+    // snapped that lower back to symmetry — silently destroying a measurement,
+    // on the very feature ("asymmetric error bars") this rework exists to make
+    // workable.
+    const opposite = oppositeRole(role);
+    if (ds.getAllTuples()[tupleIndex]?.[slotForRole(opposite, slots.length)] == null) {
+      write(opposite, mirrorCap(opts.datumPixel, cap));
     }
 
-    const mirror = this.addCapTo(base, oppositeRole(role), targetName, mirrorCap(opts.datumPixel, cap));
-    // The error caps live in their OWN related series (SD upper / SD lower), which
-    // addDataset just made active as a side effect. But the user is working on the
-    // TARGET data series -- adding error to a point must never steal "active" from
-    // it, or the next Place-Point click silently lands on an error-cap series with
-    // nothing on screen saying so (a real trap; the point you added a cap to and
-    // the target are always the same series). Restore it.
+    // ⚑ No longer needs restoring -- the caps go into the TARGET series itself,
+    // so nothing can steal "active" from it. Kept as an explicit call because
+    // the gesture is documented to leave the user on the series they were
+    // working on, and that must not depend on it happening to already be true.
     this.switchActiveDataset(opts.targetIndex);
-    return mirror;
+    return null;
+  }
+
+  /**
+   * The tuple whose DATUM (slot 0) sits at this pixel — the point a cap drag
+   * started from.
+   *
+   * ⚑ Nearest rather than exact: the UI snaps the drag's start to a datum, but
+   * the snap works in canvas space while this compares image pixels, so a
+   * rounding difference must not lose the point. Bounded, so a drag that started
+   * on nothing still refuses instead of attaching to whatever was furthest away.
+   */
+  private tupleIndexAtDatum(ds: Dataset, datumPixel: { x: number; y: number }): number {
+    const pixels = ds.getAllPixels();
+    let best = -1;
+    let bestDistance = CAP_DATUM_MATCH_PX;
+    ds.getAllTuples().forEach((tuple, i) => {
+      const pixelIndex = tuple[0];
+      if (pixelIndex === null || pixelIndex === undefined) return;
+      const p = pixels[pixelIndex];
+      if (!p) return;
+      const distance = Math.hypot(p.x - datumPixel.x, p.y - datumPixel.y);
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = i;
+      }
+    });
+    return best;
   }
 
   /**
@@ -4473,6 +4585,42 @@ export class CalibrationSession<A extends CalibratedAxes> {
         this.activeEntry.slotCursor = this.computeSlotCursorFor(dataset);
         return;
       }
+      // ⚑⚑ ERROR EXTENTS ARE THE SECOND TYPE TO INHERIT THE WHOLE-TUPLE RULE
+      // WRONGLY -- see the spider note directly above, which says it in the same
+      // words: "the rule was right for the type it was written for and wrong for
+      // the type that inherited it."
+      //
+      // A partial BOX is nonsense, so deleting one of its five members must take
+      // the box. A partial error bar is NOT nonsense: a one-sided bar is a real
+      // figure, and David requires it. Worse, the app itself places the mirrored
+      // cap -- so under the whole-tuple rule a user recording only an upper bound
+      // could not remove the lower one we invented for them without ALSO losing
+      // their data point.
+      //
+      // So the member decides:
+      //   · a CAP  -> remove just that cap, leaving a valid one-sided bar
+      //   · the DATUM -> remove the whole tuple, because an extent with nothing
+      //     to hang off is not a measurement ("an error bar hangs off a data
+      //     point", the card's own words)
+      //
+      // ⚑ Tuple positions are unaffected by pixel removal, so the datums' tuple
+      // indices are resolved BEFORE any cap is removed and stay valid after.
+      if (hasErrorSlots(dataset.getSlotNames())) {
+        const uniq = [...new Set(indices)].filter((i) => i >= 0 && i < dataset.getCount());
+        const caps = uniq.filter((i) => this.capRoleInTuples(dataset, i) !== null);
+        const datumTuples = [
+          ...new Set(
+            uniq
+              .filter((i) => this.capRoleInTuples(dataset, i) === null)
+              .map((i) => dataset.getTupleIndex(i))
+              .filter((t) => t > -1)
+          ),
+        ];
+        for (const i of [...caps].sort((a, b) => b - a)) this.removeDataPointAt(i);
+        for (const t of datumTuples.sort((a, b) => b - a)) this.removeTuple(t);
+        return;
+      }
+
       // 1.5D (box plot / histogram): a selected member stands for its whole tuple
       // -- removing one member would leave a partial box, which is not half the
       // data but nonsense. Map to unique tuples, remove each whole, high index first.
