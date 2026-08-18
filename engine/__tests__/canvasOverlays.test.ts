@@ -10,7 +10,7 @@ import {
 } from '../canvasOverlays.js';
 import type { OverlaySeries, OverlaySeriesInfo } from '../canvasOverlays.js';
 import type { CalibStepInfo } from '../axesTypeConfigs.js';
-import type { ErrorRole } from '../../algorithms/errorBar.js';
+import type { CapHandle } from '../calibrationSession.js';
 
 /**
  * These assert the BOOLEANS on a marker — which ones Konva may drag, and which
@@ -265,7 +265,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
         { px: 10, py: 4 }, // its upper cap
         { px: 10, py: 16 }, // its lower cap
       ],
-      capRoles: [null, 'upper', 'lower'] as (ErrorRole | null)[],
+      capRoles: [null, { role: 'upper', line: null }, { role: 'lower', line: null }] as (CapHandle | null)[],
     };
     const markers = points(
       buildCanvasMarkers(base({ ...withCaps, mode: 'error-bars', activeDatasetIndex: 0, errorTargetIndex: 0 }))
@@ -286,7 +286,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
             { px: 10, py: 10 },
             { px: 10, py: 4 },
           ],
-          capRoles: [null, 'upper'],
+          capRoles: [null, { role: 'upper', line: null }],
         })
       )
     );

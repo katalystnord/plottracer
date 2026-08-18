@@ -62,7 +62,26 @@ export const CAP_HALF = 13;
  * given below — a rotated calibration leans the bar, and caps drawn straight
  * across would visibly detach from it.
  */
-export function computeWhiskerGlyph(datum: Point2D, cap: Point2D): GlyphSegment[] {
+/**
+ * One whisker, with its two parts NAMED.
+ *
+ * ⚑⚑ It used to be a `GlyphSegment[]` — `[bar, tick]`, and `[tick]` alone in the
+ * degenerate case — and the caller indexed in. B2 gives the two parts DIFFERENT
+ * colours (the bar takes the series' colour, the cap is black), so "element 1 is
+ * the tick" stopped being an implementation detail and became a contract that a
+ * one-element array quietly broke.
+ */
+export interface WhiskerShape {
+  /** The bar from the datum out to the cap. Zero-length when the cap sits on its
+   * datum, which draws nothing — the cap itself still says where it is. */
+  bar: GlyphSegment;
+  /** ⚑⚑ THE TICK ACROSS THE CAP *IS* THE CAP. There is no second object to
+   * drift away from it — which is the whole of B1. See `capIsOneObject.test.ts`
+   * for why a separate ball could not be fixed, only removed. */
+  cap: GlyphSegment;
+}
+
+export function computeWhiskerGlyph(datum: Point2D, cap: Point2D): WhiskerShape {
   const dx = cap.x - datum.x;
   const dy = cap.y - datum.y;
   const length = Math.sqrt(dx * dx + dy * dy);
@@ -70,16 +89,20 @@ export function computeWhiskerGlyph(datum: Point2D, cap: Point2D): GlyphSegment[
     // A cap on top of its datum is zero error -- a claim of perfect certainty,
     // and the one thing more dangerous here than a wrong number (checkpoint
     // 77's self-relation bug). Draw the tick anyway so it is visible rather
-    // than rendering nothing at all.
-    return [{ from: { x: datum.x - CAP_HALF, y: datum.y }, to: { x: datum.x + CAP_HALF, y: datum.y } }];
+    // than rendering nothing at all, with an empty bar beside it: a bar from a
+    // point to itself is the honest drawing of no extent.
+    return {
+      bar: { from: { ...datum }, to: { ...datum } },
+      cap: { from: { x: datum.x - CAP_HALF, y: datum.y }, to: { x: datum.x + CAP_HALF, y: datum.y } },
+    };
   }
   const nx = -dy / length;
   const ny = dx / length;
-  return [
-    { from: { ...datum }, to: { ...cap } },
-    {
+  return {
+    bar: { from: { ...datum }, to: { ...cap } },
+    cap: {
       from: { x: cap.x - nx * CAP_HALF, y: cap.y - ny * CAP_HALF },
       to: { x: cap.x + nx * CAP_HALF, y: cap.y + ny * CAP_HALF },
     },
-  ];
+  };
 }

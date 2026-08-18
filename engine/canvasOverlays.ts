@@ -1,7 +1,7 @@
 import { polylineRuns } from './seriesLine.js';
 import type { CalibStepInfo } from './axesTypeConfigs.js';
 import type { PlacedCalibPoint, PointRole } from './calibrationSession.js';
-import type { ErrorRole } from '../algorithms/errorBar.js';
+import type { CapHandle } from './calibrationSession.js';
 
 /**
  * WHAT the canvas draws, decided here; HOW it is drawn stays in `ui/ImageCanvas.tsx`.
@@ -53,7 +53,18 @@ export interface CanvasMarker {
    * round, so roundness is already spoken for. Square reads as a grip, and the
    * difference survives being 4px across.
    */
-  kind?: 'calibration' | 'data' | 'aid';
+  /**
+   * ⚑⚑ AND A `cap` IS DRAWN BY THE WHISKER, NOT BY THE MARKER LAYER. An error
+   * cap's only visible form is the tick at its whisker's end (B1) — this marker
+   * exists to be GRABBED, and the renderer gives it a hit area and no fill.
+   *
+   * ⚑ No new shape had to be invented for it, which was worth checking: round
+   * is a data dot and a reticle, square is an `aid`. A cap is neither, and
+   * `computeWhiskerGlyph` has always drawn a perpendicular TICK there — the same
+   * mark matplotlib's `capsize` draws. The figure's own convention was already
+   * in the code.
+   */
+  kind?: 'calibration' | 'data' | 'aid' | 'cap';
   /**
    * A point in IMAGE coordinates to push this marker's label AWAY from.
    *
@@ -82,6 +93,20 @@ export interface CanvasMarker {
   /** Override the data-dot radius (checkpoint 120): interpolation-assist draws
    * anchors big and derived samples small. Defaults to 5. */
   radius?: number;
+  /**
+   * The line this marker's drag is confined to, in IMAGE space — an error cap's
+   * value axis.
+   *
+   * ⚑⚑ SO THE GESTURE IS BOUND TO ITS CONSTRAINT ON SCREEN, not only in the
+   * record. The model already puts a cap back on its axis on release; without
+   * this the drag visibly leans out and snaps back, which teaches the user that
+   * a diagonal error bar is a thing they might get. Pattern 4, and the same
+   * `dragBoundFunc` projection the colour key's handle already uses.
+   *
+   * Absent where the axes cannot say which way its value runs, where a free cap
+   * is the documented default.
+   */
+  dragLine?: { origin: { x: number; y: number }; direction: { x: number; y: number } };
 }
 
 /** A series drawn as connected polyline(s) under its markers (checkpoint 131) --
@@ -125,6 +150,18 @@ export const SELECTED_DOT_RADIUS = 3.5;
  * line?" question. No runs means a scatter, which stays dots. */
 export function runsForPoints(pts: readonly { px: number; py: number }[]): { x: number; y: number }[][] {
   return polylineRuns(pts.map((p) => ({ x: p.px, y: p.py })));
+}
+
+/**
+ * The marker id of a data point (or one of its error caps) by pixel index.
+ *
+ * ⚑ Exported because the WHISKER now names the marker its cap is, so the
+ * renderer can redraw it from a live drag position. Two places building the
+ * same string by hand is how they drift — and a whisker naming a marker that
+ * does not exist would fail silently, as "the cap simply does not follow".
+ */
+export function dataPointMarkerId(pixelIndex: number): string {
+  return `point-${pixelIndex}`;
 }
 
 function rgb(c: readonly [number, number, number]): string {
@@ -175,12 +212,13 @@ export interface CanvasMarkerInput {
   pendingPixelColor: string;
   dataPoints: readonly { px: number; py: number }[];
   dataPointRoles: readonly (PointRole | null)[];
-  /** Per ACTIVE-series pixel: the error role it caps, or null for a data point.
+  /** Per ACTIVE-series pixel: the cap it is (role + its drag line), or null for
+   * a data point.
    * ⚑ B4 — a datum's caps are pixels of its own series now, so the marker layer
    * has to be able to tell them apart from the readings they belong to.
    * Optional, so every type that has no error passes nothing and behaves
    * exactly as before. */
-  capRoles?: readonly (ErrorRole | null)[];
+  capRoles?: readonly (CapHandle | null)[];
   /** Every series, for the inactive-context dots. */
   allDatasetsData: readonly OverlaySeries[];
   datasetInfos: readonly OverlaySeriesInfo[];
@@ -328,7 +366,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     const plainDense = activeDense && !isInterp && !isAnchor;
     if (plainDense && !selected) return;
     result.push({
-      id: `point-${i}`,
+      id: dataPointMarkerId(i),
       x: point.px,
       y: point.py,
       // ⚑ A cap carries no ordinal. The label is the point's NUMBER, and a cap
@@ -381,6 +419,10 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       // ⚑ This is B3 ("caps ALWAYS editable") arriving with no exception to the
       // active-series guard — a cap is part of the active series' point, so
       // dragging it already IS editing the active series.
+      // ⚑ B1: an error cap has no dot of its own. Its drawn form is the tick at
+      // the end of its whisker, and this marker is the hit area over it.
+      ...(capRole ? { kind: 'cap' as const } : {}),
+      ...(capRole?.line ? { dragLine: capRole.line } : {}),
       draggable:
         i !== ringClosingIndex &&
         mode !== 'pan' &&

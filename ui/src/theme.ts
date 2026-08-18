@@ -78,6 +78,11 @@ export const theme = {
     overlay: {
       stroke: '#262626',
       pendingMarkerFill: '#ffffff',
+      /** An error cap's tick — the whisker's END, which IS the cap (B1/B2).
+       * David: *"let's keep the end of the handles black, and the line that goes
+       * to them a colour."* Darker than `stroke`, because a cap reads against
+       * the figure's own ink and against the coloured bar it terminates. */
+      capStroke: '#000000',
     },
   },
   font: {

@@ -17,28 +17,27 @@ describe('whisker glyph (checkpoint 79) -- what the live error tool draws', () =
     const DATUM_MARKER_RADIUS = 7;
     expect(CAP_HALF).toBeGreaterThan(DATUM_MARKER_RADIUS);
 
-    const segs = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
-    const tick = segs[1]!;
+    const w = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
+    const tick = w.cap;
     const width = Math.hypot(tick.to.x - tick.from.x, tick.to.y - tick.from.y);
     expect(width).toBeGreaterThan(DATUM_MARKER_RADIUS * 2);
   });
 
   it('draws the bar out to the cap, then a tick across the CAP end only', () => {
-    const segs = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
-    // Two segments, not three: the datum end already draws its own data dot, and
-    // a tick there would read as a second cap.
-    expect(segs).toHaveLength(2);
-    expect(segs[0]).toEqual({ from: { x: 100, y: 100 }, to: { x: 100, y: 40 } });
+    const w = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
+    // The datum end draws no tick of its own: it already has its data dot, and a
+    // tick there would read as a second cap.
+    expect(w.bar).toEqual({ from: { x: 100, y: 100 }, to: { x: 100, y: 40 } });
     // The tick sits at the CAP, normal to a vertical bar so horizontal...
-    expect(segs[1]!.from.y).toBeCloseTo(40);
-    expect(segs[1]!.to.y).toBeCloseTo(40);
+    expect(w.cap.from.y).toBeCloseTo(40);
+    expect(w.cap.to.y).toBeCloseTo(40);
     // ...and centred on it.
-    expect((segs[1]!.from.x + segs[1]!.to.x) / 2).toBeCloseTo(100);
+    expect((w.cap.from.x + w.cap.to.x) / 2).toBeCloseTo(100);
   });
 
   it('leans the tick with the bar, so a rotated calibration cannot detach it', () => {
-    const segs = computeWhiskerGlyph({ x: 0, y: 0 }, { x: 100, y: 100 }); // 45°
-    const tick = segs[1]!;
+    const w = computeWhiskerGlyph({ x: 0, y: 0 }, { x: 100, y: 100 }); // 45°
+    const tick = w.cap;
     // Dot product with the bar's own direction must be ~0.
     expect((tick.to.x - tick.from.x) * 100 + (tick.to.y - tick.from.y) * 100).toBeCloseTo(0, 6);
     // Centred on the cap, not on the datum.
@@ -49,9 +48,10 @@ describe('whisker glyph (checkpoint 79) -- what the live error tool draws', () =
   it('still draws a visible tick when a cap sits ON its datum (zero error)', () => {
     // A cap on its datum is a claim of perfect certainty -- more dangerous here
     // than a wrong number -- so it must never render as nothing at all.
-    const segs = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 100 });
-    expect(segs).toHaveLength(1);
-    const length = Math.hypot(segs[0]!.to.x - segs[0]!.from.x, segs[0]!.to.y - segs[0]!.from.y);
-    expect(length).toBeGreaterThan(0);
+    const w = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 100 });
+    // ⚑ The CAP is what must stay visible; the BAR is honestly empty.
+    const width = Math.hypot(w.cap.to.x - w.cap.from.x, w.cap.to.y - w.cap.from.y);
+    expect(width).toBeGreaterThan(0);
+    expect(w.bar.from).toEqual(w.bar.to);
   });
 });

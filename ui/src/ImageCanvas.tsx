@@ -16,13 +16,15 @@ import { fitToContainer, zoomAt, zoomByFactor, panBy, screenToImage, imageToScre
 import type { BoxPlotGlyphSegment } from '../../engine/boxPlotGlyph.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
 import type { CalibrationPreview } from '../../engine/calibrationPreview.js';
+import { computeWhiskerGlyph } from '../../engine/errorBarGlyph.js';
+import type { WhiskerGlyph } from '../../engine/calibrationSession.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { bytesToBase64 } from '../../engine/projectContainer.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Loupe } from './Loupe.js';
 import { CATEGORY_TICK_COLOR } from '../../engine/categoryTickOverlay.js';
-import { fmtValue } from './format.js';
+import { fmtValue, rgbToHex } from './format.js';
 import { roundToResolution } from '../../core/exportPrecision.js';
 import { theme, withAlpha } from './theme.js';
 
@@ -225,9 +227,21 @@ interface ImageCanvasProps {
    * engine/histogramGlyph.ts. Same decorative, listening={false} treatment as
    * boxPlotGlyphs: they mark what was captured, they aren't hit targets. */
   binGlyphs?: GlyphSegment[][];
-  /** Error-bar glyphs (checkpoint 70), image-pixel space -- see
-   * engine/errorBarGlyph.ts. Same decorative treatment as the others. */
-  errorBarGlyphs?: GlyphSegment[][];
+  /**
+   * Error whiskers (checkpoint 70; reshaped for B1/B2 in v2.3), image-pixel
+   * space — see engine/errorBarGlyph.ts.
+   *
+   * ⚑⚑ NOT decorative like the others, and that is the point. The BAR is
+   * display-only, but the CAP is the thing the user grabs: its tick is the only
+   * drawing of the cap there is (B1 — the ball is gone, so nothing is left to
+   * drift away from it), and while its marker is being dragged this layer
+   * redraws both parts from the live position rather than from a model that
+   * updates on release.
+   *
+   * ⚑ B2: the bar takes the SERIES' colour, the cap is black. The bar says which
+   * series this uncertainty belongs to; the black end says where the reading is.
+   */
+  errorBarGlyphs?: WhiskerGlyph[];
   /** The geometry the calibration IMPLIES (checkpoint 84), image-pixel space --
    * see engine/calibrationPreview.ts. Drawn UNDER the handles and non-interactive:
    * it exists so a mis-clicked handle stops being invisible, and it must never
@@ -562,6 +576,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   const spaceHeldRef = useRef(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * The error cap being dragged right now, in SCREEN space.
+   *
+   * ⚑⚑ B1's other half. Deleting the ball leaves one drawn cap — the whisker's
+   * own tick — but that tick comes from the MODEL, which updates on release, so
+   * on its own it would sit still while the cursor walked away. This is what
+   * lets the drawing follow the drag, and it is the same trick `hover` already
+   * uses for the loupe: Konva captures the pointer during a shape drag, so the
+   * live position is only available from the marker's own `onDragMove`.
+   */
+  const [capDrag, setCapDrag] = useState<{ id: string; x: number; y: number } | null>(null);
   // Crop selection drag (checkpoint 63): the canvas-relative screen start, plus
   // the live current point for drawing the selection rectangle.
   const cropDragRef = useRef<{ x: number; y: number } | null>(null);
@@ -1773,6 +1798,92 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                       </Fragment>
                     );
                   }
+                  if (point.kind === 'cap') {
+                    // ⚑⚑ AN ERROR CAP HAS NO MARK OF ITS OWN — B1, and the
+                    // reason it is a fix rather than a preference. It used to
+                    // draw a "ball" here while the whisker drew a tick at the
+                    // same place: two objects for one thing, one moved live by
+                    // Konva and the other frozen until release, so they visibly
+                    // separated while the record stayed perfectly correct.
+                    // David: *"they are moved independently from the bars when
+                    // moving them, and it just does not look so good."*
+                    //
+                    // So this marker draws NOTHING. Its whole job is to be
+                    // grabbable, and the cap you see is the whisker's own tick
+                    // — drawn black, and recomputed from `capDrag` while this
+                    // marker is under the cursor. There is no second object
+                    // left that COULD drift.
+                    //
+                    // ⚑ The invisible hit disc is the same trick the reticle and
+                    // the `aid` square already use, so a thin mark is still easy
+                    // to grab. The selection ring is kept: it is how you see
+                    // which point Del would remove, and a cap is deletable.
+                    const interactive = point.draggable ?? false;
+                    // ⚑⚑ BOUND TO ITS AXIS ON SCREEN, not only in the record.
+                    // The model already puts a cap back on its datum's value
+                    // axis on release (`errorCapDragLine` + `constrainCap`), and
+                    // that was invisible until the whisker started following the
+                    // drag: the bar then leaned diagonally under the cursor and
+                    // snapped straight afterwards, teaching the user that a
+                    // diagonal error bar is something they might get. Pattern 4,
+                    // and the SAME projection the colour key's handle uses.
+                    //
+                    // ⚑ The line arrives in image space and is projected in
+                    // SCREEN space, which is exact: `imageToScreen` is a uniform
+                    // scale plus a translation, so a direction converts by scale
+                    // alone and the projection is the same operation either way.
+                    //
+                    // ⚑ Absent for an axes that cannot say which way its value
+                    // runs — there the cap is free, which is the documented
+                    // default, and Konva gets no bound at all.
+                    const line = point.dragLine;
+                    const dragBound = line
+                      ? (pos: { x: number; y: number }) => {
+                          const o = imageToScreen(view, line.origin.x, line.origin.y);
+                          const ux = line.direction.x;
+                          const uy = line.direction.y;
+                          const along = (pos.x - o.x) * ux + (pos.y - o.y) * uy;
+                          return { x: o.x + ux * along, y: o.y + uy * along };
+                        }
+                      : undefined;
+                    return (
+                      <Group
+                        key={point.id}
+                        x={screenX}
+                        y={screenY}
+                        draggable={interactive}
+                        {...(dragBound ? { dragBoundFunc: dragBound } : {})}
+                        onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
+                        onContextMenu={(e) => {
+                          e.evt.preventDefault();
+                          e.cancelBubble = true;
+                          onPointContextMenu?.(point.id, e.evt.clientX, e.evt.clientY);
+                        }}
+                        onDragStart={cancelDragIfPanning}
+                        onDragMove={(e) => {
+                          setHover({ x: e.target.x(), y: e.target.y() });
+                          setCapDrag({ id: point.id, x: e.target.x(), y: e.target.y() });
+                        }}
+                        onDragEnd={(e) => {
+                          // Cleared BEFORE the commit, so the one frame between
+                          // "drag finished" and "model updated" draws from the
+                          // model rather than from a stale live position.
+                          setCapDrag(null);
+                          onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY });
+                        }}
+                      >
+                        <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
+                        {point.selected && (
+                          <Circle
+                            radius={10}
+                            stroke={theme.color.primary.main}
+                            strokeWidth={2.5}
+                            listening={false}
+                          />
+                        )}
+                      </Group>
+                    );
+                  }
                   if (point.kind === 'aid') {
                     // ⚑⚑ AN ADJUSTABLE AID, NOT A PRECISE REFERENCE. A category
                     // tick or a heatmap grid boundary is something you drag onto
@@ -1921,21 +2032,58 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   })
                 )}
-                {errorBarGlyphs?.map((segments, glyphIndex) =>
-                  segments.map((segment, segmentIndex) => {
-                    const from = imageToScreen(view, segment.from.x, segment.from.y);
-                    const to = imageToScreen(view, segment.to.x, segment.to.y);
-                    return (
+                {errorBarGlyphs?.map((whisker, glyphIndex) => {
+                  // ⚑⚑ THE LIVE POSITION, AND THIS IS THE WHOLE OF B1. Konva
+                  // moves a dragged marker and nothing else, so anything drawn
+                  // from the model is frozen until release — which is exactly why
+                  // the old ball and the whisker end separated on screen while
+                  // the record stayed perfectly correct (CLAUDE.md pattern 4:
+                  // the picture lies and the data does not). The whisker names
+                  // the marker its cap IS, so when that marker is under the
+                  // cursor the glyph is recomputed from where the cursor is.
+                  //
+                  // ⚑ Recomputed in IMAGE space, not screen space, so the cap's
+                  // tick keeps the size it has at this zoom and the whisker does
+                  // not change shape merely because it is being moved.
+                  const live =
+                    capDrag && whisker.capMarkerId && capDrag.id === whisker.capMarkerId
+                      ? computeWhiskerGlyph(
+                          whisker.bar.from,
+                          screenToImage(view, capDrag.x, capDrag.y)
+                        )
+                      : whisker;
+                  const seg = (s: GlyphSegment) => {
+                    const from = imageToScreen(view, s.from.x, s.from.y);
+                    const to = imageToScreen(view, s.to.x, s.to.y);
+                    return [from.x, from.y, to.x, to.y];
+                  };
+                  return (
+                    <Fragment key={`errorbar-glyph-${glyphIndex}`}>
+                      {/* The bar, in the series' colour. Zero-length when a cap
+                          sits on its datum, which draws nothing — the honest
+                          picture of no extent. */}
                       <Line
-                        key={`errorbar-glyph-${glyphIndex}-${segmentIndex}`}
-                        points={[from.x, from.y, to.x, to.y]}
-                        stroke={theme.color.overlay.stroke}
+                        points={seg(live.bar)}
+                        stroke={rgbToHex(whisker.color)}
                         strokeWidth={2}
                         listening={false}
                       />
-                    );
-                  })
-                )}
+                      {/* ⚑ The cap. Black and heavier than the bar, because it
+                          is the measured endpoint AND the handle — David: "let's
+                          keep the end of the handles black, and the line that
+                          goes to them a colour". Still listening={false}: the
+                          hit area is the marker sitting over it, which is what
+                          the drag machinery already knows how to move. */}
+                      <Line
+                        points={seg(live.cap)}
+                        stroke={theme.color.overlay.capStroke}
+                        strokeWidth={3}
+                        lineCap="round"
+                        listening={false}
+                      />
+                    </Fragment>
+                  );
+                })}
                 {curveFitLine && curveFitLine.length > 1 && (
                   <Line
                     points={curveFitLine.flatMap((p) => {

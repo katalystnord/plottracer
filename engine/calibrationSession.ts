@@ -196,7 +196,8 @@ import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
 import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segmentFill.js';
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
-import { computeWhiskerGlyph } from './errorBarGlyph.js';
+import { computeWhiskerGlyph, type WhiskerShape } from './errorBarGlyph.js';
+import { dataPointMarkerId } from './canvasOverlays.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
 import {
   matchCapToDatum,
@@ -439,6 +440,40 @@ function validCursorFor(
   const tuples = dataset.getAllTuples();
   if (cursor.tupleIndex < 0 || cursor.tupleIndex >= tuples.length) return fresh;
   return { ...cursor };
+}
+
+/**
+ * One drawn error whisker: the bar out to the cap, the cap tick itself, the
+ * SERIES' colour for the bar, and — when the cap can be dragged — the marker it
+ * is.
+ *
+ * ⚑⚑ THE `capMarkerId` IS WHAT MAKES THE DRIFT INEXPRESSIBLE. During a drag
+ * Konva moves the marker and nothing else, so anything drawn from the model is
+ * frozen until release — which is precisely why the ball and the whisker end
+ * used to separate on screen (David: *"they are moved independently from the
+ * bars when moving them"*). With the whisker able to say WHICH marker its cap
+ * is, the renderer redraws bar and cap from that live position, and there is no
+ * longer a second thing that can lag behind.
+ *
+ * ⚑ Absent for an INACTIVE series' whisker, which is context rather than a
+ * handle — the same rule its data points already follow.
+ */
+/**
+ * One of a datum's error caps, as the canvas needs it: which side it records,
+ * and the line its drag is confined to.
+ *
+ * ⚑ Both together, because they are one fact about one pixel. Two parallel
+ * arrays keyed by pixel index is the shape that drifts.
+ */
+export interface CapHandle {
+  role: ErrorRole;
+  /** Image space. `null` where the axes cannot say which way its value runs. */
+  line: { origin: { x: number; y: number }; direction: { x: number; y: number } } | null;
+}
+
+export interface WhiskerGlyph extends WhiskerShape {
+  color: [number, number, number];
+  capMarkerId?: string;
 }
 
 export class CalibrationSession<A extends CalibratedAxes> {
@@ -936,19 +971,33 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ One pass over the tuples, not `capRoleInTuples` per pixel — the same
    * reason `datumCount` is subtractive.
    */
-  getCapPixelRoles(index: number): (ErrorRole | null)[] {
+  getCapPixelRoles(index: number): (CapHandle | null)[] {
     const entry = this.datasetEntries[index];
     if (!entry) return [];
     const slots = entry.dataset.getSlotNames();
-    const roles: (ErrorRole | null)[] = new Array(entry.dataset.getCount()).fill(null);
-    if (!hasErrorSlots(slots)) return roles;
+    const caps: (CapHandle | null)[] = new Array(entry.dataset.getCount()).fill(null);
+    if (!hasErrorSlots(slots)) return caps;
     for (const tuple of entry.dataset.getAllTuples()) {
       for (const role of ERROR_ROLES) {
         const pixelIndex = tuple[slotForRole(role, slots.length)];
-        if (pixelIndex != null) roles[pixelIndex] = role;
+        if (pixelIndex == null) continue;
+        // ⚑⚑ THE SAME LINE THE MODEL WILL CONSTRAIN TO, not one derived from the
+        // drawing. `updateDataPointPixel` runs the drag through
+        // `errorCapDragLine` + `constrainCap`, so a cap that leaves the value
+        // axis is put back on release. Handing the RENDERER the identical answer
+        // is what stops the gesture leaning on screen and snapping afterwards —
+        // pattern 4, "is a CONSTRAINED gesture bound to its constraint ON
+        // SCREEN?", and the reason it must be this call rather than the bar's
+        // current direction is the rule this file already states elsewhere: a
+        // check computed differently from the thing it checks is not a check.
+        //
+        // ⚑ `null` on the axes that genuinely cannot say (polar, ternary, map,
+        // ccr, whose `dataToPixel` is still a stub) — there the cap is
+        // unconstrained, which is the documented default, and the drag is free.
+        caps[pixelIndex] = { role, line: this.errorCapDragLine(index, pixelIndex) };
       }
     }
-    return roles;
+    return caps;
   }
 
   /** The relation a series declares, or null if it is an ordinary series. */
@@ -1312,7 +1361,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * exists to end. The arbitration decides which cap's VALUE is reported, not
    * which points exist.
    */
-  getErrorWhiskers(): GlyphSegment[][] {
+  getErrorWhiskers(): WhiskerGlyph[] {
     // Requires calibration -- see the note above on why this now resolves in
     // DATA space. Caps cannot exist before it anyway (captureErrorCap refuses),
     // so this costs no reachable behaviour.
@@ -1325,8 +1374,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return x === undefined || y === undefined ? null : { x, y };
     };
 
-    const whiskers: GlyphSegment[][] = [];
-    for (const entry of this.datasetEntries) {
+    const whiskers: WhiskerGlyph[] = [];
+    for (const [entryIndex, entry] of this.datasetEntries.entries()) {
+      const color = entry.dataset.colorRGB.getRGB();
+      // ⚑⚑ ONLY THE ACTIVE SERIES' CAPS CAN BE DRAGGED, so only they have a
+      // marker to name. An inactive series' whisker is context: drawn, never
+      // grabbed — exactly as its data points already are.
+      const active = entryIndex === this.activeDatasetIndex;
       // ⚑⚑ THE STORED PAIRING NEEDS NO MATCHING AT ALL. Where the extents live in
       // the datum's own tuple (v2.3 B4), the tuple SAYS which cap belongs to
       // which datum, so the drawing and the record cannot disagree -- neither of
@@ -1346,7 +1400,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
             if (capIndex == null) continue;
             const cap = pixels[capIndex];
             if (!cap) continue;
-            whiskers.push(computeWhiskerGlyph({ x: datum.x, y: datum.y }, { x: cap.x, y: cap.y }));
+            whiskers.push({
+              ...computeWhiskerGlyph({ x: datum.x, y: datum.y }, { x: cap.x, y: cap.y }),
+              color,
+              ...(active ? { capMarkerId: dataPointMarkerId(capIndex) } : {}),
+            });
           }
         }
         continue;
@@ -1370,7 +1428,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       }
       if (dataValues.length === 0) continue;
 
-      for (const cap of entry.dataset.getAllPixels()) {
+      for (const [capPixelIndex, cap] of entry.dataset.getAllPixels().entries()) {
         const capData = toData(cap);
         if (!capData) continue;
         // ONE rule, shared with resolveErrorBars (finding A6). Matching here in
@@ -1380,7 +1438,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // thing it checks is not a check.
         const index = matchCapToDatum(dataValues, capData, relation.role);
         if (index < 0) continue;
-        whiskers.push(computeWhiskerGlyph(pixelOf[index]!, { x: cap.x, y: cap.y }));
+        // ⚑ The IMPORT path: a cap here is a point of its own related series, so
+        // it is draggable only when THAT series is active — and its marker index
+        // is its position in that series, which this loop is walking.
+        whiskers.push({
+          ...computeWhiskerGlyph(pixelOf[index]!, { x: cap.x, y: cap.y }),
+          color,
+          ...(active ? { capMarkerId: dataPointMarkerId(capPixelIndex) } : {}),
+        });
       }
     }
     return whiskers;

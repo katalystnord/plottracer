@@ -80,11 +80,11 @@ describe('A6 — the whisker resolves the same way the record does', () => {
 
     const whiskers = s.getErrorWhiskers();
     expect(whiskers).toHaveLength(1);
-    // The bar segment runs datum -> cap; segment[0].from is the datum end.
-    expect(whiskers[0]![0]!.from.x).toBeCloseTo(DATUM_B.x, 6);
-    expect(whiskers[0]![0]!.from.y).toBeCloseTo(DATUM_B.y, 6);
+    // The BAR runs datum -> cap; its `from` is the datum end.
+    expect(whiskers[0]!.bar.from.x).toBeCloseTo(DATUM_B.x, 6);
+    expect(whiskers[0]!.bar.from.y).toBeCloseTo(DATUM_B.y, 6);
     // And it ends exactly where the user released.
-    expect(whiskers[0]![0]!.to).toEqual({ x: CAP.x, y: CAP.y });
+    expect(whiskers[0]!.bar.to).toEqual({ x: CAP.x, y: CAP.y });
   });
 
   it('agrees with resolveErrorBars — the record and the drawing name one datum', () => {
@@ -105,7 +105,7 @@ describe('A6 — the whisker resolves the same way the record does', () => {
 
     const axes = s.getAxes() as XYAxes;
     const whiskers = s.getErrorWhiskers();
-    const drawnDatum = whiskers[0]![0]!.from;
+    const drawnDatum = whiskers[0]!.bar.from;
     const drawnData = axes.pixelToData(drawnDatum.x, drawnDatum.y);
 
     // The datum the RECORD gave error to, and the datum the DRAWING hangs it

@@ -50,11 +50,10 @@ function withTupleCaps(
   return ds;
 }
 
-/** Every point each drawn whisker touches. A `GlyphSegment` is `{from, to}` —
- * the spine runs datum→cap and the second segment is the cap's perpendicular
- * tick. */
+/** Every point each drawn whisker touches — its `bar` (datum→cap) and its `cap`
+ * (the perpendicular tick), each a `GlyphSegment` of `{from, to}`. */
 function whiskerSpans(s: ReturnType<typeof session>) {
-  return s.getErrorWhiskers().map((segments) => segments.flatMap((seg) => [seg.from, seg.to]));
+  return s.getErrorWhiskers().map((w) => [w.bar.from, w.bar.to, w.cap.from, w.cap.to]);
 }
 
 describe('a whisker is drawn from the datum the record names', () => {
