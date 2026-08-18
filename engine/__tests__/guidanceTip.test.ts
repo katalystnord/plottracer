@@ -201,8 +201,59 @@ describe('guidanceTip — calibration', () => {
     const two = guidanceTip(
       base({ isCalibrating: true, hasPendingPixel: true, currentStep: { label: 'P1', prompt: 'p' }, pendingValueFieldCount: 2 })
     );
-    expect(one).toContain('Enter the X1 value, then press Confirm.');
-    expect(two).toContain('Enter the P1 values, then press Confirm.');
+    // ⚑ The step's LABEL is no longer repeated in the instruction — D1 made the
+    // line additive, so it already reads "… — X1: <prompt> — enter the value…".
+    // Saying "the X1 value" again after that is the same word twice in one
+    // sentence. The plurality, which is what this test is about, is unchanged.
+    expect(one).toContain('X1:');
+    expect(one).toContain('. Enter the value, then press Confirm.');
+    expect(two).toContain('P1:');
+    expect(two).toContain('. Enter the values, then press Confirm.');
+  });
+
+  it('⚑⚑ D1 — the step\u2019s own prompt SURVIVES the pending pixel', () => {
+    // 🔴 The prompt is what says WHAT to type. Once a pixel was pending the tips
+    // bar dropped it entirely and showed a generic *"Enter the Y1 values, then
+    // press Confirm"* — at exactly the moment the user is typing them.
+    //
+    // ⚠️⚠️ AND ON A PRE-PLACED STEP IT WAS SHOWN TO NOBODY, EVER. The heatmap's
+    // shared corner arrives with y1 already placed, so `hasPendingPixel` is true
+    // the instant the step opens: *"The same corner again — enter the Y value
+    // where the outer EDGE of the FIRST column meets the outer EDGE of the FIRST
+    // row"* was authored, unit-tested at the config level, and dead on screen.
+    // That is the step David flagged on day one — *"the text for shared origin
+    // is misleading or incorrect"* — and it was not misleading, it was absent.
+    //
+    // ⚑ THE LESSON, not just the bug: a unit test proving `stepsForOptions`
+    // returns the right sentence proves nothing REACHED THE SCREEN. Same shape
+    // as gate 3 — satisfied in the config, unenforced where the user is.
+    const tip = guidanceTip(
+      base({
+        isCalibrating: true,
+        hasPendingPixel: true,
+        currentStep: { label: 'Y1', prompt: 'The same corner again — enter the Y value there' },
+        pendingValueFieldCount: 1,
+      })
+    );
+    expect(tip).toContain('The same corner again — enter the Y value there');
+    expect(tip, 'and what to do with it').toContain('. Enter the value, then press Confirm.');
+  });
+
+  it('⚑ it still names the step and its place in the walk', () => {
+    // The other half of what the generic line threw away: which step this is,
+    // and how many are left. A user mid-walk should not have to reopen the card
+    // to find out where they are.
+    const tip = guidanceTip(
+      base({
+        isCalibrating: true,
+        hasPendingPixel: true,
+        stepIndex: 2,
+        stepCount: 8,
+        currentStep: { label: 'Y1', prompt: 'click the origin' },
+        pendingValueFieldCount: 1,
+      })
+    );
+    expect(tip).toContain('Calibration step 3/8 — Y1');
   });
 
   it('lets Measure interrupt a calibration in progress', () => {

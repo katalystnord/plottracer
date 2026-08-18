@@ -224,10 +224,39 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       : `Area — keep clicking corners, then Finish (or Enter) to close (${pendingMeasureCount} placed).`;
   }
   if (isCalibrating) {
+    // ⚑⚑ THE STEP'S OWN PROMPT SURVIVES THE PENDING PIXEL (v2.3, D1).
+    //
+    // 🔴 This used to REPLACE the whole line with *"Enter the Y1 values, then
+    // press Confirm."* the moment a pixel was pending — and the prompt is the
+    // half that says WHAT to type ("then enter its X value and how many COLUMNS
+    // the figure has"), thrown away at exactly the moment the user is typing it.
+    //
+    // ⚠️⚠️ ON A PRE-PLACED STEP IT WAS SHOWN TO NOBODY, EVER. The heatmap's
+    // shared corner arrives with y1 already placed, so `hasPendingPixel` is true
+    // the instant the step opens: *"The same corner again — enter the Y value
+    // where the outer EDGE of the FIRST column meets the outer EDGE of the FIRST
+    // row"* was authored, unit-tested at the config level, and dead on screen.
+    // That is the step David flagged on day one ("the text for shared origin is
+    // misleading or incorrect") — and it was not misleading, it was absent.
+    //
+    // ⚑ THE LESSON: a unit test proving `stepsForOptions` returns the right
+    // sentence proves nothing REACHED THE SCREEN. Same shape as gate 3 —
+    // satisfied in the config, unenforced where the user is.
+    //
+    // ⚑ ADDITIVE, so the walk's position and the step's name survive too. The
+    // instruction is APPENDED rather than substituted, which is the whole fix:
+    // nothing the user still needs is taken away to make room for what they need
+    // next.
+    const where = `Calibration step ${stepIndex + 1}/${stepCount} — ${currentStep!.label}: ${currentStep!.prompt}`;
+    // ⚑ A NEW SENTENCE, not a third dash clause. Several prompts already contain
+    // an em dash of their own ("The same corner again — enter the Y value
+    // where…"), so appending with another produced two dash clauses in one line.
+    // The precedent is the selected-point tip, which ends its first thought and
+    // starts a second: "…Del removes it. Or click to add another."
     if (hasPendingPixel) {
-      return `Enter the ${currentStep!.label} value${pendingValueFieldCount > 1 ? 's' : ''}, then press Confirm.`;
+      return `${where}. Enter the value${pendingValueFieldCount > 1 ? 's' : ''}, then press Confirm.`;
     }
-    return `Calibration step ${stepIndex + 1}/${stepCount} — ${currentStep!.label}: ${currentStep!.prompt}`;
+    return where;
   }
   if (isCalibrated) {
     if (mode === 'select') {
