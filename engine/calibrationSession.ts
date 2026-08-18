@@ -1000,10 +1000,37 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const entry = this.datasetEntries[index];
     if (!entry || !this.axes) return [];
     const axes = this.axes;
+    // ⚑⚑ A 1-D AXES CARRIES ITS ONE VALUE IN BOTH FIELDS, and that is the read
+    // side of a rule the CAPTURE side already states. `capFreeDirection`:
+    // *"a 1-D axes HAS only that axis, so on a horizontal bar chart a drag that
+    // `roleFromDrag` names `right` still runs along the value axis — the role
+    // names a SIDE, and the axis is a fact about the chart."* Reading the same
+    // record has to make the same allowance.
+    //
+    // ⚠️ IT WAS A REGRESSION, MEASURED. Bar's `pixelToData` returns `[value]`,
+    // so `v[1]` was `undefined` and every cap on a bar chart resolved to
+    // nothing: `[{x: 0}]`, no roles, no columns. Before B4 that cost nothing
+    // visible, because a bar's caps were a SEPARATE SERIES and its rows reached
+    // the file as ordinary readings. Folding them onto the datum routed them
+    // through this projection instead — so a recorded measurement stopped
+    // reaching the export at all.
+    //
+    // ⚑ Correct at every consumer: `errorBarsFromTuples` takes `cap.y` for
+    // upper/lower and `cap.x` for left/right, and `deltasFromBar` subtracts the
+    // matching field — so whichever side the user dragged, the absolute and the
+    // delta are the value and its offset.
+    //
+    // ▶ OPEN, and deliberately not settled here: the 1.5D taxonomy says a bar's
+    // OTHER coordinate is its CATEGORY, which the record does hold (the category
+    // axis). Carrying it here would make `ErrorBarPoint` genuinely 2-D on a bar
+    // rather than doubled. That is a model decision for the layering work, not a
+    // thing to pick in passing because it turns a test green.
     const toData = (d: Dataset) =>
       d.getAllPixels().map((p) => {
         const v = axes.pixelToData(p.x, p.y);
-        return { x: v[0]!, y: v[1]! };
+        const x = v[0]!;
+        const y = v[1];
+        return { x, y: y === undefined ? x : y };
       });
 
     // ⚑⚑ THE STORED PAIRING WINS, AND THIS IS THE ONLY PLACE THAT CHOOSES.

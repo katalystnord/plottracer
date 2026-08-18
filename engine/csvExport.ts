@@ -273,16 +273,39 @@ export function tupleDataSection(
   pointGroupNames: readonly string[],
   tupleRows: readonly TupleRow[],
   rounder: ValueRounder,
-  derivedLabel?: string
+  derivedLabel?: string,
+  /** The type's own extents, when this series carries any (B4) — appended after
+   * the DERIVED value, because that is the number they qualify. */
+  error?: SeriesErrorColumns
 ): TableSection {
   // Box Plot's axes is Bar (dataDim 1): each group's single value is dimension 0.
   const hasDerived = derivedLabel != null && tupleRows.some((r) => r.derived != null);
+  const err = error?.labels.length ? error : null;
   return {
-    header: ['category', ...pointGroupNames, ...(hasDerived ? [derivedLabel] : [])],
-    rows: tupleRows.map((row) => [
+    header: [
+      'category',
+      ...pointGroupNames,
+      ...(hasDerived ? [derivedLabel] : []),
+      ...(err ? err.labels : []),
+      ...(err ? err.labels.map((l) => `${l} delta`) : []),
+    ],
+    rows: tupleRows.map((row, i) => [
       row.label,
-      ...row.points.map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : '')),
+      // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY. A row carries every tuple slot, and once
+      // a series gains error that includes the four cap slots — while the header
+      // is the type's own names. Mapping the whole row put four values under no
+      // heading and shifted the derived column off its own name: three header
+      // cells against seven row cells, every number under the wrong word, which
+      // is worse than dropping them. Sliced HERE rather than upstream because
+      // `TupleRow` is also what the on-screen table reads, where the members are
+      // wanted.
+      ...row.points
+        .slice(0, pointGroupNames.length)
+        .map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : '')),
       ...(hasDerived ? [row.derived ?? ''] : []),
+      // Blank, never 0, where a side was never captured — see flatDataSection.
+      ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
+      ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
     ]),
   };
 }

@@ -26,7 +26,7 @@
  * error exports byte-for-byte as it did before.
  */
 import { describe, it, expect } from 'vitest';
-import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
 
@@ -195,5 +195,88 @@ describe('the JSON export', () => {
       } as unknown as ExportAssemblyInput)
     );
     expect(doc.series[0].points[1]).toEqual({ X: 7.5, Y: 2.5 });
+  });
+});
+
+describe('a TUPLE type carrying error — the bar chart', () => {
+  /** One bar, floor to top, with an SD cap above its top. */
+  function barWithError() {
+    const s = new CalibrationSession(BAR_AXES_CONFIG);
+    for (const [px, py, v] of [
+      [100, 300, '0'],
+      [100, 100, '10'],
+    ] as Array<[number, number, string]>) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    s.runCalibration();
+    s.renameDataset(0, 'Sample');
+    s.addDataPoint(200, 300); // bar start, value 0
+    s.addDataPoint(200, 200); // bar end, value 5
+    expect(
+      s.captureErrorCap({
+        targetIndex: 0,
+        datumPixel: { x: 200, y: 300 },
+        capPixel: { x: 200, y: 260 },
+        baseName: 'SD',
+      })
+    ).toBeNull();
+    return s;
+  }
+
+  it('⚑⚑ the header and the row are the same length', () => {
+    // ⚠️ THE PLAINEST FORM OF THE BUG, AND IT ARRIVED WITH THE FIX. Routing
+    // `getSlotNames()` to the type's OWN slots gave the header 'Bar start' and
+    // 'Bar end' — while `tupleDataSection` still mapped over ALL of a row's
+    // members, error slots included. Three header cells against seven row cells:
+    // every value under the wrong name, which is worse than dropping them.
+    const [data] = sectionsFor(barWithError() as never, 'active');
+    for (const row of data!.rows) expect(row).toHaveLength(data!.header.length);
+  });
+
+  it("⚑ the bar keeps its own columns and the error follows them", () => {
+    const [data] = sectionsFor(barWithError() as never, 'active');
+    // ⚑ The error follows the DERIVED value, because that is the number it
+    // qualifies: a bar's height is what has an SD, not either of its corners.
+    expect(data!.header).toEqual([
+      'category',
+      'Bar start',
+      'Bar end',
+      'Value',
+      'SD upper',
+      'SD lower',
+      'SD upper delta',
+      'SD lower delta',
+    ]);
+  });
+
+  it('⚑⚑ the cap VALUES actually reach the file', () => {
+    // ⚠️ The column headers existing is not the test. Bar's `pixelToData`
+    // returns `[value]`, so the 2-D projection left every cap on a bar chart
+    // resolving to nothing — `[{x: 0}]`, no roles at all. Before B4 that cost
+    // nothing visible, because a bar's caps were a separate SERIES whose rows
+    // reached the file as ordinary readings; folding them onto the datum routed
+    // them through the projection instead. Assert the numbers.
+    const [data] = sectionsFor(barWithError() as never, 'active');
+    const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
+    expect(at('Bar end')).toBeCloseTo(5, 6);
+    expect(at('SD upper')).toBeCloseTo(2, 6); // the cap at py 260
+    expect(at('SD upper delta')).toBeCloseTo(2, 6); // measured from the bar's base
+  });
+
+  it('⚑ a bar with no error exports exactly as it did before', () => {
+    const s = new CalibrationSession(BAR_AXES_CONFIG);
+    for (const [px, py, v] of [
+      [100, 300, '0'],
+      [100, 100, '10'],
+    ] as Array<[number, number, string]>) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    s.runCalibration();
+    s.addDataPoint(200, 300);
+    s.addDataPoint(200, 200);
+    const [data] = sectionsFor(s as never, 'active');
+    expect(data!.header).toEqual(['category', 'Bar start', 'Bar end', 'Value']);
   });
 });

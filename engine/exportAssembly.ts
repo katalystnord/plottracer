@@ -283,11 +283,25 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     const infosForScope = scope === 'all' ? session.getDatasetInfos() : [];
     if (infosForScope.length > 1) {
       for (const info of infosForScope) {
-        const block = tupleDataSection(slots, session.getTupleRows(info.index), rounder, derivedLabel);
+        const block = tupleDataSection(
+          slots,
+          session.getTupleRows(info.index),
+          rounder,
+          derivedLabel,
+          errorColumnsFor(session, info.index).error
+        );
         sections.push({ ...block, title: info.name });
       }
     } else {
-      sections.push(tupleDataSection(slots, session.getTupleRows(), rounder, derivedLabel));
+      sections.push(
+        tupleDataSection(
+          slots,
+          session.getTupleRows(),
+          rounder,
+          derivedLabel,
+          errorColumnsFor(session, activeIndex).error
+        )
+      );
     }
   } else if (scope === 'all') {
     const seriesList: SeriesForCSV[] = session.getDatasetInfos().map((info) => {
