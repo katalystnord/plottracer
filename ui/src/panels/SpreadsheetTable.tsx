@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { CATEGORY_TICK_COLOR } from '../../../engine/categoryTickOverlay.js';
 import { fmtValue, rgbToHex } from '../format.js';
 import { isDerivedAt, isCellEditable, type SpreadsheetSeries } from '../../../engine/spreadsheetModel.js';
 import { formatDateNumber } from '../../../core/dateConversion.js';
@@ -20,8 +21,16 @@ export interface SpreadsheetTableProps {
   selectedPointIndices: readonly number[];
   /** The ACTIVE series' ROW count - rows past it are other series' points. */
   activeSeriesPointCount: number;
-  /** Select one point (null clears). Sets both the active and picked point. */
-  onSelectPoint: (index: number | null) => void;
+  /**
+   * Select one point (null clears). Sets both the active and picked point.
+   *
+   * ⚑⚑ IT TAKES THE SERIES TOO (v2.3, A2). A cell already knows which series it
+   * belongs to; the selection used to throw that away and re-derive the series
+   * from the dropdown, so clicking a value in one column ringed a point in
+   * another. `seriesIndex` omitted means "the one already active", which is what
+   * a canvas click and a keyboard step mean.
+   */
+  onSelectPoint: (index: number | null, seriesIndex?: number) => void;
   onSelectMarquee: (indices: number[]) => void;
   onSetPointLabel: (index: number, label: string) => void;
   onCommitPendingEdit: () => void;
@@ -42,6 +51,25 @@ export interface SpreadsheetTableProps {
  * nudge/Del target, so an italic read-only row could still be moved with an
  * arrow key.
  */
+/**
+ * ⚑⚑ THE SAME PICK THE HEATMAP DRAWS, not a second thing that means the same.
+ *
+ * David: *"We ALWAYS need to aim for consistency... Even better when two things
+ * can mirror each other in a visual way. Makes it absolutely clear what is
+ * referring to what."* The heatmap already marks a picked cell with this outline
+ * in this purple, and the canvas draws the same, so "picked" looks like "picked"
+ * everywhere without anyone being told.
+ *
+ * ⚑ A tint was tried first and could not be seen: the ROW is already tinted, so
+ * a slightly darker tint on one cell reads as the same colour. An outline is a
+ * different CHANNEL, which is what makes it legible on top of a highlight.
+ *
+ * ⚑ Drawn INSIDE the cell's own box (`outlineOffset: -2`), the heatmap's own
+ * note, and A5's rule once more: picking a cell must not move any other.
+ */
+const PICKED_OUTLINE = `2px solid ${CATEGORY_TICK_COLOR}`;
+const PICKED_OUTLINE_OFFSET = -2;
+
 export function SpreadsheetTable({
   series,
   maxRows,
@@ -194,6 +222,29 @@ export function SpreadsheetTable({
             // around the read-only cells. A derived sample has no
             // independent existence: the next anchor move rebuilds it.
             const isDerivedRow = isDerivedAt(activeSeries?.roles ?? [], i);
+            // ⚑⚑ THE CELL'S OWN SERIES, not the active one (A2). David: *"We
+            // need for each cell to be directly linked with its anchor... I have
+            // no way of knowing what is happening when I think that I am
+            // selecting the original point value."* The old link was
+            // `ROW index -> active series`; it is `CELL -> (series, row)` now.
+            //
+            // ⚠️ It is the "picture lies" pattern: the ring landed on a REAL
+            // point, so nothing looked broken - you simply could not tell that
+            // the thing highlighted was not the thing you clicked.
+            const selectCell = (s: SpreadsheetSeries) => {
+              const pixel = s.pixelIndices[i];
+              if (pixel === undefined) return;
+              if (isDerivedAt(s.roles, i)) {
+                onSelectPoint(null);
+                onSelectMarquee([]);
+                return;
+              }
+              if (mode === 'select') {
+                if (i < s.values.length) onSelectMarquee([pixel]);
+                return;
+              }
+              onSelectPoint(pixel, s.index);
+            };
             const selectRow = () => {
               // ⚑ CLEAR rather than ignore. Merely refusing the selection left
               // the PREVIOUS one active, so the arrow keys then nudged a point
@@ -286,12 +337,47 @@ export function SpreadsheetTable({
                       return (
                         <td
                           key={`${s.index}-${d}`}
-                          data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
+                          // ⚑ EVERY cell is addressable, not only the active
+                          // series' editable ones. `data-value-*` exists solely
+                          // on the active series (it is the click-to-edit span),
+                          // so until now there was no way to name - or to test -
+                          // a cell in any other column, which is precisely where
+                          // A2's defect lived.
+                          //
+                          // ⚠️ ONE ATTRIBUTE, and it has to be: the first draft
+                          // added `data-cell-*` above the existing derived one
+                          // and JSX silently kept the LAST - which is `undefined`
+                          // on an ordinary cell, so no testid rendered anywhere
+                          // and the new one looked simply absent. A derived cell
+                          // keeps its own name and needs no other: it cannot be
+                          // selected, which is the only thing `data-cell-*` is
+                          // for.
+                          data-testid={
+                            derived ? `derived-cell-${s.index}-${i}-${d}` : `data-cell-${s.index}-${i}-${d}`
+                          }
+                          // ⚑⚑ A1: THE CELL says it is selected, not just its
+                          // row. A row tint alone cannot answer "which of these
+                          // five columns did I click?", which is the question a
+                          // multi-series table exists to raise. The row keeps its
+                          // own lighter tint - it still says WHICH READING - and
+                          // the cell carries the stronger one.
+                          aria-selected={isActive && s.active}
+                          // ⚑ A1 + A2: clicking a VALUE selects that value's own
+                          // point, in that value's own series. The row keeps its
+                          // handler for the gaps between columns, so clicking the
+                          // row number still selects the active series' point.
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectCell(s);
+                          }}
                           title={derived ? 'Derived by the spline from your guide points - move an anchor to change it' : undefined}
                           style={{
                             padding: '1px 8px',
                             borderLeft: d === 0 && !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
                             fontVariantNumeric: 'tabular-nums',
+                            ...(isActive && s.active
+                              ? { outline: PICKED_OUTLINE, outlineOffset: PICKED_OUTLINE_OFFSET }
+                              : {}),
                             ...(derived ? { color: theme.color.text.legend, fontStyle: 'italic' } : {}),
                           }}
                         >

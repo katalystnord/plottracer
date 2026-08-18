@@ -8709,7 +8709,28 @@ export function Workspace() {
               // now, so `dataPoints.length` counts them and would make rows past
               // the last datum selectable in Select mode.
               activeSeriesPointCount={spreadsheetSeries.find((s) => s.active)?.values.length ?? 0}
-              onSelectPoint={(index) => {
+              onSelectPoint={(index, seriesIndex) => {
+                // ⚑⚑ A2: THE CELL NAMES ITS SERIES, so switch to it before
+                // selecting. Every operation the selection unlocks - the canvas
+                // ring, arrow-nudge, Del, the trash button, the value editor -
+                // addresses the ACTIVE series, so a selection whose series is
+                // not active is a selection you cannot act on. Selecting the
+                // cell you clicked and then acting on a different one is exactly
+                // the defect (David: *"I have no way of knowing what is
+                // happening when I think that I am selecting the original point
+                // value"*).
+                //
+                // ⚑ It also hands back editing: `isCellEditable` allows only the
+                // ACTIVE series' cells, so a non-active column was read-only and
+                // there was no visible way to make it otherwise except the
+                // dropdown. Clicking into a column is a plain statement of which
+                // series you are working on, and the dropdown shows it happen.
+                //
+                // ⚑ `handleSelectDataset` clears the selection (it is per
+                // series), so the order matters: switch first, then select.
+                if (seriesIndex !== undefined && seriesIndex !== activeDatasetIndex) {
+                  handleSelectDataset(seriesIndex);
+                }
                 setActivePointIndex(index);
                 if (index !== null) setPickedPointIndex(index);
               }}

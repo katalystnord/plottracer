@@ -2523,6 +2523,50 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
   });
 
+  it('⚑⚑ A2 - clicking a cell selects THAT cell\'s series, not whichever was active', async () => {
+    // 🔴 David, 2026-08-16, on a multi-series figure: *"When I select a point
+    // here in this graph, only the 'active' series is highlighted... but I have
+    // no way of knowing what is happening when I think that I am selecting the
+    // original point value. We need for each cell to be directly linked with its
+    // anchor."*
+    //
+    // ⚑ THE LINK WAS `ROW index -> active series` WHEN IT MUST BE
+    // `CELL -> (series, row)`. A cell already knows which series it belongs to;
+    // the selection threw that away and re-derived the series from the dropdown.
+    //
+    // ⚠️ AND IT IS THE "PICTURE LIES" PATTERN: the ring lands on a real point, so
+    // nothing looks broken - you simply cannot tell that the thing highlighted is
+    // not the thing you clicked.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(200, 200);
+    await clickAt(300, 180);
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(150);
+    await clickAt(220, 150);
+    await clickAt(320, 130);
+    await page.waitForTimeout(150);
+
+    // Series 2 is active after adding it. Click a SERIES 1 cell.
+    expect(await page.getByTestId('series-select').inputValue()).toBe('1');
+    // ⚑ Series 0's own cell, by its own testid. `data-value-*` exists only on
+    // the ACTIVE series (it is the click-to-edit span), which is exactly why
+    // there was no way to name a cell in another column before this.
+    await page.getByTestId('data-cell-0-0-1').click();
+    await page.waitForTimeout(200);
+
+    // ⚑ The cell's own series is now the one being worked on, so the canvas ring,
+    // the nudge keys, Del and the value editor all address the point that was
+    // clicked. Selecting a cell you cannot then act on is the half-fix.
+    expect(await page.getByTestId('series-select').inputValue()).toBe('0');
+
+    // ⚑ A1: and the CELL says so, not just its row. A row tint alone cannot
+    // answer "which of these columns did I click?", which is the only question a
+    // multi-series table raises.
+    expect(await page.getByTestId('data-cell-0-0-1').getAttribute('aria-selected')).toBe('true');
+    expect(await page.getByTestId('data-cell-1-0-1').getAttribute('aria-selected')).toBe('false');
+  });
+
   it('⚑⚑ A5 - opening an editor moves nothing the user is not editing', async () => {
     // David, 2026-08-16, with two screenshots of one bar chart's DATA POINTS
     // panel, at rest and mid-edit: *"This is the output fields when I'm not
