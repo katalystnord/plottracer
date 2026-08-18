@@ -10,6 +10,7 @@ import {
 } from '../canvasOverlays.js';
 import type { OverlaySeries, OverlaySeriesInfo } from '../canvasOverlays.js';
 import type { CalibStepInfo } from '../axesTypeConfigs.js';
+import type { ErrorRole } from '../../algorithms/errorBar.js';
 
 /**
  * These assert the BOOLEANS on a marker — which ones Konva may drag, and which
@@ -240,6 +241,57 @@ describe('data points — the draggable rules that shipped as defects', () => {
       buildCanvasMarkers(base({ ...three, mode: 'error-bars', activeDatasetIndex: 3, errorTargetIndex: 2 }))
     );
     expect(capSeries.every((x) => x.draggable === true)).toBe(true);
+  });
+
+  it("⚑⚑ a CAP of the target series stays draggable — B4 put it in that series", () => {
+    // The rule above scoped the inertness to the TARGET series so that a cap,
+    // living in a series of its own, stayed correctable. B4 moves the cap ONTO
+    // the datum's record, so it is a pixel of the target series — and the same
+    // rule froze it. Measured on the built app: dragging the mirrored lower cap
+    // did nothing at all, while three on-screen strings promised it would.
+    //
+    // ⚑ The DATUM is what must stay inert, and for its own stated reason: the
+    // cap gesture BEGINS by pressing a datum, and Konva's built-in drag would
+    // fire off the same press and haul the point along to the cap. That reason
+    // has never applied to a cap, which is not where a link drag starts.
+    //
+    // ⚑ This is B3 ("caps ALWAYS editable") arriving without an exception to the
+    // active-series guard, exactly as the taxonomy predicted: a cap is part of
+    // the active series' point, so dragging it already IS editing the active
+    // series.
+    const withCaps = {
+      dataPoints: [
+        { px: 10, py: 10 }, // datum
+        { px: 10, py: 4 }, // its upper cap
+        { px: 10, py: 16 }, // its lower cap
+      ],
+      capRoles: [null, 'upper', 'lower'] as (ErrorRole | null)[],
+    };
+    const markers = points(
+      buildCanvasMarkers(base({ ...withCaps, mode: 'error-bars', activeDatasetIndex: 0, errorTargetIndex: 0 }))
+    );
+    expect(markers[0]!.draggable, 'the datum the drag starts on').toBe(false);
+    expect(markers[1]!.draggable, 'its upper cap').toBe(true);
+    expect(markers[2]!.draggable, 'its lower cap').toBe(true);
+  });
+
+  it('⚑ a cap is not numbered like a data point', () => {
+    // The label is the point's ordinal. A cap is part of a reading, not another
+    // reading — numbering it says a one-point series has three points, the same
+    // claim the series list was making before `datumCount`.
+    const markers = points(
+      buildCanvasMarkers(
+        base({
+          dataPoints: [
+            { px: 10, py: 10 },
+            { px: 10, py: 4 },
+          ],
+          capRoles: [null, 'upper'],
+        })
+      )
+    );
+    expect(markers[0]!.label).toBe('1');
+    expect(markers[1]!.label).toBe('');
   });
 
   it('leave the hit graph while they are the ring-closing target', () => {

@@ -132,6 +132,17 @@ export interface ErrorSeriesRow {
   pointCount: number;
 }
 
+/**
+ * The error kinds a caption usually names, OFFERED as a datalist.
+ *
+ * ⚑ Not a picker, and not a default. The card asks for a NAME because the kind
+ * is not in the geometry — it is printed in the caption, and only the user can
+ * read it. Listing the common words makes transcription quicker; preselecting
+ * one would make a reading up, which is the thing `engine/errorRelation.ts`
+ * refused an `errorKind` field over.
+ */
+const ERROR_KIND_SUGGESTIONS = ['SD', 'SEM', '95% CI', 'range', 'IQR'] as const;
+
 export interface ErrorBarsCardProps {
   /** Every series that can be a target (i.e. all of them). */
   targets: { index: number; name: string }[];
@@ -204,15 +215,42 @@ export function ErrorBarsCard({
             <Input
               data-testid="error-base-name"
               value={baseName}
-              placeholder="SD"
+              // ⚑ No default value and no default in the placeholder either: a
+              // placeholder reading "SD" is still us naming the reading, and it
+              // is the string the user will accept by doing nothing. The prompt
+              // asks for the caption's own word instead.
+              placeholder="from the caption…"
+              list="error-kind-suggestions"
               onChange={(e) => onBaseNameChange(e.target.value)}
             />
+            {/* ⚑⚑ OFFERED, NEVER PRESELECTED. A datalist shows the vocabulary
+                without choosing from it -- David's rule that *"anything we
+                present to the user should be out of convenience, not
+                absolutes"*. Offering the words helps TRANSCRIPTION; putting one
+                in the box INVENTS a reading. Free text stays allowed, because
+                the caption is the authority and it says whatever it says. */}
+            <datalist id="error-kind-suggestions">
+              {ERROR_KIND_SUGGESTIONS.map((kind) => (
+                <option key={kind} value={kind} />
+              ))}
+            </datalist>
           </Field>
           {/* The name is the only meaning we record, so say what it becomes --
-              otherwise "SD upper" appearing in the series list is a surprise. */}
+              otherwise "SD upper" appearing in the columns is a surprise.
+              ⚑ And with no name it ASKS, rather than promising an outcome that
+              cannot happen: the model refuses the drag until the field is
+              filled, while this line used to describe the SD columns it would
+              supposedly write. The card described an outcome the model had
+              already ruled out. */}
           <Hint data-testid="error-name-hint">
-            Records into <strong>{baseName.trim() || 'SD'} upper</strong> and{' '}
-            <strong>{baseName.trim() || 'SD'} lower</strong>.
+            {baseName.trim() ? (
+              <>
+                Records into <strong>{baseName.trim()} upper</strong> and{' '}
+                <strong>{baseName.trim()} lower</strong>.
+              </>
+            ) : (
+              <>Name the error as the figure&rsquo;s caption does — its columns take that name.</>
+            )}
           </Hint>
 
           <Divider />
@@ -228,9 +266,15 @@ export function ErrorBarsCard({
             </Hint>
           ) : (
             <Hint data-testid="error-bars-hint">
+              {/* ⚑ The third sentence used to read "pick its series under
+                  Recorded below, then drag the cap" — a precondition that no
+                  longer exists. A cap lives on its datum's own record now (B4),
+                  so it belongs to the series you are already working on and is
+                  draggable where it stands. That instruction described the
+                  hidden mode David could not have discovered; it would now
+                  describe one that is not there at all. */}
               Drag from a data point out to its error cap. A cap is placed on each side — the lower one mirrored as a
-              starting position. To move a cap to where the figure draws it, pick its series under Recorded below, then
-              drag the cap.
+              starting position. Drag either cap to where the figure draws it.
             </Hint>
           )}
 

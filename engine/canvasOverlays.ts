@@ -1,6 +1,7 @@
 import { polylineRuns } from './seriesLine.js';
 import type { CalibStepInfo } from './axesTypeConfigs.js';
 import type { PlacedCalibPoint, PointRole } from './calibrationSession.js';
+import type { ErrorRole } from '../algorithms/errorBar.js';
 
 /**
  * WHAT the canvas draws, decided here; HOW it is drawn stays in `ui/ImageCanvas.tsx`.
@@ -174,6 +175,12 @@ export interface CanvasMarkerInput {
   pendingPixelColor: string;
   dataPoints: readonly { px: number; py: number }[];
   dataPointRoles: readonly (PointRole | null)[];
+  /** Per ACTIVE-series pixel: the error role it caps, or null for a data point.
+   * ⚑ B4 — a datum's caps are pixels of its own series now, so the marker layer
+   * has to be able to tell them apart from the readings they belong to.
+   * Optional, so every type that has no error passes nothing and behaves
+   * exactly as before. */
+  capRoles?: readonly (ErrorRole | null)[];
   /** Every series, for the inactive-context dots. */
   allDatasetsData: readonly OverlaySeries[];
   datasetInfos: readonly OverlaySeriesInfo[];
@@ -201,6 +208,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     pendingPixelColor,
     dataPoints,
     dataPointRoles,
+    capRoles,
     allDatasetsData,
     datasetInfos,
     fallbackColor,
@@ -299,6 +307,10 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
   const isErrorLinkAnchorSeries = mode === 'error-bars' && activeDatasetIndex === errorTargetIndex;
 
   dataPoints.forEach((point, i) => {
+    // ⚑⚑ IS THIS PIXEL A CAP? Under B4 a datum's error caps live on its own
+    // tuple, so they are pixels of the series they belong to — which changes two
+    // answers below, and both were wrong the moment the record moved.
+    const capRole = capRoles?.[i] ?? null;
     // Interpolation-assist (checkpoint 120): anchors are the RECORD, drawn big
     // and labelled; the derived samples between them are small unlabelled dots,
     // and not hand-draggable (a drag would just be wiped on the next rebuild).
@@ -319,7 +331,16 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       id: `point-${i}`,
       x: point.px,
       y: point.py,
-      label: isInterp ? '' : i === ringClosingIndex ? `${i + 1} — click to close the ring` : String(i + 1),
+      // ⚑ A cap carries no ordinal. The label is the point's NUMBER, and a cap
+      // is part of a reading rather than another reading — numbering it told the
+      // user a one-point series had three points, the same claim the series list
+      // was making before `datumCount`.
+      label:
+        isInterp || capRole
+          ? ''
+          : i === ringClosingIndex
+            ? `${i + 1} — click to close the ring`
+            : String(i + 1),
       color: activeColor,
       ...(labelAway ? { labelAway } : {}),
       // Inert in Measure mode (v1.1): a measurement click must pass THROUGH a
@@ -345,11 +366,26 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       // a non-draggable marker leaves Konva's hit graph entirely, so the press
       // reaches the stage and registers as the next image click. Only while closing
       // is actually on offer, so the point stays correctable the rest of the time.
+      // ⚑⚑ A CAP OF THE TARGET SERIES STAYS DRAGGABLE. `isErrorLinkAnchorSeries`
+      // was scoped to the target series precisely so a cap — living in a series
+      // of its own — stayed correctable. B4 moves the cap onto the datum's
+      // record, so it is a pixel of the target series and the same rule froze
+      // it: on the built app, dragging the mirrored lower cap did nothing while
+      // three on-screen strings promised it would.
+      //
+      // The DATUM is what must stay inert, for the reason stated above: the cap
+      // gesture BEGINS by pressing a datum, and Konva's own drag fires off that
+      // same press and hauls the point along to the cap. That has never applied
+      // to a cap, which is not where a link drag starts.
+      //
+      // ⚑ This is B3 ("caps ALWAYS editable") arriving with no exception to the
+      // active-series guard — a cap is part of the active series' point, so
+      // dragging it already IS editing the active series.
       draggable:
         i !== ringClosingIndex &&
         mode !== 'pan' &&
         mode !== 'measure' &&
-        !isErrorLinkAnchorSeries &&
+        (!isErrorLinkAnchorSeries || capRole !== null) &&
         !isInterp,
       selected,
       // Absent, not undefined — an ordinary dot takes ImageCanvas's default of 5.

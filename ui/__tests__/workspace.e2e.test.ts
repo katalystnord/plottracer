@@ -6544,19 +6544,50 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(tip).not.toContain('calibrate the axes to begin');
   });
 
-  it('records a cap AND its mirror into two related, user-named series', async () => {
+  /**
+   * ⚑⚑ MIGRATED TO B4, and the migration IS the change being tested. These
+   * tests each asserted that a capture produced SERIES called "SD upper" and
+   * "SD lower" and read the record out of the series dropdown. Under B4 no such
+   * series exists: the caps live on the datum's own tuple, so the record is a
+   * pair of COLUMNS on its row. Every test's INTENT survives unchanged — the
+   * capture is visible, the mirror is a starting position, the datum does not
+   * move, deleting a datum takes its caps — and only where to look has changed.
+   *
+   * ⚑ Each now types a NAME first, because the pre-filled 'SD' is gone: the
+   * kind is in the caption and the app must not choose it. That makes the first
+   * drag refuse until the field is filled, which is a real workflow change and
+   * is exactly what these steps now walk through.
+   */
+  async function nameTheError(name: string) {
+    await page.getByTestId('error-base-name').fill(name);
+  }
+  /** A datum's error reading as the data panel shows it, blank if unrecorded. */
+  async function errorCell(row: number, role: 'upper' | 'lower' | 'left' | 'right'): Promise<string> {
+    const cell = page.getByTestId(`error-cell-0-${row}-${role}`);
+    return (await cell.count()) === 0 ? '' : ((await cell.textContent()) ?? '');
+  }
+
+  it("records a cap AND its mirror onto the datum's own row", async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 200); // one datum on Series 1
     await page.getByTestId('mode-error-bars').click();
+    await nameTheError('SD');
+    const seriesBefore = (await page.locator('[data-testid="series-select"] option').allTextContents()).length;
     // Drag from the datum UP to where the figure draws the cap. The drag IS the
     // link -- nothing else declares it.
     await dragMarker(400, 200, 400, 160);
-    const names = await page.locator('[data-testid="series-select"] option').allTextContents();
-    // Named from what the user typed ("SD"), one series per role. The name is
+    // ⚑ The visible change for the user: the series list does NOT grow a pair of
+    // entries they never asked for and then have to activate in order to edit.
+    expect((await page.locator('[data-testid="series-select"] option').allTextContents()).length).toBe(
+      seriesBefore
+    );
+    // The reading lands on the datum's own row, under the name the user typed --
     // the ONLY place meaning lives, which is why there is no errorKind field.
-    expect(names.join('|')).toMatch(/SD upper/);
-    expect(names.join('|')).toMatch(/SD lower/);
+    expect(await textOf('points-table')).toMatch(/SD upper/);
+    expect(await textOf('points-table')).toMatch(/SD lower/);
+    expect(Number(await errorCell(0, 'upper'))).toBeCloseTo(6, 1);
+    expect(Number(await errorCell(0, 'lower'))).toBeCloseTo(0.67, 1);
   });
 
   it('a cap drag must NOT drag the datum it hangs off (v1.3)', async () => {
@@ -6576,6 +6607,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     const before = await rowValues(0);
     expect(before[1]).toBeCloseTo(3.333, 2);
     await page.getByTestId('mode-error-bars').click();
+    await nameTheError('SD');
     await dragMarker(400, 200, 400, 160); // drag out to the cap at y=6
     const after = await rowValues(0);
     // The datum is where it was placed -- NOT dragged up to the cap's y=6.
@@ -6583,8 +6615,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(after[1]).toBeCloseTo(before[1]!, 2);
     // ...and the gesture still did its job, so this can't be "fixed" by making
     // the tool inert.
-    const names = await page.locator('[data-testid="series-select"] option').allTextContents();
-    expect(names.join('|')).toMatch(/SD upper/);
+    expect(Number(await errorCell(0, 'upper'))).toBeCloseTo(6, 1);
   });
 
   it('the mirrored cap is a STARTING POSITION, not a symmetry claim', async () => {
@@ -6592,70 +6623,74 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await calibrateXYStandard();
     await clickAt(400, 200);
     await page.getByTestId('mode-error-bars').click();
+    await nameTheError('SD');
     await dragMarker(400, 200, 400, 160);
-    // Move the lower cap far from where the mirror put it. Nothing may
-    // re-symmetrize it or complain: an asymmetric bar is just a bar whose cap
-    // you moved (David: "we do not NEED to constrain them in any way").
-    const labels = await page.locator('[data-testid="series-select"] option').allTextContents();
-    const lowerLabel = labels.find((l) => l.startsWith('SD lower'))!;
-    await page.getByTestId('series-select').selectOption({ label: lowerLabel });
-    await page.waitForTimeout(150);
+    // ⚑⚑ NO SERIES TO SELECT FIRST. This step used to read the lower cap's
+    // series out of the dropdown and activate it -- the hidden mode David could
+    // not have discovered ("I have no way of currently knowing that I have to
+    // select the error bar series card, and then magically click the series down
+    // at the bottom of it"). The cap belongs to the series already active, so it
+    // is draggable where it stands. B3, resolved by B4 rather than by an
+    // exception to the active-series guard.
+    const lowerBefore = Number(await errorCell(0, 'lower'));
     // The mirror put the lower cap at y=240 (reflected through the datum at 200).
-    // Drag it far away; nothing may snap it back or object.
-    const capBefore = await rowValues(0);
+    // Drag it far away; nothing may snap it back or object: an asymmetric bar is
+    // just a bar whose cap you moved (David: "we do not NEED to constrain them
+    // in any way").
     await dragMarker(400, 240, 400, 285);
-    const after = await page.locator('[data-testid="series-select"] option').allTextContents();
-    // Still exactly one cap -- the drag MOVED it, it did not add one.
-    expect(after.find((l) => l.startsWith('SD lower'))).toMatch(/\(1\)/);
-    // ⚑ And it ACTUALLY moved. The count alone held whether the drag did anything
-    // or not, which is how the v1.3 gate found a blanket `mode !== 'error-bars'`
-    // draggable gate that had frozen every cap: three on-screen strings promised
-    // the drag and it silently did nothing. The lower cap is MIRRORED by the app,
-    // so a cap you cannot correct means exporting a symmetry the figure never
-    // showed -- assert the recorded value changed, not just that a row exists.
-    //
-    // The table lays every series out side by side, so row 0 reads
-    // [S1 x, S1 y, upper x, upper y, lower x, lower y] -- SD lower is created
-    // last, so its value is the LAST cell (index 1 is Series 1's y, which is the
-    // point the sibling test above pins as unmoved). Dragging down the screen
-    // lowers the value: the mirror put it at ~0.67 and 45px further down is ~-2.3.
-    const capAfter = await rowValues(0);
-    expect(capAfter[capAfter.length - 1]).toBeLessThan(capBefore[capBefore.length - 1]! - 0.2);
+    // ⚑ It ACTUALLY moved. The presence of a reading alone held whether the drag
+    // did anything or not, which is how the v1.3 gate found a blanket
+    // `mode !== 'error-bars'` draggable gate that had frozen every cap: three
+    // on-screen strings promised the drag and it silently did nothing.
+    expect(Number(await errorCell(0, 'lower'))).toBeLessThan(lowerBefore - 0.2);
+    // ...and nothing re-symmetrized the upper one behind your back.
+    expect(Number(await errorCell(0, 'upper'))).toBeCloseTo(6, 1);
   });
 
-  it('an error series is an ORDINARY series — it appears in the spreadsheet as one', async () => {
+  it("the error joins its datum's ROW, not a series of its own", async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 200);
     await page.getByTestId('mode-error-bars').click();
+    await nameTheError('SD');
     await dragMarker(400, 200, 400, 160);
     // No bespoke "Error bars" table, no ± column: recording, not interpretation.
     expect(await textOf('points-table')).not.toMatch(/±/);
-    expect(await page.getByTestId('series-col-1').count()).toBe(1);
+    // ⚑⚑ And exactly ONE series column block, where the old model made three.
+    // The side-by-side layout aligned three series BY ROW INDEX, which implied a
+    // pairing the model did not hold and showed point 1's caps against the datum
+    // at x = 10 -- the screenshot that made David say "the workflow is just not
+    // amenable to do that".
+    expect(await page.getByTestId('series-col-0').count()).toBe(1);
+    expect(await page.getByTestId('series-col-1').count()).toBe(0);
+    // One row, not three: a cap is part of a reading, not another reading.
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
   });
 
-  it('keyboard Del on a datum cascades its error bar — the fourth delete door (2026-07-22 audit)', async () => {
+  it('keyboard Del on a datum takes its error bar with it — the fourth delete door (2026-07-22 audit)', async () => {
     // The Eraser / Select+Del / right-click doors all cascade; the Place-Point
-    // keyboard Del must too, or it orphans the caps (they re-match to the wrong
-    // datum and fabricate a whisker on export).
+    // keyboard Del must too, or it leaves the caps behind (the old model then
+    // re-matched them to the wrong datum and fabricated a whisker on export).
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 200); // datum on Series 1
     await page.getByTestId('mode-error-bars').click();
-    await dragMarker(400, 200, 400, 160); // -> SD upper (1) + SD lower (1)
+    await nameTheError('SD');
+    await dragMarker(400, 200, 400, 160);
+    expect(Number(await errorCell(0, 'upper'))).toBeCloseTo(6, 1);
 
-    // Back on the parent series in Place Point: select the datum via its table
-    // row (a canvas click here would ADD a point), then press Del.
-    await page.getByTestId('series-select').selectOption({ index: 0 });
+    // Back in Place Point: select the datum via its table row (a canvas click
+    // here would ADD a point), then press Del.
     await page.getByTestId('mode-place-point').click();
     await page.getByTestId('point-row-0').click();
     await page.keyboard.press('Delete');
     await page.waitForTimeout(150);
 
-    // The datum AND both caps are gone — no half-bar left behind.
+    // The datum AND both caps are gone — no half-bar left behind, and no stray
+    // cap markers floating on the canvas with no data point under them.
+    expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(0);
     const names = await page.locator('[data-testid="series-select"] option').allTextContents();
-    expect(names.find((l) => l.startsWith('SD upper'))).toMatch(/\(0\)/);
-    expect(names.find((l) => l.startsWith('SD lower'))).toMatch(/\(0\)/);
+    expect(names.join('|')).toMatch(/\(0\)/);
   });
 
   it('refuses to hang a cap on nothing — a press off-datum pans instead', async () => {
@@ -6663,10 +6698,16 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await calibrateXYStandard();
     await clickAt(400, 200);
     await page.getByTestId('mode-error-bars').click();
-    // Press far from any datum: no snap, so no link drag and no series created.
+    // ⚠️ NAMED FIRST, DELIBERATELY. Without this the drag is refused for a
+    // NAMING reason and the snap check never runs — the test would pass against
+    // its own defect. (And its old assertion, "no series called SD exists", went
+    // vacuous the moment B4 stopped making series at all: under the new model no
+    // capture creates one, so it could no longer fail.)
+    await page.getByTestId('error-base-name').fill('SD');
+    // Press far from any datum: no snap, so no link drag and nothing recorded.
     await dragMarker(420, 120, 420, 90);
-    const names = await page.locator('[data-testid="series-select"] option').allTextContents();
-    expect(names.join('|')).not.toMatch(/SD/);
+    expect(await textOf('points-table')).not.toMatch(/SD upper/);
+    expect(await page.locator('[data-testid^="error-cell-"]').count()).toBe(0);
   });
 
   it('is greyed until a series has points to attach error to (v0.8, David)', async () => {
@@ -6695,6 +6736,53 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await page.getByTestId('error-base-name').fill('95% CI');
     expect(await textOf('error-name-hint')).toMatch(/95% CI upper/);
     expect(await textOf('error-name-hint')).toMatch(/95% CI lower/);
+  });
+
+  it('⚑⚑ the name field starts EMPTY — we do not choose the reading for the user', async () => {
+    // The design refused an `errorKind` field on purpose: "the kind is not in
+    // the geometry, it is in the figure's caption, so we could only ask the user
+    // to type it, and asking means offering a default, which is LabPlot's ±30 all
+    // over again". The code then pre-filled 'SD' and re-applied it in the hint if
+    // you cleared the box, so a figure captioned 95% CI recorded as SD unless the
+    // user noticed. B4 raises the stakes: the name is now the EXPORT COLUMN
+    // HEADER, so the invented label rides into the file.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 200);
+    await page.getByTestId('mode-error-bars').click();
+    expect(await page.getByTestId('error-base-name').inputValue()).toBe('');
+    // And the card must not fabricate one in its own description either.
+    expect(await textOf('error-name-hint')).not.toMatch(/SD upper/);
+  });
+
+  it('⚑ with no name the card asks for one instead of promising an outcome', async () => {
+    // The third defect, stacked: the model REFUSES the drag with "name the error
+    // first" while the card simultaneously promised "Records into SD upper and SD
+    // lower". The card described an outcome that could not happen.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 200);
+    await page.getByTestId('mode-error-bars').click();
+    expect(await textOf('error-name-hint')).toMatch(/[Nn]ame/);
+    await page.getByTestId('error-base-name').fill('SEM');
+    expect(await textOf('error-name-hint')).toMatch(/SEM upper/);
+  });
+
+  it('⚑ common kinds are OFFERED, with nothing preselected', async () => {
+    // "Anything we present to the user should be out of convenience, not
+    // absolutes" (David). Offering the vocabulary helps TRANSCRIPTION;
+    // preselecting one INVENTS a reading.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(400, 200);
+    await page.getByTestId('mode-error-bars').click();
+    const options = await page.locator('#error-kind-suggestions option').evaluateAll((els) =>
+      els.map((e) => (e as HTMLOptionElement).value)
+    );
+    expect(options).toContain('SD');
+    expect(options).toContain('SEM');
+    expect(options).toContain('95% CI');
+    expect(await page.getByTestId('error-base-name').inputValue()).toBe('');
   });
 });
 

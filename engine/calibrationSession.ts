@@ -925,6 +925,32 @@ export class CalibrationSession<A extends CalibratedAxes> {
     });
   }
 
+  /**
+   * Per pixel of a series: the error role it caps, or null for a data point.
+   *
+   * ⚑ What the CANVAS needs, and the marker layer could not ask before: a
+   * datum's caps are pixels of its own series now, so "is this pixel a reading
+   * or the uncertainty around one?" has an answer and the overlay has to use
+   * it. Empty for a series carrying no error, so every other type is untouched.
+   *
+   * ⚑ One pass over the tuples, not `capRoleInTuples` per pixel — the same
+   * reason `datumCount` is subtractive.
+   */
+  getCapPixelRoles(index: number): (ErrorRole | null)[] {
+    const entry = this.datasetEntries[index];
+    if (!entry) return [];
+    const slots = entry.dataset.getSlotNames();
+    const roles: (ErrorRole | null)[] = new Array(entry.dataset.getCount()).fill(null);
+    if (!hasErrorSlots(slots)) return roles;
+    for (const tuple of entry.dataset.getAllTuples()) {
+      for (const role of ERROR_ROLES) {
+        const pixelIndex = tuple[slotForRole(role, slots.length)];
+        if (pixelIndex != null) roles[pixelIndex] = role;
+      }
+    }
+    return roles;
+  }
+
   /** The relation a series declares, or null if it is an ordinary series. */
   getErrorRelation(index: number): ErrorRelation | null {
     const entry = this.datasetEntries[index];

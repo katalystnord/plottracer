@@ -1022,8 +1022,21 @@ export function Workspace() {
   // The series the caps will record error FOR, and the base name they take
   // ("SD" -> "SD upper"/"SD lower"). The name is the ONLY meaning we record --
   // no error kind, deliberately (docs/error-bars-design.md).
+  //
+  // ⚑⚑ EMPTY, AND THAT IS THE WHOLE POINT. `engine/errorRelation.ts` refused an
+  // `errorKind` field in these words: *"the kind is not in the geometry, it is
+  // in the figure's caption, so we could only ask the user to type it, and
+  // asking means offering a default, which is LabPlot's ±30 all over again (a
+  // value that looks like a measurement and isn't)."* This state then pre-filled
+  // 'SD' and the card re-applied it if you cleared the box, so a figure
+  // captioned 95% CI recorded as SD unless the user noticed -- the decision was
+  // made and the code did the opposite of it.
+  //
+  // ⚑ B4 raises the stakes rather than creating them: the base name is now the
+  // EXPORT COLUMN HEADER (`errorSlotNames` -> 'SD upper'/'SD lower'), so an
+  // invented label rides into the file instead of staying on screen.
   const [errorTargetIndex, setErrorTargetIndex] = useState(0);
-  const [errorBaseName, setErrorBaseName] = useState('SD');
+  const [errorBaseName, setErrorBaseName] = useState('');
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   // The in-progress link drag: the datum it snapped to, and where the cursor is
   // now. Drives the live overlay -- the line you drag IS the relationship.
@@ -5505,6 +5518,12 @@ export function Workspace() {
   /* eslint-disable react-hooks/exhaustive-deps */
   const dataPoints = useMemo(() => session.getDataPoints(), [session, version]);
   const dataPointRoles = useMemo(() => session.getDataPointRoles(), [session, version]);
+  // Which of the active series' pixels are error CAPS (B4) — the marker layer
+  // draws and freezes them differently from the readings they hang off.
+  const activeCapRoles = useMemo(
+    () => session.getCapPixelRoles(session.getActiveDatasetIndex()),
+    [session, version]
+  );
   const canSortNN = useMemo(() => session.canSortByNearestNeighbour(), [session, version]);
   const placedPoints = useMemo(() => session.getPlacedPoints(), [session, version]);
 
@@ -5972,6 +5991,7 @@ export function Workspace() {
         pendingPixelColor: theme.color.overlay.pendingMarkerFill,
         dataPoints,
         dataPointRoles,
+        capRoles: activeCapRoles,
         allDatasetsData,
         datasetInfos,
         fallbackColor: theme.color.error,
@@ -5986,7 +6006,7 @@ export function Workspace() {
         activeDatasetIndex,
         errorTargetIndex,
       }),
-    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
+    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
   );
 
   // v2.1: the category axis and its ticks draw through the SAME two props the
