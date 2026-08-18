@@ -39,6 +39,15 @@ import type {
   DatasetPointsView,
   PointRole,
 } from './calibrationSession.js';
+import { ERROR_ROLES, type ErrorRole } from '../algorithms/errorBar.js';
+
+/** The `ErrorBarPoint` field each role reads back from. */
+const ROLE_FIELD = {
+  upper: 'yUpper',
+  lower: 'yLower',
+  left: 'xLeft',
+  right: 'xRight',
+} as const satisfies Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'>;
 
 /** One series as the spreadsheet shows it: its identity, its values with the
  * pixel columns dropped, and the two per-point annotations that differ BETWEEN
@@ -59,6 +68,25 @@ export interface SpreadsheetSeries {
    * by construction, so printing it is three columns of one number. See
    * CalibrationSession.getErrorCapDeltas. */
   deltas: (number | null)[];
+  /** ⚑⚑ Which PIXEL each row is, so a click still addresses a real point.
+   * Row index stopped being pixel index when a datum's caps became pixels of
+   * its own series (B4) — every outward call from the table takes a pixel
+   * index, and a row without its own would address the point two along. Plain
+   * `0..n-1` for a series carrying no error. */
+  pixelIndices: number[];
+  /** The error columns this series records, in role order, under the user's own
+   * word for the error ('SD upper'). ⚑ ONE PER ROLE THAT WAS MEASURED: all four
+   * always exist in the record, but a vertical-error figure has nothing to say
+   * about left and right, and four columns of blanks assert an emptiness nobody
+   * looked for. Empty for a series with no error. */
+  errorColumns: { role: ErrorRole; label: string }[];
+  /** Per row, one value per `errorColumns` entry — the cap's ABSOLUTE position
+   * on that role's axis, `null` where that side was never captured.
+   * ⚑ Absolutes rather than deltas, measured not chosen: in the delta form "no
+   * bound" and "a bound of size zero" are the same number, which is tenet 9's
+   * exact failure (docs/generator-input-formats.md). The delta is a projection
+   * the EXPORT carries alongside. */
+  errorValues: (number | null)[][];
 }
 
 
@@ -74,7 +102,20 @@ export function buildSpreadsheetSeries(
   datasetInfos: readonly DatasetInfo[],
   session: CalibrationSession<CalibratedAxes>
 ): SpreadsheetSeries[] {
-  return allDatasetsData.map((d) => ({
+  return allDatasetsData.map((d) => {
+    const pixelIndices = session.getDatumPixelIndices(d.index);
+    const tail = session.getErrorSlotNames(d.index);
+    // Row-aligned with `pixelIndices` by construction — both walk the tuples in
+    // order and skip a tuple with no datum. See getDatumPixelIndices.
+    const bars = tail.length > 0 ? session.getResolvedErrorBars(d.index) : [];
+    const errorColumns = ERROR_ROLES.flatMap((role, i) =>
+      bars.some((b) => b[ROLE_FIELD[role]] !== undefined)
+        ? [{ role, label: tail[i] ?? role }]
+        : []
+    );
+    const roles = session.getDataPointRolesFor(d.index);
+    const labels = session.getPointLabels(d.index);
+    return {
     index: d.index,
     // v2.0 pre-launch audit: was a fabricated `Series ${d.index + 1}` fallback
     // when the two views disagree -- the same invented-name shape as the
@@ -86,11 +127,18 @@ export function buildSpreadsheetSeries(
     name: datasetInfos.find((i) => i.index === d.index)?.name ?? '',
     color: d.color,
     active: d.active,
-    values: d.points.map((p) => p.data),
-    roles: session.getDataPointRolesFor(d.index),
-    labels: session.getPointLabels(d.index),
+    values: pixelIndices.map((p) => d.points[p]?.data ?? null),
+    roles: pixelIndices.map((p) => roles[p] ?? null),
+    labels: pixelIndices.map((p) => labels[p] ?? ''),
     deltas: session.getErrorCapDeltas(d.index),
-  }));
+    pixelIndices,
+    errorColumns,
+    errorValues: pixelIndices.map((_p, row) => {
+      const bar = bars[row];
+      return errorColumns.map((c) => (bar ? bar[ROLE_FIELD[c.role]] ?? null : null));
+    }),
+    };
+  });
 }
 
 /** The table is RAGGED: it has as many rows as the longest series, and shorter

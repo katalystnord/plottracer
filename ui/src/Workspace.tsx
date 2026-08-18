@@ -8663,8 +8663,10 @@ export function Workspace() {
               mode={mode}
               activePointIndex={activePointIndex}
               selectedPointIndices={selectedPointIndices}
-              activeSeriesPointCount={dataPoints.length}
-              dataPointRoles={dataPointRoles}
+              // ⚑ ROWS, not pixels: a datum's caps are pixels of its own series
+              // now, so `dataPoints.length` counts them and would make rows past
+              // the last datum selectable in Select mode.
+              activeSeriesPointCount={spreadsheetSeries.find((s) => s.active)?.values.length ?? 0}
               onSelectPoint={(index) => {
                 setActivePointIndex(index);
                 if (index !== null) setPickedPointIndex(index);

@@ -2,7 +2,6 @@ import { theme } from '../theme.js';
 import { fmtValue, rgbToHex } from '../format.js';
 import { isDerivedAt, isCellEditable, type SpreadsheetSeries } from '../../../engine/spreadsheetModel.js';
 import { formatDateNumber } from '../../../core/dateConversion.js';
-import type { PointRole } from '../../../engine/calibrationSession.js';
 import type { ReactNode } from 'react';
 
 export interface SpreadsheetTableProps {
@@ -19,9 +18,8 @@ export interface SpreadsheetTableProps {
   mode: string;
   activePointIndex: number | null;
   selectedPointIndices: readonly number[];
-  /** The ACTIVE series' point count — rows past it are other series' points. */
+  /** The ACTIVE series' ROW count — rows past it are other series' points. */
   activeSeriesPointCount: number;
-  dataPointRoles: readonly (PointRole | null)[];
   /** Select one point (null clears). Sets both the active and picked point. */
   onSelectPoint: (index: number | null) => void;
   onSelectMarquee: (indices: number[]) => void;
@@ -56,7 +54,6 @@ export function SpreadsheetTable({
   activePointIndex,
   selectedPointIndices,
   activeSeriesPointCount,
-  dataPointRoles,
   onSelectPoint,
   onSelectMarquee,
   onSetPointLabel,
@@ -64,6 +61,10 @@ export function SpreadsheetTable({
   renderValue,
   noPointsHint,
 }: SpreadsheetTableProps) {
+  // The series a row's selection, nudging and editing act on. Every one of
+  // those takes a pixel index of the ACTIVE series, so the row needs it by name
+  // rather than by position.
+  const activeSeries = series.find((s) => s.active);
   return (
     <div
       data-testid="data-spreadsheet"
@@ -86,7 +87,14 @@ export function SpreadsheetTable({
                 // while the body filled one, skewing every column to its right
                 // (David spotted it on screen 2026-08-03 — the e2e asserts values
                 // and counts, not alignment, so nothing else could have).
-                colSpan={(s.deltas.length > 0 ? 1 : dataDim) + (showCategoryColumn ? 1 : 0)}
+                colSpan={
+                  (s.deltas.length > 0 ? 1 : dataDim) +
+                  (showCategoryColumn ? 1 : 0) +
+                  // ⚑ The error columns are the series' OWN columns, so the name
+                  // above them has to span them too — the same off-by-one-column
+                  // skew the Δ column caused when its colSpan was hardcoded.
+                  s.errorColumns.length
+                }
                 data-testid={`series-col-${s.index}`}
                 style={{
                   position: 'sticky',
@@ -147,17 +155,35 @@ export function SpreadsheetTable({
                   : valueLabels.map((label, d) =>
                       headCell(`${s.index}-${d}`, label, d === 0 && !showCategoryColumn)
                     )),
+                // ⚑⚑ AFTER the series' own value columns, under the word the
+                // user gave the error ('SD upper'). The old table stacked
+                // `SD upper` and `SD lower` as SERIES beside the data, aligned
+                // by ROW INDEX — which implied a pairing the model did not hold
+                // and showed point 1's caps against the datum at x = 10. A
+                // column on the datum's own row is the same fact, drawn true.
+                ...s.errorColumns.map((c) => headCell(`${s.index}-err-${c.role}`, c.label, false)),
               ];
             })}
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: maxRows }, (_, i) => {
+            // ⚑⚑ THE ROW'S PIXEL, not the row number. A datum's caps are pixels
+            // of its own series now (B4), so the i-th row of the active series
+            // is no longer its i-th pixel — and every outward call here takes a
+            // PIXEL index. Left as `i` it would select, nudge and delete the
+            // point two along, which is a real point, so nothing would look
+            // broken. `-1` for a row past this series' end, which no lookup and
+            // no comparison can match.
+            const activeRowPixel = activeSeries?.pixelIndices[i] ?? -1;
             // In Select mode the row must mirror the MARQUEE selection (the
             // set Del acts on), not activePointIndex (which the marquee forces
             // to null); a row-click joins that set. Everywhere else the row
             // tracks the single active point (the canvas-click counterpart).
-            const isActive = mode === 'select' ? selectedPointIndices.includes(i) : i === activePointIndex;
+            const isActive =
+              mode === 'select'
+                ? selectedPointIndices.includes(activeRowPixel)
+                : activeRowPixel === activePointIndex;
             const rowBg = isActive ? '#dff0f2' : undefined; // opaque light teal for the selected point's row
             // A ragged multi-series table can render rows past the ACTIVE
             // series' point count; in Select mode only a real active-series
@@ -167,7 +193,7 @@ export function SpreadsheetTable({
             // moved with an arrow key or deleted -- the v1.3 gate's way
             // around the read-only cells. A derived sample has no
             // independent existence: the next anchor move rebuilds it.
-            const isDerivedRow = isDerivedAt(dataPointRoles, i);
+            const isDerivedRow = isDerivedAt(activeSeries?.roles ?? [], i);
             const selectRow = () => {
               // ⚑ CLEAR rather than ignore. Merely refusing the selection left
               // the PREVIOUS one active, so the arrow keys then nudged a point
@@ -181,10 +207,10 @@ export function SpreadsheetTable({
                 return;
               }
               if (mode === 'select') {
-                if (i < activeSeriesPointCount) onSelectMarquee([i]);
+                if (i < activeSeriesPointCount) onSelectMarquee([activeRowPixel]);
                 return;
               }
-              onSelectPoint(i);
+              onSelectPoint(activeRowPixel < 0 ? null : activeRowPixel);
             };
             return (
               <tr key={i} data-testid={`point-row-${i}`} aria-selected={isActive} onClick={selectRow} style={{ cursor: 'pointer', background: rowBg }}>
@@ -193,6 +219,11 @@ export function SpreadsheetTable({
                 </td>
                 {series.map((s) => {
                   const data = s.values[i];
+                  // This series' pixel for this row — what an edit or a rename
+                  // addresses. Only the active series is editable, so this and
+                  // `activeRowPixel` agree wherever it is used; named per series
+                  // so it cannot quietly become the wrong one.
+                  const rowPixel = s.pixelIndices[i] ?? -1;
                   // The category cell: a text input on the ACTIVE series
                   // (the same "you edit the series you're working on" rule
                   // the value cells follow), plain text elsewhere so a
@@ -208,7 +239,7 @@ export function SpreadsheetTable({
                             data-testid={`category-${s.index}-${i}`}
                             value={s.labels[i] ?? ''}
                             placeholder="name…"
-                            onChange={(e) => onSetPointLabel(i, e.target.value)}
+                            onChange={(e) => onSetPointLabel(rowPixel, e.target.value)}
                             onBlur={onCommitPendingEdit}
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: 90, fontSize: 12.5 }}
@@ -270,12 +301,31 @@ export function SpreadsheetTable({
                                 // export (not editable inline -- move the point on canvas).
                                 formatDateNumber(data[d]!, dateFmt)
                               : editable
-                              ? renderValue(i, d, data[d]!)
+                              ? renderValue(rowPixel, d, data[d]!)
                               : fmtValue(data[d]!)
                             : ''}
                         </td>
                       );
                     }),
+                    // ⚑⚑ THE DATUM'S OWN EXTENTS, on the datum's own row. An
+                    // ABSOLUTE position on the value axis, because that is what
+                    // the record holds: in the delta form "no bound" and "a
+                    // bound of size zero" are the same number, which is tenet
+                    // 9's exact failure (docs/generator-input-formats.md). The
+                    // export carries the delta alongside.
+                    //
+                    // ⚑ Blank, never 0, where a side was never captured — a one
+                    // sided error bar is a real figure, and a printed 0 reads as
+                    // a measurement that was taken and came out equal.
+                    ...s.errorColumns.map((c, ei) => (
+                      <td
+                        key={`${s.index}-err-${c.role}`}
+                        data-testid={`error-cell-${s.index}-${i}-${c.role}`}
+                        style={{ padding: '1px 8px', fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {s.errorValues[i]?.[ei] == null ? '' : fmtValue(s.errorValues[i]![ei]!)}
+                      </td>
+                    )),
                   ];
                 })}
               </tr>

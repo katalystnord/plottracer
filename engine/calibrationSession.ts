@@ -833,6 +833,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return dataset.getCount() - caps;
   }
 
+  /**
+   * The pixel indices that are DATA POINTS, in the order the record pairs them
+   * with their extents — what the data panel puts one row on.
+   *
+   * ⚑⚑ ROW INDEX STOPPED BEING PIXEL INDEX when caps became pixels of the
+   * series they belong to. Everything the table hands back outward — select,
+   * nudge, delete, rename, edit a value — is a PIXEL index, so a row that does
+   * not carry its own would address the point two along. It would land on a
+   * real point, which is the worst kind of wrong.
+   *
+   * ⚑ Tuple order, and the SAME skip as `errorBarsFromTuples` (a tuple with no
+   * datum yields nothing), so this and `getResolvedErrorBars` are row-aligned
+   * by construction rather than by both happening to be sorted. A series with
+   * no error is `0..n-1`, identical to what the table did before.
+   */
+  getDatumPixelIndices(index: number): number[] {
+    const entry = this.datasetEntries[index];
+    if (!entry) return [];
+    if (!hasErrorSlots(entry.dataset.getSlotNames())) {
+      return Array.from({ length: entry.dataset.getCount() }, (_, i) => i);
+    }
+    const rows: number[] = [];
+    for (const tuple of entry.dataset.getAllTuples()) {
+      const datum = tuple[0];
+      if (datum != null) rows.push(datum);
+    }
+    return rows;
+  }
+
   /** The relation a series declares, or null if it is an ordinary series. */
   getErrorRelation(index: number): ErrorRelation | null {
     const entry = this.datasetEntries[index];
