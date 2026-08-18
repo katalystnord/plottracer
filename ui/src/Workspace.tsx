@@ -6086,7 +6086,7 @@ export function Workspace() {
         display={fmtValue(value)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
-        title="Click to edit - moves the point on the canvas"
+        title="Double-click to edit - moves the point on the canvas"
         width={56}
         onStartEdit={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
         onChange={(v) => setEditingCell({ index, axis, value: v })}
@@ -6116,7 +6116,7 @@ export function Workspace() {
       display={fmtValue(value)}
       testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
       testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
-      title="Click to edit - moves the point along its own axis"
+      title="Double-click to edit - moves the point along its own axis"
       width={64}
       align="right"
       onStartEdit={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
@@ -6272,7 +6272,7 @@ export function Workspace() {
     renderEditableName(
       axisIndex, rawName, editingAxisName, setEditingAxisName, setSpokeName,
       `spider-axis-name-${axisIndex}`, `Axis ${axisIndex + 1}`,
-      'Click to name this axis, as the figure prints it', 150
+      'Double-click to name this axis, as the figure prints it', 150
     );
 
   // Bar's category (v2.0): position (the row's own place in the table) is the
@@ -6283,7 +6283,7 @@ export function Workspace() {
     renderEditableName(
       categoryIndex, rawName, editingCategoryName, setEditingCategoryName, renameCategory,
       `bar-category-name-${categoryIndex}`, `Category ${categoryIndex + 1}`,
-      'Click to name this category, as the figure prints it', 120
+      'Double-click to name this category, as the figure prints it', 120
     );
 
   // The generic tuple table's category name (Pie's sector, Box Plot's box) --
@@ -6329,7 +6329,7 @@ export function Workspace() {
       bandIndex, name, editingHeatmapXName, setEditingHeatmapXName,
       (i, v) => setHeatmapCategoryName('x', i, v),
       `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
-      'Click to name this column, as the figure prints it', 90,
+      'Double-click to name this column, as the figure prints it', 90,
       // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
       // `0.4991` - its band-centre ordinal to four decimals - which is
       // indistinguishable from a MEASURED coordinate, on the one type where
@@ -6346,7 +6346,7 @@ export function Workspace() {
       bandIndex, name, editingHeatmapYName, setEditingHeatmapYName,
       (i, v) => setHeatmapCategoryName('y', i, v),
       `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
-      'Click to name this row, as the figure prints it', 90,
+      'Double-click to name this row, as the figure prints it', 90,
       // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
       // `0.4991` - its band-centre ordinal to four decimals - which is
       // indistinguishable from a MEASURED coordinate, on the one type where
@@ -6382,7 +6382,7 @@ export function Workspace() {
         display={display}
         testIdEdit={`heatmap-value-edit-${cell.col}-${cell.row}`}
         testIdValue={`heatmap-value-${cell.col}-${cell.row}`}
-        title="Click to edit - moves this cell along the colour key"
+        title="Double-click to edit - moves this cell along the colour key"
         width={64}
         align="right"
         onStartEdit={() =>
@@ -6401,7 +6401,7 @@ export function Workspace() {
     renderEditableName(
       tupleIndex, rawLabel, editingTupleLabel, setEditingTupleLabel, setTupleLabel,
       `tuple-label-${tupleIndex}`, `${tupleNoun.charAt(0).toUpperCase()}${tupleNoun.slice(1)} ${tupleIndex + 1}`,
-      `Click to name this ${tupleNoun}, as the figure prints it`, 100
+      `Double-click to name this ${tupleNoun}, as the figure prints it`, 100
     );
 
   // The single contextual "what do I do now?" line shown in the bottom tips bar
@@ -6974,7 +6974,7 @@ export function Workspace() {
                             display={v}
                             testIdEdit={`calib-edit-${step.key}-${vi}`}
                             testIdValue={`calib-value-${step.key}-${vi}`}
-                            title="Click to edit - re-reads every value through the corrected calibration"
+                            title="Double-click to edit - re-reads every value through the corrected calibration"
                             width={52}
                             onStartEdit={() =>
                               setEditingCalibValue({ key: step.key, index: vi, value: v })

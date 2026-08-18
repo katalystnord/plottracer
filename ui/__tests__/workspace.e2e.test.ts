@@ -1212,7 +1212,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     await clickAt(300, 385); // starts tuple 0 (Min)
     expect(await textOf('tuple-label-0')).toBe('-');
 
-    await page.getByTestId('tuple-label-0').click();
+    await page.getByTestId('tuple-label-0').dblclick();
     await page.getByTestId('tuple-label-0').fill('Sample A');
     await page.getByTestId('tuple-label-0').blur();
     await page.waitForTimeout(120);
@@ -1234,12 +1234,12 @@ describe('Workspace: Box Plot / Point Groups', () => {
     // Box 0, named Sample A. Category cell is click-to-edit (v2.0) -- click it
     // into an input before filling, same as Spider's own axis-name cell.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(300, py);
-    await page.getByTestId('tuple-label-0').click();
+    await page.getByTestId('tuple-label-0').dblclick();
     await page.getByTestId('tuple-label-0').fill('Sample A');
     await page.getByTestId('tuple-label-0').blur();
     // Box 1 to the right, named Sample B.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(500, py);
-    await page.getByTestId('tuple-label-1').click();
+    await page.getByTestId('tuple-label-1').dblclick();
     await page.getByTestId('tuple-label-1').fill('Sample B');
     await page.getByTestId('tuple-label-1').blur();
     await page.waitForTimeout(50);
@@ -2523,6 +2523,52 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
   });
 
+  it('⚑⚑ A5 - opening an editor moves nothing the user is not editing', async () => {
+    // David, 2026-08-16, with two screenshots of one bar chart's DATA POINTS
+    // panel, at rest and mid-edit: *"This is the output fields when I'm not
+    // trying to edit a cell. This is the same field when I am trying to edit a
+    // cell. Not so good consistency."* Every row grew taller, the delete button
+    // dropped to its own line, a horizontal scrollbar appeared and the second
+    // series' header shifted - none of it the cell he clicked.
+    //
+    // ⚑ THE CAUSE: an <input> defaults to about 20 characters wide whatever it
+    // contains, and the editors took a fixed `width` besides. The resting span
+    // is as wide as its text. So the table's natural width jumped the moment a
+    // cell opened and the browser resolved it by wrapping and scrolling.
+    //
+    // ⚑⚑ THE RULE, and its testable form, both David's: *an edit control must
+    // occupy the SAME BOX as the value it edits. If entering edit mode moves
+    // anything the user was not editing, the control is the wrong size.* So this
+    // measures POSITIONS, not styles - it is the only form that cannot be
+    // satisfied by a plausible-looking stylesheet.
+    await resetWorkspace('bar');
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    await dragMarker(250, 400, 250, 250);
+    await dragMarker(400, 400, 400, 200);
+    await page.waitForTimeout(150);
+
+    // Everything that is NOT the cell about to be edited.
+    const others = ['bar-category-name-1', 'points-table'];
+    const before = await Promise.all(others.map((id) => page.getByTestId(id).boundingBox()));
+
+    await page.getByTestId('bar-category-name-0').dblclick();
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('bar-category-name-0').evaluate((e) => e.tagName)).toBe('INPUT');
+
+    const after = await Promise.all(others.map((id) => page.getByTestId(id).boundingBox()));
+    others.forEach((id, i) => {
+      expect(Math.round(after[i]!.x), `${id} x`).toBe(Math.round(before[i]!.x));
+      expect(Math.round(after[i]!.y), `${id} y`).toBe(Math.round(before[i]!.y));
+      expect(Math.round(after[i]!.width), `${id} width`).toBe(Math.round(before[i]!.width));
+      expect(Math.round(after[i]!.height), `${id} height`).toBe(Math.round(before[i]!.height));
+    });
+  });
+
   it('types a category name and prefills it into the next series (v1.3 #9)', async () => {
     // A Bar figure's independent variable is a NAME the reader transcribes off
     // the tick labels. v2.0: naming is the shared bar table's own category
@@ -2541,10 +2587,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     await dragMarker(250, 400, 250, 250); // bar 1 (category 0)
     await dragMarker(400, 400, 400, 200); // bar 2 (category 1)
-    await page.getByTestId('bar-category-name-0').click();
+    await page.getByTestId('bar-category-name-0').dblclick();
     await page.getByTestId('bar-category-name-0').fill('Flax');
     await page.getByTestId('bar-category-name-0').blur();
-    await page.getByTestId('bar-category-name-1').click();
+    await page.getByTestId('bar-category-name-1').dblclick();
     await page.getByTestId('bar-category-name-1').fill('Hemp');
     await page.getByTestId('bar-category-name-1').blur();
     await page.waitForTimeout(100);
@@ -2573,7 +2619,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // series' bar into a category of its own, if a prefill guess is wrong,
     // is a different action than renaming this shared row and not this
     // table's job.)
-    await page.getByTestId('bar-category-name-1').click();
+    await page.getByTestId('bar-category-name-1').dblclick();
     await page.getByTestId('bar-category-name-1').fill('Jute');
     await page.getByTestId('bar-category-name-1').blur();
     await page.waitForTimeout(100);
@@ -2966,7 +3012,7 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     // The derived cell offers no click-to-edit affordance at all...
     expect(await page.getByTestId('data-value-x-1').count()).toBe(0);
     // ...while the anchor row still opens its inline editor on click.
-    await page.getByTestId('data-value-x-0').click();
+    await page.getByTestId('data-value-x-0').dblclick();
     expect(await page.getByTestId('data-edit-x-0').count()).toBe(1);
     await page.keyboard.press('Escape');
   });
@@ -4497,7 +4543,7 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // reading back as (8.000, 5.000) proves the point's *pixel* moved -- the
     // data column is derived from the pixel via pixelToData, so it can only
     // read 8 if the pixel was repositioned by the inverse (dataToPixel).
-    await page.getByTestId('data-value-x-0').click();
+    await page.getByTestId('data-value-x-0').dblclick();
     const input = page.getByTestId('data-edit-x-0');
     await input.fill('8');
     await input.press('Enter');
@@ -7423,7 +7469,7 @@ describe('spider charts', () => {
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
 
-    await page.getByTestId('spider-value-0-0').click();
+    await page.getByTestId('spider-value-0-0').dblclick();
     await page.keyboard.press('Control+a');
     await page.keyboard.type('75');
     await page.keyboard.press('Enter');
@@ -7574,7 +7620,7 @@ describe('spider charts', () => {
     // Click-to-edit: at rest the cell is text (a dash when unnamed), so it never
     // reads as a field demanding input.
     expect(await textOf('spider-axis-name-1')).toBe('Weight');
-    await page.getByTestId('spider-axis-name-1').click();
+    await page.getByTestId('spider-axis-name-1').dblclick();
     await page.getByTestId('spider-axis-name-1').fill('Elongation at break (%)');
     await page.getByTestId('spider-axis-name-1').blur();
     await page.waitForTimeout(150);
@@ -7582,7 +7628,7 @@ describe('spider charts', () => {
     expect(await textOf('spider-axis-name-1')).toBe('Elongation at break (%)');
     // ⚑ And an axis left unnamed reads as a DASH, like a value nobody recorded -
     // the name is optional, and a permanent input box says the opposite.
-    await page.getByTestId('spider-axis-name-2').click();
+    await page.getByTestId('spider-axis-name-2').dblclick();
     await page.getByTestId('spider-axis-name-2').fill('');
     await page.getByTestId('spider-axis-name-2').blur();
     await page.waitForTimeout(150);
@@ -8906,7 +8952,13 @@ describe('heatmap capture (v2.2)', () => {
     expect(await page.getByTestId(`heatmap-y-name-${topBand}`).count()).toBeGreaterThan(1);
     const nameCell = last.getByTestId(`heatmap-y-name-${topBand}`);
     await nameCell.scrollIntoViewIfNeeded();
-    await nameCell.click();
+    // ⚑ DOUBLE click (v2.3, A3): a single click selects, editing needs two.
+    // ⚠️ THIS WALK IS WHY `EditableName` STOPS ITS OWN CLICK. The long form's
+    // row picks its cell on click, so a name cell inside it answered to two
+    // gestures at once and the double click could not land. A name is not a
+    // value: naming a band and picking a cell are different acts that happen to
+    // share a row.
+    await nameCell.dblclick();
     await page.waitForTimeout(200);
     expect(await page.locator(`input[data-testid="heatmap-y-name-${topBand}"]`).count()).toBe(1);
     const editor = last.locator(`input[data-testid="heatmap-y-name-${topBand}"]`);
@@ -9003,7 +9055,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(picked).toMatch(/R2/);
     expect(picked).toMatch(/value/);
 
-    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').click();
+    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').dblclick();
     await page.waitForTimeout(200);
     const editor = page.locator('input[data-testid="heatmap-value-edit-2-1"]');
     expect(await editor.count()).toBe(1);
@@ -9110,7 +9162,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-matrix-cell-2-1').click();
     await page.waitForTimeout(150);
     const before = await textOf('heatmap-matrix-cell-2-1');
-    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').click();
+    await page.getByTestId('heatmap-picked-cell').getByTestId('heatmap-value-2-1').dblclick();
     await page.waitForTimeout(150);
     await page.locator('input[data-testid="heatmap-value-edit-2-1"]').press('Enter');
     await page.waitForTimeout(300);
@@ -9316,7 +9368,7 @@ describe('heatmap capture (v2.2)', () => {
 
     // The last column's declared count, as typed.
     expect(await textOf('calib-value-x2-1')).toBe('5');
-    await page.getByTestId('calib-value-x2-1').click();
+    await page.getByTestId('calib-value-x2-1').dblclick();
     await page.waitForTimeout(150);
     const box = page.getByTestId('calib-edit-x2-1');
     await box.fill('6');
