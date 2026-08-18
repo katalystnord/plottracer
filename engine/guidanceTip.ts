@@ -416,6 +416,20 @@ export function noPointsHint({ mode, config }: { mode: ToolMode; config: Guidanc
     return 'No points yet — pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
   if (mode === 'segment-fill') return 'No points yet — click the curve on the image to flood-fill it.';
   if (mode === 'interpolate') return 'No points yet — click a few guide points along one curve.';
+  // ⚑⚑ A CATEGORICAL LINE HAS NO BARS. It is `axesKind: 'bar'` because it shares
+  // BarAxes' calibration — two points on the value axis — and nothing else, so
+  // the bar branch below caught it and told a chart of five markers to *"click
+  // the end of each bar"*. Seen on the built app while driving the v2.3 Line
+  // fix; this function's own header is entirely about hints that name a gesture
+  // the type does not have, and this is a fourth instance of it.
+  //
+  // ⚑ The wording MIRRORS the tips bar, which already had it right for this type
+  // (*"Click each category's marker in turn"*). Two sentences describing one
+  // gesture must not describe it differently.
+  if (config.id === 'categorical')
+    return mode === 'place-point'
+      ? 'No points yet — click each category’s marker in turn to record its value.'
+      : 'No points yet — pick Add points (3) from the tool rail and click each category’s marker.';
   if (mode === 'place-point')
     return config.id === 'bar'
       ? 'No points yet — drag from one corner of a bar to the opposite corner (or click twice) to record it.'

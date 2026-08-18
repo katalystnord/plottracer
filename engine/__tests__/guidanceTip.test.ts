@@ -386,6 +386,24 @@ describe('noPointsHint', () => {
     );
   });
 
+  it('⚑⚑ a categorical Line has no BARS to click the end of', () => {
+    // ⚠️ SEEN ON THE BUILT APP while driving the v2.3 Line fix: a line chart of
+    // five markers was told to *"click the end of each bar to record its
+    // value."* There are no bars on the figure. That is this function's OWN
+    // defect class — its header is entirely about hints that name a tool or a
+    // gesture the type does not have — arriving for a fourth time, at a site
+    // reached because Line is `axesKind: 'bar'` while looking nothing like one.
+    //
+    // ⚑ It mirrors the tips bar, which already had the right words for this
+    // type: *"Click each category's marker in turn."* Two sentences describing
+    // one gesture must not describe it differently.
+    for (const mode of ['place-point', 'select'] as const) {
+      const hint = noPointsHint({ mode, config: CATEGORICAL_LINE_CONFIG });
+      expect(hint, mode).toContain('each category\u2019s marker');
+      expect(hint, mode).not.toContain('bar');
+    }
+  });
+
   it('points a non-capturing tool back at the rail, per graph type', () => {
     // Pan / Select / Eraser / Measure / Image-edit / Error-bars all land here.
     expect(noPointsHint({ mode: 'select', config: BAR_AXES_CONFIG })).toBe(
