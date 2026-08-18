@@ -192,6 +192,40 @@ describe('the capture cursor never aims at an error slot', () => {
     expect(reloaded.getDataset().getAllTuples(), 'the click opened its OWN tuple').toHaveLength(2);
   });
 
+  it('⚑⚑ the LIVE cursor does not walk into one either — the second entrance', () => {
+    // ⚠️ FOUND BY A FIXTURE WITH FOUR POINTS INSTEAD OF ONE. `computeSlotCursorFor`
+    // was fixed first, and it is only the LOAD entrance; `nextSlot` advances the
+    // cursor during capture and had the same whole-tuple scan. Measured, with
+    // four datums each given a cap:
+    //
+    //     tuples after the third click:  [[0,1,2,null,null], [3,6,5,7,null]]
+    //                                                            ^ pixel 7, the
+    //     third DATA POINT, filed into 'SD left' of the second datum's tuple.
+    //
+    // The fourth capture then refused, because the point it was dragged from was
+    // not a datum any more. "Guards belong in the model, and the model has more
+    // than one entrance" — the third time this file's own comments say so.
+    const s = xySession();
+    for (const px of [120, 160, 200, 240]) {
+      const py = 400 - px;
+      expect(s.addDataPoint(px, py)).toBe('point-added');
+      expect(
+        s.captureErrorCap({
+          targetIndex: 0,
+          datumPixel: { x: px, y: py },
+          capPixel: { x: px, y: py - 60 },
+          baseName: 'SD',
+        }),
+        `the cap on the datum at px ${px}`
+      ).toBeNull();
+    }
+    expect(s.getDataset().getAllTuples()).toHaveLength(4);
+    for (const tuple of s.getDataset().getAllTuples()) {
+      expect(tuple.slice(3), 'no click may land in a horizontal error slot').toEqual([null, null]);
+    }
+    expect(s.getDatasetInfos()[0]!.pointCount).toBe(4);
+  });
+
   it('⚑ a genuinely half-built tuple is still walked to', () => {
     // The companion assertion: only the ERROR tail may be skipped. A box plot
     // two members in still has to send the next click to member 3.

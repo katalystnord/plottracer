@@ -9,6 +9,7 @@
 
 import type { Dataset } from '../core/dataset.js';
 import type { AnyAxes } from '../core/plotData.js';
+import { getFitPoints } from './curveFit.js';
 
 export interface Point2D {
   x: number;
@@ -77,13 +78,19 @@ export function evalSpline(spline: NaturalSpline, t: number): SplineEval {
 
 /** Points in dataset order (no sorting, no filtering) — required for splines that must support closed/looping curves. */
 export function getGeometryPoints(dataset: Dataset, axes: AnyAxes): Point2D[] {
-  const pts: Point2D[] = [];
-  for (let i = 0; i < dataset.getCount(); i++) {
-    const px = dataset.getPixel(i);
-    const d = axes.pixelToData(px.x, px.y);
-    pts.push({ x: d[0]!, y: d[1]! });
-  }
-  return pts;
+  // ⚑⚑ THE SAME QUESTION CURVE FIT ALREADY ANSWERED, so it is the same
+  // function. `getFitPoints` restricts a slotted dataset to slot 0 and its own
+  // doc names this exact case — *"otherwise the Upper/Lower bound points would
+  // be fit as if they were independent curve samples"* — written for the old
+  // model, and true again now that a datum's caps live on its own tuple.
+  //
+  // ⚠️ This walked every pixel, which was safe only because `runGeometry`
+  // refused any dataset with slots at all. That refusal is about tuple TYPES (a
+  // box plot's five letter values are not a traced curve) and it fired on an XY
+  // scatter that had merely acquired extents — so the same series was refused
+  // geometry AND, had it not been, would have measured its own error bars.
+  // Two defects propping each other up; the reuse removes both.
+  return getFitPoints(dataset, axes);
 }
 
 export interface GeometryPerPoint {

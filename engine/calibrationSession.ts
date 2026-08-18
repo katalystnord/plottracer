@@ -3700,7 +3700,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const dataset = entry.dataset;
     if (!dataset.hasSlots()) return false;
     if (this.config.tupleMembers !== 'independent' && !this.isBarIntervalShape(dataset)) return false;
-    if (groupIndex < 0 || groupIndex >= dataset.getSlotNames().length) return false;
+    // ⚑ The type's OWN slots: aiming the cursor at an error slot would make the
+    // next click fill it, which is the same defect nextSlot and
+    // computeSlotCursorFor were fixed for — this is the entrance the TABLE uses.
+    if (groupIndex < 0 || groupIndex >= this.ownSlots(dataset).length) return false;
     if (tupleIndex !== null) {
       const tuple = dataset.getAllTuples()[tupleIndex];
       if (!tuple) return false;
@@ -3893,10 +3896,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const cursor = this.activeEntry.slotCursor;
     if (cursor.tupleIndex === null) return;
     const tuples = this.activeEntry.dataset.getAllTuples();
+    // ⚑⚑ THE SAME BOUND AS computeSlotCursorFor, AND THE SECOND ENTRANCE.
+    // That one is the LOAD path; this one advances the cursor as you capture,
+    // and it had the identical whole-tuple scan. Measured on four datums each
+    // given a cap: the THIRD data point was filed into 'SD left' of the second
+    // datum's tuple, and the fourth capture then refused because the point it
+    // was dragged from was no longer a datum. An error slot is filled by
+    // DRAGGING a cap; it is never a click destination.
+    const ownWidth = this.ownSlots(this.activeEntry.dataset).length;
     let nextTupleIndex = -1;
     let nextGroupIndex = -1;
     for (let tupleIndex = cursor.tupleIndex; tupleIndex < tuples.length; tupleIndex++) {
-      const tuple = tuples[tupleIndex]!;
+      const tuple = tuples[tupleIndex]!.slice(0, ownWidth);
       const startGroupIndex = tupleIndex === cursor.tupleIndex ? cursor.groupIndex + 1 : 0;
       const groupIndex = tuple.indexOf(null, startGroupIndex);
       if (groupIndex > -1) {
