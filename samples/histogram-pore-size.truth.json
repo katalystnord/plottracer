@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "histogram-pore-size.png",
-    "note": "Synthetic ground truth \u2014 true bin edges + count."
+    "note": "Synthetic ground truth - true bin edges + count."
   },
   "graphType": "histogram",
   "axes": {

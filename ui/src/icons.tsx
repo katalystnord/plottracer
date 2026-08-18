@@ -3,7 +3,7 @@
  * the top-level icons/ directory -- a straight copy of ui-patches/icons/
  * (Ketcher, Apache-2.0, plus Katalyst Nord's own custom/ originals; see
  * icons/NOTICE and icons/LICENSE) per the target module structure in
- * CLAUDE.md's "Product #1 — rebuild design". Imported with Vite's `?raw`
+ * CLAUDE.md's "Product #1 - rebuild design". Imported with Vite's `?raw`
  * suffix (raw string content, declared by vite/client -- see
  * ui/src/vite-env.d.ts) and inlined via dangerouslySetInnerHTML rather
  * than referenced by URL, since `fill="currentColor"` only resolves to
@@ -112,7 +112,7 @@ import selectPointSvg from '../../icons/custom/select-point.svg?raw';
 // style) except Box Plot, which reuses the icon already drawn for it.
 import graphXySvg from '../../icons/custom/graph-xy.svg?raw';
 import graphHistogramSvg from '../../icons/custom/graph-histogram.svg?raw';
-// ⚑ A heatmap's glyph is a 3x3 of cells at DIFFERENT opacities — the one thing
+// ⚑ A heatmap's glyph is a 3x3 of cells at DIFFERENT opacities - the one thing
 // that distinguishes it from a plain grid at 24px, and the one thing a reader
 // scanning the picker for "mine has coloured squares" is looking for.
 import graphHeatmapSvg from '../../icons/custom/graph-heatmap.svg?raw';

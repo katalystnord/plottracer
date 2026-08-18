@@ -5,20 +5,20 @@ import { serializeProject, deserializeProject } from '../projectFile.js';
 import { resolveHeatmapGrid } from '../heatmapRun.js';
 
 /**
- * A heatmap has to SURVIVE A SAVE (v2.2) — the grid, the colour key, and which
+ * A heatmap has to SURVIVE A SAVE (v2.2) - the grid, the colour key, and which
  * kind of chart it was.
  *
  * ⚑ THREE THINGS COULD BE LOST HERE, and each would be lost silently:
  *
  *   1. the GRAPH TYPE. A heatmap calibrates `XYAxes`, and a file says which
  *      type it is through the axes metadata. Without that stamp a saved heatmap
- *      reopens as an XY chart — its key clicks read back as stray axis points.
+ *      reopens as an XY chart - its key clicks read back as stray axis points.
  *   2. the COLOUR KEY. Its four clicks live in the calibration, and the axes
  *      carries the calibration into the file. Hand the axes only the x/y frame
  *      and the key is written nowhere, so a reopened project has a calibration
  *      it cannot read one cell through.
  *   3. the GRID and the LOG-KEY setting. Neither has a pixel to ride on, so
- *      both live in the axes metadata — pie's total and sweep set that
+ *      both live in the axes metadata - pie's total and sweep set that
  *      precedent for exactly this reason.
  *
  * Every one of them opens CLEAN and wrong, which is why they are tested at the
@@ -48,7 +48,7 @@ function calibratedSession(options: Record<string, string> = {}): CalibrationSes
 }
 
 /**
- * Save and reopen through the REAL project path — `serializeProject` /
+ * Save and reopen through the REAL project path - `serializeProject` /
  * `deserializeProject`, the pair the Save Project button uses.
  *
  * ⚑ Not a hand-rolled `PlotData` round trip: the graph type is resolved HERE,
@@ -61,7 +61,7 @@ function roundTrip(session: CalibrationSession<XYAxes>): {
 } {
   const saved = serializeProject(session, 'data:image/png;base64,AAAA');
   if ('error' in saved) throw new Error(`save refused: ${saved.error}`);
-  // Through JSON, because that is what a file is — anything that does not
+  // Through JSON, because that is what a file is - anything that does not
   // survive stringify/parse does not survive Save.
   const opened = deserializeProject(JSON.parse(JSON.stringify(saved)));
   if ('error' in opened) throw new Error(`open refused: ${opened.error}`);
@@ -75,13 +75,13 @@ describe('a heatmap survives a save', () => {
     const before = calibratedSession();
     expect(before.getAxes()!.getMetadata()[GRAPH_TYPE_METADATA_KEY]).toBe('heatmap');
     // ⚑ And the FILE says so: without the stamp `deserializeProject` falls back
-    // to the axes CLASS, which is `XYAxes` — so the project reopens as a plain
+    // to the axes CLASS, which is `XYAxes` - so the project reopens as a plain
     // XY chart with eight stray calibration points.
     expect(roundTrip(before).configId).toBe('heatmap');
   });
 
   it('carries the COLOUR KEY’s four clicks through the file', () => {
-    // ⚑ The four x/y points are not the calibration — they are the first half
+    // ⚑ The four x/y points are not the calibration - they are the first half
     // of it. A file holding only them reopens as a heatmap with no key.
     const before = calibratedSession();
     const { session: after } = roundTrip(before);
@@ -103,7 +103,7 @@ describe('a heatmap survives a save', () => {
   it('remembers a LOG colour key, which nothing else could tell you', () => {
     // ⚑ Same shape as pie's tilt: the setting is not part of `XYAxes`, so
     // without its own home in the metadata a reopened project reads every cell
-    // off a linear key it was never calibrated with — and looks fine doing it.
+    // off a linear key it was never calibrated with - and looks fine doing it.
     const before = calibratedSession({ isLogValue: 'true' });
     expect(before.getAxes()!.getMetadata()['heatmapLogValue']).toBe('true');
     expect(roundTrip(before).session.getOptions()['isLogValue']).toBe('true');
@@ -112,7 +112,7 @@ describe('a heatmap survives a save', () => {
   });
 
   it('carries the GRID through the FILE, as PARAMETERS against the axis position', () => {
-    // ⚑⚑ P2. The file holds parameters, never absolute coordinates — David:
+    // ⚑⚑ P2. The file holds parameters, never absolute coordinates - David:
     // *"The grid is not absolute, but in relation to the calibrated axis
     // position."* So a reopened project draws its grid in the same PLACE on the
     // figure whatever the axes are later corrected to say.
@@ -125,7 +125,7 @@ describe('a heatmap survives a save', () => {
 
   it('carries the axis NAMES through the file, beside the grid', () => {
     // ⚑⚑ A reopened heatmap whose columns lost their names exports the index
-    // numbers the names exist to replace — silently, with every value correct.
+    // numbers the names exist to replace - silently, with every value correct.
     const before = calibratedSession();
     before.setHeatmapLayer({ labels: { x: ['BRCA1', 'TP53'], y: ['tumour', 'normal'] } });
     const { session: after } = roundTrip(before);
@@ -133,8 +133,8 @@ describe('a heatmap survives a save', () => {
   });
 
   it('writes NO layer at all for a value × value heatmap that has none', () => {
-    // ⚑ Absent, not empty. Every project that is not a heatmap — and every
-    // heatmap whose grid was never read — writes the same file it always did.
+    // ⚑ Absent, not empty. Every project that is not a heatmap - and every
+    // heatmap whose grid was never read - writes the same file it always did.
     const { session: after } = roundTrip(calibratedSession());
     expect(after.getHeatmapLayer()).toBeNull();
   });
@@ -157,12 +157,12 @@ describe('a heatmap survives a save', () => {
     }
   });
 
-  it('sorts a grid that arrives out of order — at the door that RESOLVES it', () => {
+  it('sorts a grid that arrives out of order - at the door that RESOLVES it', () => {
     // ⚑ The ordering guard moved with P2, and deliberately. The FILE holds
     // PARAMETERS, where "ascending" is not yet meaningful: an axis calibrated
     // backwards has parameters that ascend while its data coordinates descend.
     // Sorting belongs where the numbers become dividers, which is
-    // `resolveHeatmapGrid` → `checkDividers` — the same rule the interactive
+    // `resolveHeatmapGrid` → `checkDividers` - the same rule the interactive
     // path applies, applied once.
     const session = calibratedSession();
     session.setHeatmapLayer({ grid: { x: [1, 0, 0.3], y: [1, 0] } });
@@ -182,14 +182,14 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     readings: { '1,1': 0.42 },
   };
 
-  it('survives a re-calibration because nothing COPIES it — it was never there', () => {
+  it('survives a re-calibration because nothing COPIES it - it was never there', () => {
     // ⚑⚑ THE POINT OF THE WHOLE CHANGE. David: *"Anything detected on the graph
     // sits on TOP of the calibration… not be a part of it. We should and need to
     // be able to adjust the axis calibrations independently of changing the
     // grid."*
     //
     // ⚠️ The record used to live in AXES METADATA, and `runCalibration` ends
-    // with `this.axes = result.axes` — a brand-new object — so re-calibrating
+    // with `this.axes = result.axes` - a brand-new object - so re-calibrating
     // emptied it. The fix at the time COPIED the metadata across. This asserts
     // the structural version: the layer is on the SESSION, so the two are
     // independent and there is nothing to copy.
@@ -200,7 +200,7 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     expect(s.setCalibrationValues('x1', ['0'])).toBe(true);
     expect(s.getHeatmapLayer()).toEqual(LAYER);
 
-    // And the door a user opens most casually — `setOption` re-calibrates the
+    // And the door a user opens most casually - `setOption` re-calibrates the
     // moment the axes exist.
     s.setOption('isLogValue', 'false');
     expect(s.getHeatmapLayer()).toEqual(LAYER);
@@ -226,7 +226,7 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     expect(after.getHeatmapLayer()).toEqual(LAYER);
   });
 
-  it('is CLEARED by a reset — the old figure\u2019s grid is not the new one\u2019s', () => {
+  it('is CLEARED by a reset - the old figure\u2019s grid is not the new one\u2019s', () => {
     // Same sentence `categoryAxis` is cleared on: "discard every series and
     // point" does not promise to keep a grid describing the figure that just
     // went away.
@@ -239,7 +239,7 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
   it('DROPS a malformed layer whole rather than reading half of it', () => {
     // ⚑ A load entrance, guarded like every other. A grid with two good
     // dividers and one `"x"` would otherwise place a boundary the user never
-    // put anywhere — and on a heatmap a wrong boundary has NO visible symptom,
+    // put anywhere - and on a heatmap a wrong boundary has NO visible symptom,
     // because the colour IS the value.
     const before = calibratedSession();
     before.setHeatmapLayer({ grid: { x: [0, 'x' as unknown as number, 1], y: [0, 1] } });
@@ -254,10 +254,10 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     expect(after.getHeatmapLayer()?.readings).toEqual({ '1,1': 0.42 });
   });
 
-  it('\u2691\u2691 keeps a reading only if it is ON the colour key \u2014 the file is an ENTRANCE too', () => {
+  it('\u2691\u2691 keeps a reading only if it is ON the colour key - the file is an ENTRANCE too', () => {
     // \u2691\u2691 THE THIRD ENTRANCE. Both interactive paths bound a reading to the strip
-    // and say so \u2014 `setCellReadingAt` ("that is past the end of the colour key
-    // \u2014 the key runs between the two corners you marked, and there is no ink
+    // and say so - `setCellReadingAt` ("that is past the end of the colour key
+    // - the key runs between the two corners you marked, and there is no ink
     // beyond them to read a colour from") and `setCellReading` through
     // `positionAtValue`. The FILE checked only that the key looked like a cell
     // and the value was a finite number, so a hand-edited or foreign project
@@ -270,7 +270,7 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     // line at two entrances" and there were three.
     //
     // \u2691 DROPPED, not clamped: the cell then falls back to what its own COLOUR
-    // says, which is a real measurement off real ink \u2014 the same thing
+    // says, which is a real measurement off real ink - the same thing
     // `clearCellReading` means by "hand the cell back to the colour key".
     // Clamping would invent a reading at the strip's end that nobody took.
     const before = calibratedSession();

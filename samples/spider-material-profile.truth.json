@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "spider-material-profile.png",
-    "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 \u2014 the per-axis-scale case the only prior art (ChartSense) excludes."
+    "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 - the per-axis-scale case the only prior art (ChartSense) excludes."
   },
   "graphType": "spider",
   "axes": [

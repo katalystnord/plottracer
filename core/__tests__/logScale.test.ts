@@ -11,8 +11,8 @@ import { logEndpointsUsable, logPositiveEndpointsUsable } from '../axes/logScale
  * reached THROUGH those four classes, and each of them exercises one rule with
  * one shape of input.
  *
- * The whole reason the module exists is that the two rules genuinely DIFFER —
- * XY may run through the negative decades, a radius may not — so testing them
+ * The whole reason the module exists is that the two rules genuinely DIFFER -
+ * XY may run through the negative decades, a radius may not - so testing them
  * only through their callers is exactly the arrangement that let them drift
  * into four separate inline copies in the first place.
  */

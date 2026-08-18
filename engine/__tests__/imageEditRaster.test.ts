@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { applyImageEditOp, rotateImageByAngle, clampCropRect, cropImage } from '../imageEdit.js';
 
 /**
- * Image edits — **does the RASTER agree with `mapPoint`?**
+ * Image edits - **does the RASTER agree with `mapPoint`?**
  *
  * ⚑ WHY THIS FILE EXISTS. `engine/imageEdit.ts` scored **58.37%** with 107
  * mutants unnoticed, almost all of them inside `rotateImageByAngle`'s
  * inverse-map arithmetic. The existing `imageEdit.test.ts` covers the shape
- * well — dimensions, the 90° ops' index formulas, `mapPoint`'s isometry — and
+ * well - dimensions, the 90° ops' index formulas, `mapPoint`'s isometry - and
  * stays. What nothing checked is the one thing the module actually promises:
  *
  *   "`mapPoint` is the exact affine rotation about the image centre (not the
  *    pixel-sampled path), so calibration handles / data points / measurement
- *    vertices rotate WITH the raster and keep their geometric relationship —
+ *    vertices rotate WITH the raster and keep their geometric relationship -
  *    a calibrated value is unchanged by a deskew."
  *
- * Two independent computations — the pixel sampler and `mapPoint` — must
+ * Two independent computations - the pixel sampler and `mapPoint` - must
  * describe the SAME rotation. Nothing compared them. Every sign, every
  * operator and both `± 0.5` terms in the sampler could flip with the suite
  * green, and the symptom would be calibration handles drifting off the image
@@ -26,7 +26,7 @@ import { applyImageEditOp, rotateImageByAngle, clampCropRect, cropImage } from '
  * explicitly so nobody has to rediscover it: coordinates are CONTINUOUS, and
  * pixel `i` spans `[i, i+1)`, so its CENTRE is `i + 0.5`. `mapPoint(2, 3)` is
  * therefore the top-left CORNER of pixel (2,3), not the pixel itself. Feeding
- * it a bare pixel index looks almost right and is off by up to one pixel —
+ * it a bare pixel index looks almost right and is off by up to one pixel -
  * measured, not assumed (mapPoint(2,3) → (6.00,2.00) where the raster puts
  * that pixel at (5,2); mapPoint(2.5,3.5) → (5.50,2.50), which is that
  * pixel's centre exactly).
@@ -41,7 +41,7 @@ function rasterWithMark(w: number, h: number, mx: number, my: number): Uint8Clam
   return src;
 }
 
-/** The brightest red pixel in a raster — where the mark ended up. */
+/** The brightest red pixel in a raster - where the mark ended up. */
 function brightest(data: Uint8ClampedArray, w: number, h: number): { x: number; y: number; value: number } {
   let best = -1;
   let bx = -1;
@@ -59,7 +59,7 @@ function brightest(data: Uint8ClampedArray, w: number, h: number): { x: number; 
   return { x: bx, y: by, value: best };
 }
 
-describe('rotateImageByAngle — the raster and mapPoint describe ONE rotation', () => {
+describe('rotateImageByAngle - the raster and mapPoint describe ONE rotation', () => {
   it('⚑ puts the marked pixel exactly where mapPoint says, at 90° (where sampling is exact)', () => {
     // At a right angle cos/sin are 0/1, so bilinear sampling lands on a whole
     // pixel and the agreement can be asserted EXACTLY rather than within a
@@ -191,7 +191,7 @@ describe('rotateImageByAngle — the raster and mapPoint describe ONE rotation',
   });
 });
 
-describe('clampCropRect — the boundary between a usable crop and none', () => {
+describe('clampCropRect - the boundary between a usable crop and none', () => {
   it('keeps a rect exactly one pixel wide or tall', () => {
     // ⚑ `width < 1 || height < 1` mutated to `<= 1` and survived: that would
     // reject the smallest legitimate crop. One pixel is the boundary both
@@ -211,7 +211,7 @@ describe('clampCropRect — the boundary between a usable crop and none', () => 
   });
 });
 
-describe('cropImage — the kept region really is the region asked for', () => {
+describe('cropImage - the kept region really is the region asked for', () => {
   it('⚑ copies the requested sub-region pixel for pixel, at the right offset', () => {
     // The copy loops' bounds and the source/destination index arithmetic had
     // six survivors between them (`ry <= c.height`, `rx <= c.width`, `d - 2`,

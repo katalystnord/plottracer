@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 export interface SpreadsheetTableProps {
   series: readonly SpreadsheetSeries[];
-  /** Rows are RAGGED — row i is the i-th point of each series, blank where short. */
+  /** Rows are RAGGED - row i is the i-th point of each series, blank where short. */
   maxRows: number;
   /** How many value columns this graph type has (XY: 2, Bar: 1, Ternary: 3, …). */
   dataDim: number;
@@ -18,7 +18,7 @@ export interface SpreadsheetTableProps {
   mode: string;
   activePointIndex: number | null;
   selectedPointIndices: readonly number[];
-  /** The ACTIVE series' ROW count — rows past it are other series' points. */
+  /** The ACTIVE series' ROW count - rows past it are other series' points. */
   activeSeriesPointCount: number;
   /** Select one point (null clears). Sets both the active and picked point. */
   onSelectPoint: (index: number | null) => void;
@@ -37,7 +37,7 @@ export interface SpreadsheetTableProps {
  * ⚑ A spline-DERIVED sample is not the user's number to type over: the next
  * rebuild regenerates it from the anchors, so an edit there looked like it took
  * and was silently wiped (v0.6 audit). It reads muted + italic and refuses the
- * edit, pointing at the anchors — which ARE editable, and which the curve
+ * edit, pointing at the anchors - which ARE editable, and which the curve
  * follows. A derived row is not selectable either: selecting it made it the
  * nudge/Del target, so an italic read-only row could still be moved with an
  * arrow key.
@@ -85,13 +85,13 @@ export function SpreadsheetTable({
                 // ⚑ An error-cap series renders ONE column (its Δ), not dataDim.
                 // Hardcoding dataDim here spanned the name across two columns
                 // while the body filled one, skewing every column to its right
-                // (David spotted it on screen 2026-08-03 — the e2e asserts values
+                // (David spotted it on screen 2026-08-03 - the e2e asserts values
                 // and counts, not alignment, so nothing else could have).
                 colSpan={
                   (s.deltas.length > 0 ? 1 : dataDim) +
                   (showCategoryColumn ? 1 : 0) +
                   // ⚑ The error columns are the series' OWN columns, so the name
-                  // above them has to span them too — the same off-by-one-column
+                  // above them has to span them too - the same off-by-one-column
                   // skew the Δ column caused when its colSpan was hardcoded.
                   s.errorColumns.length
                 }
@@ -158,7 +158,7 @@ export function SpreadsheetTable({
                 // ⚑⚑ AFTER the series' own value columns, under the word the
                 // user gave the error ('SD upper'). The old table stacked
                 // `SD upper` and `SD lower` as SERIES beside the data, aligned
-                // by ROW INDEX — which implied a pairing the model did not hold
+                // by ROW INDEX - which implied a pairing the model did not hold
                 // and showed point 1's caps against the datum at x = 10. A
                 // column on the datum's own row is the same fact, drawn true.
                 ...s.errorColumns.map((c) => headCell(`${s.index}-err-${c.role}`, c.label, false)),
@@ -170,7 +170,7 @@ export function SpreadsheetTable({
           {Array.from({ length: maxRows }, (_, i) => {
             // ⚑⚑ THE ROW'S PIXEL, not the row number. A datum's caps are pixels
             // of its own series now (B4), so the i-th row of the active series
-            // is no longer its i-th pixel — and every outward call here takes a
+            // is no longer its i-th pixel - and every outward call here takes a
             // PIXEL index. Left as `i` it would select, nudge and delete the
             // point two along, which is a real point, so nothing would look
             // broken. `-1` for a row past this series' end, which no lookup and
@@ -219,7 +219,7 @@ export function SpreadsheetTable({
                 </td>
                 {series.map((s) => {
                   const data = s.values[i];
-                  // This series' pixel for this row — what an edit or a rename
+                  // This series' pixel for this row - what an edit or a rename
                   // addresses. Only the active series is editable, so this and
                   // `activeRowPixel` agree wherever it is used; named per series
                   // so it cannot quietly become the wrong one.
@@ -287,7 +287,7 @@ export function SpreadsheetTable({
                         <td
                           key={`${s.index}-${d}`}
                           data-testid={derived ? `derived-cell-${s.index}-${i}-${d}` : undefined}
-                          title={derived ? 'Derived by the spline from your guide points — move an anchor to change it' : undefined}
+                          title={derived ? 'Derived by the spline from your guide points - move an anchor to change it' : undefined}
                           style={{
                             padding: '1px 8px',
                             borderLeft: d === 0 && !showCategoryColumn ? `1px solid ${theme.color.border.regular}` : 'none',
@@ -314,7 +314,7 @@ export function SpreadsheetTable({
                     // 9's exact failure (docs/generator-input-formats.md). The
                     // export carries the delta alongside.
                     //
-                    // ⚑ Blank, never 0, where a side was never captured — a one
+                    // ⚑ Blank, never 0, where a side was never captured - a one
                     // sided error bar is a real figure, and a printed 0 reads as
                     // a measurement that was taken and came out equal.
                     ...s.errorColumns.map((c, ei) => (

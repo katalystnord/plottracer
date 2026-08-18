@@ -1,22 +1,22 @@
 /**
- * B4 — error caps as EXTENTS ON THE DATUM'S OWN RECORD (v2.3).
+ * B4 - error caps as EXTENTS ON THE DATUM'S OWN RECORD (v2.3).
  *
  * A datum and its caps are ONE tuple of pixels: `[value, upper, lower, left,
- * right]`. This module is the pure half — turning that stored tuple into the
+ * right]`. This module is the pure half - turning that stored tuple into the
  * `ErrorBarPoint` the rest of the app already consumes.
  *
  * ⚑⚑ WHAT THIS REPLACES, AND WHY IT IS A CORRECTNESS FIX RATHER THAN A TIDY-UP.
  * The cap→datum link used to be DERIVED on every read: `matchCapToDatum` handed
  * a cap to whichever datum was nearest along one axis. On David's own capture
  * all four caps sat at x ≈ 4.93, so `nearestIndex` gave every one of them to
- * datum 1 — the table showed point 1's caps beside the datum at x = 10 and a
+ * datum 1 - the table showed point 1's caps beside the datum at x = 10 and a
  * collapsed zero-height pair beside point 1. He could not verify or correct his
  * own capture from the only feedback surface there is, which is a tenet-1
  * failure. **Storing the pairing does not improve the arbitration; it deletes
  * the arbitration.** A defect that cannot be expressed cannot come back.
  *
  * ⚑ IT IS THE BAR MODEL ONE DIMENSION OVER. The dimensional taxonomy calls a bar
- * **1.5D** — a category coordinate plus a value with EXTENT — and it is captured
+ * **1.5D** - a category coordinate plus a value with EXTENT - and it is captured
  * as a tuple of two corner pixels (`BAR_INTERVAL_SLOTS`). A datum with error
  * bars is a 2-D coordinate plus an extent, so it is the same primitive with more
  * members. Nothing new is invented here: `_tuples` in `core/dataset.ts`, the
@@ -27,7 +27,7 @@
  * IMPORTED file (WPD, or any of ours written before this) carries error caps as
  * separate series with no per-point pairing, and the only way to pair them is
  * geometrically. `matchCapToDatum` stays as the IMPORT-BOUNDARY rule it always
- * should have been — translating a foreign model into ours (tenet 6) — rather
+ * should have been - translating a foreign model into ours (tenet 6) - rather
  * than as the model itself.
  */
 import { ERROR_ROLES, ROLE_FIELD, type ErrorBarPoint, type ErrorRole } from './errorBar.js';
@@ -37,7 +37,7 @@ import { ERROR_ROLES, ROLE_FIELD, type ErrorBarPoint, type ErrorRole } from './e
  *
  * ⚑ DERIVED FROM `ERROR_ROLES`, NOT WRITTEN OUT BESIDE IT. A hand-maintained
  * list would be a second registry of the same taxonomy, free to omit a role
- * while every test still passed — which is exactly how v2.2 lost a whole axis
+ * while every test still passed - which is exactly how v2.2 lost a whole axis
  * case. Adding a fifth role to `ERROR_ROLES` extends this automatically.
  *
  * ⚑ Slot names are Title Case because they become COLUMN HEADERS in the data
@@ -52,7 +52,7 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
 /**
  * ⚑⚑ THE ERROR SLOTS ARE ALWAYS THE LAST FOUR, AND THAT IS THE WHOLE MAPPING.
  *
- * Error bars are not an XY feature — `captureErrorCap`'s own header says the
+ * Error bars are not an XY feature - `captureErrorCap`'s own header says the
  * gesture *"works on all 7 graph types, including error on a bar plot"*. A bar
  * series ALREADY has tuples (`['Bar start', 'Bar end']`), so a fixed role→slot
  * table of 1..4 would have written an upper cap straight over 'Bar end' and
@@ -62,7 +62,7 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
  *     XY   ['Value', 'Upper', 'Lower', 'Left', 'Right']           roles at 1..4
  *     Bar  ['Bar start', 'Bar end', 'Upper', 'Lower', … ]         roles at 2..5
  *
- * ⚑ Derivable, so nothing new has to be stored or serialized — the alternative
+ * ⚑ Derivable, so nothing new has to be stored or serialized - the alternative
  * was a per-dataset "where do my error slots begin" field, which is state that
  * can disagree with the thing it describes.
  */
@@ -74,8 +74,8 @@ function errorSlotBase(slotCount: number): number {
  * Does this slot list END IN a full set of error slots?
  *
  * ⚑⚑ IT ASKS THE NAMES, NOT THE COUNT, AND A BOX PLOT IS WHY. Counting was the
- * obvious test — "more slots than a type needs means the extras are error
- * slots" — and it is wrong on the type that would have suffered most: a Box Plot
+ * obvious test - "more slots than a type needs means the extras are error
+ * slots" - and it is wrong on the type that would have suffered most: a Box Plot
  * has FIVE slots, `['Min', 'Q1', 'Median', 'Q3', 'Max']`, so a count-based check
  * puts the error base at 1 and reads **Q1, Median, Q3 and Max as upper, lower,
  * left and right**. Every box in the figure would then export its quartiles as
@@ -123,14 +123,14 @@ export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS
  * is still an XY scatter, and every panel, table and exporter that asks "what
  * shape is this?" must get the type's answer, not the storage's.
  *
- * ⚠️ THIS IS NOT A TIDYING FUNCTION — it is the fix for a silent data loss, and
+ * ⚠️ THIS IS NOT A TIDYING FUNCTION - it is the fix for a silent data loss, and
  * the loss is worth stating because the record was correct the whole time. With
  * the shape question answered by `Dataset.hasSlots()`, an XY point at (5, 5)
  * carrying caps at 7 and 3 met the TUPLE exporter, which prints one column per
- * slot from `data[0]` — the x. It wrote `Value 5 · SD upper 5 · SD lower 5`: the
+ * slot from `data[0]` - the x. It wrote `Value 5 · SD upper 5 · SD lower 5`: the
  * y coordinate and both readings gone, every number in the row plausible.
  *
- * ⚑ CLAUDE.md pattern 1 second time round — *"does this belong to the TYPE, or
+ * ⚑ CLAUDE.md pattern 1 second time round - *"does this belong to the TYPE, or
  * to an AXIS?"* Here: to the TYPE, or to the SERIES. The heatmap collapsed a
  * dimension into a property of a cell; this is the mirror, a property of a
  * series inflating into a property of the type. Same cost: everything
@@ -138,7 +138,7 @@ export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS
  *
  * ⚑ THE SYNTHETIC 'Value'. On a type with no slots of its own, `errorSlotNames`
  * invents one to stand for the datum, because a tuple needs a member 0. It is a
- * placeholder rather than a member — an XY point's columns are X and Y — so it
+ * placeholder rather than a member - an XY point's columns are X and Y - so it
  * is stripped here and such a type reads back as having no slots at all.
  * Recognising it BY NAME is safe only while no real type declares a single slot
  * called 'Value', which is asserted as its own test rather than assumed: a
@@ -151,7 +151,7 @@ export function ownSlotNames(slotNames: readonly string[]): string[] {
   return own.length === 1 && own[0] === ERROR_EXTENT_SLOTS[0] ? [] : own;
 }
 
-/** The error tail's slot names — what the user called the error, once per role
+/** The error tail's slot names - what the user called the error, once per role
  * ('SD upper', 'SD lower', …). Empty for a series carrying no error, so a
  * caller can concatenate it unconditionally. */
 export function errorTailNames(slotNames: readonly string[]): string[] {
@@ -163,10 +163,10 @@ export function errorTailNames(slotNames: readonly string[]): string[] {
  * members, then one per role.
  *
  * ⚑ THE ROLE SLOTS CARRY THE USER'S OWN WORD, and that is where the meaning of
- * the error went. The original design refused an `errorKind` field on purpose —
+ * the error went. The original design refused an `errorKind` field on purpose -
  * *"the kind is not in the geometry, it is in the figure's caption, so we could
  * only ask the user to type it, and asking means offering a default, which is
- * LabPlot's ±30 all over again"* — and put the meaning in the NAME of the error
+ * LabPlot's ±30 all over again"* - and put the meaning in the NAME of the error
  * series the user wrote ("SD", "SEM", "CI95"). Folding caps into the datum's
  * record removes that series, so without this the meaning would have been lost
  * in the refactor: a column headed 'Upper' says nothing about what it measures.
@@ -182,7 +182,7 @@ export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Val
  * Read the stored tuples into one `ErrorBarPoint` per captured datum.
  *
  * `pointAt` resolves a tuple member (a pixel index) to its DATA-space position,
- * or null when that member was never captured — which is why nothing here does
+ * or null when that member was never captured - which is why nothing here does
  * geometry: the pairing arrives already decided.
  *
  * ⚑ A MISSING MEMBER IS OMITTED, NEVER ZEROED. A tuple is legitimately
@@ -190,8 +190,8 @@ export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Val
  * `yLower: 0` would be a fabricated measurement sitting in the record wearing
  * the same clothes as a real one (tenet 9).
  *
- * ⚑ A tuple with no DATUM yields nothing at all. The card states the invariant —
- * *"an error bar hangs off a data point"* — and an extent with nothing to hang
+ * ⚑ A tuple with no DATUM yields nothing at all. The card states the invariant -
+ * *"an error bar hangs off a data point"* - and an extent with nothing to hang
  * off is a coordinate, not a measurement.
  */
 export function errorBarsFromTuples(
@@ -221,7 +221,7 @@ export function errorBarsFromTuples(
   return bars;
 }
 
-/** A datum's error as SIGNED OFFSETS from its own value — the `yerr` form. */
+/** A datum's error as SIGNED OFFSETS from its own value - the `yerr` form. */
 export interface ErrorDeltas {
   yUpper?: number;
   yLower?: number;
@@ -238,15 +238,15 @@ export interface ErrorDeltas {
  * `geom_errorbar(aes(ymin, ymax))` takes the positions outright. Carrying both
  * means neither consumer has to do arithmetic on the record.
  *
- * ⚑ SIGNED BY ROLE, not by magnitude — `upper`/`right` positive, `lower`/`left`
- * negative — so the two columns of an asymmetric bar can be told apart at a
+ * ⚑ SIGNED BY ROLE, not by magnitude - `upper`/`right` positive, `lower`/`left`
+ * negative - so the two columns of an asymmetric bar can be told apart at a
  * glance. (matplotlib itself refuses negative `yerr`, taking direction from
  * which ROW a magnitude sits in; our column is labelled, so the sign is free
  * information rather than a contradiction.)
  *
  * ⚠️⚠️ AN ABSENT SIDE IS OMITTED, NEVER ZERO, and this is the whole reason the
  * ABSOLUTES are the record and these are a projection. In the delta form "no
- * lower bound" and "a lower bound of size zero" are the same number — measured:
+ * lower bound" and "a lower bound of size zero" are the same number - measured:
  * matplotlib CRASHES on `NaN` in `yerr` and silently accepts `0`, drawing a cap
  * sitting exactly on the value. A record shaped like this would make a
  * measurement we never took indistinguishable from one we did, and it would look

@@ -1,5 +1,5 @@
 /**
- * Colour filter — checkpoint 117, the foundation of v0.6 auto-extraction.
+ * Colour filter - checkpoint 117, the foundation of v0.6 auto-extraction.
  *
  * The first stage of WebPlotDigitizer's auto-extraction pipeline
  * (region mask -> COLOUR FILTER -> binary mask -> algorithm -> points), adapted

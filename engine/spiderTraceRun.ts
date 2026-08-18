@@ -1,11 +1,11 @@
 /**
- * Spider colour-trace orchestration (v1.4) — the policy layer on top of
+ * Spider colour-trace orchestration (v1.4) - the policy layer on top of
  * algorithms/spiderTrace.ts, the sibling of engine/colorTraceRun.ts.
  *
  * The generic colour trace reduces a mask one point per COLUMN, which is a curve
  * tool: on a radar chart it would return the polygon's outline as a sideways
  * scribble, with no idea which axis any of it belonged to. Here the calibrated rays
- * do the reducing — one reading per axis, read where the series crosses that axis,
+ * do the reducing - one reading per axis, read where the series crosses that axis,
  * which is the only place a radar chart states a number.
  *
  * ⚑ ASSIST, NEVER SWEEP. This returns one READING per spoke, each carrying why it
@@ -19,13 +19,13 @@ import { traceSpiderAlongSpokes, type SpiderTraceOptions, type SpokeRun } from '
 import type { SpiderAxes } from '../core/axes/spider.js';
 
 export interface SpiderReading {
-  /** Spoke index — the slot / table row this reading belongs to. */
+  /** Spoke index - the slot / table row this reading belongs to. */
   index: number;
   /** The axis's name, for the message. Empty when the figure's was illegible. */
   name: string;
   /** Image pixel to record, or null where nothing is offered. */
   point: { x: number; y: number } | null;
-  /** The value that pixel reads on THIS axis's scale — for the report only; the
+  /** The value that pixel reads on THIS axis's scale - for the report only; the
    * record still derives it from the stored pixel, as every other capture does. */
   value: number | null;
   /** Null when a single unambiguous crossing was found. */
@@ -49,7 +49,7 @@ const MIN_MATCHED_PIXELS = 3;
  * The bounding box of the calibrated spider, as a FilterRegion: the centre plus
  * every spoke's known point, grown by the overshoot the tracer itself looks
  * through. Radar charts put the axis LABELS outside that box in the same ink the
- * grid uses, so a first pass stays inside the web — and, like the XY plot box, it
+ * grid uses, so a first pass stays inside the web - and, like the XY plot box, it
  * stays visible and adjustable rather than being applied invisibly.
  */
 export function spiderBoxRegion(axes: SpiderAxes | null | undefined, overshoot = 0.15): FilterRegion | null {
@@ -75,7 +75,7 @@ export function spiderBoxRegion(axes: SpiderAxes | null | undefined, overshoot =
  * Walk every calibrated ray through the colour mask and report what crosses it.
  *
  * Fails with a clear message rather than offering a near-empty trace when almost
- * nothing matched — the same rule runColorTrace follows, and for the same reason:
+ * nothing matched - the same rule runColorTrace follows, and for the same reason:
  * an empty result the user has to interpret is worse than being told to repick.
  */
 export function runSpiderTrace(
@@ -90,7 +90,7 @@ export function runSpiderTrace(
   options?: SpiderTraceOptions
 ): SpiderTraceRunResult {
   if (!axes?.isCalibrated()) {
-    return { error: 'Calibrate the axes first — a trace along the rays needs them.' };
+    return { error: 'Calibrate the axes first - a trace along the rays needs them.' };
   }
   const { mask, count } = colorFilter(data, width, height, target, tolerance, mode, region);
   if (count < MIN_MATCHED_PIXELS) {

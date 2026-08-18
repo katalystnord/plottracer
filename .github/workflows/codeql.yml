@@ -7,7 +7,7 @@ name: CodeQL
 # it can follow a value from where it enters the program to where it is used,
 # across files and functions. That is the one question none of the other
 # instruments here can answer, and it is exactly the shape of this project's
-# recurring defect — a value from a FILE reaching arithmetic without passing a
+# recurring defect - a value from a FILE reaching arithmetic without passing a
 # guard (see the pie total that arrived as NaN and calibrated successfully).
 #
 # Free for public repositories. Results land in the Security tab.

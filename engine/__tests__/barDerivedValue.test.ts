@@ -10,7 +10,7 @@ import { Calibration } from '../../core/calibration.js';
 import { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * A bar's VALUE — the sign convention — and the file-load door that refuses a
+ * A bar's VALUE - the sign convention - and the file-load door that refuses a
  * calibration which cannot produce one.
  *
  * ⚑ WHY THIS FILE EXISTS. Two of the hottest unnoticed lines in
@@ -20,7 +20,7 @@ import { BarAxes } from '../../core/axes/bar.js';
  * and both decide a NUMBER that reaches the export.
  *
  * `barCalibrationValueCheck` is the mirror of the refusal
- * `BarAxes.calibrate()` performs — declared on the config so a LOADED FILE
+ * `BarAxes.calibrate()` performs - declared on the config so a LOADED FILE
  * meets it too, because `plotData.deserialize` calls `calibrate()` directly
  * and never inspects its return value. The axes-level half was pinned when it
  * was written; this is the config-level half, on all three types that share
@@ -35,7 +35,7 @@ function barCal(v1: string, v2: string): Calibration {
   return cal;
 }
 
-describe('barCalibrationValueCheck — the refusal a LOADED file must also meet', () => {
+describe('barCalibrationValueCheck - the refusal a LOADED file must also meet', () => {
   // All three types share BarAxes and therefore share this check.
   const sharing = [
     ['Bar', BAR_AXES_CONFIG],
@@ -107,7 +107,7 @@ function barValue(s: CalibrationSession<BarAxes>, x: number, y0: number, y1: num
   return rows[rows.length - 1]!.derived;
 }
 
-describe("a bar's value — the sign convention", () => {
+describe("a bar's value - the sign convention", () => {
   it('measures from the declared BASELINE to the far end, not between the corners', () => {
     // Default: baseline shared at 0. A bar drawn from the baseline up to 5
     // reads 5 whichever end was dragged first.

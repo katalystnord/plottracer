@@ -5,7 +5,7 @@ import { CalibrationSession, HEATMAP_AXES_CONFIG, XY_AXES_CONFIG } from '../cali
  * EDITING A CALIBRATION VALUE AFTER IT IS PLACED.
  *
  * ⚑⚑ THERE WAS NO WAY TO. `updateCalibPointPixel` moves a placed point's
- * GEOMETRY — you can drag a calibration handle on the canvas — but nothing ever
+ * GEOMETRY - you can drag a calibration handle on the canvas - but nothing ever
  * set its VALUES. Once confirmed, the number was frozen until Reset
  * calibration threw the whole walk away.
  *
@@ -15,13 +15,13 @@ import { CalibrationSession, HEATMAP_AXES_CONFIG, XY_AXES_CONFIG } from '../cali
  * even?"* His only route was to discard eight clicks and six numbers and start
  * again.
  *
- * ⚑ NOT a heatmap defect — every type has had it. It bites hardest here because
+ * ⚑ NOT a heatmap defect - every type has had it. It bites hardest here because
  * the walk is eight steps rather than four, and because the colour key's two
  * labelled ticks are the easiest numbers in the app to get wrong.
  *
  * ⚑ It is also the inconsistency David named for cells: every other value in
  * the app is editable where it is shown. A data point's value can be edited in
- * the table — and editing it MOVES the point. A category name can be renamed.
+ * the table - and editing it MOVES the point. A category name can be renamed.
  * The calibration value, which everything else is measured against, could not.
  */
 
@@ -56,7 +56,7 @@ describe('a placed calibration value can be corrected', () => {
 
   it('unblocks the log colour key that had no way out', () => {
     // David's case exactly: a key value of 0 typed on a linear key, then Log
-    // switched on — refused, with no way to enter the positive value it asks
+    // switched on - refused, with no way to enter the positive value it asks
     // for. Correcting the value now makes the same calibration succeed.
     const s = walked();
     s.setOption('isLogValue', 'true');
@@ -71,7 +71,7 @@ describe('a placed calibration value can be corrected', () => {
   it('REFUSES a value the walk itself would not have accepted', () => {
     // ⚑ The same guard at both entrances. `confirmCalibrationValues` requires a
     // value for every non-optional field; an edit that could bypass that would
-    // be a second door into the model with a weaker lock — the shape this
+    // be a second door into the model with a weaker lock - the shape this
     // project has been bitten by four times.
     const s = walked();
     expect(s.setCalibrationValues('kv1', [''])).toBe(false);
@@ -93,7 +93,7 @@ describe('a placed calibration value can be corrected', () => {
     expect(s.getAxes()!.pixelToData(250, 200)).toEqual([5, 10]);
 
     expect(s.setCalibrationValues('x2', ['20'])).toBe(true);
-    // The axes moved with it — no second Calibrate press.
+    // The axes moved with it - no second Calibrate press.
     expect(s.getAxes()!.pixelToData(250, 200)).toEqual([10, 10]);
   });
 

@@ -10,7 +10,7 @@ import {
 } from '../calibrationSession.js';
 
 /**
- * Checkpoint 84 — the calibration's own geometry, drawn.
+ * Checkpoint 84 - the calibration's own geometry, drawn.
  *
  * Until now we drew the handles and nothing between them, so a mis-clicked
  * handle gave a wrong-but-plausible chart with nothing on screen wrong.
@@ -20,7 +20,7 @@ const cfg = (axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr', keys:
   steps: keys.map((key, i) => ({ key, color: `#00000${i}` })),
 });
 
-describe('calibrationPreview — what the user implied', () => {
+describe('calibrationPreview - what the user implied', () => {
   it('joins X1->X2 and Y1->Y2 on an XY chart', () => {
     const p = calibrationPreview(cfg('xy', ['x1', 'x2', 'y1', 'y2']), {
       x1: { px: 100, py: 300 },
@@ -35,7 +35,7 @@ describe('calibrationPreview — what the user implied', () => {
     expect(p.circles).toEqual([]);
   });
 
-  it('is PROGRESSIVE — each pair draws as soon as its own points exist', () => {
+  it('is PROGRESSIVE - each pair draws as soon as its own points exist', () => {
     // WPD gates on getCount()===4: nothing appears until the last click. Each
     // pair here is independent, so you see the X axis you implied before you
     // have started on Y.
@@ -76,7 +76,7 @@ describe('calibrationPreview — what the user implied', () => {
     ]);
   });
 
-  it('fits BOTH CCR circles from the 5 clicks — the case nobody can eyeball', () => {
+  it('fits BOTH CCR circles from the 5 clicks - the case nobody can eyeball', () => {
     // Points on a unit circle about (100,100): the pen arc through 3 of them and
     // the chart circle through 3 more, sharing t0r2 exactly as WPD does.
     const on = (deg: number, r: number) => ({
@@ -123,7 +123,7 @@ describe('calibrationPreview — what the user implied', () => {
   });
 });
 
-describe('getCalibrationPreview — live off the real session', () => {
+describe('getCalibrationPreview - live off the real session', () => {
   function place(session: CalibrationSession<never>, pts: Array<[number, number, string[]]>) {
     for (const [px, py, values] of pts) {
       expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
@@ -142,7 +142,7 @@ describe('getCalibrationPreview — live off the real session', () => {
     expect(s.getCalibrationPreview().segments).toHaveLength(1);
   });
 
-  it('follows a dragged handle — it is live, not a snapshot', () => {
+  it('follows a dragged handle - it is live, not a snapshot', () => {
     const s = new CalibrationSession(XY_AXES_CONFIG);
     place(s as never, [
       [100, 300, ['0']],
@@ -152,7 +152,7 @@ describe('getCalibrationPreview — live off the real session', () => {
     expect(s.getCalibrationPreview().segments[0]!.to).toEqual({ x: 500, y: 280 });
   });
 
-  it('Histogram gets it for free — gated on axesKind, not config.id', () => {
+  it('Histogram gets it for free - gated on axesKind, not config.id', () => {
     // Checkpoint 73's rule. Histogram declares axesKind 'xy', so it needs no
     // entry of its own and cannot be forgotten.
     const s = new CalibrationSession(HISTOGRAM_AXES_CONFIG);

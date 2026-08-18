@@ -1,5 +1,5 @@
 /**
- * Multi-format table rendering (v0.8) — the one place a table of extracted
+ * Multi-format table rendering (v0.8) - the one place a table of extracted
  * values becomes CSV / TSV / LaTeX / MATLAB / Python / R text, so PlotDigitizer
  * export parity (David) is a rendering choice, not a second copy of every
  * per-chart-type builder. engine/csvExport.ts builds the SECTIONS (what the
@@ -8,7 +8,7 @@
  * A document is a list of SECTIONS, each an optionally-titled table. Sections
  * exist so derived data stays SEPARATED from the record (David, tenet 9): the
  * raw traced points are one section, and a curve fit's summary + its sampled
- * curve are their own sections — a reader lifts just the data, or just the fit,
+ * curve are their own sections - a reader lifts just the data, or just the fit,
  * without untangling them. This is the same "labelled block appended after the
  * data" shape the Measurements export has always used.
  *
@@ -47,7 +47,7 @@ function isNumeric(c: Cell): c is number {
 
 /** Collapse newlines so a value is safe inside a single-line comment
  * (LaTeX `%`, MATLAB `%`, Python `#`). A label pasted with an embedded newline
- * would otherwise break out of the comment and turn the tail into live code — a
+ * would otherwise break out of the comment and turn the tail into live code - a
  * syntax error on paste. Audit #4 hardened the DATA cells against this; the
  * comment headers that echo the same titles/labels were missed (v0.8 follow-up). */
 function commentSafe(value: Cell): string {
@@ -61,14 +61,14 @@ function commentSafe(value: Cell): string {
  * Cells a spreadsheet would execute rather than display.
  *
  * ⚑ A leading `=`, `+`, `-` or `@` makes Excel, LibreOffice and Sheets treat
- * the cell as a FORMULA. Our labels are attacker-controlled — every importer
- * takes series and category names verbatim from someone else's file — so a
+ * the cell as a FORMULA. Our labels are attacker-controlled - every importer
+ * takes series and category names verbatim from someone else's file - so a
  * name like `=cmd|'/C calc'!A0` rides into the CSV as executable content.
  *
  * The fix is the standard one and it is lossless: prefix a single quote, which
  * every spreadsheet strips on display and which a plain CSV reader sees as one
  * extra character. NOT applied to numbers, which cannot be dangerous and would
- * be corrupted by it — and not needed in .ods/.xlsx, where the writers declare
+ * be corrupted by it - and not needed in .ods/.xlsx, where the writers declare
  * a string type (odsExport's `office:value-type`, exceljs's plain string), so
  * only the type-free text formats need it. (Round-2 audit.)
  */
@@ -153,7 +153,7 @@ function varName(title: string | undefined, fallback: string): string {
 }
 
 /** MATLAB/Python/LaTeX spellings for the non-finite doubles. R has its own
- *  (rScalar), which is where the case was first recognised — and then missed
+ *  (rScalar), which is where the case was first recognised - and then missed
  *  everywhere else, so a single Infinity made the whole exported script
  *  unparseable rather than merely odd. (Round-2 audit.) */
 function nonFinite(n: number, inf: string, negInf: string, nan: string): string | null {

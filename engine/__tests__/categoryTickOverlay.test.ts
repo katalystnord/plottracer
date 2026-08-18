@@ -19,7 +19,7 @@ import {
  *
  * ⚑ These are the two halves that would otherwise sit in `ui/`, where mutation
  * testing cannot reach them and the only instrument is a 20-minute Electron
- * run. Everything here is about what is DRAWN and what is ASKED — no assertion
+ * run. Everything here is about what is DRAWN and what is ASKED - no assertion
  * in this file should ever be about a measured value, because ticks decide none.
  */
 
@@ -58,7 +58,7 @@ describe('the drawn axis', () => {
     expect(t2).toEqual({ from: { x: 475, y: 500 }, to: { x: 475, y: 514 } });
   });
 
-  it('⚑ ticks stand off DOWNWARD on an upright chart — where a figure prints them', () => {
+  it('⚑ ticks stand off DOWNWARD on an upright chart - where a figure prints them', () => {
     const tick = categoryAxisGlyphs({ edges: H, tickPoints: [{ x: 300, y: 500 }] })[0]![3]!;
     expect(tick.to.y).toBeGreaterThan(tick.from.y);
     expect(tick.to.x).toBe(tick.from.x);
@@ -89,8 +89,8 @@ describe('the drag handles', () => {
     const ticks = markers.filter((m) => categoryTickIndexFromId(m.id) !== null);
     expect(ticks).toHaveLength(2);
     // ⚑ The handle stands off at the OUTER END of its tick, not on the axis
-    // line: it stays bound to the axis by the mark itself, and on a heatmap —
-    // where two axes meet at the plot corner — it is what stops an x boundary
+    // line: it stays bound to the axis by the mark itself, and on a heatmap -
+    // where two axes meet at the plot corner - it is what stops an x boundary
     // and a y boundary at the origin landing on the same pixel.
     expect(ticks[0]).toMatchObject({ id: 'categoryTick0', x: 225, y: 514, draggable: true });
     expect(ticks[1]!.id).toBe('categoryTick1');
@@ -109,7 +109,7 @@ describe('the drag handles', () => {
     expect(end).toMatchObject({ x: 600, y: 500, label: 'Categories end' });
   });
 
-  it('⚑ but the ends are NOT draggable — visible is not the same as grabbable', () => {
+  it('⚑ but the ends are NOT draggable - visible is not the same as grabbable', () => {
     // Every tick is a function of the two edges, so dragging one rescales them
     // all and discards any the user adjusted. Re-placing the axis lives in the
     // fold-out, where it can warn first.
@@ -122,7 +122,7 @@ describe('the drag handles', () => {
     expect(categoryTickIndexFromId('categoryAxisEnd')).toBeNull();
   });
 
-  it('⚑ does not wear the calibration amber — P1 sits on the very same pixel', () => {
+  it('⚑ does not wear the calibration amber - P1 sits on the very same pixel', () => {
     // Two different kinds of thing in one place must not wear one uniform.
     expect(CATEGORY_TICK_COLOR).not.toBe('#e0a458');
   });
@@ -142,7 +142,7 @@ describe('the fold-out only offers itself when it can do something', () => {
     expect(panel({ supported: false }).phase).toBe('unavailable');
   });
 
-  it('⚑ is unavailable until the value axis is calibrated — it never gates it', () => {
+  it('⚑ is unavailable until the value axis is calibrated - it never gates it', () => {
     expect(panel({ isCalibrated: false }).phase).toBe('unavailable');
   });
 
@@ -165,7 +165,7 @@ describe('what the fold-out asks for', () => {
     const v = panel({ seedPixel: { px: 100, py: 500 } });
     expect(v.canReuseSeed).toBe(true);
     expect(v.prompt).toBe(
-      'Click where the categories end. P1 (the amber handle) is being reused as the start — press Re-place axis if that is wrong.'
+      'Click where the categories end. P1 (the amber handle) is being reused as the start - press Re-place axis if that is wrong.'
     );
   });
 
@@ -214,8 +214,8 @@ describe('the regenerate warning', () => {
 describe('the words on screen', () => {
   it('the summary invites the user in, then reports what is declared', () => {
     expect(categoryPanelSummary(false, 0)).toBe('Mark category ticks?');
-    expect(categoryPanelSummary(true, 1)).toBe('Category ticks — 1 category');
-    expect(categoryPanelSummary(true, 5)).toBe('Category ticks — 5 categories');
+    expect(categoryPanelSummary(true, 1)).toBe('Category ticks - 1 category');
+    expect(categoryPanelSummary(true, 5)).toBe('Category ticks - 5 categories');
   });
 
   it('names both conventions in the figure’s terms, not ours', () => {
@@ -235,7 +235,7 @@ describe('⚑ a refused mark says why (review #10)', () => {
     // prompt was unchanged, and the app simply appeared to ignore the user.
     const msg = categoryMarkMessage('too-close');
     expect(msg).toBe(
-      'That is the same point as the start of the axis — click where the categories END, further along.'
+      'That is the same point as the start of the axis - click where the categories END, further along.'
     );
   });
 
@@ -246,7 +246,7 @@ describe('⚑ a refused mark says why (review #10)', () => {
 });
 
 
-describe('⚑⚑ "Re-place axis" can place BOTH ends — the walk that was unreachable', () => {
+describe('⚑⚑ "Re-place axis" can place BOTH ends - the walk that was unreachable', () => {
   const seed = { px: 100, py: 500 };
 
   it('reuses P1 by default, which is the one-click offer', () => {
@@ -255,7 +255,7 @@ describe('⚑⚑ "Re-place axis" can place BOTH ends — the walk that was unrea
     expect(v.prompt).toContain('P1 (the amber handle) is being reused');
   });
 
-  it('⚑⚑ it names the handle THIS TYPE actually has — a Line has no P1', () => {
+  it('⚑⚑ it names the handle THIS TYPE actually has - a Line has no P1', () => {
     // ⚠️ FOUND BY DRIVING THE BUILT APP, and it is gate 4's exact class: *"a
     // walkthrough test may only click what a prompt on screen tells it to
     // click."* Extending category ticks to categorical Line (v2.3) gave a chart
@@ -327,7 +327,7 @@ describe('⚑ the two capabilities that were documented only in MANUAL (v2.1 aud
 });
 
 /**
- * A DIVIDER IS AN AID, NOT A PRECISE REFERENCE — and the drawing has to say so.
+ * A DIVIDER IS AN AID, NOT A PRECISE REFERENCE - and the drawing has to say so.
  *
  * ⚑⚑ Both a bar chart's category ticks and a heatmap's grid boundaries were
  * marked `kind: 'calibration'`, which renders the CROSSHAIR RETICLE that exists,
@@ -337,8 +337,8 @@ describe('⚑ the two capabilities that were documented only in MANUAL (v2.1 aud
  * once: that a divider adjusted by eye carries a calibration point's authority,
  * and that a calibration point may be dragged as casually as a divider.
  *
- * ⚑ It is the TWO-LAYER MODEL made visible — calibration points ARE the axis,
- * the grid DERIVES from them (agreed 2026-08-13) — which is why it is the same
+ * ⚑ It is the TWO-LAYER MODEL made visible - calibration points ARE the axis,
+ * the grid DERIVES from them (agreed 2026-08-13) - which is why it is the same
  * change on both types rather than a heatmap tweak.
  *
  * ⚑ B1/B2 fall out of the same distinction: under `edge` the derived end
@@ -369,7 +369,7 @@ describe('the weight of a tick handle', () => {
   });
 
   it('keeps the AXIS ENDS as calibration marks, because that is what they are', () => {
-    // ⚑ The two edges are not adjustable — every tick is a function of them, and
+    // ⚑ The two edges are not adjustable - every tick is a function of them, and
     // they are non-draggable for exactly that reason. They ARE references, so
     // they keep the reference mark. The distinction is authority, not decoration.
     const markers = categoryTickMarkers({ edges, tickPoints: [{ x: 160, y: 300 }] });

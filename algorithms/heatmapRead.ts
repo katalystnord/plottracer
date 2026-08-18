@@ -1,5 +1,5 @@
 /**
- * Reading a heatmap — the grid, the image and the key, turned into the record
+ * Reading a heatmap - the grid, the image and the key, turned into the record
  * (v2.2, phase 3).
  *
  * ⚑ THE RECORD IS A MATRIX OF VALUES, and each row of it is
@@ -22,8 +22,8 @@
  *
  * The third is this file's own contribution and it catches what the other two
  * cannot: a cell with a printed number in it, a significance asterisk, a
- * hatch, a border eating the sample. Its colour may sit exactly on the ramp —
- * distance 0, a tight band, total confidence — while a third of the cell is ink
+ * hatch, a border eating the sample. Its colour may sit exactly on the ramp -
+ * distance 0, a tight band, total confidence - while a third of the cell is ink
  * that is not data. Uniformity is the only signal that says so.
  *
  * ⚑ STILL A RECORDING, NOT AN INTERPRETATION. Nothing here decides that a cell
@@ -48,7 +48,7 @@ export interface ReadHeatmapOptions {
    *
    * ⚑ NOT COSMETIC. A cell's border is drawn ON the boundary, and an
    * anti-aliased border blends the two neighbouring colours into something that
-   * is on neither — a colour that inverts to a position between two cells and
+   * is on neither - a colour that inverts to a position between two cells and
    * reports itself as a confident reading of a value the figure never printed.
    * Insetting is what keeps the sample inside the thing being measured.
    */
@@ -71,7 +71,7 @@ export interface HeatmapCellReading {
   yMin: number;
   yMax: number;
   /**
-   * The centre of the DRAWN cell, in data coordinates — the midpoint in PIXELS
+   * The centre of the DRAWN cell, in data coordinates - the midpoint in PIXELS
    * mapped back, not the average of the bounds.
    *
    * ⚑ On a linear axis the two agree exactly and the distinction is invisible.
@@ -82,7 +82,7 @@ export interface HeatmapCellReading {
    */
   xCentre: number;
   yCentre: number;
-  /** The colour actually sampled — kept so a caller can show the user what was
+  /** The colour actually sampled - kept so a caller can show the user what was
    * read, which is the only way to check a colour reading by eye. */
   rgb: RGB;
   /** Null when the cell could not be sampled at all (entirely off-image, or
@@ -92,14 +92,14 @@ export interface HeatmapCellReading {
   /** Other values this cell's colour is equally consistent with (a cyclic key, a
    * key that revisits a colour). Non-empty means AMBIGUOUS, not imprecise. */
   rivals: readonly ColorValueBand[];
-  /** The reading sits against an END of the key, so the cell may be CLIPPED —
+  /** The reading sits against an END of the key, so the cell may be CLIPPED -
    * see `ColorValueReading.atKeyLimit`. The one wrong value distance and
    * uniformity cannot see. */
   atKeyLimit: boolean;
   /**
    * The fraction of the cell's sampled pixels that match the colour we read, to
    * within the noise floor. 1 for a flat printed cell; lower for a cell carrying
-   * a number, an asterisk, a hatch — or for a smooth field, where it is not a
+   * a number, an asterisk, a hatch - or for a smooth field, where it is not a
    * fault at all but the honest statement that the cell is not one colour.
    */
   uniformity: number;
@@ -110,7 +110,7 @@ export interface HeatmapCellReading {
 /**
  * Read every cell of the grid.
  *
- * Returns null only when the grid itself is unusable — a caller never gets a
+ * Returns null only when the grid itself is unusable - a caller never gets a
  * partial matrix, because a matrix missing its edge cells looks complete.
  */
 export function readHeatmap(
@@ -159,12 +159,12 @@ function readCell(
   for (let i = 0; i < maxPerAxis; i++) {
     for (let j = 0; j < maxPerAxis; j++) {
       // Sample on a lattice across the cell in DATA space, inset from its edges,
-      // then project each point — so a rotated or log-scaled cell is still
+      // then project each point - so a rotated or log-scaled cell is still
       // sampled across its own interior rather than across a screen rectangle.
       //
       // ⚠️⚠️ KNOWN LIMITATION, DELIBERATELY LEFT (v2.2, David's call): THIS
       // LATTICE IS REGULAR, SO A REGULAR OVERLAY CAN ALIAS WITH IT. Measured on
-      // 2026-08-12 after David asked whether hatched heatmaps exist — they do,
+      // 2026-08-12 after David asked whether hatched heatmaps exist - they do,
       // and stippling to mark significance is common in climate and
       // epidemiology figures. A hatch covering up to about a third of a cell is
       // read CORRECTLY and flagged by `uniformity`. At half coverage the two
@@ -173,14 +173,14 @@ function readCell(
       // every sample landed on ONE PHASE of the pattern.
       //
       // What that costs: with an off-ramp hatch (black over colour) `distance`
-      // shouts — 190 RGB units in the measurement. With a hatch that is ITSELF
-      // on the ramp — a grey hatch over a grey key — the reading comes back
+      // shouts - 190 RGB units in the measurement. With a hatch that is ITSELF
+      // on the ramp - a grey hatch over a grey key - the reading comes back
       // exact, uniform and wrong, which is the same silent class as a clipped
       // cell and the one this module exists to prevent.
       //
       // ▶ THE FIX WHEN IT IS TIME: make the lattice incommensurate with any
-      // periodic pattern — a coprime sample count, or a deterministic sub-pixel
-      // jitter per row — so no stride can hold one phase. Do NOT "fix" it by
+      // periodic pattern - a coprime sample count, or a deterministic sub-pixel
+      // jitter per row - so no stride can hold one phase. Do NOT "fix" it by
       // raising `maxPerAxis`: a denser regular lattice aliases just as cleanly
       // against a finer pattern.
       const u = lerpFraction(i, maxPerAxis, inset);
@@ -230,7 +230,7 @@ function readCell(
 /**
  * The centre as a data coordinate. The projector only goes data → pixel, so the
  * pixel midpoint is turned back into data by interpolating the cell's own
- * corners — which is exact for the affine case and is what "the middle of this
+ * corners - which is exact for the affine case and is what "the middle of this
  * block of ink" means on any monotone axis.
  */
 function centreInData(axes: PixelProjector, cell: HeatmapCell): {
@@ -254,7 +254,7 @@ function centreInData(axes: PixelProjector, cell: HeatmapCell): {
  * ⚑ THE FIRST VERSION WAS CIRCULAR and its test caught it: it projected the
  * ARITHMETIC mean of the bounds and then searched for the data value that lands
  * there, which is the arithmetic mean by construction. It returned 50.5 for a
- * log cell running 1 to 100 — the answer the whole function exists to avoid —
+ * log cell running 1 to 100 - the answer the whole function exists to avoid -
  * and would have agreed with the naive midpoint on every axis, forever.
  *
  * Falls back to the arithmetic midpoint when the projection cannot be used at

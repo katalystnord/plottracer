@@ -1,7 +1,7 @@
 import { theme } from '../theme.js';
 
 /**
- * The heatmap's GRID DEFINITION — a fold-down on the calibration card (v2.2).
+ * The heatmap's GRID DEFINITION - a fold-down on the calibration card (v2.2).
  *
  * ⚑⚑ WHERE THIS LIVES IS THE POINT. It was a sidebar card holding both the
  * inputs AND the extracted cells; David: *"where we assign columns and rows, I
@@ -9,7 +9,7 @@ import { theme } from '../theme.js';
  * we did for bars… Because it is part of setting up the data definition /
  * calibration. NOT outputs."* So the counts, the boundaries and the names sit
  * with the calibration that defines them, and the cells went to the Cells panel
- * where every other type's output already is — the split the rail fold-out
+ * where every other type's output already is - the split the rail fold-out
  * redesign settled and marked LOCKED, which this card had quietly broken.
  *
  * ⚑ EVERY DECISION IS IN `engine/heatmapRun.ts`; this file is a button, two
@@ -18,7 +18,7 @@ import { theme } from '../theme.js';
  * only other thing that can is an 18-minute Electron run.
  *
  * ⚑ THE STATUS LINE IS NOT DECORATION. In a heatmap the colour IS the value, so
- * a wrong cell has no other symptom — nothing missing, nothing misplaced, no
+ * a wrong cell has no other symptom - nothing missing, nothing misplaced, no
  * refusal. The whole apparatus underneath measures whether each cell can vouch
  * for itself; if that never reached the screen it would have been for nothing.
  * So the summary says how many need a look, and every flagged cell says why in
@@ -26,7 +26,7 @@ import { theme } from '../theme.js';
  */
 
 export interface HeatmapCardProps {
-  /** Columns and rows the user says the figure has — a CHECK on detection, never
+  /** Columns and rows the user says the figure has - a CHECK on detection, never
    * a target. Blank means "no declaration", and detection then offers whatever
    * it found. */
   /**
@@ -44,12 +44,12 @@ export interface HeatmapCardProps {
   gridSize: { columns: number; rows: number } | null;
   onDetect: () => void;
   onOverlayEvenGrid: () => void;
-  /** Add a boundary on one axis — it lands in the middle of the widest cell,
+  /** Add a boundary on one axis - it lands in the middle of the widest cell,
    * which is where a boundary detection missed almost always belongs. */
   onAddColumnBoundary: () => void;
   onAddRowBoundary: () => void;
   /** The boundary whose handle the user clicked on the figure, in the figure's
-   * own units — null when none is picked. */
+   * own units - null when none is picked. */
   selectedBoundary: { axis: 'x' | 'y'; value: number } | null;
   onRemoveBoundary: () => void;
   /** False when removing it would leave the axis with no cell at all; the button
@@ -61,7 +61,7 @@ export interface HeatmapCardProps {
   yLabels: string;
   onLabelsChange: (xLabels: string, yLabels: string) => void;
   /** Blur handler: a text edit becomes one undo entry when it ENDS, never one
-   * per keystroke — the same rule every other text field here follows. */
+   * per keystroke - the same rule every other text field here follows. */
   onCommitPendingEdit: () => void;
   /** "3 of 5 named", or a warning that there are more names than cells. Empty
    * before anything has been typed. */
@@ -71,15 +71,15 @@ export interface HeatmapCardProps {
   /**
    * What a count or convention change would cost, and any disagreement the grid
    * already has with the declared counts (C3/C4). Null when there is nothing to
-   * say — the bar chart's rule, written on its own `regenerateWarning`: a
+   * say - the bar chart's rule, written on its own `regenerateWarning`: a
    * warning that appears when nothing would be discarded teaches the user to
    * ignore it.
    */
   regenerateWarning: string | null;
-  /** Detection's own report — agreement, a miss, or why nothing could be read.
+  /** Detection's own report - agreement, a miss, or why nothing could be read.
    *
-   * ⚑ THERE IS NO `summary` PROP. The read's own summary — "20 cells read; 3
-   * need a look" — is a statement about the RECORD and renders beside it in the
+   * ⚑ THERE IS NO `summary` PROP. The read's own summary - "20 cells read; 3
+   * need a look" - is a statement about the RECORD and renders beside it in the
    * Cells panel, which is also the only place it can survive: pressing Read
    * cells folds this card, so a summary rendered here would be filed away in a
    * closed fold-out at the exact moment it became true. The ERROR stays,
@@ -116,11 +116,11 @@ export function HeatmapCard({
         {/* ⚑⚑ NO COUNT BOXES. How many columns and rows the figure has is
             declared ONCE, in the calibration walk, for a measured axis exactly
             as for a named one. These inputs existed because a value axis was
-            never asked — so the panel asked again, and the two answers could
+            never asked - so the panel asked again, and the two answers could
             disagree. The declaration is shown here, never re-collected. */}
         <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
           {gridSize
-            ? `${gridSize.columns} columns × ${gridSize.rows} rows, from the calibration — drag a boundary to adjust`
+            ? `${gridSize.columns} columns × ${gridSize.rows} rows, from the calibration - drag a boundary to adjust`
             : 'Calibrate the axes to see the grid.'}
         </span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -128,31 +128,31 @@ export function HeatmapCard({
             Detect grid
           </button>
           {/* ⚑⚑ ASKED FOR, NEVER ASSERTED. An even lattice used to appear the
-              moment a count was known — geometry we invented, drawn as
+              moment a count was known - geometry we invented, drawn as
               confidently as one read off the figure, and visibly wrong on any
               figure whose columns are unequal. David: *"it will look like we
               have gotten it wrong every single time. We show it AFTER."*
               ⚑ It still has to be REACHABLE, because a continuous field draws no
               boundaries to detect and a sampling lattice is the honest answer
-              there — so it becomes a button the user presses, and the message it
+              there - so it becomes a button the user presses, and the message it
               leaves says the boundaries are not measured. */}
           <button
             type="button"
             data-testid="heatmap-overlay-even"
             onClick={onOverlayEvenGrid}
             disabled={!canRead}
-            title="Lay an evenly spaced grid over the plot — for a continuous field with no drawn cells. These boundaries are chosen, not measured."
+            title="Lay an evenly spaced grid over the plot - for a continuous field with no drawn cells. These boundaries are chosen, not measured."
           >
             Overlay even grid
           </button>
         </div>
-        {/* ⚑⚑ READ CELLS IS NOT HERE ANY MORE — it lives on the Grid summary
+        {/* ⚑⚑ READ CELLS IS NOT HERE ANY MORE - it lives on the Grid summary
             line, outside this fold-out, and there is only ONE of it.
             ⚑ It moved out because the flow had no visible next step: everything
             on screen said READY while the action that finishes the job sat
             inside a closed fold-out inside a closed card (David: *"that is a UI
             design fault"*). It is not ALSO here because, with the card open,
-            two identical teal buttons sat eighty pixels apart — David: *"we now
+            two identical teal buttons sat eighty pixels apart - David: *"we now
             still have the old red cells button there too. I think that old one
             should go."*
             ⚠️ AND MY ARGUMENT FOR KEEPING BOTH WAS WRONG. I cited `Reset to key`,
@@ -161,12 +161,12 @@ export function HeatmapCard({
             same time, and one of them is undiscoverable. These were both visible
             at once, in one card. **The same action in two places is justified by
             two different MOMENTS or SURFACES, never by two positions in one
-            view** — otherwise it is just the second-mechanism smell again.
+            view** - otherwise it is just the second-mechanism smell again.
             ⚑ The ENDING survives the move: pressing it still folds the card, so
             the eye goes to the Cells panel where the record now is. */}
         {/* ⚑⚑ THE HAND `detectGrid` KEEPS TELLING THE USER TO USE. When detection
             finds every rule the figure draws but one, it refuses to fill the miss
-            in and says "place the missing ones by hand" — and until now there was
+            in and says "place the missing ones by hand" - and until now there was
             no gesture that could. A message naming an action the interface does
             not offer is the keystone-persona failure, not a wording problem.
             ⚑ Buttons rather than a canvas gesture: a boundary added by clicking
@@ -206,7 +206,7 @@ export function HeatmapCard({
                   title={
                     canRemoveBoundary
                       ? 'Remove this boundary and merge the two cells it separates'
-                      : 'An axis keeps its last two boundaries — one cell is still a grid'
+                      : 'An axis keeps its last two boundaries - one cell is still a grid'
                   }
                 >
                   Remove
@@ -215,13 +215,13 @@ export function HeatmapCard({
             )}
             {/* ⚑⚑ "THE LABEL IS THE COORDINATE." A heatmap's axes are each
                 independently a CATEGORY or a VALUE, and all four combinations are
-                published — gene × sample, treatment × time, field × field. On a
+                published - gene × sample, treatment × time, field × field. On a
                 named axis the printed name is what identifies the cell, and an
                 export reading `1, 2, 3` for it cannot be rejoined to anything the
                 reader has. Typing what the figure prints is RECORDING, the same
                 act as typing a calibration tick's value; what would be
                 interpretation is inventing a name nobody printed, and nothing
-                here does that — an unnamed cell keeps its measured coordinates. */}
+                here does that - an unnamed cell keeps its measured coordinates. */}
             {/* ⚑ "Column NAMES", not "Columns": the card already has a Columns
                 box holding a COUNT, and two fields with the same word in one
                 panel is a question the user has to answer by experiment. Found
@@ -233,7 +233,7 @@ export function HeatmapCard({
                 value={xLabels}
                 onChange={(e) => onLabelsChange(e.target.value, yLabels)}
                 onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated — left → right"
+                placeholder="names, comma separated - left → right"
                 style={{ flex: 1, minWidth: 0 }}
               />
             </label>
@@ -244,7 +244,7 @@ export function HeatmapCard({
                 value={yLabels}
                 onChange={(e) => onLabelsChange(xLabels, e.target.value)}
                 onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated — top → bottom"
+                placeholder="names, comma separated - top → bottom"
                 style={{ flex: 1, minWidth: 0 }}
               />
             </label>

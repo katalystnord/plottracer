@@ -2,7 +2,7 @@
  * The geometry a calibration IMPLIES, drawn while you place it (checkpoint 84).
  *
  * **Why this is a tenet-1 fix and not decoration.** Until now we drew the
- * handles (ckpt 59's reticles) and *nothing between them* — so a mis-clicked
+ * handles (ckpt 59's reticles) and *nothing between them* - so a mis-clicked
  * handle produced a **wrong-but-plausible chart, silently**. Every value on the
  * figure is wrong, and nothing on screen looks wrong. That is the
  * silent-bad-data failure at its purest: the app cannot get reliable data out
@@ -18,7 +18,7 @@
  * deliberate divergences, each earning itself:
  *
  * 1. **Progressive, not all-or-nothing.** WPD gates on
- *    `getCount() === 4` — nothing appears until the last click. Each pair here
+ *    `getCount() === 4` - nothing appears until the last click. Each pair here
  *    draws as soon as *its own* two points exist, so you see the X axis you
  *    implied before you start on Y. Strictly more useful, and free: the pairs
  *    are independent by construction.
@@ -42,7 +42,7 @@ export interface PreviewPoint {
   y: number;
 }
 
-/** A line the calibration implies — an axis, a scale bar, a triangle edge. */
+/** A line the calibration implies - an axis, a scale bar, a triangle edge. */
 export interface PreviewSegment {
   from: PreviewPoint;
   to: PreviewPoint;
@@ -62,7 +62,7 @@ export interface PreviewSegment {
   emphasis?: boolean;
 }
 
-/** A circle the calibration implies — a CCR pen arc or chart circle. */
+/** A circle the calibration implies - a CCR pen arc or chart circle. */
 export interface PreviewCircle {
   cx: number;
   cy: number;
@@ -91,12 +91,12 @@ type AxesKind = 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider' | 
 /**
  * Which placed points to join, per axes kind, by step key.
  *
- * Keyed on `axesKind` — the DECLARED capability — rather than on `config.id`,
+ * Keyed on `axesKind` - the DECLARED capability - rather than on `config.id`,
  * so the whole XY family (XY, Histogram, and any future XY-backed type) gets the
  * preview automatically. That is checkpoint 73's rule, and the reason Histogram
  * needs no entry of its own here.
  */
-/** The colour a LIVE calibration segment is drawn in — the same magenta the
+/** The colour a LIVE calibration segment is drawn in - the same magenta the
  * colour-match preview paints with (Workspace's COLOR_TRACE_PREVIEW_RGBA, ckpt
  * 121), picked there for reading clearly over typical scientific figures without
  * being mistaken for a series colour. Both are the app pointing at the image. */
@@ -129,10 +129,10 @@ const PAIRS: Record<AxesKind, readonly (readonly [string, string])[]> = {
   ],
   // The scale bar itself.
   map: [['p1', 'p2']],
-  // CCR implies circles, not lines — see CIRCLE_TRIPLES.
+  // CCR implies circles, not lines - see CIRCLE_TRIPLES.
   ccr: [],
   // Spider's rays cannot be a fixed list: the spoke count belongs to the figure,
-  // not to the type. Built from the placed steps instead — see spiderPairs below.
+  // not to the type. Built from the placed steps instead - see spiderPairs below.
   spider: [],
 };
 
@@ -142,7 +142,7 @@ const PAIRS: Record<AxesKind, readonly (readonly [string, string])[]> = {
  *
  * ⚑ This is the preview that matters most for spider, for the CCR reason. A ray's
  * DIRECTION is measured from a single click, so a spoke clicked slightly off the
- * printed axis tilts the whole scale — and every value along it moves — with
+ * printed axis tilts the whole scale - and every value along it moves - with
  * nothing on screen wrong. Drawing the rays as they are placed is how the user
  * sees that the lines they implied are the lines the figure drew.
  */
@@ -155,7 +155,7 @@ function spiderPairs(steps: readonly { key: string }[]): readonly (readonly [str
  *
  * **This is the one that matters most.** A CCR is calibrated from 5 clicks that
  * imply two arcs, and *nobody can eyeball whether 5 points imply the right
- * circle*. Fitting and drawing them live is the only way the user can tell —
+ * circle*. Fitting and drawing them live is the only way the user can tell -
  * which is exactly why WPD built a bespoke repainter for it and nothing else.
  * The triples mirror upstream's: points 0-1-2 are the pen arc, 2-3-4 the chart
  * circle, sharing point 2.
@@ -172,18 +172,18 @@ const CIRCLE_TRIPLES: Partial<Record<AxesKind, readonly (readonly [string, strin
  *
  * `placed` is the session's own map of step key -> pixel; a missing key simply
  * means that pair or triple isn't drawn yet. Returns empty rather than throwing
- * on anything degenerate — this is a drawing aid, and it must never be the
+ * on anything degenerate - this is a drawing aid, and it must never be the
  * reason a calibration fails.
  */
 export function calibrationPreview(
   // ⚑ NOT the config: `steps` here must be the session's UNROLLED list
   // (`session.getSteps()`), because a spider's spokes exist only in the session.
   // Named `shape` rather than `config` so the call site cannot read as though
-  // handing over the type's own fixed steps — which for a spider is just the
+  // handing over the type's own fixed steps - which for a spider is just the
   // origin, and would leave the preview unable to name or colour any ray.
   shape: { axesKind: AxesKind; steps: readonly { key: string; color: string }[] },
   placed: Readonly<Record<string, { px: number; py: number } | undefined>>,
-  /** Step key to draw as the live one — see PreviewSegment.emphasis. */
+  /** Step key to draw as the live one - see PreviewSegment.emphasis. */
   emphasisKey?: string
 ): CalibrationPreview {
   const at = (key: string): PreviewPoint | null => {
@@ -206,7 +206,7 @@ export function calibrationPreview(
         to,
         // ⚑ The LIVE ray is drawn in the colour-match magenta, not in the step's own
         // colour. Spider rays take their colour from the shared origin step, which
-        // is green — and a green highlight over a green series is no highlight at
+        // is green - and a green highlight over a green series is no highlight at
         // all (the bundled example has exactly that). This magenta is already the
         // app's "machine is telling you something about the image" colour, chosen
         // for the same property: it is not easily mistaken for a series.

@@ -3,7 +3,7 @@
  *
  * ⚑ EVERY FIXTURE IN THIS FILE IS OURS, authored from the format's structure.
  * Engauge is GPL-2.0 and its test corpus is GPL-2.0 data, so none of it is
- * copied into this tree — see engine/digImport.ts's clean-room header and
+ * copied into this tree - see engine/digImport.ts's clean-room header and
  * __tests__/fixtures/PROVENANCE.md.
  */
 import { describe, it, expect } from 'vitest';
@@ -119,7 +119,7 @@ describe('isEngaugeDocument', () => {
   // ⚑ EITHER marker is enough, and that is the point of the rule: real .dig
   // files in the wild carry both, but the DOCTYPE is dropped by anything that
   // rewrites the XML, and older documents predate the attribute. Requiring both
-  // would refuse files we can read perfectly well — and since this function
+  // would refuse files we can read perfectly well - and since this function
   // decides which importer the Open dialog hands the bytes to, a refusal here
   // surfaces as "no filter recognises this file".
   it('recognises a document that carries only the DOCTYPE', () => {
@@ -147,7 +147,7 @@ describe('isEngaugeDocument', () => {
 /**
  * The reader's smallest decisions, which are the ones that can quietly invent a
  * number. `numAttr` returns null for an absent or unparseable attribute so the
- * caller DROPS the point — because `Number(null)` is 0, and a 0 here is a
+ * caller DROPS the point - because `Number(null)` is 0, and a 0 here is a
  * coordinate the file never carried, sitting on the axis, indistinguishable from
  * a real measurement (tenets 9 + 10).
  */
@@ -192,7 +192,7 @@ describe('a point the file did not fully record', () => {
 
   it('drops an axis point missing the value the user typed', () => {
     // An axis point with no graph Y would calibrate the figure against a 0
-    // nobody entered — the worst place in the file for an invented number.
+    // nobody entered - the worst place in the file for an invented number.
     const short = axisPt(100, 500, 0, 0) + axisPt(600, 500, 10, 0) + `<Point IsAxisPoint="True"><PositionScreen X="100" Y="100"/><PositionGraph X="0"/></Point>`;
     const r = readEngaugeProject(rawDig(short, `<Point><PositionScreen X="1" Y="2"/></Point>`));
     if ('error' in r) throw new Error(r.error);
@@ -263,7 +263,7 @@ describe('readEngaugeProject', () => {
  * What the reader does with a document that is not the tidy one the fixture
  * builder writes: a missing attribute, a missing element, a type it does not
  * know. ⚑ EVERY REFUSAL AND EVERY DEFAULT in `readEngaugeProject` had NO
- * coverage at all — 18 mutants' worth — so nothing checked that an absent
+ * coverage at all - 18 mutants' worth - so nothing checked that an absent
  * attribute takes its documented default rather than becoming an empty string,
  * and nothing checked that a file we cannot read is REFUSED BY NAME rather than
  * opened as a figure whose numbers would be quietly wrong.
@@ -370,7 +370,7 @@ describe('readEngaugeProject on documents that are not the tidy case', () => {
   });
 
   it('names an unnamed curve "Curve" rather than leaving it blank', () => {
-    // A blank name would render as an unlabelled series in the rail — the
+    // A blank name would render as an unlabelled series in the rail - the
     // fabricated-vs-missing name question, answered the other way: the file
     // really did not say, so a neutral word beats an empty one.
     const p = projectOf(
@@ -405,7 +405,7 @@ describe('readEngaugeProject on documents that are not the tidy case', () => {
 
   it('drops an axis point missing ANY of its four numbers', () => {
     // Each coordinate is checked separately, because a point missing only its
-    // screen X is exactly as unusable as one missing everything — and dropping
+    // screen X is exactly as unusable as one missing everything - and dropping
     // it is the only honest answer (there is nothing to infer it from).
     const partial = [
       `<Point><PositionScreen Y="500"/><PositionGraph X="0" Y="0"/></Point>`,
@@ -488,7 +488,7 @@ describe('the embedded image', () => {
     return r.imageDataURL === null ? null : r.imageDataURL.slice(5, r.imageDataURL.indexOf(';'));
   };
 
-  // ⚑ The payload's OWN BYTES decide what it is — the file never says. Only PNG
+  // ⚑ The payload's OWN BYTES decide what it is - the file never says. Only PNG
   // was covered before, so nothing checked that a .dig carrying a photographic
   // figure (JPEG is the common case for a scanned paper) is labelled correctly.
   // A data URL whose declared type is wrong renders as a broken image.
@@ -525,7 +525,7 @@ describe('the old binary format is identified by its HEAD', () => {
   it('does not refuse an XML document because a NUL appears deep inside it', () => {
     // The pre-6.3 format is a Qt stream that begins with a version word, so the
     // evidence is in the first bytes. Scanning the whole file instead would turn
-    // any XML that happens to carry a NUL into a wrongly-named refusal — telling
+    // any XML that happens to carry a NUL into a wrongly-named refusal - telling
     // the user to re-save a file that was never in the old format.
     const doc =
       `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n<Document VersionNumber="11.0">` +
@@ -544,7 +544,7 @@ describe('the old binary format is identified by its HEAD', () => {
   });
 });
 
-describe('importEngaugeFigure — calibration', () => {
+describe('importEngaugeFigure - calibration', () => {
   it('reads a point that sits on an axis point back as that axis point', () => {
     // The third axis point is pixel (100,100) = graph (0,1); Curve1's first
     // point is on that same pixel, so it must import as exactly (0, 1).
@@ -586,7 +586,7 @@ describe('importEngaugeFigure — calibration', () => {
 
   it('rebuilds an equivalent calibration when the three points do not form an L', () => {
     // Same affine map as the default fixture, but stated with a third point that
-    // shares neither coordinate — the general case. The imported VALUES must be
+    // shares neither coordinate - the general case. The imported VALUES must be
     // identical, because three correspondences determine the map uniquely.
     // No two points share a graph X or a graph Y, so there is no "L" to find.
     // All three lie on the same map as the default fixture: sx = 100 + 50x,
@@ -614,7 +614,7 @@ describe('importEngaugeFigure — calibration', () => {
   /**
    * ⚑⚑ THE FIXTURE ABOVE CANNOT SEE HALF OF THE ARITHMETIC IT EXERCISES.
    * Its map is axis-aligned (sx depends only on x, sy only on y), so the
-   * recovered matrix is DIAGONAL and its off-diagonal terms are exactly zero —
+   * recovered matrix is DIAGONAL and its off-diagonal terms are exactly zero -
    * which means a sign flip, or a multiply turned into a divide, on either of
    * them changes nothing at all. The affine reconstruction is the one piece of
    * real arithmetic in this module, and half of it was being asserted against a
@@ -707,7 +707,7 @@ describe('importEngaugeFigure — calibration', () => {
   });
 });
 
-describe('importEngaugeFigure — refusals and honesty', () => {
+describe('importEngaugeFigure - refusals and honesty', () => {
   it('refuses a project that was never calibrated', () => {
     const parsed = readEngaugeProject(makeDig({ axisPoints: [] }));
     if ('error' in parsed) throw new Error(parsed.error);
@@ -745,7 +745,7 @@ describe('importEngaugeFigure — refusals and honesty', () => {
   });
 });
 
-describe('importEngaugeFigure — polar', () => {
+describe('importEngaugeFigure - polar', () => {
   it('imports a polar document, finding the centre by its zero radius', () => {
     // theta in graph X, radius in graph Y. Centre at (400,400), 50px per unit
     // of radius: r=10 lies 500px away, r=5 lies 250px away. The two radial

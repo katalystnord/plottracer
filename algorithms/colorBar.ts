@@ -1,9 +1,9 @@
 /**
- * The colour bar — turning a cell's colour back into a POSITION on the key
+ * The colour bar - turning a cell's colour back into a POSITION on the key
  * (v2.2, heatmaps, phase 1).
  *
  * ⚑⚑ WHY THIS IS THE FIRST THING BUILT, AND WHY IT GETS THIS MUCH CARE. In a
- * heatmap the colour IS the value, so a colour error is a VALUE error — and it
+ * heatmap the colour IS the value, so a colour error is a VALUE error - and it
  * is SILENT. On a bar chart a slightly-off colour still lands inside the
  * tolerance ball and finds the right bar; the number that comes out is still
  * the bar's. Here, a JPEG-shifted cell returns a slightly WRONG NUMBER with no
@@ -20,8 +20,8 @@
  *   tLow..tHigh .... the stretch of the key this colour CANNOT be told apart
  *                    from, at that measured colour error. This is the key's own
  *                    resolution, read off the key. It widens exactly where the
- *                    ramp is ill-conditioned — the ends of `jet`, where a large
- *                    value change makes a small colour change — so the figure's
+ *                    ramp is ill-conditioned - the ends of `jet`, where a large
+ *                    value change makes a small colour change - so the figure's
  *                    own weakness shows up as a wider band instead of as a
  *                    confidently wrong number.
  *   rivals ......... OTHER, disjoint stretches equally consistent with this
@@ -34,7 +34,7 @@
  * disagreement be visible. It is the same corroboration principle the bar
  * retake settled on, arriving early because here it is cheap.
  *
- * ⚑ THE UNCERTAINTY IS AN INTERVAL IN POSITION, NOT A DERIVATIVE — deliberately.
+ * ⚑ THE UNCERTAINTY IS AN INTERVAL IN POSITION, NOT A DERIVATIVE - deliberately.
  * A band converts through ANY monotone scale (including the log colour bars that
  * are ordinary in older papers) by mapping its two ends, with no calculus and no
  * error propagation. It also degrades gracefully where a derivative blows up: on
@@ -42,13 +42,13 @@
  * infinite and would have to be laundered into a null on its way to the record
  * (see the curve-fit overflow: `null * x === 0`).
  *
- * ⚑ POSITION ONLY — this module never produces a value. Position → value is two
+ * ⚑ POSITION ONLY - this module never produces a value. Position → value is two
  * labelled ticks on the key, i.e. the ordinary axis machinery, log rule
  * included (`core/axes/logScale.ts`). Keeping that out of here is what makes the
  * colour bar just another axis rather than a special mechanism.
  *
  * ⚑ RGB EUCLIDEAN, NOT A PERCEPTUAL SPACE, and that is a considered choice. We
- * are not asking "do these look alike to a human" — we are matching a rendered
+ * are not asking "do these look alike to a human" - we are matching a rendered
  * pixel against the ramp in the SAME rendering. The error we are chasing (8-bit
  * rounding, JPEG chroma quantisation, anti-aliasing) lives in RGB, and the rest
  * of the extraction stack already measures colour there (`colorFilter.ts`).
@@ -71,13 +71,13 @@ export interface Point2D {
  * A FLOOR, not a claim about any particular encoder: it is the width the
  * indistinguishable band gets when a cell matches the ramp EXACTLY (distance 0),
  * which is the common case on a PNG. Without it, a perfect match would report
- * zero uncertainty — which no measurement off an 8-bit image has ever had. Where
+ * zero uncertainty - which no measurement off an 8-bit image has ever had. Where
  * the measured error is larger, the measured error is used instead.
  */
 export const COLOR_NOISE_FLOOR = 4;
 
 /**
- * A strip shorter than this cannot be sampled meaningfully — there is nowhere
+ * A strip shorter than this cannot be sampled meaningfully - there is nowhere
  * near enough of the ramp to invert against, and at this size the two clicks are
  * far more likely to be a mis-click than a key.
  */
@@ -90,7 +90,7 @@ export const MIN_STRIP_LENGTH_PX = 8;
  * ⚑ This exists for one specific, likely user error: clicking the two ends
  * ACROSS the bar's width instead of ALONG its length. That gives a strip of one
  * flat colour, on which every cell in the figure inverts to the same meaningless
- * position — silently. Real published keys span hundreds of units here (viridis
+ * position - silently. Real published keys span hundreds of units here (viridis
  * runs dark purple to yellow); pure sensor/JPEG noise on a flat fill spans
  * around ten. The gap between those two populations is wide enough that this
  * threshold is not a tuning parameter.
@@ -115,7 +115,7 @@ export interface ColorBarSample {
  * project file carries no strip and the load path comes through `sampleColorBar`
  * like every other path. The v2.2 audit found the guard with no caller and no
  * test and deleted it. `checkStripSamples` stays exported because it is the rule
- * `sampleColorBar` applies and it is worth testing directly — not because
+ * `sampleColorBar` applies and it is worth testing directly - not because
  * anything else runs it.
  */
 export interface ColorBarStrip {
@@ -131,8 +131,8 @@ export interface ColorBarStrip {
 /**
  * Why a strip was refused. Codes, not sentences: the sentence belongs where it
  * is shown. Each one must reach the user naming both the REQUIREMENT and its
- * CONSEQUENCE — "the two ends must lie along the bar's length; as clicked, every
- * cell would read the same value" — because a refusal that only says "invalid"
+ * CONSEQUENCE - "the two ends must lie along the bar's length; as clicked, every
+ * cell would read the same value" - because a refusal that only says "invalid"
  * sends the user to fix something that is not broken.
  */
 export type ColorBarRefusal =
@@ -141,7 +141,7 @@ export type ColorBarRefusal =
   | 'not-a-line'
   /** An end lies outside the image. */
   | 'off-image'
-  /** Everything along the strip was fully transparent — there is no key here. */
+  /** Everything along the strip was fully transparent - there is no key here. */
   | 'no-pixels'
   /**
    * The key is drawn as a handful of DISCRETE BANDS rather than a continuous
@@ -149,13 +149,13 @@ export type ColorBarRefusal =
    *
    * ⚑⚑ A BANDED KEY IDENTIFIES A LABEL, NOT A VALUE. Inverting a cell's colour
    * against it lands on a plateau covering a whole range, and reporting the
-   * middle of that range would be a number the figure never contains — the one
+   * middle of that range would be a number the figure never contains - the one
    * failure mode this module exists to prevent, since in a heatmap the colour
    * IS the value and a wrong one has no other symptom. Agreed as a v2.2 scope
    * refusal when the record was settled, and it must NAME why.
    */
   | 'discrete'
-  /** The strip carries one flat colour (see `MIN_RAMP_SPREAD`) — most likely
+  /** The strip carries one flat colour (see `MIN_RAMP_SPREAD`) - most likely
    * clicked across the bar rather than along it. */
   | 'no-ramp';
 
@@ -189,7 +189,7 @@ export function colorDistance(a: RGB, b: RGB): number {
  *
  * ⚑ A MEDOID, NOT A MEAN OR A PER-CHANNEL MEDIAN, and the difference matters
  * here. Both of those can return a colour that is not in the set and not on the
- * ramp — averaging across a cell border invents a blend that sits BETWEEN two
+ * ramp - averaging across a cell border invents a blend that sits BETWEEN two
  * positions on the key, which then inverts to a position the figure never
  * asserted. A medoid is always a colour that was actually printed.
  *
@@ -210,7 +210,7 @@ export function medoidColor(colors: readonly RGB[]): RGB | null {
   return best;
 }
 
-/** The diagonal of the sampled colours' RGB bounding box — how much colour the
+/** The diagonal of the sampled colours' RGB bounding box - how much colour the
  * strip spans. Zero for a flat strip. Its only caller has already established
  * that there are at least two samples. */
 function rampSpread(samples: readonly ColorBarSample[]): number {
@@ -232,7 +232,7 @@ function rampSpread(samples: readonly ColorBarSample[]): number {
  * ⚑ Separate from `sampleColorBar` because it has to run where there is no
  * image to sample: the calibration walk can refuse a degenerate pair of clicks
  * the moment they are made, long before a colour is read through them. One rule,
- * two entrances — the alternative is the calibration card and the sampler each
+ * two entrances - the alternative is the calibration card and the sampler each
  * carrying their own idea of what a strip is, and drifting.
  */
 export function checkStripGeometry(from: Point2D, to: Point2D): ColorBarRefusal | null {
@@ -276,7 +276,7 @@ function levelTolerance(samples: readonly ColorBarSample[]): number {
  * the noise floor.
  *
  * ⚑ MEASURED, not assumed, and the fixtures set the threshold: the four real
- * matplotlib keys shipped here come out at 108, 171, 195 and — on a q35 JPEG —
+ * matplotlib keys shipped here come out at 108, 171, 195 and - on a q35 JPEG -
  * 239 and 260 levels. A published banded key has a handful. Two orders of
  * magnitude apart, so `MAX_DISCRETE_LEVELS` sits far from both: it does not
  * have to be tuned, only to fall in the gap.
@@ -285,7 +285,7 @@ function levelTolerance(samples: readonly ColorBarSample[]): number {
  * why (David: *"Non-colour / monochrome heatmaps are going to be a problem
  * though"*). Counting against a fixed RGB distance conflates two different
  * things: a key with FEW colours, and a key with CLOSE ones. A greyscale ramp
- * over a narrow range — say 100…160 — moves a fraction of an RGB unit per
+ * over a narrow range - say 100…160 - moves a fraction of an RGB unit per
  * sample, so an absolute floor would see one long plateau and call a perfectly
  * ordinary monochrome key "banded", refusing a figure the tool can read.
  * Relative to its own spread it resolves the same ~64 levels a full-range ramp
@@ -315,7 +315,7 @@ const LEVELS_A_RAMP_MUST_RESOLVE = 64;
  * least any real fixture shows is 108. */
 const MAX_DISCRETE_LEVELS = 20;
 
-/** Below this many samples the strip is too short to judge — a 30px key has few
+/** Below this many samples the strip is too short to judge - a 30px key has few
  * levels because it has few pixels, not because it is banded. */
 const MIN_SAMPLES_TO_JUDGE_BANDING = 60;
 
@@ -334,19 +334,19 @@ const MIN_SAMPLES_TO_JUDGE_BANDING = 60;
  * ⚑⚑ CORNERS ARE A TARGET A PERSON CAN ACTUALLY HIT. David, after failing to
  * calibrate a key: *"it is really hard to know where to click on the key… ideally
  * corners of the strip should be clickable, ideally opposite corners."* The old
- * pair of clicks asked for two points ALONG the bar's centreline — a line nothing
+ * pair of clicks asked for two points ALONG the bar's centreline - a line nothing
  * is drawn on, so there was nothing to aim at and no way to tell a good click
  * from a bad one. A rectangle's corner is printed, unambiguous and either hit or
  * missed.
  *
  * ⚑ AND IT MEASURES THE THICKNESS, which was a hardcoded 5 px. The bar's short
  * side is right there in the gesture, so the sampling window becomes a property
- * of the figure instead of a guess — on a thin key 5 px sampled outside the ink,
+ * of the figure instead of a guess - on a thin key 5 px sampled outside the ink,
  * and on a thick one it threw away most of the evidence.
  *
  * ⚑ INSET FROM THE SHORT SIDES, because a colour key is normally drawn with a
  * black frame and a corner click lands ON it. Sampling the full height would mix
- * the frame into every reading — the same reason `readHeatmap` insets a cell.
+ * the frame into every reading - the same reason `readHeatmap` insets a cell.
  * The LONG axis is not inset: the ramp's ends are what the ends of the bar are.
  */
 export function stripFromCorners(
@@ -436,15 +436,15 @@ export function sampleColorBar(
  * this projects each click onto the strip so the pair can be interpolated. It is
  * a projection rather than a distance because the click will never land exactly
  * on the line the strip was sampled along, and the component ACROSS the strip
- * carries no information — a tick clicked 3px above the bar is the same tick.
+ * carries no information - a tick clicked 3px above the bar is the same tick.
  *
  * Returns null for a degenerate strip, which `sampleColorBar` cannot produce.
  */
 export function positionOnStrip(
   /**
    * ⚑ Only the two ENDS are read, so the parameter is widened to them. The
-   * heatmap's key cursor has to project a pointer onto the same line — both to
-   * CONSTRAIN the drag on screen and to report the position for the record — and
+   * heatmap's key cursor has to project a pointer onto the same line - both to
+   * CONSTRAIN the drag on screen and to report the position for the record - and
    * two projections that must agree is exactly the shape this project keeps
    * getting bitten by. One function, both jobs.
    */
@@ -459,7 +459,7 @@ export function positionOnStrip(
 }
 
 /**
- * The ink the key carries at a position along it — the key read FORWARDS.
+ * The ink the key carries at a position along it - the key read FORWARDS.
  *
  * ⚑⚑ WHY THIS EXISTS, and it is a rule rather than a convenience. David,
  * 2026-08-15: *"the colour / tint ALWAYS == a number. The number is the
@@ -472,13 +472,13 @@ export function positionOnStrip(
  * inspection.
  *
  * ⚑ IT ALSO REMOVES A REAL CONFLATION. A cell whose ink sat OFF the ramp used to
- * be drawn in that off-ramp colour — a colour corresponding to NO VALUE anywhere
+ * be drawn in that off-ramp colour - a colour corresponding to NO VALUE anywhere
  * on the key. Rendering `key(value)` cannot produce one; how far the ink sat off
  * the ramp stays reported, as evidence, in its own column.
  *
  * INTERPOLATED between the bracketing samples, not snapped to the nearer one:
  * snapping would quantise the drawn colour to the key's own sampling pitch, so
- * two cells a hair apart in value would be drawn identically — the confusion the
+ * two cells a hair apart in value would be drawn identically - the confusion the
  * mirroring exists to remove.
  *
  * CLAMPED past either end, because the key has no ink beyond itself. A cell can
@@ -535,7 +535,7 @@ export interface ColorBarReading extends ColorBarBand {
   /**
    * Other, disjoint stretches equally consistent with the queried colour,
    * nearest-first. Empty for a well-conditioned monotone ramp. Non-empty means
-   * the position is AMBIGUOUS, not merely imprecise — the reading must not be
+   * the position is AMBIGUOUS, not merely imprecise - the reading must not be
    * recorded as a number without the user resolving it.
    */
   rivals: readonly ColorBarBand[];
@@ -569,7 +569,7 @@ function projectOntoSegment(rgb: RGB, a: RGB, b: RGB): { u: number; distance: nu
  * unique?
  *
  * Returns null only for a strip with fewer than two samples, which
- * `sampleColorBar` cannot produce — it is the guard for the strip's other
+ * `sampleColorBar` cannot produce - it is the guard for the strip's other
  * entrance.
  */
 export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | null {
@@ -585,20 +585,20 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
   }
 
   // ⚑⚑ A COLOUR OCCUPIES A STRETCH OF THE KEY, NOT A POINT, AND THE READING IS
-  // ITS MIDDLE. A colormap is a lookup table — matplotlib's are 256 entries —
+  // ITS MIDDLE. A colormap is a lookup table - matplotlib's are 256 entries -
   // so a key drawn 550px long repeats every colour over about two pixels, and a
   // large figure or a coarse map makes those plateaus much wider. Taking the
   // FIRST tied position (what `argmin` does, and what this did first) biases
   // every single reading to the LOW end of its plateau. Measured on the jet
   // fixture: a systematic 0.6–0.8 °C under-read on a 160 °C range, in the same
   // direction for every cell, from a colour that matched the key EXACTLY. A
-  // constant signed bias is the worst kind — averaging cells does not remove it.
+  // constant signed bias is the worst kind - averaging cells does not remove it.
   const plateau = tiedRun(d, best);
   let t = (samples[plateau.lo]!.t + samples[plateau.hi]!.t) / 2;
   let distance = d[best]!;
 
   // Refine BETWEEN samples: the true position generally falls between two pixels
-  // of the key. Only the segments leaving the plateau can improve on it — inside
+  // of the key. Only the segments leaving the plateau can improve on it - inside
   // the plateau every colour is identical, so there is nothing to interpolate.
   for (const j of [plateau.lo - 1, plateau.hi]) {
     if (j < 0 || j + 1 >= n) continue;
@@ -615,15 +615,15 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
   //
   // ⚑ THE MISMATCH HAS TO BE SPLIT INTO TWO COMPONENTS, and only one of them is
   // uncertainty about POSITION. `distance` is the part that points OFF the ramp
-  // — contamination, JPEG, a border blended in — and it is common to every
+  // - contamination, JPEG, a border blended in - and it is common to every
   // position; no amount of sliding along the key removes it. What separates one
   // position from another is the remaining component ALONG the ramp, which by
   // Pythagoras is `sqrt(d² − distance²)`. A position is not excluded when that
   // along-ramp part is no larger than the error we already measured on this very
   // pixel (floored, so an exact match does not claim zero uncertainty).
   //
-  // ⚑ Testing `d[i] <= distance` instead — the obvious first form of this, and
-  // the one written here first — is DEGENERATE: `distance` is by construction
+  // ⚑ Testing `d[i] <= distance` instead - the obvious first form of this, and
+  // the one written here first - is DEGENERATE: `distance` is by construction
   // the minimum over the whole key, so nothing but the winner can ever satisfy
   // it and every band collapses to a point. That is the dangerous direction. A
   // contaminated cell would have reported the tightest confidence of all.
@@ -631,7 +631,7 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
   // plateau also sets a hard limit on precision: two values inside one entry are
   // printed identically, so no inversion can separate them. Worse, the key and
   // the cells are TWO renderings of that table and their bin boundaries need not
-  // line up — measured on the jet fixture, a cell whose colour matched the key
+  // line up - measured on the jet fixture, a cell whose colour matched the key
   // exactly still sat up to a full entry away from where the key put it. A band
   // narrower than one step of the key would therefore exclude the right answer
   // while reporting distance 0, which is the confidently-wrong reading this
@@ -659,7 +659,7 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
   const winnerIndex = bands.findIndex((b) => best >= b.i0 && best <= b.i1);
   // The refined position can beat every sampled one (the colour sits between two
   // pixels of the key on a steep ramp), leaving no sample under tolerance. The
-  // reading is then a point, not a band — reported as such rather than widened
+  // reading is then a point, not a band - reported as such rather than widened
   // to something we did not measure.
   if (winnerIndex < 0) return { t, tLow: t, tHigh: t, distance, rivals: [] };
 
@@ -673,12 +673,12 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
 
 /**
  * The contiguous stretch around `index` whose samples are all EXACTLY as good a
- * match as `index` itself — the colormap's lookup-table plateau.
+ * match as `index` itself - the colormap's lookup-table plateau.
  *
  * Exact equality is the right test and not a floating-point hazard: two samples
  * that hold the same RGB triple produce the same distance from the same query
  * by the same arithmetic. Colours that merely differ by a count are not ties and
- * must not be swallowed — they are what the band is for.
+ * must not be swallowed - they are what the band is for.
  */
 function tiedRun(d: Float64Array, firstIndex: number): { lo: number; hi: number } {
   // ⚑ FORWARD ONLY, and that is a contract rather than an oversight. Both
@@ -695,7 +695,7 @@ function tiedRun(d: Float64Array, firstIndex: number): { lo: number; hi: number 
  * How big one step of the key is here: the colour distance from a plateau to the
  * nearest DIFFERENT colour beside it. The key's own resolution, in the key's own
  * units, measured at the position being read rather than assumed for the whole
- * ramp — a colormap's step varies enormously along its length.
+ * ramp - a colormap's step varies enormously along its length.
  *
  * Zero when the strip carries no other colour at all, which `checkStripSamples`
  * has already refused.
@@ -734,7 +734,7 @@ function bandFromRun(
   const edge = (inner: number, outer: number): number => {
     const dInner = d[inner]!;
     const dOuter = d[outer]!;
-    // `dOuter > tolerance >= dInner` by construction — the run is maximal, so
+    // `dOuter > tolerance >= dInner` by construction - the run is maximal, so
     // the sample just outside it is strictly above the tolerance the run was cut
     // at. The difference is therefore never zero and needs no guard.
     const f = (tolerance - dInner) / (dOuter - dInner);

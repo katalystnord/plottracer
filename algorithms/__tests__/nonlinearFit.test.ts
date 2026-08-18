@@ -14,7 +14,7 @@ import type { Point2D } from '../curveFit.js';
  * computes. Each case below builds points BY HAND from a formula with known
  * parameters and asks the fitter to recover them. That is the one test a fitter
  * can be given that proves more than self-consistency: if `a` was 3.5 going in
- * and 3.5 comes back, the solver works — and if it came back 3.4999999 the
+ * and 3.5 comes back, the solver works - and if it came back 3.4999999 the
  * tolerance says how well.
  */
 
@@ -53,7 +53,7 @@ describe('the model registry', () => {
   });
 });
 
-describe('recovers the parameters it was given — exponential', () => {
+describe('recovers the parameters it was given - exponential', () => {
   it('recovers a and b from y = 3.5·e^(0.4x)', () => {
     const pts = sample((x) => 3.5 * Math.exp(0.4 * x), range(0, 5, 20));
     const r = fitOf('exponential', pts);
@@ -82,7 +82,7 @@ describe('recovers the parameters it was given — exponential', () => {
   });
 });
 
-describe('recovers the parameters it was given — the other models', () => {
+describe('recovers the parameters it was given - the other models', () => {
   it('power law: y = 2.25·x^1.7', () => {
     const pts = sample((x) => 2.25 * Math.pow(x, 1.7), range(0.5, 8, 25));
     const r = fitOf('power', pts);

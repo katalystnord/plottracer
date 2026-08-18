@@ -29,7 +29,7 @@ const DEFAULT_MAX_POINTS = 500;
  * The bounding box of a set of calibration point pixels, as a FilterRegion. For
  * an XY chart this is the plot rectangle (X1/X2 on the x-axis, Y1/Y2 on the
  * y-axis), which is exactly the region that excludes the title, axis lines and
- * tick labels a colour trace would otherwise grab — they share the curve's
+ * tick labels a colour trace would otherwise grab - they share the curve's
  * colour within tolerance but fall OUTSIDE the box. Returned as the default
  * trace region so a first pass stays inside the plot; the caller keeps it
  * visible and adjustable so data extending beyond the calibration points is one

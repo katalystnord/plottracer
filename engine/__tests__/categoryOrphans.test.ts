@@ -3,18 +3,18 @@ import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * ⚑⚑ A DELETED BAR GIVES ITS CATEGORY BACK — round-2 audit.
+ * ⚑⚑ A DELETED BAR GIVES ITS CATEGORY BACK - round-2 audit.
  *
  * Every new bar reserves a fresh category slot, and nothing ever gave one
  * back. The shared v2.0 Bar table draws its rows from the CategoryAxis rather
  * than from the tuples, so each deleted bar left a dead row with a null value
- * — and the per-cell delete only renders where a value exists, so the ghost
+ * - and the per-cell delete only renders where a value exists, so the ghost
  * row had NO delete affordance on any cell. It saved and reloaded with the
  * file.
  *
  * Worse than untidy: retyping the freed name on a replacement bar hit
  * `setTupleLabel`'s sole-owner branch and renamed IN PLACE, leaving two
- * identically named rows — after which `getCategoryIndex` resolved that name
+ * identically named rows - after which `getCategoryIndex` resolved that name
  * to the invisible one, and a third series' bar filed into a row nobody can
  * see. It fails the keystone test outright: a capable first-time user is left
  * with a row they can neither fill nor remove.
@@ -48,7 +48,7 @@ describe('deleting a bar releases its category', () => {
     expect(names[0]).toBe('Flax');
   });
 
-  it('releases it through removeLastPoint too — every deletion door', () => {
+  it('releases it through removeLastPoint too - every deletion door', () => {
     const s = calibratedBar();
     bar(s, 150, 'Flax');
     bar(s, 250, 'Hemp');

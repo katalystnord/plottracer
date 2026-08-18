@@ -3,7 +3,7 @@ import { BAR_AXES_CONFIG, CATEGORICAL_LINE_CONFIG, CalibrationSession } from '..
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * Category-name PREFILL — the convenience that must never invent a name.
+ * Category-name PREFILL - the convenience that must never invent a name.
  *
  * ⚑ WHY THIS FILE EXISTS. `prefillCategoryLabel` and its v2.0 tuple sibling
  * carry ~30 mutants no test notices, and they are the single most
@@ -12,7 +12,7 @@ import type { BarAxes } from '../../core/axes/bar.js';
  * user transcribed**.
  *
  * ⚑ IT HAS FABRICATED WRONG NAMES BEFORE, and the v1.3 gate caught it. The
- * pairing used to be by ROW INDEX — i.e. click order — so the two most
+ * pairing used to be by ROW INDEX - i.e. click order - so the two most
  * ordinary grouped-bar situations lied: a series with no Hemp bar (Flax, then
  * Jute) got row 1 prefilled "Hemp", and clicking the rightmost bar first did
  * the same. The fix made the pairing a MEASUREMENT: the donor is whichever

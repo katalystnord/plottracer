@@ -1,5 +1,5 @@
 /**
- * DRIVING ANY GRAPH TYPE THROUGH A REAL CALIBRATION — the one fixture.
+ * DRIVING ANY GRAPH TYPE THROUGH A REAL CALIBRATION - the one fixture.
  *
  * A cross-cutting test ("every type must …") needs a calibrated session of each
  * of the twelve types, and each type wants a pixel layout that is genuinely
@@ -11,12 +11,12 @@
  * ⚑ WHY IT LIVES HERE. `everyAxesTypeRefuses.test.ts` built this table for its
  * own use, and `everyTypeGenerates.test.ts` needs exactly the same thing. One
  * copy each is how `#7c3aed` came to have seven sites and three spellings
- * (v2.2 audit, finding A1) — a duplicate is not neutral, it forks every
+ * (v2.2 audit, finding A1) - a duplicate is not neutral, it forks every
  * decision downstream of it. So the table moved here the moment it had a second
  * caller, rather than after it had a third.
  *
  * ⚑⚑ KEYED BY CONFIG `id`, NOT BY LABEL. A label is UI text and is expected to
- * change — "Line (categorical)" became "Line" in v1.6 — while an id is what a
+ * change - "Line (categorical)" became "Line" in v1.6 - while an id is what a
  * saved file names its type with, and is therefore stable by contract.
  */
 import { expect } from 'vitest';
@@ -33,7 +33,7 @@ import {
  * ⚑ WHY EACH ONE IS SHAPED AS IT IS. The first version of the refusal suite
  * walked every click along one diagonal. For XY that trips `parallelAxisGuard`
  * before any VALUE is read, so the "identical values are refused" case passed
- * without ever testing values — and the property it claimed was false: XY
+ * without ever testing values - and the property it claimed was false: XY
  * happily accepted two identical X values and read one constant forever. The
  * round-2 audit fleet caught it. **A degenerate-input test must be degenerate
  * in exactly ONE way, or it proves nothing about the way it names.**
@@ -70,7 +70,7 @@ export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
  *
  * ⚑⚑ NOT `HEALTHY_PIXELS[id]!`. A per-type lookup that returns `undefined` for
  * an unknown key is how the heatmap escaped `axesConfigTable.test.ts` for a
- * whole release (finding A6b) — a test of that shape gets QUIETER as the app
+ * whole release (finding A6b) - a test of that shape gets QUIETER as the app
  * grows. A missing entry here would otherwise throw a bare TypeError deep
  * inside a loop: loud, but saying nothing about which type is unenrolled.
  */
@@ -78,7 +78,7 @@ export function healthyPixels(id: string): Array<[number, number]> {
   const pixels = HEALTHY_PIXELS[id];
   expect(
     pixels,
-    `${id} has no healthy pixel layout — add one deliberately, so a new type is proven to calibrate rather than silently skipped`
+    `${id} has no healthy pixel layout - add one deliberately, so a new type is proven to calibrate rather than silently skipped`
   ).toBeDefined();
   return pixels!;
 }
@@ -93,7 +93,7 @@ export const labelOf = (id: string): string =>
 
 /**
  * Click `config`'s steps at its healthy pixels, giving every value field the
- * text `valueAt` returns. Does NOT call `runCalibration` — the caller decides
+ * text `valueAt` returns. Does NOT call `runCalibration` - the caller decides
  * whether success or refusal is the thing being tested.
  */
 export function clickHealthy(
@@ -122,7 +122,7 @@ export function clickHealthy(
 
 /**
  * A CALIBRATED session of `config`, from healthy pixels and distinct ascending
- * values — the starting point for any test about what happens AFTER a
+ * values - the starting point for any test about what happens AFTER a
  * calibration.
  *
  * Values are `10, 20, 30…`: distinct, ascending and positive, so they are valid

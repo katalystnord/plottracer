@@ -52,14 +52,14 @@ export function setGeometryState(dataset: Dataset, state: GeometryState | null):
 export function runGeometry(dataset: Dataset, axes: AnyAxes, closed: boolean): RunGeometryResult {
   // ⚑ The type's OWN slots. A Box Plot's five letter values really are
   // independent measurements rather than a traced curve, and that refusal
-  // stands — but an XY scatter that acquired error extents is still a traced
+  // stands - but an XY scatter that acquired error extents is still a traced
   // curve, and asking `dataset.hasSlots()` refused it the moment one error bar
   // was added. The shape question again: what the TYPE is, not what the storage
   // looks like.
   if (ownSlotNames(dataset.getSlotNames()).length > 0) {
     return {
       error:
-        "Geometry statistics don't apply to datasets with slots (Box Plot / Error Bar Groups) — those are tuples of independent measurements, not a single traced curve.",
+        "Geometry statistics don't apply to datasets with slots (Box Plot / Error Bar Groups) - those are tuples of independent measurements, not a single traced curve.",
     };
   }
 

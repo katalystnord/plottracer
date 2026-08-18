@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readEngaugeProject, importEngaugeFigure } from '../digImport.js';
 
 /**
- * The Engauge reader's CALIBRATION RECONSTRUCTION — finding the "L" in a set
+ * The Engauge reader's CALIBRATION RECONSTRUCTION - finding the "L" in a set
  * of axis points, and refusing arrangements that cannot fix a scale.
  *
  * ⚑ WHY THIS FILE EXISTS. `digImport.ts` carries 169 surviving mutants, the
  * largest pool left, and they cluster in `buildXYCalibration` (lines 452–497)
- * — the function that turns another tool's axis points into our Calibration.
+ * - the function that turns another tool's axis points into our Calibration.
  * The existing suite reads the ORDINARY three-point L; nothing exercised the
  * four-sides mode, the degenerate arrangements, or the search that pairs the
  * points up.
@@ -15,7 +15,7 @@ import { readEngaugeProject, importEngaugeFigure } from '../digImport.js';
  * Every defect here is a silent wrong number, which is the worst kind (tenet
  * 1): the file imports, the figure appears, and every value is read off a
  * scale that means something else. The refusals matter as much as the
- * successes — the function returns null so the caller can say it cannot read
+ * successes - the function returns null so the caller can say it cannot read
  * the file, rather than importing a calibration that is quietly wrong.
  */
 
@@ -169,7 +169,7 @@ describe('arrangements it must REFUSE rather than import wrongly', () => {
     expect('error' in importOf(noYPair)).toBe(true);
   });
 
-  it('refuses a pair that shares BOTH coordinates — the same point twice', () => {
+  it('refuses a pair that shares BOTH coordinates - the same point twice', () => {
     const duplicate: Pt[] = [
       { sx: 100, sy: 500, gx: 0, gy: 0 },
       { sx: 600, sy: 500, gx: 0, gy: 0 },
@@ -238,7 +238,7 @@ describe('log scales come through the reconstruction', () => {
  * ⚑ AN IMPORTED POLAR FIGURE MUST READ, not merely open.
  *
  * The 2026-07-31 audit found that no test anywhere asserted a VALUE read back
- * from an imported polar `.dig` — only the notes, the unit conversion and the
+ * from an imported polar `.dig` - only the notes, the unit conversion and the
  * refusals. The fixture behind those tests was doubly degenerate (both radial
  * points at the same declared radius AND the same pixel distance from the
  * centre), so `dist20 - dist10` and `r2 - r1` were both zero and every reading
@@ -268,7 +268,7 @@ describe('an imported polar figure reads real values', () => {
       `UnitsThetaString="Degrees (DDD.DDDDD)"/>` +
       `<Curve CurveName="Axes"><CurvePoints>${axisXml}</CurvePoints></Curve>` +
       `<CurvesGraphs><Curve CurveName="Curve1"><CurvePoints>` +
-      // 150px east of the centre — halfway between the two calibration radii.
+      // 150px east of the centre - halfway between the two calibration radii.
       `<Point><PositionScreen X="250" Y="100"/></Point>` +
       `</CurvePoints></Curve></CurvesGraphs>`;
     return enc(

@@ -7,7 +7,7 @@ export interface SpiderColumn {
   seriesIndex: number;
   seriesName: string;
   profileIndex: number;
-  /** The column heading — the profile's own name, or its position. */
+  /** The column heading - the profile's own name, or its position. */
   label: string;
   values: readonly (number | null)[];
   pointIndices: readonly (number | null)[];
@@ -26,7 +26,7 @@ export interface SpiderTableProps {
   /** Which axis the next click fills, and in which profile (null = a new one). */
   cursorAxisIndex: number | null;
   cursorTupleIndex: number | null;
-  /** How many profiles exist — a column past the end is a NEW one. */
+  /** How many profiles exist - a column past the end is a NEW one. */
   tupleCount: number;
   onSelectSeries: (seriesIndex: number) => void;
   onSelectPoint: (pointIndex: number) => void;
@@ -37,13 +37,13 @@ export interface SpiderTableProps {
 }
 
 /**
- * The Spider table (v1.4): `# | Category | Series 1 | Series 2 | …` — one row
+ * The Spider table (v1.4): `# | Category | Series 1 | Series 2 | …` - one row
  * per AXIS, one column per series.
  *
  * ⚑ The slot table this replaced showed the ACTIVE series only, so adding a
  * second series made the first one's readings vanish off the screen. Every
  * ungrouped type already showed all series at once, so that table was the
- * outlier — caught by driving the app, not by a test. Rows-as-axes is also how
+ * outlier - caught by driving the app, not by a test. Rows-as-axes is also how
  * radar data is normally published, and it stays compact as series are added.
  *
  * ⚑ The alignment is REAL: row k is axis k for every series, because each
@@ -105,7 +105,7 @@ export function SpiderTable({
                   // active series if it belongs to another one. Points of an
                   // inactive series are deliberately inert on the canvas (so
                   // a click can never land on the wrong series), which left
-                  // the table as the only possible route to them — and it
+                  // the table as the only possible route to them - and it
                   // wasn't wired, so they could not be reached at all.
                   onClick={() => {
                     if (col.seriesIndex !== activeSeriesIndex) onSelectSeries(col.seriesIndex);
@@ -113,7 +113,7 @@ export function SpiderTable({
                     // (David: "Can I make an empty slot active again, so
                     // that I can re-add a point that is missing?"). The
                     // cursor otherwise walks to the FIRST gap, which cannot
-                    // reach the second one until the first is filled — and
+                    // reach the second one until the first is filled - and
                     // gaps are normal here: the axis-aware trace leaves one
                     // wherever it refused a ray. Clicking the dash is how
                     // that refusal list becomes a worklist.
@@ -155,17 +155,17 @@ export function SpiderTable({
                   }}
                 >
                   {/* An axis this series has not reached reads as a dash, not
-                      a zero — nothing was measured there.
+                      a zero - nothing was measured there.
 
                       ⚑ Typing is offered on the ACTIVE series only, the same
-                      rule the XY table follows — and it has to be, because the
+                      rule the XY table follows - and it has to be, because the
                       editor is keyed by (point index, axis) and point indices
                       are per-series, so two columns would otherwise open an
                       editor on the same keystroke. One click on another
                       column makes it active (above); its cells then read as
                       editable. */}
                   {value == null || pointIndex == null ? (
-                    <span style={{ color: theme.color.text.legend }}>—</span>
+                    <span style={{ color: theme.color.text.legend }}>-</span>
                   ) : col.seriesIndex === activeSeriesIndex ? (
                     renderValue(col.seriesIndex, pointIndex, axisIndex, value)
                   ) : (

@@ -99,7 +99,7 @@ describe('PolarAxes', () => {
     const cal = new Calibration(2);
     // Origin at (0,0)px. Point 1 at pixel-distance 5 along the +x ray
     // representing r=5,theta=0deg; point 2 at pixel-distance 10 along the
-    // same ray representing r=10 — same ray on purpose so pixel distance
+    // same ray representing r=10 - same ray on purpose so pixel distance
     // maps directly to radius, keeping the expected values easy to verify
     // by hand.
     cal.addPoint(0, 0, '0', '0');
@@ -164,7 +164,7 @@ describe('CircularChartRecorderAxes', () => {
     expect(axes.numCalibrationPointsRequired()).toBe(5);
     expect(axes.getDimensions()).toBe(2);
     expect(axes.getAxesLabels()).toEqual(['Time', 'Magnitude']);
-    // isCalibrated() is a hardcoded `return false` in the original — preserved as-is.
+    // isCalibrated() is a hardcoded `return false` in the original - preserved as-is.
     expect(axes.isCalibrated()).toBe(false);
   });
 });

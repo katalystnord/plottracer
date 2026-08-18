@@ -7,7 +7,7 @@ import type { CapHandle } from './calibrationSession.js';
  * WHAT the canvas draws, decided here; HOW it is drawn stays in `ui/ImageCanvas.tsx`.
  *
  * ⚑ WHY THIS MOVED OUT OF `Workspace.tsx` (v2.1, the Workspace split). These
- * memos hold the app's HIT-TESTING rules — which markers Konva may drag, which
+ * memos hold the app's HIT-TESTING rules - which markers Konva may drag, which
  * must leave its hit graph entirely so a press reaches the stage beneath. That
  * is the single most defect-prone region in the project and the one no
  * instrument could reach:
@@ -16,7 +16,7 @@ import type { CapHandle } from './calibrationSession.js';
  *   hit graph while the e2e stayed green, because it asserted the cap COUNT,
  *   which held either way.
  * - v2.0.1: the datum a cap hangs off was hauled along by the same press that
- *   recorded the cap — silent, and it corrupts a point already placed correctly.
+ *   recorded the cap - silent, and it corrupts a point already placed correctly.
  * - The pie ring's closing click was the one click the figure ignored, because a
  *   draggable marker sits exactly where that click must land and takes the press.
  *
@@ -26,14 +26,14 @@ import type { CapHandle } from './calibrationSession.js';
  */
 
 export interface CanvasMarker {
-  /** Stable identity passed back to onMarkerDragEnd — not a React key concern. */
+  /** Stable identity passed back to onMarkerDragEnd - not a React key concern. */
   id: string;
   x: number;
   y: number;
   label: string;
   color: string;
   draggable?: boolean;
-  /** The selected/"active" data point (checkpoint 58) — drawn with a highlight
+  /** The selected/"active" data point (checkpoint 58) - drawn with a highlight
    * ring so it stands out on the canvas as the one the trash button will delete. */
   selected?: boolean;
   /**
@@ -41,8 +41,8 @@ export interface CanvasMarker {
    * dot (checkpoint 59), so axis references read as distinct from data points.
    *
    * ⚑⚑ AND AN `aid` IS NEITHER. A category tick or a heatmap grid boundary is an
-   * ADJUSTABLE AID — a divider you are expected to drag until it sits on the
-   * figure's own rule — while the reticle was chosen to say "precise reference".
+   * ADJUSTABLE AID - a divider you are expected to drag until it sits on the
+   * figure's own rule - while the reticle was chosen to say "precise reference".
    * Drawing both the same way told the user that a boundary they had nudged by
    * eye carried the authority of a calibration point, and that the calibration
    * point could be dragged as casually as a divider. Both halves are wrong, and
@@ -55,12 +55,12 @@ export interface CanvasMarker {
    */
   /**
    * ⚑⚑ AND A `cap` IS DRAWN BY THE WHISKER, NOT BY THE MARKER LAYER. An error
-   * cap's only visible form is the tick at its whisker's end (B1) — this marker
+   * cap's only visible form is the tick at its whisker's end (B1) - this marker
    * exists to be GRABBED, and the renderer gives it a hit area and no fill.
    *
    * ⚑ No new shape had to be invented for it, which was worth checking: round
    * is a data dot and a reticle, square is an `aid`. A cap is neither, and
-   * `computeWhiskerGlyph` has always drawn a perpendicular TICK there — the same
+   * `computeWhiskerGlyph` has always drawn a perpendicular TICK there - the same
    * mark matplotlib's `capsize` draws. The figure's own convention was already
    * in the code.
    */
@@ -85,7 +85,7 @@ export interface CanvasMarker {
    * ⚑ The other half of the same problem `labelAway` solves, for a line rather
    * than a rim: a heatmap's four colour-key handles sit along one horizontal
    * strip, so a fixed up-and-right offset prints them on top of each other.
-   * Which steps stagger is declared by the axes config, not decided here — only
+   * Which steps stagger is declared by the axes config, not decided here - only
    * the config knows its own crowding. Presentational: it moves TEXT, never the
    * marker.
    */
@@ -94,7 +94,7 @@ export interface CanvasMarker {
    * anchors big and derived samples small. Defaults to 5. */
   radius?: number;
   /**
-   * The line this marker's drag is confined to, in IMAGE space — an error cap's
+   * The line this marker's drag is confined to, in IMAGE space - an error cap's
    * value axis.
    *
    * ⚑⚑ SO THE GESTURE IS BOUND TO ITS CONSTRAINT ON SCREEN, not only in the
@@ -125,7 +125,7 @@ export interface SeriesLine {
  * What the overlay needs from a series: identity, colour, and PIXELS.
  *
  * ⚑ Deliberately narrower than `DatasetPointsView`, which also carries each
- * point's `data` — the calibrated VALUES. Nothing drawn on the canvas depends on
+ * point's `data` - the calibrated VALUES. Nothing drawn on the canvas depends on
  * what a point means, only on where it sits, and saying so in the type is what
  * keeps it that way. `DatasetPointsView` satisfies this structurally, so callers
  * pass it unchanged.
@@ -146,7 +146,7 @@ export interface OverlaySeriesInfo {
 /** The radius a plain dense series' one visible (selected) dot is drawn at. */
 export const SELECTED_DOT_RADIUS = 3.5;
 
-/** Split a series into contiguous runs — the "is this dense enough to draw as a
+/** Split a series into contiguous runs - the "is this dense enough to draw as a
  * line?" question. No runs means a scatter, which stays dots. */
 export function runsForPoints(pts: readonly { px: number; py: number }[]): { x: number; y: number }[][] {
   return polylineRuns(pts.map((p) => ({ x: p.px, y: p.py })));
@@ -157,7 +157,7 @@ export function runsForPoints(pts: readonly { px: number; py: number }[]): { x: 
  *
  * ⚑ Exported because the WHISKER now names the marker its cap is, so the
  * renderer can redraw it from a live drag position. Two places building the
- * same string by hand is how they drift — and a whisker naming a marker that
+ * same string by hand is how they drift - and a whisker naming a marker that
  * does not exist would fail silently, as "the cap simply does not follow".
  */
 export function dataPointMarkerId(pixelIndex: number): string {
@@ -214,7 +214,7 @@ export interface CanvasMarkerInput {
   dataPointRoles: readonly (PointRole | null)[];
   /** Per ACTIVE-series pixel: the cap it is (role + its drag line), or null for
    * a data point.
-   * ⚑ B4 — a datum's caps are pixels of its own series now, so the marker layer
+   * ⚑ B4 - a datum's caps are pixels of its own series now, so the marker layer
    * has to be able to tell them apart from the readings they belong to.
    * Optional, so every type that has no error passes nothing and behaves
    * exactly as before. */
@@ -222,7 +222,7 @@ export interface CanvasMarkerInput {
   /** Every series, for the inactive-context dots. */
   allDatasetsData: readonly OverlaySeries[];
   datasetInfos: readonly OverlaySeriesInfo[];
-  /** Fallback when no dataset is active — should never be reached in practice. */
+  /** Fallback when no dataset is active - should never be reached in practice. */
   fallbackColor: string;
   axesKind: string;
   /** The axes are built. Handles only become draggable once they are. */
@@ -272,7 +272,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         x: point.px,
         y: point.py,
         // ⚑ Spider labels the handle with its VALUE alone. The generic
-        // "<step>=<values>" form rendered as "Axis 5=80, Biodegradation" — six of
+        // "<step>=<values>" form rendered as "Axis 5=80, Biodegradation" - six of
         // those sprawled across the plot, repeating axis names the FIGURE already
         // prints and burying the one thing the handle asserts, which is where that
         // value sits. Caught on screen; no test can see a label being cluttered.
@@ -287,7 +287,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // ⚑ Spread rather than `labelAway,`: under exactOptionalPropertyTypes an
         // ABSENT key means "does not apply" and an explicit `undefined` does not.
         // A non-radial figure has no centre to lean away from, so the key is not
-        // there at all — the same rule v2.0 turned on for the record.
+        // there at all - the same rule v2.0 turned on for the record.
         ...(labelAway ? { labelAway } : {}),
         // Spread for the same exactOptionalPropertyTypes reason as labelAway:
         // a step that does not stagger has no key at all.
@@ -346,7 +346,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
 
   dataPoints.forEach((point, i) => {
     // ⚑⚑ IS THIS PIXEL A CAP? Under B4 a datum's error caps live on its own
-    // tuple, so they are pixels of the series they belong to — which changes two
+    // tuple, so they are pixels of the series they belong to - which changes two
     // answers below, and both were wrong the moment the record moved.
     const capRole = capRoles?.[i] ?? null;
     // Interpolation-assist (checkpoint 120): anchors are the RECORD, drawn big
@@ -370,14 +370,14 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       x: point.px,
       y: point.py,
       // ⚑ A cap carries no ordinal. The label is the point's NUMBER, and a cap
-      // is part of a reading rather than another reading — numbering it told the
+      // is part of a reading rather than another reading - numbering it told the
       // user a one-point series had three points, the same claim the series list
       // was making before `datumCount`.
       label:
         isInterp || capRole
           ? ''
           : i === ringClosingIndex
-            ? `${i + 1} — click to close the ring`
+            ? `${i + 1} - click to close the ring`
             : String(i + 1),
       color: activeColor,
       ...(labelAway ? { labelAway } : {}),
@@ -405,8 +405,8 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       // reaches the stage and registers as the next image click. Only while closing
       // is actually on offer, so the point stays correctable the rest of the time.
       // ⚑⚑ A CAP OF THE TARGET SERIES STAYS DRAGGABLE. `isErrorLinkAnchorSeries`
-      // was scoped to the target series precisely so a cap — living in a series
-      // of its own — stayed correctable. B4 moves the cap onto the datum's
+      // was scoped to the target series precisely so a cap - living in a series
+      // of its own - stayed correctable. B4 moves the cap onto the datum's
       // record, so it is a pixel of the target series and the same rule froze
       // it: on the built app, dragging the mirrored lower cap did nothing while
       // three on-screen strings promised it would.
@@ -417,7 +417,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       // to a cap, which is not where a link drag starts.
       //
       // ⚑ This is B3 ("caps ALWAYS editable") arriving with no exception to the
-      // active-series guard — a cap is part of the active series' point, so
+      // active-series guard - a cap is part of the active series' point, so
       // dragging it already IS editing the active series.
       // ⚑ B1: an error cap has no dot of its own. Its drawn form is the tick at
       // the end of its whisker, and this marker is the hit area over it.
@@ -430,7 +430,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         (!isErrorLinkAnchorSeries || capRole !== null) &&
         !isInterp,
       selected,
-      // Absent, not undefined — an ordinary dot takes ImageCanvas's default of 5.
+      // Absent, not undefined - an ordinary dot takes ImageCanvas's default of 5.
       ...(isAnchor
         ? { radius: 6.5 }
         : isInterp

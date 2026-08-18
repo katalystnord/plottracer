@@ -2,7 +2,7 @@
  * PlotTracer's own defect shapes, as lint rules.
  *
  * ⚑⚑ WHY THESE EXIST. Every rule below is a bug this repository has actually
- * shipped — several of them more than once. The ranked audit plan called for
+ * shipped - several of them more than once. The ranked audit plan called for
  * Semgrep precisely to encode them, on the reasoning that "this is the
  * project's own philosophy applied to tooling: turn a hard-won lesson into an
  * instrument so it cannot recur." Semgrep needs a Python toolchain that is not
@@ -12,7 +12,7 @@
  *
  * ⚑ THE BAR FOR ADDING A RULE: it must name a defect that REACHED master at
  * least once. A rule that encodes a preference rather than a scar belongs in
- * the style config, not here — the value of this file is that every entry is
+ * the style config, not here - the value of this file is that every entry is
  * evidence, and diluting it with taste is how it stops being read.
  *
  * ⚑ Each rule carries the commit or session that earned it, so a future reader
@@ -22,7 +22,7 @@
 /** ─────────────────────────────────────────────────────────────────────────
  *  ⛔ REMOVED: `no-fabricated-label`.
  *
- *  It flagged `?? 'Bar0'` / `` `Series ${n}` `` — the defect found FOUR times on
+ *  It flagged `?? 'Bar0'` / `` `Series ${n}` `` - the defect found FOUR times on
  *  2026-07-30. Written and run, it produced 15 hits and EVERY ONE was a false
  *  positive: `Group ${i}` and `Category ${i}` are on-screen labels for a slot
  *  the user has not named, `Point ${n} selected` is a tips-bar sentence, and
@@ -30,12 +30,12 @@
  *
  *  ⚑ The real defect was narrower than the pattern: a name written INTO THE
  *  RECORD as though someone had transcribed it. Nothing in the syntax
- *  distinguishes that from a label drawn on screen — the difference is where the
+ *  distinguishes that from a label drawn on screen - the difference is where the
  *  string goes, several calls away.
  *
  *  ⚑ So it is deleted rather than kept with disables. A rule that fires on
  *  correct code gets silenced, and a silenced rule is worse than no rule: it
- *  looks like coverage. The lesson stays where it works — grep the literal
+ *  looks like coverage. The lesson stays where it works - grep the literal
  *  string when one instance is found (feedback_sweep_and_self_audit).
  *  ───────────────────────────────────────────────────────────────────────── */
 
@@ -54,7 +54,7 @@ const noDynamicRegexp = {
     schema: [],
     messages: {
       dynamic:
-        'RegExp built from a runtime string. A name out of a file WILL contain a metacharacter one day — ' +
+        'RegExp built from a runtime string. A name out of a file WILL contain a metacharacter one day - ' +
         'this threw on a folder called "Fig 3 (rev 2)". Compare directly, or escape first.',
     },
   },
@@ -82,7 +82,7 @@ const noDynamicRegexp = {
  *  the one place that decides what a typed or file-borne value means, including
  *  dates and separators.
  *
- *  Scoped to core/axes/ — the calibration classes, where a wrong number is a
+ *  Scoped to core/axes/ - the calibration classes, where a wrong number is a
  *  wrong READING rather than a wrong pixel.
  *  ───────────────────────────────────────────────────────────────────────── */
 const noRawNumberParse = {
@@ -92,7 +92,7 @@ const noRawNumberParse = {
     schema: [],
     messages: {
       raw:
-        '{{fn}}() on a calibration value. "1,000" becomes 1 and every reading is silently wrong — this shipped in ' +
+        '{{fn}}() on a calibration value. "1,000" becomes 1 and every reading is silently wrong - this shipped in ' +
         'MapAxes. Use InputParser, which is the one place that decides what a typed value means.',
     },
   },
@@ -106,7 +106,7 @@ const noRawNumberParse = {
         if (name !== 'parseFloat' && name !== 'parseInt') return;
         const arg = node.arguments[0];
         if (!arg) return;
-        // ⚑ ONLY VALUES THE USER OR A FILE DECLARED — `cp.dx`, `cp.dy`,
+        // ⚑ ONLY VALUES THE USER OR A FILE DECLARED - `cp.dx`, `cp.dy`,
         // `globalValues[...]`, `meta[...]`. A first draft flagged every
         // parseFloat in the directory and hit `parseFloat(String(pxi))`, which
         // parses a PIXEL: already a number, nothing to misread, no InputParser
@@ -121,7 +121,7 @@ const noRawNumberParse = {
 };
 
 /** ─────────────────────────────────────────────────────────────────────────
- *  4. ⚑⚑ A `calibrate()` that cannot fail — the defect this project has now
+ *  4. ⚑⚑ A `calibrate()` that cannot fail - the defect this project has now
  *  shipped FIVE times.
  *
  *  xy, polar, map, ternary (2026-07-31), then PieAxes (2026-08-01, found by a
@@ -137,7 +137,7 @@ const calibrateMustRefuse = {
     schema: [],
     messages: {
       cannotFail:
-        'calibrate() has no `return false` — it cannot refuse anything. This exact shape has shipped FIVE times ' +
+        'calibrate() has no `return false` - it cannot refuse anything. This exact shape has shipped FIVE times ' +
         '(xy, polar, map, ternary, pie), each reporting success while every reading came back null, 0 or NaN.',
     },
   },

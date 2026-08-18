@@ -2,7 +2,7 @@
  * Splitting a merged run of bars at declared category dividers (v2.1).
  *
  * Touching bars of the same colour flood into ONE blob and read as one oversized
- * bar — the #1 fixable limit measured against the full corpus, costing ~11 points
+ * bar - the #1 fixable limit measured against the full corpus, costing ~11 points
  * of real-figure recall (82.2% separated against 71.1% touching, 384 figures).
  * Three image-analysis approaches are spent. This is the fourth thing to try, and
  * it is not image analysis at all: the user declares where the categories divide,
@@ -10,14 +10,14 @@
  *
  * ⚑ WHAT MAKES THIS DIFFERENT FROM WPD'S OWN SPLITTER. Upstream already separates
  * touching bars (`barExtraction.js`: group columns while |Δx| ≤ 30px and both ends
- * are within ΔVal = 10px). That is a BLIND tolerance — it has no idea how many
+ * are within ΔVal = 10px). That is a BLIND tolerance - it has no idea how many
  * bars should be there, so it returns whatever the threshold yields, and it keys
  * the split on the very quantity being measured, which fails exactly when
  * neighbouring bars are similar heights. Declared dividers know nothing about
  * heights, so they do not care.
  *
  * ⚑⚑ THE DISCIPLINE, or this becomes approach C again. Approach C won on the
- * metric (+3.9) and was reverted because it ERASED SHORT BARS — a visible failure
+ * metric (+3.9) and was reverted because it ERASED SHORT BARS - a visible failure
  * traded for an invisible one. Knowing how many bars to expect is precisely the
  * condition under which a threshold gets quietly lowered until the answer appears.
  * So the expected count governs **when to stop and when to report a miss**, never
@@ -51,7 +51,7 @@ export interface SplitPiece {
   /** The piece's own extent in the value direction, robustly estimated. */
   min: number;
   max: number;
-  /** How many ink columns it was measured from — a thin piece is worth doubting,
+  /** How many ink columns it was measured from - a thin piece is worth doubting,
    * and the caller can see it rather than being told a bar was found. */
   columns: number;
 }
@@ -73,7 +73,7 @@ function median(values: number[]): number {
 export interface SplitOptions {
   /** Ink columns a band needs before it counts as a bar. Two, because a single
    * column is as likely to be an antialiased edge bleeding across a divider as
-   * it is to be a bar — and a band that thin is exactly what a slightly
+   * it is to be a bar - and a band that thin is exactly what a slightly
    * misplaced divider produces. */
   minColumns?: number;
 }
@@ -85,14 +85,14 @@ export interface SplitOptions {
  * this is the single most important line in the file. Two touching bars of
  * different heights form a step. If a piece's value were the maximum column
  * extent inside its band, a divider a few pixels into the taller neighbour would
- * drag the shorter bar's reading up to its neighbour's — a silently wrong NUMBER
+ * drag the shorter bar's reading up to its neighbour's - a silently wrong NUMBER
  * caused by a small placement error, in exactly the case this feature exists to
  * serve. The median ignores a contaminated edge column entirely, which is what
  * lets the design promise that tick placement is an aid and not a measurement.
  *
  * `dividers` must be ascending; `columns` need not be sorted. Bands are
  * half-open [from, to) so a column landing exactly on a divider belongs to the
- * band that divider opens — the same rule `bandIndexForParam` uses, so a bar
+ * band that divider opens - the same rule `bandIndexForParam` uses, so a bar
  * cannot be assigned to one category and split into another.
  */
 export function splitRunAtDividers(
@@ -144,7 +144,7 @@ export interface ExpectationReport {
  * Check a split against what the declared structure says should be there.
  *
  * ⚑ This REPORTS. It does not retry, relax anything, or fill a gap. The count is
- * here so a short answer can be named — "no bar found for category 3" — instead
+ * here so a short answer can be named - "no bar found for category 3" - instead
  * of a table that is quietly missing a row and looks finished. Anything that
  * used this number to widen a tolerance until it matched would be reintroducing
  * approach C with extra steps.

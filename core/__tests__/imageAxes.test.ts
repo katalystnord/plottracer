@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ImageAxes } from '../axes/image.js';
 
 /**
- * ImageAxes — raw pixel coordinates, the identity axes.
+ * ImageAxes - raw pixel coordinates, the identity axes.
  *
- * ⚑ THIS FILE SCORED 0.00% ON MUTATION TESTING. Not low — zero. Every mutant
+ * ⚑ THIS FILE SCORED 0.00% ON MUTATION TESTING. Not low - zero. Every mutant
  * survived and fifteen had no coverage at all, because nothing anywhere executed it.
  * It is the smallest axes class in the project and the one place where "the tests are
  * green" meant literally nothing.
@@ -12,7 +12,7 @@ import { ImageAxes } from '../axes/image.js';
  * It is worth testing rather than deleting because its identity behaviour is a
  * CONTRACT, not an absence of one: it is what lets a figure be worked on before any
  * calibration exists, and `isCalibrated()` returning true unconditionally is the
- * assertion that pixel coordinates are always valid — the opposite of every other
+ * assertion that pixel coordinates are always valid - the opposite of every other
  * axes class, and exactly the kind of inversion a future edit could "tidy" away.
  */
 
@@ -39,7 +39,7 @@ describe('the mapping is the identity, in both directions', () => {
   });
 
   it('maps data back to the same pixel', () => {
-    // ⚑ Genuinely inverts (as BarAxes's now does too, since v2.0) — and something
+    // ⚑ Genuinely inverts (as BarAxes's now does too, since v2.0) - and something
     // downstream may probe it the way errorCapture probes Bar's. A mutant
     // replacing this with `{}` survived.
     expect(new ImageAxes().dataToPixel(40, 60)).toEqual({ x: 40, y: 60 });
@@ -56,7 +56,7 @@ describe('the mapping is the identity, in both directions', () => {
 
 describe('the live readout', () => {
   it('shows both coordinates to two decimals, comma-separated', () => {
-    // ⚑ A mutant that dropped the ", " separator survived — so "12.30, 45.60" and
+    // ⚑ A mutant that dropped the ", " separator survived - so "12.30, 45.60" and
     // "12.3045.60" were indistinguishable to the suite. The separator is the whole
     // readability of the readout.
     expect(new ImageAxes().pixelToLiveString(12.3, 45.6)).toBe('12.30, 45.60');

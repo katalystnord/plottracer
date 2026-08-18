@@ -41,7 +41,7 @@ import { freshProfile } from './e2eProfile.js';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-// ⚑ CONTAINMENT — where this run's windows go, decided in ONE place for all
+// ⚑ CONTAINMENT - where this run's windows go, decided in ONE place for all
 // three Electron e2e files (`./e2eContainment.ts`, which holds the reasoning:
 // why it must be a launch ARGUMENT, the three things that look like containment
 // and are not, and why an undeclared run now REFUSES instead of launching).
@@ -54,33 +54,33 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
  * ⚑⚑ THE SUITE HAD NO PROFILE OF ITS OWN, so it ran against the developer's
  * REAL PlotTracer user-data directory. Two live consequences: the run WROTE
  * into his installed app's storage, and anything the app persists survived from
- * one run to the next — a shared mutable fixture nobody declared.
+ * one run to the next - a shared mutable fixture nobody declared.
  *
  * ⚑ The sidebar test found it the expensive way. It asserts the panel opens at
- * its DEFAULT width, then drags the handle to ~563px — which v2.2 made
+ * its DEFAULT width, then drags the handle to ~563px - which v2.2 made
  * PERSISTENT. So it passed on the first run, stored the width it had just
  * dragged to, and failed on every run after, with no code change in between.
  * A green board went red by itself, which is the worst way to learn this.
  *
  * ⚑ The rule: a test that only passes on a clean profile must be GIVEN a clean
- * profile. Hoping for one makes every future persisted setting — recent files,
- * window geometry, whatever v2.3 adds — a landmine for whichever test runs
+ * profile. Hoping for one makes every future persisted setting - recent files,
+ * window geometry, whatever v2.3 adds - a landmine for whichever test runs
  * second. Fixed at the launch, not in the one test that happened to trip it.
  */
 /**
  * ⚑ The sweep and the mkdtemp live in `./e2eProfile.ts`, which holds the
  * reasoning: why it is swept at START rather than at exit, and why the clock is
- * an ARGUMENT — this block leaked twice, the second time because it read /tmp's
+ * an ARGUMENT - this block leaked twice, the second time because it read /tmp's
  * mtime instead of the time, which no test could reach while it was a
  * module-scope side effect here.
  */
 const E2E_USER_DATA = freshProfile();
 
 
-/** The bundled spider example's published ground truth — anchors in IMAGE pixels,
+/** The bundled spider example's published ground truth - anchors in IMAGE pixels,
  * plus the values each series states. Read here so the spider trace can be checked
  * against the figure the app itself ships, not against geometry a test invented. */
-/** The bundled pie family's published ground truth (v1.6) — read here so the app can
+/** The bundled pie family's published ground truth (v1.6) - read here so the app can
  * be driven against the SAME numbers the figures were rendered from, rather than
  * against geometry a test invented for itself. */
 const PIE_TRUTHS = ['pie-filler-composition', 'pie-exploded-market-share', 'donut-donut-flavours', 'pie-tilted-market-segments'].map(
@@ -159,12 +159,12 @@ function makePdf(pageCount: number): Buffer {
   return Buffer.from(parts.join(''), 'latin1');
 }
 const SAMPLE_IMAGE = path.join(REPO_ROOT, 'samples/xy-stress-strain.png');
-// The heatmap fixture, which ships the values it was drawn from — so the e2e
+// The heatmap fixture, which ships the values it was drawn from - so the e2e
 // can check the numbers the app puts on screen against the figure's own truth
 // rather than against itself (engine/__tests__/fixtures/colorbars/).
 const HEATMAP_IMAGE = path.join(REPO_ROOT, 'engine/__tests__/fixtures/colorbars/heatmap-viridis.png');
 const HEATMAP_TRUTH = path.join(REPO_ROOT, 'engine/__tests__/fixtures/colorbars/truth.json');
-// A 2-page LZW TIFF (B7) — historic scans are commonly (multipage) TIFF.
+// A 2-page LZW TIFF (B7) - historic scans are commonly (multipage) TIFF.
 const MULTIPAGE_TIFF = path.join(REPO_ROOT, 'ui/__tests__/fixtures/multipage.tiff');
 
 let app: ElectronApplication;
@@ -580,7 +580,7 @@ describe('Workspace: XY axes', () => {
     await expectRow([5, 5]);
 
     // In Calibrate mode, click the X2 handle (local 400,250) to select it for the
-    // keyboard — the same handle you would otherwise drag.
+    // keyboard - the same handle you would otherwise drag.
     await page.getByTestId('mode-calibrate').click();
     await clickAt(400, 250);
     expect(await textOf('tips-bar')).toMatch(/Handle selected/i);
@@ -604,10 +604,10 @@ describe('Workspace: XY axes', () => {
 
     // Switch to Measure mode WITHOUT clicking a measurement vertex, then press the
     // arrows as if fine-tuning a measurement. The lingering data-point selection
-    // must NOT be silently moved — arrow-nudge is gated to Place Point/Interpolate.
+    // must NOT be silently moved - arrow-nudge is gated to Place Point/Interpolate.
     await page.getByTestId('mode-measure').click();
     for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowUp');
-    await expectRow([5, 5]); // unchanged — the point did not move
+    await expectRow([5, 5]); // unchanged - the point did not move
   });
 
   it('still pans the background after marker interactions', async () => {
@@ -792,7 +792,7 @@ describe('Workspace: Bar axes', () => {
 
   it('walks a shorter 2-step calibration and reads back a bar dragged corner to corner', async () => {
     await resetWorkspace('bar');
-    expect(await textOf('tips-bar')).toMatch(/1\/2 — P1/);
+    expect(await textOf('tips-bar')).toMatch(/1\/2 - P1/);
 
     await calibrateBarStandard();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
@@ -929,7 +929,7 @@ describe('Workspace: Bar axes', () => {
 
     await page.getByTestId('category-count').fill('4');
     await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks \u2014 4 categories');
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
 
     // Both conventions are visible without opening anything, and centred is preset.
     expect(await page.getByTestId('category-convention-centred').isChecked()).toBe(true);
@@ -955,7 +955,7 @@ describe('Workspace: Bar axes', () => {
 
     await page.getByTestId('category-count').fill('5');
     await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks — 5 categories');
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 5 categories');
 
     // Name the last one, then retype the count with the field selected: the
     // browser replaces the whole value, so the first keystroke IS "1".
@@ -963,7 +963,7 @@ describe('Workspace: Bar axes', () => {
     await page.getByTestId('category-count').fill('12');
     await page.waitForTimeout(150);
     // The transient "1" must not have taken effect -- only the final 12.
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks — 12 categories');
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 12 categories');
   });
 
   it('removes the ticks again, leaving the calibration untouched', async () => {
@@ -1172,7 +1172,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await textOf('tips-bar')).toMatch(/Q1.*box 1/);
     const tableText = await textOf('points-table');
     expect(tableText).toContain('0.5'); // Min still filled (fmtValue formatting)
-    expect(tableText).not.toContain('1.5'); // Q1 slot cleared back to '—'
+    expect(tableText).not.toContain('1.5'); // Q1 slot cleared back to '-'
   });
 
   it('removing a point from a complete tuple makes its box-and-whisker glyph disappear again', async () => {
@@ -1199,7 +1199,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     await calibrateBarStandard();
 
     await clickAt(300, 385); // starts tuple 0 (Min)
-    expect(await textOf('tuple-label-0')).toBe('—');
+    expect(await textOf('tuple-label-0')).toBe('-');
 
     await page.getByTestId('tuple-label-0').click();
     await page.getByTestId('tuple-label-0').fill('Sample A');
@@ -1213,7 +1213,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await textOf('tuple-label-0')).toBe('Sample A');
 
     await clickAt(500, 385); // starts tuple 1
-    expect(await textOf('tuple-label-1')).toBe('—');
+    expect(await textOf('tuple-label-1')).toBe('-');
   });
 
   it('deletes a whole box with the row ✕, the label rides the box, and undo restores it (checkpoint 129)', async () => {
@@ -1270,14 +1270,14 @@ describe('Workspace: Polar axes', () => {
 
   it('walks a 3-step calibration where the origin needs no typed value, then reads back r and θ', async () => {
     await resetWorkspace('polar');
-    expect(await textOf('tips-bar')).toMatch(/1\/3 — Origin/);
+    expect(await textOf('tips-bar')).toMatch(/1\/3 - Origin/);
 
     await clickAt(100, 300); // origin: click alone advances the step
-    expect(await textOf('tips-bar')).toMatch(/2\/3 — P1/);
+    expect(await textOf('tips-bar')).toMatch(/2\/3 - P1/);
 
     await clickAt(400, 300);
     await confirmValues(['10', '0']);
-    expect(await textOf('tips-bar')).toMatch(/3\/3 — P2/);
+    expect(await textOf('tips-bar')).toMatch(/3\/3 - P2/);
 
     await clickAt(700, 300);
     await confirmValues(['20', '0']);
@@ -1327,12 +1327,12 @@ describe('Workspace: Ternary axes', () => {
 
   it('walks a 3-step calibration where every corner needs no typed value, then reads back a, b, c', async () => {
     await resetWorkspace('ternary');
-    expect(await textOf('tips-bar')).toMatch(/1\/3 — A/);
+    expect(await textOf('tips-bar')).toMatch(/1\/3 - A/);
 
     await clickAt(100, 300); // A: click alone advances the step
-    expect(await textOf('tips-bar')).toMatch(/2\/3 — B/);
+    expect(await textOf('tips-bar')).toMatch(/2\/3 - B/);
     await clickAt(100, 100); // B
-    expect(await textOf('tips-bar')).toMatch(/3\/3 — C/);
+    expect(await textOf('tips-bar')).toMatch(/3\/3 - C/);
     await clickAt(300, 300); // C
     await page.getByTestId('run-calibration').click();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
@@ -1378,10 +1378,10 @@ describe('Workspace: Map axes', () => {
     // bottom-left to match WPD (its own <select> lists Bottom Left first) --
     // that default has its own coverage in the checkpoint-68 block below.
     await page.getByTestId('calib-choice-origin-top-left').check();
-    expect(await textOf('tips-bar')).toMatch(/1\/2 — P1/);
+    expect(await textOf('tips-bar')).toMatch(/1\/2 - P1/);
 
     await clickAt(100, 300); // P1: click alone advances the step
-    expect(await textOf('tips-bar')).toMatch(/2\/2 — P2/);
+    expect(await textOf('tips-bar')).toMatch(/2\/2 - P2/);
     await clickAt(400, 300);
     await confirmValue('30');
     await page.getByTestId('run-calibration').click();
@@ -1460,21 +1460,21 @@ describe('Workspace: Circular Chart Recorder axes', () => {
 
   it('walks a 5-step calibration mixing value-less and 1-2 value steps, gating Calibrate on the global field', async () => {
     await resetWorkspace('ccr');
-    expect(await textOf('tips-bar')).toMatch(/1\/5 — \(T0,R0\)/);
+    expect(await textOf('tips-bar')).toMatch(/1\/5 - \(T0,R0\)/);
 
     await clickAt(200, 200); // (T0,R0): 2 values
     await confirmValues(['2024/01/01 00:00', '1']);
-    expect(await textOf('tips-bar')).toMatch(/2\/5 — \(T0,R1\)/);
+    expect(await textOf('tips-bar')).toMatch(/2\/5 - \(T0,R1\)/);
 
     await clickAt(400, 200); // (T0,R1): click-only, advances immediately
-    expect(await textOf('tips-bar')).toMatch(/3\/5 — \(T0,R2\)/);
+    expect(await textOf('tips-bar')).toMatch(/3\/5 - \(T0,R2\)/);
 
     await clickAt(300, 100); // (T0,R2): 1 value
     await confirmValue('10');
-    expect(await textOf('tips-bar')).toMatch(/4\/5 — \(T1,R2\)/);
+    expect(await textOf('tips-bar')).toMatch(/4\/5 - \(T1,R2\)/);
 
     await clickAt(200, 400); // (T1,R2): click-only
-    expect(await textOf('tips-bar')).toMatch(/5\/5 — \(T2,R2\)/);
+    expect(await textOf('tips-bar')).toMatch(/5\/5 - \(T2,R2\)/);
 
     await clickAt(400, 400); // (T2,R2): click-only, walk complete
     expect(await page.locator('[data-testid="global-field-startTime"]').isVisible()).toBe(true);
@@ -1905,7 +1905,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(savePath);
   });
 
-  it('opening an example while a PDF is open drops the stale source PDF (post-v0.4 audit — D1)', async () => {
+  it('opening an example while a PDF is open drops the stale source PDF (post-v0.4 audit - D1)', async () => {
     await resetWorkspace('xy');
     const pdfPath = tempFilePath('pdf');
     fs.writeFileSync(pdfPath, makePdf(1));
@@ -1954,7 +1954,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.dispatchEvent('[data-testid="canvas-container"]', 'drop', { dataTransfer: dt });
   }
 
-  it('opens a PDF dropped onto the canvas, not just via the dialog (checkpoint 98 — T1)', async () => {
+  it('opens a PDF dropped onto the canvas, not just via the dialog (checkpoint 98 - T1)', async () => {
     await resetWorkspace('xy');
     // The drop/paste handlers used to pre-filter to image/* before the PDF
     // branch could run, so a dropped PDF was reported as an unsupported image.
@@ -1968,7 +1968,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('provenance')).toMatch(/dropped\.pdf/);
   });
 
-  it('dropping an image while a PDF is open clears the stale PDF + provenance (checkpoint 98 — T2)', async () => {
+  it('dropping an image while a PDF is open clears the stale PDF + provenance (checkpoint 98 - T2)', async () => {
     await resetWorkspace('xy');
     const pdfPath = tempFilePath('pdf');
     fs.writeFileSync(pdfPath, makePdf(2));
@@ -1986,7 +1986,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(pdfPath);
   });
 
-  it('re-opens a PDF after closing one via an image, without breaking (checkpoint 100 — T4)', async () => {
+  it('re-opens a PDF after closing one via an image, without breaking (checkpoint 100 - T4)', async () => {
     await resetWorkspace('xy');
     const pdfPath = tempFilePath('pdf');
     fs.writeFileSync(pdfPath, makePdf(2));
@@ -2084,7 +2084,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Click endpoint A to select it, then nudge it up: the slope re-derives from
     // the moved pixel, so the displayed value changes (proof it's live, not frozen
-    // — the "unfrozen measurements" defect this closes).
+    // - the "unfrozen measurements" defect this closes).
     await clickAt(460, 300);
     expect(await textOf('tips-bar')).toMatch(/Measurement point selected/i);
     for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowUp');
@@ -2550,8 +2550,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('bar-category-name-0')).toBe('Flax');
     expect(await textOf('bar-category-name-1')).toBe('Hemp');
     expect(await page.getByTestId('bar-category-name-2').count()).toBe(0); // still 2 rows
-    expect(await textOf('bar-cell-0-0')).not.toBe('—'); // series 1's Flax bar
-    expect(await textOf('bar-cell-1-0')).not.toBe('—'); // series 2's, same row
+    expect(await textOf('bar-cell-0-0')).not.toBe('-'); // series 1's Flax bar
+    expect(await textOf('bar-cell-1-0')).not.toBe('-'); // series 2's, same row
 
     // ...and renaming the ROW is a rename of that one shared category, seen by
     // every series bound to it at once -- the whole point of one row per
@@ -2567,8 +2567,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('bar-category-name-1').blur();
     await page.waitForTimeout(100);
     expect(await textOf('bar-category-name-1')).toBe('Jute');
-    expect(await textOf('bar-cell-0-1')).not.toBe('—'); // series 1's bar, same row
-    expect(await textOf('bar-cell-1-1')).not.toBe('—'); // series 2's, still the same row
+    expect(await textOf('bar-cell-0-1')).not.toBe('-'); // series 1's bar, same row
+    expect(await textOf('bar-cell-1-1')).not.toBe('-'); // series 2's, still the same row
 
     // The typed name replaces an empty category cell in the file.
     const csvPath = tempFilePath('csv');
@@ -2652,7 +2652,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(pdfPath);
   });
 
-  it('saves and reopens a MULTI-FIGURE project — every figure, its type, name and active index (checkpoint 115)', async () => {
+  it('saves and reopens a MULTI-FIGURE project - every figure, its type, name and active index (checkpoint 115)', async () => {
     await resetWorkspace('xy');
     const pdfPath = tempFilePath('pdf');
     fs.writeFileSync(pdfPath, makePdf(2));
@@ -2722,7 +2722,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(savePath);
   });
 
-  it('saves a figure captured AFTER a page flip — no stale-session error (audit H1)', async () => {
+  it('saves a figure captured AFTER a page flip - no stale-session error (audit H1)', async () => {
     await resetWorkspace('xy');
     const pdfPath = tempFilePath('pdf');
     fs.writeFileSync(pdfPath, makePdf(3)); // 3 pages, so figure 2 can live on a later page
@@ -2748,7 +2748,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
-    // Save must SUCCEED. Before the fix this aborted with "Can't save 'Figure 2' —
+    // Save must SUCCEED. Before the fix this aborted with "Can't save 'Figure 2' -
     // Calibrate the axes", losing both figures.
     const savePath = tempFilePath('zip');
     await stubSaveDialog(savePath);
@@ -2856,13 +2856,13 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
   // we had already found and normalized. It read: "floodFill's `visited`
   // bitmask... includes rejected boundary pixels alongside accepted ones...
   // confirmed by hand while developing this test, not a bug introduced by this
-  // checkpoint." That diagnosis was exactly right, and it was a REAL DEFECT —
+  // checkpoint." That diagnosis was exactly right, and it was a REAL DEFECT -
   // the exported mask was the fill dilated by 1px, so a 1px line exported three
   // columns of points. It was seen, correctly explained, written down, and then
   // used to justify weakening this assertion, instead of being logged as a bug.
   // Fixed in checkpoint 78 (`seen` and `mask` are now two arrays).
   //
-  // "A code comment is not a backlog" — CLAUDE.md's own root-cause lesson,
+  // "A code comment is not a backlog" - CLAUDE.md's own root-cause lesson,
   // caught here in the act. The conclusion below still stands; the mechanism it
   // used to blame is gone.
   //
@@ -3285,7 +3285,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     const results = await textOf('curve-fit-output');
     // The fabricated perfect score is gone...
     expect(results).not.toContain('R² = 1.00000');
-    expect(results).toMatch(/R² = —/);
+    expect(results).toMatch(/R² = -/);
     // ...and the card says why, rather than leaving a dash to be puzzled over.
     expect(await textOf('curve-fit-no-r2')).toMatch(/every value in this series is the same/);
     // RMS is still reported: it needs no reference variance.
@@ -3332,7 +3332,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     const summary = csv.split('\n')[csv.split('\n').findIndex((l) => l.startsWith('series,')) + 1]!;
     expect(summary).toMatch(/,no$/);
     // ...and so does the sampled-curve block, which can be lifted out alone.
-    expect(csv).toContain('Fitted curve — Series 1 (did not settle)');
+    expect(csv).toContain('Fitted curve - Series 1 (did not settle)');
 
     fs.unlinkSync(csvPath);
   });
@@ -3510,8 +3510,8 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
 
 describe('Workspace: Grid Line Removal (checkpoint 28)', () => {
   it('CANNOT BE OPENED before an image, rather than opening and then refusing', async () => {
-    // ⚑ This test used to assert the opposite — open the panel on an empty
-    // canvas, press Remove, read 'No image loaded.' — which was the DEFECT
+    // ⚑ This test used to assert the opposite - open the panel on an empty
+    // canvas, press Remove, read 'No image loaded.' - which was the DEFECT
     // written down as the expectation. Every control beside it (Export, zoom,
     // undo) was gated on having an image; this one offered a colour picker, a
     // tolerance and a button whose only possible outcome was a refusal.
@@ -3681,7 +3681,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     // 2026-07-22 walkthrough: a whole-image trace grabbed the title, axis lines
     // and tick labels (same colour as the curve), so the traced curve "crept"
     // outside the plot. The By-colour panel now opens with the region pre-set to
-    // the calibration box — visible and clearable — so the first pass stays in.
+    // the calibration box - visible and clearable - so the first pass stays in.
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
@@ -3809,7 +3809,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
 
     // The sample has 26 well-separated markers -> one centroid each. A tight band
     // (not exactly 26) tolerates a 1-px antialiasing-edge difference in the
-    // browser's PNG decode, while still proving "one point per marker" — not one
+    // browser's PNG decode, while still proving "one point per marker" - not one
     // giant blob (the whole curve) and not hundreds of noise specks.
     const rows = await page.getByTestId('points-table').locator('tbody tr').count();
     expect(rows).toBeGreaterThanOrEqual(24);
@@ -3917,7 +3917,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     expect(await page.getByTestId('series-color').inputValue()).not.toBe('#123456');
   });
 
-  it('recolours a series from a palette swatch — no native colour dialog (checkpoint 89)', async () => {
+  it('recolours a series from a palette swatch - no native colour dialog (checkpoint 89)', async () => {
     // The bug: the series-colour picker was a native <input type="color">, the
     // exact dialog checkpoint 49 found CRASHES this Electron build on Linux
     // (fixed for Grid Removal, missed here). The swatches are the crash-free
@@ -4336,7 +4336,7 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await expect.poll(() => page.getByTestId('keytip-mode-calibrate').count(), { timeout: 5000 }).toBe(0);
   });
 
-  it('completes the OFFICE sequence on the rail — Alt, then the badged key', async () => {
+  it('completes the OFFICE sequence on the rail - Alt, then the badged key', async () => {
     // ⚑ David's point, and it is why the ONLYOFFICE/Office form was worth adopting: an
     // Office user's fingers press Alt and THEN the key they see. Here that lands on a
     // working path -- not because Alt arms anything (it doesn't, deliberately: see
@@ -5589,7 +5589,7 @@ describe('Workspace: resizable sidebar (checkpoint 60)', () => {
     const sidebarWidth = () =>
       page.locator('[style*="--sidebar-width"]').evaluate((el: HTMLElement) => el.style.getPropertyValue('--sidebar-width'));
     // ⚑ Asserted against the CONSTANT, not a literal, so raising the default is
-    // a one-line change rather than a hunt through the e2e — and so this cannot
+    // a one-line change rather than a hunt through the e2e - and so this cannot
     // pass while the app and the store disagree about what the default is.
     expect(await sidebarWidth()).toBe(`${DEFAULT_PANEL_WIDTH}px`);
 
@@ -5763,7 +5763,7 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     return cells.slice(1).map((c) => c.trim()).filter(Boolean).map(Number);
   }
 
-  it('undoes and redoes a rotate — the raster reverts with the points (audit #4)', async () => {
+  it('undoes and redoes a rotate - the raster reverts with the points (audit #4)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // a data point reading (5, 5)
@@ -5793,7 +5793,7 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     expect(await textOf('image-dims')).toBe(dimsRotated);
   });
 
-  it('undoes a crop — the raster and its provenance both roll back (re-editable crop, audit #4)', async () => {
+  it('undoes a crop - the raster and its provenance both roll back (re-editable crop, audit #4)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // (5, 5)
@@ -5948,7 +5948,7 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     await clickAt(250, 175); // only one corner so far
     // Which edge a lone click is isn't known until the second corner decides
     // the ordering, so every derived cell must stay blank rather than guess.
-    expect(await binRow(0)).toEqual(['1', '—', '—', '—']);
+    expect(await binRow(0)).toEqual(['1', '-', '-', '-']);
   });
 
   it('names its tuples "bin", not Box Plot\'s "box"', async () => {
@@ -6019,11 +6019,11 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
 });
 
 /**
- * Checkpoint 68 — per-axes calibration options.
+ * Checkpoint 68 - per-axes calibration options.
  *
  * The 2026-07-15 parity re-audit's biggest finding: WPD exposes these on its
  * calibration sidebar and we hardcoded every one to a literal across 6 of 7
- * axes types, so log axes — table stakes for scientific figures — were both
+ * axes types, so log axes - table stakes for scientific figures - were both
  * unreachable and undiscoverable. See CLAUDE.md.
  */
 describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
@@ -6062,7 +6062,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     // own controls default to week / bottom-left.
     await resetWorkspace('ccr');
     // ⚑ Read off the RADIO that is checked. Both defaults are now visible on the
-    // card without opening anything, which is the point of the change — a
+    // card without opening anything, which is the point of the change - a
     // dropdown showed the default and hid the alternative.
     expect(await page.getByTestId('calib-choice-rotationTime-week').isChecked()).toBe(true);
     expect(await page.getByTestId('calib-choice-rotationTime-day').isChecked()).toBe(false);
@@ -6071,7 +6071,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     expect(await page.getByTestId('calib-choice-origin-top-left').isChecked()).toBe(false);
   });
 
-  it('offers every axes type its own options — none left hardcoded', async () => {
+  it('offers every axes type its own options - none left hardcoded', async () => {
     const expected: Record<string, string[]> = {
       xy: ['isLogX', 'isLogY', 'skipRotation'],
       bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue'], // v2.0: the declared-baseline setting
@@ -6084,7 +6084,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       ternary: ['isRange100', 'isNormal'],
       map: ['origin', 'units'],
       ccr: ['rotationTime', 'rotationDirection'],
-      // ⚑ ADDED 2026-08-14. The heatmap was never in this list — the same gap
+      // ⚑ ADDED 2026-08-14. The heatmap was never in this list - the same gap
       // that let Box Plot silently inherit Bar's options, which is the reason
       // the list exists. It carries the most options of any type, and four of
       // them are the axis-kind CHOICES, so a regression here is a walk that
@@ -6109,11 +6109,11 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
 });
 
 /**
- * Checkpoint 70 — Error Bars restored.
+ * Checkpoint 70 - Error Bars restored.
  *
  * NOT a new feature: the old `npm start` app has shipped this since
  * 2026-07-06 (ui-patches/overrides.js:663-944 + api-bridge.js:169). The
- * rebuild began 2026-07-08 and never carried it across — it had no checkpoint
+ * rebuild began 2026-07-08 and never carried it across - it had no checkpoint
  * number, while its sibling Box Plot (added a day earlier, same mechanism) did.
  * Found by the third-pass parity audit on 2026-07-15. See CLAUDE.md and
  * kn-development-principles/PAIRING-PRINCIPLES.md §A1.
@@ -6164,7 +6164,7 @@ describe('Workspace: calibration geometry preview (checkpoint 84)', () => {
     }, box);
   }
 
-  it('draws the X axis you implied — ink appears BETWEEN the handles', async () => {
+  it('draws the X axis you implied - ink appears BETWEEN the handles', async () => {
     await resetWorkspace('xy');
     // A band around the midpoint of X1(100,250)..X2(400,250). No reticle reaches
     // here, so before the preview it is empty overlay.
@@ -6182,7 +6182,7 @@ describe('Workspace: calibration geometry preview (checkpoint 84)', () => {
     expect(await overlayInkIn(mid)).toBeGreaterThan(0);
   });
 
-  it('follows a dragged handle — live, not baked at click time', async () => {
+  it('follows a dragged handle - live, not baked at click time', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await page.getByTestId('mode-calibrate').click();
@@ -6395,7 +6395,7 @@ describe('Workspace: the loupe shows your own points (checkpoint 83)', () => {
     expect(after).not.toBe(before);
   });
 
-  it('is not painting everywhere — an empty region still shows the image alone', async () => {
+  it('is not painting everywhere - an empty region still shows the image alone', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await refreshCanvasBox();
@@ -6413,7 +6413,7 @@ describe('Workspace: the loupe shows your own points (checkpoint 83)', () => {
     expect(await loupeSignature()).toBe(before);
   });
 
-  it('shows calibration handles too — the loupe is how you place them precisely', async () => {
+  it('shows calibration handles too - the loupe is how you place them precisely', async () => {
     // Handles live on the same overlay layer, so they arrive for free. This is
     // why the loupe was the right fix to make first: it improves CALIBRATION
     // accuracy, not just point placement.
@@ -6507,7 +6507,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
   });
 
-  it('is a rail tool, NOT a graph type — so you trace first and add error after', async () => {
+  it('is a rail tool, NOT a graph type - so you trace first and add error after', async () => {
     await resetWorkspace('xy');
     // The retirement, asserted directly: the picker must no longer offer it.
     // As a graph type the choice came BEFORE you started (trace an XY curve,
@@ -6549,9 +6549,9 @@ describe('Workspace: error capture (checkpoint 79)', () => {
    * tests each asserted that a capture produced SERIES called "SD upper" and
    * "SD lower" and read the record out of the series dropdown. Under B4 no such
    * series exists: the caps live on the datum's own tuple, so the record is a
-   * pair of COLUMNS on its row. Every test's INTENT survives unchanged — the
+   * pair of COLUMNS on its row. Every test's INTENT survives unchanged - the
    * capture is visible, the mirror is a starting position, the datum does not
-   * move, deleting a datum takes its caps — and only where to look has changed.
+   * move, deleting a datum takes its caps - and only where to look has changed.
    *
    * ⚑ Each now types a NAME first, because the pre-filled 'SD' is gone: the
    * kind is in the caption and the app must not choose it. That makes the first
@@ -6667,7 +6667,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
   });
 
-  it('keyboard Del on a datum takes its error bar with it — the fourth delete door (2026-07-22 audit)', async () => {
+  it('keyboard Del on a datum takes its error bar with it - the fourth delete door (2026-07-22 audit)', async () => {
     // The Eraser / Select+Del / right-click doors all cascade; the Place-Point
     // keyboard Del must too, or it leaves the caps behind (the old model then
     // re-matched them to the wrong datum and fabricated a whisker on export).
@@ -6686,20 +6686,20 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     await page.keyboard.press('Delete');
     await page.waitForTimeout(150);
 
-    // The datum AND both caps are gone — no half-bar left behind, and no stray
+    // The datum AND both caps are gone - no half-bar left behind, and no stray
     // cap markers floating on the canvas with no data point under them.
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(0);
     const names = await page.locator('[data-testid="series-select"] option').allTextContents();
     expect(names.join('|')).toMatch(/\(0\)/);
   });
 
-  it('refuses to hang a cap on nothing — a press off-datum pans instead', async () => {
+  it('refuses to hang a cap on nothing - a press off-datum pans instead', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 200);
     await page.getByTestId('mode-error-bars').click();
     // ⚠️ NAMED FIRST, DELIBERATELY. Without this the drag is refused for a
-    // NAMING reason and the snap check never runs — the test would pass against
+    // NAMING reason and the snap check never runs - the test would pass against
     // its own defect. (And its old assertion, "no series called SD exists", went
     // vacuous the moment B4 stopped making series at all: under the new model no
     // capture creates one, so it could no longer fail.)
@@ -6728,7 +6728,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await page.getByTestId('mode-error-bars').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('names are derived visibly — "SD" becomes "SD upper"/"SD lower" before you drag', async () => {
+  it('names are derived visibly - "SD" becomes "SD upper"/"SD lower" before you drag', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 200);
@@ -6738,7 +6738,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
     expect(await textOf('error-name-hint')).toMatch(/95% CI lower/);
   });
 
-  it('⚑⚑ the name field starts EMPTY — we do not choose the reading for the user', async () => {
+  it('⚑⚑ the name field starts EMPTY - we do not choose the reading for the user', async () => {
     // The design refused an `errorKind` field on purpose: "the kind is not in
     // the geometry, it is in the figure's caption, so we could only ask the user
     // to type it, and asking means offering a default, which is LabPlot's ±30 all
@@ -6787,22 +6787,22 @@ describe('Workspace: error capture (checkpoint 79)', () => {
 });
 
 /**
- * Checkpoint 71 — "Reset calibration" is honest and undoable.
+ * Checkpoint 71 - "Reset calibration" is honest and undoable.
  *
  * Found by the fourth-pass audit of WPD's controller layer, which enumerated
  * every *refusal* WPD performs. The input-validation half of that seam was
- * recovered at checkpoint 69; this is the other half — WPD's
+ * recovered at checkpoint 69; this is the other half - WPD's
  * destructive-action confirmations (`okCancelPopup` appears 4x in its
  * controllers; the new app had exactly one `window.confirm` anywhere).
  *
  * The bug: the button says "Reset calibration" but discarded every series,
- * point and measurement — verified at 250 points across 2 series -> 0 — while
+ * point and measurement - verified at 250 points across 2 series -> 0 - while
  * `history.reset()` emptied the undo stack so none of it came back, and
  * `markClean()` disarmed the unsaved-work guard too. Both safety nets down, no
  * dialog, and a label that actively promises the data is safe.
  */
 describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', () => {
-  it('warns before discarding traced data — naming what is actually lost', async () => {
+  it('warns before discarding traced data - naming what is actually lost', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 175);
@@ -6820,7 +6820,7 @@ describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', 
     dialogMessages.length = 0;
     await page.getByTestId('reset-calibration').click();
     await page.waitForTimeout(200);
-    // A dialog on a free action is noise the user learns to dismiss — which is
+    // A dialog on a free action is noise the user learns to dismiss - which is
     // exactly how a real warning gets ignored later.
     expect(dialogMessages).toEqual([]);
   });
@@ -6840,7 +6840,7 @@ describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', 
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(0);
   });
 
-  it('is undoable — Ctrl+Z brings the data back', async () => {
+  it('is undoable - Ctrl+Z brings the data back', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(400, 175); // (5, 5)
@@ -6860,24 +6860,24 @@ describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', 
 });
 
 /**
- * Checkpoint 73 — capability gates, not identity gates.
+ * Checkpoint 73 - capability gates, not identity gates.
  *
  * Found by the fourth-pass audit of our OWN new code: Histogram and Error Bars
  * build a real XYAxes with identical steps and a working dataToPixel, but six
- * sites tested `config.id === 'xy'` — the config's NAME rather than the axes'
+ * sites tested `config.id === 'xy'` - the config's NAME rather than the axes'
  * CAPABILITY. So those charts silently lost Curve Fit, slope measurement,
  * auto-straighten and click-to-edit, and were told "Calibrate an XY chart
  * first" on a chart the user had just calibrated as XY.
  */
 describe('Workspace: capability gates (checkpoint 73)', () => {
   // Checkpoint 73's headline test ("offers Curve Fit on an Error Bars chart,
-  // fitting the Values only — n = 3 points from 9 placed") is GONE, deliberately,
+  // fitting the Values only - n = 3 points from 9 placed") is GONE, deliberately,
   // and it is worth saying why rather than leaving a hole.
   //
   // It proved that getFitPoints' group-skipping branch (written at ckpt 27,
   // unreachable until 73) was finally live. Checkpoint 79 retires the "Error
   // Bars" graph type, which was the only config that was XY-backed AND grouped
-  // AND curve-fittable — so that branch is unreachable again. **That is correct,
+  // AND curve-fittable - so that branch is unreachable again. **That is correct,
   // not a regression:** the branch only ever existed to skip Upper/Lower groups
   // in the tuple model, and under the error model an error series is an ordinary
   // ungrouped series, so there is nothing to skip. Curve Fit through a series
@@ -6885,14 +6885,14 @@ describe('Workspace: capability gates (checkpoint 73)', () => {
   // ckpt 27 tests. The surviving grouped type (Box Plot, on Bar) does not offer
   // Curve Fit at all. Logged for the audit rather than fixed here: getFitPoints'
   // group-skipping is now dead code.
-  it('does NOT offer Curve Fit on a Histogram — fitting bin corners is meaningless', async () => {
+  it('does NOT offer Curve Fit on a Histogram - fitting bin corners is meaningless', async () => {
     await resetWorkspace('histogram');
     await calibrateXYStandard();
     // Group 0 is "Bin start", so a fit would run through bin corners.
     expect(await page.getByTestId('curve-fit-trigger').count()).toBe(0);
   });
 
-  it('keeps Geometry XY-only — it rejects grouped datasets outright', async () => {
+  it('keeps Geometry XY-only - it rejects grouped datasets outright', async () => {
     // A capability check here would be worse UX: the panel would open and could
     // only ever print an error (engine/geometryPanel.ts:28).
     // Vehicle changed to Histogram at ckpt 79 (was the retired Error Bars type):
@@ -7010,7 +7010,7 @@ describe('series names are unique (checkpoint 75)', () => {
 });
 
 describe('Workspace: Trace Challenge (v1.2 game)', () => {
-  it('plays a full game — pre-calibrated rounds, scoring, reveal, results, high score, then resets', async () => {
+  it('plays a full game - pre-calibrated rounds, scoring, reveal, results, high score, then resets', async () => {
     // Electron persists localStorage across launches, so clear the high-score
     // board first -> this run's fresh total always qualifies (deterministic).
     await page.evaluate(() => window.localStorage.removeItem('plottracer.challenge.highscores'));
@@ -7115,7 +7115,7 @@ describe('fold-out cards do not overflow sideways', () => {
 
 describe('OpenDocument export', () => {
   // ⚑ ODF is the ISO standard (26300) and several EU administrations require it
-  // for public documents — the format this project's own reasoning argues for.
+  // for public documents - the format this project's own reasoning argues for.
   // What the e2e adds over the engine's structural tests is that the app writes
   // a real file through the production save path, byte for byte.
   it('writes a real .ods a spreadsheet application can sniff', async () => {
@@ -7234,7 +7234,7 @@ describe('spider charts', () => {
     // (1) `defaultValue` was declared on the centre's field and read by nothing, so
     // the 0 the config promised never appeared and had to be typed every time.
     // (2) The name field is optional in the model but was labelled just "Name"
-    // beside a required value, which reads as required — the same reason Polar's
+    // beside a required value, which reads as required - the same reason Polar's
     // unused theta says "(optional)" in its own label.
     await resetWorkspace('spider');
     await clickAt(CX, CY);
@@ -7320,7 +7320,7 @@ describe('spider charts', () => {
     // second series made the first one's readings vanish off the screen.
     // ⚑ The axis names live in EDITABLE fields now (they are transcription, and a
     // typo must be fixable), so they are read back as input values rather than as
-    // table text — the same way the bar Category column is read.
+    // table text - the same way the bar Category column is read.
     expect(await textOf('spider-axis-name-0')).toBe('Strength');
     expect(await textOf('points-table')).toContain('50');
     expect(await textOf('tips-bar')).toMatch(/Strength/);
@@ -7329,7 +7329,7 @@ describe('spider charts', () => {
   it('tells the user WHERE to aim, and calls a tuple by its own name', async () => {
     // ⚑ Two v1.3-gate lessons applied up front rather than found at the gate.
     // (1) On a spider the click's distance along the ray IS the number, exactly as
-    // a bar's click height is — the generic point-group tip ("filling Strength")
+    // a bar's click height is - the generic point-group tip ("filling Strength")
     // never says that, which is the same silence that let the bar midpoint error
     // through. (2) The shared tuple line falls back to Box Plot's "box" unless the
     // config declares its own noun, which is how Histogram's bins once announced
@@ -7346,7 +7346,7 @@ describe('spider charts', () => {
 
   it('keeps the calibrated axis rays drawn on the figure after calibrating', async () => {
     // The overlay is what you AIM at. It is the same preview drawn during
-    // calibration, and it stays because the placed handles stay — a spoke's
+    // calibration, and it stays because the placed handles stay - a spoke's
     // direction comes from a single click, so seeing the ray you implied is the
     // only way to tell it matches the ray the figure drew.
     await resetWorkspace('spider');
@@ -7358,7 +7358,7 @@ describe('spider charts', () => {
   it('draws the axis the cursor is filling as the live one, and follows it round', async () => {
     // ⚑ Prevention rather than correction. Spoke order is deliberately unenforced
     // at calibration, so the capture cursor walks the spokes in CALIBRATION order,
-    // which need not match the visual order round the chart — a user going
+    // which need not match the visual order round the chart - a user going
     // clockwise by eye can drift out of step and click the wrong vertex, and the
     // click would be projected onto whichever axis the cursor was actually on. At
     // 120 degrees that turns an intended 50 into -25, on the right row, looking
@@ -7383,7 +7383,7 @@ describe('spider charts', () => {
     // Slot 1 is Strength, but this click lands over on the Weight ray.
     await clickAt(...spoke(1, 3, R / 2));
 
-    // ⚑ The notice is raised AT CAPTURE, from the click before it is snapped —
+    // ⚑ The notice is raised AT CAPTURE, from the click before it is snapped -
     // afterwards the stored point is on its ray and there is nothing left to
     // measure. It is shown, never recorded: no other graph type stores such a
     // thing, and once the dot visibly sits on the axis the user stops aiming
@@ -7393,13 +7393,13 @@ describe('spider charts', () => {
     expect(notice).toContain('Weight');
     expect(notice).toMatch(/px off/);
 
-    // The value recorded is the projection onto the axis it was captured against —
+    // The value recorded is the projection onto the axis it was captured against -
     // 50 out along a ray 120 degrees away reads -25, not the 50 the Weight ray
     // would have given. Reading the nearest ray would have looked entirely
     // plausible and been off a different axis's scale.
     // Matched loosely: the canvas is fitted/zoomed, so a click lands at the
     // nearest device pixel rather than at exact ideal geometry. What is being
-    // asserted is the SIGN and magnitude — a Weight-ray reading would be +50.
+    // asserted is the SIGN and magnitude - a Weight-ray reading would be +50.
     expect(await textOf('points-table')).toMatch(/-2[45]\./);
   });
 
@@ -7419,7 +7419,7 @@ describe('spider charts', () => {
     await page.waitForTimeout(150);
 
     // ⚑ The number read back is derived from the PIXEL, through the same projection
-    // that produced the old one — so this passing means the marker actually moved
+    // that produced the old one - so this passing means the marker actually moved
     // out along the ray, not that the cell is holding typed text.
     expect(await textOf('spider-cell-0-0')).toMatch(/^75/);
     // ...and only that point moved: the other two axes still read what was clicked.
@@ -7433,7 +7433,7 @@ describe('spider charts', () => {
   it('lets a cell reach a point the canvas keeps inert, and the live ray follows it', async () => {
     // ⚑ Two behaviours that shipped in fc19687 without coverage. Points of an
     // INACTIVE series are deliberately inert on the canvas so a click can never land
-    // on the wrong series — which leaves the table as the only route to them. And
+    // on the wrong series - which leaves the table as the only route to them. And
     // the live-ray highlight has to follow the SELECTION, or it points at the axis
     // the next capture would fill while the selected point sits on another.
     await resetWorkspace('spider');
@@ -7462,7 +7462,7 @@ describe('spider charts', () => {
     // ⚑ Spider is the one point-group type auto-extract is offered for, and the
     // exception is a correctness one: its slots ARE the axes the trace searches, so
     // every reading has a home it was measured against. Flood-fill and Guide points
-    // stay out — they produce ordinary points, which a spider series has no slot
+    // stay out - they produce ordinary points, which a spider series has no slot
     // for, so they would have run and recorded nothing. A button that does nothing
     // reads as broken, not as inapplicable.
     await resetWorkspace('spider');
@@ -7481,7 +7481,7 @@ describe('spider charts', () => {
     // ⚑ The whole pipeline against ground truth: the app's OWN sample figure, opened
     // for real, calibrated on the anchors its truth file publishes, traced by the
     // colour its generator drew one series in, compared with the values that series
-    // states. Six axes running to 120, 60, 25, 100, 80 and 5 — so a reading taken off
+    // states. Six axes running to 120, 60, 25, 100, 80 and 5 - so a reading taken off
     // a neighbouring ray, or off one shared scale, cannot pass by looking plausible.
     // Every other spider test here calibrates INVENTED geometry over the default XY
     // sample: they prove the app self-consistent and nothing more.
@@ -7489,7 +7489,7 @@ describe('spider charts', () => {
     // ⚑ The calibration arrives as a PROJECT rather than as seven computed clicks.
     // Driving it through the canvas means converting image pixels to click points
     // through a view transform that is fitted asynchronously and re-fitted by the
-    // capture step — and a transform read one frame early shifts every click, which
+    // capture step - and a transform read one frame early shifts every click, which
     // surfaces seconds later as a value field that never appeared. That cost this
     // test three flaky runs. The clicking path is thoroughly covered by the tests
     // above; what is under test HERE is the trace, so the calibration is built
@@ -7514,7 +7514,7 @@ describe('spider charts', () => {
       const range = spiderTruth.axes[i]!.max - spiderTruth.axes[i]!.centre;
       // Within 4% of THAT axis's range. The reading is the outer edge of the ink and
       // the figure draws a 7pt marker at each vertex, so it lands a marker's radius
-      // proud of the published value — about 1.5%, the same on every axis. A reading
+      // proud of the published value - about 1.5%, the same on every axis. A reading
       // off a neighbouring ray or a shared scale misses by very much more.
       expect(
         Math.abs(read - published[i]!),
@@ -7527,7 +7527,7 @@ describe('spider charts', () => {
     // ⚑ David, seeing a green-swatched "Series 3" sitting on the RED curve: series
     // are coloured in creation order, so after tracing three films by colour the
     // markers contradicted the picture underneath them. The series colour's whole
-    // job is to say which series this is — and after a By-colour trace the figure's
+    // job is to say which series this is - and after a By-colour trace the figure's
     // own ink is the strongest answer there is. Display only; the record is
     // untouched, and one undo takes it back with the points.
     // ⚑ The REAL spider figure, not invented geometry over the XY sample. This
@@ -7554,7 +7554,7 @@ describe('spider charts', () => {
   it('renames an axis from the spreadsheet, and the whole app follows', async () => {
     // David: "I cannot edit the axis in the spreadsheet. THAT I want to fix." The
     // name is the one thing on that row nobody measured, so a typo should not mean
-    // re-walking the calibration — and because it belongs to the AXIS, renaming it
+    // re-walking the calibration - and because it belongs to the AXIS, renaming it
     // has to move the capture slots and the guidance with it, not just the cell.
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
@@ -7569,14 +7569,14 @@ describe('spider charts', () => {
     await page.waitForTimeout(150);
 
     expect(await textOf('spider-axis-name-1')).toBe('Elongation at break (%)');
-    // ⚑ And an axis left unnamed reads as a DASH, like a value nobody recorded —
+    // ⚑ And an axis left unnamed reads as a DASH, like a value nobody recorded -
     // the name is optional, and a permanent input box says the opposite.
     await page.getByTestId('spider-axis-name-2').click();
     await page.getByTestId('spider-axis-name-2').fill('');
     await page.getByTestId('spider-axis-name-2').blur();
     await page.waitForTimeout(150);
-    expect(await textOf('spider-axis-name-2')).toBe('—');
-    // The capture cursor names the axis it is about to fill — from the tips bar's
+    expect(await textOf('spider-axis-name-2')).toBe('-');
+    // The capture cursor names the axis it is about to fill - from the tips bar's
     // own slotAimNote suffix (v2.0, 2026-07-30), which appends it even here: a point
     // is still selected (the "nudge" branch is active, which never mentions the
     // axis by name on its own), and slotAimNote covers exactly that gap.
@@ -7605,7 +7605,7 @@ describe('spider charts', () => {
     // column in the table for ever, and the user would have to work out that it
     // came from a trace that found nothing.
     for (const axisIndex of [0, 1, 2]) {
-      expect(await textOf(`spider-cell-0-${axisIndex}`)).toBe('—');
+      expect(await textOf(`spider-cell-0-${axisIndex}`)).toBe('-');
     }
   });
 
@@ -7634,15 +7634,15 @@ describe('spider charts', () => {
     // incompleteness -- the profile in hand is unfinished because you are in it. A
     // point is selected after each click, so the suffix fires and the count shows.
     await clickAt(...spoke(0, 3, R / 2));
-    expect(await textOf('tips-bar')).toContain('Weight — profile 1 (1 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Weight - profile 1 (1 of 3 filled)');
     await clickAt(...spoke(1, 3, R / 2));
-    expect(await textOf('tips-bar')).toContain('Cost — profile 1 (2 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Cost - profile 1 (2 of 3 filled)');
 
     // Finish it, and start a second.
     await clickAt(...spoke(2, 3, R / 2));
-    expect(await textOf('tips-bar')).toContain('Strength — new profile (0 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Strength - new profile (0 of 3 filled)');
     await clickAt(...spoke(0, 3, R / 4));
-    expect(await textOf('tips-bar')).toContain('Weight — profile 2 (1 of 3 filled)');
+    expect(await textOf('tips-bar')).toContain('Weight - profile 2 (1 of 3 filled)');
 
     // ⚑ THE SIGNAL. Punch a hole in the FINISHED profile while the second is in hand.
     // A spider's slots are N×1D -- independently meaningful and independently EMPTY --
@@ -7659,7 +7659,7 @@ describe('spider charts', () => {
   it('erases ONE reading, and the freed slot can be re-aimed from the table', async () => {
     // ⚑ Both halves found by driving the app. The Eraser blanked a whole six-axis
     // series, because a spider inherited the Box Plot rule that a member stands for
-    // its tuple — true of a box, false of six independent readings. And once there
+    // its tuple - true of a box, false of six independent readings. And once there
     // are two gaps, the cursor only ever offers the first, so the second could not
     // be filled at all (David: "Can I make an empty slot active again?").
     await resetWorkspace('spider');
@@ -7673,7 +7673,7 @@ describe('spider charts', () => {
     await page.waitForTimeout(150);
 
     expect(await textOf('spider-cell-0-0')).toMatch(/\d/); // untouched
-    expect(await textOf('spider-cell-0-1')).toBe('—'); // the one erased
+    expect(await textOf('spider-cell-0-1')).toBe('-'); // the one erased
     expect(await textOf('spider-cell-0-2')).toMatch(/\d/); // untouched
     // ...and the freed slot is what the next click fills. Eraser mode's own tips-bar
     // branch never names a slot on its own, so slotAimNote's suffix always fires here.
@@ -7692,13 +7692,13 @@ describe('spider charts', () => {
     await clickAt(...spoke(1, 3, R / 4));
     await page.waitForTimeout(150);
     expect(await textOf('spider-cell-0-1')).toMatch(/\d/);
-    expect(await textOf('spider-cell-0-0')).toBe('—');
+    expect(await textOf('spider-cell-0-0')).toBe('-');
   });
 
   it('exports EVERY series, each reading against its own axis', async () => {
     // ⚑ The release audit's finding. Grouped types routed the CSV through the
     // tuple-table section, which is ACTIVE-SERIES-ONLY and reads values off the
-    // NEAREST ray — so the screen showed three series and the file carried one,
+    // NEAREST ray - so the screen showed three series and the file carried one,
     // read against whichever spoke each point sat closest to rather than the axis
     // it was captured on. The scope control was hidden for grouped types too, so
     // there was no way to ask for the rest.
@@ -7752,7 +7752,7 @@ describe('spider charts', () => {
   it('walks a five-axis figure end to end, card and canvas both tracking all five', async () => {
     // ⚑ The regression the whole session-owned step list exists to prevent. Four
     // sites in Workspace.tsx used to read `config.steps`, which for a spider holds
-    // ONLY the centre — so the card would render a one-step calibration, the
+    // ONLY the centre - so the card would render a one-step calibration, the
     // progress line would say "1/1", and the canvas would draw a single handle
     // while the user placed six. A unit test cannot see any of that.
     await resetWorkspace('spider');
@@ -7774,7 +7774,7 @@ describe('spider charts', () => {
 
 
 /**
- * Pie / donut (v1.6) — driven against the four bundled figures' OWN ground truth.
+ * Pie / donut (v1.6) - driven against the four bundled figures' OWN ground truth.
  *
  * ⚑ THIS IS THE INSTRUMENT THE SPIDER TAUGHT US TO BUILD. Fifteen green e2e once
  * passed over a trace that read a run's MIDPOINT, because every one of them invented
@@ -7785,7 +7785,7 @@ describe('spider charts', () => {
  * Calibration and capture are done ENGINE-SIDE and loaded as a project, mirroring the
  * spider truth test above and for the same reason recorded there: clicking a canvas
  * whose transform may be one frame stale shifts every click and surfaces seconds
- * later as a value that never appeared. The click path has its own coverage — both in
+ * later as a value that never appeared. The click path has its own coverage - both in
  * engine/__tests__/pieCapture.test.ts and in the calibration test below, which drives
  * the real UI.
  */
@@ -7795,7 +7795,7 @@ describe('pie charts (v1.6)', () => {
   });
 
   it('is offered in the graph-type dropdown and asks for an outline, a total and a sweep', async () => {
-    // ⚑ Nothing clicks a centre — a donut has none to click, so the outline IS the
+    // ⚑ Nothing clicks a centre - a donut has none to click, so the outline IS the
     // calibration and the centre is fitted through it.
     expect(await textOf('repeat-count')).toMatch(/3 outline points/);
     await page.getByTestId('calib-chip-outline1').waitFor({ state: 'visible' });
@@ -7803,7 +7803,7 @@ describe('pie charts (v1.6)', () => {
     expect(await page.getByTestId('calib-chip-outline4').count()).toBe(0);
 
     // ⚑ The total and the sweep are NOT asserted here: they are global fields, and the
-    // card shows them only once every outline point is placed — they belong to the
+    // card shows them only once every outline point is placed - they belong to the
     // whole figure, so asking for them mid-walk would be asking about a shape that
     // does not exist yet. Their defaults and their effect are covered by the four
     // figure tests below and by engine/__tests__/pieCalibration.test.ts.
@@ -7949,7 +7949,7 @@ describe('pie charts (v1.6)', () => {
       // capture does not end on a permanently half-filled row.
       await expect.poll(rows, { timeout: 5000 }).toBe(4);
       for (let i = 0; i < 4; i++) {
-        expect(await textOf(`tuple-derived-${i}`), `sector ${i}`).not.toBe('—');
+        expect(await textOf(`tuple-derived-${i}`), `sector ${i}`).not.toBe('-');
       }
       // ...and the four now account for the whole figure.
       const total = await Promise.all(
@@ -8066,7 +8066,7 @@ describe('pie charts (v1.6)', () => {
  * The F1 "How to use PlotTracer" card (v2.0).
  *
  * ⚑⚑ WHY THIS EXISTS SEPARATELY FROM helpOverlayKeys.test.ts. That file asserts
- * the card's key table against Workspace.tsx's own source — it proves the two
+ * the card's key table against Workspace.tsx's own source - it proves the two
  * agree, and nothing more. It cannot tell whether pressing F1 opens anything,
  * whether the button is wired, or whether the card can be dismissed. Source
  * agreeing with source is the failure mode this project keeps getting caught
@@ -8074,7 +8074,7 @@ describe('pie charts (v1.6)', () => {
  */
 describe('Workspace: the F1 help card', () => {
   /** Present-and-visible, in this suite's own idiom (vitest expect, not
-   *  Playwright's — the locator matchers are not available here). */
+   *  Playwright's - the locator matchers are not available here). */
   const cardCount = () => page.getByTestId('help-overlay').count();
 
   it('opens on F1 and closes on Escape', async () => {
@@ -8089,7 +8089,7 @@ describe('Workspace: the F1 help card', () => {
     await expect.poll(cardCount, { timeout: 5000 }).toBe(0);
   });
 
-  it('opens from the Help card too — the route a first-time user can SEE', async () => {
+  it('opens from the Help card too - the route a first-time user can SEE', async () => {
     // ⚑ The button is the load-bearing half. A key nobody has been told about
     // is a capability that does not exist for a first-time user; F1 is the
     // shortcut for the second time onwards.
@@ -8147,17 +8147,17 @@ describe('Workspace: the F1 help card', () => {
 });
 
 /**
- * HEATMAPS (v2.2) — the whole feature, driven through the real app.
+ * HEATMAPS (v2.2) - the whole feature, driven through the real app.
  *
  * ⚑ THE ONE INSTRUMENT THE UNIT TESTS CANNOT BE. Everything under `engine/` is
  * measured against this same figure already; what is unproven until here is that
- * a person can actually get to it — that the type is in the picker, that eight
+ * a person can actually get to it - that the type is in the picker, that eight
  * clicks land where the calibration expects them, that the buttons are reachable
  * and that the numbers arrive on screen. Six of this project's defects were found
  * by David USING the app and none of them by a green unit test.
  *
  * ⚑ The figure ships its own truth, so this checks the app's answer against the
- * VALUES THE FIGURE WAS DRAWN FROM — not against the app's own arithmetic.
+ * VALUES THE FIGURE WAS DRAWN FROM - not against the app's own arithmetic.
  */
 describe('heatmap capture (v2.2)', () => {
   interface HeatmapTruth {
@@ -8188,18 +8188,18 @@ describe('heatmap capture (v2.2)', () => {
   /**
    * The corner the card is asking for, in the card's own words.
    *
-   * ⚑⚑ GATE 4 — A WALK MAY ONLY CLICK WHAT A PROMPT ON SCREEN NAMES. Every
+   * ⚑⚑ GATE 4 - A WALK MAY ONLY CLICK WHAT A PROMPT ON SCREEN NAMES. Every
    * calibration walk in this file clicked coordinates the author already knew
    * and never read the step text at all, which is exactly how v2.2's
    * shared-corner defect survived: the prompt was present, non-blank and
-   * distinct from its siblings — the generic checks in `axesConfigTable` all
-   * pass — it simply named a corner no test ever looked at. Reading it here
+   * distinct from its siblings - the generic checks in `axesConfigTable` all
+   * pass - it simply named a corner no test ever looked at. Reading it here
    * binds the words on screen to the pixel about to be clicked, so a prompt
    * that sends the user somewhere else fails AT the step rather than eight
    * steps later as a parallel-axes refusal.
    *
    * ⚑ THE TIPS BAR IS WHERE THE USER READS IT (checkpoint 57 moved it there),
-   * so that is what this asserts — not the config's string, which a unit test
+   * so that is what this asserts - not the config's string, which a unit test
    * can check without proving anything reached the screen. `calib-prompt`
    * sounds like the right target and is NOT: it labels the "Reuse a placed
    * pixel" widget, and is now named `calib-reuse-pixel` so the next person
@@ -8221,7 +8221,7 @@ describe('heatmap capture (v2.2)', () => {
    * assertions above would sit happily on a prompt that named the corners
    * consistently and WRONGLY, so the figure's own truth is asked which pixel
    * each name belongs to: the LAST column is to the right of the FIRST, and the
-   * LAST row is higher up the page than the FIRST — screen y grows downward.
+   * LAST row is higher up the page than the FIRST - screen y grows downward.
    */
   function expectCornersAgreeWithTheirNames() {
     expect(truth.frame.x2.x).toBeGreaterThan(truth.frame.x1.x);
@@ -8233,7 +8233,7 @@ describe('heatmap capture (v2.2)', () => {
    *
    * ⚑ It sits at the OUTER END of its tick mark (`TICK_LENGTH` in
    * `categoryTickOverlay.ts`), which is what keeps it visibly BOUND to the axis
-   * — the mark joins them — and what stops an x boundary and a y boundary at the
+   * - the mark joins them - and what stops an x boundary and a y boundary at the
    * plot's corner landing on the same pixel. Almost exactly where the retired
    * `dividerHandles` put its floating dot, but attached to something now.
    */
@@ -8247,7 +8247,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(150);
   }
 
-  /** Open the grid fold-down on the calibration card — the inputs live there
+  /** Open the grid fold-down on the calibration card - the inputs live there
    * now, beside the calibration that defines them. */
   /**
    * Make the grid section visible.
@@ -8280,11 +8280,11 @@ describe('heatmap capture (v2.2)', () => {
       );
     }
     await expectPromptNames('FIRST', 'LAST');
-    // ⚑ B12 — NO Y1 CLICK. The lower-left corner is shared, and on a NAMED axis
+    // ⚑ B12 - NO Y1 CLICK. The lower-left corner is shared, and on a NAMED axis
     // it takes no typed value either, so the walk places it and moves straight
     // on. Three clicks describe the frame; this is the second and third.
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
-    await confirmValue('4'); // four rows on this figure — a named axis types only the count
+    await confirmValue('4'); // four rows on this figure - a named axis types only the count
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
     await clickImagePixel(truth.key.to.x, truth.key.to.y);
     for (const tick of truth.key.ticks) {
@@ -8304,7 +8304,7 @@ describe('heatmap capture (v2.2)', () => {
       await clickImagePixel(p.x, p.y);
       await confirmValues(step === 'x2' ? [String(p.value), bands[step]!] : [String(p.value)]);
     }
-    // ⚑ B12 — the shared corner arrives placed, with its value prefilled.
+    // ⚑ B12 - the shared corner arrives placed, with its value prefilled.
     await confirmValue(String(truth.frame.y1.value));
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
     await confirmValues([String(truth.frame.y2.value), bands['y2']!]);
@@ -8321,10 +8321,10 @@ describe('heatmap capture (v2.2)', () => {
 
   async function calibrateHeatmap() {
     // ⚑ Each axis's SECOND click now declares how many bands the figure has, on
-    // a measured axis exactly as on a named one — a heatmap is a matrix either
+    // a measured axis exactly as on a named one - a heatmap is a matrix either
     // way. The bundled figure is 5 columns × 4 rows, read off its own truth.
     const bands = { x2: String(truth.grid.x.length - 1), y2: String(truth.grid.y.length - 1) };
-    // ⚑⚑ B12 — THREE CLICKS, not four. The figure's own truth says x1 and y1 are
+    // ⚑⚑ B12 - THREE CLICKS, not four. The figure's own truth says x1 and y1 are
     // the SAME pixel (70.4, 281.32), which is what three-point calibration
     // relies on and what every rectangular heatmap has: the two axes span one
     // rectangle, so three of its corners carry the whole transform.
@@ -8337,10 +8337,10 @@ describe('heatmap capture (v2.2)', () => {
     }
     // ⚑⚑ NOT ASSERTED AT THE SHARED CORNER, AND THAT IS A FINDING, NOT AN
     // OMISSION. y1 arrives PRE-PLACED, so `hasPendingPixel` is true the moment
-    // the step opens — and `guidanceTip` drops the prompt entirely in that
+    // the step opens - and `guidanceTip` drops the prompt entirely in that
     // state, showing only "Enter the <label> value, then press Confirm". So the
     // sentence written for the walk's most confusing step ("The same corner
-    // again — enter the Y value where …") never reaches the screen at all.
+    // again - enter the Y value where …") never reaches the screen at all.
     // Gate 4 governs CLICKS and this step has none, so the walk asserts the
     // three clicks below; the dead prompt is logged for v2.3 rather than
     // papered over with an assertion of what is merely there.
@@ -8374,8 +8374,8 @@ describe('heatmap capture (v2.2)', () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
     }, HEATMAP_IMAGE);
     // ⚑⚑ A BIGGER WINDOW, because that is what a user does. A heatmap has the
-    // tallest calibration card in the app — eight steps plus the grid fold-down
-    // plus the per-axis options — and at the harness's default size it floats
+    // tallest calibration card in the app - eight steps plus the grid fold-down
+    // plus the per-axis options - and at the harness's default size it floats
     // over the pixels the walk asks you to click. David, when I mistook that for
     // a regression: *"We make the window bigger to see the full figure! Up to
     // the user! Not a regression! We have ALSO talked about this before!"* A
@@ -8396,38 +8396,38 @@ describe('heatmap capture (v2.2)', () => {
   it('is offered in the graph-type picker, and starts its own eight-step walk', async () => {
     // ⚑ This used to assert the sidebar Heatmap CARD was visible. The card is
     // now a fold-down on the calibration card and appears only once the axes
-    // are calibrated — because the calibration card floats over the figure, and
+    // are calibrated - because the calibration card floats over the figure, and
     // an open fold-down covered the very pixels the walk asks you to click. So
     // the assertion moves to what picking the type actually does: it starts the
     // heatmap's own walk, whose first step is the colour key's business rather
     // than an XY chart's four points.
     await resetWorkspace('heatmap');
-    // The grid fold-down is on screen from the start, CLOSED — the feature is
+    // The grid fold-down is on screen from the start, CLOSED - the feature is
     // discoverable before it exists, without growing the card over the figure.
     expect(await page.getByTestId('heatmap-grid-summary').isVisible()).toBe(true);
     expect(await page.getByTestId('heatmap-detect').count()).toBe(0);
-    // Eight steps, not four, and the extra ones are the colour key's — which is
+    // Eight steps, not four, and the extra ones are the colour key's - which is
     // what makes this the heatmap's walk rather than an XY chart's.
     const walk = await textOf('calibration-bar');
     expect(walk).toMatch(/0\/8/);
     // ⚑ The key is two OPPOSITE CORNERS of the bar now, not two points along a
-    // centreline nothing is drawn on — a corner is printed and can be aimed at.
+    // centreline nothing is drawn on - a corner is printed and can be aimed at.
     expect(walk).toMatch(/Key corner/);
     expect(walk).toMatch(/Opposite corner/);
     expect(walk).toMatch(/Key value 1/);
   });
 
   it('⚑⚑ DETECT re-reads, so the table never describes a grid that is gone', async () => {
-    // David, on the built package: a card reporting "Grid — 5 × 4 cells" beside a
+    // David, on the built package: a card reporting "Grid - 5 × 4 cells" beside a
     // matrix of 12. The grid had changed AFTER the read, and the table went on
     // describing the grid it was read from.
     //
     // ⚑ THE RULE ALREADY EXISTED, on the path that gets it right.
-    // `applyHeatmapGridEdit` — every boundary edit — clears the report and
+    // `applyHeatmapGridEdit` - every boundary edit - clears the report and
     // re-reads, and says why: *"A report of a measurement that no longer
     // describes the grid is not stale wording, it is a wrong statement."*
     // Detect called the RAW `applyHeatmapGrid` and skipped it. One rule, two
-    // callers, one of them not using it — the shape this whole release keeps
+    // callers, one of them not using it - the shape this whole release keeps
     // finding.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
@@ -8445,7 +8445,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-cells-summary')).toMatch(/24 cells read/);
 
     // …and DETECT is a grid change too. Before this fix the table stayed at 24
-    // while the card said 5 × 4 — a measurement of a grid that no longer existed.
+    // while the card said 5 × 4 - a measurement of a grid that no longer existed.
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(500);
     expect(await textOf('heatmap-grid-summary')).toMatch(/5 × 4 cells/);
@@ -8457,7 +8457,7 @@ describe('heatmap capture (v2.2)', () => {
     await calibrateHeatmap();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
-    // The user says how many cells the figure has — a CHECK on detection.
+    // The user says how many cells the figure has - a CHECK on detection.
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-detect-message')).toMatch(/5 columns/);
@@ -8465,7 +8465,7 @@ describe('heatmap capture (v2.2)', () => {
 
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
-    // ⚑⚑ READ CELLS IS THE ENDING, so it closes the card it finished — David's
+    // ⚑⚑ READ CELLS IS THE ENDING, so it closes the card it finished - David's
     // *"there is nothing intuitive here to press to say 'done!'"*, answered by
     // the button that already did the job rather than by a second one beside
     // it. The card's folded line still names the grid, so nothing is lost.
@@ -8473,14 +8473,14 @@ describe('heatmap capture (v2.2)', () => {
     // ⚑ And the count now lives with the RECORD, which is the only place it
     // could survive that fold.
     expect(await textOf('heatmap-cells-summary')).toBe('20 cells read, all clean.');
-    // ⚑⚑ E1 — AND DETECTION'S REPORT RETIRES WITH IT. "5 columns, matching the 4
+    // ⚑⚑ E1 - AND DETECTION'S REPORT RETIRES WITH IT. "5 columns, matching the 4
     // boundaries found" describes a step the user is now two steps past, and the
     // summary beside it says the same figure better. It is the SAME rule adding
     // a boundary already follows ("the user overruled the proposal; the proposal
     // stops describing the grid") applied one step later: a read supersedes the
     // proposal it was read through.
     // ⚑ It matters more than tidiness. Both fold-outs are collapsed by now and
-    // the message still sits ON the figure, over the plot's top-left corner —
+    // the message still sits ON the figure, over the plot's top-left corner -
     // there is no fold for it to hide in, so it cannot be dismissed at all.
     expect(await page.getByTestId('heatmap-detect-message').count()).toBe(0);
     // The matrix is what opens, and it is the figure's own shape: five columns
@@ -8497,10 +8497,10 @@ describe('heatmap capture (v2.2)', () => {
     // than slack: every calibration point here was placed by a real mouse click
     // at a fitted zoom, so it lands on a screen pixel and the frame it defines is
     // off by a fraction of an image pixel. Measured: 0.003 of a data unit on a
-    // 9-unit axis, 0.04% — which is the precision a person clicking gets, and
+    // 9-unit axis, 0.04% - which is the precision a person clicking gets, and
     // the unit tests already pin the arithmetic exactly.
     // ⚑ The long view leads with IDENTITY (`column`, `row`) and then the
-    // coordinates — asserted here rather than silently skipped, so a shift in
+    // coordinates - asserted here rather than silently skipped, so a shift in
     // the column order fails with a reason instead of a NaN.
     expect(cells.slice(0, 2)).toEqual(['C1', 'R1']);
     expect(Number(cells[2])).toBeCloseTo(0.5, 2); // x centre of a 0..1 column
@@ -8549,24 +8549,24 @@ describe('heatmap capture (v2.2)', () => {
     // The cell got wider, and its value was re-read rather than left describing
     // the grid it used to have.
     const after = await page.getByTestId('heatmap-row').first().locator('td').allTextContents();
-    // ⚑ Columns 0 and 1 are the cell's identity, which must NOT move — it is the
+    // ⚑ Columns 0 and 1 are the cell's identity, which must NOT move - it is the
     // same cell, wider. That it stays `C1 R1` is half the assertion.
     expect(after.slice(0, 2)).toEqual(['C1', 'R1']);
     expect(Number(after[2])).toBeGreaterThan(Number(before[2])); // x centre moved right
     expect(after[4]).not.toBe(before[4]); // …and the value with it
     expect(await page.getByTestId('heatmap-row').count()).toBe(20); // no cell gained or lost
 
-    // ⚑⚑ C1 — AND THE CALIBRATION DID NOT MOVE. Calibration points ARE the axis;
+    // ⚑⚑ C1 - AND THE CALIBRATION DID NOT MOVE. Calibration points ARE the axis;
     // the grid DERIVES from them, and nothing a grid gesture does may reach the
     // layer underneath. It matters because every marker on the figure arrives at
     // ONE drag handler, which falls through to `updateCalibPointPixel` for
-    // anything it does not recognise — so a divider read as a calibration handle
+    // anything it does not recognise - so a divider read as a calibration handle
     // would silently recalibrate the whole figure, and every exported value
     // would be wrong with nothing on screen saying so.
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
     // ⚑ UNFOLDED to read them: Calibrate auto-folds its card (checkpoint 86),
     // so the values are not in the DOM until the card is opened again. Asserting
-    // them blind timed out — the test asking for something the screen genuinely
+    // them blind timed out - the test asking for something the screen genuinely
     // was not showing, which is the right way round for that to fail.
     await page.getByTestId('calib-fold').click();
     await page.waitForTimeout(200);
@@ -8574,24 +8574,24 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('calib-value-x2-0')).toBe(String(truth.frame.x2.value));
     expect(await textOf('calib-value-y2-0')).toBe(String(truth.frame.y2.value));
     // ⚑ LEFT OPEN. The Grid fold-out lives INSIDE this card, so folding it again
-    // takes the grid summary — and the Read cells button — off screen with it.
+    // takes the grid summary - and the Read cells button - off screen with it.
     // Re-folding here is what made the rest of this walk hang: the test went
     // looking for controls it had just put away.
 
     // ⚑ AND IT IS UNDOABLE, which had never been verified for a boundary. An
     // adjustment you cannot take back is one users make cautiously or not at
-    // all — and the grid rides in axes metadata, so undo only works because the
+    // all - and the grid rides in axes metadata, so undo only works because the
     // snapshot serialises the axes rather than through any grid-specific path.
     await page.getByTestId('undo').click();
     await page.waitForTimeout(400);
     // ⚑⚑ UNDO RE-READS THE TABLE AGAINST THE RESTORED GRID, matching the forward
     // path (David, 2026-08-16: *"Re-read, matching the forward path"*).
     //
-    // ⚠️⚠️ THIS ASSERTION USED TO READ `.toBe(0)` — "undo clears the results
-    // table" — and its own comment said it was "recorded as the behaviour, not
+    // ⚠️⚠️ THIS ASSERTION USED TO READ `.toBe(0)` - "undo clears the results
+    // table" - and its own comment said it was "recorded as the behaviour, not
     // endorsed". It was worse than that: it PASSED FOR THE WRONG REASON. The
     // table was empty because the undo was LOSING THE GRID, so there was nothing
-    // to re-read from — which is exactly the defect David hit on the built
+    // to re-read from - which is exactly the defect David hit on the built
     // package (*"undo removed the whole grid. :-O"*). The test had written that
     // defect down as expected behaviour, and went green on it for a release.
     // ⚑ It only surfaced once detection started taking its own snapshot, so undo
@@ -8604,7 +8604,7 @@ describe('heatmap capture (v2.2)', () => {
 
   it('ADDS a boundary the detector missed, and removes one it invented', async () => {
     // ⚑⚑ THE GESTURE THE APP HAS BEEN TELLING USERS TO USE. `detectGrid` refuses
-    // to fill a miss in and says "place the missing ones by hand" — a sentence
+    // to fill a miss in and says "place the missing ones by hand" - a sentence
     // that named an action the interface did not offer until this test's feature
     // existed. Both halves are driven here, through the card the user sees.
     await resetWorkspace('heatmap');
@@ -8615,18 +8615,18 @@ describe('heatmap capture (v2.2)', () => {
     await showHeatmapTable();
     // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
     // The bulk name boxes and the boundary buttons live in that card, so a test
-    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // that uses them after reading says so. ⚑ A user is not stuck - a column's
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
     expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
     // ⚑⚑ THE MESSAGE IS THERE FIRST, asserted so its DISAPPEARANCE below means
     // something. Without this the `.toBe(0)` at the end of this test would pass
-    // just as happily if detection had stopped reporting at all — an absence
+    // just as happily if detection had stopped reporting at all - an absence
     // with no positive counterpart agrees with the wrong cause, which is how a
     // sibling test spent a release asserting a defect (see the undo note in
     // "lets a divider be DRAGGED").
     // ⚑⚑ RE-DETECTED HERE ON PURPOSE (E1, v2.3). The read above now retires
-    // detection's report, so by this point it is already gone — and an absence
+    // detection's report, so by this point it is already gone - and an absence
     // that was true before the gesture proves nothing ABOUT the gesture. Running
     // detection again restores the message, so the assertion below is once more
     // about ADDING A BOUNDARY rather than about the read that preceded it.
@@ -8637,14 +8637,14 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-add-column').click();
     await page.waitForTimeout(300);
     expect(await textOf('heatmap-declared-grid')).toMatch(/6 columns × 4 rows/);
-    // The new boundary announces WHERE it went, in the figure's own units — a
+    // The new boundary announces WHERE it went, in the figure's own units - a
     // cell that silently split somewhere in a six-column grid is a change the
     // user has to hunt for.
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = /);
     // And the cells were re-read, not left describing the grid they had.
     expect(await page.getByTestId('heatmap-row').count()).toBe(24);
     // ⚑⚑ AND DETECTION'S REPORT IS GONE. It read "5 columns, matching the 4
-    // boundaries found" beside "Grid: 6 × 4 cells" — a card contradicting itself
+    // boundaries found" beside "Grid: 6 × 4 cells" - a card contradicting itself
     // about the figure in front of it, found by looking at a screenshot rather
     // than by any assertion. The user overruled the proposal; the proposal stops
     // describing the grid.
@@ -8664,12 +8664,12 @@ describe('heatmap capture (v2.2)', () => {
 
   it('gives a calibrated heatmap its grid straight away, and picks the handle that is CLICKED', async () => {
     // ⚑⚑ NO INVISIBLE PRECONDITION. The grid, its handles and the boundary
-    // buttons are on screen the moment the calibration finishes — they used to
+    // buttons are on screen the moment the calibration finishes - they used to
     // appear only after pressing Detect or Read, which nothing on screen said.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
     await page.waitForTimeout(300);
-    // ⚑⚑ CASE A1. This asserted `Grid: 1 × 1 cells` — the defect as its own
+    // ⚑⚑ CASE A1. This asserted `Grid: 1 × 1 cells` - the defect as its own
     // premise. A value×value heatmap got ONE cell spanning the whole figure,
     // because the grid was gated on an axis being categorical. The figure has
     // 5 columns and 4 rows and says so in the walk, whichever way it is indexed.
@@ -8683,8 +8683,8 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = 0\.0/);
 
     // ⚑ Removable, because a five-column axis has six boundaries to spare. This
-    // used to assert the opposite — the axis was down to the two boundaries that
-    // ARE the grid — which was only ever true because a measured axis got no
+    // used to assert the opposite - the axis was down to the two boundaries that
+    // ARE the grid - which was only ever true because a measured axis got no
     // bands at all (case A1). The refusal at the real floor is covered by
     // `removeDividerHandle`'s own unit tests, where the floor can be reached
     // without twelve clicks.
@@ -8694,8 +8694,8 @@ describe('heatmap capture (v2.2)', () => {
 
   it('NAMES the columns, and the names travel into the export beside the bounds', async () => {
     // ⚑⚑ "The label is the coordinate." The most common published heatmap is
-    // category × category — gene × sample, confusion matrix, correlation matrix
-    // — and an export reading `1, 2, 3` where the figure prints `BRCA1` cannot
+    // category × category - gene × sample, confusion matrix, correlation matrix
+    // - and an export reading `1, 2, 3` where the figure prints `BRCA1` cannot
     // be rejoined to anything the reader has. Driven through the card and out to
     // a real file, because that file is the product.
     await resetWorkspace('heatmap');
@@ -8706,14 +8706,14 @@ describe('heatmap capture (v2.2)', () => {
     await showHeatmapTable();
     // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
     // The bulk name boxes and the boundary buttons live in that card, so a test
-    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // that uses them after reading says so. ⚑ A user is not stuck - a column's
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
 
     await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
     await page.waitForTimeout(300);
-    // The card counts rather than refuses — four names on a five-column figure
+    // The card counts rather than refuses - four names on a five-column figure
     // is someone part-way through, not an error.
     expect(await textOf('heatmap-label-coverage')).toMatch(/Columns: 4 of 5 named/);
     // The table shows the name the moment it is typed, without re-reading.
@@ -8723,7 +8723,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(first[2]).toBe('BRCA1');
 
     // ⚑⚑ THE ROW ORDER, which the v2.2 audit caught: the table is ordered by
-    // cell index and cell row 0 is yMin — the BOTTOM of the figure — while a
+    // cell index and cell row 0 is yMin - the BOTTOM of the figure - while a
     // person copies names off a heatmap TOP-DOWN. So the first row name typed
     // must land on the LAST table row, and the last name on the first. Before
     // the fix every row name was filed one-for-one against the wrong row, with
@@ -8732,7 +8732,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(first[3]).toBe('bottom');
     const lastRow = await page.getByTestId('heatmap-row').nth(rowCount - 1).locator('td').allTextContents();
     expect(lastRow[3]).toBe('top');
-    // ⚑ And the convention is still stated on screen — but IN the field it
+    // ⚑ And the convention is still stated on screen - but IN the field it
     // governs rather than as a sentence beneath it (v2.3, E6). A placeholder
     // reading "left → right" is read at the moment of typing; a line of prose
     // under two boxes is read never, and it was one of four such lines on this
@@ -8752,9 +8752,9 @@ describe('heatmap capture (v2.2)', () => {
     // ⚑ The name is BESIDE the measured bounds, never instead of them: the
     // bounds are read off the pixels and stay true whatever the axis is called.
     expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,x width,y height,value/);
-    // ⚑ The first cell is col 0 / row 0 — the figure's BOTTOM-left — so it
+    // ⚑ The first cell is col 0 / row 0 - the figure's BOTTOM-left - so it
     // carries the LAST row name typed. The order survives into the file.
-    // ⚑ IDENTITY LEADS THE EXPORTED ROW TOO, unconditionally — David: *"whatever
+    // ⚑ IDENTITY LEADS THE EXPORTED ROW TOO, unconditionally - David: *"whatever
     // we export needs to be usable as a basis for reconstructing the same
     // graph."* The names follow it where the figure prints them.
     expect(csv).toMatch(/^C1,R1,BRCA1,bottom,/m);
@@ -8767,8 +8767,8 @@ describe('heatmap capture (v2.2)', () => {
 
   it('puts the CELLS where every other type puts its record, not in the card', async () => {
     // ⚑⚑ THE INVARIANT A LINT RULE COULD NOT EXPRESS. The rail fold-out redesign
-    // settled it and marked it LOCKED — a fold-out takes INPUTS, a type's record
-    // goes to the Data-points panel — and v2.2 shipped a Heatmap card holding
+    // settled it and marked it LOCKED - a fold-out takes INPUTS, a type's record
+    // goes to the Data-points panel - and v2.2 shipped a Heatmap card holding
     // both, so a heatmap's output sat where no other type's does while the panel
     // users actually read said "No points yet". David: *"we DO want the output
     // in the same place as for the other graphs… Else it becomes very confusing
@@ -8800,9 +8800,9 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('data-points-heading')).toBe('Cells');
   });
 
-  it('⚑⚑ UNDO takes back the READ, not the whole grid — the two are separate steps', async () => {
+  it('⚑⚑ UNDO takes back the READ, not the whole grid - the two are separate steps', async () => {
     // ⚠️ DAVID, 2026-08-16, on the built package: *"undo removed the whole grid.
-    // :-O"* — and he was right. Neither `Detect grid` nor `Read cells` took an
+    // :-O"* - and he was right. Neither `Detect grid` nor `Read cells` took an
     // undo snapshot, so the two actions that produce the ENTIRE heatmap record
     // were invisible to undo. One Ctrl+Z jumped back past both of them, to the
     // last calibration step, and the grid went with it.
@@ -8828,7 +8828,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('undo').click();
     await page.waitForTimeout(400);
     // ⚑ OPENED TO LOOK (v2.3, E2). Reading the cells folds the card to its one
-    // line — "Calibration · Calibrated ✓ · 20 cells read ✓" — and undo re-reads
+    // line - "Calibration · Calibrated ✓ · 20 cells read ✓" - and undo re-reads
     // them, so the card is still FINISHED and still folded. The grid's own
     // summary lives inside the card now, not beside it, so inspecting it means
     // opening the card. That is the design, not a regression: a finished card
@@ -8839,25 +8839,25 @@ describe('heatmap capture (v2.2)', () => {
     // ⚑ THE CELLS COME BACK WITH IT, and that is the OTHER rule working, not a
     // failure: restoring a grid RE-READS its cells rather than emptying the
     // table (David, 2026-08-16: *"Re-read, matching the forward path"*). So
-    // undoing a read is visually a no-op — what the snapshot buys is that undo
+    // undoing a read is visually a no-op - what the snapshot buys is that undo
     // has somewhere to LAND between "grid detected" and "calibration finished",
     // instead of stepping over both.
     expect(await page.getByTestId('heatmap-matrix-row').count()).toBeGreaterThan(0);
 
-    // And the grid is still readable afterwards — the dead end David hit, where
+    // And the grid is still readable afterwards - the dead end David hit, where
     // the grid was gone and Read cells was therefore disabled.
     expect(await page.getByTestId('heatmap-read').isEnabled()).toBe(true);
   });
 
   it('lets a CATEGORY name be edited in the table, on the band it belongs to', async () => {
-    // ⚑ A name is the one thing in that table the figure does not measure — it
+    // ⚑ A name is the one thing in that table the figure does not measure - it
     // is transcribed by a person, and a person mistypes. Same click-to-edit the
     // bar chart's Category column has had since v2.0.
     //
     // ⚑⚑ AND IT MUST LAND ON THE RIGHT BAND. The table works in CELL indices
     // (row 0 = yMin, the bottom) while the name boxes work in READING order
     // (first name = the top). An edit that wrote the cell index straight into
-    // the typed text would put the name on the mirror-image row — the exact
+    // the typed text would put the name on the mirror-image row - the exact
     // defect the audit found this morning, re-entered from the other end.
     await resetWorkspace('heatmap');
     await calibrateHeatmapCategorical();
@@ -8866,7 +8866,7 @@ describe('heatmap capture (v2.2)', () => {
     await showHeatmapTable();
     // ⚑ REOPENED: Read cells is the card's ENDING and folds it (David, 2026-08-15).
     // The bulk name boxes and the boundary buttons live in that card, so a test
-    // that uses them after reading says so. ⚑ A user is not stuck — a column's
+    // that uses them after reading says so. ⚑ A user is not stuck - a column's
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
 
@@ -8874,7 +8874,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
     await page.waitForTimeout(300);
     const rows = await page.getByTestId('heatmap-row').count();
-    // The LAST table row is the top of the figure — that is where "top" went.
+    // The LAST table row is the top of the figure - that is where "top" went.
     const last = page.getByTestId('heatmap-row').nth(rows - 1);
     expect((await last.locator('td').allTextContents())[3]).toBe('top');
 
@@ -8883,13 +8883,13 @@ describe('heatmap capture (v2.2)', () => {
     // for the resting span and the open input, so it has to be the exact band.
     const topBand = 3; // four rows on this figure
     // ⚑ SCOPED TO ONE TABLE ROW. The long form repeats a band's name once per
-    // cell — five copies now that a measured x axis has bands of its own (case
+    // cell - five copies now that a measured x axis has bands of its own (case
     // A1), where it used to have exactly one. And `EditableName` reuses one
     // testid for the resting span and the open input, so the row is the only
     // thing that makes either unambiguous.
     // ⚑⚑ THE MULTI-COPY CASE IS THE POINT, so it is asserted rather than assumed.
     // Keying the editor on the BAND mounted one autoFocus input per copy, each
-    // blurring the last, and onBlur closes the editor — the name could not be
+    // blurring the last, and onBlur closes the editor - the name could not be
     // opened at all. Invisible until a measured x axis had bands of its own
     // (case A1); before that every band appeared in exactly one row.
     expect(await page.getByTestId(`heatmap-y-name-${topBand}`).count()).toBeGreaterThan(1);
@@ -8906,7 +8906,7 @@ describe('heatmap capture (v2.2)', () => {
     // It landed on the band that was clicked…
     expect((await page.getByTestId('heatmap-row').nth(rows - 1).locator('td').allTextContents())[3]).toBe('RENAMED');
     // …and the typed list reads back in the SAME order, with only that one
-    // changed — proof the edit went through the reading-order mapping and not
+    // changed - proof the edit went through the reading-order mapping and not
     // around it.
     expect(await page.getByTestId('heatmap-y-labels').inputValue()).toBe('RENAMED, upper, lower, bottom');
   });
@@ -8914,12 +8914,12 @@ describe('heatmap capture (v2.2)', () => {
   it('links the picked CELL between the figure and the results, both ways', async () => {
     // ⚑⚑ David: *"I do not think that I can select something on the heatmap, and
     // that is selected in the matrix or table… if you are on a square in the
-    // matrix, it is highlighted in the heatmap?"* Correct — a heatmap's cells
+    // matrix, it is highlighted in the heatmap?"* Correct - a heatmap's cells
     // have no markers, so none of the selection machinery reached them. Every
     // other type ties its table to its canvas; this is that, for a matrix.
     //
     // ⚑ AND IT CLOSES A REAL FALLTHROUGH. A bare click on a heatmap used to
-    // reach `add-point` and drop a raw datum into the active series — invisible
+    // reach `add-point` and drop a raw datum into the active series - invisible
     // until export, on a type whose own tips bar says values come from the grid.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
@@ -8943,7 +8943,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(300);
     expect(await textOf('heatmap-selected-cell')).not.toBe('2,1');
     expect(await textOf('heatmap-selected-cell')).not.toBe('');
-    // The series is still empty — the click identified a cell, it did not record one.
+    // The series is still empty - the click identified a cell, it did not record one.
     expect(await page.getByTestId('series-select').textContent()).toMatch(/\(0\)/);
 
     // Clicking the picked square again clears it.
@@ -8958,14 +8958,14 @@ describe('heatmap capture (v2.2)', () => {
   // recalibration is two lines instead of a second walk through the UI.
   it('lets a person correct a cell, and hands it back to the key on demand', async () => {
     // ⚑⚑ B7 + B16. David: *"there might be something in the color/patern/shape
-    // that a user can see and we can't"* — a hatched cell, an asterisk over the
+    // that a user can see and we can't"* - a hatched cell, an asterisk over the
     // fill, a label bleeding into the colour. Their eye is the better instrument
     // for those, so their number is a MEASUREMENT and goes into the record the
     // way ours does: as a position on the third axis.
     //
     // ⚑ EVERY CLICK HERE IS ONE THE SCREEN OFFERS (gate 4). The value carries
     // the same dashed click-to-edit underline every other typed value in the app
-    // has had since v1.3, and the cell SHOWS its source — so the right-click menu
+    // has had since v1.3, and the cell SHOWS its source - so the right-click menu
     // changes something already visible rather than revealing it.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
@@ -8979,13 +8979,13 @@ describe('heatmap capture (v2.2)', () => {
 
     // ⚑⚑ CLICKING A MATRIX CELL SELECTS IT AND NOTHING ELSE. In this view the
     // cell IS the value, so an editor opening here would eat the selection
-    // click — and, seeded with the current number, would commit it on blur and
+    // click - and, seeded with the current number, would commit it on blur and
     // stamp a cell as user-read that nobody typed into. The picked-cell line is
     // where the value can be corrected, and it appears BECAUSE of this click.
     await page.getByTestId('heatmap-matrix-cell-2-1').click();
     await page.waitForTimeout(200);
     expect(await page.locator('input[data-testid="heatmap-value-edit-2-1"]').count()).toBe(0);
-    // ⚑ ALL THREE COORDINATES — a heatmap is 2.5D, and where the cell sits on
+    // ⚑ ALL THREE COORDINATES - a heatmap is 2.5D, and where the cell sits on
     // the colour key is a coordinate exactly as its column and row are.
     const picked = await textOf('heatmap-picked-cell');
     expect(picked).toMatch(/C3/);
@@ -9000,7 +9000,7 @@ describe('heatmap capture (v2.2)', () => {
     await editor.press('Enter');
     await page.waitForTimeout(400);
 
-    // ⚑⚑ SQUARE brackets — the scholarly "editorially supplied", and the one
+    // ⚑⚑ SQUARE brackets - the scholarly "editorially supplied", and the one
     // channel that survives a paste into a spreadsheet. NOT round: `(59)` is
     // accounting notation for MINUS 59, which Excel applies silently.
     // ⚑ `59.000`, not `59`: what is stored is a POSITION on the key, so the
@@ -9023,9 +9023,9 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-matrix-cell-2-1')).toBe(fromKey);
   });
 
-  it('P1 — drags the cell along the COLOUR KEY, the third axis’s own handle', async () => {
-    // ⚑⚑ THE OTHER HALF OF THE PAIR. Every value in this app has both — drag the
-    // marker or type the number — and since B7 the third axis had only the typed
+  it('P1 - drags the cell along the COLOUR KEY, the third axis’s own handle', async () => {
+    // ⚑⚑ THE OTHER HALF OF THE PAIR. Every value in this app has both - drag the
+    // marker or type the number - and since B7 the third axis had only the typed
     // one. David: *"make that marker DRAGGABLE, with instant color update of the
     // background of the cell? and if you change the value, the marker also
     // moves."*
@@ -9044,11 +9044,11 @@ describe('heatmap capture (v2.2)', () => {
     const before = await textOf('heatmap-matrix-cell-2-1');
     expect(before).not.toMatch(/\[/);
 
-    // Drag the cursor along the key — from where this cell sits to a clearly
+    // Drag the cursor along the key - from where this cell sits to a clearly
     // different place on the strip.
     // ⚑⚑ THE GRAB POINT IS READ, NOT ASSUMED. The cursor sits wherever this
-    // cell's own reading puts it on the key — a number no test can know in
-    // advance — so it is taken from the mirrored readout, the same way every
+    // cell's own reading puts it on the key - a number no test can know in
+    // advance - so it is taken from the mirrored readout, the same way every
     // other Konva-only fact in this file is asserted. Guessing a position and
     // pressing there is how a drag test passes while touching nothing.
     const cursorAt = Number(await textOf('heatmap-key-cursor'));
@@ -9068,8 +9068,8 @@ describe('heatmap capture (v2.2)', () => {
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    // ⚑ Whatever the exact number, the cell is now a PERSON's reading — square
-    // brackets, no tint — and it changed.
+    // ⚑ Whatever the exact number, the cell is now a PERSON's reading - square
+    // brackets, no tint - and it changed.
     const after = await textOf('heatmap-matrix-cell-2-1');
     expect(after).toMatch(/^\[.*\]$/);
     expect(after).not.toBe(before);
@@ -9087,7 +9087,7 @@ describe('heatmap capture (v2.2)', () => {
   it('records NOTHING when an editor is opened and closed without typing', async () => {
     // ⚑⚑ A GLANCE IS NOT A MEASUREMENT. The editor opens seeded with the number
     // already there, so committing on blur wrote that number back as the user's
-    // own reading — a cell stamped user-read that nobody typed into, and in the
+    // own reading - a cell stamped user-read that nobody typed into, and in the
     // file indistinguishable from one they did. Found by the suite, not by
     // reasoning: it surfaced as a multi-select test losing its second cell.
     await resetWorkspace('heatmap');
@@ -9108,10 +9108,10 @@ describe('heatmap capture (v2.2)', () => {
     expect(before).not.toMatch(/\[/);
   });
 
-  it('B12 — calibrates from THREE corners, with no checkbox to find and tick', async () => {
+  it('B12 - calibrates from THREE corners, with no checkbox to find and tick', async () => {
     // ⚑⚑ THREE POINTS ARE THE AFFINE MINIMUM, so on a heatmap they are simply
-    // THE WALK. Two can never define a 2-D transform — which is what killed the
-    // share-both-corners feature — and four can be placed inconsistently, which
+    // THE WALK. Two can never define a 2-D transform - which is what killed the
+    // share-both-corners feature - and four can be placed inconsistently, which
     // is what the parallel-axes guard is for. The checkbox existed to fold a
     // fourth click away; where three is the only sensible walk, unticking it
     // could only ask for a worse one.
@@ -9123,11 +9123,11 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('calib-choice-xIsCategory-true').check();
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(200);
-    // Gone — an option nobody should choose is an option that should not be there.
+    // Gone - an option nobody should choose is an option that should not be there.
     expect(await page.getByTestId('common-origin').count()).toBe(0);
 
     // ⚑ THE PROMPT NAMES BOTH BANDS, so every click is fully described before it
-    // is made — the gate that a walkthrough test may only click what the screen
+    // is made - the gate that a walkthrough test may only click what the screen
     // tells it to. It must NOT say "where the axes meet": on `heatmap.2` they
     // do not meet where a reader expects.
     const first = await textOf('tips-bar');
@@ -9145,7 +9145,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('calibration-bar')).toMatch(/3\/8/);
     expect(await textOf('tips-bar')).toMatch(/LAST row/);
 
-    // ⚑⚑ AND IT CALIBRATES — the assertion the feature this replaces never made.
+    // ⚑⚑ AND IT CALIBRATES - the assertion the feature this replaces never made.
     // Both of its tests stopped at a step count and never called Calibrate, so
     // they proved a walk could be performed and nothing about the result.
     await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
@@ -9163,7 +9163,7 @@ describe('heatmap capture (v2.2)', () => {
 
   it('says WHY Remove is unavailable at the floor, before it is pressed', async () => {
     // ⚑ The model's refusal is unit-tested (`removeDividerHandle`); this is the
-    // half only the screen can show — a disabled button carrying its reason,
+    // half only the screen can show - a disabled button carrying its reason,
     // because a button that fails on click teaches nothing. Declaring one
     // column and one row is the cheapest way to stand on the floor.
     await resetWorkspace('heatmap');
@@ -9206,17 +9206,17 @@ describe('heatmap capture (v2.2)', () => {
     }
   });
 
-  it('P4 — a dragged boundary STAYS ON ITS AXIS, not where the mouse let go', async () => {
+  it('P4 - a dragged boundary STAYS ON ITS AXIS, not where the mouse let go', async () => {
     // ⚑⚑ David: *"Why are the tick marks not bound to the axis???"* Dragging
     // mutates the Konva node's position, but React re-applies only a prop whose
-    // VALUE CHANGED — and the model CONSTRAINS the drag (an x-divider keeps only
+    // VALUE CHANGED - and the model CONSTRAINS the drag (an x-divider keeps only
     // the drop's x). So the perpendicular coordinate never changes in state, is
     // never re-applied, and the handle stays wherever the mouse let go, off the
     // axis, while the model is perfectly correct. The picture lies and the data
     // does not.
     //
     // ⚑ The same defect is on the bar chart's category ticks and has been since
-    // v2.1 — it just reads as sloppiness on a horizontal axis instead of as
+    // v2.1 - it just reads as sloppiness on a horizontal axis instead of as
     // obviously wrong against a grid. The fix is in the renderer, so this covers
     // every constrained handle in the app.
     await resetWorkspace('heatmap');
@@ -9233,14 +9233,14 @@ describe('heatmap capture (v2.2)', () => {
     const before = await imageToLocal(px(truth.grid.x[1]!), axisY);
     await refreshCanvasBox();
     // ⚑⚑ NOTHING IS SELECTED FIRST. An earlier version clicked a handle before
-    // dragging, and selection PERSISTS — so the "is anything selected?" check
+    // dragging, and selection PERSISTS - so the "is anything selected?" check
     // was answered by that first click no matter where the later one landed.
     // The assertion measured its own setup.
     //
     // A move the model ACCEPTS re-renders, and the new x drags the node back
     // into place by accident. A move it REFUSES changes no state at all, so
     // nothing re-renders and the handle simply stays where the mouse let go.
-    // Dragging past a neighbour is refused — `moveDivider` will not let a
+    // Dragging past a neighbour is refused - `moveDivider` will not let a
     // boundary cross another.
     const past = await imageToLocal(px(truth.grid.x[3]! + 1), axisY);
     await refreshCanvasBox();
@@ -9251,7 +9251,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(400);
 
     // THE DECISIVE ASSERTION: click where the mouse let go. If the handle stayed
-    // there — 60px off its own axis — that click selects it.
+    // there - 60px off its own axis - that click selects it.
     await refreshCanvasBox();
     await clickAt(past.lx, past.ly + 60);
     await page.waitForTimeout(250);
@@ -9272,7 +9272,7 @@ describe('heatmap capture (v2.2)', () => {
     // enter a positive value: *"And I don't see how I can edit the points at
     // this point during the calibration even?"* There was no way. A placed
     // calibration value was plain text, so the only route was Reset calibration
-    // — discarding eight clicks and six numbers to change one digit.
+    // - discarding eight clicks and six numbers to change one digit.
     //
     // ⚑ Not a heatmap defect: no type could edit one. It bites hardest here
     // because the walk is twice as long and the colour key's two labelled ticks
@@ -9281,16 +9281,16 @@ describe('heatmap capture (v2.2)', () => {
     // calibrated yet, and the app asking for a value he could not change.
     await resetWorkspace('heatmap');
     const bands = { x2: '5', y2: '4' } as Record<string, string>;
-    // ⚑⚑ THREE CLICKS, NOT FOUR — corrected 2026-08-17 (v2.2 audit pass 5).
+    // ⚑⚑ THREE CLICKS, NOT FOUR - corrected 2026-08-17 (v2.2 audit pass 5).
     // This walked x1, x2, y1, y2 with a click each, which is the walk B12
     // REPLACED: y1 is the shared corner and arrives PRE-PLACED, so no prompt
     // ever asks for that click. It passed anyway, because x1 and y1 are the
-    // same pixel in this figure — so the stray click landed on the point that
+    // same pixel in this figure - so the stray click landed on the point that
     // was already there and changed nothing.
     // ⚑ That is gate 4 exactly: *a walkthrough test may only click what a prompt
     // on screen tells it to click.* A test clicking a step the user never
     // clicks is not testing the user's walk, and it would keep passing on a
-    // figure where the two corners were NOT the same pixel — right up until it
+    // figure where the two corners were NOT the same pixel - right up until it
     // silently stopped meaning anything.
     for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
@@ -9312,7 +9312,7 @@ describe('heatmap capture (v2.2)', () => {
     await box.press('Enter');
     await page.waitForTimeout(400);
 
-    // Corrected in place, with the walk untouched — no Reset, no re-clicking.
+    // Corrected in place, with the walk untouched - no Reset, no re-clicking.
     expect(await textOf('calib-value-x2-1')).toBe('6');
     // …and the correction is what the calibration then uses.
     await clickImagePixel(truth.key.from.x, truth.key.from.y);
@@ -9323,19 +9323,19 @@ describe('heatmap capture (v2.2)', () => {
     }
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(700);
-    // ⚑ The GRID is 5 × 4, because detection measured the figure — which has
-    // five columns — and a declaration does not override a measurement. What
+    // ⚑ The GRID is 5 × 4, because detection measured the figure - which has
+    // five columns - and a declaration does not override a measurement. What
     // the corrected value changed is what detection was CHECKED against, and
     // the shortfall it reports names the new number.
     expect(await textOf('heatmap-detect-message')).toMatch(/6 columns/);
   });
 
-  it('B6 — selects a RANGE, a COLUMN and a ROW, the way the app selects points', async () => {
+  it('B6 - selects a RANGE, a COLUMN and a ROW, the way the app selects points', async () => {
     // ⚑⚑ David, three times: *"I have no ability to edit or select multiple
     // cells"*, *"I cannot select a range of cells, or click cells on the heatmap
     // to select them"*, *"I cannot select a whole column for example."* The
     // heatmap had its own single-cell pick while the app has had Shift-click and
-    // marquee multi-select for DATA POINTS since v1.2 — a parallel mechanism
+    // marquee multi-select for DATA POINTS since v1.2 - a parallel mechanism
     // doing less, which is this release's recurring shape.
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
@@ -9374,8 +9374,8 @@ describe('heatmap capture (v2.2)', () => {
   it('lets ENTER walk a two-field step, without reaching for Tab', async () => {
     // ⚑⚑ David: *"when I just pressed enter, I want it to jump to the box...
     // I can press tab (do not remove that capability) but it is not as
-    // intuitive."* A heatmap axis's second click asks for TWO numbers — the
-    // coordinate and the band count — and Enter used to be swallowed: confirm
+    // intuitive."* A heatmap axis's second click asks for TWO numbers - the
+    // coordinate and the band count - and Enter used to be swallowed: confirm
     // refuses while a required field is blank, so the key did nothing and the
     // only way on was Tab or the mouse.
     await resetWorkspace('heatmap');

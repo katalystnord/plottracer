@@ -5,14 +5,14 @@ import { Calibration } from '../calibration.js';
 /**
  * Polar calibration.
  *
- * ⚑ WHY THIS FILE EXISTS. `core/axes/polar.ts` scored 34.69% — the lowest of any
- * real axes class — and unlike XY and Map there is nothing upstream to port:
+ * ⚑ WHY THIS FILE EXISTS. `core/axes/polar.ts` scored 34.69% - the lowest of any
+ * real axes class - and unlike XY and Map there is nothing upstream to port:
  * WebPlotDigitizer has NO polar test, and neither does Engauge (verified against
  * the live remote, not a stale clone). This maths has never been checked by
  * anyone, here or upstream. So these cases are derived from the coordinate
  * system itself rather than from a lineage.
  *
- * `calibrate` takes three independent flags — degrees, clockwise, log radial —
+ * `calibrate` takes three independent flags - degrees, clockwise, log radial -
  * so eight behavioural combinations run through one `pixelToData`. Flag
  * combinations are where mutants hide, and each case below pins one axis of that
  * space rather than re-checking the happy path.
@@ -33,7 +33,7 @@ function polar({ degrees = true, clockwise = false, logR = false } = {}): PolarA
   return axes;
 }
 
-describe('PolarAxes — the calibration reproduces itself', () => {
+describe('PolarAxes - the calibration reproduces itself', () => {
   it('reads calibration point 1 back as the values it was given', () => {
     // The most basic obligation of any calibration, and nothing asserted it.
     const [r, theta] = polar().pixelToData(200, 100);
@@ -47,7 +47,7 @@ describe('PolarAxes — the calibration reproduces itself', () => {
   });
 });
 
-describe('PolarAxes — angle, in degrees, anticlockwise', () => {
+describe('PolarAxes - angle, in degrees, anticlockwise', () => {
   const axes = polar();
 
   // Screen y grows downwards, so "north" is a SMALLER y. Getting that sign
@@ -65,7 +65,7 @@ describe('PolarAxes — angle, in degrees, anticlockwise', () => {
     expect(r).toBeCloseTo(10, 9);
   });
 
-  it('never reports a negative angle — the range is [0, 360)', () => {
+  it('never reports a negative angle - the range is [0, 360)', () => {
     // The implementation adds 2π to a negative result. A mutant that drops that
     // wrap makes south read -90 instead of 270, which every downstream export
     // would carry as a plausible-looking number.
@@ -82,7 +82,7 @@ describe('PolarAxes — angle, in degrees, anticlockwise', () => {
   });
 });
 
-describe('PolarAxes — the three flags', () => {
+describe('PolarAxes - the three flags', () => {
   it('mirrors the angle when the chart runs clockwise', () => {
     // North is 90° going anticlockwise from east, and 270° going clockwise.
     expect(polar({ clockwise: false }).pixelToData(100, 0)[1]).toBeCloseTo(90, 9);
@@ -92,7 +92,7 @@ describe('PolarAxes — the three flags', () => {
   it('reports the SAME angle in radians when degrees is off', () => {
     // ⚑ The unit question, pinned as an invariant rather than a constant: the
     // two readings must describe one angle. This is the bug class that reached
-    // a release today — the .dig reader treated gradians and turns as radians,
+    // a release today - the .dig reader treated gradians and turns as radians,
     // exporting 49.21 for an angle whose true value was 0.
     const deg = polar({ degrees: true }).pixelToData(100, 0)[1]!;
     const rad = polar({ degrees: false }).pixelToData(100, 0)[1]!;
@@ -102,7 +102,7 @@ describe('PolarAxes — the three flags', () => {
 
   it('spaces a log radial axis GEOMETRICALLY, not arithmetically', () => {
     // r=10 at 100px, r=100 at 200px. Halfway between them in DISTANCE is 150px,
-    // which on a log scale is 10^1.5 = 31.6228 — the geometric mean, not the
+    // which on a log scale is 10^1.5 = 31.6228 - the geometric mean, not the
     // arithmetic 55. A mutant that skips the log conversion returns 55 and is
     // invisible to any test that only checks the calibration points.
     const [r] = polar({ logR: true }).pixelToData(250, 100);
@@ -117,7 +117,7 @@ describe('PolarAxes — the three flags', () => {
   });
 });
 
-describe('PolarAxes — what it does NOT provide', () => {
+describe('PolarAxes - what it does NOT provide', () => {
   it('ships the unimplemented dataToPixel stub', () => {
     // Asserted so that implementing it later must be a deliberate act. Same
     // rule as Map and Bar.
@@ -191,14 +191,14 @@ describe('PolarAxes.calibrate refuses invalid input instead of succeeding silent
 });
 
 /**
- * ⚑ A LOG RADIUS that cannot be logged — refused by the MODEL.
+ * ⚑ A LOG RADIUS that cannot be logged - refused by the MODEL.
  *
  * Same defect as the one found in `core/axes/xy.ts` while writing importer
  * tests: `Math.log(0)` is −Infinity and `Math.log(negative)` is NaN, both were
  * baked into dist10/dist12, and `calibrate()` returned true regardless.
  *
  * Polar differs from XY in one way that matters: it has no negative branch at
- * all, because a radius is a distance. So its rule is the stricter one —
+ * all, because a radius is a distance. So its rule is the stricter one -
  * strictly positive, not merely "same sign". See `core/axes/logScale.ts`,
  * which holds both rules in one place so they cannot drift apart.
  */

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
  * ⚑ MUTATION: 95.00% (scoped throwaway config; recipe in
  * `algorithms/__tests__/colorBar.test.ts`). The survivors are all reads of an
  * index one past the end of a divider list, where the value fetched is
- * `undefined` and every comparison against it is false — so the explicit bound
+ * `undefined` and every comparison against it is false - so the explicit bound
  * and the arithmetic agree, and the bound stays because relying on
  * `undefined < number` is a type lie the compiler cannot see.
  */
@@ -27,14 +27,14 @@ describe('checkDividers', () => {
 
   it('leaves the caller’s array alone', () => {
     // A model that sorts its input in place makes the caller's undo snapshot
-    // change underneath it — the shape that has bitten this project's session
+    // change underneath it - the shape that has bitten this project's session
     // state before.
     const input = [3, 1, 2];
     checkDividers(input);
     expect(input).toEqual([3, 1, 2]);
   });
 
-  it('refuses fewer than two dividers — one boundary bounds nothing', () => {
+  it('refuses fewer than two dividers - one boundary bounds nothing', () => {
     expect(checkDividers([]).reason).toBe('too-few');
     expect(checkDividers([1]).reason).toBe('too-few');
     expect(checkDividers([1, 2]).reason).toBeNull();
@@ -45,14 +45,14 @@ describe('checkDividers', () => {
     expect(checkDividers([0, Infinity]).reason).toBe('not-a-number');
   });
 
-  it('refuses two dividers at the same coordinate — a cell with no interior', () => {
+  it('refuses two dividers at the same coordinate - a cell with no interior', () => {
     expect(checkDividers([0, 1, 1, 2]).reason).toBe('coincident');
     // ⚑ And two that are merely indistinguishable, not just equal: a boundary
     // placed a denormal apart is the same boundary entered twice, and the cell
     // between them has no pixels to sample.
     expect(checkDividers([0, 1, 1 + 1e-12, 2]).reason).toBe('coincident');
     expect(checkDividers([0, 1, 1.001, 2]).reason).toBeNull();
-    // Exactly the tolerance apart is far enough — the threshold is "closer
+    // Exactly the tolerance apart is far enough - the threshold is "closer
     // than", not "no further than".
     expect(checkDividers([0, 1e-9]).reason).toBeNull();
     expect(checkDividers([0, 0.9e-9]).reason).toBe('coincident');
@@ -80,7 +80,7 @@ describe('equalDividers', () => {
 
   it('produces an ordinary adjustable list, indistinguishable from a placed one', () => {
     // ⚑ The count is a STARTING POINT, not a model. What comes out is a plain
-    // divider list, and nothing downstream can tell it from one placed by hand —
+    // divider list, and nothing downstream can tell it from one placed by hand -
     // which is what keeps unequal cells first-class rather than a special case.
     const generated = equalDividers(0, 4, 4)!;
     expect(moveDivider(generated, 2, 2.4)).toEqual([0, 1, 2.4, 3, 4]);
@@ -104,8 +104,8 @@ describe('moveDivider', () => {
   });
 
   it('refuses a move ONTO a neighbour, not just past it', () => {
-    // ⚑ Landing exactly on the neighbour makes a cell with no interior — the
-    // same thing `checkDividers` refuses — so the drag has to stop just short of
+    // ⚑ Landing exactly on the neighbour makes a cell with no interior - the
+    // same thing `checkDividers` refuses - so the drag has to stop just short of
     // it in both directions, not only on the way up.
     expect(moveDivider([0, 1, 2, 3], 1, 0)).toBeNull();
     expect(moveDivider([0, 1, 2, 3], 1, 2)).toBeNull();
@@ -187,7 +187,7 @@ describe('cellsOf', () => {
     expect(cells[0]).toEqual({ col: 0, row: 0, xMin: 0, xMax: 1, yMin: 0, yMax: 2 });
   });
 
-  it('is null — never a partial matrix — when either axis is unusable', () => {
+  it('is null - never a partial matrix - when either axis is unusable', () => {
     // ⚑ Half a lattice would export cells that are silently wrong at the edges,
     // and a matrix missing its edge cells looks complete.
     expect(cellsOf([0], [0, 1])).toBeNull();
@@ -216,7 +216,7 @@ describe('cellIndexAt', () => {
     // ⚑ The deliberate difference from `categoryAxis.bandIndexForParam`, whose
     // outermost bands are unbounded because a bar just past the last divider
     // still belongs to the category a reader would name. A point outside a
-    // heatmap is outside the MATRIX — there is no row for it, and inventing one
+    // heatmap is outside the MATRIX - there is no row for it, and inventing one
     // would put a value in a cell the figure does not have.
     expect(cellIndexAt(xs, ys, -0.1, 1)).toBeNull();
     expect(cellIndexAt(xs, ys, 4.1, 1)).toBeNull();
@@ -232,7 +232,7 @@ describe('cellIndexAt', () => {
 });
 
 /**
- * ⚑⚑ P2 — THE GRID SITS ON THE CALIBRATION, NOT IN IT.
+ * ⚑⚑ P2 - THE GRID SITS ON THE CALIBRATION, NOT IN IT.
  *
  * David, 2026-08-16: *"Anything detected on the graph sits on TOP of the
  * calibration… It has to sit on top of it and respect it, but not be a part of
@@ -242,14 +242,14 @@ describe('cellIndexAt', () => {
  * to the calibrated axis position."*
  *
  * ⚠️ THE RULE WAS ALREADY WRITTEN and this store ignored it. `core/bandedAxis.ts`
- * says it outright — *"PARAMETER SPACE IS THE WHOLE TRICK… A store of ABSOLUTE
- * coordinates — which is what the first heatmap grid used — cannot express it at
+ * says it outright - *"PARAMETER SPACE IS THE WHOLE TRICK… A store of ABSOLUTE
+ * coordinates - which is what the first heatmap grid used - cannot express it at
  * all: a bare number cannot say whether it should follow the axis or stay where
  * it was put."* It named this violator by name, in the same release.
  */
 describe('a divider is a PARAMETER against the axis position, never an absolute', () => {
   it('turns a data coordinate into a parameter, and back again', () => {
-    // 0 at the axis's first calibration point, 1 at its second — the same frame
+    // 0 at the axis's first calibration point, 1 at its second - the same frame
     // `core/bandedAxis.ts` uses for category ticks.
     expect(gridParamsFrom([0, 25, 50, 100], 0, 100)).toEqual([0, 0.25, 0.5, 1]);
     expect(dividersFromParams([0, 0.25, 0.5, 1], 0, 100)).toEqual([0, 25, 50, 100]);
@@ -266,14 +266,14 @@ describe('a divider is a PARAMETER against the axis position, never an absolute'
     }
   });
 
-  it('⚑⚑ IS UNCHANGED WHEN A CALIBRATION VALUE IS RETYPED — the grid does not depend on the numbers', () => {
+  it('⚑⚑ IS UNCHANGED WHEN A CALIBRATION VALUE IS RETYPED - the grid does not depend on the numbers', () => {
     // David's rule 3, stated as an outcome. The user placed the grid on ink and
     // then corrected what the axis is worth. The PARAMETERS must not move, so
     // the grid stays on the ink it was measured from.
     const params = gridParamsFrom([0, 30, 100], 0, 100)!;
     // Same pixels, different numbers: the axis now reads 10..200.
     const redrawn = dividersFromParams(params, 10, 200)!;
-    // The DATA coordinates change, which is right — those pixels are now worth
+    // The DATA coordinates change, which is right - those pixels are now worth
     // different numbers. The parameters, which are what is stored, did not.
     expect(redrawn).toEqual([10, 67, 200]);
     expect(gridParamsFrom(redrawn, 10, 200)).toEqual(params);
@@ -281,7 +281,7 @@ describe('a divider is a PARAMETER against the axis position, never an absolute'
 
   it('keeps a divider OUTSIDE the calibrated span outside it, rather than clamping', () => {
     // The `centred` tick convention puts the calibration points on band CENTRES,
-    // so the outermost dividers sit half a band BEYOND them — a negative
+    // so the outermost dividers sit half a band BEYOND them - a negative
     // parameter and one past 1 are ordinary, not errors. Clamping would eat half
     // a column at each end.
     const params = gridParamsFrom([-12.5, 12.5, 112.5], 0, 100)!;
@@ -299,7 +299,7 @@ describe('a divider is a PARAMETER against the axis position, never an absolute'
   });
 
   it('refuses a divider list that is not one, at both doors', () => {
-    // The same rule `checkDividers` applies interactively — a store is another
+    // The same rule `checkDividers` applies interactively - a store is another
     // entrance to the model, and it gets the same guard.
     expect(gridParamsFrom([Number.NaN, 1], 0, 100)).toBeNull();
     expect(dividersFromParams([0, Number.POSITIVE_INFINITY], 0, 100)).toBeNull();

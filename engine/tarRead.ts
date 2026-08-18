@@ -1,8 +1,8 @@
 /**
- * Minimal USTAR reader — enough to open a WebPlotDigitizer `.tar` project
+ * Minimal USTAR reader - enough to open a WebPlotDigitizer `.tar` project
  * (checkpoint 74).
  *
- * **Why we read tar at all.** A bare WPD `.json` carries **no image** —
+ * **Why we read tar at all.** A bare WPD `.json` carries **no image** -
  * confirmed across every upstream fixture (`wpd-core/tests/files/*.json` are
  * all `{version, axesColl, datasetColl, measurementColl}` with no image key).
  * WPD's own "Download Project File (.tar)" is the image-bearing format:
@@ -13,13 +13,13 @@
  * **Why not a library.** WPD uses `tarballjs`, declared as a **git URL**
  * (`wpd-core/package.json`: `"https://github.com/ankitrohatgi/tarballjs.git#v1.0"`).
  * We only need *read*, tar is a simple fixed-width format, and a pure
- * dependency-free reader is headless and reusable by a future batch pipeline —
+ * dependency-free reader is headless and reusable by a future batch pipeline -
  * so this is ~80 lines instead of a git dependency.
  *
- * Scope: read-only, and only what a WPD project uses — regular files and
+ * Scope: read-only, and only what a WPD project uses - regular files and
  * directories in USTAR. GNU long names (`@LongLink`), sparse files, PAX
  * extended headers and compression are **not** supported; a `.tar.gz` will not
- * open. WPD writes plain uncompressed tar, so that is sufficient — and
+ * open. WPD writes plain uncompressed tar, so that is sufficient - and
  * unsupported entries are reported rather than silently skipped.
  */
 
@@ -35,11 +35,11 @@ export interface TarEntry {
 const BLOCK = 512;
 
 /**
- * Reads a NUL-terminated ASCII field — used for names.
+ * Reads a NUL-terminated ASCII field - used for names.
  *
  * **Only NUL terminates.** A space is a legitimate filename character
  * ("my paper fig3/wpd.json" is an ordinary WPD project name), and treating
- * 0x20 as a terminator silently truncates such a name to "my" — which reads as
+ * 0x20 as a terminator silently truncates such a name to "my" - which reads as
  * a corrupt archive rather than an error. Numeric fields are space-padded and
  * are handled by readOctal, which trims instead.
  */
@@ -64,7 +64,7 @@ function readOctal(buf: Uint8Array, offset: number, length: number): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** True when the 512-byte block at `offset` is all zeros — tar's end marker. */
+/** True when the 512-byte block at `offset` is all zeros - tar's end marker. */
 function isZeroBlock(buf: Uint8Array, offset: number): boolean {
   for (let i = offset; i < offset + BLOCK && i < buf.length; i++) {
     if (buf[i] !== 0) return false;
@@ -77,7 +77,7 @@ function isZeroBlock(buf: Uint8Array, offset: number): boolean {
  *
  * Throws on a malformed archive rather than returning a partial result: a
  * half-read project would surface later as mysteriously missing data, and this
- * is the import path for someone else's file — the one place to be strict.
+ * is the import path for someone else's file - the one place to be strict.
  */
 export function readTar(bytes: Uint8Array): TarEntry[] {
   const entries: TarEntry[] = [];
@@ -101,7 +101,7 @@ export function readTar(bytes: Uint8Array): TarEntry[] {
     const isFile = typeflag === '0' || typeflag === '\0' || typeflag === '';
     if (!isDir && !isFile) {
       throw new Error(
-        `Unsupported tar entry "${fullName}" (type '${typeflag}') — this reader handles plain files and directories only.`
+        `Unsupported tar entry "${fullName}" (type '${typeflag}') - this reader handles plain files and directories only.`
       );
     }
 

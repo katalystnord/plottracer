@@ -15,8 +15,8 @@ import type { TupleRow } from '../calibrationSession.js';
 /**
  * The exporters that carry a ValueRounder, and the side-by-side series block.
  *
- * ⚑ WHY THIS FILE EXISTS. `csvExport.ts` scored 58.48% — the lowest in
- * `engine/` — and 91 of its 142 unnoticed mutants had NO COVERAGE AT ALL:
+ * ⚑ WHY THIS FILE EXISTS. `csvExport.ts` scored 58.48% - the lowest in
+ * `engine/` - and 91 of its 142 unnoticed mutants had NO COVERAGE AT ALL:
  * `histogramSection`, `buildHistogramJSON` and `buildTupleSeriesJSON` were
  * never called by any test, and `allSeriesSection` only through a `as never`
  * cast that pinned neither its ragged rows nor its role columns.
@@ -28,13 +28,13 @@ import type { TupleRow } from '../calibrationSession.js';
  * plausible-looking column.
  *
  * The existing suite could not have caught that, because it exports through
- * the identity rounder — under which every dimension mix-up is a no-op. Both
+ * the identity rounder - under which every dimension mix-up is a no-op. Both
  * instruments below exist to remove that blindness: `dimRounder` gives each
  * dimension a DIFFERENT resolution, and `recordingRounder` captures the exact
  * (coords, dim) each cell asked for.
  */
 
-/** Rounds dim 0 to whole numbers and dim 1 to two decimals — so a cell that
+/** Rounds dim 0 to whole numbers and dim 1 to two decimals - so a cell that
  *  reads the wrong dimension comes out a visibly different number. */
 const dimRounder: ValueRounder = {
   at: (coords, dim) => roundDim(coords[dim] as number, dim),
@@ -45,7 +45,7 @@ function roundDim(v: number, dim: number): number {
 }
 
 /** Records every rounding request, so the COORDS a cell was read at can be
- *  asserted — not just the number that came back. */
+ *  asserted - not just the number that came back. */
 function recordingRounder(): ValueRounder & { calls: { coords: number[]; dim: number; scalar?: number }[] } {
   const calls: { coords: number[]; dim: number; scalar?: number }[] = [];
   return {
@@ -68,7 +68,7 @@ describe('the histogram CSV block', () => {
   it('⚑ reads each edge at the BIN axis and the height at the VALUE axis', () => {
     // Histogram axes is XY: both edges are dimension 0 and the magnitude is
     // dimension 1. Under the identity rounder every swap of those is a no-op,
-    // which is exactly why this never showed up before — here dim 0 rounds to
+    // which is exactly why this never showed up before - here dim 0 rounds to
     // whole numbers, so a height read at dim 0 loses its decimals and a bin
     // edge read at dim 1 keeps decimals it should not have.
     const s = histogramSection([bin(1.4, 2.6, 7.25)], dimRounder);
@@ -85,7 +85,7 @@ describe('the histogram CSV block', () => {
     histogramSection([bin(1, 4, 9)], r);
     expect(r.calls).toEqual([
       { coords: [1, 9], dim: 0 }, // bin start, at itself
-      { coords: [4, 9], dim: 0 }, // bin end, at ITSELF — not at binStart
+      { coords: [4, 9], dim: 0 }, // bin end, at ITSELF - not at binStart
       { coords: [1, 9], dim: 1 }, // the height
     ]);
   });
@@ -114,7 +114,7 @@ describe('the histogram CSV block', () => {
 
   it('grows the error column as soon as ANY bin carries one, blank on the rest', () => {
     // `some`, not `every`: one bin with an error is enough for the column to
-    // be meaningful, and the bins without one get a blank — never a zero,
+    // be meaningful, and the bins without one get a blank - never a zero,
     // which would assert a measurement of "no error".
     const s = histogramSection([bin(0, 1, 5, 0.125), bin(1, 2, 8)], dimRounder);
     expect(s.header).toEqual(['bin start', 'bin end', 'value', 'value error']);
@@ -199,7 +199,7 @@ describe('the tuple JSON export (Pie, Box Plot, Bar)', () => {
     // The file's own flagged rule. `derivedTupleValue.compute` has already
     // applied the right precision; the axis-resolution rounder would need a
     // working dataToPixel, which pie does not have. This rounder mangles
-    // anything it touches — so an untouched 42.375 proves it was not touched.
+    // anything it touches - so an untouched 42.375 proves it was not touched.
     const doc = JSON.parse(
       buildTupleSeriesJSON([{ name: 'Slices', rows: [tuple(0, 'Flax', [view([30])], 42.375)] }], ['start'], dimRounder, 'value')
     );
@@ -261,7 +261,7 @@ describe('the side-by-side series block', () => {
   });
 
   it('⚑ pads a SHORTER series with blank cells, keeping the longer one intact', () => {
-    // Ragged is the normal case — two traced curves rarely have the same
+    // Ragged is the normal case - two traced curves rarely have the same
     // point count. The row count comes from the LONGEST series; taking the
     // first or the shortest silently truncates real data out of the export.
     const s = allSeriesSection(
@@ -404,7 +404,7 @@ describe('an error-cap series exports its DELTA beside its absolute position', (
   // ⚑ BOTH, deliberately. The absolute cap position is what was measured off
   // the pixels, so it stays the record; the delta is what a plotting library
   // takes. Asked what numbers you would need to REDRAW the figure, the answer
-  // is x, y, -delta, +delta — matplotlib's `yerr` and Excel want deltas,
+  // is x, y, -delta, +delta - matplotlib's `yerr` and Excel want deltas,
   // ggplot's ymin/ymax want the absolutes, and carrying both means neither
   // reader has to do arithmetic on someone else's record.
   const datum = { name: 'Sample A', rows: [{ values: [1, 10] as (number | string)[] }] };

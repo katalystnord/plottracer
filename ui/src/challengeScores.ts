@@ -1,5 +1,5 @@
 /**
- * Trace Challenge — local high-score table (v1.2 game). Persisted in the renderer's
+ * Trace Challenge - local high-score table (v1.2 game). Persisted in the renderer's
  * localStorage, which Electron keeps under the app profile across restarts. Lower
  * adjusted time is better, so the board sorts ascending (fastest first).
  */
@@ -45,7 +45,7 @@ export function insertHighScore(name: string, adjustedSeconds: number): HighScor
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    /* private mode / quota — the run just doesn't persist */
+    /* private mode / quota - the run just doesn't persist */
   }
   return next;
 }

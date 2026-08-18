@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "xy-multiseries-modulus.png",
-    "note": "Synthetic ground truth \u2014 exact vertices of each plotted line."
+    "note": "Synthetic ground truth - exact vertices of each plotted line."
   },
   "graphType": "xy",
   "axes": {

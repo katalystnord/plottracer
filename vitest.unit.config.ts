@@ -2,7 +2,7 @@ import { defineConfig, mergeConfig } from 'vitest/config';
 import base from './vitest.config.js';
 
 /**
- * THE UNIT BOARD — everything except the suites that launch a real Electron app.
+ * THE UNIT BOARD - everything except the suites that launch a real Electron app.
  *
  * ⚑⚑ WHY IT EXISTS: **CI never ran a test.** Until now `.github/workflows/
  * build.yml` ran `npm ci`, typecheck, lint and the packager, so a tag could be
@@ -18,7 +18,7 @@ import base from './vitest.config.js';
  * board remain the only things that prove the app.
  *
  * ⚑⚑ THE EXCLUSION IS BY CONVENTION, AND THE CONVENTION IS ENFORCED. `*.e2e.
- * test.ts` is a pattern, not a list — and `e2eContainment.test.ts` asserts that
+ * test.ts` is a pattern, not a list - and `e2eContainment.test.ts` asserts that
  * every file importing Playwright's Electron driver is named that way, so a
  * fourth one cannot appear outside the pattern. That assertion exists because of
  * exactly this mistake, made by hand on 2026-08-17: a suite run excluded

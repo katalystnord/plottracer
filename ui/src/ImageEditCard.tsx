@@ -230,7 +230,7 @@ export function ImageEditCard({
             onChange={(e) => onAngleChange?.(Number(e.target.value))}
             // ⚑ margin 0 (David saw the scrollbar, 2026-07-27). A range input carries
             // a 2px UA margin on each side, so `width: 100%` makes it exactly 4px
-            // wider than its parent — and because the card sets `overflowY: auto`,
+            // wider than its parent - and because the card sets `overflowY: auto`,
             // CSS computes overflow-x to `auto` too, turning those 4px into a
             // scrollbar across the whole card. Widening the card cannot fix it: the
             // overflow measured 4px at 200, 232 and 240px alike.
@@ -249,7 +249,7 @@ export function ImageEditCard({
               disabled={disabled || autoAngle == null}
               title={
                 autoAngle == null
-                  ? 'Calibrate an XY chart first — levels the image off the X-axis handles'
+                  ? 'Calibrate an XY chart first - levels the image off the X-axis handles'
                   : 'Level the image using the X-axis calibration handles'
               }
               style={{ justifyContent: 'center' }}

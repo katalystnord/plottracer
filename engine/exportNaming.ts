@@ -5,7 +5,7 @@ import type { TableFormat } from './tableFormats.js';
  *
  * ⚑ The default filename is derived from the source image (`figure.png` →
  * `figure.csv`) rather than hardcoded, because a hardcoded `data.csv` collides
- * on every export when someone batches a folder — the second figure silently
+ * on every export when someone batches a folder - the second figure silently
  * overwrites the first, or the user has to rename by hand thirty times. That
  * makes path parsing part of the product, and path parsing is exactly where
  * edge cases live: a Windows path, a dotfile, a name that is nothing but an
@@ -29,7 +29,7 @@ export const EXPORT_FILTER_NAMES: Record<NamedExportFormat, string> = {
  * The stem an export defaults to: the source image's own name, stripped of its
  * directory and extension.
  *
- * Falls back to `data` when there is no usable name — including when stripping
+ * Falls back to `data` when there is no usable name - including when stripping
  * leaves nothing behind (`.gitignore`, `   .png`), which is the case a plain
  * `replace` chain silently turns into an empty filename.
  */

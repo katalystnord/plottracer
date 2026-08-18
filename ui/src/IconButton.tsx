@@ -8,7 +8,7 @@ import { KeyTipsContext } from './useKeyTips.js';
 /**
  * A single icon-only toolbar button (checkpoint 24, see CLAUDE.md) --
  * every icon keeps a tooltip with its keyboard shortcut, no exceptions
- * (CLAUDE.md's "Product #1 — rebuild design"). `shortcut` renders both
+ * (CLAUDE.md's "Product #1 - rebuild design"). `shortcut` renders both
  * in the native `title` tooltip and as a small always-visible badge on
  * the button itself ("Numbered single-key hotkeys visible on every tool
  * button", same doc), rather than being tooltip-only.

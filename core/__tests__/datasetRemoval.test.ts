@@ -6,7 +6,7 @@ import { Dataset } from '../dataset.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `removeLastPixel` and `removeNearestPixel` were called
  * by NO test in the suite, and they are the two removals a user actually
- * triggers — Del on the last-placed point, and clicking near a point to take it
+ * triggers - Del on the last-placed point, and clicking near a point to take it
  * out. `removePixelAtIndex` (which both delegate to) was covered; the callers
  * were not.
  *
@@ -15,7 +15,7 @@ import { Dataset } from '../dataset.js';
  *   - both assign `dataset._dataPoints = [a, b, c]` directly, reaching past the
  *     public API into a private field, so the tests would keep passing if
  *     addPixel broke entirely and would break if the internal shape changed;
- *   - `removeNearestPixel` is tested with a sinon stub on `findNearestPixel` —
+ *   - `removeNearestPixel` is tested with a sinon stub on `findNearestPixel` -
  *     stubbing a method of the object under test, which verifies the delegation
  *     and nothing about whether the right point is chosen.
  * Written here through the public API instead, and with the search actually
@@ -52,7 +52,7 @@ describe('Dataset.removeLastPixel', () => {
 
   it('keeps the metadata count honest when the removed point carried some', () => {
     // removePixelAtIndex decrements a separate counter when the point had
-    // metadata. Routing through removeLastPixel must not bypass that — a stale
+    // metadata. Routing through removeLastPixel must not bypass that - a stale
     // count is how a dataset starts reporting overrides it no longer holds.
     const ds = new Dataset(2);
     ds.setMetadataKeys(['overrides']);
@@ -74,7 +74,7 @@ describe('Dataset.removeLastPixel', () => {
     // and hands it to removePixelAtIndex, whose guard was `index < length` only:
     // -1 < 0 is true, so it fell through and dereferenced _dataPoints[-1],
     // throwing `TypeError: Cannot read properties of undefined`. Not reachable
-    // by a user — CalibrationSession.removeLastPoint checks the count first —
+    // by a user - CalibrationSession.removeLastPoint checks the count first -
     // but that put the guard in the session rather than the model. Now guarded
     // at both ends in dataset.ts.
     const ds = new Dataset(2);
@@ -88,7 +88,7 @@ describe('Dataset.removeNearestPixel', () => {
     // ⚑ The case upstream's stub cannot reach. Two points sit within the default
     // 50px threshold; the search must keep looking after the first candidate and
     // return the closer one. A mutant that returns on first match removes the
-    // wrong point — and the user sees A point vanish, so nothing looks broken.
+    // wrong point - and the user sees A point vanish, so nothing looks broken.
     const ds = threePoints();
 
     const removed = ds.removeNearestPixel(29, 39);

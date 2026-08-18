@@ -1,8 +1,8 @@
 /**
- * Display formatting — how a number LOOKS, never what it is.
+ * Display formatting - how a number LOOKS, never what it is.
  *
  * ⚑ Kept firmly on the ui/ side of the line `core/measurementValues.ts` draws:
- * *"formatting stays in ui/ — a core/ module that returned "45.0°" would be
+ * *"formatting stays in ui/ - a core/ module that returned "45.0°" would be
  * re-committing the defect"* that once made a rounded display string the only
  * copy of a measurement's value. Nothing here is ever stored; the record keeps
  * the raw double and every value is re-derived from pixels on demand.
@@ -22,7 +22,7 @@ const VALUE_FMT = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6, 
  * record is untouched (tenet 9), and export rounds to pixel resolution separately. */
 const VALUE_FMT_SCI = new Intl.NumberFormat('en-US', { notation: 'scientific', maximumSignificantDigits: 6 });
 export function fmtValue(n: number): string {
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return '-';
   const a = Math.abs(n);
   if (a !== 0 && (a < 1e-4 || a >= 1e9)) return VALUE_FMT_SCI.format(n);
   return VALUE_FMT.format(n);

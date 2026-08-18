@@ -1,23 +1,23 @@
 /**
- * Principled export precision — round each value to the figure's OWN resolution,
+ * Principled export precision - round each value to the figure's OWN resolution,
  * ~half a pixel in data units, instead of a fixed number of decimals.
  *
  * **Why this replaces the fixed 2-decimal round (B6).** `Math.round(v*100)/100`
  * assumed every axis lives around O(1–100). On a small-magnitude, log, or
- * sub-unit-binned axis it silently ZEROED real data — `0.0012` exported as `0`,
- * a log-Y series collapsed to `[0, 0.01, 0.03]` — reaching every format including
+ * sub-unit-binned axis it silently ZEROED real data - `0.0012` exported as `0`,
+ * a log-Y series collapsed to `[0, 0.01, 0.03]` - reaching every format including
  * the JSON a downstream pipeline ingests (v1.0-gate audit, BLOCKER). The record
  * (project file, pixel coords) always kept full precision; only export was lossy.
  *
  * **The rule.** A value read off the figure is known to within about one pixel.
- * So round it to the data-space size of a pixel THERE — computed numerically from
+ * So round it to the data-space size of a pixel THERE - computed numerically from
  * the axis's own `pixelToData` gradient. Exact for linear axes; correctly LOCAL
  * for log/nonlinear ones (the resolution near a small log value is tiny, so the
  * small value survives). Reporting finer than that is precision the figure never
  * carried; reporting coarser (the old gate) throws away precision it did.
  *
  * **Full-precision opt-in.** `mode: 'full'` skips rounding entirely and emits the
- * raw computed value — for a user who wants every digit and will judge precision
+ * raw computed value - for a user who wants every digit and will judge precision
  * themselves. Surfaced as a checkbox on the export dialog.
  *
  * Pure: no DOM, no engine imports.
@@ -31,7 +31,7 @@ export interface PixelReadableAxes {
 }
 
 /** What the data-space rounder needs additionally: project a value back to a
- * pixel. Real on XY/Image; a stub returning `{0,0}` on the other five — which is
+ * pixel. Real on XY/Image; a stub returning `{0,0}` on the other five - which is
  * harmless here, because the only type-specific exporters that use this are
  * histogram / error bars (XY, real) and box plots (Bar, LINEAR so its resolution
  * is constant and the origin pixel gives the right answer regardless). */
@@ -43,7 +43,7 @@ export interface DataMappableAxes extends PixelReadableAxes {
  * Half-pixel resolution, in data units, for each dimension of `pixelToData` at
  * pixel `(px, py)`: half the magnitude of the per-pixel data gradient (forward
  * difference in px and py). The smallest data increment the figure can resolve
- * there — one pixel.
+ * there - one pixel.
  */
 export function halfPixelResolution(axes: PixelReadableAxes, px: number, py: number): number[] {
   const v0 = axes.pixelToData(px, py);
@@ -59,7 +59,7 @@ export function halfPixelResolution(axes: PixelReadableAxes, px: number, py: num
 /**
  * Round `v` so its last kept digit sits at the resolution `halfStep`. If the
  * resolution can't be determined (non-finite, or `<= 0` from a degenerate
- * calibration), `v` is returned UNCHANGED — full precision, NEVER coerced toward
+ * calibration), `v` is returned UNCHANGED - full precision, NEVER coerced toward
  * zero (that coercion was the whole bug). `ceil` on the decimal count is
  * deliberate: err toward keeping a digit, not dropping a small value.
  */

@@ -11,8 +11,8 @@ import {
 /**
  * The data panel's remembered width.
  *
- * ⚑ Small, but it is a STORE with three ways to be wrong — a missing entry, a
- * corrupt one, and one outside the range the drag handle allows — and none of
+ * ⚑ Small, but it is a STORE with three ways to be wrong - a missing entry, a
+ * corrupt one, and one outside the range the drag handle allows - and none of
  * them is reachable from the e2e, which only ever drags the real handle.
  */
 
@@ -43,7 +43,7 @@ describe('the data panel remembers its width', () => {
     expect(readPanelWidth()).toBe(512);
   });
 
-  it('⚑ CLAMPS ON THE WAY IN AND OUT — the store is another entrance to the model', () => {
+  it('⚑ CLAMPS ON THE WAY IN AND OUT - the store is another entrance to the model', () => {
     // The drag handle already refuses anything outside this range. A stored
     // value is a SECOND entrance, and a hand-edited entry must not be able to
     // smuggle a width past the limit the gesture enforces.

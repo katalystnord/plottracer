@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { InputParser } from '../inputParser.js';
 
 /**
- * Checkpoint 81 — the whole-string rule.
+ * Checkpoint 81 - the whole-string rule.
  *
  * Upstream's `parseFloat` is a PREFIX parser and `InputParser` only rejected
  * `NaN`, so trailing garbage was silently discarded on **all 7 axes types**.
  * Found by execution while investigating what was logged as a Bar-only defect.
  *
  * Each "silently became" case below was verified against the OLD code before
- * the fix — these are recordings of real behaviour, not hypotheticals.
+ * the fix - these are recordings of real behaviour, not hypotheticals.
  */
 describe('InputParser refuses input it used to silently truncate', () => {
   const parse = (s: unknown) => {
@@ -18,7 +18,7 @@ describe('InputParser refuses input it used to silently truncate', () => {
     return { v, isValid: ip.isValid, isDate: ip.isDate };
   };
 
-  it('refuses a thousands separator — it silently became 1', () => {
+  it('refuses a thousands separator - it silently became 1', () => {
     // The worst of the set: an ordinary thing to type on a scientific axis,
     // and it made every value on the chart 1000x wrong with nothing on screen
     // wrong. Refusing is the only honest answer: we cannot know whether
@@ -26,16 +26,16 @@ describe('InputParser refuses input it used to silently truncate', () => {
     expect(parse('1,000')).toEqual({ v: null, isValid: false, isDate: false });
   });
 
-  it('refuses a value with units — it silently became 5', () => {
+  it('refuses a value with units - it silently became 5', () => {
     expect(parse('5 kg')).toEqual({ v: null, isValid: false, isDate: false });
     expect(parse('5%')).toEqual({ v: null, isValid: false, isDate: false });
   });
 
-  it('refuses a malformed number — it silently became 1.2', () => {
+  it('refuses a malformed number - it silently became 1.2', () => {
     expect(parse('1.2.3')).toEqual({ v: null, isValid: false, isDate: false });
   });
 
-  it('refuses an ISO date rather than reading it as the year — parity gap 8b', () => {
+  it('refuses an ISO date rather than reading it as the year - parity gap 8b', () => {
     // "2024-01-01" has no "/" or ":", so the date path declines it (WPD's own
     // rule), and it used to fall through to parseFloat -> 2024, isValid=true.
     // Calibrating 2024-01-01..2024-12-31 gave xmin === xmax -> singular matrix
@@ -43,7 +43,7 @@ describe('InputParser refuses input it used to silently truncate', () => {
     expect(parse('2024-01-01')).toEqual({ v: null, isValid: false, isDate: false });
   });
 
-  it('refuses an equation — because equations NEVER worked', () => {
+  it('refuses an equation - because equations NEVER worked', () => {
     // Gap 8b's defence was that fixing the ISO date is "not cheap" because WPD
     // "accepts equations, so 2024-01-01 is ambiguous between a date and a
     // subtraction". Verified by execution: "2+3" yielded 2, not 5. There is no
@@ -53,7 +53,7 @@ describe('InputParser refuses input it used to silently truncate', () => {
     expect(parse('2*3')).toEqual({ v: null, isValid: false, isDate: false });
   });
 
-  it('refuses empty and blank — Number("") is 0, which parseFloat was not', () => {
+  it('refuses empty and blank - Number("") is 0, which parseFloat was not', () => {
     // The one place a naive parseFloat->Number swap makes things WORSE: it
     // would turn a blank field into a silent zero.
     expect(parse('')).toEqual({ v: null, isValid: false, isDate: false });
@@ -69,7 +69,7 @@ describe('InputParser refuses input it used to silently truncate', () => {
     expect(parse('10').isValid).toBe(true);
   });
 
-  it('still accepts real dates — the date path runs first and is untouched', () => {
+  it('still accepts real dates - the date path runs first and is untouched', () => {
     const slash = parse('2024/01/01');
     expect(slash.isValid).toBe(true);
     expect(slash.isDate).toBe(true);
@@ -100,12 +100,12 @@ describe('InputParser refuses input it used to silently truncate', () => {
 });
 
 /**
- * ⚑ A NUMBER IS NEVER A DATE (2026-07-28) — the effect at the axes level.
+ * ⚑ A NUMBER IS NEVER A DATE (2026-07-28) - the effect at the axes level.
  *
  * dateConversion.parse applied its "must contain / or :" guard only to STRINGS,
  * so a numeric calibration value went to toJD and was read as an HOUR OF TODAY:
  * `parse(0)` returned midnight-today (~1.78e12) while `parse('0')` returned 0.
- * Only 0..23 were affected, because toJD rejects hour > 23 — which is why 100
+ * Only 0..23 were affected, because toJD rejects hour > 23 - which is why 100
  * behaved and 10 did not.
  *
  * The two axes types react differently, and BOTH are wrong:
@@ -113,7 +113,7 @@ describe('InputParser refuses input it used to silently truncate', () => {
  *   • XYAxes has no such guard and would have taken the timestamp as the value.
  *
  * ⚑ Scope, stated honestly: this is NOT demonstrated on any upstream file we
- * hold — wpd4.json's BarAxes stores `dy` as the string '-2', and only its unused
+ * hold - wpd4.json's BarAxes stores `dy` as the string '-2', and only its unused
  * `dx` is an integer. It bit the .dig and StarryDigitizer importers (fixed there
  * by passing text) and it bites any file, hand-edited or third-party-written,
  * that stores a plain number. The guard belongs in the model regardless: the

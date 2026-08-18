@@ -4,7 +4,7 @@ import { HelpIcon, GRAPH_TYPE_ICONS } from '../icons.js';
 import { EXAMPLES, MANUAL_URL } from '../examples.js';
 
 /**
- * The Help dropdown — the F1 card's visible route, the bundled examples, the
+ * The Help dropdown - the F1 card's visible route, the bundled examples, the
  * manual and the Trace Challenge.
  *
  * ⚑ THE "How to use PlotTracer" BUTTON IS THE POINT OF THIS CARD. F1 opens the
@@ -165,7 +165,7 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                     fontWeight: 700,
                     fontSize: theme.font.size.regular,
                   }}
-                  title="Race the clock tracing 5 pre-calibrated example figures — scored against their true values"
+                  title="Race the clock tracing 5 pre-calibrated example figures - scored against their true values"
                 >
                   🎯 Take The Trace Challenge
                 </button>
@@ -188,7 +188,7 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                     fontSize: theme.font.size.regular,
                     whiteSpace: 'nowrap',
                   }}
-                  title="Open the full manual in your browser — every chart type, every export format, and what each tool refuses"
+                  title="Open the full manual in your browser - every chart type, every export format, and what each tool refuses"
                 >
                   Manual ↗
                 </button>
@@ -196,14 +196,14 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
               <div style={{ height: 1, background: theme.color.border.regular, margin: '8px 0' }} />
               {/* ⚑ NO maxWidth. This carried `maxWidth: 260` from when the help card
                   was a narrow column, and stayed after the example list grew labels
-                  like "XY Scatter — modulus vs. crosslinker (Auto-trace ▸ Scattered
-                  points)" — which now set the card's width. The attribution was
+                  like "XY Scatter - modulus vs. crosslinker (Auto-trace ▸ Scattered
+                  points)" - which now set the card's width. The attribution was
                   wrapping to seven lines inside a card twice that wide, with the
                   right half of every line empty. It is required text (AGPL-3.0 plus
                   the clean-room and Ketcher acknowledgements), so it should read as
                   a paragraph rather than a ransom note. */}
               <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5 }}>
-                <strong>PlotTracer</strong> <span data-testid="app-version">v{appVersion}</span> — a
+                <strong>PlotTracer</strong> <span data-testid="app-version">v{appVersion}</span> - a
                 desktop plot digitizer based on{' '}
                 <strong>WebPlotDigitizer</strong> by Ankit Rohatgi, distributed under
                 AGPL-3.0. Several algorithms are clean-room reimplementations of{' '}

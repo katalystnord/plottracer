@@ -75,7 +75,7 @@ function inputFor(
 }
 
 /** `Object.hasOwn` in a repo that compiles to ES2020. Asking whether the KEY is
- * there, not whether reading it gives undefined — which is the whole question
+ * there, not whether reading it gives undefined - which is the whole question
  * for `rSquared` and `converged`, where an absent field means "does not apply". */
 const hasKey = (obj: object, key: string): boolean => Object.prototype.hasOwnProperty.call(obj, key);
 
@@ -176,7 +176,7 @@ describe('the geometry gate', () => {
  * The fit block INSIDE the file, not merely the fact that a block appeared.
  *
  * ⚑ Two of its keys are ABSENT on purpose, and absence is the whole meaning:
- * `rSquared` is undefined for a flat series (v1.5.1 — R² divides by zero when
+ * `rSquared` is undefined for a flat series (v1.5.1 - R² divides by zero when
  * every y is the mean, and the old code answered 1, which is not a rounding
  * error but an invented number), and `converged` does not apply to a polynomial,
  * which is solved directly and has nothing to settle. A test that only checks
@@ -205,7 +205,7 @@ describe('the curve fit block that reaches the file', () => {
 
   it('OMITS R² for a flat series rather than claiming 1', () => {
     // Every y identical: SStot is exactly 0, so R² has no value at all. The key
-    // must be missing, not null and not 1 — a reader that finds a number there
+    // must be missing, not null and not 1 - a reader that finds a number there
     // reads it as a goodness this fit never had.
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);
@@ -215,7 +215,7 @@ describe('the curve fit block that reaches the file', () => {
 
     const fit = fitOf(session);
     expect(hasKey(fit, 'rSquared')).toBe(false);
-    // ...and RMS, which IS defined here, still arrives — the honest headline.
+    // ...and RMS, which IS defined here, still arrives - the honest headline.
     expect(fit.rms).toBeCloseTo(0, 6);
   });
 
@@ -256,12 +256,12 @@ describe('export scope decides WHICH series reach the file', () => {
     const session = buildSession();
     session.addDataset('Series 2');
     session.setActiveDataset(1);
-    session.addDataPoint(220, 115); // (4, 9) — still on y = 2x + 1
+    session.addDataPoint(220, 115); // (4, 9) - still on y = 2x + 1
     session.addDataPoint(250, 85); // (5, 11), so this series can carry a fit too
     return session;
   }
 
-  it('scope "active" writes only the active series — the second one, here', () => {
+  it('scope "active" writes only the active series - the second one, here', () => {
     const parsed = JSON.parse(buildExportJson(inputFor(twoSeries(), { scope: 'active' })));
     expect(parsed.series.map((s: { name: string }) => s.name)).toEqual(['Series 2']);
   });
@@ -273,7 +273,7 @@ describe('export scope decides WHICH series reach the file', () => {
 
   it('names the fit after the series it belongs to, under either scope', () => {
     // ⚑ The blocks are keyed by NAME, so resolving the active series wrongly
-    // does not lose the fit — it files it against somebody else's data.
+    // does not lose the fit - it files it against somebody else's data.
     const session = twoSeries();
     const result = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });
     if ('error' in result) throw new Error(result.error);
@@ -330,7 +330,7 @@ describe('an error series exports as a series carrying its relation', () => {
     // Both formats, deliberately: the absolute cap position is what was measured
     // off the pixels and stays the record, while the Δ is what a plotting library
     // takes. Until v2.1 the JSON dropped it, leaving a JSON reader to re-derive
-    // the cap→datum pairing — the one rule that has shipped wrong twice.
+    // the cap→datum pairing - the one rule that has shipped wrong twice.
     const parsed = JSON.parse(buildExportJson(inputFor(withErrorSeries(), { scope: 'all' })));
     const upper = parsed.series.find((s: { name: string }) => s.name === 'Upper');
     expect(upper.deltas).toHaveLength(2);
@@ -401,7 +401,7 @@ describe('geometry reaches the file under either scope, named for its series', (
 describe('a fit saved before nonlinear models existed', () => {
   it('reads as a polynomial rather than as a model with no name', () => {
     // Files saved before v1.5 carry no `model` key at all, and the absence means
-    // polynomial — the only kind that existed. Exporting an empty name there
+    // polynomial - the only kind that existed. Exporting an empty name there
     // would describe the fit as nothing in particular.
     const session = buildSession();
     const result = runCurveFit(session.getDataset(), session.getAxes()!, { degree: 1, restrict: false });

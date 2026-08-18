@@ -34,7 +34,7 @@ describe('roundToResolution', () => {
     expect(roundToResolution(5432.9, 17)).toBe(5433);
   });
 
-  it('returns the value UNCHANGED when the resolution is unknown — never coerces toward zero', () => {
+  it('returns the value UNCHANGED when the resolution is unknown - never coerces toward zero', () => {
     expect(roundToResolution(0.001, 0)).toBe(0.001); // degenerate calibration
     expect(roundToResolution(0.001, NaN)).toBe(0.001);
     expect(roundToResolution(0.001, -1)).toBe(0.001);

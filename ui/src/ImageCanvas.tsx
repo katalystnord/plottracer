@@ -43,7 +43,7 @@ export const SUPPORTED_IMAGE_FORMATS = 'PNG, JPG, GIF, BMP, WEBP, SVG, PDF, TIFF
 // multipage) ARE supported now (B7) -- routed by content to their decoders before
 // this ever fires; this only catches a genuinely undecodable/corrupt file.
 function unsupportedFileMessage(name: string): string {
-  return `Can't open ${name} — PlotTracer reads ${SUPPORTED_IMAGE_FORMATS}.`;
+  return `Can't open ${name} - PlotTracer reads ${SUPPORTED_IMAGE_FORMATS}.`;
 }
 
 /** Decode a `data:<mime>;base64,<payload>` URL to raw bytes -- used to hand a
@@ -68,12 +68,12 @@ function dataURLToBytes(dataURL: string): Uint8Array {
  *
  * The base image stays plain Canvas2D; the marker overlay (calibration
  * handles, placed points) renders on a Konva layer stacked on top
- * (checkpoint 10/11, see CLAUDE.md) — per the original Product #1 design
+ * (checkpoint 10/11, see CLAUDE.md) - per the original Product #1 design
  * of Canvas2D for the base image, Konva for the overlay. Since checkpoint
  * 12, the Konva Stage is the interactive surface: wheel-zoom, drag-pan and
  * click-to-add-point handlers live on the Stage (not the plain canvas
- * underneath), because a CSS `pointer-events: none` wrapper — needed while
- * the overlay was non-interactive — blocks Konva from ever seeing an event
+ * underneath), because a CSS `pointer-events: none` wrapper - needed while
+ * the overlay was non-interactive - blocks Konva from ever seeing an event
  * regardless of its own `listening` flag. A background click/drag (where
  * `e.target === stage`) runs the existing pan/click logic unchanged;
  * a mousedown that lands on a draggable Circle instead bubbles from the
@@ -82,7 +82,7 @@ function dataURLToBytes(dataURL: string): Uint8Array {
  * Also renders the floating cursor-following zoom loupe (see Loupe.tsx)
  * while hovering a loaded image, plus a small persistent x/y readout as
  * a fallback for continuous coordinate awareness (CLAUDE.md "Product #1
- * — rebuild design").
+ * - rebuild design").
  *
  * Since checkpoint 22, an optional `boxPlotGlyphs` prop (image-pixel-space
  * segments from engine/calibrationSession.ts's getBoxPlotGlyphs, computed
@@ -154,7 +154,7 @@ function labelPlacement(
   below?: boolean
 ): { x: number; y: number; align: 'left' | 'right' } {
   // ⚑ `below` wins over the outward ray: a marker asking to stagger is telling
-  // us its NEIGHBOURS are the problem, which leaning outward cannot fix — on a
+  // us its NEIGHBOURS are the problem, which leaning outward cannot fix - on a
   // straight colour key every handle's outward direction is the same direction.
   if (below === true) return { x: screenX + gap, y: screenY + 8, align: 'left' };
   if (!away) return { x: screenX + gap, y: screenY - 20, align: 'left' };
@@ -206,11 +206,11 @@ export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
 /** ⚑ The same violet the CATEGORY TICKS use, which the heatmap's handles now
  * take too (Workspace's HEATMAP_GRID_COLOR aliases it): the line you see and the
  * dot you grab have to read as one thing, or the handle looks like a stray data
- * point — and a boundary placed on an axis is the same mechanism whether the
+ * point - and a boundary placed on an axis is the same mechanism whether the
  * figure is a bar chart or a matrix, so it should not be a different colour. */
 /** ⚑ THE SHARED STRUCTURE VIOLET, imported rather than restated. This was a
  * SECOND constant holding the same hex as `CATEGORY_TICK_COLOR`, which is
- * exactly the duplication the "reuse the tick graphics" instruction was about —
+ * exactly the duplication the "reuse the tick graphics" instruction was about -
  * the shapes were reused and the colour was copied. Kept as a local alias only
  * so the many `GRID_OVERLAY_COLOR` uses below still read as "the grid's colour". */
 const GRID_OVERLAY_COLOR = CATEGORY_TICK_COLOR;
@@ -229,11 +229,11 @@ interface ImageCanvasProps {
   binGlyphs?: GlyphSegment[][];
   /**
    * Error whiskers (checkpoint 70; reshaped for B1/B2 in v2.3), image-pixel
-   * space — see engine/errorBarGlyph.ts.
+   * space - see engine/errorBarGlyph.ts.
    *
    * ⚑⚑ NOT decorative like the others, and that is the point. The BAR is
    * display-only, but the CAP is the thing the user grabs: its tick is the only
-   * drawing of the cap there is (B1 — the ball is gone, so nothing is left to
+   * drawing of the cap there is (B1 - the ball is gone, so nothing is left to
    * drift away from it), and while its marker is being dragged this layer
    * redraws both parts from the live position rather than from a model that
    * updates on release.
@@ -267,7 +267,7 @@ interface ImageCanvasProps {
   /**
    * The heatmap grid (v2.2): one polyline per divider, in image-pixel space.
    *
-   * ⚑ Drawn, never grabbed — `listening={false}` like every other overlay here.
+   * ⚑ Drawn, never grabbed - `listening={false}` like every other overlay here.
    * A divider is adjusted from the Heatmap card, not by dragging the line: the
    * line is what tells the user WHERE the boundary the app is using actually
    * sits, which is the whole reason a proposed grid is safe to propose.
@@ -276,7 +276,7 @@ interface ImageCanvasProps {
   /**
    * The four corners of the CELL the user has picked, in image pixels.
    *
-   * ⚑ A heatmap's record has no markers on the figure — the cells are the
+   * ⚑ A heatmap's record has no markers on the figure - the cells are the
    * record, and until now nothing on screen tied a row of the results to the
    * square it came from. David: *"if you are on a square in the matrix, it is
    * highlighted in the heatmap?"* Drawn as a filled outline rather than a dot,
@@ -285,16 +285,16 @@ interface ImageCanvasProps {
    */
   gridSelection?: { x: number; y: number }[] | null;
   /**
-   * The picked cell's position ON THE COLOUR KEY — the third axis's own marker.
+   * The picked cell's position ON THE COLOUR KEY - the third axis's own marker.
    *
    * ⚑⚑ THE THIRD AXIS IS AN AXIS, so it gets a handle you can drag, exactly as
-   * x and y do. Everything else in this app has both halves — drag the marker or
-   * type the value — and the colour key had only the typed one. `from`/`to` are
+   * x and y do. Everything else in this app has both halves - drag the marker or
+   * type the value - and the colour key had only the typed one. `from`/`to` are
    * the strip's ends in IMAGE coordinates and `t` is where along it the cell
    * sits; the cursor is drawn from those rather than from a pixel, so it follows
    * the key when the figure is zoomed, panned or recalibrated.
    *
-   * ⚠️ `from`/`to` must be the strip's CENTRELINE, not the two corner clicks —
+   * ⚠️ `from`/`to` must be the strip's CENTRELINE, not the two corner clicks -
    * `keyCursorStrip` is the one place that decides, and it is the same line the
    * sampler reads. `thickness` is the bar's measured depth, in IMAGE units.
    */
@@ -305,29 +305,29 @@ interface ImageCanvasProps {
     thickness: number;
   } | null;
   /**
-   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS — the third axis's calibrated
+   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS - the third axis's calibrated
    * extent, printed on the key itself.
    *
    * ⚑⚑ WHY IT IS ON SCREEN AT ALL (2026-08-17). These two numbers were already
    * computed, already held, and already written into every export as the
-   * `Colour key` section — and shown nowhere. David calibrated a key printed
+   * `Colour key` section - and shown nowhere. David calibrated a key printed
    * `10¹`/`10²` without ticking **Log**, so the key was read LINEARLY, exactly
    * as instructed, and thirty cells came out on a span of **−38 … 169**: several
    * of them negative, for an IC50, which cannot be. Nothing objected, because
-   * nothing was wrong — a linear key that goes negative is a perfectly legal
+   * nothing was wrong - a linear key that goes negative is a perfectly legal
    * diverging key. With **Log** ticked the same figure reads **3 … 589**.
    *
    * ⚑⚑ The two spans are unmistakable side by side, and they are available the
-   * moment the key is calibrated — BEFORE a single cell is read. That is the
+   * moment the key is calibrated - BEFORE a single cell is read. That is the
    * whole of the fix: not a new measurement, a number we already had, put where
    * the choice that decides it is made.
    *
-   * ⚠️ NUMBERS ONLY — nothing is flagged, and a zero crossing least of all.
+   * ⚠️ NUMBERS ONLY - nothing is flagged, and a zero crossing least of all.
    * David: *"There can easily be instances where crossing zero is perfectly
    * reasonable. Just think of temperature on a heatmap."* Quite: the bundled
    * example's own key is *Peak temperature (°C)*, and anomaly maps, elevation
    * and log-fold change all cross zero as a matter of course. A warning that
-   * fires on ordinary figures teaches the user to ignore it — the bar chart's
+   * fires on ordinary figures teaches the user to ignore it - the bar chart's
    * `regenerateWarning` rule, and tenet 9 besides. We report the extent we
    * measured and let the reader do the reading.
    *
@@ -337,14 +337,14 @@ interface ImageCanvasProps {
   keySpan?: {
     from: number;
     to: number;
-    /** Half a pixel's worth of value along the strip — the finest increment this
+    /** Half a pixel's worth of value along the strip - the finest increment this
      * key can resolve, so the readout rounds to it rather than printing digits
      * the pixels never supported. Measured in `keySpanFromClicks`; APPLIED here,
      * because formatting stays in ui/. */
     halfStep: number;
     strip: { from: { x: number; y: number }; to: { x: number; y: number }; thickness: number };
   } | null;
-  /** Live, while the cursor is being dragged — for the colour preview. */
+  /** Live, while the cursor is being dragged - for the colour preview. */
   onKeyCursorDrag?: (t: number) => void;
   /** Committed, on release. */
   onKeyCursorDragEnd?: (t: number) => void;
@@ -366,12 +366,12 @@ interface ImageCanvasProps {
   onImageClick?: (x: number, y: number) => void;
   /** Fired with a marker's id and its new image-pixel coordinates once a drag ends. */
   onMarkerDragEnd?: (id: string, x: number, y: number) => void;
-  /** Fired when a marker is clicked (not dragged) — selects it as the active
+  /** Fired when a marker is clicked (not dragged) - selects it as the active
    * point (checkpoint 58). `shiftKey` lets the Select tool toggle multi-select. */
   onMarkerClick?: (id: string, shiftKey?: boolean) => void;
   /** Mouse model (David 2026-07-20): true only when Pan is the active tool, so a
    * plain left-drag pans. In any other tool a left-drag is NOT a pan (it does the
-   * tool, or nothing) — panning then lives on Ctrl+Left and the middle button,
+   * tool, or nothing) - panning then lives on Ctrl+Left and the middle button,
    * which pan from ANY tool regardless of this flag. */
   leftButtonPans?: boolean;
   /** Right-click a data-point marker → the caller shows a context menu at the
@@ -439,7 +439,7 @@ interface ImageCanvasProps {
   linkSnap?: ((x: number, y: number) => { x: number; y: number } | null) | null;
   onLinkDragMove?: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
   onLinkDrag?: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
-  /** The in-flight link drag was abandoned (cursor left the canvas) — clear the
+  /** The in-flight link drag was abandoned (cursor left the canvas) - clear the
    * rubber-band. Distinct from onLinkDrag, which records. */
   onLinkDragCancel?: () => void;
   /** Live deskew preview (checkpoint 64): CSS-rotates the drawn canvas + overlay
@@ -579,8 +579,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   /**
    * The error cap being dragged right now, in SCREEN space.
    *
-   * ⚑⚑ B1's other half. Deleting the ball leaves one drawn cap — the whisker's
-   * own tick — but that tick comes from the MODEL, which updates on release, so
+   * ⚑⚑ B1's other half. Deleting the ball leaves one drawn cap - the whisker's
+   * own tick - but that tick comes from the MODEL, which updates on release, so
    * on its own it would sit still while the cursor walked away. This is what
    * lets the drawing follow the drag, and it is the same trick `hover` already
    * uses for the loupe: Konva captures the pointer during a shape drag, so the
@@ -839,7 +839,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
 
   const openImage = useCallback(async () => {
     if (!window.electronAPI) {
-      setOpenError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
+      setOpenError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
       return;
     }
     if (beforeOpenImage && !beforeOpenImage()) return; // unsaved-work guard declined
@@ -877,11 +877,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
    * select-marquee / lasso / bar-capture anchor is kept in screen coordinates
    * and only converted to image space at drag-END, using whatever `view` is
    * current then. Change `view` in between and the stored anchor is never
-   * re-projected, so the rectangle recorded is not the one the user drew — for
+   * re-projected, so the rectangle recorded is not the one the user drew - for
    * boxMode (v2.0 Bar capture) that is a wrong READING, not a cosmetic glitch.
    *
    * ⚑ `onWheel` has refused this since the v2.0 pre-launch audit, but the
-   * refusal lived inline in `onWheel` alone — while the SAME view change is
+   * refusal lived inline in `onWheel` alone - while the SAME view change is
    * reachable from the zoom buttons, the zoom slider, and the Ctrl +/-/0/1
    * menu accelerators. The keyboard ones are reachable with the mouse button
    * still held, which is exactly the situation the guard exists for. Shared
@@ -1626,14 +1626,14 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             >
               {/* The overlay layer is captured by ref so the LOUPE can composite
                   it over the magnified image (checkpoint 83). Konva already
-                  renders it to its own <canvas>, so this costs nothing to read —
+                  renders it to its own <canvas>, so this costs nothing to read -
                   no re-render, no toCanvas(), just a drawImage from a canvas
                   that already exists. WPD has to alpha-composite two contexts
                   pixel-by-pixel (graphicsWidget.js:566-579) because its data
                   layer isn't separable; ours is, which makes the same feature
                   cheaper for us than for the reference. */}
               <Layer ref={overlayLayerRef}>
-                {/* Colour-match preview (ckpt 121) — FIRST so it sits UNDER every
+                {/* Colour-match preview (ckpt 121) - FIRST so it sits UNDER every
                     handle/point/glyph: it is context for what a trace would grab,
                     never a hit target (`listening={false}`). The offscreen canvas
                     is native-image-sized, so it positions at the image origin and
@@ -1648,10 +1648,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     listening={false}
                   />
                 )}
-                {/* The calibration's implied geometry (ckpt 84) — FIRST in the
+                {/* The calibration's implied geometry (ckpt 84) - FIRST in the
                     layer so it sits UNDER the handles: it is a check on where
                     they are, so it must never obscure or outrank them. Also
-                    `listening={false}` — decorative, never a hit target, same as
+                    `listening={false}` - decorative, never a hit target, same as
                     every other derived overlay here. Being on this layer means it
                     shows in the LOUPE too (ckpt 83), which is how you place a
                     handle precisely AND see what it implies at the same time. */}
@@ -1799,7 +1799,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   }
                   if (point.kind === 'cap') {
-                    // ⚑⚑ AN ERROR CAP HAS NO MARK OF ITS OWN — B1, and the
+                    // ⚑⚑ AN ERROR CAP HAS NO MARK OF ITS OWN - B1, and the
                     // reason it is a fix rather than a preference. It used to
                     // draw a "ball" here while the whisker drew a tick at the
                     // same place: two objects for one thing, one moved live by
@@ -1810,7 +1810,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     //
                     // So this marker draws NOTHING. Its whole job is to be
                     // grabbable, and the cap you see is the whisker's own tick
-                    // — drawn black, and recomputed from `capDrag` while this
+                    // - drawn black, and recomputed from `capDrag` while this
                     // marker is under the cursor. There is no second object
                     // left that COULD drift.
                     //
@@ -1834,7 +1834,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     // alone and the projection is the same operation either way.
                     //
                     // ⚑ Absent for an axes that cannot say which way its value
-                    // runs — there the cap is free, which is the documented
+                    // runs - there the cap is free, which is the documented
                     // default, and Konva gets no bound at all.
                     const line = point.dragLine;
                     const dragBound = line
@@ -1889,7 +1889,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     // tick or a heatmap grid boundary is something you drag onto
                     // the figure's own rule; the reticle above was chosen to say
                     // "precise reference". Drawing both alike claimed a boundary
-                    // nudged by eye had a calibration point's authority — and
+                    // nudged by eye had a calibration point's authority - and
                     // invited the calibration point to be dragged as casually as
                     // a divider. The two-layer model, made visible.
                     //
@@ -2035,7 +2035,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 {errorBarGlyphs?.map((whisker, glyphIndex) => {
                   // ⚑⚑ THE LIVE POSITION, AND THIS IS THE WHOLE OF B1. Konva
                   // moves a dragged marker and nothing else, so anything drawn
-                  // from the model is frozen until release — which is exactly why
+                  // from the model is frozen until release - which is exactly why
                   // the old ball and the whisker end separated on screen while
                   // the record stayed perfectly correct (CLAUDE.md pattern 4:
                   // the picture lies and the data does not). The whisker names
@@ -2060,7 +2060,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   return (
                     <Fragment key={`errorbar-glyph-${glyphIndex}`}>
                       {/* The bar, in the series' colour. Zero-length when a cap
-                          sits on its datum, which draws nothing — the honest
+                          sits on its datum, which draws nothing - the honest
                           picture of no extent. */}
                       <Line
                         points={seg(live.bar)}
@@ -2069,7 +2069,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         listening={false}
                       />
                       {/* ⚑ The cap. Black and heavier than the bar, because it
-                          is the measured endpoint AND the handle — David: "let's
+                          is the measured endpoint AND the handle - David: "let's
                           keep the end of the handles black, and the line that
                           goes to them a colour". Still listening={false}: the
                           hit area is the marker sitting over it, which is what
@@ -2148,7 +2148,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     // less than a solid fill would. Taken one step further that
                     // argument ends here: the cell's COLOUR IS the datum being
                     // inspected, so tinting it AT ALL means the one cell the user
-                    // picked is the one cell that no longer matches the figure —
+                    // picked is the one cell that no longer matches the figure -
                     // and the matrix, which mirrors it, would disagree too.
                     // David: *"absolute MIRRORING… That is the ground truth."*
                     // ⚑ The table's pick is now the same outline, so "picked"
@@ -2159,9 +2159,9 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 {/* ⚑⚑ THE COLOUR KEY'S OWN HANDLE (P1 + David's idea, 2026-08-15).
                     A caliper straddling the strip: a rectangle with a tick out
                     each side and a line down the middle marking the exact
-                    position. Deliberately none of the other three shapes — a
+                    position. Deliberately none of the other three shapes - a
                     reticle says "precise reference", a square says "grab and
-                    slide", a dot says "datum" — because this is a READING shown
+                    slide", a dot says "datum" - because this is a READING shown
                     on an axis, and it has to be told apart from all of them at a
                     glance.
                     ⚑ The middle line is the SAME purple that already means
@@ -2169,13 +2169,13 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     read as one selection rather than three unrelated marks.
                     ⚑⚑ CONSTRAINED TO THE STRIP, and bound to it ON SCREEN.
                     `dragBoundFunc` projects the pointer onto the key's own line,
-                    so the handle cannot leave the axis it means something on —
+                    so the handle cannot leave the axis it means something on -
                     pattern 4, which cost v2.2 every constrained handle it had.
                     The SAME projection reports the position for the record
                     (`positionOnStrip`), so what is drawn and what is stored
                     cannot disagree. */}
                 {/* ⚑⚑ THE KEY'S CALIBRATED EXTENT, at the ends of the key. See
-                    the `keySpan` prop for why these two numbers are on screen —
+                    the `keySpan` prop for why these two numbers are on screen -
                     they were computed and exported all along and shown nowhere,
                     which is how a linear reading of a log key produced thirty
                     plausible cells and a negative floor nobody could see.
@@ -2183,7 +2183,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     so the extent and the reading cannot disagree about where the
                     key is, and it follows zoom, pan and recalibration for free.
                     ⚑ Placed OUTSIDE each end, along the key's own direction, so
-                    it never covers the ramp it describes — the caliper already
+                    it never covers the ramp it describes - the caliper already
                     learned that lesson ("the caliper HID THE VERY COLOUR IT
                     POINTS AT"). Non-interactive: it is a readout, not a handle. */}
                 {keySpan && (() => {
@@ -2245,8 +2245,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   // as a small box floating ON the bar rather than a caliper
                   // STRADDLING it (David: *"it does not take the full width of
                   // the colour key, and that looks wrong"*). The thickness comes
-                  // from the user's own two corner clicks — the same measurement
-                  // the sampler uses — and it is in IMAGE space, so it scales
+                  // from the user's own two corner clicks - the same measurement
+                  // the sampler uses - and it is in IMAGE space, so it scales
                   // with the view like everything else the overlay draws.
                   // ⚑ THE PATTERN, three times in one day: a CONSTANT standing
                   // where a MEASUREMENT already exists.
@@ -2284,11 +2284,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                       // dragged data marker feeds its live position into `hover`
                       // for exactly this reason (Konva captures the pointer, so
                       // the Stage's own onMouseMove stops firing and the loupe
-                      // would freeze). Same two lines, same reason — not a
+                      // would freeze). Same two lines, same reason - not a
                       // second way of driving the loupe.
                       // ⚑ Nothing new to composite: the loupe already draws the
                       // Konva overlay over the magnified image, so it magnifies
-                      // the caliper too — which is only useful now that the
+                      // the caliper too - which is only useful now that the
                       // caliper is a FRAME rather than a filled white box that
                       // hid the very colour it points at.
                       onDragMove={(e) => {
@@ -2310,7 +2310,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         height={h * 2}
                         // ⚑⚑ A FRAME, NOT A FILLED BOX. It used to be painted
                         // white, so the caliper HID THE VERY COLOUR IT POINTS AT
-                        // — and it is magnified in the loupe, where that is most
+                        // - and it is magnified in the loupe, where that is most
                         // of what you see. Open, the key's own ink shows through
                         // with the purple line marking the position, which is
                         // the comparison the whole gesture exists for.
@@ -2519,7 +2519,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           // the loupe.
           // ⚑⚑ A PINNED CALIPER DRAG OUTRANKS THE HIDE. The colour key is
           // routinely drawn where a card overlaps it, and vanishing mid-drag is
-          // worst exactly when the loupe is most needed — the user is matching a
+          // worst exactly when the loupe is most needed - the user is matching a
           // colour by eye and cannot see the band at 1:1. The hide exists for a
           // cursor RESTING over a card, which is not what this is.
           (keyCursorDragging ||

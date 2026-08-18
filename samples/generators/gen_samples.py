@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seeded generators for PlotTracer's bundled EXAMPLE figures — and, crucially, the
+Seeded generators for PlotTracer's bundled EXAMPLE figures - and, crucially, the
 GROUND TRUTH they were rendered from (checkpoint 123+).
 
 Every bundled example (samples/*.png) is a synthetic figure. Historically these
 were made by ad-hoc scripts that were never committed, so the real values behind
 them were lost. That is a shame twice over: the examples can't be regenerated, and
-we can't tell a user "here is exactly how close your extraction was" — a self-test
+we can't tell a user "here is exactly how close your extraction was" - a self-test
 / accuracy score that doubles as a validation harness for any automated extraction
 (comparing extraction against the known table of values behind a figure).
 
@@ -20,12 +20,12 @@ Run:  python3 samples/generators/gen_samples.py
 
 ALL 14 bundled examples are now banked here (ground truth complete, 2026-07-20):
 the "series of values" types (scatter, xy-multiseries, bar, histogram,
-categorical, xy-stress-strain — the e2e SAMPLE_IMAGE, errorbar, boxplot, polar,
+categorical, xy-stress-strain - the e2e SAMPLE_IMAGE, errorbar, boxplot, polar,
 ccr, dash-styles) plus the three that were deferred to last because they carry no
 native matplotlib primitive or were image/PDF-backed: TERNARY (hand-built
 triangle), MAP (lon/lat with a decorative landmass), and the 3-page MULTIPAGE
 PDF. The ternary/map/pdf values were MEASURED off the earlier throwaway exemplars
-(whose source values were lost) and replotted from those measurements (David) —
+(whose source values were lost) and replotted from those measurements (David) -
 see the scratch measurement scripts' method in each generator's docstring.
 """
 
@@ -48,7 +48,7 @@ def _save(fig, name):
     """Save a 900x700 RGB PNG (matching every other bundled sample).
 
     Set env SKIP_PNG=1 to re-emit only the .truth.json (e.g. to add the
-    `calibration` block) WITHOUT rewriting the committed PNG — so a truth-only
+    `calibration` block) WITHOUT rewriting the committed PNG - so a truth-only
     change can't drift the bundled images across matplotlib versions."""
     if os.environ.get("SKIP_PNG") == "1":
         plt.close(fig)
@@ -68,8 +68,8 @@ def _write_truth(name, truth):
 
 
 def _xy_calibration(fig, ax, xmin, xmax, ymin, ymax):
-    """The 4 XY calibration anchors (x1/x2/y1/y2) in IMAGE/canvas pixel space —
-    origin top-left, y DOWN — which is the space PlotTracer's calibration uses.
+    """The 4 XY calibration anchors (x1/x2/y1/y2) in IMAGE/canvas pixel space -
+    origin top-left, y DOWN - which is the space PlotTracer's calibration uses.
 
     This lets the Trace Challenge game PRE-CALIBRATE a round (the player only
     places points, never clicks the axes). `ax.transData` maps data -> display
@@ -99,7 +99,7 @@ def _xy_calibration(fig, ax, xmin, xmax, ymin, ymax):
 def _value_calibration(fig, ax, vmin, vmax):
     """The 2 value-axis calibration anchors (p1/p2) for Bar / Box-plot, which
     calibrate ONLY the magnitude axis (no category/x calibration). Image-pixel
-    space, y-flipped — same conventions as _xy_calibration. The px is taken on the
+    space, y-flipped - same conventions as _xy_calibration. The px is taken on the
     left axis edge; only py carries the value mapping (vertical bars)."""
     fig.canvas.draw()
     h = fig.get_figheight() * fig.dpi
@@ -118,7 +118,7 @@ def _value_calibration(fig, ax, vmin, vmax):
 
 
 def gen_scatter():
-    """Compressive modulus vs. crosslinker concentration — 26 separated markers
+    """Compressive modulus vs. crosslinker concentration - 26 separated markers
     (rejection-sampled so none touch -> the Blob Detector finds exactly one
     centroid per marker). Byte-reproduces the checkpoint-123 sample."""
     name = "scatter-crosslink-modulus"
@@ -152,7 +152,7 @@ def gen_scatter():
     calib = _xy_calibration(fig, ax, 0, XMAX, 0, YMAX)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — the exact values the figure was rendered from. For a self-test / accuracy score."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - the exact values the figure was rendered from. For a self-test / accuracy score."},
         "graphType": "xy",
         "axes": {"x": {"label": "Crosslinker concentration (mol%)", "min": 0, "max": 10},
                  "y": {"label": "Compressive modulus (kPa)", "min": 0, "max": 120}},
@@ -162,7 +162,7 @@ def gen_scatter():
 
 
 def gen_multiseries():
-    """Storage modulus vs. temperature for 4 biopolymer blends — 4 line series,
+    """Storage modulus vs. temperature for 4 biopolymer blends - 4 line series,
     each ~9 plotted data points. Truth = each series' vertices."""
     name = "xy-multiseries-modulus"
     rng = np.random.default_rng(11)
@@ -186,7 +186,7 @@ def gen_multiseries():
     ax.set_ylim(0, 3600)
     ax.set_xlabel("Temperature (°C)", fontsize=13)
     ax.set_ylabel("Storage modulus (MPa)", fontsize=13)
-    ax.set_title("Storage modulus vs. temperature — 4 blends", fontsize=15)
+    ax.set_title("Storage modulus vs. temperature - 4 blends", fontsize=15)
     ax.grid(True, color="#dddddd", linewidth=0.8)
     ax.legend(fontsize=10)
     ax.tick_params(labelsize=11)
@@ -194,7 +194,7 @@ def gen_multiseries():
     calib = _xy_calibration(fig, ax, 0, 110, 0, 3600)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — exact vertices of each plotted line."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - exact vertices of each plotted line."},
         "graphType": "xy",
         "axes": {"x": {"label": "Temperature (°C)", "min": 0, "max": 110},
                  "y": {"label": "Storage modulus (MPa)", "min": 0, "max": 3600}},
@@ -204,7 +204,7 @@ def gen_multiseries():
 
 
 def gen_bar():
-    """Tensile strength across fibre types — categorical bars. Truth = per-bar
+    """Tensile strength across fibre types - categorical bars. Truth = per-bar
     value."""
     name = "bar-tensile-strength"
     cats = ["Flax", "Hemp", "Jute", "Kenaf", "Sisal", "Ramie"]
@@ -224,7 +224,7 @@ def gen_bar():
     calib = _value_calibration(fig, ax, 0, 450)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — per-bar value."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - per-bar value."},
         "graphType": "bar",
         "axes": {"y": {"label": "Tensile strength (MPa)", "min": 0, "max": 450}},
         "calibration": calib,
@@ -233,7 +233,7 @@ def gen_bar():
 
 
 def gen_bar_grouped():
-    """Cell viability, control vs. treatment — a GROUPED bar (v2.0): two series
+    """Cell viability, control vs. treatment - a GROUPED bar (v2.0): two series
     sharing one category axis, side by side per category rather than stacked.
     Truth = per-bar value, one entry per series, same shape as gen_bar's single
     series repeated -- a grouped bar has no shared-baseline arithmetic to get
@@ -253,7 +253,7 @@ def gen_bar_grouped():
     ax.set_xticklabels(cats)
     ax.set_ylim(0, 70)
     ax.set_ylabel("Cell viability (%)", fontsize=13)
-    ax.set_title("Cell viability — control vs. treatment", fontsize=15)
+    ax.set_title("Cell viability - control vs. treatment", fontsize=15)
     ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
     ax.legend(fontsize=10)
     ax.tick_params(labelsize=11)
@@ -261,7 +261,7 @@ def gen_bar_grouped():
     calib = _value_calibration(fig, ax, 0, 70)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — per-bar value, one series per group."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - per-bar value, one series per group."},
         "graphType": "bar",
         "axes": {"y": {"label": "Cell viability (%)", "min": 0, "max": 70}},
         "calibration": calib,
@@ -273,7 +273,7 @@ def gen_bar_grouped():
 
 
 def gen_bar_grouped_missing():
-    """Enzyme activity by substrate — a grouped bar where the FIRST series is
+    """Enzyme activity by substrate - a grouped bar where the FIRST series is
     MISSING a category (v2.1).
 
     ⚑ WHY THIS FIGURE EXISTS, and why the gap is in series ONE. Until category
@@ -311,7 +311,7 @@ def gen_bar_grouped_missing():
     ax.set_xticklabels(cats)
     ax.set_ylim(0, 60)
     ax.set_ylabel("Enzyme activity (U/mg)", fontsize=13)
-    ax.set_title("Enzyme activity by substrate — control assay not run for lactose", fontsize=14)
+    ax.set_title("Enzyme activity by substrate - control assay not run for lactose", fontsize=14)
     ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
     ax.legend(fontsize=10)
     ax.tick_params(labelsize=11)
@@ -339,7 +339,7 @@ def gen_bar_grouped_missing():
 
 
 def gen_bar_stacked():
-    """Quarterly cost breakdown — a STACKED bar (v2.0): four series drawn as
+    """Quarterly cost breakdown - a STACKED bar (v2.0): four series drawn as
     segments of one bar per quarter. Truth = each series' own SEGMENT height
     (its SPAN), never the cumulative top it visually reaches -- matching the
     capture model (v2.0 design): each segment is its own honestly-dragged box,
@@ -380,7 +380,7 @@ def gen_bar_stacked():
 
 
 def gen_bar_floating():
-    """Monthly temperature range — a FLOATING bar (v2.0): neither end is the
+    """Monthly temperature range - a FLOATING bar (v2.0): neither end is the
     chart's baseline (zero), and several bars cross zero entirely. Truth =
     each bar's two measured ENDS (start/end), not a single value -- a floating
     bar has no baseline-relative magnitude to reduce to, which is exactly the
@@ -415,7 +415,7 @@ def gen_bar_floating():
 
 
 def gen_histogram():
-    """Pore-size distribution — a histogram over uniform bins. Truth = each bin's
+    """Pore-size distribution - a histogram over uniform bins. Truth = each bin's
     edges and count (the record PlotTracer captures as true bin intervals)."""
     name = "histogram-pore-size"
     edges = np.arange(0, 110, 10)  # 0..100 in 10 bins
@@ -436,7 +436,7 @@ def gen_histogram():
     calib = _xy_calibration(fig, ax, 0, 100, 0, 60)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — true bin edges + count."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - true bin edges + count."},
         "graphType": "histogram",
         "axes": {"x": {"label": "Pore diameter (µm)", "min": 0, "max": 100},
                  "y": {"label": "Count", "min": 0, "max": 60}},
@@ -464,7 +464,7 @@ def gen_categorical():
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — per-category value; X is ordered, not numeric."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - per-category value; X is ordered, not numeric."},
         "graphType": "categorical",
         "axes": {"y": {"label": "Young's modulus (GPa)", "min": 0, "max": 35}},
         "series": [{"name": "modulus", "points": [{"category": c, "value": v} for c, v in zip(cats, vals)]}],
@@ -501,7 +501,7 @@ def gen_stress_strain():
     xs = np.linspace(0, 15, 61)
     ys = np.clip(42 * np.tanh(xs / 3.2) + 0.9 * xs - 0.09 * np.clip(xs - 11, 0, None) ** 2, 0, None)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — a dense sampling of the plotted curve (continuous: the truth is the curve)."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - a dense sampling of the plotted curve (continuous: the truth is the curve)."},
         "graphType": "xy",
         "axes": {"x": {"label": "Strain (%)", "min": 0, "max": 15},
                  "y": {"label": "Stress (MPa)", "min": 0, "max": 50}},
@@ -512,7 +512,7 @@ def gen_stress_strain():
 
 def gen_errorbar():
     """Tensile strength vs. cure time WITH error bars (the flagship uncertainty
-    case). Truth = each point's value and its absolute upper/lower cap — the
+    case). Truth = each point's value and its absolute upper/lower cap - the
     schema ckpt 70/79 record (deltas derived, never stored)."""
     name = "errorbar-tensile-cure"
     x = np.array([5, 10, 20, 40, 60, 90, 120], dtype=float)  # cure time (min)
@@ -531,7 +531,7 @@ def gen_errorbar():
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — value + absolute upper/lower cap per point (deltas are derived)."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - value + absolute upper/lower cap per point (deltas are derived)."},
         "graphType": "xy",
         "axes": {"x": {"label": "Cure time (min)", "min": 0, "max": 130},
                  "y": {"label": "Tensile strength (MPa)", "min": 0, "max": 60}},
@@ -542,13 +542,13 @@ def gen_errorbar():
 
 
 def gen_errorbar_asymmetric():
-    """Time to failure vs. applied stress with ASYMMETRIC 95% CIs — the case the
+    """Time to failure vs. applied stress with ASYMMETRIC 95% CIs - the case the
     symmetric ± SD example above cannot show.
 
     ⚑ The asymmetry is not decoration. Time-to-failure is log-normally
     distributed, so its confidence interval is genuinely lopsided: the upper arm
     is longer than the lower one, every point. A tool that mirrors one cap
-    through the datum reports a symmetry this figure never drew — which is
+    through the datum reports a symmetry this figure never drew - which is
     exactly the defect the error-cap workflow exists to avoid, and there was no
     bundled figure that could demonstrate it (David, 2026-08-03).
 
@@ -582,7 +582,7 @@ def gen_errorbar_asymmetric():
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png",
-                   "note": "Synthetic ground truth — value + absolute upper/lower cap per point. "
+                   "note": "Synthetic ground truth - value + absolute upper/lower cap per point. "
                            "Every interval is ASYMMETRIC: the upper arm is longer than the lower."},
         "graphType": "xy",
         "axes": {"x": {"label": "Applied stress (MPa)", "min": 25, "max": 225},
@@ -624,7 +624,7 @@ def gen_boxplot():
     calib = _value_calibration(fig, ax, 0, 450)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — five-number summary per box."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - five-number summary per box."},
         "graphType": "boxplot",
         "axes": {"y": {"label": "Tensile strength (MPa)", "min": 0, "max": 450}},
         "calibration": calib,
@@ -634,7 +634,7 @@ def gen_boxplot():
 
 
 def gen_polar():
-    """Diffusion rate vs. angle — a polar plot. Truth = (angle°, radius) samples."""
+    """Diffusion rate vs. angle - a polar plot. Truth = (angle°, radius) samples."""
     name = "polar-diffusion-rate"
     theta = np.linspace(0, 2 * np.pi, 24, endpoint=False)
     r = 6 + 3 * np.cos(theta - 0.6) + 0.5 * np.cos(3 * theta)  # a lobed diffusion profile
@@ -649,7 +649,7 @@ def gen_polar():
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — (angle°, radius) samples."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - (angle°, radius) samples."},
         "graphType": "polar",
         "axes": {"angle": {"label": "Angle", "min": 0, "max": 360, "unit": "deg"},
                  "radius": {"label": "Diffusion rate (µm²/s)", "min": 0, "max": 10}},
@@ -659,7 +659,7 @@ def gen_polar():
 
 
 def gen_ccr():
-    """Circular chart recorder — temperature over a 24 h rotation (time mapped to
+    """Circular chart recorder - temperature over a 24 h rotation (time mapped to
     angle, value to radius). Truth = (time h, temperature °C) samples."""
     name = "circular-temperature-recording"
     hours = np.arange(0, 24, 1.0)
@@ -675,7 +675,7 @@ def gen_ccr():
     ax.plot(tc, rc, "-", color=NAVY, linewidth=1.8)
     ax.set_rmin(0)
     ax.set_rmax(30)
-    # Label the dial in HOURS, not degrees — a chart recorder's angular axis is
+    # Label the dial in HOURS, not degrees - a chart recorder's angular axis is
     # time (one 24 h rotation), which is what the CCR calibration reads. 0 h at
     # the top (N), clockwise. This makes the time->angle mapping self-evident.
     ax.set_thetagrids(list(range(0, 360, 30)), labels=[f"{int(a / 360 * 24)} h" for a in range(0, 360, 30)])
@@ -683,7 +683,7 @@ def gen_ccr():
     fig.tight_layout()
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — (time h, temperature C) samples; time maps to angle over one 24 h rotation. Calibrate with a time-format start (e.g. 0:00) and rotation = day, direction = clockwise, so the extracted Time reads back as a clock time rather than a raw number."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - (time h, temperature C) samples; time maps to angle over one 24 h rotation. Calibrate with a time-format start (e.g. 0:00) and rotation = day, direction = clockwise, so the extracted Time reads back as a clock time rather than a raw number."},
         "graphType": "ccr",
         "axes": {"time": {"label": "Time", "min": 0, "max": 24, "unit": "h"},
                  "radius": {"label": "Temperature (°C)", "min": 0, "max": 30}},
@@ -694,10 +694,10 @@ def gen_ccr():
 
 def gen_dashstyles():
     """A black-and-white technical drawing whose curves are distinguished ONLY by
-    DASH STYLE — solid / dashed / dash-dot / dotted — all drawn in the SAME black
+    DASH STYLE - solid / dashed / dash-dot / dotted - all drawn in the SAME black
     (v0.8, David). This is the motivating case for Interpolation-assist: you can't
     colour-separate same-colour curves (Auto-trace by colour is useless here), and
-    a dashed line has no unbroken path for Segment Fill's flood to follow — so the
+    a dashed line has no unbroken path for Segment Fill's flood to follow - so the
     intended workflow is drop a few guide points on the dashed curve you're
     following and let the spline fill between them. Four cumulative-release curves
     (first-order kinetics), staggered so they stay separable across the range.
@@ -731,7 +731,7 @@ def gen_dashstyles():
     ax.set_ylim(0, 100)
     ax.set_xlabel("Time (h)", fontsize=13)
     ax.set_ylabel("Cumulative release (%)", fontsize=13)
-    ax.set_title("Cumulative release — 4 formulations (dash-coded)", fontsize=15)
+    ax.set_title("Cumulative release - 4 formulations (dash-coded)", fontsize=15)
     # Faint grid only; the figure is otherwise pure black-on-white so the sole
     # cue distinguishing the four curves is the dash pattern.
     ax.grid(True, color="#dddddd", linewidth=0.8)
@@ -741,7 +741,7 @@ def gen_dashstyles():
     calib = _xy_calibration(fig, ax, 0, 12, 0, 100)
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — dense sampling of each dash-coded curve (monochrome; curves differ ONLY by dash style)."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - dense sampling of each dash-coded curve (monochrome; curves differ ONLY by dash style)."},
         "graphType": "xy",
         "axes": {"x": {"label": "Time (h)", "min": 0, "max": 12},
                  "y": {"label": "Cumulative release (%)", "min": 0, "max": 100}},
@@ -751,12 +751,12 @@ def gen_dashstyles():
 
 
 def gen_ternary():
-    """Ternary blend composition — biopolymer films (chitosan / alginate /
+    """Ternary blend composition - biopolymer films (chitosan / alginate /
     cellulose, summing to 100%). matplotlib has no native ternary axes, so the
     triangle is hand-built (upward: top=Chitosan, bottom-left=Alginate,
     bottom-right=Cellulose, 20% grid). The 6 blend compositions were MEASURED off
     the previous throwaway exemplar (whose values were lost) and replotted from
-    there (David, 2026-07-20) — they came back as clean round numbers, so those
+    there (David, 2026-07-20) - they came back as clean round numbers, so those
     are what the original figure encoded. Truth = per-blend (a, b, c) = the three
     corner values; keys match the app's ternary a/b/c labels, vertex roles noted."""
     name = "ternary-blend-composition"
@@ -799,7 +799,7 @@ def gen_ternary():
     ax.text(T[0], T[1] + 0.03, "C · Chitosan (%)", ha="center", va="bottom", fontsize=12, color="#5a3a2a", fontweight="bold")
     ax.text(L[0] - 0.02, L[1] - 0.03, "A · Alginate (%)", ha="center", va="top", fontsize=12, color="#5a3a2a", fontweight="bold")
     ax.text(Rr[0] + 0.02, Rr[1] - 0.03, "B · Cellulose (%)", ha="center", va="top", fontsize=12, color="#5a3a2a", fontweight="bold")
-    ax.set_title("Ternary Blend Composition — Biopolymer Films", fontsize=15, fontweight="bold")
+    ax.set_title("Ternary Blend Composition - Biopolymer Films", fontsize=15, fontweight="bold")
     ax.set_xlim(-0.12, 1.12)
     ax.set_ylim(-0.12, h + 0.12)
     ax.set_aspect("equal")
@@ -819,7 +819,7 @@ def gen_ternary():
 
 
 def gen_map():
-    """Field-survey map with a SCALE BAR — the Map axes type is a *scale-bar*
+    """Field-survey map with a SCALE BAR - the Map axes type is a *scale-bar*
     model (uniform distance/pixel from a corner origin), NOT gridded x/y axes. So
     this figure has a 200 km scale bar and no numeric axes: you place the two
     calibration points on the bar, pick a corner as origin, and every feature
@@ -841,7 +841,7 @@ def gen_map():
     ax = fig.add_axes([0, 0, 1, 1])  # fill the figure: image corner == (0,0) km
     ax.set_xlim(0, W)
     ax.set_ylim(0, H)
-    ax.set_aspect("equal")  # square pixels — the Map model's uniform-scale assumption
+    ax.set_aspect("equal")  # square pixels - the Map model's uniform-scale assumption
     ax.set_facecolor("#eef4fb")  # sea
     ax.add_patch(plt.Polygon(land, closed=True, facecolor="#d7e8c9", edgecolor="#8fae74", linewidth=1.6, zorder=1))
     for label, x, y in sites:
@@ -853,12 +853,12 @@ def gen_map():
     for xx in (sx, sx + slen):
         ax.plot([xx, xx], [sy - 12, sy + 12], color="black", linewidth=3, zorder=5)
     ax.text(sx + slen / 2, sy + 20, "200 km", ha="center", va="bottom", fontsize=13, fontweight="bold", zorder=5)
-    ax.text(W / 2, H - 30, "Sample Collection Sites — Field Survey Map", ha="center", va="top", fontsize=16, fontweight="bold", zorder=5)
+    ax.text(W / 2, H - 30, "Sample Collection Sites - Field Survey Map", ha="center", va="top", fontsize=16, fontweight="bold", zorder=5)
     ax.set_xticks([])
     ax.set_yticks([])
     _save(fig, name)
     _write_truth(name, {
-        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth — each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."},
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."},
         "graphType": "map",
         "axes": {"scaleBar": {"length": 200, "unit": "km"}, "origin": "bottom-left",
                  "x": {"label": "Easting", "min": 0, "max": W, "unit": "km"},
@@ -868,7 +868,7 @@ def gen_map():
 
 
 def gen_multipage_pdf():
-    """A 3-page PDF, one figure per page — the multi-figure showcase (checkpoint
+    """A 3-page PDF, one figure per page - the multi-figure showcase (checkpoint
     114). Each page's data was MEASURED off the previous throwaway PDF and
     replotted (David, 2026-07-20): (1) a PLA/flax tensile stress–strain curve
     (XY), (2) tensile strength by fibre (bar), (3) flexural modulus by fibre (a
@@ -886,7 +886,7 @@ def gen_multipage_pdf():
 
     pdf_path = os.path.join(SAMPLES_DIR, name + ".pdf")
     with PdfPages(pdf_path) as pdf:
-        # Page 1 — XY stress–strain.
+        # Page 1 - XY stress–strain.
         fig = plt.figure(figsize=(8.5, 11), dpi=100)
         ax = fig.add_axes([0.13, 0.56, 0.78, 0.35])
         ax.plot(ss_x, ss_y, "-o", color=NAVY, markersize=4, linewidth=1.5)
@@ -897,7 +897,7 @@ def gen_multipage_pdf():
         fig.text(0.13, 0.45, "Figure 1.  Tensile stress-strain response of a PLA-flax composite. The curve shows an\ninitial elastic region, yield near 5% strain, and\nductile failure past the ultimate stress.", fontsize=11)
         pdf.savefig(fig); plt.close(fig)
 
-        # Page 2 — bar.
+        # Page 2 - bar.
         fig = plt.figure(figsize=(8.5, 11), dpi=100)
         ax = fig.add_axes([0.13, 0.56, 0.78, 0.35])
         ax.bar(bar_cats, bar_vals, color=NAVY, width=0.6)
@@ -909,7 +909,7 @@ def gen_multipage_pdf():
         fig.text(0.13, 0.45, "Figure 2.  Ultimate tensile strength of composites reinforced with different natural\nfibres. Error bars omitted for clarity.", fontsize=11)
         pdf.savefig(fig); plt.close(fig)
 
-        # Page 3 — categorical line.
+        # Page 3 - categorical line.
         fig = plt.figure(figsize=(8.5, 11), dpi=100)
         ax = fig.add_axes([0.13, 0.56, 0.78, 0.35])
         ax.plot(flex_cats, flex_vals, "-o", color=NAVY, markersize=5, linewidth=1.6)
@@ -921,7 +921,7 @@ def gen_multipage_pdf():
         pdf.savefig(fig); plt.close(fig)
 
     _write_truth(name, {
-        "source": {"imagePath": name + ".pdf", "note": "Synthetic ground truth — one figure per page (measured off the prior exemplar, replotted). Each page is its own graph type."},
+        "source": {"imagePath": name + ".pdf", "note": "Synthetic ground truth - one figure per page (measured off the prior exemplar, replotted). Each page is its own graph type."},
         "figures": [
             {"page": 1, "graphType": "xy",
              "axes": {"x": {"label": "Strain (%)", "min": 0, "max": 25}, "y": {"label": "Stress (MPa)", "min": 0, "max": 60}},
@@ -937,7 +937,7 @@ def gen_multipage_pdf():
 
 
 def gen_spider():
-    """Spider / radar — material performance profile, three biopolymer films
+    """Spider / radar - material performance profile, three biopolymer films
     (v1.4).
 
     Hand-built like the ternary: matplotlib's polar axes assume ONE radial scale,
@@ -1028,7 +1028,7 @@ def gen_spider():
         ax.plot(arr[:, 0], arr[:, 1], color=colour, lw=2.0, zorder=3, label=sname)
         # ⚑ NO WHITE MARKER RIM (David, 2026-07-27). A white edge is a styling
         # choice, not what radar charts normally look like: real ones draw a
-        # continuous line, or markers laid OVER it — not markers that cut it. And
+        # continuous line, or markers laid OVER it - not markers that cut it. And
         # the rim is not merely cosmetic here. It breaks the ink exactly where the
         # series crosses its axis, which is the one place the figure states a
         # number: reading outward along the ray gives line, white gap, marker,
@@ -1042,7 +1042,7 @@ def gen_spider():
     # calibration (0 preselected), so an example that never shows it would be
     # asking the user for a number the figure had not told them.
     ax.text(-0.055, -0.055, "0", ha="right", va="top", fontsize=8.5, color="#444444", zorder=5)
-    ax.set_title("Material Performance Profile — Biopolymer Films", fontsize=15, fontweight="bold")
+    ax.set_title("Material Performance Profile - Biopolymer Films", fontsize=15, fontweight="bold")
     ax.set_xlim(-1.55, 1.55)
     ax.set_ylim(-1.42, 1.42)
     ax.set_aspect("equal")
@@ -1069,7 +1069,7 @@ def gen_spider():
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png",
-                   "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 — the per-axis-scale case the only prior art (ChartSense) excludes."},
+                   "note": "Synthetic ground truth. Each axis has its OWN range and a shared centre of 0 - the per-axis-scale case the only prior art (ChartSense) excludes."},
         "graphType": "spider",
         "axes": [{"axis": i + 1, "name": label, "centre": centre, "max": vmax}
                  for i, (label, vmax) in enumerate(axes_def)],
@@ -1189,7 +1189,7 @@ def _pie_figure(title, labels, values, *, explode=None, donut=False, centre_text
 
 
 def gen_pie():
-    """A perfectly circular pie — the base case. Percentages summing to 100, so the
+    """A perfectly circular pie - the base case. Percentages summing to 100, so the
     calibration's prefilled total of 100 is already correct and the slice values ARE
     the printed labels."""
     name = "pie-filler-composition"
@@ -1212,7 +1212,7 @@ def gen_pie():
 
 
 def gen_pie_exploded():
-    """A pie with ONE slice pulled out — the own-apex capture.
+    """A pie with ONE slice pulled out - the own-apex capture.
 
     ⚑ The exploded slice is TRANSLATED, so its arc keeps the pie's radius while that
     arc's centre moves out to the slice's own tip. Measured against the shared centre
@@ -1245,8 +1245,8 @@ def gen_donut():
     """A donut chart. About donuts. (David, and he is quite right.)
 
     The joke is free; the test value is not. This one carries two things the plain pie
-    does not: an INNER RADIUS, which the angle is indifferent to — that indifference is
-    exactly what lets one calibration read every ring — and a total that is NOT 100, so
+    does not: an INNER RADIUS, which the angle is indifferent to - that indifference is
+    exactly what lets one calibration read every ring - and a total that is NOT 100, so
     the calibration's prefilled default has to actually be changed to read the figure.
     The total is printed in the hole, which is where real donut charts put it (the
     Tableau example David found does the same with $2,297,201)."""
@@ -1261,7 +1261,7 @@ def gen_donut():
     _save(fig, name)
     _write_truth(name, {
         "source": {"imagePath": name + ".png",
-                   "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole — the total is 2500, NOT 100, so the calibration default must be changed to read it."},
+                   "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole - the total is 2500, NOT 100, so the calibration default must be changed to read it."},
         "graphType": "pie",
         "total": total,
         "unit": "thousands sold",
@@ -1274,16 +1274,16 @@ def gen_donut():
 
 
 def gen_pie_tilted():
-    """A TILTED pie — the 2D stand-in for a 3D chart's top face.
+    """A TILTED pie - the 2D stand-in for a 3D chart's top face.
 
     ⚑ Why this exists: about 12% of real pie figures in the PMC corpus are drawn in
-    3D, and a 3D pie's top face is a COMPLETE, UNOCCLUDED ellipse — an exact affine
+    3D, and a 3D pie's top face is a COMPLETE, UNOCCLUDED ellipse - an exact affine
     image of the circle, so it is recoverable rather than refusable. Read flat, a 2:1
     figure turns a 7% slice into 13.4% while the readings still sum to 100, which is
     the silent-wrong-number shape this project exists to avoid.
 
     Drawn by squashing a circular pie to 55% of its height and rotating it, which is
-    exactly what a projection does — so the truth here is the TRUE angles, and any
+    exactly what a projection does - so the truth here is the TRUE angles, and any
     reader that does not invert the map will disagree with them."""
     name = "pie-tilted-market-segments"
     labels = ["Segment A", "Segment B", "Segment C", "Segment D"]
@@ -1318,7 +1318,7 @@ def gen_pie_tilted():
         ax.text(lx, ly, f"{v:.0f}%", ha="center", va="center", color="white", fontsize=12, fontweight="bold")
         cum += v
 
-    ax.set_title("Market segments (%) — drawn tilted", fontsize=15)
+    ax.set_title("Market segments (%) - drawn tilted", fontsize=15)
     fig.tight_layout()
     fig.canvas.draw()
     h = fig.get_figheight() * fig.dpi
@@ -1372,7 +1372,7 @@ def gen_pie_tilted():
 def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values, fig, ax, cbar, log=False,
                    x_categories=None, y_categories=None):
     """A heatmap's ground truth: the CELLS, and the calibration a reader needs to
-    find them — the four x/y anchors plus the colour key's own four clicks.
+    find them - the four x/y anchors plus the colour key's own four clicks.
 
     ⚑ The record is one row per cell with its BOUNDS and its centre, because
     edges -> centres is derivable and centres -> edges is not once cells are
@@ -1420,7 +1420,7 @@ def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values,
         "graphType": "heatmap",
         # ⚑⚑ THE AXIS KIND IS PART OF THE TRUTH. A heatmap's x and y are each
         # independently a CATEGORY or a VALUE, and on a category axis the
-        # coordinates below are ORDINALS — counted positions, not measurements —
+        # coordinates below are ORDINALS - counted positions, not measurements -
         # with the printed name as the real coordinate. Recording only numbers
         # here is how both bundled examples came to describe themselves as value
         # axes when one of them is a compound-by-cell-line matrix.
@@ -1445,7 +1445,7 @@ def _heatmap_truth(name, note, xlabel, ylabel, vlabel, x_edges, y_edges, values,
                 # what the app now asks for: a corner is printed and either hit
                 # or missed, where a point on the centreline gave the user
                 # nothing to aim at. Inset 2px so they sit inside the frame the
-                # colorbar draws, which is where a careful click lands too — and
+                # colorbar draws, which is where a careful click lands too - and
                 # the rectangle then MEASURES the strip's thickness instead of
                 # it being a hardcoded 5 px.
                 "k1": px(box.x0 + 2, box.y0 + 2),
@@ -1484,7 +1484,7 @@ def gen_heatmap_weld():
     cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.14)
     cbar.set_label("Peak temperature (°C)")
     fig.tight_layout()
-    _heatmap_truth(name, "Synthetic ground truth — the value of every cell, and its bounds.",
+    _heatmap_truth(name, "Synthetic ground truth - the value of every cell, and its bounds.",
                    "Distance from weld centre (mm)", "Depth (mm)", "Peak temperature (°C)",
                    x_edges, y_edges, values, fig, ax, cbar)
     _save(fig, name)
@@ -1516,7 +1516,7 @@ def gen_heatmap_assay():
     rng = np.random.default_rng(7)
     # ⚑ INSIDE the key's own range, and the first version was not. Values ran to
     # 1580 nM against a key stopping at 600, so matplotlib CLIPPED five cells to
-    # the key's top colour — and a clipped cell reads back exact, uniform and
+    # the key's top colour - and a clipped cell reads back exact, uniform and
     # wrong, because the figure genuinely no longer contains the number. That is
     # a defect in the FIGURE, not in the reader, and a bundled example must not
     # ship one. (It is also what prompted the reader's `atKeyLimit` warning.)
@@ -1539,7 +1539,7 @@ def gen_heatmap_assay():
     cbar = fig.colorbar(mesh, ax=ax, orientation="horizontal", pad=0.14)
     cbar.set_label("IC50 (nM, log scale)")
     fig.tight_layout()
-    _heatmap_truth(name, "Synthetic ground truth — a LOG colour key, drawn cell borders, and TWO CATEGORY AXES.",
+    _heatmap_truth(name, "Synthetic ground truth - a LOG colour key, drawn cell borders, and TWO CATEGORY AXES.",
                    "Compound", "Cell line", "IC50 (nM, log scale)",
                    x_edges, y_edges, values, fig, ax, cbar, log=True,
                    x_categories=compounds, y_categories=cell_lines)
@@ -1550,10 +1550,10 @@ def gen_heatmap_timecourse():
     """The MIXED case: a CATEGORY axis against a VALUE axis (v2.2).
 
     ⚑⚑ THE THIRD OF THE FOUR COMBINATIONS THE RECORD ENUMERATES, and until this
-    figure existed nothing demonstrated it — both bundled heatmaps were value ×
+    figure existed nothing demonstrated it - both bundled heatmaps were value ×
     value, which is what David caught: *"Both examples heatmaps only use value
     axis. That does not hold."* Rows are named treatments with no coordinate of
-    any kind; columns are TIME, a real value axis, and its bins are UNEQUAL — 0,
+    any kind; columns are TIME, a real value axis, and its bins are UNEQUAL - 0,
     1, 2, 4, 8, 24 hours, as a sampling schedule actually runs.
 
     ⚑ So the two axes are captured by opposite means IN ONE FIGURE, which is the
@@ -1584,7 +1584,7 @@ def gen_heatmap_timecourse():
     cbar.set_label("Engagement (%)")
     fig.tight_layout()
     _heatmap_truth(name,
-                   "Synthetic ground truth — a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins.",
+                   "Synthetic ground truth - a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins.",
                    "Time (h)", "Treatment", "Engagement (%)",
                    x_edges, y_edges, values, fig, ax, cbar, log=False,
                    y_categories=treatments)

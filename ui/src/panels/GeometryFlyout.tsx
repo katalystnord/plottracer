@@ -2,7 +2,7 @@ import { FloatingPanel } from '../FloatingPanel.js';
 import { GeometryIcon } from '../icons.js';
 
 /**
- * The Geometry rail fold-out — INPUTS only (v1.1 step 2): Closed curve ·
+ * The Geometry rail fold-out - INPUTS only (v1.1 step 2): Closed curve ·
  * Compute · Clear.
  *
  * The RESULT (arc length, area, curvature + the per-point table) lives in
@@ -12,7 +12,7 @@ import { GeometryIcon } from '../icons.js';
  */
 
 export interface GeometryFlyoutProps {
-  /** Offered only where it means something — see Workspace's own gate. */
+  /** Offered only where it means something - see Workspace's own gate. */
   visible: boolean;
   /** Disabled until there are axes to measure against. */
   disabled: boolean;

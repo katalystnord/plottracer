@@ -27,22 +27,22 @@ import type { ValueRounder } from '../core/exportPrecision.js';
 import { renderTable, type Cell, type TableSection } from './tableFormats.js';
 
 /**
- * One heatmap cell as the export sees it (v2.2) — structural, so this module
+ * One heatmap cell as the export sees it (v2.2) - structural, so this module
  * stays independent of `engine/heatmapRun.ts` and its image-reading half.
  * `engine/heatmapRun.ts`'s `HeatmapRow` satisfies it.
  */
 /**
- * The COLOUR KEY's own extent — the third axis's span.
+ * The COLOUR KEY's own extent - the third axis's span.
  *
  * ⚑⚑ David asked whether the weld sample could be regenerated from what we
- * save. The data: yes — `x_edges` and `y_edges` fall out of the cell bounds and
+ * save. The data: yes - `x_edges` and `y_edges` fall out of the cell bounds and
  * the matrix IS the value array, unequal cells included. But the generator also
  * took `vmin=60, vmax=780`, and we exported readings on the colour axis while
  * never exporting the axis itself. A consumer redrawing falls back to the
  * values' own min and max and gets different colours, with nothing saying why.
  *
  * ⚑ x and y have carried their extent all along, because every cell writes its
- * bounds. This is the same fact for the third axis — the last place it was
+ * bounds. This is the same fact for the third axis - the last place it was
  * being treated as less than an axis.
  *
  * ⚑ The COLORMAP is deliberately absent: we measure the ramp rather than
@@ -50,7 +50,7 @@ import { renderTable, type Cell, type TableSection } from './tableFormats.js';
  * part of the file nobody could check.
  */
 export interface HeatmapKeyExport {
-  /** The value at each end of the strip, in click order — a key may run
+  /** The value at each end of the strip, in click order - a key may run
    * high-to-low, and plenty do. */
   from: number;
   to: number;
@@ -61,7 +61,7 @@ export interface HeatmapExportCell {
   /** ⚑⚑ WHICH CELL THIS IS, 0-based, written to the file as `C1`/`R1`.
    *
    * ⚠️ IT WAS NOT HERE AT ALL. `HeatmapRow` has carried `col`/`row` all along
-   * and this type dropped them — so the identity was discarded exactly at the
+   * and this type dropped them - so the identity was discarded exactly at the
    * boundary to the file, and a value × value heatmap exported bounds with no
    * way to say which cell was which. The v2.2 export audit found this was the
    * only type missing identity. */
@@ -73,7 +73,7 @@ export interface HeatmapExportCell {
   yMax: number;
   xCentre: number;
   yCentre: number;
-  /** Null for a cell that could not be read — written as empty, never 0. */
+  /** Null for a cell that could not be read - written as empty, never 0. */
   value: number | null;
   low: number | null;
   high: number | null;
@@ -89,7 +89,7 @@ export interface HeatmapExportCell {
    * ⚑⚑ All three are MEASUREMENTS, and they fail in opposite ways: OCR reads ink
    * as GLYPHS and fails discretely (right, or badly wrong); the colour reads it
    * as a RAMP and fails continuously (small, silent); a person reads by eye and
-   * sees what both machines are blind to — a hatched cell, an asterisk over the
+   * sees what both machines are blind to - a hatched cell, an asterisk over the
    * fill, a texture the sampler averages away. A consumer treating an OCR'd 59
    * and a colour-inverted 58.7 as the same kind of number is wrong about both,
    * which is why this is a property of the VALUE and not a footnote.
@@ -108,7 +108,7 @@ export interface HeatmapExportCell {
   /**
    * Is this cell's x / y coordinate an ORDINAL rather than a measurement?
    *
-   * ⚑⚑ A category axis's bounds are 0,1,2… — counted positions, not lengths —
+   * ⚑⚑ A category axis's bounds are 0,1,2… - counted positions, not lengths -
    * and they look exactly like a value axis's would. Without saying so the file
    * hands a reader `x_min 3, x_max 4` for "the fourth gene" and invites them to
    * treat it as a distance. The record says which it is; it does not drop the
@@ -119,7 +119,7 @@ export interface HeatmapExportCell {
 }
 
 /** Does any cell carry a name on this axis? Decides whether the export grows a
- * label column at all — the same rule the histogram's `value error` column
+ * label column at all - the same rule the histogram's `value error` column
  * follows, so a value x value heatmap's file stays exactly what it was. */
 function hasLabels(cells: readonly HeatmapExportCell[], axis: 'x' | 'y'): boolean {
   return cells.some((c) => (axis === 'x' ? c.xLabel : c.yLabel));
@@ -154,12 +154,12 @@ export interface ExportRow {
   values: ExportValue[];
   /** For an interpolation-assist series only: whether the user ASSIGNED this
    * point (`anchor`) or the spline DERIVED it (`interpolated`). Undefined for an
-   * ordinary placed/traced point — the distinction doesn't apply to it (v1.3). */
+   * ordinary placed/traced point - the distinction doesn't apply to it (v1.3). */
   role?: PointRole;
 }
 
 /**
- * A series' own error columns and their per-row readings — B4's per-datum
+ * A series' own error columns and their per-row readings - B4's per-datum
  * extents, where a cap lives on the datum's record instead of in a series of
  * its own.
  *
@@ -169,7 +169,7 @@ export interface ExportRow {
  * record (a delta cannot tell "no bound" from "a bound of size zero"); the
  * deltas are the projection.
  *
- * ⚑ `labels` carries only the roles that were MEASURED — presence is the
+ * ⚑ `labels` carries only the roles that were MEASURED - presence is the
  * signal, the same rule `role` and `delta` follow here. Absent for a series
  * with no error, which then exports byte-for-byte as it did before.
  */
@@ -193,7 +193,7 @@ function hasRoles(rows: readonly ExportRow[]): boolean {
 /** One row per point: pixel coordinates plus the axes' own columns.
  *
  * Headers come from the axes (`session.getExportFields()`), not from a
- * generated `value`/`value1`/`value2` list — the old generic names were a
+ * generated `value`/`value1`/`value2` list - the old generic names were a
  * documented simplification ("axis labels aren't tracked anywhere in ui/ yet")
  * that was false: `getAxesLabels()` has always been there and had zero callers.
  * A Bar chart's first column is now its Label, and a CCR's first column is a
@@ -203,13 +203,13 @@ function hasRoles(rows: readonly ExportRow[]): boolean {
  *
  * A trailing `role` column appears only when the series actually carries roles
  * (an interpolation-assist trace), and an ordinary point inside such a series
- * leaves it blank — we state the fact the record holds and invent nothing for
+ * leaves it blank - we state the fact the record holds and invent nothing for
  * the points it doesn't apply to. */
 export function flatDataSection(
   rows: readonly ExportRow[],
   fields: readonly string[],
   /** The datum's own extents, when this series carries any (B4). Row-aligned
-   * with `rows`, which are one per DATUM — a cap is not a point. */
+   * with `rows`, which are one per DATUM - a cap is not a point. */
   error?: SeriesErrorColumns
 ): TableSection {
   const roles = hasRoles(rows);
@@ -229,7 +229,7 @@ export function flatDataSection(
       ...fields.map((_f, d) => r.values[d] ?? ''),
       // ⚑ Blank, never 0, where a side was never captured. A one-sided error
       // bar is a real figure, and matplotlib ACCEPTS a yerr of 0 and draws a
-      // bound sitting exactly on the value — a measurement nobody took, wearing
+      // bound sitting exactly on the value - a measurement nobody took, wearing
       // the record's clothes.
       ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
       ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
@@ -245,7 +245,7 @@ export function buildFlatDataCSV(rows: readonly ExportRow[], fields: readonly st
  * in group order, plus (v2.0) a trailing DERIVED column when the type
  * declares one (`AxesTypeConfig.derivedTupleValue`). An unfilled slot
  * (still-open tuple) exports as a blank cell, matching the points table's
- * own "—" placeholder in spirit. Only a group's first data value is
+ * own "-" placeholder in spirit. Only a group's first data value is
  * exported (dataDim is always 1 for the Bar axes Box Plot uses this for --
  * see calibrationSession.ts's getBoxPlotGlyphs, the only place slots are
  * offered today).
@@ -274,7 +274,7 @@ export function tupleDataSection(
   tupleRows: readonly TupleRow[],
   rounder: ValueRounder,
   derivedLabel?: string,
-  /** The type's own extents, when this series carries any (B4) — appended after
+  /** The type's own extents, when this series carries any (B4) - appended after
    * the DERIVED value, because that is the number they qualify. */
   error?: SeriesErrorColumns
 ): TableSection {
@@ -292,7 +292,7 @@ export function tupleDataSection(
     rows: tupleRows.map((row, i) => [
       row.label,
       // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY. A row carries every tuple slot, and once
-      // a series gains error that includes the four cap slots — while the header
+      // a series gains error that includes the four cap slots - while the header
       // is the type's own names. Mapping the whole row put four values under no
       // heading and shifted the derived column off its own name: three header
       // cells against seven row cells, every number under the wrong word, which
@@ -303,7 +303,7 @@ export function tupleDataSection(
         .slice(0, pointGroupNames.length)
         .map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : '')),
       ...(hasDerived ? [row.derived ?? ''] : []),
-      // Blank, never 0, where a side was never captured — see flatDataSection.
+      // Blank, never 0, where a side was never captured - see flatDataSection.
       ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
       ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
     ]),
@@ -350,11 +350,11 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
   };
 }
 /**
- * A heatmap's cells, LONG FORM — one row per cell (v2.2).
+ * A heatmap's cells, LONG FORM - one row per cell (v2.2).
  *
  * ⚑⚑ BOUNDS AND CENTRE, BOTH. The asymmetry decided it before any code was
  * written: edges → centres is derivable and centres → edges is NOT once cells
- * are unequal, and a real consumer needs each convention — matplotlib's
+ * are unequal, and a real consumer needs each convention - matplotlib's
  * `shading='flat'` REQUIRES n+1 edges and refuses centres, while
  * `shading='nearest'` takes centres. A record carrying one of them fails
  * against the other, so it carries both and neither reader does arithmetic on
@@ -362,7 +362,7 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
  * exact; from centres alone it was wrong by 0.375 data units.
  *
  * ⚑⚑ AND THE EVIDENCE RIDES WITH THE VALUE, in the same row. In a heatmap the
- * colour IS the value, so a wrong cell has no other symptom — the interval it
+ * colour IS the value, so a wrong cell has no other symptom - the interval it
  * could not be told apart from, how far its colour sat off the key, and how
  * much of the cell was actually that colour are the only things that say
  * whether to trust the number. A file that dropped them would hand on 20
@@ -370,11 +370,11 @@ export function histogramSection(bins: readonly (HistogramBin | null)[], rounder
  * to prevent. Same precedent as the error-bar Δ, which rides into the file
  * beside the point it belongs to.
  *
- * ⚑ An unread cell writes EMPTY, never 0 — `0` is a value a heatmap might
+ * ⚑ An unread cell writes EMPTY, never 0 - `0` is a value a heatmap might
  * really contain.
  */
 /** "x (category index)" where the axis is counted, "x min" where it is
- * measured — the header carries the distinction rather than a footnote. */
+ * measured - the header carries the distinction rather than a footnote. */
 function axisHeader(cells: readonly HeatmapExportCell[], axis: 'x' | 'y', suffix: string): string {
   const category = cells.some((c) => (axis === 'x' ? c.xIsCategory : c.yIsCategory));
   return category ? `${axis} ${suffix} (category index)` : `${axis} ${suffix}`;
@@ -392,13 +392,13 @@ export function heatmapCellsSection(
     title: 'Cells',
     header: [
       // ⚑⚑ THE NAME COMES FIRST AND THE BOUNDS STAY. On a category axis the
-      // label IS the coordinate — a gene name, a treatment, a confusion-matrix
-      // class — and a file that exported `1, 2, 3` for it cannot be rejoined to
+      // label IS the coordinate - a gene name, a treatment, a confusion-matrix
+      // class - and a file that exported `1, 2, 3` for it cannot be rejoined to
       // anything the reader has. But the bounds are MEASURED off the pixels and
       // remain true whatever the axis is called, so the name is added beside
       // them rather than in place of them (tenet 9: record, do not choose for
       // the reader).
-      // ⚑⚑ IDENTITY, UNCONDITIONALLY — David, 2026-08-16: *"Whatever is needed
+      // ⚑⚑ IDENTITY, UNCONDITIONALLY - David, 2026-08-16: *"Whatever is needed
       // for a data set to be able to be used to create the same heatmap needs to
       // be recorded by us. Even if something like axis identifier C1/R1 needs to
       // be DERIVED. Whatever we export (for all types of graphs) needs to be
@@ -407,7 +407,7 @@ export function heatmapCellsSection(
       // ⚠️ The label columns below appear only when the axes are NAMED, so a
       // value × value heatmap exported no identity at all: a reader got bounds
       // and had to reconstruct which cell was which. The v2.2 audit's export
-      // pass found this was the ONLY type missing it — bar leads with
+      // pass found this was the ONLY type missing it - bar leads with
       // `category`, spider carries `Axis`, and the flat types export their
       // coordinates.
       //
@@ -428,7 +428,7 @@ export function heatmapCellsSection(
       axisHeader(cells, 'y', 'centre'),
       // ⚑⚑ THE DELTA HALF, which was missing. The error-bar precedent
       // (`39f2d81`) is to carry the absolutes AND the delta "so neither reader
-      // does arithmetic on the record" — cells got the absolutes and the centre
+      // does arithmetic on the record" - cells got the absolutes and the centre
       // and stopped there. It is not pedantry: `bar(x, height, WIDTH)` takes a
       // width directly while `pcolormesh` takes edges, so one of the two real
       // consumer conventions had to compute its own input.
@@ -451,7 +451,7 @@ export function heatmapCellsSection(
       'at key limit',
     ],
     rows: cells.map((c) => [
-      // ⚑ 1-BASED, matching every place these appear on screen — the matrix
+      // ⚑ 1-BASED, matching every place these appear on screen - the matrix
       // headers, the picked-cell line and the long table all say `C1`, so the
       // file saying `0` would be a fourth spelling of one thing.
       `C${c.col + 1}`,
@@ -465,12 +465,12 @@ export function heatmapCellsSection(
       at(c.xCentre, c, 0),
       at(c.yCentre, c, 1),
       // ⚑ A WIDTH is a difference, not a position, so it is rounded through the
-      // axis's own resolution the same way the bounds are — `at` takes the pair
+      // axis's own resolution the same way the bounds are - `at` takes the pair
       // it belongs to, which keeps a log axis honest about what its resolution
       // means at that coordinate.
       at(c.xMax - c.xMin, c, 0),
       at(c.yMax - c.yMin, c, 1),
-      // ⚑ The VALUE is not an x or a y — it is read off the colour key, whose
+      // ⚑ The VALUE is not an x or a y - it is read off the colour key, whose
       // resolution has nothing to do with the figure's pixel pitch. Rounding it
       // through the axes' own resolution would claim a precision from the wrong
       // instrument, so it is written as measured.
@@ -501,7 +501,7 @@ export function heatmapKeySection(key: HeatmapKeyExport): TableSection {
 }
 
 /**
- * The same cells as a MATRIX — the convenience view, and the shape the wide /
+ * The same cells as a MATRIX - the convenience view, and the shape the wide /
  * array-style consumers take (matplotlib, plotly, seaborn, R's `image`).
  *
  * ⚑ DERIVED, never the record. It is the long form pivoted, exactly as the
@@ -514,7 +514,7 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
   const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
   const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
   // ⚑ THE HEADERS TAKE THE NAME WHERE THERE IS ONE. The matrix has exactly one
-  // slot per coordinate, so unlike the long form it cannot carry both — and a
+  // slot per coordinate, so unlike the long form it cannot carry both - and a
   // named axis whose header row reads `1, 2, 3` is the shape that made this
   // whole feature necessary. A cell with no name keeps its centre, so a
   // half-named axis stays addressable rather than going blank.
@@ -556,7 +556,7 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
  * Deliberately still absent, and logged rather than smuggled in here: WPD's
  * per-measurement `Label` column, and Area's `Perimeter`. Both are real; both
  * are a capability change, not a value-contract change. (This once pointed at
- * `core/connectedPoints.ts` for "the math, unused" — that unreachable
+ * `core/connectedPoints.ts` for "the math, unused" - that unreachable
  * getPerimeter was deleted in the 2026-07-31 dead-code sweep, so adding the
  * column means writing the arithmetic, not wiring up something dormant.) */
 export interface MeasurementCsvRow {
@@ -589,7 +589,7 @@ export interface SeriesForCSV {
    * record (David, 2026-08-03: "if I was going to MAKE these plots from
    * numerical values, what are the numbers that I need?"). */
   deltas?: readonly (number | null)[];
-  /** This series' OWN per-datum extents (B4) — distinct from `deltas` above,
+  /** This series' OWN per-datum extents (B4) - distinct from `deltas` above,
    * which belongs to the older shape where a cap was a series in its own right.
    * Both survive: a WPD import really does arrive as separate cap series. */
   error?: SeriesErrorColumns;
@@ -607,7 +607,7 @@ export interface SeriesForCSV {
  * a consumer can plot it without re-evaluating the polynomial. */
 export interface CurveFitExport {
   series: string;
-  /** Which shape produced the equation — polynomial, exponential, power,
+  /** Which shape produced the equation - polynomial, exponential, power,
    * logarithmic, gaussian, logistic. Absent on a fit stored before nonlinear
    * models existed, which means polynomial. A plain string rather than the
    * panel's union, to keep this module free of a dependency on it. */
@@ -703,7 +703,7 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
       for (let d = 0; d < fields.length; d++) row.push(r?.values[d] ?? '');
       const err = errCols[si];
       if (err) {
-        // Blank, never 0 — see flatDataSection.
+        // Blank, never 0 - see flatDataSection.
         for (let c = 0; c < err.labels.length; c++) row.push(err.values[i]?.[c] ?? '');
         for (let c = 0; c < err.labels.length; c++) row.push(err.deltas[i]?.[c] ?? '');
       }
@@ -741,7 +741,7 @@ export function buildSeriesJSON(
         points: s.rows.map((r, i) => ({
           ...Object.fromEntries(fields.map((label, d) => [label, r.values[d] ?? null])),
           // ⚑ The datum's own extents, under exactly the names the CSV headers
-          // use — mirror, not merely match: a reader who switches format meets
+          // use - mirror, not merely match: a reader who switches format meets
           // the same words, so nothing has to be explained twice.
           //
           // ⚑ A side that was never read carries NO KEY, rather than a null.
@@ -854,7 +854,7 @@ export function fittedCurveSection(fit: CurveFitExport, valueLabels: readonly st
     // The caveat rides in the TITLE because this block is designed to be taken
     // on its own -- these 101 points ARE the unsettled curve, and lifted out of
     // the document they would otherwise carry no trace of it.
-    title: `Fitted curve — ${fit.series}${fit.converged === false ? ' (did not settle)' : ''}`,
+    title: `Fitted curve - ${fit.series}${fit.converged === false ? ' (did not settle)' : ''}`,
     header: [xl, yl],
     rows: fit.samples.map((p) => [p.x, p.y]),
   };
@@ -885,7 +885,7 @@ export function geometryTableSection(series: string, result: GeometryResult, val
   const xl = valueLabels[0] ?? 'x';
   const yl = valueLabels[1] ?? 'y';
   return {
-    title: `Geometry per-point — ${series}`,
+    title: `Geometry per-point - ${series}`,
     header: ['point', xl, yl, 'cumulative_length', 'curvature'],
     rows: result.perPoint.map((p, i) => [i + 1, p.x, p.y, p.cumulativeLength, p.curvature]),
   };
@@ -906,12 +906,12 @@ export function geometryTableSection(series: string, result: GeometryResult, val
  *
  * ⚑ THE SAME TWO SHAPES THE TABLE FORMATS GET, because the two library
  * conventions are real and a file serving one fails the other: LONG/tidy (one
- * row per cell — ggplot2's `geom_tile`, vega-lite) and WIDE/matrix (a 2D array
- * plus coordinate vectors — matplotlib, plotly, seaborn, R's `image`). Our
+ * row per cell - ggplot2's `geom_tile`, vega-lite) and WIDE/matrix (a 2D array
+ * plus coordinate vectors - matplotlib, plotly, seaborn, R's `image`). Our
  * record IS the tidy one, and it pivots into the other, so both are written and
  * neither consumer has to reshape anything by hand.
  *
- * ⚑ `null`, not 0, for a cell that could not be read — and JSON's null survives
+ * ⚑ `null`, not 0, for a cell that could not be read - and JSON's null survives
  * the round trip where a NaN would not (`setMetadata`'s own JSON pass rewrites
  * NaN as null, and `null * x === 0` is how a laundered NaN became a flat line
  * at zero once already).

@@ -3,7 +3,7 @@
  * than a synthetic stand-in.
  *
  * ⚑ WHY THIS EXISTS. The app decodes images through the DOM, which a unit test
- * has no access to — so every image test so far has drawn its own figure, and a
+ * has no access to - so every image test so far has drawn its own figure, and a
  * figure a test draws can only prove the code self-consistent. The spider
  * over-read is the case in point: the synthetic radar chart strokes lines and
  * draws NO MARKERS, so it exhibits a ~1px bias where the real PNG exhibits ~4.8px,
@@ -11,7 +11,7 @@
  * wrong cause. Reading the shipped PNG is the only way to ask the real question
  * (see [ground truth is the instrument] in the project's own notes).
  *
- * Deliberately narrow: 8-bit, non-interlaced, colour type 2 (RGB) or 6 (RGBA) —
+ * Deliberately narrow: 8-bit, non-interlaced, colour type 2 (RGB) or 6 (RGBA) -
  * which is what `samples/` holds. Anything else throws by name rather than
  * returning a plausible-looking wrong image. `fflate` is already a dependency
  * (the project container writes zips with it), so this adds none.

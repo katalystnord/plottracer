@@ -23,7 +23,7 @@ import { reconcileWithExpected } from '../../algorithms/barSplit.js';
  * `core/__tests__/categoryAxis.test.ts`, where it is pure. What only the SESSION
  * can get wrong is the wiring: which graph types may have ticks at all, which
  * placed pixel seeds the axis, and whether the geometry survives the three other
- * entrances this codebase keeps being bitten by — an image edit, the undo
+ * entrances this codebase keeps being bitten by - an image edit, the undo
  * snapshot, and a reset.
  *
  * ⚑ Ticks are an AID. Nothing here should ever assert that a tick changes a
@@ -67,7 +67,7 @@ describe('which graph types have categories at all', () => {
     }
   });
 
-  it('⚑⚑ categorical Line TOO, as of v2.3 — and its seed is `v1`, not `p1`', () => {
+  it('⚑⚑ categorical Line TOO, as of v2.3 - and its seed is `v1`, not `p1`', () => {
     // ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, and correctly: *"a declared band
     // has nothing to write to until the per-point path stores an index, and a
     // control that does nothing is worse than no control."* The per-point path
@@ -79,7 +79,7 @@ describe('which graph types have categories at all', () => {
     // series missing one category slid every later reading a category to the
     // left. See `categoricalLineIsBanded.test.ts` for the measured numbers.
     //
-    // ⚑ `v1` because a Line has no origin corner to seed from — its calibration
+    // ⚑ `v1` because a Line has no origin corner to seed from - its calibration
     // is two points on the VALUE axis. That is exactly why `categoryTicks`
     // declares `originStep` as a name rather than a literal, and this is the
     // prediction the old comment made coming true.
@@ -102,13 +102,13 @@ describe('which graph types have categories at all', () => {
   });
 });
 
-describe('the seed pixel — what makes marking the axis one click, not two', () => {
+describe('the seed pixel - what makes marking the axis one click, not two', () => {
   it('is nothing until the seed step has been placed', () => {
     const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     expect(s.categoryTickOriginPixel()).toBeNull();
   });
 
-  it('is P1 once placed — the value origin sits on the category axis edge', () => {
+  it('is P1 once placed - the value origin sits on the category axis edge', () => {
     expect(calibratedBar().categoryTickOriginPixel()).toEqual({ px: 100, py: 500 });
   });
 
@@ -142,7 +142,7 @@ describe('marking the axis and declaring the categories', () => {
     expect(s.categoryBandAt(550, 300)).toBe(3);
   });
 
-  it('RE-PLACING the axis keeps every category — the user is fixing the axis, not abandoning them', () => {
+  it('RE-PLACING the axis keeps every category - the user is fixing the axis, not abandoning them', () => {
     const s = withTicks(3);
     s.getCategoryAxis().renameCategory(0, 'Flax');
     expect(s.clearCategoryAxisGeometry()).toBe(true);
@@ -150,7 +150,7 @@ describe('marking the axis and declaring the categories', () => {
     expect(s.getCategoryAxis().getCategories()).toEqual(['Flax', '', '']);
   });
 
-  it('does not gate the calibration — a bar chart calibrates with no ticks at all', () => {
+  it('does not gate the calibration - a bar chart calibrates with no ticks at all', () => {
     const s = calibratedBar();
     expect(s.isCalibrated()).toBe(true);
     expect(s.getCategoryAxis().hasGeometry()).toBe(false);
@@ -188,7 +188,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     ]);
   });
 
-  it('⚑ UNDO carries it — the snapshot is an entrance too', () => {
+  it('⚑ UNDO carries it - the snapshot is an entrance too', () => {
     const s = withTicks(4);
     s.setCategoryTickConvention('edge');
     s.moveCategoryTick(0, { x: 200, y: 500 });
@@ -231,7 +231,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getBarCategoryTable().columns[0]?.values).toEqual(before);
   });
 
-  it('⚑ and a SINGLE bar in band 0 survives it too — the identity mapping', () => {
+  it('⚑ and a SINGLE bar in band 0 survives it too - the identity mapping', () => {
     // keep = [true,false,false]: nothing is renumbered for the survivor, which
     // is exactly the path that used to write nothing at all.
     const s = withTicks(3);
@@ -267,7 +267,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(3);
   });
 
-  it('⚑ and the sweep still runs where it belongs — the UN-ticked path', () => {
+  it('⚑ and the sweep still runs where it belongs - the UN-ticked path', () => {
     // The guard must not switch the sweep off everywhere. Without ticks a
     // category exists only because a bar reserved it, so removing that bar
     // genuinely does leave an orphan, and the old behaviour is correct.
@@ -281,7 +281,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getCategoryAxis().getCategories()).toHaveLength(1);
   });
 
-  it('⚑⚑ UNDO does not INVENT a declared count — the rows must not reorder', () => {
+  it('⚑⚑ UNDO does not INVENT a declared count - the rows must not reorder', () => {
     // THE DEFECT, found by two independent reviewers (v2.1 audit).
     //
     // `_countDeclared` was not serialized; the load door guessed it back as
@@ -337,7 +337,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getCategoryAxis().getCategories()).toEqual([]);
   });
 
-  it('clearing the POINTS leaves the marks alone — they describe the figure', () => {
+  it('clearing the POINTS leaves the marks alone - they describe the figure', () => {
     const s = withTicks(3);
     s.addDataPoint(150, 500);
     s.addDataPoint(150, 300);
@@ -354,7 +354,7 @@ function barAt(s: CalibrationSession<BarAxes>, x: number, topY = 300): void {
   s.addDataPoint(x, topY);
 }
 
-describe('⚑ a bar belongs to its BAND — the guess is gone, not fenced', () => {
+describe('⚑ a bar belongs to its BAND - the guess is gone, not fenced', () => {
   /** Three categories across x = 100..600: bands 100-266.7, 266.7-433.3, 433.3-600. */
   const FLAX = 183;
   const HEMP = 350;
@@ -398,7 +398,7 @@ describe('⚑ a bar belongs to its BAND — the guess is gone, not fenced', () =
     expect(build([JUTE, HEMP, FLAX])).toEqual(['Jute', '', 'Flax']);
   });
 
-  it('⚑ appends no category on capture — the declared count is the count', () => {
+  it('⚑ appends no category on capture - the declared count is the count', () => {
     // Without the band, every unmatched bar reserves a fresh empty category,
     // which would push the list past the declared N and leave the ticks stale.
     const s = withTicks(3);
@@ -596,7 +596,7 @@ describe('⚑ the detector cuts a merged run at the declared dividers', () => {
 });
 
 describe('the dividers the DETECTOR is handed', () => {
-  it('is nothing at all until an axis is marked — so the detector call is unchanged', () => {
+  it('is nothing at all until an axis is marked - so the detector call is unchanged', () => {
     // ⚑ The whole un-ticked path depends on this being null: a caller passing it
     // straight through gets exactly the pre-v2.1 behaviour.
     expect(calibratedBar().categoryDividersForDetect()).toBeNull();
@@ -686,7 +686,7 @@ describe('⚑ the two ways a bar could vanish from the table (code review, 2026-
     expect(s.getTupleLabel(0)).toBe('Flax'); // the ordinary prefill path still runs
   });
 
-  it('⚑ HIGH: two bars of one series in ONE band — the first keeps its row, the rest are REPORTED', () => {
+  it('⚑ HIGH: two bars of one series in ONE band - the first keeps its row, the rest are REPORTED', () => {
     // This was last-wins, so the second bar silently evicted the first one's
     // row. The outer bands are unbounded, so a stray bar or a mis-declared count
     // was enough, and the table came back looking complete with a real reading
@@ -728,12 +728,12 @@ describe('⚑ the split REPORT is surfaced, and points at the right category', (
   });
 
   it('names the one that came up empty', () => {
-    expect(categoryMissReport(['Lactose'])).toBe(' — no bar found for Lactose.');
+    expect(categoryMissReport(['Lactose'])).toBe(' - no bar found for Lactose.');
   });
 
   it('counts them when there is more than one', () => {
     expect(categoryMissReport(['Lactose', 'Maltose'])).toBe(
-      ' — no bar found for 2 categories: Lactose, Maltose.'
+      ' - no bar found for 2 categories: Lactose, Maltose.'
     );
   });
 
@@ -766,7 +766,7 @@ describe('⚑ the split REPORT is surfaced, and points at the right category', (
     expect(back.categoryIndexOfBand(3, true)).toBe(0);
   });
 
-  it('the dividers stay ascending either way — the splitter requires it', () => {
+  it('the dividers stay ascending either way - the splitter requires it', () => {
     const back = calibratedBar();
     back.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 });
     back.setCategoryCount(3);

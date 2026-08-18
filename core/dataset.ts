@@ -126,7 +126,7 @@ export class Dataset {
 
   removePixelAtIndex(index: number): void {
     // ⚑ BOTH bounds. The upper test alone let a NEGATIVE index through (-1 < 0
-    // is true), and the next line dereferences `_dataPoints[-1]` — so
+    // is true), and the next line dereferences `_dataPoints[-1]` - so
     // `removeLastPixel()` on an empty dataset threw a TypeError rather than
     // doing nothing. No caller can reach it today because
     // `CalibrationSession.removeLastPoint` checks the count first, but that is
@@ -245,13 +245,13 @@ export class Dataset {
    * ⚑⚑ THIS IS THE LabPlot FAILURE MODE, AND IT IS WHY THE METHOD EXISTS.
    * David, 2026-08-17: *"points needed to be Errorplots from the beginning, and
    * if they were not, you lost whatever points you had placed. We want
-   * flexibility — you should be able to place points, and then ADD error bars to
+   * flexibility - you should be able to place points, and then ADD error bars to
    * them."*
    *
    * ⚠️ `setSlotNames` ALONE DOES EXACTLY WHAT HE DESCRIBES. Measured: seven plain
    * points, then slot names set, gives `count = 7`, `hasSlots = true`,
    * `tuples = 0`. The pixels are still in storage, so from the inside nothing
-   * looks wrong — but `hasSlots` is what selects the TUPLE table (zero rows) and
+   * looks wrong - but `hasSlots` is what selects the TUPLE table (zero rows) and
    * what makes `getExportShape()` return `'tuples'` (an empty CSV). Seven
    * measured points, present in memory and absent from both the screen and the
    * file, with nothing reporting it. Worse than losing them, because it is
@@ -262,7 +262,7 @@ export class Dataset {
    * about the figure and an absent one is not (tenet 9).
    *
    * ⚑ A SERIES THAT IS ALREADY SLOTTED IS LEFT ALONE. Its tuples encode a real
-   * pairing whose nulls mean "not captured yet" — rebuilding one-tuple-per-pixel
+   * pairing whose nulls mean "not captured yet" - rebuilding one-tuple-per-pixel
    * would tear a two-corner bar into two half bars. That also makes this
    * idempotent, which it must be: the UI cannot be trusted to ask exactly once
    * across a second cap, a reload, or an undo round trip.

@@ -42,12 +42,12 @@ describe('sectionsToXlsx', () => {
   it('sanitises + de-duplicates sheet names that collide or use illegal chars', async () => {
     const wb = await load(
       await sectionsToXlsx([
-        { title: 'Fitted curve — A/B', header: ['x'], rows: [[1]] },
-        { title: 'Fitted curve — A/B', header: ['x'], rows: [[2]] },
+        { title: 'Fitted curve - A/B', header: ['x'], rows: [[1]] },
+        { title: 'Fitted curve - A/B', header: ['x'], rows: [[2]] },
       ])
     );
     const names = wb.worksheets.map((w) => w.name);
-    expect(names[0]).toBe('Fitted curve — A B'); // '/' replaced
+    expect(names[0]).toBe('Fitted curve - A B'); // '/' replaced
     expect(names[1]).toMatch(/\(2\)$/); // duplicate disambiguated
     expect(names[0]).not.toBe(names[1]);
   });
@@ -68,7 +68,7 @@ describe('sectionsToXlsx', () => {
     // their first 31 characters, so Excel sees one name twice. Truncating before
     // the uniqueness check is what makes them two sheets; without it exceljs
     // rejects the second outright ("Worksheet name already exists") and the whole
-    // export throws — every other tab lost with it.
+    // export throws - every other tab lost with it.
     const wb = await load(
       await sectionsToXlsx([
         { title: 'Absorbance at 450 nm, replicate 1', header: ['x'], rows: [[1]] },

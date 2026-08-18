@@ -1,5 +1,5 @@
 /**
- * Trace Challenge — a small self-contained fireworks burst for the results screen
+ * Trace Challenge - a small self-contained fireworks burst for the results screen
  * (v1.2 game). Pure canvas + requestAnimationFrame, no external dependency
  * (CSP-safe). Decorative and non-interactive (pointer-events: none).
  */

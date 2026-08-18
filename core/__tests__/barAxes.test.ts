@@ -3,10 +3,10 @@ import { BarAxes } from '../axes/bar.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * BarAxes — the geometry, the orientation, and the readout.
+ * BarAxes - the geometry, the orientation, and the readout.
  *
  * ⚑ WHY THIS FILE EXISTS. `bar.ts` scored **41.18%** on mutation testing with 37
- * mutants uncovered — the weakest axes class in the project, and the only one the
+ * mutants uncovered - the weakest axes class in the project, and the only one the
  * pre-v2.0 audit did NOT move (40% → 41%, while xy went 45→68 and polar 35→63).
  * That matters because **v2.0 rewrites this model**: building the bar record on top
  * of a file where three changes in five go unnoticed is building on green-but-
@@ -33,11 +33,11 @@ function bar(
   return axes;
 }
 
-describe('which way the bars run — the orientation classifier', () => {
+describe('which way the bars run - the orientation classifier', () => {
   // ⚑ FOUR BRANCHES, and every one of them had surviving mutants: the 270° test
   // could be replaced by `true`, by `false`, by `<=`, by `>=`, and by `+270` and the
   // suite noticed none of it. The classifier decides whether a figure's bars are read
-  // vertically or horizontally, so getting it wrong does not throw — it silently
+  // vertically or horizontally, so getting it wrong does not throw - it silently
   // reads the wrong dimension of every bar.
   //
   // Image y runs DOWN, so a baseline BELOW the top means y decreases upward.
@@ -65,7 +65,7 @@ describe('which way the bars run — the orientation classifier', () => {
     // Outside every tolerance (45° is 15° beyond the nearest), so the classifier
     // falls through and the object keeps what it was constructed with: axes 'Y',
     // direction 'increasing'. Checked with the chart declared ROTATED, which is the
-    // only way to see the raw classification — see the next test for why.
+    // only way to see the raw classification - see the next test for why.
     const diagonal = bar([100, 300], [300, 100], '0', '100', { isRotated: true });
     expect(diagonal.getOrientation().angle).toBeCloseTo(45, 6);
     expect(diagonal.getOrientation().axes).toBe('Y');
@@ -73,7 +73,7 @@ describe('which way the bars run — the orientation classifier', () => {
   });
 
   it('⚑ SILENTLY SQUARES an unclassifiable calibration to vertical', () => {
-    // ⚑ FOUND BY WRITING THIS TEST — I expected the 45° angle to survive and it did
+    // ⚑ FOUND BY WRITING THIS TEST - I expected the 45° angle to survive and it did
     // not. On an unrotated chart the fall-through default ('Y') feeds straight into
     // the squaring-up step, so `x2 = x1` is applied and the orientation is then
     // RECOMPUTED as exactly 90°. A calibration too diagonal to classify therefore
@@ -96,7 +96,7 @@ describe('which way the bars run — the orientation classifier', () => {
 
 describe('squaring up an unrotated chart', () => {
   it('forces a vertical axis to be exactly vertical', () => {
-    // ⚑ `this.x2 = this.x1` — and its sibling `this.y2 = this.y1`, whose mutant
+    // ⚑ `this.x2 = this.x1` - and its sibling `this.y2 = this.y1`, whose mutant
     // survived. On a chart declared NOT rotated, the value axis is taken to be truly
     // vertical (or truly horizontal) and the clicked lean is treated as aim error.
     // The observable consequence is that the reading stops depending on the
@@ -158,7 +158,7 @@ describe('reading a bar back', () => {
   });
 });
 
-describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated line', () => {
+describe('dataToPixel - v2.0: the exact inverse, restricted to the calibrated line', () => {
   it('inverts a plain vertical calibration', () => {
     const axes = bar([100, 300], [100, 100]); // 0 at y=300, 100 at y=100
     const p = axes.dataToPixel(70);
@@ -191,7 +191,7 @@ describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated 
     expect(axes.pixelToData(p.x, p.y)[0]).toBeCloseTo(10, 6);
   });
 
-  // ⚑ {NaN, NaN}, never {0, 0} — {0,0} is both a real image coordinate and the
+  // ⚑ {NaN, NaN}, never {0, 0} - {0,0} is both a real image coordinate and the
   // old stub's sentinel, so returning it here would be silently indistinguishable
   // from "cannot invert" (see spider.ts's dataToPixel for the same rule, and the
   // file header for why this matters).
@@ -223,7 +223,7 @@ describe('dataToPixel — v2.0: the exact inverse, restricted to the calibrated 
   });
 });
 
-describe('the declared baseline (v2.0) — a setting, not a calibration value', () => {
+describe('the declared baseline (v2.0) - a setting, not a calibration value', () => {
   it('defaults to a shared baseline at zero -- the ordinary bar chart, walked past', () => {
     const axes = new BarAxes();
     expect(axes.hasDeclaredBaseline()).toBe(true);
@@ -273,7 +273,7 @@ describe('what it declares itself to be', () => {
   });
 
   it('labels its columns Category and Y', () => {
-    // ⚑ `Category`, not WPD's inherited `Label` — renamed on David's call so the
+    // ⚑ `Category`, not WPD's inherited `Label` - renamed on David's call so the
     // table, the Box Plot tuple field and the categorical export all use one word.
     // It is a breaking header change for anything parsing a v1.0-v1.2 Bar export by
     // column NAME, which is why it is pinned rather than left to drift back.

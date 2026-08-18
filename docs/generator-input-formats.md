@@ -1,4 +1,4 @@
-# What R and Python need, per graph type — and what that says about our models
+# What R and Python need, per graph type - and what that says about our models
 
 **Tenet 11(a), run systematically.** David, 2026-08-17: *"Check, for all types of
 graphs that we are currently supporting and intending to support, how and in what
@@ -6,11 +6,11 @@ format R and Python would need the data to be presented like. And that should
 then map out to the specific models needed."*
 
 **Everything below marked ✅ was MEASURED by running the generator**, not recalled
-from documentation — matplotlib 3.10.7, ggplot2 4.0.2, base R 4.x, on this
+from documentation - matplotlib 3.10.7, ggplot2 4.0.2, base R 4.x, on this
 machine. Claims that could not be run are marked ⚠️ INFERRED and say why.
 
 The standing check this feeds: *does our record supply exactly what a generator
-requires? If not, the model or the thinking is wrong* — however healthy the
+requires? If not, the model or the thinking is wrong* - however healthy the
 exports look.
 
 ---
@@ -43,12 +43,12 @@ David has made one-sided a first-class requirement. Measured:
 | ggplot2 | `NA` everywhere | ✅ **renders** |
 | ggplot2 | `NA` on one row | ✅ **renders the rest** |
 | matplotlib | `NaN` in `yerr` | ❌ **crashes** (`IndexError`) |
-| matplotlib | `0` in `yerr` | ⚠️ **accepted, and WRONG** — draws a bound sitting exactly on the value |
+| matplotlib | `0` in `yerr` | ⚠️ **accepted, and WRONG** - draws a bound sitting exactly on the value |
 
 ⚠️⚠️ **This is the whole argument for absolutes being the record.** In the delta
 form, "no lower bound" and "a lower bound of zero size" are the same number.
 A record that stored deltas would make a measurement we never took
-indistinguishable from one we did — tenet 9's exact failure, and it would be
+indistinguishable from one we did - tenet 9's exact failure, and it would be
 invisible because `0` renders as a plausible little cap.
 
 ⇒ **The record holds absolutes, with genuinely absent members.** Deltas are a
@@ -64,18 +64,18 @@ absolutes"*, one level down: the delta column is a convenience over the record.
     geom_ribbon     required aes:  x|y, ymin|xmin, ymax|xmax
     IDENTICAL: TRUE
 
-The same data frame renders as discrete error bars or as a continuous band —
+The same data frame renders as discrete error bars or as a continuous band -
 **discrete vs continuous is the GEOM, not the data.** matplotlib agrees from the
 other side: `fill_between(x, y1, y2)` takes absolutes on the boundary's own x.
 
 ⚑ **This corrects a claim made earlier in the B4 work.** I had written that an
 independently-traced uncertainty boundary would be *a different kind of record*.
-To a generator it is the **same** record — same columns, same vocabulary. What
+To a generator it is the **same** record - same columns, same vocabulary. What
 differs is only whether the coordinates coincide with the carrier's own samples.
 
 ⇒ The unified shape is **a set of `(coordinate, lower, upper)` rows bound to a
 carrier**. Our per-datum tuple is the case where those coordinates ARE the
-datums. A band is the case where there are more of them. Nothing new to invent —
+datums. A band is the case where there are more of them. Nothing new to invent -
 which is what David meant by *"errors are just points."*
 
 ⚑ Note `x|y` and `ymin|xmin`: ggplot's own model is **per direction**, which is
@@ -89,23 +89,23 @@ our four roles (`upper`/`lower` on y, `left`/`right` on x) under other names.
 |---|---|---|---|---|
 | **XY / scatter** | `plot(x,y)` / `scatter(x,y)` | `geom_point(aes(x,y))` | point pairs | ✅ matches |
 | **XY + error** | `errorbar(yerr=deltas)` | `geom_errorbar(ymin,ymax)` | absolutes + deltas | ✅ both forms carried |
-| **Histogram** | ✅ `stairs(values[n], edges[n+1])` — refuses `edges[n]` | `geom_col` / `geom_rect` | `['Bin start','Bin end']` | ✅ true edges, exactly what is demanded |
+| **Histogram** | ✅ `stairs(values[n], edges[n+1])` - refuses `edges[n]` | `geom_col` / `geom_rect` | `['Bin start','Bin end']` | ✅ true edges, exactly what is demanded |
 | **Bar** | ✅ `bar(x, height, width, bottom)` | ✅ `geom_col(aes(x,y))` | two corner pixels ⇒ extent + height | ✅ supplies x-extent AND height |
-| **Box plot** | ✅ `bxp([{med,q1,q3,whislo,whishi}])` — **KeyError** if any is missing | ✅ `geom_boxplot(stat='identity', aes(lower,middle,upper,ymin,ymax))` | `['Min','Q1','Median','Q3','Max']` | ✅ five named statistics, one-to-one |
-| **Heatmap** | ✅ `pcolormesh(X,Y,C,shading='flat')` — **refuses centres**, needs n+1 | ✅ `geom_rect(xmin,xmax,ymin,ymax)`; `geom_tile` takes centres+size | per-cell bounds | ✅ bounds, as established |
-| **Pie** | ✅ `pie(x)` — **normalises any sum > 1** | `geom_col + coord_polar` | raw values, closure never forced | ✅ and see below |
+| **Box plot** | ✅ `bxp([{med,q1,q3,whislo,whishi}])` - **KeyError** if any is missing | ✅ `geom_boxplot(stat='identity', aes(lower,middle,upper,ymin,ymax))` | `['Min','Q1','Median','Q3','Max']` | ✅ five named statistics, one-to-one |
+| **Heatmap** | ✅ `pcolormesh(X,Y,C,shading='flat')` - **refuses centres**, needs n+1 | ✅ `geom_rect(xmin,xmax,ymin,ymax)`; `geom_tile` takes centres+size | per-cell bounds | ✅ bounds, as established |
+| **Pie** | ✅ `pie(x)` - **normalises any sum > 1** | `geom_col + coord_polar` | raw values, closure never forced | ✅ and see below |
 | **Spider / radar** | ⚠️ no native geom; polar line over evenly-spaced θ | ⚠️ no native geom | axis NAME + value per spoke | ✅ θ is presentation, as ruled in v1.4 |
 | **Polar** | `plot(θ, r)` on a polar axes | `coord_polar` | (θ, r) | ✅ matches |
 | **Ternary** | ⚠️ no matplotlib geom; plotly `Scatterternary(a,b,c)` wants **all three** | ⚠️ `ggtern` wants all three | all three components stored | ✅ closure error preserved |
 | **Map** | ⚠️ needs a geo stack | ⚠️ likewise | lon/lat | ✅ matches |
 | **CCR / circular** | ⚠️ polar family | ⚠️ polar family | (θ, r) | ✅ matches |
-| **Line (categorical)** | `bar`/`geom_col` — category is a coordinate | `geom_col(aes(x=factor,y))` | ⚠️ **category DERIVED from click order** | 🔴 **FAILS** — the known v2.3 defect |
-| *intended:* **Contour** | ✅ `contour(X,Y,Z,levels)` | `geom_contour(aes(z))` | — | grid, or curves each carrying a level |
-| *intended:* **Bubble** | ✅ `scatter(x,y,s)` — `s=[100,400,900]` ⇒ radii 10/20/30 pt, so s is an AREA | `geom_point(aes(size))` | — | size is measured ink: a third coordinate, not a category |
-| *intended:* **Band** | ✅ `fill_between(x,y1,y2)` | ✅ `geom_ribbon(ymin,ymax)` | — | same shape as error bars (finding 3) |
-| *intended:* **Mosaic** | ⚠️ no native geom | ⚠️ `ggmosaic` | — | per-cell bounds + a second value |
+| **Line (categorical)** | `bar`/`geom_col` - category is a coordinate | `geom_col(aes(x=factor,y))` | ⚠️ **category DERIVED from click order** | 🔴 **FAILS** - the known v2.3 defect |
+| *intended:* **Contour** | ✅ `contour(X,Y,Z,levels)` | `geom_contour(aes(z))` | - | grid, or curves each carrying a level |
+| *intended:* **Bubble** | ✅ `scatter(x,y,s)` - `s=[100,400,900]` ⇒ radii 10/20/30 pt, so s is an AREA | `geom_point(aes(size))` | - | size is measured ink: a third coordinate, not a category |
+| *intended:* **Band** | ✅ `fill_between(x,y1,y2)` | ✅ `geom_ribbon(ymin,ymax)` | - | same shape as error bars (finding 3) |
+| *intended:* **Mosaic** | ⚠️ no native geom | ⚠️ `ggmosaic` | - | per-cell bounds + a second value |
 
-### ✅ Pie, measured — why closure must never be forced
+### ✅ Pie, measured - why closure must never be forced
 
     values summing to 100  ->  wedges 144.0 + 126.0 + 90.0  = 360°
     values summing to  97  ->  wedges 148.5 + 129.9 + 81.6  = 360°
@@ -121,7 +121,7 @@ information no consumer can recover.
 
 **Line (categorical)** stores a value and *derives* its category from
 left-to-right capture order. `geom_col` needs the category as a coordinate, so a
-library handed our record cannot place the points — and capturing out of order
+library handed our record cannot place the points - and capturing out of order
 silently assigns the wrong category. Already graded a correctness fix and
 scheduled for v2.3; this sweep is independent confirmation from the consumer
 side.
@@ -130,7 +130,7 @@ side.
 
 `bxp` raises **KeyError** without any of `med`, `q1`, `q3`, `whislo`, `whishi`;
 ggplot needs `lower, middle, upper, ymin, ymax`; base R's `$stats` is a five-row
-matrix. All three demand **five named statistics** — and note ggplot reuses
+matrix. All three demand **five named statistics** - and note ggplot reuses
 `ymin`/`ymax` for the *whiskers* while `lower`/`upper` mean the *box*.
 
 A box is not uncertainty *about* a value; it is a five-number summary of a
@@ -144,13 +144,13 @@ all three generators demand.
 
 ## What this maps to, for the error model
 
-1. **The record is absolutes**, with absent members genuinely absent — because
+1. **The record is absolutes**, with absent members genuinely absent - because
    the delta form cannot distinguish "no bound" from "a bound of size zero"
    (finding 2), and one-sided is a requirement.
 2. **Deltas are a projection**, emitted alongside, never instead. Absent stays
    absent even though matplotlib then cannot draw that point.
-3. **Error bars and bands are one vocabulary** — `(coordinate, lower, upper)`
-   bound to a carrier — so a tool acting on error need not ask which it is
+3. **Error bars and bands are one vocabulary** - `(coordinate, lower, upper)`
+   bound to a carrier - so a tool acting on error need not ask which it is
    (finding 3). That is the "coalesce around the data" property, and the
    generators already work this way.
 4. **Roles are per direction**, matching ggplot's `x|y` / `ymin|xmin` split, so
@@ -161,7 +161,7 @@ all three generators demand.
 
 ## Reproducing this
 
-The probe scripts are throwaway by design — the findings are the deliverable, and
+The probe scripts are throwaway by design - the findings are the deliverable, and
 each is a single call anyone can re-run:
 
     python3 -c "import matplotlib; ..."   # errorbar / bxp / pcolormesh / stairs / pie

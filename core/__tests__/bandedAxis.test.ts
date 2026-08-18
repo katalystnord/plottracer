@@ -9,13 +9,13 @@ import { BandedAxis,
 } from '../bandedAxis.js';
 
 /**
- * A BANDED AXIS — the band mechanism, with no idea what the axis means (v2.2).
+ * A BANDED AXIS - the band mechanism, with no idea what the axis means (v2.2).
  *
  * ⚑⚑ WHY THIS FILE EXISTS. `core/categoryAxis.ts` is TWO things fused: a banded
  * axis (edges, convention, declared count, generated ticks in PARAMETER space,
  * one adjustment flag) and a shared NAME LIST that a bar chart's datasets bind
  * to. The settled heatmap design said v2.1's category ticks were the structural
- * foundation; the build read the memo's *"NOT `core/categoryAxis.ts` — a heatmap
+ * foundation; the build read the memo's *"NOT `core/categoryAxis.ts` - a heatmap
  * has two independent axes, binding it there would make one axis rename the
  * other"* as covering the whole class. That is right about the NAME LIST and
  * wrong about the BAND MECHANISM, and the over-application is what produced a
@@ -26,7 +26,7 @@ import { BandedAxis,
  * each own one. Nothing here knows whether it is horizontal, vertical, or a
  * colour key.
  *
- * ⚑ PARAMETER SPACE IS THE POINT — 0 at the first edge, 1 at the second. It is
+ * ⚑ PARAMETER SPACE IS THE POINT - 0 at the first edge, 1 at the second. It is
  * what makes "if the axis moves, the dividers move with it" true by
  * construction rather than by a synchronisation pass, and it is exactly what
  * absolute data coordinates could not express (see the C2 case below).
@@ -53,7 +53,7 @@ describe('a banded axis needs no names', () => {
 
   it('puts the SAME dividers on the figure from either convention', () => {
     // The two conventions differ in what the user CLICKS, never in the bands
-    // that result — the invariant v2.1 established, restated here because this
+    // that result - the invariant v2.1 established, restated here because this
     // class is now where it lives.
     const edges = axis('edge', 4).getDividerParams();
     const centred = axis('centred', 4).getDividerParams();
@@ -61,12 +61,12 @@ describe('a banded axis needs no names', () => {
   });
 });
 
-describe('C2 — the axis moves and the dividers move with it', () => {
+describe('C2 - the axis moves and the dividers move with it', () => {
   it('keeps every divider in proportion when the edges are MOVED', () => {
     // ⚑⚑ David: *"The tick dividers are dependent on the axis end points. If the
     // axis moves, they do too."* Two layers: the calibration is the axis and is
     // edited only through its own markers; the grid derives from it. In
-    // parameter space that is free — but only if moving the edges does NOT
+    // parameter space that is free - but only if moving the edges does NOT
     // regenerate.
     const a = axis('edge', 4);
     a.moveTick(1, { x: 260, y: 500 }); // drag the middle divider off-centre
@@ -93,8 +93,8 @@ describe('C2 — the axis moves and the dividers move with it', () => {
   });
 
   it('distinguishes PLACING the edges from MOVING them', () => {
-    // Placing is bar's gesture — the axis is being defined, so the ticks are
-    // generated fresh. Moving is the heatmap's — the axis already exists and is
+    // Placing is bar's gesture - the axis is being defined, so the ticks are
+    // generated fresh. Moving is the heatmap's - the axis already exists and is
     // being corrected, so adjustments survive. Same state, two verbs.
     const a = axis('edge', 4);
     a.moveTick(1, { x: 260, y: 500 });
@@ -106,7 +106,7 @@ describe('C2 — the axis moves and the dividers move with it', () => {
   });
 });
 
-describe('C3/C4 — what a regeneration costs, and saying so first', () => {
+describe('C3/C4 - what a regeneration costs, and saying so first', () => {
   it('reports adjustments so the caller can warn BEFORE discarding them', () => {
     const a = axis('edge', 4);
     expect(a.hasAdjustments()).toBe(false);
@@ -152,7 +152,7 @@ describe('a divider is dragged the same way whatever the axis means', () => {
     const a = axis('edge', 4);
     expect(a.bandIndexAt({ x: 150, y: 500 })).toBe(0);
     expect(a.bandIndexAt({ x: 450, y: 500 })).toBe(3);
-    // Outside the span still belongs to the nearest band — a cell drawn a pixel
+    // Outside the span still belongs to the nearest band - a cell drawn a pixel
     // past the plot box is not a category the figure does not have.
     expect(a.bandIndexAt({ x: 50, y: 500 })).toBe(0);
     expect(a.bandIndexAt({ x: 900, y: 500 })).toBe(3);
@@ -160,7 +160,7 @@ describe('a divider is dragged the same way whatever the axis means', () => {
 });
 
 /**
- * ⚑⚑ ONE ALGORITHM, THREE IMPLEMENTATIONS, TWO POLICIES — found by the v2.2
+ * ⚑⚑ ONE ALGORITHM, THREE IMPLEMENTATIONS, TWO POLICIES - found by the v2.2
  * audit's reuse pass, grepping for the LOOP rather than for a name.
  *
  *   core/bandedAxis.ts   bandIndexForParam   CLAMPS   (documented)
@@ -174,11 +174,11 @@ describe('a divider is dragged the same way whatever the axis means', () => {
  *
  * ⚠️ THE THIRD SITE NEVER STATED A CHOICE, and its clamp is exactly why a legend
  * swatch lands in "Category 4" instead of being reported as unplaceable. So the
- * fix is not to pick one policy — it is to make every site NAME the one it wants,
+ * fix is not to pick one policy - it is to make every site NAME the one it wants,
  * which turns an accident of which copy was reached for into a decision someone
  * had to make.
  */
-describe('bandIndexIn — the one band lookup, with its out-of-range policy named', () => {
+describe('bandIndexIn - the one band lookup, with its out-of-range policy named', () => {
   const dividers = [0, 10, 20, 30];
 
   it('finds the band a value falls in, under either policy', () => {
@@ -210,7 +210,7 @@ describe('bandIndexIn — the one band lookup, with its out-of-range policy name
     }
   });
 
-  it('⚑ is what bandIndexForParam now IS — the wrapper cannot drift from it', () => {
+  it('⚑ is what bandIndexForParam now IS - the wrapper cannot drift from it', () => {
     // Asserted against the delegate rather than restated: the reason three copies
     // existed is that each was written out longhand, so each could be edited
     // alone. A wrapper that computes nothing cannot.
@@ -221,18 +221,18 @@ describe('bandIndexIn — the one band lookup, with its out-of-range policy name
 });
 
 /**
- * ⚑⚑ A3 — THE SCALAR CORE, shared rather than expressed twice.
+ * ⚑⚑ A3 - THE SCALAR CORE, shared rather than expressed twice.
  *
  * The v2.2 audit found "0 at one end, 1 at the other" written in two places:
  * `paramAtPoint`/`pointAtParam` here, in 2-D image space, and
  * `gridParamsFrom`/`dividersFromParams` in `core/heatmapGrid.ts`, in 1-D data
- * space. They are not two ideas — the 1-D case IS the 2-D case with the
- * perpendicular component absent — but nothing said so and nothing enforced it.
+ * space. They are not two ideas - the 1-D case IS the 2-D case with the
+ * perpendicular component absent - but nothing said so and nothing enforced it.
  *
  * ⚑ David chose to EXTRACT rather than to document (option C): a reason living
  * only in a comment is exactly what produced this release's worst defect.
  */
-describe('paramOfSpan / valueOfSpan — the affine core both frames now share', () => {
+describe('paramOfSpan / valueOfSpan - the affine core both frames now share', () => {
   it('maps a value to its position along a span, and back', () => {
     expect(paramOfSpan(25, 0, 100)).toBe(0.25);
     expect(valueOfSpan(0.25, 0, 100)).toBe(25);
@@ -243,7 +243,7 @@ describe('paramOfSpan / valueOfSpan — the affine core both frames now share', 
     expect(valueOfSpan(0.25, 100, 0)).toBe(75);
   });
 
-  it('does not clamp — past an end is a real position, not an error', () => {
+  it('does not clamp - past an end is a real position, not an error', () => {
     // The `centred` tick convention puts the outermost boundaries half a band
     // BEYOND the calibration points, so negative parameters are ordinary.
     expect(paramOfSpan(-10, 0, 100)).toBe(-0.1);
@@ -257,10 +257,10 @@ describe('paramOfSpan / valueOfSpan — the affine core both frames now share', 
     expect(paramOfSpan(5, 7, 7)).toBeNaN();
   });
 
-  it('⚑⚑ AGREES WITH paramAtPoint FOR A POINT ON THE AXIS — the claim, enforced', () => {
+  it('⚑⚑ AGREES WITH paramAtPoint FOR A POINT ON THE AXIS - the claim, enforced', () => {
     // This is what replaces the comment. `paramAtPoint` is a PROJECTION and
     // cannot compose from the scalar core (it must also handle points OFF the
-    // line) — so instead of asserting they share code, assert they share
+    // line) - so instead of asserting they share code, assert they share
     // ANSWERS wherever both are defined. A divergence in either now fails here.
     const edges = [{ x: 10, y: 20 }, { x: 110, y: 220 }] as const;
     for (const t of [-0.3, 0, 0.25, 0.5, 1, 1.4]) {
@@ -270,7 +270,7 @@ describe('paramOfSpan / valueOfSpan — the affine core both frames now share', 
     }
   });
 
-  it('⚑ pointAtParam IS valueOfSpan per component — asserted, not restated', () => {
+  it('⚑ pointAtParam IS valueOfSpan per component - asserted, not restated', () => {
     const edges = [{ x: 10, y: 20 }, { x: 110, y: 220 }] as const;
     for (const t of [0, 0.5, 1, 2]) {
       expect(pointAtParam(edges, t)).toEqual({

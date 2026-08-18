@@ -10,7 +10,7 @@ import { CalibrationSession, HEATMAP_AXES_CONFIG } from '../calibrationSession.j
 /**
  * The heatmap's exported record (v2.2).
  *
- * ⚑ THE RECORD IS THE LONG FORM AND THE MATRIX IS DERIVED FROM IT — both are
+ * ⚑ THE RECORD IS THE LONG FORM AND THE MATRIX IS DERIVED FROM IT - both are
  * written, because the two library conventions are real: tidy/one-row-per-cell
  * (ggplot2's `geom_tile`, vega-lite) and wide/matrix (matplotlib, plotly,
  * seaborn, R's `image`). A file serving one fails the other.
@@ -51,7 +51,7 @@ const cell = (over: Partial<HeatmapExportCell>): HeatmapExportCell => ({
 /** Two columns × two rows, unequal, with distinct values. */
 /** ⚑ A 2 × 2 grid, and its cells now carry their OWN col/row rather than the
  * factory's zeros. A fixture where every cell is `C1 R1` cannot see an identity
- * column that is wrong — which is exactly the blindness that let the export ship
+ * column that is wrong - which is exactly the blindness that let the export ship
  * without one. */
 const GRID: HeatmapExportCell[] = [
   cell({ col: 0, row: 0, xMin: 0, xMax: 1, yMin: 0, yMax: 2, xCentre: 0.5, yCentre: 1, value: 10 }),
@@ -69,7 +69,7 @@ describe('heatmapCellsSection', () => {
     // the absolutes AND the delta so neither reader computes; cells carried the
     // absolutes and the centre and stopped. `bar(x, height, WIDTH)` takes a
     // width directly, so one of the two real consumer conventions was left to
-    // work it out. Area stays DERIVED — colour is the value and the bounds say
+    // work it out. Area stays DERIVED - colour is the value and the bounds say
     // where it applies; area is measured only in a mosaic, where geometry IS
     // the value.
     const section = heatmapCellsSection(GRID, makeRounder(axes(), 'auto'));
@@ -141,14 +141,14 @@ describe('heatmapCellsSection', () => {
   it('does NOT round the value through the figure’s pixel resolution', () => {
     // ⚑ The value is read off the COLOUR KEY, whose resolution has nothing to do
     // with the plot's pixel pitch. Rounding it through the axes would claim a
-    // precision borrowed from the wrong instrument — while the coordinates,
+    // precision borrowed from the wrong instrument - while the coordinates,
     // which ARE pixel-derived, are rounded exactly as every other export is.
     const section = heatmapCellsSection([cell({ value: 42.123456789 })], makeRounder(axes(), 'auto'));
     expect(section.rows[0]![section.header.indexOf('value')]).toBe(42.123456789);
   });
 
   it('carries the CLIPPING flag, which no number in the row could imply', () => {
-    // ⚑ A cell at the key's extreme is exact, uniform and possibly wrong — the
+    // ⚑ A cell at the key's extreme is exact, uniform and possibly wrong - the
     // figure stopped containing the value. A file that dropped this would hand
     // on a confident number with its one caveat removed.
     const section = heatmapCellsSection([cell({ atKeyLimit: true })], makeRounder(axes(), 'auto'));
@@ -157,7 +157,7 @@ describe('heatmapCellsSection', () => {
   });
 
   it('says WHICH INSTRUMENT read every value, in every file', () => {
-    // ⚑⚑ B16. The three instruments fail in OPPOSITE ways — OCR reads ink as
+    // ⚑⚑ B16. The three instruments fail in OPPOSITE ways - OCR reads ink as
     // GLYPHS and fails discretely (right, or badly wrong); the colour reads it
     // as a RAMP and fails continuously (small, silent); a person sees what both
     // machines are blind to. A consumer treating an OCR'd 59 and a
@@ -166,7 +166,7 @@ describe('heatmapCellsSection', () => {
     // ⚑ UNCONDITIONAL, unlike the label columns. A missing `x label` column says
     // plainly that nothing is named; a missing source column would say nothing
     // at all, and leave a reader to assume a default they were never told.
-    // Evidence columns are always written here — `uniformity` and `at key limit`
+    // Evidence columns are always written here - `uniformity` and `at key limit`
     // set that precedent, and this is one of them.
     const section = heatmapCellsSection(
       [cell({ value: 42.5, source: 'colour' }), cell({ value: 59, source: 'user' })],
@@ -180,7 +180,7 @@ describe('heatmapCellsSection', () => {
     expect(heatmapCellsSection([cell({})], makeRounder(axes(), 'auto')).rows[0]![at]).toBe('colour');
   });
 
-  it('carries the source into the JSON too — the machine-readable half', () => {
+  it('carries the source into the JSON too - the machine-readable half', () => {
     // ⚑ The bracket around `[59]` in the table is the half that survives a paste
     // into a spreadsheet; this is the half a program can read. Both channels,
     // because they reach different readers.
@@ -224,8 +224,8 @@ describe('heatmapMatrixSection', () => {
   });
 });
 
-describe('a NAMED axis — "the label is the coordinate"', () => {
-  /** The same grid with gene names on x and one sample name on y — the shape a
+describe('a NAMED axis - "the label is the coordinate"', () => {
+  /** The same grid with gene names on x and one sample name on y - the shape a
    * gene × sample or confusion-matrix figure actually has. */
   const NAMED: HeatmapExportCell[] = [
     { ...GRID[0]!, xLabel: 'BRCA1', yLabel: 'tumour' },
@@ -244,12 +244,12 @@ describe('a NAMED axis — "the label is the coordinate"', () => {
     expect(section.rows[1]!.slice(0, 13)).toEqual(['C2', 'R1', 'TP53', 'tumour', 1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
-  it('leaves a VALUE axis with no NAME columns — but it still gets its identity', () => {
+  it('leaves a VALUE axis with no NAME columns - but it still gets its identity', () => {
     // ⚑ The histogram's `value error` rule still holds for the NAMES: a label
     // column exists only when something fills it.
     // ⚠️ IDENTITY IS THE EXCEPTION, and deliberately. Those columns used to be
     // the only thing saying which cell a row was, so a value × value heatmap
-    // exported bounds and nothing else to join on — David: *"whatever we export
+    // exported bounds and nothing else to join on - David: *"whatever we export
     // needs to be usable as a basis for reconstructing the same graph."*
     const valueOnly = heatmapCellsSection(GRID, makeRounder(axes(), 'auto'));
     expect(valueOnly.header.slice(0, 3)).toEqual(['column', 'row', 'x min']);
@@ -278,7 +278,7 @@ describe('a NAMED axis — "the label is the coordinate"', () => {
       matrix: { x: number[]; xLabels?: string[]; yLabels?: string[] };
     };
     expect(doc.cells[1]!['xLabel']).toBe('TP53');
-    // ⚑ Positions AND tick labels, aligned index for index — matplotlib wants
+    // ⚑ Positions AND tick labels, aligned index for index - matplotlib wants
     // numbers for the first and strings for the second.
     expect(doc.matrix.x).toEqual([0.5, 2.5]);
     expect(doc.matrix.xLabels).toEqual(['BRCA1', 'TP53']);
@@ -345,7 +345,7 @@ describe('buildHeatmapJSON', () => {
 describe('the export ROUTES a heatmap session to those sections', () => {
   /**
    * ⚑ THE GATE, not the sections. A shape that renders perfectly and is never
-   * reached is this project's own recurring failure — a feature measured
+   * reached is this project's own recurring failure - a feature measured
    * against 882 figures in a harness while `Workspace.tsx` never called it.
    * These go through `buildExportSections`/`buildExportJson`, the two functions
    * the Export menu actually calls.
@@ -402,7 +402,7 @@ describe('the export ROUTES a heatmap session to those sections', () => {
   });
 
   it('exports an empty table before Read cells, rather than an empty FIGURE', () => {
-    // A heatmap with no cells read is not a heatmap with no data — and the file
+    // A heatmap with no cells read is not a heatmap with no data - and the file
     // has no way to say which, so it says what it has: nothing yet.
     const sections = buildExportSections(input([]));
     expect(sections[0]!.rows).toEqual([]);
@@ -410,14 +410,14 @@ describe('the export ROUTES a heatmap session to those sections', () => {
   });
 });
 
-describe('B10 — the colour key’s extent travels with the export', () => {
+describe('B10 - the colour key’s extent travels with the export', () => {
   /**
    * ⚑⚑ David asked whether the weld sample could be regenerated from what we
    * save. Its generator is in the repo:
    *
    *   pcolormesh(x_edges, y_edges, values, cmap="viridis", vmin=60, vmax=780)
    *
-   * The DATA reproduced exactly — `x_edges` and `y_edges` fall out of the cell
+   * The DATA reproduced exactly - `x_edges` and `y_edges` fall out of the cell
    * bounds and the matrix IS the value array, unequal cells included. But
    * `vmin`/`vmax` never left the app: we exported readings taken ON the colour
    * axis and never the axis's own span, while x and y have carried theirs all

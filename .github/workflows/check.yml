@@ -2,7 +2,7 @@ name: Check
 
 # ⚑ THE GATE THAT SEES ORDINARY COMMITS. `build.yml` only runs on a version tag
 # or a hand dispatch, so the typecheck job living there gates the RELEASE and
-# nothing else — a commit that does not compile could sit on master for days.
+# nothing else - a commit that does not compile could sit on master for days.
 # This runs on every push and pull request instead, in about a minute.
 #
 # Both exist on purpose and the duplication is the point: this one catches the
@@ -10,7 +10,7 @@ name: Check
 # a release cannot publish uncompiled code even if it is tagged from a commit
 # that never went through here.
 #
-# tools/git-hooks/pre-commit is the third layer — the same typecheck, ~10s, at
+# tools/git-hooks/pre-commit is the third layer - the same typecheck, ~10s, at
 # the moment of the mistake. Install it per clone:
 #     git config core.hooksPath tools/git-hooks
 #

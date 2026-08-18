@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "multipage-figures.pdf",
-    "note": "Synthetic ground truth \u2014 one figure per page (measured off the prior exemplar, replotted). Each page is its own graph type."
+    "note": "Synthetic ground truth - one figure per page (measured off the prior exemplar, replotted). Each page is its own graph type."
   },
   "figures": [
     {

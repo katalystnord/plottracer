@@ -3,12 +3,12 @@ import { CalibrationSession, HISTOGRAM_AXES_CONFIG } from '../calibrationSession
 import type { XYAxes } from '../../core/axes/xy.js';
 
 /**
- * v2.0 Phase 6 — a histogram bin's height reaches the on-screen tuple table.
+ * v2.0 Phase 6 - a histogram bin's height reaches the on-screen tuple table.
  *
  * `getHistogramBins()` (algorithms/histogram.ts's binFromCorners) already
  * computed this correctly for the dedicated bins export path; the gap was
- * that `getTupleRows()[i].derived` — what Workspace.tsx's live tuple table
- * actually reads — stayed null for Histogram, since HISTOGRAM_AXES_CONFIG
+ * that `getTupleRows()[i].derived` - what Workspace.tsx's live tuple table
+ * actually reads - stayed null for Histogram, since HISTOGRAM_AXES_CONFIG
  * never declared `derivedTupleValue`. This exercises the same computation
  * (two top corners, average their y) now reaching that column too, reusing
  * binFromCorners itself rather than re-deriving the arithmetic.

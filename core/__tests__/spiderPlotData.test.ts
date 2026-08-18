@@ -7,7 +7,7 @@ import { Calibration } from '../calibration.js';
  * Spider's project-file round trip (v1.4).
  *
  * The interesting part is that a spider's whole calibration is VARIABLE-LENGTH and
- * lives entirely in the calibration points — dx the known value, dy that spoke's own
+ * lives entirely in the calibration points - dx the known value, dy that spoke's own
  * centre value, dz the axis name. So unlike every other axes type, there is no fixed
  * point count to check and nothing spider-specific in the axes entry beyond `isLog`.
  * Two things can silently go wrong and both are asserted below: losing the NAMES
@@ -77,7 +77,7 @@ describe('SpiderAxes survives a project-file round trip', () => {
     expect(roundTrip(buildSpider()).getOrigin()).toEqual({ x: 100, y: 100 });
   });
 
-  it('carries the log flag — a linear reload would be wrong but plausible', () => {
+  it('carries the log flag - a linear reload would be wrong but plausible', () => {
     const cal = new Calibration(3);
     cal.addPoint(100, 100, '0', '0', '');
     cal.addPoint(100, 0, '100', '1', 'A');
@@ -86,7 +86,7 @@ describe('SpiderAxes survives a project-file round trip', () => {
 
     const restored = roundTrip(axes);
     expect(restored.isLog()).toBe(true);
-    // The midpoint of a 1..100 log spoke is 10. Reloading it linearly gives 50.5 —
+    // The midpoint of a 1..100 log spoke is 10. Reloading it linearly gives 50.5 -
     // a number nothing on screen would flag as wrong.
     expect(restored.projectOnSpoke(0, 100, 50)!.value).toBeCloseTo(10, 10);
   });

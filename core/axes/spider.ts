@@ -1,12 +1,12 @@
 /**
- * SpiderAxes — spider / radar / Kiviat charts.
+ * SpiderAxes - spider / radar / Kiviat charts.
  *
  * ⚑ ORIGINAL WORK, not a port. There is no upstream counterpart: WebPlotDigitizer,
  * Engauge and StarryDigitizer have no radar mode at all (grepped, 2026-07-26), and
  * OriginPro's digitizer offers Cartesian, Polar and Ternary only. The one piece of
  * prior art is ChartSense (CHI 2017), a research prototype which assumes every axis
  * shares one scale and every adjacent pair of axes is equally spaced. Neither
- * assumption is made here — see `calibrate` below.
+ * assumption is made here - see `calibrate` below.
  *
  * ⚑ WHY THIS IS NOT PolarAxes. `core/axes/polar.ts` is a faithful WPD port with ONE
  * radial scale and a *continuously measured* angle: a datum there is (r, θ), and θ is
@@ -18,8 +18,8 @@
  *
  * THE MODEL (David's, 2026-07-26)
  *   - one origin click, shared by every spoke;
- *   - per spoke, ONE click on a known point — which supplies that ray's direction AND
- *     its distance from the origin in a single measurement — plus that point's value
+ *   - per spoke, ONE click on a known point - which supplies that ray's direction AND
+ *     its distance from the origin in a single measurement - plus that point's value
  *     and the axis's printed name;
  *   - a click is recorded by projecting it onto a ray, and the PERPENDICULAR distance
  *     from that ray is reported so a click that landed on the wrong spoke can be
@@ -27,7 +27,7 @@
  *
  * ⚑ THE CENTRE VALUE IS STORED PER SPOKE even though the UI asks for it once. Origin
  * + one known point + its value is a single (value, distance) pair, and a scale needs
- * two, so the centre's value must be collected — with 0 preselected, which is a
+ * two, so the centre's value must be collected - with 0 preselected, which is a
  * default the user walks past and can change, not an invention. A common centre is
  * the rule in real figures, so ONE question is the right workflow; but storing it once
  * would bake that simplification into the FILE, and a later per-axis override would
@@ -53,7 +53,7 @@ export interface Spoke {
   lengthPx: number;
   /** The value the figure prints at the known point. */
   knownValue: number;
-  /** The value at the shared origin. Per spoke — see the file header. */
+  /** The value at the shared origin. Per spoke - see the file header. */
   centreValue: number;
 }
 
@@ -94,7 +94,7 @@ export class SpiderAxes {
    *
    * Per spoke the calibration point carries `dx` = the value printed at that point,
    * `dy` = the value at the centre for that spoke, `dz` = the axis's name. The origin
-   * point carries only its pixel — deliberately NOT a copy of the centre value, so
+   * point carries only its pixel - deliberately NOT a copy of the centre value, so
    * there is exactly one home for that fact and no way for two copies to disagree.
    *
    * ⚑ Refuses rather than reporting success on degenerate input. Every axes class we
@@ -158,7 +158,7 @@ export class SpiderAxes {
   }
 
   /**
-   * Read a pixel against ONE named spoke — the capture path's entry point.
+   * Read a pixel against ONE named spoke - the capture path's entry point.
    *
    * The caller knows which axis it is asking about (the capture cursor walks the
    * spokes in order), so the axis identity is never guessed from geometry. The
@@ -195,7 +195,7 @@ export class SpiderAxes {
    * spaced axes, every spoke has an exact opposite, and the two are collinear. By
    * perpendicular distance alone, a point far out on one of them is zero from
    * both, and the tie broke on floating-point noise. Driving the six-axis sample
-   * produced the giveaway on screen — "0 px off the Cost index axis and nearer
+   * produced the giveaway on screen - "0 px off the Cost index axis and nearer
    * Water-vapour barrier", a sentence that cannot be true (David, 2026-07-27).
    * Every fixture in the unit tests had three spokes, which has no opposite pairs,
    * so nothing caught it.
@@ -222,7 +222,7 @@ export class SpiderAxes {
   /**
    * The generic axes contract: one value per pixel, read off the NEAREST spoke.
    *
-   * This is the live cursor readout's path, not the capture path — capture goes
+   * This is the live cursor readout's path, not the capture path - capture goes
    * through projectOnSpoke with the axis it means. Nearest-spoke is the only honest
    * answer available when nobody has said which axis is meant, and for a click that
    * landed on a spoke it agrees with the capture path by construction.
@@ -232,7 +232,7 @@ export class SpiderAxes {
     return [projection == null ? NaN : projection.value];
   }
 
-  /** Pixel position of `value` along spoke `index` — the inverse of projectOnSpoke.
+  /** Pixel position of `value` along spoke `index` - the inverse of projectOnSpoke.
    *
    * ⚑ Real, not a stub. BarAxes ships WPD's unimplemented `dataToPixel` returning
    * {0,0}, and that stubbed-ness became load-bearing (algorithms/errorCapture.ts
@@ -240,8 +240,8 @@ export class SpiderAxes {
    * export precision (core/exportPrecision.ts measures a half-pixel in DATA units
    * through this) and any drawn overlay get a truthful answer.
    *
-   * ⚑ WHERE THERE IS NO PIXEL — an unknown spoke, or a non-positive value on a log
-   * axis — this answers {NaN, NaN}, NOT {0,0}. The shared axes contract has no
+   * ⚑ WHERE THERE IS NO PIXEL - an unknown spoke, or a non-positive value on a log
+   * axis - this answers {NaN, NaN}, NOT {0,0}. The shared axes contract has no
    * nullable return, and {0,0} is both a real image coordinate and the exact
    * sentinel the stubbed implementations use, so returning it here would be
    * indistinguishable from "this type cannot invert" and would quietly draw a point
@@ -294,8 +294,8 @@ export class SpiderAxes {
 
   /** The axis's printed name, or its positional fallback when it was never named. */
   /**
-   * Rename one spoke. A name carries NO geometry — it is the one thing about a
-   * spoke that was transcribed rather than measured — so this changes a label and
+   * Rename one spoke. A name carries NO geometry - it is the one thing about a
+   * spoke that was transcribed rather than measured - so this changes a label and
    * nothing else: no scale, no direction, no recorded value moves.
    *
    * ⚑ Which is why renaming must NOT go through a re-calibration. Re-deriving the
@@ -331,7 +331,7 @@ export class SpiderAxes {
     this.metadata = JSON.parse(JSON.stringify(obj));
   }
 
-  /** Variable by construction — a spider has as many spokes as the figure drew.
+  /** Variable by construction - a spider has as many spokes as the figure drew.
    * Every other axes class answers with a constant; this one can only answer for a
    * calibration it has already accepted, and 2 (origin + one spoke) is the floor. */
   numCalibrationPointsRequired(): number {
@@ -342,7 +342,7 @@ export class SpiderAxes {
     return 2;
   }
 
-  /** Value-column headers. One measured number per datum, like Bar — the axis it
+  /** Value-column headers. One measured number per datum, like Bar - the axis it
    * belongs to is the point GROUP, not part of the value, and the axis's NAME is
    * looked up from the spoke rather than stored per point (it was measured once, at
    * calibration). The export layer joins those into `Axis, Name, Value`, the direct

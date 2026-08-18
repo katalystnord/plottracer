@@ -1,5 +1,5 @@
 /**
- * Error capture — the pure half of the drag gesture (checkpoint 79).
+ * Error capture - the pure half of the drag gesture (checkpoint 79).
  *
  * The capture UI's model is `docs/error-bars-design.md`: **the drag IS the
  * link.** You press on a datum, drag out to where the figure draws the cap, and
@@ -18,22 +18,22 @@
  *
  * **This file works in pixel space, and that is the point.** *"There is
  * absolutely nothing magical about error points from a numerical perspective"*
- * (David) — an error point is a pixel, read back through `pixelToData` like
+ * (David) - an error point is a pixel, read back through `pixelToData` like
  * every other point. An earlier draft mirrored in *data* space via
  * `dataToPixel` so that "±" would come out exact on a log axis; that bought
  * nothing (we do not claim symmetry, and CLAUDE.md's own decision is that the
  * kind of error is not ours to record) and cost a great deal: it needed a
  * capability probe, and it would have **disabled the tool on bar charts**,
  * because `BarAxes.dataToPixel` was (at the time of this design) an upstream
- * stub returning `{x: 0, y: 0}` — as are Polar's, Ternary's, Map's and CCR's
+ * stub returning `{x: 0, y: 0}` - as are Polar's, Ternary's, Map's and CCR's
  * still. (v2.0 gave Bar a real `dataToPixel`, but `capFreeDirection` below
- * still can't use it for Bar — see that function's own doc comment for why.)
+ * still can't use it for Bar - see that function's own doc comment for why.)
  * Reflecting the pixel needs none of them, so capture works on every graph
  * type, including the asymmetric-error-on-a-bar-plot case that has had zero
  * coverage.
  *
  * Pure and headless per CLAUDE.md's leg (c): no DOM, no engine imports, no
- * `core/` imports — this file needs nothing from an axes at all.
+ * `core/` imports - this file needs nothing from an axes at all.
  */
 
 import type { ErrorRole } from './errorBar.js';
@@ -51,11 +51,11 @@ export interface Point2D {
  * The gesture alone says it, so the card needs no four-way role selector: drag
  * up and you get an upper cap, drag right and you get a right one. The user is
  * pointing at a cap the figure already drew, so the direction is not a guess
- * about intent — it is where they pointed.
+ * about intent - it is where they pointed.
  *
  * Screen space, hence the inverted y test: image-pixel y grows *downward*, so
  * a drag "up" is toward a smaller y. This reads the role the way the user sees
- * it rather than the way the axes numbers it, which is deliberate — it needs
+ * it rather than the way the axes numbers it, which is deliberate - it needs
  * nothing from the axes and therefore behaves the same on all 7 types. A chart
  * calibrated with an inverted or rotated y axis can put the numerically-larger
  * cap below on screen; the whisker still draws where the caps are, and the
@@ -75,7 +75,7 @@ export function roleFromDrag(datumPixel: Point2D, capPixel: Point2D): ErrorRole 
   return dx > 0 ? 'right' : 'left';
 }
 
-/** The opposite of a role — the one the mirrored cap plays. */
+/** The opposite of a role - the one the mirrored cap plays. */
 export function oppositeRole(role: ErrorRole): ErrorRole {
   switch (role) {
     case 'upper':
@@ -90,7 +90,7 @@ export function oppositeRole(role: ErrorRole): ErrorRole {
 }
 
 /**
- * The slice of a calibrated axes the *constraint* needs — and only the
+ * The slice of a calibrated axes the *constraint* needs - and only the
  * constraint. Structural, so `algorithms/` keeps its zero-dependency contract.
  */
 export interface DataPixelMapping {
@@ -99,7 +99,7 @@ export interface DataPixelMapping {
 }
 
 /**
- * A unit vector in **pixel** space along which a cap of `role` may move — or
+ * A unit vector in **pixel** space along which a cap of `role` may move - or
  * **null when this axes cannot say**, which means no constraint at all.
  *
  * **The model's one constraint, and it is not available everywhere** (David,
@@ -108,7 +108,7 @@ export interface DataPixelMapping {
  * constraint."*).
  *
  * **Why it is a constraint we are allowed at all:** a figure draws an error bar
- * *aligned with* its data point — the whisker is a line **through** the datum,
+ * *aligned with* its data point - the whisker is a line **through** the datum,
  * not merely near it. Pinning the cap to that line records what the figure
  * shows, exactly as recording a bin's edges does. It is not a claim about what
  * the error *means* (±, SD vs CI, symmetry all stay out). It also protects the
@@ -116,7 +116,7 @@ export interface DataPixelMapping {
  * its datum **by x**, so a cap that drifted sideways could silently resolve onto
  * a *neighbouring* datum.
  *
- * **Why it cannot be "lock x" — the obvious version, which is wrong.** That
+ * **Why it cannot be "lock x" - the obvious version, which is wrong.** That
  * assumes the datum's value axis runs straight up the screen. It does not:
  * checkpoint 68 turned WPD's rotation correction on by default, so a plain XY
  * chart's y-direction can be tilted; a polar chart's error runs *radially*; a
@@ -131,11 +131,11 @@ export interface DataPixelMapping {
  * returns null too, but for a different reason since v2.0**: its
  * `pixelToData` still returns a length-1 array (one real data value, no
  * second coordinate to step), so `dy === undefined` below fires before
- * `dataToPixel` is even called — giving Bar a real `dataToPixel` did not by
+ * `dataToPixel` is even called - giving Bar a real `dataToPixel` did not by
  * itself unlock this constraint. It stays "unconstrained" until a later
  * phase gives Bar a second coordinate to return.
  *
- * **Null degrades to "unconstrained", never to "disabled"** — which is what
+ * **Null degrades to "unconstrained", never to "disabled"** - which is what
  * makes probing safe here, and is the difference from an earlier draft that
  * probed in order to *gate the whole feature* and would have refused error bars
  * on bar charts. A free cap is exactly the documented default; the constraint
@@ -153,20 +153,20 @@ export function capFreeDirection(
 
   // ⚑⚑ A 1-D AXES CAN STILL SAY WHICH WAY ITS VALUE RUNS (v2.3). This used to
   // give up here: Bar's `pixelToData` returns `[value]`, so `dy` is undefined and
-  // the function returned null — leaving every cap on a bar chart, and every
+  // the function returned null - leaving every cap on a bar chart, and every
   // other 1-D type, UNCONSTRAINED. Measured, that was 5 of 12 types where a
   // DIAGONAL cap could be recorded, against David's *"there cannot be one in
   // between"*.
   //
   // But a 1-D axes has a perfectly good `dataToPixel`, and stepping its ONE value
-  // is the same probe this function already runs — Bar answers `(0, -1)` on a
+  // is the same probe this function already runs - Bar answers `(0, -1)` on a
   // screen-aligned chart and follows the tilt on a rotated one. Nothing new is
   // measured or assumed; the existing mechanism simply had a dimensionality
   // assumption baked into it.
   //
   // ⚑ EVERY ROLE ALIGNS TO THE VALUE AXIS HERE, whatever the drag was called.
   // A 1-D axes HAS only that axis, so on a horizontal bar chart a drag that
-  // `roleFromDrag` names `right` still runs along the value axis — the role
+  // `roleFromDrag` names `right` still runs along the value axis - the role
   // names a SIDE, and the axis is a fact about the chart.
   if (dy === undefined || !Number.isFinite(dy)) {
     const step = Math.max(Math.abs(dx) * 0.01, 1e-6);
@@ -205,7 +205,7 @@ export function freeAxisFor(role: ErrorRole): 'x' | 'y' {
 /**
  * `cap` projected onto the line through `datum` along `direction`.
  *
- * With `direction` null the cap is returned untouched — the honest behaviour on
+ * With `direction` null the cap is returned untouched - the honest behaviour on
  * an axes that cannot say which way its value axis runs (see capFreeDirection).
  */
 export function constrainCap(
@@ -237,7 +237,7 @@ export function mirrorCap(datumPixel: Point2D, capPixel: Point2D): Point2D {
  * Used to snap a drag's *start* onto a real datum. **The snap is what keeps the
  * datum end of the whisker honest**: the bar is anchored on a point the user
  * already placed from the figure, not on wherever the press landed. The cap end
- * is never snapped — it is the measurement.
+ * is never snapped - it is the measurement.
  *
  * A distance limit here is the opposite of the one `resolveErrorBars`
  * deliberately refuses. That one would hide a mis-resolution the rendering is
@@ -270,8 +270,8 @@ export function nearestPixel(
  * **The user names the concept once ("SD"); the file needs two names**, because
  * upper and lower are two series (the model relates one series to another with
  * one role) and checkpoint 75 made names unique. Deriving "SD upper"/"SD lower"
- * keeps the series list readable, which "SD"/"SD (2)" — what uniqueDatasetName
- * would produce — does not.
+ * keeps the series list readable, which "SD"/"SD (2)" - what uniqueDatasetName
+ * would produce - does not.
  *
  * The name is the only place meaning lives, which is why it is the one thing we
  * ask for: no error *kind* is recorded (David: *"We do not even need to know

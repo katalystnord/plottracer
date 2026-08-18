@@ -1,10 +1,10 @@
 /**
- * The cap's drag locks to ITS OWN datum's line — read from the record.
+ * The cap's drag locks to ITS OWN datum's line - read from the record.
  *
  * ⚑⚑ THE DEFECT THIS INHERITS. David, 2026-08-04, driving the asymmetric
  * error-bar example: a cap 100px below its own datum but 58px from the NEIGHBOUR
  * claimed the neighbour, `constrainCap` projected it onto that datum's vertical,
- * and **the cap jumped sideways onto the bar next to it** — taking its delta with
+ * and **the cap jumped sideways onto the bar next to it** - taking its delta with
  * it, so the number moved to the wrong data point too. Ordinary on a decaying
  * curve with wide error at its left-hand end, i.e. whenever a whisker is longer
  * than the gap to the next point.
@@ -86,7 +86,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
     expect(Math.abs(line!.direction.y), 'horizontal: no y component').toBeLessThan(1e-6);
   });
 
-  it('the DATUM itself is not constrained — it is not a cap', () => {
+  it('the DATUM itself is not constrained - it is not a cap', () => {
     // Dragging the data point must stay free; only its extents are locked.
     const s = session();
     const ds = s.getDatasets()[0]!;
@@ -114,7 +114,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
   });
 });
 
-describe('the imported shape still constrains — no regression', () => {
+describe('the imported shape still constrains - no regression', () => {
   it('a cap in a related series is still locked to its datum', () => {
     const s = session();
     s.addDataPoint(200, 200);

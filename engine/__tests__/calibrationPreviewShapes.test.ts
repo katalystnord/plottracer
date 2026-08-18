@@ -6,7 +6,7 @@ import { calibrationPreview } from '../calibrationPreview.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `calibrationPreview.ts` scored 62.67% with 29
  * uncovered mutants, and the existing suite never builds a spider or a pie
- * shape at all — the two branches that are not a table lookup. `spiderPairs`
+ * shape at all - the two branches that are not a table lookup. `spiderPairs`
  * derives its rays from the placed steps, and the pie branch FITS A CIRCLE.
  * Neither is exercised, and nor is the emphasis colour.
  *
@@ -21,7 +21,7 @@ import { calibrationPreview } from '../calibrationPreview.js';
  *    figure to compare it against at all.
  *
  * Drawing them back over the figure is the only check the user gets, which
- * makes a preview that silently draws nothing — or draws garbage — a defect
+ * makes a preview that silently draws nothing - or draws garbage - a defect
  * in the reading, not in the rendering.
  */
 
@@ -55,7 +55,7 @@ describe('a spider’s rays are derived from the steps that exist', () => {
   });
 
   it('draws each ray as soon as ITS spoke is placed, not when all are', () => {
-    // Progressive, like every other pair — the user is checking each spoke as
+    // Progressive, like every other pair - the user is checking each spoke as
     // they click it.
     const p = calibrationPreview(
       shape('spider', spokes),
@@ -83,7 +83,7 @@ describe('a spider’s rays are derived from the steps that exist', () => {
     expect(p.segments).toHaveLength(6);
   });
 
-  it('has no circles — a spider is rays, not a fitted shape', () => {
+  it('has no circles - a spider is rays, not a fitted shape', () => {
     const p = calibrationPreview(shape('spider', spokes), placed({ origin: [100, 100], axis1: [200, 100] }));
     expect(p.circles).toEqual([]);
   });
@@ -95,7 +95,7 @@ describe('the LIVE step is drawn in the machine’s own magenta', () => {
 
   it('⚑ highlights the emphasised ray in magenta, NOT in the step’s own colour', () => {
     // Spider rays take their colour from the shared origin step, which is
-    // green — and a green highlight over a green series is no highlight at
+    // green - and a green highlight over a green series is no highlight at
     // all. The bundled spider example has exactly that.
     const p = calibrationPreview(
       shape('spider', spokes, { origin: '#00ff00' }),
@@ -151,7 +151,7 @@ describe('a pie previews the FITTED circle, not segments', () => {
   const rim = placed({ p1: [150, 100], p2: [100, 150], p3: [50, 100], p4: [100, 50] });
   const pieShape = shape('pie', ['p1', 'p2', 'p3', 'p4']);
 
-  it('⚑ joins NOTHING — a pie’s rim points are not a polygon', () => {
+  it('⚑ joins NOTHING - a pie’s rim points are not a polygon', () => {
     // Segments between rim clicks would draw a quadrilateral the figure never
     // had, and would hide the one thing worth seeing.
     expect(calibrationPreview(pieShape, rim).segments).toEqual([]);
@@ -174,7 +174,7 @@ describe('a pie previews the FITTED circle, not segments', () => {
     expect(marker).toBeDefined();
     expect(marker!.cx).toBeCloseTo(100, 6);
     expect(marker!.cy).toBeCloseTo(100, 6);
-    // Sized in SCREEN pixels rather than figure units — a figure-scaled
+    // Sized in SCREEN pixels rather than figure units - a figure-scaled
     // crosshair was lost in the tangle where the slices meet.
     expect(marker!.r).toBe(9);
   });

@@ -17,7 +17,7 @@ import {
  * ⚑ THE FIXTURES DRAW NO CELL BORDERS AT ALL (`edgecolors='none'`), which is the
  * HARDER of the two cases: every boundary here is a bare colour discontinuity
  * with no rule to find. If it works without ink to follow, a figure that does
- * print its gridlines is easier, not different — the same measurement finds
+ * print its gridlines is easier, not different - the same measurement finds
  * both, which is why there is no "does this figure have gridlines?" mode.
  *
  * ⚑ And the cells are UNEQUAL, so nothing about the answer can come from
@@ -74,7 +74,7 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
           .sort((a, b) => a - b);
         expect(found, `${file} ${axis}`).toHaveLength(expected.length);
         expected.forEach((want, i) => {
-          // Within 0.005 of the box — about 1.5px on a 550px plot, i.e. the
+          // Within 0.005 of the box - about 1.5px on a 550px plot, i.e. the
           // width of the anti-aliased step itself.
           expect(found[i], `${file} ${axis} boundary ${i}`).toBeCloseTo(want, 2);
         });
@@ -84,7 +84,7 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
 
   it('does not propose the plot box’s own edges', () => {
     // ⚑ The step from the paper to the first cell is the LARGEST change in the
-    // whole profile — 222 RGB units on this figure, three times any real
+    // whole profile - 222 RGB units on this figure, three times any real
     // boundary. Proposing it would hand the user two dividers sitting on the
     // edges they had just placed themselves.
     const { box, img } = scene('heatmap-viridis.png');
@@ -95,7 +95,7 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
   });
 
   it('keeps the true boundaries at the TOP of the ranking on a degraded figure', () => {
-    // ⚑ Quality-35 JPEG adds spurious peaks — of course it does, and the module
+    // ⚑ Quality-35 JPEG adds spurious peaks - of course it does, and the module
     // reports them rather than hiding them. What has to hold is that the real
     // boundaries are the STRONGEST, because that is what makes the ranking
     // usable as a proposal and the strength worth showing.
@@ -103,7 +103,7 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
     for (const axis of ['x', 'y'] as const) {
       const expected = truePositions(axis === 'x' ? fig.grid.x : fig.grid.y);
       const { candidates } = detectDividers(img.data, img.width, img.height, box, axis);
-      // ⚑ At LEAST the real ones — never fewer. An earlier version demanded
+      // ⚑ At LEAST the real ones - never fewer. An earlier version demanded
       // strictly more, on the grounds that JPEG always adds spurious peaks; then
       // widening the merge window from 5px to 8px (for the drawn rules in the
       // bundled IC50 example) absorbed the spurious ones on this figure's x axis
@@ -118,7 +118,7 @@ describe('detecting a heatmap’s cell boundaries on real renders', () => {
         // ⚑ A looser tolerance than the clean figures get, and it is a
         // measurement rather than a concession: JPEG smears the step over
         // several pixels, and the worst boundary here lands 0.0067 of the box
-        // away from the truth — about 1.8px. The clean renders keep the 1.5px
+        // away from the truth - about 1.8px. The clean renders keep the 1.5px
         // bound above; saying so is the point, since a user reading a degraded
         // figure should expect their dividers to need a nudge.
         expect(Math.abs(top[i]! - want), `${axis} boundary ${i}`).toBeLessThan(0.008);

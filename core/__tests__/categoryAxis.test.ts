@@ -11,7 +11,7 @@ import {
 } from '../categoryAxis.js';
 
 /**
- * CategoryAxis — v2.0 groundwork, unwired.
+ * CategoryAxis - v2.0 groundwork, unwired.
  *
  * Written before anything binds to this class (see the plan's phasing): a
  * category axis is only a name list here, so these tests are about the list
@@ -71,7 +71,7 @@ describe('renaming', () => {
   });
 });
 
-describe('reordering — permutation-checked, mirroring Dataset.reorderPixels', () => {
+describe('reordering - permutation-checked, mirroring Dataset.reorderPixels', () => {
   it('applies order[newIndex] = oldIndex', () => {
     const ax = withThree();
     expect(ax.reorderCategories([2, 0, 1])).toBe(true);
@@ -124,13 +124,13 @@ describe('removing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Geometry (v2.1) — the category ticks.
+// Geometry (v2.1) - the category ticks.
 //
 // ⚑ These are tests of an AID, not of a calibration. Nothing here decides a
 // measured VALUE: a bar reads its value from the calibrated value axis, and
 // auto-extract finds bars from ink. Ticks divide and label. So the assertions
 // below are about STRUCTURE (how many marks, in what order, which band a point
-// lands in) and about REFUSALS — never about sub-pixel accuracy, which is not
+// lands in) and about REFUSALS - never about sub-pixel accuracy, which is not
 // load-bearing here and must not be made so.
 // ---------------------------------------------------------------------------
 
@@ -146,7 +146,7 @@ function withAxis(n: number, convention: TickConvention = 'centred'): CategoryAx
   return ax;
 }
 
-describe('tickCountFor / generateTickParams — how many marks, and where', () => {
+describe('tickCountFor / generateTickParams - how many marks, and where', () => {
   it('centred draws one tick per category, edge draws one between each pair', () => {
     expect(tickCountFor('centred', 5)).toBe(5);
     expect(tickCountFor('edge', 5)).toBe(4);
@@ -174,7 +174,7 @@ describe('tickCountFor / generateTickParams — how many marks, and where', () =
   });
 });
 
-describe('dividerParamsFrom — both conventions resolve to the SAME bands', () => {
+describe('dividerParamsFrom - both conventions resolve to the SAME bands', () => {
   it('⚑ the central claim of the design: same axis, same count, same N+1 dividers', () => {
     for (const n of [1, 2, 3, 5, 12]) {
       const centred = dividerParamsFrom('centred', generateTickParams('centred', n));
@@ -201,7 +201,7 @@ describe('dividerParamsFrom — both conventions resolve to the SAME bands', () 
   });
 });
 
-describe('bandIndexForParam — the outermost bands are unbounded', () => {
+describe('bandIndexForParam - the outermost bands are unbounded', () => {
   const dividers = [0, 0.25, 0.5, 0.75, 1];
 
   it('places a parameter in its band', () => {
@@ -265,7 +265,7 @@ describe('pointAtParam / paramAtPoint', () => {
   });
 });
 
-describe('setAxisEdges — the refusal that must be able to fire', () => {
+describe('setAxisEdges - the refusal that must be able to fire', () => {
   it('⚑ refuses two coincident edges instead of reporting success', () => {
     // The calibrate()-cannot-fail shape. A zero-length axis divides by zero in
     // paramAtPoint, so every tick, divider and assignment would read NaN with
@@ -301,14 +301,14 @@ describe('setAxisEdges — the refusal that must be able to fire', () => {
 });
 
 describe('declaring the categories', () => {
-  it('the count IS the name list length — one source, not two', () => {
+  it('the count IS the name list length - one source, not two', () => {
     const ax = withAxis(4);
     expect(ax.getCategoryCount()).toBe(4);
     expect(ax.getCategories()).toEqual(['', '', '', '']);
     expect(ax.getTickParams()).toHaveLength(4);
   });
 
-  it('⚑ growing never invents a name — new categories are blank', () => {
+  it('⚑ growing never invents a name - new categories are blank', () => {
     const ax = new CategoryAxis();
     ax.addCategory('Flax');
     ax.addCategory('Hemp');
@@ -353,12 +353,12 @@ describe('the convention toggle moves the marks on screen', () => {
     expect(ax.getTickPoints().map((p) => p.x)).toEqual([225, 350, 475]);
   });
 
-  it('⚑ but the BANDS are unchanged — that is why the choice is not about accuracy', () => {
+  it('⚑ but the BANDS are unchanged - that is why the choice is not about accuracy', () => {
     const centred = withAxis(4, 'centred');
     const edge = withAxis(4, 'edge');
     // ⚑ Assert the VALUES, not merely that the two agree. Comparing the two
     // outputs to each other passes on [] === [], so this claim survived a mutant
-    // that made getDividerPoints always empty — an agreement test proves nothing
+    // that made getDividerPoints always empty - an agreement test proves nothing
     // until at least one side is pinned to a known answer.
     const expected = [
       { x: 100, y: 500 },
@@ -388,7 +388,7 @@ describe('dragging a tick', () => {
     expect(ax.hasAdjustments()).toBe(true);
   });
 
-  it('⚑ a tick can never cross its neighbour — that would reassign categories silently', () => {
+  it('⚑ a tick can never cross its neighbour - that would reassign categories silently', () => {
     const ax = withAxis(4);
     const before = [...ax.getTickParams()];
     ax.moveTick(1, { x: 5000, y: 500 }); // dragged far past ticks 2 and 3
@@ -416,7 +416,7 @@ describe('dragging a tick', () => {
     expect(new CategoryAxis().moveTick(0, { x: 1, y: 1 })).toBe(false);
   });
 
-  it('⚑ regenerating discards the adjustment — which is why callers must warn first', () => {
+  it('⚑ regenerating discards the adjustment - which is why callers must warn first', () => {
     const ax = withAxis(4);
     ax.moveTick(1, { x: 300, y: 500 });
     expect(ax.hasAdjustments()).toBe(true);
@@ -426,7 +426,7 @@ describe('dragging a tick', () => {
   });
 });
 
-describe('ticksAreStale — the one way the count and the marks can disagree', () => {
+describe('ticksAreStale - the one way the count and the marks can disagree', () => {
   it('is false for a freshly declared axis', () => {
     expect(withAxis(4).ticksAreStale()).toBe(false);
     expect(withAxis(4, 'edge').ticksAreStale()).toBe(false);
@@ -447,7 +447,7 @@ describe('ticksAreStale — the one way the count and the marks can disagree', (
   });
 });
 
-describe('bandIndexAt — what replaces the nearest-donor guess', () => {
+describe('bandIndexAt - what replaces the nearest-donor guess', () => {
   it('files a bar under the category it sits in', () => {
     const ax = withAxis(4); // bands at x = 100-225, 225-350, 350-475, 475-600
     expect(ax.bandIndexAt({ x: 150, y: 300 })).toBe(0);
@@ -484,7 +484,7 @@ describe('bandIndexAt — what replaces the nearest-donor guess', () => {
 });
 
 describe('clearGeometry', () => {
-  it('drops the marks and keeps the names — the un-ticked path is supported, not broken', () => {
+  it('drops the marks and keeps the names - the un-ticked path is supported, not broken', () => {
     const ax = withAxis(3);
     ax.renameCategory(0, 'Flax');
     ax.moveTick(1, { x: 300, y: 500 });
@@ -525,7 +525,7 @@ describe('the defaults a fresh axis starts from', () => {
 describe('axes that are not image-aligned', () => {
   it('⚑ accepts a 45-degree axis, where |dx| equals |dy|', () => {
     // The one tilt at which a squared length computed as dx*dx - dy*dy is
-    // exactly zero — i.e. where a sign slip would refuse a perfectly good axis
+    // exactly zero - i.e. where a sign slip would refuse a perfectly good axis
     // and every horizontal-axis test would stay green.
     const ax = new CategoryAxis();
     expect(ax.setAxisEdges({ x: 0, y: 0 }, { x: 100, y: 100 })).toBe(true);
@@ -610,7 +610,7 @@ describe('the inherited list guards still hold', () => {
 });
 
 describe('removeCategory boundary', () => {
-  it('refuses an index one past the end — the boundary, not just a wild value', () => {
+  it('refuses an index one past the end - the boundary, not just a wild value', () => {
     const ax = withThree();
     expect(ax.removeCategory(3)).toBe(false);
     expect(ax.getCategories()).toEqual(['Alpha', 'Beta', 'Gamma']);
@@ -660,7 +660,7 @@ describe('moveTick survives a point that is finite but absurd', () => {
   });
 });
 
-describe('restoreTickParams — the LOAD door enforces what the click path does', () => {
+describe('restoreTickParams - the LOAD door enforces what the click path does', () => {
   /** The parameters a 4-category centred axis generates. */
   const FOUR = [0.125, 0.375, 0.625, 0.875];
 
@@ -677,7 +677,7 @@ describe('restoreTickParams — the LOAD door enforces what the click path does'
     expect(ax.hasAdjustments()).toBe(false);
   });
 
-  it('⚑ REGENERATES rather than refusing — the ticks are an aid, the data is not', () => {
+  it('⚑ REGENERATES rather than refusing - the ticks are an aid, the data is not', () => {
     // Refusing the load would cost the user their measurements over a broken
     // hint. Rebuilding the hint costs nothing measured.
     //
@@ -706,7 +706,7 @@ describe('restoreTickParams — the LOAD door enforces what the click path does'
     expect(withAxis(2).restoreTickParams([0.5, 1.4])).toBe(false);
   });
 
-  it('rejects ticks that are not strictly increasing — order carries the categories', () => {
+  it('rejects ticks that are not strictly increasing - order carries the categories', () => {
     expect(withAxis(3).restoreTickParams([0.6, 0.2, 0.8])).toBe(false);
     expect(withAxis(3).restoreTickParams([0.2, 0.2, 0.8])).toBe(false); // equal, so a zero-width band
   });
@@ -766,7 +766,7 @@ describe('⚑ the load door enforces SPACING, not merely order (review #4)', () 
     expect(ax.getDividerParams()).toEqual([...ax.getDividerParams()].sort((a, b) => a - b));
   });
 
-  it('⚑ accepts the spacing a DRAG itself produces — the guard must not out-strict the click path', () => {
+  it('⚑ accepts the spacing a DRAG itself produces - the guard must not out-strict the click path', () => {
     // moveTick clamps to `prev + EPS`, so the least adjacent spacing it can
     // leave is EPS (1e-6). A first draft used 2*EPS here and would have refused
     // a file the app had just written itself.
@@ -803,7 +803,7 @@ describe('⚑ the load door enforces SPACING, not merely order (review #4)', () 
     expect(ax.hasAdjustments()).toBe(true);
   });
 
-  it('⚑ and the slack is ONE ULP, not a licence — a genuinely collapsed pair is still refused', () => {
+  it('⚑ and the slack is ONE ULP, not a licence - a genuinely collapsed pair is still refused', () => {
     // The loosened comparison must not become "any increasing set will do", or
     // the tick reordering it exists to prevent walks straight back in.
     const ax = withAxis(3);

@@ -10,10 +10,10 @@ import { formatDateNumber, getFormatString, parse } from '../dateConversion.js';
  *
  *  - `formatDate` normalises SEVEN uppercase token spellings to lowercase
  *    before substituting. Each is its own mutant, and an unnormalised token
- *    survives into the output verbatim — a user who types `DD/MM/YYYY` gets
+ *    survives into the output verbatim - a user who types `DD/MM/YYYY` gets
  *    the literal letters back instead of a date.
  *  - `formatDateNumber` picks a rounding granularity by scanning the format
- *    for `frac`, then `s`, `i`, `h`, `d`, `m`, `y` — IN THAT ORDER. The order
+ *    for `frac`, then `s`, `i`, `h`, `d`, `m`, `y` - IN THAT ORDER. The order
  *    is load-bearing and not obvious: `yyyy/mm/dd hh:ii:ss` contains every one
  *    of those letters, so which branch wins decides whether the value is
  *    rounded to the second or to the day.
@@ -70,7 +70,7 @@ describe('uppercase tokens are accepted, not echoed', () => {
     // NOT a live defect, and deliberately not "fixed" here: `getFormatString`
     // is the only producer of a format string in the app and emits lowercase
     // exclusively, so nothing reaches this path. The uppercase branch is
-    // defensive — a hand-edited or foreign project file could restore one
+    // defensive - a hand-edited or foreign project file could restore one
     // through `initialFormattingX`. Changing the cascade would change how
     // every axis tick is rounded, which is a rendering decision, not a test fix.
     expect(formatDateNumber(T, 'yyyy/mm/dd hh:ii:ss')).toBe('2024/03/05 14:37:27');
@@ -80,7 +80,7 @@ describe('uppercase tokens are accepted, not echoed', () => {
 
 describe('the two-digit year', () => {
   it('zero-pads a year below 2010, where the remainder is a single digit', () => {
-    // `yy` for 2005 is "05", not "5" — the padding branch fires only for
+    // `yy` for 2005 is "05", not "5" - the padding branch fires only for
     // years x000..x009, so nothing in an ordinary fixture reaches it.
     expect(formatDateNumber(Date.UTC(2005, 0, 1), 'yy')).toBe('05');
     expect(formatDateNumber(Date.UTC(2000, 0, 1), 'yy')).toBe('00');
@@ -93,7 +93,7 @@ describe('the two-digit year', () => {
 });
 
 describe('the rounding granularity is chosen by the FIRST field the format names', () => {
-  // 23:59:59.500 — half a second before midnight, so rounding to any field
+  // 23:59:59.500 - half a second before midnight, so rounding to any field
   // coarser than a second rolls the value into the NEXT DAY. That is what
   // makes each branch visible.
   const almostMidnight = Date.UTC(2024, 2, 5, 23, 59, 59, 500);
@@ -135,7 +135,7 @@ describe('the rounding granularity is chosen by the FIRST field the format names
 
 describe('inferring a format from what the user typed', () => {
   it('grows the date format one field per part', () => {
-    // ⚑ A bare "2024" has no separator, so it is NOT a date at all — it reads
+    // ⚑ A bare "2024" has no separator, so it is NOT a date at all - it reads
     // as an hour. That is the same rule `parse` enforces, and the two must
     // agree or a figure's axis would be formatted as something it did not
     // parse as.
@@ -162,7 +162,7 @@ describe('inferring a format from what the user typed', () => {
   });
 
   it('round-trips a typed date: infer the format, parse, format back', () => {
-    // The three functions are used together — the axis stores the format the
+    // The three functions are used together - the axis stores the format the
     // user's own first value implied, and every tick is rendered through it.
     for (const typed of ['2024/03/05', '2024/03/05 14:37', '2024/03/05 14:37:26']) {
       const fmt = getFormatString(typed);

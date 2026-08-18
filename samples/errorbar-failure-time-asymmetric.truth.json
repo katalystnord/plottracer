@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "errorbar-failure-time-asymmetric.png",
-    "note": "Synthetic ground truth \u2014 value + absolute upper/lower cap per point. Every interval is ASYMMETRIC: the upper arm is longer than the lower."
+    "note": "Synthetic ground truth - value + absolute upper/lower cap per point. Every interval is ASYMMETRIC: the upper arm is longer than the lower."
   },
   "graphType": "xy",
   "axes": {

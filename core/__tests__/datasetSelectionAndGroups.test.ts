@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { Dataset } from '../dataset.js';
 
 /**
- * `Dataset` — the group/slot bookkeeping.
+ * `Dataset` - the group/slot bookkeeping.
  *
  * ⚑ METHODS OF THE RECORD'S OWN CLASS HAD ZERO TEST REFERENCES ANYWHERE:
  * `getPointGroupsCount`, `getPixelIndexesInGroup`, `removeSlotFromTuples`,
- * `refreshTuplesAfterGroupAdd`, plus `clearAll`. Not weakly tested —
+ * `refreshTuplesAfterGroupAdd`, plus `clearAll`. Not weakly tested -
  * untouched. `dataset.ts` scored 53.71% with 136 uncovered mutants, and this
  * is where most of them lived.
  *
  * It matters now because **v2.0 changes the record**, and the slot machinery below is
  * exactly what a bar's value-plus-extent will be built on. These are the operations
  * that keep a tuple pointing at the pixels it means; when one of them is wrong the
- * result is not a crash, it is a reading silently attached to the wrong slot — the
+ * result is not a crash, it is a reading silently attached to the wrong slot - the
  * shape of three separate defects already fixed this month.
  *
- * ⚑ This file also used to cover `Dataset`'s SELECTION api — nine methods
+ * ⚑ This file also used to cover `Dataset`'s SELECTION api - nine methods
  * inherited from upstream. They were deleted on 2026-07-31 as unreachable:
  * the app tracks selection in React state (`selectedPointIndices`) and
  * implements its own marquee in `Workspace.tsx`'s `handleSelectRect`, so
@@ -34,7 +34,7 @@ function withPixels(n: number): Dataset {
 describe('clearing the dataset', () => {
   it('empties EVERY field, not just the points', () => {
     // ⚑ `clearAll` resets six fields. A mutant dropping any one of them leaves a
-    // dataset that looks empty and is not — stale group names would make `hasSlots()`
+    // dataset that looks empty and is not - stale group names would make `hasSlots()`
     // true on a series with no points, and stale tuples would point at pixels that no
     // longer exist. Asserted field by field rather than by "the points are gone".
     const ds = withPixels(3);
@@ -64,7 +64,7 @@ describe('the slot machinery v2.0 will build the bar record on', () => {
     expect(ds.getPointGroupsCount()).toBe(5);
   });
 
-  it('reads one slot ACROSS every tuple — the table\'s column', () => {
+  it('reads one slot ACROSS every tuple - the table\'s column', () => {
     // This is how a spider's row and a box plot's column are read: one slot index,
     // every tuple, in order, with a null where the reading is missing.
     const ds = withPixels(4);
@@ -80,7 +80,7 @@ describe('the slot machinery v2.0 will build the bar record on', () => {
   });
 
   it('returns nothing for a slot index the dataset does not have', () => {
-    // ⚑ Not an exception — an empty list. Callers iterate the result, so throwing
+    // ⚑ Not an exception - an empty list. Callers iterate the result, so throwing
     // here would turn an out-of-range column into a crash mid-render.
     const ds = withPixels(2);
     ds.setSlotNames(['Only']);
@@ -104,7 +104,7 @@ describe('the slot machinery v2.0 will build the bar record on', () => {
   });
 
   it('removes a slot from every tuple, keeping the others aligned', () => {
-    // The mirror of the above — the spider losing an axis. The surviving readings
+    // The mirror of the above - the spider losing an axis. The surviving readings
     // must shift together, or every tuple after the removed slot reads one column
     // across from where it belongs.
     const ds = withPixels(6);

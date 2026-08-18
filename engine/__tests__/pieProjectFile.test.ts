@@ -4,13 +4,13 @@ import { serializeProject, deserializeProject } from '../projectFile.js';
 import type { PieAxes } from '../../core/axes/pie.js';
 
 /**
- * A pie through the project FILE — the model's second entrance.
+ * A pie through the project FILE - the model's second entrance.
  *
  * ⚑ Round-tripped through serializeProject/deserializeProject rather than through
  * PlotData.serialize alone, because those are not the same test. `serializeProjectZip`
  * rebuilds project.json by SPREADING the file object, so a key that never reaches the
  * assembled file passes every unit test on the serializer and is missing from every
- * real save — the trap that cost this project a release-gate blocker once already.
+ * real save - the trap that cost this project a release-gate blocker once already.
  */
 
 function calibratedPie(opts: { total: string; sweep: string; tilted?: boolean }): CalibrationSession<PieAxes> {

@@ -2,8 +2,8 @@
  * Faithful TypeScript port of wpd-core's core/mathFunctions.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * Ported 2026-07 as part of PlotTracer's Product #1 rebuild (see
- * CLAUDE.md "Current scoped task — Step 1: extract core/"). Behavior is
- * intended to be bit-for-bit identical to the original — verified by
+ * CLAUDE.md "Current scoped task - Step 1: extract core/"). Behavior is
+ * intended to be bit-for-bit identical to the original - verified by
  * golden-value tests and a cross-check against the live wpd-core.
  */
 
@@ -72,7 +72,7 @@ export interface Circle {
   radius: number;
 }
 
-/** Circumscribed circle through 3 points — matches wpd.getCircleFrom3Pts exactly. */
+/** Circumscribed circle through 3 points - matches wpd.getCircleFrom3Pts exactly. */
 export function getCircleFrom3Pts(pts: [Vec2, Vec2, Vec2]): Circle {
   const Ax = pts[0][0], Bx = pts[1][0], Cx = pts[2][0];
   const Ay = pts[0][1], By = pts[1][1], Cy = pts[2][1];
@@ -98,13 +98,13 @@ export function getCircleFrom3Pts(pts: [Vec2, Vec2, Vec2]): Circle {
  * `getCircleFrom3Pts` above so the two never disagree. Beyond three there is no
  * exact answer, so this is Kåsa's algebraic least-squares fit: minimising
  * (x²+y²) - (2x·x0 + 2y·y0 + c) is LINEAR in the unknowns, which makes it a 3x3
- * solve with no iteration, no initial guess and no convergence to report — the
+ * solve with no iteration, no initial guess and no convergence to report - the
  * least modelling that answers the question (tenet 10).
  *
  * ⚑ Why more than three is worth allowing: three rim clicks always fit perfectly,
  * so a bad one is undetectable. A fourth is genuine redundancy about the FIGURE
  * (different ink, not the same boundary twice), and the residual it produces says
- * something real — a rim that will not fit a circle is a pie that is not circular.
+ * something real - a rim that will not fit a circle is a pie that is not circular.
  *
  * Returns null when the points are collinear or too few, rather than a circle of
  * infinite radius.
@@ -144,7 +144,7 @@ export function fitCircle(pts: readonly Vec2[]): Circle | null {
  * ⚑ Returned as vectors rather than (a, b, angle) because that is the form the
  * measurement needs: an ellipse is an AFFINE image of a circle, and `a`/`b` are the
  * images of two orthogonal circle radii. Expressing a pixel in that basis and taking
- * atan2 gives the angle ON THE RECOVERED CIRCLE — the true angle — with the inverse
+ * atan2 gives the angle ON THE RECOVERED CIRCLE - the true angle - with the inverse
  * map applied implicitly. No un-rotating, no un-squashing, no branch.
  */
 export interface Ellipse {
@@ -163,12 +163,12 @@ export interface Ellipse {
  *
  * ⚑ WHY THIS EARNS ITS PLACE: about 12% of real pie figures are drawn in 3D
  * (measured on the PMC corpus), and a 3D pie's TOP FACE is a complete, unoccluded
- * ellipse — an exact affine image of the circle. Read flat, its angles are badly
+ * ellipse - an exact affine image of the circle. Read flat, its angles are badly
  * wrong: on a real 2:1 figure a 7% slice reads 13.4%, while the readings still sum
  * to 100 so nothing looks amiss. Inverting the map is the difference between a
  * number and a plausible number.
  *
- * Fits the general conic Ax² + Bxy + Cy² + Dx + Ey = 1 by ordinary least squares —
+ * Fits the general conic Ax² + Bxy + Cy² + Dx + Ey = 1 by ordinary least squares -
  * linear in five unknowns, so a 5x5 normal-equation solve with no iteration and no
  * eigen-decomposition of the design matrix. Returns null unless the result really is
  * an ellipse (a hyperbola or parabola means the points do not describe one).
@@ -265,7 +265,7 @@ export function fitEllipse(pts: readonly Vec2[]): Ellipse | null {
   };
 }
 
-/** How far the points stray from a fitted circle (RMS, in pixels) — a property of
+/** How far the points stray from a fitted circle (RMS, in pixels) - a property of
  * the FIGURE, not of the fit: a rim that will not sit on a circle is telling you the
  * pie is tilted or was drawn as an ellipse. Reported, never acted on (the app does
  * not infer tilt). */
@@ -279,7 +279,7 @@ export function circleFitResidual(pts: readonly Vec2[], circle: Circle): number 
   return Math.sqrt(acc / pts.length);
 }
 
-/** Normalize an angle in degrees to [0, 360) — matches wpd.normalizeAngleDeg exactly. */
+/** Normalize an angle in degrees to [0, 360) - matches wpd.normalizeAngleDeg exactly. */
 export function normalizeAngleDeg(angleDeg: number): number {
   let normDeg = angleDeg % 360;
   if (normDeg < 0) {

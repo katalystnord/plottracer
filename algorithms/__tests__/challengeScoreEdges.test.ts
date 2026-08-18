@@ -18,7 +18,7 @@ import {
  * (which decides what counts as a match at all), and both scorers' "nothing
  * matched" fallbacks.
  *
- * A scoring defect is quiet by construction — the game shows a number, and no
+ * A scoring defect is quiet by construction - the game shows a number, and no
  * number is obviously wrong. The one that matters most is the fallback: with
  * nothing matched, `meanErrorFrac` is 1 rather than 0/0, because a mean of no
  * errors is not zero error. Mutated to 0 it would report a PERFECT trace for a
@@ -32,7 +32,7 @@ describe('the scatter matcher pairs each point at most once', () => {
   it('⚑ takes the CLOSEST pairing first, so a near point cannot be stolen', () => {
     // Two user points sit near one truth point. The greedy pass is sorted by
     // distance, so the nearer one claims the match and the other is an extra
-    // — never both matching the same truth.
+    // - never both matching the same truth.
     const truth = [pt(5, 5)];
     const user = [pt(5.9, 5), pt(5.05, 5)];
     const s = scoreRound('scatter', [user], [truth], R, 0);
@@ -44,7 +44,7 @@ describe('the scatter matcher pairs each point at most once', () => {
   });
 
   it('⚑ refuses a pairing beyond the match threshold rather than taking the best available', () => {
-    // A point far from everything is an extra AND leaves a miss — not a poor
+    // A point far from everything is an extra AND leaves a miss - not a poor
     // match. Removing the threshold would let one wild click "cover" a truth
     // point and quietly halve the penalty.
     const truth = [pt(5, 5)];
@@ -104,7 +104,7 @@ describe('the scatter matcher pairs each point at most once', () => {
 });
 
 describe('the ordered scorer (bar and box)', () => {
-  it('compares item by item, in order — position IS the identity', () => {
+  it('compares item by item, in order - position IS the identity', () => {
     // Bars are matched left to right, not by nearness: a bar in the wrong
     // slot is a wrong reading, not a near miss.
     const s = scoreOrderedRound([[10], [20]], [[20], [10]], 100, 0);
@@ -138,7 +138,7 @@ describe('the ordered scorer (bar and box)', () => {
   it('⚑ never reports a NEGATIVE miss or extra count', () => {
     // Both are clamped at zero; without the clamp one of the two is negative
     // whenever the counts differ, and it would subtract seconds from the
-    // penalty — rewarding the player for getting it wrong.
+    // penalty - rewarding the player for getting it wrong.
     const s = scoreOrderedRound([[1], [2], [3]], [[1]], 100, 0);
     expect(s.breakdown.misses).toBeGreaterThanOrEqual(0);
     expect(s.breakdown.extras).toBeGreaterThanOrEqual(0);

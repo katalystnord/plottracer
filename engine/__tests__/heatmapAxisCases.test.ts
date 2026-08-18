@@ -4,26 +4,26 @@ import { heatmapBandCounts, heatmapBounds, initialGridFor } from '../heatmapRun.
 import type { XYAxes } from '../../core/axes/xy.js';
 
 /**
- * THE FOUR AXIS CASES — the design's own list, as named tests (v2.2 rewrite).
+ * THE FOUR AXIS CASES - the design's own list, as named tests (v2.2 rewrite).
  *
- * ⚑⚑ WHY THIS FILE EXISTS. The settled design named four combinations —
- * category×category, category×value, value×value, value×category — *"all of
- * which occur in published figures"* — and gave an expected outcome for none of
+ * ⚑⚑ WHY THIS FILE EXISTS. The settled design named four combinations -
+ * category×category, category×value, value×value, value×category - *"all of
+ * which occur in published figures"* - and gave an expected outcome for none of
  * them. The build implemented the two category ones and nobody noticed the
  * other half was missing for a whole release, because a conclusion in a memo
  * reads as satisfied while a red test does not. See CLAUDE.md, "From an agreed
- * design to a build — four gates".
+ * design to a build - four gates".
  *
  * ⚑⚑ THE DEFECT THESE PIN DOWN: "is the axis category or value" is about WHAT
- * INDEXES the rows and columns — names or numbers. It was read as WHETHER THE
+ * INDEXES the rows and columns - names or numbers. It was read as WHETHER THE
  * GRID EXISTS AT ALL, and `initialGridFor` gave a value axis exactly two
- * dividers — one cell spanning the figure. David: *"I think we need to have
+ * dividers - one cell spanning the figure. David: *"I think we need to have
  * column and row number markers even if they are not categories."* A heatmap is
  * a MATRIX whichever way its axes are indexed.
  *
  * ⚑ THE COUNT IS DECLARED ONCE, IN THE WALK, FOR BOTH KINDS, in the `dz` slot of
  * each axis's second point. A category axis has no coordinate competing for
- * `dx`, which is why the count used to live there — but putting the two kinds'
+ * `dx`, which is why the count used to live there - but putting the two kinds'
  * counts in different slots is the same asymmetry that produced a second count
  * box in the grid panel. One slot, both kinds; `dx` always means the coordinate
  * or nothing.
@@ -63,10 +63,10 @@ function dividersOf(s: CalibrationSession<XYAxes>): { x: number[]; y: number[] }
   return { x: [...grid.xDividers], y: [...grid.yDividers] };
 }
 
-describe('A1 — value × value: a measured axis has bands too', () => {
+describe('A1 - value × value: a measured axis has bands too', () => {
   it('puts 7 columns and 5 rows on a figure whose axes are both numeric', () => {
     // ⚑⚑ THE CASE THAT WAS ENTIRELY ABSENT. Before this, both axes numeric gave
-    // `[xMin, xMax]` and `[yMin, yMax]` — ONE cell covering the whole figure,
+    // `[xMin, xMax]` and `[yMin, yMax]` - ONE cell covering the whole figure,
     // no dividers, nothing to select and nothing to drag.
     const s = walk(
       {},
@@ -96,7 +96,7 @@ describe('A1 — value × value: a measured axis has bands too', () => {
   });
 });
 
-describe('A2 — category × category', () => {
+describe('A2 - category × category', () => {
   it('puts the declared bands on both axes, indexed 0…N', () => {
     const s = walk(
       { xIsCategory: 'true', yIsCategory: 'true' },
@@ -122,7 +122,7 @@ describe('A2 — category × category', () => {
   });
 });
 
-describe('A3 — category × value', () => {
+describe('A3 - category × value', () => {
   it('bands both axes, with names available on x only', () => {
     const s = walk(
       { xIsCategory: 'true' },
@@ -136,7 +136,7 @@ describe('A3 — category × value', () => {
   });
 });
 
-describe('A4 — value × category, the transpose', () => {
+describe('A4 - value × category, the transpose', () => {
   it('bands both axes the other way round', () => {
     const s = walk(
       { yIsCategory: 'true' },
@@ -165,11 +165,11 @@ describe('the count is a declaration, and a bad one is refused', () => {
   });
 });
 
-describe('B4 — a MEASURED axis says where its clicks landed too', () => {
+describe('B4 - a MEASURED axis says where its clicks landed too', () => {
   /**
    * ⚑⚑ THE SAME WRONG BRANCH, IN A SECOND PLACE. David, on the layout:
    * *"we want to make it VISUALLY coherent for the user, when they are setting
-   * value tick markers also?"* Right — and the reason it was not is that the
+   * value tick markers also?"* Right - and the reason it was not is that the
    * tick convention is declared `onlyWhen: 'xIsCategory'`, so a measured axis
    * cannot say whether its two clicks were band CENTRES or band BOUNDARIES.
    * It now has bands (case A1), so it has the question.
@@ -181,7 +181,7 @@ describe('B4 — a MEASURED axis says where its clicks landed too', () => {
    * rare: matplotlib's `imshow` labels cell centres, `pcolormesh` labels
    * boundaries.
    *
-   * ⚑ THE CALIBRATION IS UNTOUCHED EITHER WAY — x=0 is still at that pixel.
+   * ⚑ THE CALIBRATION IS UNTOUCHED EITHER WAY - x=0 is still at that pixel.
    * Only the GRID extent changes, which is the two-layer model doing its job.
    */
   it('extends the grid half a band past clicks that marked CENTRES', () => {
@@ -229,18 +229,18 @@ describe('B4 — a MEASURED axis says where its clicks landed too', () => {
   });
 });
 
-describe('B11 — a LOG colour key says what it needs, and refuses at the click', () => {
+describe('B11 - a LOG colour key says what it needs, and refuses at the click', () => {
   /**
    * ⚑⚑ David: *"It is really difficult to know where to click, so clicking known
    * points like this causes this type of error."* He clicked the END of the
-   * colour strip for the first key value and typed 0 — which is the natural
+   * colour strip for the first key value and typed 0 - which is the natural
    * move, and on a linear key beginning at zero it is often right. On a LOG key
    * it can never be: the scale never reaches zero, and the ends of the ramp
    * usually carry no printed number at all (the weld sample's strip runs 60…780
    * while its ticks read 100…700).
    *
    * The old behaviour accepted the click, carried it through the rest of the
-   * walk, and refused at Calibrate — by which point nothing said which of eight
+   * walk, and refused at Calibrate - by which point nothing said which of eight
    * clicks was wrong, and there was no way to edit it either.
    */
   it('asks for a LABELLED tick, and warns the ends carry no number', () => {
@@ -261,14 +261,14 @@ describe('B11 — a LOG colour key says what it needs, and refuses at the click'
       [100, 300, ['0']], [400, 300, ['10', '5']],
       [100, 300, ['0']], [100, 100, ['20', '4']],
       [120, 420, []], [380, 420, []],
-      [150, 420, ['0']], // the strip's end, typed as zero — David's click
+      [150, 420, ['0']], // the strip's end, typed as zero - David's click
       [350, 420, ['100']],
     ];
     const results = clicks.map(([px, py, vals]) => {
       s.handleCalibrationClick(px, py);
       return vals.length > 0 ? s.confirmCalibrationValues(vals) : true;
     });
-    // Every step up to the last is accepted — one value alone cannot say whether
+    // Every step up to the last is accepted - one value alone cannot say whether
     // a log scale passes through zero, so the last confirm is the EARLIEST
     // honest moment to refuse.
     expect(results.slice(0, -1).every(Boolean)).toBe(true);
@@ -278,7 +278,7 @@ describe('B11 — a LOG colour key says what it needs, and refuses at the click'
 
   it('keeps the pending pixel so the value can be corrected in place', () => {
     // ⚑ A refused confirm must not cost the click. The box keeps what was typed
-    // and the user fixes the number — the alternative is hunting for that tick
+    // and the user fixes the number - the alternative is hunting for that tick
     // again, which is what made the old refusal so expensive.
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
     s.setOption('isLogValue', 'true');
@@ -300,10 +300,10 @@ describe('B11 — a LOG colour key says what it needs, and refuses at the click'
   });
 });
 
-describe('B11b — switching Log ON re-checks what was already typed', () => {
+describe('B11b - switching Log ON re-checks what was already typed', () => {
   it('reports immediately, rather than waiting for Calibrate', () => {
     // ⚑ A 0 typed on a LINEAR key is legitimate. Ticking Log makes it
-    // impossible — and nothing said so until Calibrate, which is how David
+    // impossible - and nothing said so until Calibrate, which is how David
     // ended up with a refusal and no idea which of eight clicks caused it.
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
     for (const [px, py, vals] of [

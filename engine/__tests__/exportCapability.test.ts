@@ -79,13 +79,13 @@ describe('formatLimitations', () => {
 /**
  * ⚑ The claims above are only worth anything if they match what the writers
  * actually do. These assert against the REAL exporters rather than restating
- * the module's own beliefs — announcing a loss that does not happen is the same
+ * the module's own beliefs - announcing a loss that does not happen is the same
  * defect as hiding one that does.
  */
 describe('the claims match what the exporters really emit', () => {
   const series = [{ name: 'Series 1', rows: [{ values: [1, 2] as (number | string)[], role: 'interpolated' }] }];
 
-  it('no exporter emits the calibration or the image — the universal claim is true', () => {
+  it('no exporter emits the calibration or the image - the universal claim is true', () => {
     const json = buildSeriesJSON(series as never, ['x', 'y']);
     const csv = renderTable([allSeriesSection(series as never, ['x', 'y'])], 'csv');
     for (const text of [json, csv]) {
@@ -116,7 +116,7 @@ describe('the claims match what the exporters really emit', () => {
       [allSeriesSection(series as never, ['x', 'y']), measurementsSection([{ tool: 'Distance', value: '3', unit: 'mm' }] as never)],
       'csv'
     );
-    // One document containing both blocks — which is exactly what the note says.
+    // One document containing both blocks - which is exactly what the note says.
     expect(text).toMatch(/Series 1/);
     expect(text).toMatch(/Distance/);
   });

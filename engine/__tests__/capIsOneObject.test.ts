@@ -1,5 +1,5 @@
 /**
- * B1 + B2 — ⚑⚑ THE WHISKER'S END *IS* THE CAP. THERE IS NO SECOND OBJECT.
+ * B1 + B2 - ⚑⚑ THE WHISKER'S END *IS* THE CAP. THERE IS NO SECOND OBJECT.
  *
  * David's design, 2026-08-16: *"The 'balls' on the error bar are not working
  * well from a UI experience. They are moved independently from the bars when
@@ -13,18 +13,18 @@
  * `listening={false}`, so it moves on RELEASE; the ball is a draggable marker,
  * which Konva moves LIVE. One representation is frozen while the other tracks
  * the cursor, and they visibly separate. **Collapsing them into one object makes
- * the drift inexpressible** rather than fixed-and-refixable — the strongest kind
+ * the drift inexpressible** rather than fixed-and-refixable - the strongest kind
  * of fix, and the shape this project keeps getting bitten by (CLAUDE.md pattern
  * 4: the picture lies while the model is correct).
  *
  * ⚠️ B4 made this urgent rather than optional. A cap used to be a pixel of its
  * OWN series, so its dot was only drawn when you activated that series. Now it
- * is a pixel of the datum's series — so every error bar draws a numbered data
+ * is a pixel of the datum's series - so every error bar draws a numbered data
  * dot on top of its own cap tick, all the time.
  *
  * ⚑ NO NEW SHAPE VOCABULARY IS NEEDED, and that was worth checking before
  * inventing one: round = a data dot and the calibration reticle, square = an
- * `aid` you are meant to drag by eye. A cap is neither — and
+ * `aid` you are meant to drag by eye. A cap is neither - and
  * `computeWhiskerGlyph` has always drawn a perpendicular TICK at the cap, which
  * is also what matplotlib's `capsize` draws. The figure's own convention was
  * already in the code.
@@ -65,7 +65,7 @@ describe('the whisker is one object with two parts', () => {
   it('names its parts, so a renderer cannot colour them by position', () => {
     // It used to return `[bar, tick]` and the caller indexed in. B2 gives the
     // two parts DIFFERENT colours, so "segment 1" being the tick stopped being a
-    // detail and became a contract — and the degenerate case returns a
+    // detail and became a contract - and the degenerate case returns a
     // one-element array, which would have made `segs[1]` the tick sometimes and
     // undefined other times.
     const w = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 40 });
@@ -76,8 +76,8 @@ describe('the whisker is one object with two parts', () => {
   });
 
   it('⚑ a cap sitting ON its datum still has a visible cap and an empty bar', () => {
-    // Zero error is a claim of perfect certainty — more dangerous here than a
-    // wrong number — so it must never render as nothing at all.
+    // Zero error is a claim of perfect certainty - more dangerous here than a
+    // wrong number - so it must never render as nothing at all.
     const w = computeWhiskerGlyph({ x: 100, y: 100 }, { x: 100, y: 100 });
     expect(Math.hypot(w.cap.to.x - w.cap.from.x, w.cap.to.y - w.cap.from.y)).toBeGreaterThan(0);
     expect(w.bar.from).toEqual(w.bar.to);
@@ -85,7 +85,7 @@ describe('the whisker is one object with two parts', () => {
 });
 
 describe('a whisker carries what the renderer needs to draw and bind it', () => {
-  it("⚑ the BAR takes the series' colour — the cap is black, always", () => {
+  it("⚑ the BAR takes the series' colour - the cap is black, always", () => {
     // Two colours on one glyph, and the reason is legibility against the ink:
     // the bar says WHICH series this uncertainty belongs to, the black end says
     // WHERE the reading is. A single-colour whisker made the cap the same weight
@@ -107,7 +107,7 @@ describe('a whisker carries what the renderer needs to draw and bind it', () => 
     expect(whiskers.map((w) => w.capMarkerId).sort()).toEqual(capPixels.map(dataPointMarkerId).sort());
   });
 
-  it('⚑ a cap of an INACTIVE series names no marker — it has none to name', () => {
+  it('⚑ a cap of an INACTIVE series names no marker - it has none to name', () => {
     const s = session();
     s.addDataset('Series 2');
     s.setActiveDataset(1);
@@ -156,8 +156,8 @@ describe('the cap marker', () => {
   it('⚑⚑ it carries the line its drag is confined to, so the gesture cannot lean', () => {
     // ⚠️ SEEN ON THE BUILT APP, once the whisker started following the drag
     // live: the bar leaned diagonally under the cursor and snapped vertical on
-    // release. The MODEL was right the whole time — `updateDataPointPixel` runs
-    // every cap through `errorCapDragLine` + `constrainCap` — but a constrained
+    // release. The MODEL was right the whole time - `updateDataPointPixel` runs
+    // every cap through `errorCapDragLine` + `constrainCap` - but a constrained
     // gesture that is not bound to its constraint ON SCREEN teaches the user
     // that a diagonal error bar is something they might get. Pattern 4, and the
     // same `dragBoundFunc` projection the colour key's handle already uses.

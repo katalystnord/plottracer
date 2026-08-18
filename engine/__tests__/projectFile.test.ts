@@ -482,7 +482,7 @@ describe('deserializeProject', () => {
     expect(garbled.provenance).toEqual({});
   });
 
-  it('drops malformed crop entries instead of trusting them (checkpoint 100 — T5)', () => {
+  it('drops malformed crop entries instead of trusting them (checkpoint 100 - T5)', () => {
     // A hand-edited file with junk in `crops` used to pass the shallow
     // Array.isArray check, then crash the status bar reading .fromWidth off it.
     const base = {

@@ -5,12 +5,12 @@
  * pulled out into its own game module. And might be able to think of another
  * game later too."* Before this, the game's six state atoms and eight callbacks
  * were interleaved with the digitizer's own in `Workspace.tsx`, so there was no
- * answer to "what does a game actually need from the app?" — and therefore no
+ * answer to "what does a game actually need from the app?" - and therefore no
  * cheap way to add a second one. `TraceChallengeHost` below IS that answer,
  * written down: eleven capabilities, nothing else. A second game implements
  * against the same host and needs no new seam in `Workspace`.
  *
- * ⛔ NOT a registry — yet. One game does not justify a dispatch table (tenet 10),
+ * ⛔ NOT a registry - yet. One game does not justify a dispatch table (tenet 10),
  * and a registry with a single entry is a guess about the second game rather
  * than a fact about this one. The host contract is the part that is knowable
  * now, and it is the part that makes the registry a small step later.
@@ -19,7 +19,7 @@
  * pre-calibration, scoring, the reveal) and `algorithms/challengeScore.ts`. This
  * file is deliberately the React-shaped remainder: state, effects, and the
  * host calls that only make sense against a live workspace. It follows the
- * refactor-4 method — the hook's BODY goes to a pure module, never the hook —
+ * refactor-4 method - the hook's BODY goes to a pure module, never the hook -
  * so what is left here is genuinely irreducible wiring.
  */
 import { useCallback, useMemo, useState } from 'react';
@@ -58,7 +58,7 @@ export interface TraceChallengeHost {
   resetDocument(axesConfigId: string, dataURL?: string): void;
   closePdf(): void;
   clearFiguresToSingle(): void;
-  /** False if the player declined to discard unsaved work — the game must abort. */
+  /** False if the player declined to discard unsaved work - the game must abort. */
   confirmDiscardIfDirty(): boolean;
   loadImage(dataURL: string, name: string): void;
   clearImage(): void;
@@ -79,7 +79,7 @@ export interface TraceChallengeState {
   readonly lastScore: RoundScore | null;
   readonly totalAdjusted: number;
   readonly highScores: readonly HighScore[];
-  /** The current round's true answer, in image pixels — null unless revealing. */
+  /** The current round's true answer, in image pixels - null unless revealing. */
   readonly reveal: ChallengeReveal | null;
   start(): void;
   begin(): void;

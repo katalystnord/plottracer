@@ -4,20 +4,20 @@ import { heatmapAxisOverlays, readHeatmapCells, NO_HEATMAP_LABELS } from '../hea
 import type { PixelProjector } from '../../algorithms/heatmapRead.js';
 
 /**
- * ITEM 6 — a heatmap's boundaries are TICK MARKERS, not dots.
+ * ITEM 6 - a heatmap's boundaries are TICK MARKERS, not dots.
  *
  * ⚑⚑ David, twice: *"We still have points and not selectable tick markers that
  * we said that we were going to reuse from bar tick characterisation. We said
  * that we were going to stop inventing new things and REUSE things that we
  * already have."* He was right, and the measurement is stark: the heatmap drew
- * `dividerHandles` — bare marker dots outside the plot — and borrowed only the
+ * `dividerHandles` - bare marker dots outside the plot - and borrowed only the
  * COLOUR from v2.1's category ticks. No axis line, no end marks, no tick marks.
  * The bar chart has drawn all three since v2.1, from `categoryTickOverlay.ts`.
  *
  * ⚑ WHAT THE REUSE COSTS THE SHARED CODE: two declarations. A bar chart's axis
  * EDGES are frozen and get their own labelled marks; a heatmap's outer
  * boundaries are ORDINARY DIVIDERS that drag like any other (the two-layer
- * model), so it asks for no separate end marks — and it brings its own ids,
+ * model), so it asks for no separate end marks - and it brings its own ids,
  * because `hmx:3` is what its drag handler answers to. Nothing else differs,
  * which is the point.
  */
@@ -39,7 +39,7 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
     expect(y.tickPoints).toHaveLength(3);
   });
 
-  it('DRAWS the axis and a mark per divider — the thing that was missing', () => {
+  it('DRAWS the axis and a mark per divider - the thing that was missing', () => {
     const { x } = heatmapAxisOverlays(grid, axes);
     const runs = categoryAxisGlyphs(x);
     expect(runs).toHaveLength(1);
@@ -58,7 +58,7 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
   it('makes EVERY divider draggable, outer ones included', () => {
     // ⚑ The two-layer model: the calibration is the axis and is edited through
     // its own markers; the grid derives from it and is adjustable throughout.
-    // A bar chart freezes its edges because every tick is a function of them —
+    // A bar chart freezes its edges because every tick is a function of them -
     // a heatmap's are not, so the reason does not carry over.
     const { x } = heatmapAxisOverlays(grid, axes);
     expect(categoryTickMarkers(x).every((m) => m.draggable)).toBe(true);
@@ -82,7 +82,7 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
 });
 
 
-/** One cell, read from a synthetic ramp — enough to see what the row carries. */
+/** One cell, read from a synthetic ramp - enough to see what the row carries. */
 function readOneCell() {
   const width = 40;
   const height = 20;
@@ -118,14 +118,14 @@ function readOneCell() {
   return rows[0]!;
 }
 
-describe('B16 — a cell says WHICH INSTRUMENT read it', () => {
+describe('B16 - a cell says WHICH INSTRUMENT read it', () => {
   /**
    * ⚑⚑ David: *"if there is a printed number in a cell, the printed number is
    * the preferred number. But we must still be able to edit it... And perhaps
    * that needs a right click popup selection menu on each cell? Select, use OCR
    * number, or Use number based on key calibration."*
    *
-   * All three are MEASUREMENTS and they fail in opposite ways — OCR reads ink as
+   * All three are MEASUREMENTS and they fail in opposite ways - OCR reads ink as
    * glyphs and fails discretely; the colour reads ink as a ramp and fails
    * continuously and silently; the user sees what both machines are blind to.
    * A consumer treating an OCR'd 59 and a colour-inverted 58.7 as the same kind
@@ -141,7 +141,7 @@ describe('B16 — a cell says WHICH INSTRUMENT read it', () => {
   });
 
   it('keeps the sampled colour, so the table can mirror the figure', () => {
-    // ⚑ The indicator IS the evidence — the matrix is tinted with what was
+    // ⚑ The indicator IS the evidence - the matrix is tinted with what was
     // sampled, so a shadowed column shows as a darker band in the table beside
     // numbers that look perfectly reasonable.
     const s = readOneCell();

@@ -1,5 +1,5 @@
 /**
- * The heatmap capture run — everything the UI needs, kept OUT of the UI
+ * The heatmap capture run - everything the UI needs, kept OUT of the UI
  * (v2.2, phase 3b).
  *
  * ⚑ THE METHOD THAT MADE THE v2.1 SPLIT WORK: the body goes in `engine/`, the
@@ -24,7 +24,7 @@
  * deleted it. The claim was false in a way that mattered: the strip is
  * RE-SAMPLED from the image on every load rather than stored, so the load path
  * already runs `sampleColorBar` and gets that function's own refusal. A second
- * entrance would only be needed if the colours were stored — and the reason
+ * entrance would only be needed if the colours were stored - and the reason
  * they are not is written on `buildColorScale`.
  */
 
@@ -75,21 +75,21 @@ const KEY_STEPS = ['k1', 'k2', 'kv1', 'kv2'] as const;
 function stripRefusalSentence(reason: ColorBarRefusal): string {
   switch (reason) {
     case 'not-a-line':
-      return 'The colour key’s two ends are too close together to read a ramp between them — click where the coloured strip begins and where it ends, along its length.';
+      return 'The colour key’s two ends are too close together to read a ramp between them - click where the coloured strip begins and where it ends, along its length.';
     case 'off-image':
       return 'The colour key’s ends must both be on the image.';
     case 'no-pixels':
-      return 'Nothing was found along the colour key — the strip is fully transparent there.';
+      return 'Nothing was found along the colour key - the strip is fully transparent there.';
     case 'no-ramp':
       return 'The colour key reads as one flat colour, so every cell would come out the same. Click along the strip’s LENGTH rather than across its width.';
     case 'discrete':
       // ⚑⚑ NAMES WHY, AND WHAT IT WOULD HAVE COST. The user is being told the
       // tool will not do the thing they asked for, so the sentence has to carry
       // the reason: a banded key maps a colour to a RANGE, and the number we
-      // could invent for it — the middle of that range — is one the figure does
+      // could invent for it - the middle of that range - is one the figure does
       // not contain. In a heatmap the colour IS the value, so that invented
       // number would arrive with no symptom at all.
-      return 'This colour key is drawn as a few discrete bands rather than a continuous ramp, so a cell’s colour identifies a BAND — a range — and not a value. PlotTracer will not report a number the figure does not contain: read these cells against the key by eye, or trace a figure whose key is a continuous ramp.';
+      return 'This colour key is drawn as a few discrete bands rather than a continuous ramp, so a cell’s colour identifies a BAND - a range - and not a value. PlotTracer will not report a number the figure does not contain: read these cells against the key by eye, or trace a figure whose key is a continuous ramp.';
   }
 }
 
@@ -97,7 +97,7 @@ function stripRefusalSentence(reason: ColorBarRefusal): string {
  * Sample the key described by the calibration's last four clicks.
  *
  * ⚑ SAMPLED FROM THE IMAGE EVERY TIME, never stored. A project file keeps the
- * four clicks — which is what the user actually did — and the colours are read
+ * four clicks - which is what the user actually did - and the colours are read
  * back from the image it also keeps. Storing hundreds of RGB triples would be a
  * second copy of something derivable, and the two would eventually disagree;
  * re-sampling also sends the load path through the same refusals as the click
@@ -110,7 +110,7 @@ export function buildColorScale(
 ): { scale: ColorScale | null; error: string | null } {
   for (const key of KEY_STEPS) {
     if (placed[key] === undefined) {
-      return { scale: null, error: 'The colour key is not calibrated yet — place its two ends and two labelled ticks.' };
+      return { scale: null, error: 'The colour key is not calibrated yet - place its two ends and two labelled ticks.' };
     }
   }
   const k1 = placed['k1']!;
@@ -151,11 +151,11 @@ export function buildColorScale(
     case 'tick-not-a-number':
       return { scale: null, error: 'The colour key’s two labelled values must both be numbers.' };
     case 'ticks-equal-value':
-      return { scale: null, error: 'The colour key’s two labelled ticks have the same value — they must differ, or every cell reads the same number.' };
+      return { scale: null, error: 'The colour key’s two labelled ticks have the same value - they must differ, or every cell reads the same number.' };
     case 'ticks-coincide':
-      return { scale: null, error: 'The colour key’s two labelled ticks are at the same place along the strip — click two different positions on it.' };
+      return { scale: null, error: 'The colour key’s two labelled ticks are at the same place along the strip - click two different positions on it.' };
     case 'log-needs-positive':
-      return { scale: null, error: 'A log colour scale cannot pass through zero or go negative — enter positive values (e.g. 1 and 100).' };
+      return { scale: null, error: 'A log colour scale cannot pass through zero or go negative - enter positive values (e.g. 1 and 100).' };
     default:
       return { scale, error: null };
   }
@@ -173,7 +173,7 @@ export function buildColorScale(
  * ⚑ WHY IT IS THE CENTRE and not the cell's overlap with the box: a marquee is
  * a "grab what I dragged over" gesture, and requiring only overlap would grab a
  * whole row from a box clipping its edge. The centre is the same standard a
- * point is held to — the thing itself must be inside.
+ * point is held to - the thing itself must be inside.
  *
  * ⚑ B6 asked for this (*"I cannot select a range of cells, or click cells on the
  * heatmap"*) and v2.2 built multi-select in the TABLE only, then called it done.
@@ -201,21 +201,21 @@ export function cellKeysInRect(
  *
  * ⚑⚑ THE SAME LINE THE SAMPLER READS, WHICH IS THE WHOLE POINT. `k1` and `k2`
  * are OPPOSITE CORNERS of the key, so the line between them is the rectangle's
- * DIAGONAL — and the caliper used to be drawn along it. That tilted the glyph by
+ * DIAGONAL - and the caliper used to be drawn along it. That tilted the glyph by
  * the diagonal's angle and let it drift from one long edge at low values to the
  * other at high ones, which is both of David's complaints about it (*"it does
  * not take the full width of the colour key, and that looks wrong"* … *"And it
  * is a wrong angle too?"*) from a single cause.
  *
  * ⚠️ AND IT WAS THE TRAP THIS PROJECT KEEPS FALLING INTO: `buildColorScale`
- * samples along `stripFromCorners(k1, k2)` — the CENTRELINE — so the position
+ * samples along `stripFromCorners(k1, k2)` - the CENTRELINE - so the position
  * DRAWN and the position SAMPLED were measured along two different lines. The
  * drag already reused `positionOnStrip`; the drawing was hand-rolled beside it.
  * One function for both, so they cannot come apart.
  *
  * ⚑ THE THICKNESS IS MEASURED, not chosen. It comes from the user's own two
- * corner clicks — the same measurement that replaced a hardcoded 5px sampling
- * window — so the caliper spans the bar it is pointing at instead of floating on
+ * corner clicks - the same measurement that replaced a hardcoded 5px sampling
+ * window - so the caliper spans the bar it is pointing at instead of floating on
  * it as a fixed-size box. ⚠️ It is in IMAGE space; the overlay must scale it by
  * the view's zoom like everything else it draws.
  */
@@ -230,19 +230,19 @@ export function keyCursorStrip(
  * WHAT THE COLOUR KEY READS AT ITS TWO ENDS, from the four key clicks alone.
  *
  * ⚑⚑ WHY THIS EXISTS (2026-08-17). These two numbers have always been in the
- * export — `heatmapKeyRef` writes them as the `Colour key` section — but they
+ * export - `heatmapKeyRef` writes them as the `Colour key` section - but they
  * were computed in `readCellsFor`, i.e. only once the cells had been read, and
  * they were shown nowhere at all. David calibrated a key printed `10¹`/`10²`
  * without ticking **Log**; it was read linearly, exactly as instructed, and
  * thirty cells came out on a span of **−38 … 169**, several of them negative
  * for an IC50. Nothing was wrong, so nothing objected. With **Log** the same
- * key reads **3 … 589**. The two are unmistakable side by side — but only if
+ * key reads **3 … 589**. The two are unmistakable side by side - but only if
  * they are on screen BEFORE the cells are read, which is what this is for.
  *
  * ⚑⚑ NO IMAGE, DELIBERATELY. The extent is pure geometry: where the two
  * labelled ticks project onto the strip, what they are worth, and whether the
  * scale is log. Sampling the ramp is what a READING needs, not what the ENDS
- * need — so this can run the instant the fourth click lands, and it is testable
+ * need - so this can run the instant the fourth click lands, and it is testable
  * without an Electron run, which nothing in `ui/` is.
  *
  * ⚑ `valueAtParam` is the same scale the readings come out of, extracted rather
@@ -263,12 +263,12 @@ export function keySpanFromClicks(
   from: number;
   to: number;
   /**
-   * The smallest increment this key can actually resolve — half a pixel's worth
+   * The smallest increment this key can actually resolve - half a pixel's worth
    * of value at the strip's ends, in data units.
    *
    * ⚑⚑ REPORTED, NOT APPLIED. David, on a key printed 0…100 whose extent read
    * `-0.04515`: *"I think we should round the numbers in the colour key
-   * calibration to something reasonable."* Quite — five decimals on a reading
+   * calibration to something reasonable."* Quite - five decimals on a reading
    * sampled off a 1,030-pixel bar claims a precision the pixels do not have,
    * and the tool asserting more than it measured is the same tenet-9 line as
    * drawing a boundary nobody placed.
@@ -277,7 +277,7 @@ export function keySpanFromClicks(
    * last kept digit sits at the resolution", where the resolution is half a
    * pixel because a digitized reading cannot be finer than the pixels it came
    * from. What is new here is only the resolution for THIS axis, which no
-   * `pixelToData` can supply — the colour key is not a spatial axis, so its
+   * `pixelToData` can supply - the colour key is not a spatial axis, so its
    * gradient is value-per-pixel-along-the-strip.
    *
    * ⚑ The DECISION lives here and the FORMATTING stays in `ui/`, which is the
@@ -300,14 +300,14 @@ export function keySpanFromClicks(
   if (from === null || to === null) return null;
   // ⚑ Half a pixel's worth of value, measured along the strip the user marked.
   // On a LOG key the value-per-pixel varies along the ramp, so this is the
-  // coarsest of the two ends — the honest one to round both by, since rounding
+  // coarsest of the two ends - the honest one to round both by, since rounding
   // the fine end by the coarse step never claims more than was measured.
   const lengthPx = Math.hypot(strip.to.x - strip.from.x, strip.to.y - strip.from.y);
   const halfStep = lengthPx > 0 ? Math.abs(to - from) / (2 * lengthPx) : NaN;
   return { from, to, halfStep, strip };
 }
 
-/** The axes surface needed to read a heatmap's frame back — structural, so no
+/** The axes surface needed to read a heatmap's frame back - structural, so no
  * `core/axes` import. `XYAxes` satisfies it. */
 export interface HeatmapFrameCarrier {
   calibration: { getPoint(index: number): { dx: unknown; dy: unknown } | null } | null;
@@ -334,7 +334,7 @@ export function heatmapAxisKinds(axes: HeatmapFrameCarrier): HeatmapAxisKinds {
  *
  * ⚑⚑ FROM THE CALIBRATION, NOT FROM THE TYPED TEXT, and that is what makes a
  * category axis work at all: its steps ask for a count and an edge, so there is
- * no typed coordinate to read — the frame `buildAxes` derived (0…N) exists only
+ * no typed coordinate to read - the frame `buildAxes` derived (0…N) exists only
  * on the axes. Reading the boxes instead left a categorical heatmap with no
  * bounds, therefore no grid, therefore no cells: the feature silently absent.
  * It also removes a second source of truth for something the axes already knows.
@@ -360,7 +360,7 @@ export function heatmapBounds(
    * ⚑ The two kinds differ only in what the numbers ARE. A category axis was
    * given an ordinal frame by `buildAxes`, so its clicks land at 0.5…N-0.5 and
    * the grid is simply 0…N. A value axis keeps the coordinates the user typed,
-   * so the half-band is computed from them — and the CALIBRATION is untouched
+   * so the half-band is computed from them - and the CALIBRATION is untouched
    * either way: x=0 is still at that pixel, only the grid's extent moves.
    *
    * ⚑ This used to run for category axes ONLY, which is the same wrong branch
@@ -402,7 +402,7 @@ export function heatmapBounds(
  * How many bands each axis DECLARES, read from the calibration.
  *
  * ⚑⚑ ONE QUESTION, ONE SLOT, BOTH KINDS. The count lives in `dz` of each axis's
- * second point whether the axis is named or measured — see the heatmap config's
+ * second point whether the axis is named or measured - see the heatmap config's
  * `fixedSteps`. It used to live in `dx` for a category axis and nowhere at all
  * for a value axis, which is precisely why a measured axis could not be asked
  * how many columns it had, and therefore never got a grid.
@@ -421,14 +421,14 @@ export function heatmapBandCounts(axes: HeatmapFrameCarrier): { columns: number;
  *
  * ⚑⚑ IT DOES NOT ASK WHAT THE AXIS MEANS, and that is the whole correction.
  * This function used to read `HeatmapAxisKinds` and give a VALUE axis
- * `[lo, hi]` — one cell spanning the entire figure, no dividers, nothing to
+ * `[lo, hi]` - one cell spanning the entire figure, no dividers, nothing to
  * select and nothing to drag. "Is the axis category or value" decides what
  * INDEXES the columns, names or numbers; it never decided whether there are
  * columns. A continuous field is still drawn as a matrix of cells.
  *
  * ⚑ THE COUNT IS A STARTING POINT, NOT A MODEL. What comes out is an ordinary
  * divider list, individually adjustable from the moment it exists, so an
- * unevenly drawn figure stays first-class — nothing downstream can tell an
+ * unevenly drawn figure stays first-class - nothing downstream can tell an
  * evenly generated grid from a hand-placed one.
  */
 export function initialGridFor(
@@ -448,7 +448,7 @@ export function initialGridFor(
  *
  * ⚑ The outer boundaries are ORDINARY DIVIDERS, adjustable like every other
  * one. They start at the two values the user calibrated because that is the
- * only span the session knows about — not because the figure's plot box is
+ * only span the session knows about - not because the figure's plot box is
  * assumed to be there. If the axis was calibrated on two interior ticks, the
  * user drags the outer dividers out to the edges, and nothing special happens
  * when they do.
@@ -468,7 +468,7 @@ export function initialGrid(axesBounds: {
 /**
  * Where the grid LIVES between sessions: the axes' own metadata.
  *
- * ⚑⚑ THE SAME HOME PIE'S TOTAL AND SWEEP USE, for the same stated reason —
+ * ⚑⚑ THE SAME HOME PIE'S TOTAL AND SWEEP USE, for the same stated reason -
  * the grid has no pixel to ride on, so the axes metadata is its one place in
  * the file. Choosing it over a new project-file field is not a shortcut: axes
  * metadata already rides through `core/plotData.ts`'s serialize/deserialize,
@@ -481,7 +481,7 @@ export function initialGrid(axesBounds: {
  */
 
 /**
- * THE GRID'S STORE — a parameter per divider, per axis.
+ * THE GRID'S STORE - a parameter per divider, per axis.
  *
  * ⚑⚑ Deliberately NOT named `xDividers`/`yDividers` like the resolved form. The
  * numbers mean something different now, and a meaning that changes under an
@@ -492,7 +492,7 @@ export interface HeatmapGridParams {
   x: readonly number[];
   y: readonly number[];
   /** Where the axes SAT when this grid was recorded. Used only to say "the axis
-   * has moved since" — never to place anything. Absent on a grid recorded
+   * has moved since" - never to place anything. Absent on a grid recorded
    * before the stamp existed, which simply means nothing to compare. */
   axisAt?: HeatmapAxisStamp;
 }
@@ -500,15 +500,15 @@ export interface HeatmapGridParams {
 /**
  * The axes surface the grid's parameter frame needs.
  *
- * ⚠️⚠️ `pixelToData`, NOT the typed values — and getting this wrong cost a
+ * ⚠️⚠️ `pixelToData`, NOT the typed values - and getting this wrong cost a
  * regression on the day it was written. The first version read
  * `placed['y1'].values[0]`, which is EMPTY on a CATEGORY axis: the row edge
  * takes no coordinate and the far edge carries the COUNT instead. `Number('')`
  * is 0, so both ends read 0, the span was degenerate, and a categorical heatmap
  * silently had no grid at all.
  *
- * ⚑⚑ THAT IS "a heatmap always has a numeric scale" — the exact false premise
- * that hid the missing category axis for a whole release — reintroduced in the
+ * ⚑⚑ THAT IS "a heatmap always has a numeric scale" - the exact false premise
+ * that hid the missing category axis for a whole release - reintroduced in the
  * same file on the same day its header was rewritten to condemn it. David had
  * even said the right word: *"in relation to the calibrated axis POSITION."*
  * Asking the axes what a POSITION is worth works for both kinds; reading what
@@ -531,8 +531,8 @@ const AXIS_MOVED_EPS = 0.01;
 /**
  * Where the axes were when a grid was recorded.
  *
- * ⚑ Stored WITH the grid and used for exactly one thing — answering "has the
- * axis moved since?" — never to place anything. The grid's position comes from
+ * ⚑ Stored WITH the grid and used for exactly one thing - answering "has the
+ * axis moved since?" - never to place anything. The grid's position comes from
  * its parameters and the calibration in force; this is only how the app knows to
  * SAY something.
  */
@@ -557,7 +557,7 @@ export function heatmapAxisStamp(
  * underneath it change so drastically that a new grid detection needs to take
  * place, then we should warn the user of that, and ask for a new grid detection
  * to take place, and NOT MAKE ABSTRACT MODELS AROUND IT."* So: did the
- * calibration points move — a fact, measured. NOT "does the grid still fit the
+ * calibration points move - a fact, measured. NOT "does the grid still fit the
  * ink", which is the model, and which would be wrong silently on exactly the
  * figures where it mattered.
  *
@@ -581,7 +581,7 @@ export function heatmapAxisMoved(
 }
 
 /**
- * The two calibration VALUES bounding each axis — the frame a parameter is
+ * The two calibration VALUES bounding each axis - the frame a parameter is
  * measured in.
  *
  * ⚑ Read off the PLACED POINTS rather than the axes object, because that is
@@ -626,7 +626,7 @@ export function resolveHeatmapGrid(
   return { xDividers: cx.dividers, yDividers: cy.dividers };
 }
 
-/** The inverse, for the paths that still produce data coordinates — detection
+/** The inverse, for the paths that still produce data coordinates - detection
  * reads the ink, and a dragged handle lands on a pixel. */
 export function heatmapGridToParams(
   grid: HeatmapState,
@@ -663,7 +663,7 @@ export const NO_HEATMAP_LABELS: HeatmapLabels = { x: [], y: [] };
  *
  * ⚑ ONE key format, exported rather than re-spelled. `Workspace` had its own
  * `cellKey`, the table had two more inline, and the readings below would have
- * made a fourth — four literals that must agree for a pick to highlight the cell
+ * made a fourth - four literals that must agree for a pick to highlight the cell
  * it edits, with nothing to notice if one drifted.
  */
 export function cellKey(col: number, row: number): string {
@@ -682,7 +682,7 @@ export function cellKey(col: number, row: number): string {
  * disagree with the rest, and nothing on screen would say which to trust.
  *
  * ⚑ NO PROVENANCE FLAG HERE. The `source` a row carries is WHICH INSTRUMENT
- * read it — colour, OCR, or a person — not declared-versus-measured. All three
+ * read it - colour, OCR, or a person - not declared-versus-measured. All three
  * are measurements; membership of this record IS the answer, so there is nothing
  * extra to store.
  *
@@ -698,7 +698,7 @@ export const NO_HEATMAP_CELL_READINGS: HeatmapCellReadings = {};
  *
  * ⚑ THE REFUSAL IS THE MODEL'S, at the gesture. `positionAtValue` is the third
  * axis's inverse and it answers null for exactly the values the key cannot
- * represent — a log key has no zero and no negative branch — which is the same
+ * represent - a log key has no zero and no negative branch - which is the same
  * shape as `dataToPixel` returning NaN for a log X axis asked for −5, refused
  * where the user is looking rather than eight steps later.
  */
@@ -715,20 +715,20 @@ export function setCellReading(
   }
   const t = positionAtValue(scale, parsed);
   // ⚑ THE TYPED TWIN GOES THROUGH THE SAME BOUND. A guard on one entrance only
-  // is the shape this project keeps getting bitten by — and this is the entrance
+  // is the shape this project keeps getting bitten by - and this is the entrance
   // that can actually reach past the strip, since the drag is clamped on screen.
   if (t !== null && (t < 0 || t > 1)) {
     return {
       readings,
       error:
-        'The colour key does not reach that value — it runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
+        'The colour key does not reach that value - it runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
     };
   }
   if (t === null) {
     return {
       readings,
       error: scale.log
-        ? 'A log colour key has no zero and no negative side — enter a positive number.'
+        ? 'A log colour key has no zero and no negative side - enter a positive number.'
         : 'The colour key cannot place that value.',
     };
   }
@@ -740,14 +740,14 @@ export function setCellReading(
  *
  * ⚑⚑ THE PRIMITIVE OF THE PAIR. The record stores a position, so dragging the
  * key's marker writes it outright while a typed number has to be converted
- * first — `setCellReading` is the derived half, not this one. Every other axis
+ * first - `setCellReading` is the derived half, not this one. Every other axis
  * in the app has had both gestures since v1.3 ("I should be able to both edit
  * the number OR move the point on the axis"); the third axis had only the typed
  * one until the key grew a marker.
  *
  * ⚑ A POSITION PAST THE LABELLED TICKS IS ACCEPTED, deliberately. The printed
  * labels are almost never at the very ends of the ramp, so most keys extend
- * beyond them — the same reason `valueAtPosition` extrapolates rather than
+ * beyond them - the same reason `valueAtPosition` extrapolates rather than
  * clamping. Refusing here would put the extremes of the figure out of the
  * gesture's reach, and the extremes are usually the point of the figure.
  */
@@ -760,7 +760,7 @@ export function setCellReadingAt(
   if (!Number.isFinite(t)) {
     return { readings, error: 'That is not a position on the colour key.' };
   }
-  // ⚑⚑ THE CALIBRATED AREA BOUNDS THE READING — the same rule every other axis
+  // ⚑⚑ THE CALIBRATED AREA BOUNDS THE READING - the same rule every other axis
   // has. David, 2026-08-16: *"We have CALIBRATED ends of the colour key. All we
   // are doing is setting KNOWN VALUES at 100 and 700… Anything that wants to go
   // OUTSIDE of the calibrated area is out of bounds."*
@@ -772,15 +772,15 @@ export function setCellReadingAt(
   // higher, off ink that was really sampled. Bounding at the ticks would refuse
   // a real reading of a real figure.
   // ⚑ `isPositionOnKey` is the same predicate the LOAD path uses (core/
-  // heatmapGrid.ts). It lives in core/ so all three entrances — this drag, the
-  // typed twin above, and a project file — share one expression of the bound
+  // heatmapGrid.ts). It lives in core/ so all three entrances - this drag, the
+  // typed twin above, and a project file - share one expression of the bound
   // rather than three that can drift. The file's copy was missing entirely
   // until the v2.2 audit's pass 5 went looking.
   if (!isPositionOnKey(t)) {
     return {
       readings,
       error:
-        'That is past the end of the colour key — the key runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
+        'That is past the end of the colour key - the key runs between the two corners you marked, and there is no ink beyond them to read a colour from.',
     };
   }
   return { readings: { ...readings, [cellKey(col, row)]: t }, error: null };
@@ -802,7 +802,7 @@ export function clearCellReading(
 /**
  * Does cell-index order run OPPOSITE to the way the figure is read?
  *
- * ⚑⚑ MEASURED FROM THE AXES, NEVER ASSUMED — which is the whole reason this is
+ * ⚑⚑ MEASURED FROM THE AXES, NEVER ASSUMED - which is the whole reason this is
  * a function and not the constant `{ x: false, y: true }`. On the ordinary
  * upward-y figure, row 0 is `yMin` and sits at the BOTTOM, so a list typed
  * top-down is reversed; on a figure calibrated upside down, or a rotated scan,
@@ -846,12 +846,12 @@ export function labelOrderReversed(
  * ⚑ The grid is part of DEFINING the figure, not of reading it (David: *"it is
  * part of setting up the data definition / calibration. NOT outputs."*), so it
  * lives as a disclosure on the calibration card exactly as the bar chart's
- * category ticks do — and like that one, its summary is on screen the moment
+ * category ticks do - and like that one, its summary is on screen the moment
  * the axes are calibrated, so nobody has to know the feature exists to find it.
  */
 /**
  * What a count or convention change would cost, said while it can still be
- * avoided — and any disagreement the grid has with the declaration (C3/C4).
+ * avoided - and any disagreement the grid has with the declaration (C3/C4).
  *
  * ⚑⚑ THE SENTENCE IS THE BAR CHART'S, because the situation is. v2.1's category
  * ticks carry `regenerateWarning` with the rule written on it: *"Only ever shown
@@ -861,12 +861,12 @@ export function labelOrderReversed(
  *
  * ⚑ NO STORED `_adjusted` FLAG, unlike `BandedAxis`. A bar's ticks can only be
  * generated and then dragged, so "did you adjust them?" is the whole question.
- * A heatmap's grid can also be DETECTED — read off the figure's own rules — and
+ * A heatmap's grid can also be DETECTED - read off the figure's own rules - and
  * a detected grid is exactly as much of a loss as a dragged one. So the question
  * here is "is there a grid to lose?", which the grid itself answers.
  *
  * ⚑⚑ AND A DISAGREEMENT IS REPORTED, NOT RESOLVED. Changing the declared count
- * leaves the grid describing a frame that no longer exists — five columns of
+ * leaves the grid describing a frame that no longer exists - five columns of
  * boundaries under a calibration that now says six. Rebuilding silently would
  * throw away measured boundaries; keeping it silently leaves the two disagreeing
  * with nothing on screen saying so. Tenet 9: say what is, and let the user
@@ -899,7 +899,7 @@ export function heatmapRegenerateWarning(
 }
 
 export function heatmapGridSummary(grid: HeatmapState | null): string {
-  // ⚑⚑ B14 — THE PRECONDITION, SAID BEFORE THE WORK IS DONE. A radial heatmap
+  // ⚑⚑ B14 - THE PRECONDITION, SAID BEFORE THE WORK IS DONE. A radial heatmap
   // (`holoviews` RadialHeatMap: concentric rings and angular bands, and per its
   // own docs "no rectangular plot box with corners") calibrates as a rectangle
   // without complaint and then reads confident nonsense out of every cell.
@@ -909,20 +909,20 @@ export function heatmapGridSummary(grid: HeatmapState | null): string {
   // and nothing in the pixels tells it apart from a rotated rectangular plot. A
   // "looks polar to me" test would be interpretation of the kind tenet 9 keeps
   // out, and a wrong one would block real figures. Naming the requirement is the
-  // honest half — and it costs a user eight clicks to learn it any other way.
+  // honest half - and it costs a user eight clicks to learn it any other way.
   //
   // ⚑ Only while there is nothing to lose. Once a grid exists this line's job is
   // to report it; a caveat that never goes away is one nobody reads.
-  if (grid === null) return 'Grid — needs a rectangular grid of cells; calibrate the axes first';
+  if (grid === null) return 'Grid - needs a rectangular grid of cells; calibrate the axes first';
   const columns = Math.max(0, grid.xDividers.length - 1);
   const rows = Math.max(0, grid.yDividers.length - 1);
-  return `Grid — ${columns} × ${rows} cells`;
+  return `Grid - ${columns} × ${rows} cells`;
 }
 
 /**
  * The typed lists, lined up with the cells they name.
  *
- * ⚑ ONE PLACE, and everything that touches labels goes through it — attaching
+ * ⚑ ONE PLACE, and everything that touches labels goes through it - attaching
  * them to cells, showing them in the boxes, writing them to the file. The rule
  * (pad, then flip if the figure reads the other way) is only correct if it is
  * applied identically in every direction; two copies of it would disagree the
@@ -949,12 +949,12 @@ export function labelsForCells(
  * ⚑⚑ David, twice: *"We still have points and not selectable tick markers that
  * we said that we were going to reuse from bar tick characterisation."* The
  * heatmap drew its own marker dots outside the plot and borrowed only the
- * COLOUR from v2.1's category ticks — no axis line, no tick marks, a second
+ * COLOUR from v2.1's category ticks - no axis line, no tick marks, a second
  * mechanism for a solved problem. This hands the same geometry to
  * `categoryTickOverlay.ts`, so a boundary looks and behaves like the tick it is.
  *
  * ⚑ THE POINTS SIT ON THE AXIS, not offset. The overlay computes its own
- * standoff along the outward normal — which is also where the retired handles'
+ * standoff along the outward normal - which is also where the retired handles'
  * hardcoded 16px went, and why their offset direction had to be worked out here
  * a second time.
  *
@@ -977,13 +977,13 @@ export function heatmapAxisOverlays(
   const finite = (p: { x: number; y: number }) => Number.isFinite(p.x) && Number.isFinite(p.y);
 
   /**
-   * The axis runs along the plot's own edge — but WHICH WAY IS OUT still has to
+   * The axis runs along the plot's own edge - but WHICH WAY IS OUT still has to
    * be computed, not assumed.
    *
    * ⚑⚑ `outwardNormal` takes its direction from the edge ORDER: it sends a
    * left-to-right axis's ticks downward, which is where an upright figure prints
    * them. A figure calibrated upside down, or a rotated scan, has its own idea
-   * of outward — and marks that ignored it would sit INSIDE the plot on exactly
+   * of outward - and marks that ignored it would sit INSIDE the plot on exactly
    * the charts that are hardest to read already. So the edges are ORDERED here
    * against a point known to be inside the figure: if the normal would point at
    * it, they are swapped. Caught by the flipped-figure test, which the retired
@@ -999,7 +999,7 @@ export function heatmapAxisOverlays(
     return towardsInside > 0 ? [b, a] : [a, b];
   };
   // ⚑⚑ EACH AXIS SITS ON ITS OWN EDGE OF THE PLOT: x along y = yLo, y along
-  // x = xLo — the two edges the figure prints its ticks against. Building the y
+  // x = xLo - the two edges the figure prints its ticks against. Building the y
   // axis at xHi put its handles down the RIGHT-HAND side while the figure's row
   // labels were on the left, which is where David saw them. The interior corner
   // is the OPPOSITE one in each case, so the marks lean away from the cells.
@@ -1035,7 +1035,7 @@ export function isDividerHandle(id: string): boolean {
  * any special drag mode: drag it anywhere and it slides along its own axis.
  *
  * ⚑ RETURNS NULL WHEN THE MOVE IS REFUSED, which is the whole reason the model
- * owns this rule — `moveDivider` will not let a divider cross its neighbour,
+ * owns this rule - `moveDivider` will not let a divider cross its neighbour,
  * because re-sorting would renumber every cell past it and file correct values
  * under the wrong column. The handle then springs back to where it was, and the
  * user sees the boundary stop.
@@ -1057,7 +1057,7 @@ export function dragDivider(
 }
 
 /**
- * Which divider a handle refers to, and what it currently sits at — so the card
+ * Which divider a handle refers to, and what it currently sits at - so the card
  * can say *which* boundary is selected in the figure's own units rather than in
  * a handle id nobody typed.
  */
@@ -1078,14 +1078,14 @@ export function describeDivider(
  * Add a boundary on one axis, and say which handle it became.
  *
  * ⚑⚑ IT LANDS IN THE MIDDLE OF THE WIDEST CELL, and that is not an arbitrary
- * parking spot — it is where a MISSING boundary almost always belongs. When
+ * parking spot - it is where a MISSING boundary almost always belongs. When
  * detection finds six of the seven rules a figure draws, the cell it failed to
  * split is exactly twice its neighbours' width, so the widest cell IS the
  * evidence for where the seventh one goes. `detectGrid` already refuses to fill
  * a miss in and tells the user to place it by hand; this is the hand.
  *
  * ⚑ A STARTING POSITION, NEVER A CLAIM. The midpoint is arithmetic in data
- * coordinates, which on a log axis is not the middle of the drawn cell — and it
+ * coordinates, which on a log axis is not the middle of the drawn cell - and it
  * does not need to be, because nothing is recorded until the user drags it onto
  * the boundary they can see and reads the cells. Making it cleverer would
  * dress a guess up as a measurement (tenets 9 and 10).
@@ -1134,7 +1134,7 @@ export function removeDividerHandle(grid: HeatmapState, handleId: string): Heatm
 
 export interface DetectGridOptions {
   /** How many columns the figure has, if the user has said. A CHECK on the
-   * answer, never a target — see `algorithms/gridDetect.ts`. */
+   * answer, never a target - see `algorithms/gridDetect.ts`. */
   columns?: number;
   rows?: number;
 }
@@ -1207,7 +1207,7 @@ export function detectGrid(
       // silently twice as wide as the figure's."* The argument is right and the
       // remedy was wrong: discarding three correct measurements to avoid an
       // invisible error trades a measurement for a blank. The error is made
-      // VISIBLE instead — the grid carries fewer cells than the declared count,
+      // VISIBLE instead - the grid carries fewer cells than the declared count,
       // and the sentence says how many are missing, so the shortfall is on
       // screen twice over.
       //
@@ -1217,14 +1217,14 @@ export function detectGrid(
       // universal sent every axis down the checked path, where one faint rule
       // turned a good proposal into nothing at all.
       notes.push(
-        `Found ${report.found} of the ${report.expected} boundaries needed for ${count} ${label} — the ${report.found} are placed, add the missing ${report.missing} by hand.`
+        `Found ${report.found} of the ${report.expected} boundaries needed for ${count} ${label} - the ${report.found} are placed, add the missing ${report.missing} by hand.`
       );
       return toData(proposeAllDividers(candidates), lo, hi);
     }
     notes.push(
       report.agrees
         ? `${count} ${label}, matching the ${report.found} boundaries found.`
-        : `${count} ${label} taken from the ${report.found} boundaries found — check the extra ones.`
+        : `${count} ${label} taken from the ${report.found} boundaries found - check the extra ones.`
     );
     return toData(proposed, lo, hi);
   };
@@ -1236,7 +1236,7 @@ export function detectGrid(
   }
   // ⚑⚑ ONE AXIS FAILING MUST NOT DISCARD THE OTHER. David typed a 6 where the
   // figure has 5 rows; detection found all four COLUMN boundaries, then threw
-  // them away because the row count could not be met — leaving a 1 × 5 grid and
+  // them away because the row count could not be met - leaving a 1 × 5 grid and
   // five cells of nonsense. The refusal was right about the rows and wrong about
   // everything else: a miss is reported per axis, and the axis that succeeded
   // keeps its result. The failed one keeps the dividers it already had, so
@@ -1261,29 +1261,29 @@ export interface HeatmapRow {
   yMax: number;
   xCentre: number;
   yCentre: number;
-  /** Null when the cell could not be read at all — shown as a dash, never a 0. */
+  /** Null when the cell could not be read at all - shown as a dash, never a 0. */
   value: number | null;
   /**
    * The colour actually sampled, so the table can show WHERE the number came
-   * from — David: *"Fill our cell with a color if it derived from color, and no
+   * from - David: *"Fill our cell with a color if it derived from color, and no
    * color if it is user set or OCR."* The indicator is the evidence itself, and
    * it turns the matrix into a miniature of the figure: a shadowed column shows
    * as a darker band beside numbers that look perfectly reasonable.
    */
   rgb?: readonly [number, number, number];
   /**
-   * THE COLOUR THIS CELL IS DRAWN IN — the key's own ink at `keyPosition`.
+   * THE COLOUR THIS CELL IS DRAWN IN - the key's own ink at `keyPosition`.
    *
    * ⚑⚑ NOT `rgb`, AND THE DISTINCTION IS THE WHOLE POINT. David, 2026-08-15:
    * *"We need to have absolute MIRRORING of the colour between the heatmap, the
-   * draggable colour key, and the output matrix. That is the ground truth"* —
+   * draggable colour key, and the output matrix. That is the ground truth"* -
    * and the direction that makes it reachable: *"the colour / tint ALWAYS == a
    * number… the colour we show is only its REPRESENTATION. Hence that is WHY it
    * is important that the colour follows the value, not the other way around."*
    *
    * So the two fields mean opposite things and neither can stand in for the
-   * other. `rgb` is the ink that was MEASURED — evidence, which `colour offset`
-   * and `uniformity` report on. `keyRgb` is the ink the key gives this value —
+   * other. `rgb` is the ink that was MEASURED - evidence, which `colour offset`
+   * and `uniformity` report on. `keyRgb` is the ink the key gives this value -
    * representation, and the only one that may be DRAWN.
    *
    * What follows for free:
@@ -1293,7 +1293,7 @@ export interface HeatmapRow {
    *   · the figure, the key's caliper and the matrix cannot disagree, because
    *     all three are the same function of the same number.
    *   · a cell whose ink sat OFF the ramp stops being painted in a colour that
-   *     corresponds to no value anywhere on the key — the one case where the old
+   *     corresponds to no value anywhere on the key - the one case where the old
    *     tint showed something meaningless.
    *
    * Undefined exactly when `keyPosition` is null: with no position there is no
@@ -1303,10 +1303,10 @@ export interface HeatmapRow {
   /**
    * WHICH INSTRUMENT read this cell.
    *
-   * ⚑⚑ All three are measurements and they fail in opposite ways — OCR reads
+   * ⚑⚑ All three are measurements and they fail in opposite ways - OCR reads
    * ink as GLYPHS and fails discretely (right, or badly wrong); the colour reads
    * ink as a RAMP and fails continuously (small, silent); the USER sees what
-   * both machines are blind to — a hatched cell, an asterisk over the fill, a
+   * both machines are blind to - a hatched cell, an asterisk over the fill, a
    * texture the sampler averages away. A consumer treating an OCR'd 59 and a
    * colour-inverted 58.7 as the same kind of number is wrong about both.
    *
@@ -1317,8 +1317,8 @@ export interface HeatmapRow {
   /**
    * WHERE THIS CELL SITS ON THE COLOUR KEY, in the strip's own 0..1 frame.
    *
-   * ⚑⚑ THE THIRD COORDINATE. A row has always carried `xCentre` and `yCentre` —
-   * where the cell sits on the first two axes — and reported the third as a
+   * ⚑⚑ THE THIRD COORDINATE. A row has always carried `xCentre` and `yCentre` -
+   * where the cell sits on the first two axes - and reported the third as a
    * NUMBER only. A heatmap is 2.5D: this is a coordinate exactly as those are,
    * and it is the one the whole figure exists to convey. Without it nothing can
    * draw a cell's value as a POSITION, which is what the key's marker needs and
@@ -1326,7 +1326,7 @@ export interface HeatmapRow {
    *
    * ⚑ One number whichever instrument produced it: a colour-read cell comes back
    * through `positionAtValue` (exact for a monotone scale), a user-read one
-   * reports the position that WAS stored — so the marker cannot drift from where
+   * reports the position that WAS stored - so the marker cannot drift from where
    * the user put it. Null when the cell has no reading to place.
    */
   keyPosition: number | null;
@@ -1338,7 +1338,7 @@ export interface HeatmapRow {
   /** Other values this colour is equally consistent with. Non-empty means the
    * reading is AMBIGUOUS and must not be treated as a number. */
   rivalValues: number[];
-  /** The cell's colour is the key's extreme, so the figure may have CLIPPED it —
+  /** The cell's colour is the key's extreme, so the figure may have CLIPPED it -
    * the value could be this or anything beyond it. */
   atKeyLimit: boolean;
   /** The one-line verdict the table shows: what, if anything, is wrong with
@@ -1350,15 +1350,15 @@ export interface HeatmapRow {
    * the pixels and stay measured whatever the axis is called. */
   xLabel: string;
   yLabel: string;
-  /** This coordinate is an ORDINAL — a counted position, not a measured one.
+  /** This coordinate is an ORDINAL - a counted position, not a measured one.
    * Rides into the export so a reader cannot mistake band 3 for 3 mm. */
   xIsCategory: boolean;
   yIsCategory: boolean;
 }
 
 /** How much of a cell may be something other than its colour before it is worth
- * saying so. Below 1 means SOMETHING is in the cell — a printed number, an
- * asterisk, JPEG noise — and on a real q35 JPEG this is the only signal that
+ * saying so. Below 1 means SOMETHING is in the cell - a printed number, an
+ * asterisk, JPEG noise - and on a real q35 JPEG this is the only signal that
  * caught a wrong reading whose colour sat exactly on the ramp. */
 const UNIFORMITY_WORTH_REPORTING = 0.999;
 
@@ -1367,7 +1367,7 @@ const UNIFORMITY_WORTH_REPORTING = 0.999;
  *
  * ⚑⚑ TWO KINDS OF EVIDENCE, and `mine` is what separates them. The rivals, the
  * distance off the ramp and the clipping flag are properties of INVERTING A
- * COLOUR — they say nothing at all once a person has read the cell by eye, and
+ * COLOUR - they say nothing at all once a person has read the cell by eye, and
  * repeating them beside their number would be a machine's doubts attached to
  * someone else's measurement. Uniformity is a property of the CELL'S INK: a
  * hatched cell is still hatched after it is read correctly, and it is the
@@ -1378,11 +1378,11 @@ function warningFor(cell: HeatmapCellReading, mine: boolean): string {
   if (cell.samples === 0) return 'Not on the image';
   const parts: string[] = [];
   if (!mine) {
-    if (cell.reading === null) return 'No value — the colour key cannot be read';
+    if (cell.reading === null) return 'No value - the colour key cannot be read';
     if (cell.rivals.length > 0) parts.push(`${cell.rivals.length + 1} possible values`);
     // ⚑ First among the soft warnings, because it is the one nothing else
     // catches: a clipped cell is exact, uniform and wrong.
-    if (cell.atKeyLimit) parts.push('at the key’s limit — may be clipped');
+    if (cell.atKeyLimit) parts.push('at the key’s limit - may be clipped');
     if (cell.reading.distance > 0) parts.push(`colour ${cell.reading.distance.toFixed(1)} off the key`);
   }
   if (cell.uniformity < UNIFORMITY_WORTH_REPORTING) {
@@ -1402,7 +1402,7 @@ export interface ReadHeatmapCellsResult {
  * Read every cell, and say plainly how many of them can vouch for themselves.
  *
  * ⚑ THE SUMMARY IS THE POINT OF THE WHOLE FEATURE. In a heatmap the colour IS
- * the value, so a wrong cell has no other symptom — no gap in the trace, no
+ * the value, so a wrong cell has no other symptom - no gap in the trace, no
  * refusal, nothing odd on screen. Measured across three real renders, every
  * cell that reported itself clean was correct and every wrong one said so, but
  * that is only worth anything if the saying reaches the user.
@@ -1424,11 +1424,11 @@ export function readHeatmapCells(
    *
    * ⚑ David, on why this matters past heatmaps: *"I do NOT want to come back to
    * this problem for the next chart type, i.e. bubble graphs."* A default is how
-   * you come back to it — see `engine/__tests__/everyGraphType.test.ts` for the
+   * you come back to it - see `engine/__tests__/everyGraphType.test.ts` for the
    * structural half of that answer.
    */
   kinds: HeatmapAxisKinds,
-  /** The cells the user read themselves — positions on the key, applied through
+  /** The cells the user read themselves - positions on the key, applied through
    * the same inverse ours came out of. */
   readings: HeatmapCellReadings = NO_HEATMAP_CELL_READINGS
 ): ReadHeatmapCellsResult {
@@ -1445,7 +1445,7 @@ export function readHeatmapCells(
     return { rows: [], summary: '', error: 'The grid needs at least one boundary on each axis.' };
   }
   const rows = cells.map((cell) => {
-    // ⚑ THE USER'S READING GOES THROUGH THE SAME TRANSFORM OURS DOES — one
+    // ⚑ THE USER'S READING GOES THROUGH THE SAME TRANSFORM OURS DOES - one
     // `valueAtPosition`, one key. That is what makes their number and ours
     // comparable at all, and what makes both of them move when the key does.
     const t = readings[cellKey(cell.col, cell.row)];
@@ -1473,11 +1473,11 @@ export function readHeatmapCells(
       // the same inverse the value came out of, so the two always agree.
       keyPosition,
       // ⚑ EVIDENCE. The ink that was actually there, kept only where the colour
-      // WAS the reading — `colour offset` and `uniformity` report on it, and a
+      // WAS the reading - `colour offset` and `uniformity` report on it, and a
       // cell a person read has no measured ink of its own. It is no longer a
       // display input; see `keyRgb`.
       ...(cell.rgb && !mine ? { rgb: [cell.rgb[0], cell.rgb[1], cell.rgb[2]] as const } : {}),
-      // ⚑ REPRESENTATION, for every cell that has a position — whichever
+      // ⚑ REPRESENTATION, for every cell that has a position - whichever
       // instrument produced it.
       ...(keyRgb ? { keyRgb: [keyRgb[0], keyRgb[1], keyRgb[2]] as const } : {}),
       source: mine ? ('user' as const) : ('colour' as const),

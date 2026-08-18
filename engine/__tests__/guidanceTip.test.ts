@@ -22,7 +22,7 @@ import {
   PIE_AXES_CONFIG,
 } from '../axesTypeConfigs.js';
 
-/** Every graph type the picker offers — the real configs, not stand-ins. */
+/** Every graph type the picker offers - the real configs, not stand-ins. */
 const ALL_CONFIGS: readonly GuidanceConfig[] = [
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
@@ -52,7 +52,7 @@ const ALL_MODES: readonly ToolMode[] = [
   'interpolate',
 ];
 
-/** A calibrated XY chart, nothing selected, nothing pending — the quiet base state. */
+/** A calibrated XY chart, nothing selected, nothing pending - the quiet base state. */
 function base(over: Partial<GuidanceTipInput> = {}): GuidanceTipInput {
   return {
     canvasHasImage: true,
@@ -90,7 +90,7 @@ function base(over: Partial<GuidanceTipInput> = {}): GuidanceTipInput {
   };
 }
 
-describe('guidanceTip — the pre-capture gates come first', () => {
+describe('guidanceTip - the pre-capture gates come first', () => {
   it('asks for an image before anything else, whatever the tool', () => {
     for (const mode of ALL_MODES) {
       expect(guidanceTip(base({ canvasHasImage: false, mode }))).toContain('Open an image to begin');
@@ -112,7 +112,7 @@ describe('guidanceTip — the pre-capture gates come first', () => {
   });
 });
 
-describe('guidanceTip — measure', () => {
+describe('guidanceTip - measure', () => {
   it('gates Slope on the axes CLASS, so a calibrated histogram is not refused', () => {
     // ⚑ The round-2 audit defect: this branch asked `config.id`, so on a
     // HISTOGRAM the slope tool worked, the Measure card agreed it worked, and
@@ -142,7 +142,7 @@ describe('guidanceTip — measure', () => {
 
   it('counts the points already down, for every multi-click tool', () => {
     expect(guidanceTip(base({ mode: 'measure', measureTool: 'distance', pendingMeasureCount: 0 }))).toContain(
-      'Distance — click the first point'
+      'Distance - click the first point'
     );
     expect(guidanceTip(base({ mode: 'measure', measureTool: 'distance', pendingMeasureCount: 1 }))).toContain(
       'click the second point'
@@ -164,7 +164,7 @@ describe('guidanceTip — measure', () => {
     );
   });
 
-  it('a selected vertex surfaces the arrow keys — the only place they are advertised', () => {
+  it('a selected vertex surfaces the arrow keys - the only place they are advertised', () => {
     // The keystone rule: a keyboard-only path the user never sees does not exist.
     expect(guidanceTip(base({ mode: 'measure', hasActiveMeasure: true }))).toContain('↑ ↓ ← → nudge');
   });
@@ -181,7 +181,7 @@ describe('guidanceTip — measure', () => {
   });
 });
 
-describe('guidanceTip — calibration', () => {
+describe('guidanceTip - calibration', () => {
   it('counts the step from 1, not 0', () => {
     const tip = guidanceTip(
       base({
@@ -191,7 +191,7 @@ describe('guidanceTip — calibration', () => {
         stepCount: 4,
       })
     );
-    expect(tip).toContain('Calibration step 1/4 — X1: click the first x tick');
+    expect(tip).toContain('Calibration step 1/4 - X1: click the first x tick');
   });
 
   it('agrees with itself about plurality when a step asks for two values', () => {
@@ -201,8 +201,8 @@ describe('guidanceTip — calibration', () => {
     const two = guidanceTip(
       base({ isCalibrating: true, hasPendingPixel: true, currentStep: { label: 'P1', prompt: 'p' }, pendingValueFieldCount: 2 })
     );
-    // ⚑ The step's LABEL is no longer repeated in the instruction — D1 made the
-    // line additive, so it already reads "… — X1: <prompt> — enter the value…".
+    // ⚑ The step's LABEL is no longer repeated in the instruction - D1 made the
+    // line additive, so it already reads "… - X1: <prompt> - enter the value…".
     // Saying "the X1 value" again after that is the same word twice in one
     // sentence. The plurality, which is what this test is about, is unchanged.
     expect(one).toContain('X1:');
@@ -211,31 +211,31 @@ describe('guidanceTip — calibration', () => {
     expect(two).toContain('. Enter the values, then press Confirm.');
   });
 
-  it('⚑⚑ D1 — the step\u2019s own prompt SURVIVES the pending pixel', () => {
+  it('⚑⚑ D1 - the step\u2019s own prompt SURVIVES the pending pixel', () => {
     // 🔴 The prompt is what says WHAT to type. Once a pixel was pending the tips
     // bar dropped it entirely and showed a generic *"Enter the Y1 values, then
-    // press Confirm"* — at exactly the moment the user is typing them.
+    // press Confirm"* - at exactly the moment the user is typing them.
     //
     // ⚠️⚠️ AND ON A PRE-PLACED STEP IT WAS SHOWN TO NOBODY, EVER. The heatmap's
     // shared corner arrives with y1 already placed, so `hasPendingPixel` is true
-    // the instant the step opens: *"The same corner again — enter the Y value
+    // the instant the step opens: *"The same corner again - enter the Y value
     // where the outer EDGE of the FIRST column meets the outer EDGE of the FIRST
     // row"* was authored, unit-tested at the config level, and dead on screen.
-    // That is the step David flagged on day one — *"the text for shared origin
-    // is misleading or incorrect"* — and it was not misleading, it was absent.
+    // That is the step David flagged on day one - *"the text for shared origin
+    // is misleading or incorrect"* - and it was not misleading, it was absent.
     //
     // ⚑ THE LESSON, not just the bug: a unit test proving `stepsForOptions`
     // returns the right sentence proves nothing REACHED THE SCREEN. Same shape
-    // as gate 3 — satisfied in the config, unenforced where the user is.
+    // as gate 3 - satisfied in the config, unenforced where the user is.
     const tip = guidanceTip(
       base({
         isCalibrating: true,
         hasPendingPixel: true,
-        currentStep: { label: 'Y1', prompt: 'The same corner again — enter the Y value there' },
+        currentStep: { label: 'Y1', prompt: 'The same corner again - enter the Y value there' },
         pendingValueFieldCount: 1,
       })
     );
-    expect(tip).toContain('The same corner again — enter the Y value there');
+    expect(tip).toContain('The same corner again - enter the Y value there');
     expect(tip, 'and what to do with it').toContain('. Enter the value, then press Confirm.');
   });
 
@@ -253,7 +253,7 @@ describe('guidanceTip — calibration', () => {
         pendingValueFieldCount: 1,
       })
     );
-    expect(tip).toContain('Calibration step 3/8 — Y1');
+    expect(tip).toContain('Calibration step 3/8 - Y1');
   });
 
   it('lets Measure interrupt a calibration in progress', () => {
@@ -265,7 +265,7 @@ describe('guidanceTip — calibration', () => {
   });
 });
 
-describe('guidanceTip — capture, per graph type', () => {
+describe('guidanceTip - capture, per graph type', () => {
   it('Spider says the RAY is the reading, and names the axis being filled', () => {
     const tip = guidanceTip(
       base({
@@ -281,7 +281,7 @@ describe('guidanceTip — capture, per graph type', () => {
     expect(tip).toContain('starting a new profile');
   });
 
-  it('Bar says BOTH ENDS are measured — the wording that guards the midpoint defect', () => {
+  it('Bar says BOTH ENDS are measured - the wording that guards the midpoint defect', () => {
     const tip = guidanceTip(
       base({
         mode: 'place-point',
@@ -297,14 +297,14 @@ describe('guidanceTip — capture, per graph type', () => {
     expect(tip).toContain('bar 3, filling Bar start');
   });
 
-  it('Bar beats the generic slot line — Bar always has slots, so order decides', () => {
+  it('Bar beats the generic slot line - Bar always has slots, so order decides', () => {
     const tip = guidanceTip(
       base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', tupleNoun: 'bar' })
     );
-    expect(tip).not.toContain('Click to add a point — filling');
+    expect(tip).not.toContain('Click to add a point - filling');
   });
 
-  it('categorical Line stays one click per category — there is no second end to drag', () => {
+  it('categorical Line stays one click per category - there is no second end to drag', () => {
     const tip = guidanceTip(base({ mode: 'place-point', config: CATEGORICAL_LINE_CONFIG, hasSlots: false }));
     expect(tip).toContain('Click each category’s marker in turn');
     expect(tip).not.toContain('opposite corner');
@@ -317,7 +317,7 @@ describe('guidanceTip — capture, per graph type', () => {
   });
 });
 
-describe('guidanceTip — the branches that exist because they were MISSING', () => {
+describe('guidanceTip - the branches that exist because they were MISSING', () => {
   it('error-bars on a calibrated chart does not fall through to "calibrate the axes to begin"', () => {
     // ⚑ Caught on the screenshot bench: the one tool whose whole job is a
     // two-ended drag was the one with no guidance, so a calibrated chart was
@@ -350,12 +350,12 @@ describe('guidanceTip — the branches that exist because they were MISSING', ()
   });
 });
 
-describe('guidanceTip — the slot-aim suffix', () => {
+describe('guidanceTip - the slot-aim suffix', () => {
   const withSlots = (over: Partial<GuidanceTipInput> = {}) =>
     base({
       hasSlots: true,
       currentGroupLabel: 'Median',
-      captureProgressText: 'Next: Median — box 2 (3 of 5 filled)',
+      captureProgressText: 'Next: Median - box 2 (3 of 5 filled)',
       config: BOX_PLOT_AXES_CONFIG,
       tupleNoun: 'box',
       ...over,
@@ -363,12 +363,12 @@ describe('guidanceTip — the slot-aim suffix', () => {
 
   it('appends the count where the sentence does NOT already name the slot', () => {
     const tip = guidanceTip(withSlots({ mode: 'eraser' }));
-    expect(tip).toContain('Eraser — click a data point to remove it.');
-    expect(tip).toContain('— Median — box 2 (3 of 5 filled)');
+    expect(tip).toContain('Eraser - click a data point to remove it.');
+    expect(tip).toContain('- Median - box 2 (3 of 5 filled)');
     expect(tip).not.toContain('Next: '); // the prefix is stripped, not repeated
   });
 
-  it('stays silent where the branch already named the slot — no literal duplicate', () => {
+  it('stays silent where the branch already named the slot - no literal duplicate', () => {
     const tip = guidanceTip(
       withSlots({ mode: 'place-point', config: SPIDER_AXES_CONFIG, currentGroupLabel: 'Median' })
     );
@@ -376,20 +376,20 @@ describe('guidanceTip — the slot-aim suffix', () => {
     expect(tip.match(/Median/g)?.length).toBe(1);
   });
 
-  it('never rides along on a calibration step — Bar has slots from the moment it is picked', () => {
-    // ⚑ Without the isCalibrated guard, "Calibration step 1/2 — P1: ..." grew a
-    // bogus "— Bar start — new bar (0 of 2 filled)" tacked onto it.
+  it('never rides along on a calibration step - Bar has slots from the moment it is picked', () => {
+    // ⚑ Without the isCalibrated guard, "Calibration step 1/2 - P1: ..." grew a
+    // bogus "- Bar start - new bar (0 of 2 filled)" tacked onto it.
     const tip = guidanceTip(
       withSlots({
         isCalibrated: false,
         isCalibrating: true,
         currentStep: { label: 'P1', prompt: 'click the baseline' },
         stepCount: 2,
-        captureProgressText: 'Next: Bar start — new bar (0 of 2 filled)',
+        captureProgressText: 'Next: Bar start - new bar (0 of 2 filled)',
         currentGroupLabel: 'Bar start',
       })
     );
-    expect(tip).toBe('Calibration step 1/2 — P1: click the baseline');
+    expect(tip).toBe('Calibration step 1/2 - P1: click the baseline');
   });
 
   it('adds nothing when the type has no slots to report on', () => {
@@ -401,7 +401,7 @@ describe('guidanceTip — the slot-aim suffix', () => {
 describe('noPointsHint', () => {
   it('never invites a canvas click in a mode where a plain click is inert', () => {
     // ⚑ The original defect: the table said "click on the image to add data
-    // points" while the tips bar said "a plain click does nothing" — both on
+    // points" while the tips bar said "a plain click does nothing" - both on
     // screen at once, telling the reader opposite things.
     for (const mode of ['color-trace', 'segment-fill', 'interpolate'] as const) {
       const hint = noPointsHint({ mode, config: XY_AXES_CONFIG });
@@ -411,29 +411,29 @@ describe('noPointsHint', () => {
 
   // ⚑ Asserted whole, not by `toContain`. This hint's entire job is to say the
   // RIGHT thing, and a test that only checks what it does not say passes just
-  // as happily on an empty string — which is what a mutation run proved.
+  // as happily on an empty string - which is what a mutation run proved.
   it('names each auto-extract mechanism by the gesture that actually drives it', () => {
     expect(noPointsHint({ mode: 'color-trace', config: XY_AXES_CONFIG })).toBe(
-      'No points yet — pick the series’ colour, then press Trace. A plain click on the image does nothing here.'
+      'No points yet - pick the series’ colour, then press Trace. A plain click on the image does nothing here.'
     );
     expect(noPointsHint({ mode: 'segment-fill', config: XY_AXES_CONFIG })).toBe(
-      'No points yet — click the curve on the image to flood-fill it.'
+      'No points yet - click the curve on the image to flood-fill it.'
     );
     expect(noPointsHint({ mode: 'interpolate', config: XY_AXES_CONFIG })).toBe(
-      'No points yet — click a few guide points along one curve.'
+      'No points yet - click a few guide points along one curve.'
     );
   });
 
   it('tells a Bar user to drag corner to corner, not to click one end', () => {
     expect(noPointsHint({ mode: 'place-point', config: BAR_AXES_CONFIG })).toBe(
-      'No points yet — drag from one corner of a bar to the opposite corner (or click twice) to record it.'
+      'No points yet - drag from one corner of a bar to the opposite corner (or click twice) to record it.'
     );
-    // Box Plot is axesKind 'bar' but not id 'bar' — a different capture gesture.
+    // Box Plot is axesKind 'bar' but not id 'bar' - a different capture gesture.
     expect(noPointsHint({ mode: 'place-point', config: BOX_PLOT_AXES_CONFIG })).toBe(
-      'No points yet — click the end of each bar to record its value.'
+      'No points yet - click the end of each bar to record its value.'
     );
     expect(noPointsHint({ mode: 'place-point', config: XY_AXES_CONFIG })).toBe(
-      'No points yet — click on the image to add data points.'
+      'No points yet - click on the image to add data points.'
     );
   });
 
@@ -441,8 +441,8 @@ describe('noPointsHint', () => {
     // ⚠️ SEEN ON THE BUILT APP while driving the v2.3 Line fix: a line chart of
     // five markers was told to *"click the end of each bar to record its
     // value."* There are no bars on the figure. That is this function's OWN
-    // defect class — its header is entirely about hints that name a tool or a
-    // gesture the type does not have — arriving for a fourth time, at a site
+    // defect class - its header is entirely about hints that name a tool or a
+    // gesture the type does not have - arriving for a fourth time, at a site
     // reached because Line is `axesKind: 'bar'` while looking nothing like one.
     //
     // ⚑ It mirrors the tips bar, which already had the right words for this
@@ -458,23 +458,23 @@ describe('noPointsHint', () => {
   it('points a non-capturing tool back at the rail, per graph type', () => {
     // Pan / Select / Eraser / Measure / Image-edit / Error-bars all land here.
     expect(noPointsHint({ mode: 'select', config: BAR_AXES_CONFIG })).toBe(
-      'No points yet — drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.'
+      'No points yet - drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.'
     );
     expect(noPointsHint({ mode: 'select', config: BOX_PLOT_AXES_CONFIG })).toBe(
-      'No points yet — pick Add points (3) from the tool rail and click the end of each bar.'
+      'No points yet - pick Add points (3) from the tool rail and click the end of each bar.'
     );
     expect(noPointsHint({ mode: 'select', config: PIE_AXES_CONFIG })).toBe(
-      'No points yet — pick Add points (3) from the tool rail.'
+      'No points yet - pick Add points (3) from the tool rail.'
     );
     expect(noPointsHint({ mode: 'select', config: XY_AXES_CONFIG })).toBe(
-      'No points yet — pick Add points (3) or Auto-extract (4) from the tool rail.'
+      'No points yet - pick Add points (3) or Auto-extract (4) from the tool rail.'
     );
   });
 
   it('sends a HEATMAP user to its card, and never to a tool that cannot capture it', () => {
     // ⚑ FOUND BY LOOKING AT A SCREENSHOT of the finished feature, not by a test.
     // The panel invited "click on the image to add data points" beside a heatmap
-    // table holding 20 values — and a heatmap's cells are never placed by hand,
+    // table holding 20 values - and a heatmap's cells are never placed by hand,
     // so following it drops stray points and teaches the user the app is broken.
     // Fourth instance of the contradiction class this function was written for.
     for (const mode of ALL_MODES) {
@@ -490,7 +490,7 @@ describe('the two surfaces must not contradict each other about Auto-extract', (
   // Four separate times, one panel recommended a tool the other refuses: the
   // rail button is greyed for `autoExtractKind: 'none'` (Box Plot, categorical
   // Line, Pie), and the hint kept offering it anyway. Neither a unit test nor
-  // the e2e could see it — the e2e asserts values and counts, never prose.
+  // the e2e could see it - the e2e asserts values and counts, never prose.
   it('the empty-table hint never offers Auto-extract on a type that refuses it', () => {
     for (const config of ALL_CONFIGS) {
       if (config.autoExtractKind !== 'none') continue;
@@ -530,7 +530,7 @@ describe('the two surfaces must not contradict each other about Auto-extract', (
   });
 });
 
-describe('guidanceTip — the eyedropper takes the bar over whatever tool is armed', () => {
+describe('guidanceTip - the eyedropper takes the bar over whatever tool is armed', () => {
   it('says which ink it is about to sample', () => {
     expect(guidanceTip(base({ eyedropper: 'grid', mode: 'place-point' }))).toBe(
       'Eyedropper: click a gridline on the image to sample its colour.'
@@ -540,19 +540,19 @@ describe('guidanceTip — the eyedropper takes the bar over whatever tool is arm
     );
   });
 
-  it('lets the trace eyedropper fall through — it has no line of its own', () => {
+  it('lets the trace eyedropper fall through - it has no line of its own', () => {
     const tip = guidanceTip(base({ eyedropper: 'trace', mode: 'color-trace' }));
     expect(tip).toContain('By colour');
   });
 });
 
-describe('guidanceTip — image edit AFTER capture', () => {
+describe('guidanceTip - image edit AFTER capture', () => {
   it('separates cropping from the plain rotate/flip case', () => {
     expect(guidanceTip(base({ mode: 'image-edit', cropMode: false }))).toBe(
-      'Image — rotate or flip; calibration and points move with the image.'
+      'Image - rotate or flip; calibration and points move with the image.'
     );
     expect(guidanceTip(base({ mode: 'image-edit', cropMode: true, hasCropRect: false }))).toBe(
-      'Crop — drag a rectangle over the area to keep.'
+      'Crop - drag a rectangle over the area to keep.'
     );
   });
 
@@ -563,7 +563,7 @@ describe('guidanceTip — image edit AFTER capture', () => {
   });
 });
 
-describe('guidanceTip — select', () => {
+describe('guidanceTip - select', () => {
   it('agrees with itself about plurality', () => {
     expect(guidanceTip(base({ mode: 'select', selectedPointCount: 1 }))).toContain('1 point selected');
     expect(guidanceTip(base({ mode: 'select', selectedPointCount: 2 }))).toContain('2 points selected');
@@ -582,7 +582,7 @@ describe('guidanceTip — select', () => {
   });
 });
 
-describe('guidanceTip — place-point, the remaining branches', () => {
+describe('guidanceTip - place-point, the remaining branches', () => {
   it('a slotted type that is neither Spider nor Bar gets the generic slot line', () => {
     const tip = guidanceTip(
       base({
@@ -593,7 +593,7 @@ describe('guidanceTip — place-point, the remaining branches', () => {
         tupleNoun: 'box',
       })
     );
-    expect(tip).toContain('Click to add a point — filling Median (new box).');
+    expect(tip).toContain('Click to add a point - filling Median (new box).');
   });
 
   it('numbers the tuple in hand rather than calling it new', () => {
@@ -639,7 +639,7 @@ describe('guidanceTip — place-point, the remaining branches', () => {
   });
 });
 
-describe('guidanceTip — calibrate, colour trace and interpolate', () => {
+describe('guidanceTip - calibrate, colour trace and interpolate', () => {
   it('offers nudge only when a handle is actually selected', () => {
     expect(guidanceTip(base({ mode: 'calibrate', hasActiveHandle: true }))).toContain('Handle selected');
     expect(guidanceTip(base({ mode: 'calibrate', hasActiveHandle: false }))).toContain(
@@ -681,11 +681,11 @@ describe('guidanceTip — calibrate, colour trace and interpolate', () => {
   });
 
   it('pan says plainly that nothing will be edited', () => {
-    expect(guidanceTip(base({ mode: 'pan' }))).toBe('Pan and zoom only — pick a tool from the left rail to edit.');
+    expect(guidanceTip(base({ mode: 'pan' }))).toBe('Pan and zoom only - pick a tool from the left rail to edit.');
   });
 });
 
-describe('guidanceTip — measure click counts at their boundaries', () => {
+describe('guidanceTip - measure click counts at their boundaries', () => {
   it('set scale counts the first and second point', () => {
     expect(guidanceTip(base({ mode: 'measure', settingScale: true, pendingMeasureCount: 0 }))).toContain(
       'click the first point of a known distance'
@@ -763,11 +763,11 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
   });
 
   /**
-   * ① — the other half of David's "UI design fault". A grid on screen, a
+   * ① - the other half of David's "UI design fault". A grid on screen, a
    * detection report and `Calibrated ✓` all read as READY, and nothing named the
    * action that turns the grid into a record.
    */
-  it('names READ CELLS once a grid exists — the action that finishes the job', () => {
+  it('names READ CELLS once a grid exists - the action that finishes the job', () => {
     const ready = guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: false }));
     expect(ready).toMatch(/read cells/i);
     // ⚑ And FIRST: the adjusting gestures are a side quest at this moment, and
@@ -784,7 +784,7 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
   });
 
   it('says the WAY BACK, because right-click is the half nothing else shows', () => {
-    // ⚑ Typing over a value is discoverable — the dashed underline every
+    // ⚑ Typing over a value is discoverable - the dashed underline every
     // editable number in the app carries. Handing the cell back to the key is
     // not, and a correction with no visible exit is a one-way door.
     expect(guidanceTipBase(heatmap({ heatmapHasGrid: true, heatmapHasCells: true }))).toMatch(
@@ -793,17 +793,17 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
   });
 
   /**
-   * ③ — David's screenshot finding. The bar named typing, right-clicking and
+   * ③ - David's screenshot finding. The bar named typing, right-clicking and
    * dragging a boundary, and never named the CALIPER: dragging a cell along the
    * colour key, which is the newest gesture and the least guessable one.
    */
-  it('names the COLOUR KEY drag once a cell is picked — the third axis’s own handle', () => {
+  it('names the COLOUR KEY drag once a cell is picked - the third axis’s own handle', () => {
     const picked = guidanceTipBase(
       heatmap({ heatmapHasGrid: true, heatmapHasCells: true, heatmapCellPicked: true })
     );
     expect(picked).toMatch(/colour key/i);
     expect(picked).toMatch(/drag/i);
-    // The way back stays said — it is the half nothing else shows.
+    // The way back stays said - it is the half nothing else shows.
     expect(picked).toMatch(/right-click/i);
   });
 

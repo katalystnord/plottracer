@@ -7,14 +7,14 @@ import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from '../conne
 import { CategoryAxis } from '../categoryAxis.js';
 
 /**
- * PlotData's RELATIONSHIPS — the object→axes map, deletion, and measurements.
+ * PlotData's RELATIONSHIPS - the object→axes map, deletion, and measurements.
  *
- * ⚑ WHY THIS FILE EXISTS. `core/plotData.ts` scored 32.44% — the lowest in
- * `core/` — with 277 survivors and 204 mutants no test reaches, and its function
+ * ⚑ WHY THIS FILE EXISTS. `core/plotData.ts` scored 32.44% - the lowest in
+ * `core/` - with 277 survivors and 204 mutants no test reaches, and its function
  * coverage is 57%: **thirteen of its twenty-three methods are never called by any
  * test in the suite.** Our existing plotData tests round-trip a document's
  * CONTENT well; what nothing touches is the part that binds the content together
- * — which dataset belongs to which axes, what happens when either is deleted,
+ * - which dataset belongs to which axes, what happens when either is deleted,
  * and whether measurements survive being saved.
  *
  * That matters more than the score suggests. PlotData is the record: a defect
@@ -46,11 +46,11 @@ function dataset(name: string): Dataset {
   return ds;
 }
 
-describe('PlotData — deleting an axes', () => {
+describe('PlotData - deleting an axes', () => {
   it('ORPHANS the datasets that used it rather than leaving a dangling reference', () => {
     // The contract, which nothing asserted: the dataset survives, and its axes
     // becomes null. A mutant that skips the map walk leaves the dataset pointing
-    // at an axes no longer in the collection — a document that serialises to a
+    // at an axes no longer in the collection - a document that serialises to a
     // reference to nothing.
     const pd = new PlotData();
     const axes = xyAxes('A');
@@ -90,7 +90,7 @@ describe('PlotData — deleting an axes', () => {
 
   it('does nothing when handed an axes it does not hold', () => {
     // The `indexOf >= 0` guard. Without it, splice(-1, 1) removes the LAST
-    // axes — deleting something the caller never asked about.
+    // axes - deleting something the caller never asked about.
     const pd = new PlotData();
     const kept = xyAxes('kept');
     pd.addAxes(kept);
@@ -102,7 +102,7 @@ describe('PlotData — deleting an axes', () => {
   });
 });
 
-describe('PlotData — deleting a dataset', () => {
+describe('PlotData - deleting a dataset', () => {
   it('removes its binding AND its auto-detection data, leaving nothing behind', () => {
     // ⚑ Deliberately asymmetric with deleteAxes, and worth pinning as such:
     // deleting an AXES nulls the map entry (the dataset lives on, orphaned),
@@ -154,7 +154,7 @@ describe('PlotData — deleting a dataset', () => {
   });
 });
 
-describe('PlotData — category axis binding (v2.0 groundwork, unwired)', () => {
+describe('PlotData - category axis binding (v2.0 groundwork, unwired)', () => {
   // Mirrors the value-axes describe blocks above exactly -- CategoryAxis is a
   // second, independent binding dimension using the identical additive-map
   // pattern (`_objectAxesMap` for value axes, `_datasetCategoryAxisMap` here).
@@ -258,10 +258,10 @@ describe('PlotData — category axis binding (v2.0 groundwork, unwired)', () => 
   });
 });
 
-describe('PlotData — measurements are part of the record', () => {
+describe('PlotData - measurements are part of the record', () => {
   // `addMeasurement` was called by NO test in the suite before this file, which
   // means measurements had never been round-tripped through the document at all.
-  // They export, so a serialisation defect here loses recorded work in silence —
+  // They export, so a serialisation defect here loses recorded work in silence -
   // the worst failure mode this project has (tenet 9).
   function withMeasurements(): PlotData {
     const pd = new PlotData();
@@ -320,7 +320,7 @@ describe('PlotData — measurements are part of the record', () => {
   });
 });
 
-describe('PlotData — reset', () => {
+describe('PlotData - reset', () => {
   it('empties every collection, not just the ones it is easy to remember', () => {
     // reset() clears axes, datasets and measurements. A mutant that forgets one
     // leaves a stale object in a document the user believes is new.
@@ -337,7 +337,7 @@ describe('PlotData — reset', () => {
   });
 });
 
-describe('PlotData — category axis serialization (v2.0 groundwork)', () => {
+describe('PlotData - category axis serialization (v2.0 groundwork)', () => {
   it('carries a category axis and its binding through serialize and back', () => {
     const pd = new PlotData();
     const dsA = dataset('a');

@@ -1,6 +1,6 @@
 /**
  * Faithful TypeScript port of the pure functions from
- * ui-patches/engauge-algos.js's Grid Line Removal section (Phase 2.3 —
+ * ui-patches/engauge-algos.js's Grid Line Removal section (Phase 2.3 -
  * see that file's header for the original provenance note). Ported per
  * CLAUDE.md's Step 1 scope.
  *
@@ -8,7 +8,7 @@
  * original constructs a DOM `ImageData` object internally, which ties
  * this pure pixel-transform to a browser/Electron-renderer global that
  * doesn't exist in Node or a headless service. `removeGridLinesOp` here
- * returns a plain `{ data, width, height }` instead — the caller wraps
+ * returns a plain `{ data, width, height }` instead - the caller wraps
  * `data` in `new ImageData(data, width, height)` at whatever boundary
  * actually needs a canvas-compatible object. Keeps this file usable from
  * a headless service too, not just the Electron UI.

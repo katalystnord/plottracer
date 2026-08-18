@@ -25,7 +25,7 @@ import type { RGB } from '../../algorithms/colorFilter.js';
  *
  * The fixtures are matplotlib renders that ship the values they were drawn from
  * (`samples/generators/gen_colorbar_fixtures.py`), so this measures the whole
- * chain — sample the key, invert a cell, map through two labelled ticks — against
+ * chain - sample the key, invert a cell, map through two labelled ticks - against
  * ground truth.
  *
  * ⚑⚑ IT FOUND TWO DEFECTS THE SYNTHETIC TESTS COULD NOT SEE, both of them the
@@ -37,7 +37,7 @@ import type { RGB } from '../../algorithms/colorFilter.js';
  * continuous by construction.
  *
  * ⚑ THE CLAIM UNDER TEST IS NOT "THE ERROR IS SMALL". On the JPEG fixture it is
- * not small. The claim is that the error is REPORTED — see the silent-miss test,
+ * not small. The claim is that the error is REPORTED - see the silent-miss test,
  * which is the one that matters most in this file.
  */
 
@@ -92,7 +92,7 @@ function keyStrip(fig: TruthFigure, img: Image): ColorBarStrip {
 /**
  * The whole calibrated key: the strip, plus the two labelled ticks that give it
  * a scale. This is the app's own object (`algorithms/colorScale.ts`) rather than
- * arithmetic the test does for itself — an earlier version of this file
+ * arithmetic the test does for itself - an earlier version of this file
  * interpolated the ticks inline, which measured the inversion against a mapping
  * no user would ever run.
  */
@@ -164,7 +164,7 @@ const HEATMAPS = ['heatmap-viridis.png', 'heatmap-jet.png', 'heatmap-jet-jpeg.pn
 describe('colour bar against real matplotlib renders', () => {
   it('reads a clean heatmap to a fraction of a degree', () => {
     // Measured on a −40..120 °C key ~550px long: viridis max 0.64 °C, mean 0.26;
-    // jet max 0.64, mean 0.24. That residue is the key's own lookup table — 256
+    // jet max 0.64, mean 0.24. That residue is the key's own lookup table - 256
     // entries over 160 °C is 0.625 °C per entry, so half an entry is the floor
     // any inversion through this key can reach. We are at it.
     for (const name of ['heatmap-viridis.png', 'heatmap-jet.png']) {
@@ -176,7 +176,7 @@ describe('colour bar against real matplotlib renders', () => {
     }
   });
 
-  it('NEVER misses silently — every band that missed the truth said so', () => {
+  it('NEVER misses silently - every band that missed the truth said so', () => {
     // ⚑⚑ THE CENTRAL CLAIM OF THE WHOLE MODULE, and the only one that would
     // still matter if the accuracy were worse. In a heatmap the colour IS the
     // value, so a wrong reading has no other symptom: no missing point, no
@@ -208,7 +208,7 @@ describe('colour bar against real matplotlib renders', () => {
 
   it('widens the band on `jet`s ill-conditioned stretch, located by measurement', () => {
     // ⚑ THE PRECONCEPTION WAS HALF WRONG AND THE FIXTURE SETTLED IT. `jet` is
-    // ill-conditioned "near its ends" — but measured against its own lookup
+    // ill-conditioned "near its ends" - but measured against its own lookup
     // table, its mean step (4.26 RGB units per entry) is more than DOUBLE
     // viridis's (1.90), so over most of its length jet is the better-conditioned
     // of the two in RGB terms and its bands are NARROWER. The ill-conditioning is
@@ -234,7 +234,7 @@ describe('colour bar against real matplotlib renders', () => {
   it('reports the damage JPEG does rather than absorbing it', () => {
     const clean = readFigure(figure('heatmap-jet.png'), (img, c) => cellColor(img, c.x, c.y));
     const jpeg = readFigure(figure('heatmap-jet-jpeg.png'), (img, c) => cellColor(img, c.x, c.y));
-    // The same figure, the same cells, the same key — only the encoder differs.
+    // The same figure, the same cells, the same key - only the encoder differs.
     expect(max(jpeg.map((o) => o.error))).toBeGreaterThan(max(clean.map((o) => o.error)));
     expect(max(jpeg.map((o) => o.distance))).toBeGreaterThan(0);
     expect(max(clean.map((o) => o.distance))).toBe(0);
@@ -258,7 +258,7 @@ describe('colour bar against real matplotlib renders', () => {
     const strip = keyStrip(fig, img);
     const reading = invertColor(strip, pixelAt(img, fig.key.from.x, fig.key.from.y))!;
     expect(reading.rivals).toHaveLength(1);
-    // At the far end, not next door — that is what makes it a rival rather than
+    // At the far end, not next door - that is what makes it a rival rather than
     // the same band read twice.
     expect(Math.abs(reading.rivals[0]!.t - reading.t)).toBeGreaterThan(0.9);
   });

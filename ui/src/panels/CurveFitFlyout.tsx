@@ -6,7 +6,7 @@ import { CURVE_FIT_MAX_DEGREE } from '../../../algorithms/curveFit.js';
 import { FIT_MODELS } from '../../../algorithms/nonlinearFit.js';
 
 /**
- * The Curve Fit rail fold-out — INPUTS only (v1.1 step 2): Model · Degree ·
+ * The Curve Fit rail fold-out - INPUTS only (v1.1 step 2): Model · Degree ·
  * Restrict · Fit · Clear. The RESULT (equation, R², RMS, n) lives in
  * `panels/CurveFitCard.tsx`, in the sidebar.
  *
@@ -83,7 +83,7 @@ export function CurveFitFlyout({
             <option value="polynomial">Polynomial</option>
             {FIT_MODELS.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label} — {m.form}
+                {m.label} - {m.form}
               </option>
             ))}
           </select>
@@ -118,7 +118,7 @@ export function CurveFitFlyout({
           Clear
         </button>
       </div>
-      {/* The chosen model's form, spelled out — what makes the width cap free. */}
+      {/* The chosen model's form, spelled out - what makes the width cap free. */}
       {model !== 'polynomial' && (
         <div
           data-testid="curve-fit-model-form"

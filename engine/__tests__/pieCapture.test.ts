@@ -4,7 +4,7 @@ import type { PieAxes } from '../../core/axes/pie.js';
 import { buildExportJson, buildExportSections, type ExportAssemblyInput } from '../exportAssembly.js';
 
 /**
- * Capturing a pie's slices — one click per boundary.
+ * Capturing a pie's slices - one click per boundary.
  *
  * ⚑ A pie's slices SHARE their boundaries, which is what separates this from every
  * other tuple-shaped type. A histogram's bins do not: bins can have gaps and uneven
@@ -114,7 +114,7 @@ describe('chaining is opt-in, not the default for tuples', () => {
 });
 
 describe('the direction of the walk', () => {
-  it('reports the complement when walked backwards — loudly, not silently', () => {
+  it('reports the complement when walked backwards - loudly, not silently', () => {
     // ⚑ Nothing infers which way round the user is going, and nothing needs to: walk
     // anticlockwise and four quarter-turns report 75 each, totalling 300 against a
     // figure that says 100. The error is in the numbers rather than hidden by them,
@@ -152,7 +152,7 @@ describe('an exploded slice is captured about its own apex', () => {
     // Consumed: explosion arms ONE sector, it is not a mode the figure is in.
     expect(session.isAwaitingExplodedApex()).toBe(false);
 
-    // The apex is not a data point — it is geometry the sector is measured about.
+    // The apex is not a data point - it is geometry the sector is measured about.
     expect(session.getDataset().getCount()).toBe(0);
 
     // Its two edges, as a pair: a pulled-out slice shares boundaries with nobody.
@@ -204,7 +204,7 @@ describe('an exploded slice is captured about its own apex', () => {
   });
 
   it('leaves ordinary slices measured about the fitted centre', () => {
-    // No apex stored means "this slice never moved" — so the fallback is the pie's
+    // No apex stored means "this slice never moved" - so the fallback is the pie's
     // own centre, and nothing about an ordinary capture changes.
     const session = calibratedPie();
     clickBoundaries(session, [-90, 0]);
@@ -782,7 +782,7 @@ describe('the captured sector VALUE now reaches export (v2.0 groundwork)', () =>
   });
 });
 
-describe('checkValues — the refusals a LOADED pie file must meet too', () => {
+describe('checkValues - the refusals a LOADED pie file must meet too', () => {
   // ⚑ Declared on the config rather than performed inside buildAxes, so that
   // plotData.deserialize -- which calls axes.calibrate() and never inspects its
   // return value -- meets the same refusal a click does. The config's own
@@ -794,14 +794,14 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
   // it: 4 no-coverage mutants in checkValues and 5 in buildAxes. Nothing would
   // have noticed any of these refusals being deleted.
 
-  /** Outline clicks only — globals set per test so each refusal can be reached. */
+  /** Outline clicks only - globals set per test so each refusal can be reached. */
   function pieAwaitingGlobals(points = [90, 210, 330]) {
     const session = new CalibrationSession(PIE_AXES_CONFIG);
     for (const a of points) session.handleCalibrationClick(...at(a));
     return session;
   }
 
-  it('refuses a NEGATIVE total — a sector is a fraction of a whole', () => {
+  it('refuses a NEGATIVE total - a sector is a fraction of a whole', () => {
     const session = pieAwaitingGlobals();
     session.setGlobalFieldValue('total', '-50');
     expect(session.runCalibration()).toBe(false);
@@ -809,7 +809,7 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
     expect(session.isCalibrated()).toBe(false);
   });
 
-  it('refuses a ZERO total — every slice would read as an infinite share', () => {
+  it('refuses a ZERO total - every slice would read as an infinite share', () => {
     const session = pieAwaitingGlobals();
     session.setGlobalFieldValue('total', '0');
     expect(session.runCalibration()).toBe(false);
@@ -823,7 +823,7 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
     expect(session.getCalibrationError()).toMatch(/total must be a positive number/);
   });
 
-  it('refuses a sweep above 360 — a pie cannot turn more than once', () => {
+  it('refuses a sweep above 360 - a pie cannot turn more than once', () => {
     const session = pieAwaitingGlobals();
     session.setGlobalFieldValue('total', '100');
     session.setGlobalFieldValue('sweep', '540');
@@ -839,7 +839,7 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
     expect(session.getCalibrationError()).toMatch(/sweep must be between 0 and 360/);
   });
 
-  it('ACCEPTS exactly 360 and exactly a half pie — the boundary is inclusive', () => {
+  it('ACCEPTS exactly 360 and exactly a half pie - the boundary is inclusive', () => {
     // The guard is `sweep > 360`, not `>=`. Asserting the accepted edge is what
     // stops a later tightening from rejecting an ordinary whole circle.
     for (const sweep of ['360', '180']) {
@@ -868,7 +868,7 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
     expect(session.getCalibrationError()).toMatch(/five outline points/);
   });
 
-  it('an UNtilted pie is content with three — the refusal is scoped to tilt', () => {
+  it('an UNtilted pie is content with three - the refusal is scoped to tilt', () => {
     // Guards against the five-point rule being applied to every pie, which would
     // reject the ordinary circular case the app is mostly used for.
     const session = pieAwaitingGlobals([90, 210, 330]);
@@ -906,14 +906,14 @@ describe('checkValues — the refusals a LOADED pie file must meet too', () => {
 
   it('⚑⚑ KEEPS them across a RE-CALIBRATION, without anything copying them', () => {
     // ⚠️ THE MEASUREMENT BEHIND DELETING THE METADATA CARRY.
-    // `runCalibration` ends with `this.axes = result.axes` — a brand-new axes —
+    // `runCalibration` ends with `this.axes = result.axes` - a brand-new axes -
     // and a carry was added so a heatmap's RECORD (its grid, names and readings,
     // which lived in axes metadata) survived. The audit asked what ELSE that
     // carry was holding up, and the answer should be nothing: every other key in
     // axes metadata is DECLARED during calibration and rewritten by `buildAxes`
     // on every build.
     //
-    // Pie is the type that tests that claim hardest — three keys, all typed by
+    // Pie is the type that tests that claim hardest - three keys, all typed by
     // the user, none of them derived from a pixel. If they survive a second
     // calibration, they survive because `buildAxes` writes them again, not
     // because something copied them.

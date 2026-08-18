@@ -17,7 +17,7 @@ function click(over: Partial<MeasureClickInput> = {}): MeasureClickInput {
   };
 }
 
-describe('snapToNearestPoint — an assist that must never move a deliberate vertex', () => {
+describe('snapToNearestPoint - an assist that must never move a deliberate vertex', () => {
   const pts = [
     { px: 100, py: 100 },
     { px: 140, py: 100 },
@@ -38,14 +38,14 @@ describe('snapToNearestPoint — an assist that must never move a deliberate ver
   it('⚑ keeps the reach at ~12 SCREEN px, so it feels the same at any zoom', () => {
     // The threshold is in the click's own (image) space, so it must SHRINK as
     // the view is magnified. Without dividing by the zoom, snapping would
-    // swallow ever more of the figure the further you zoomed in — exactly when
+    // swallow ever more of the figure the further you zoomed in - exactly when
     // the user is being most precise.
     const near = { px: 100, py: 100 };
     // 11 image px away: inside 12 at 1x, outside 12/4 = 3 at 4x.
     expect(snapToNearestPoint(111, 100, [near], 1)).toEqual({ x: 100, y: 100 });
     expect(snapToNearestPoint(111, 100, [near], 4)).toEqual({ x: 111, y: 100 });
     // Zoomed OUT to 0.25x the reach is 12/0.25 = 48 image px, so a point 40
-    // away — far out of reach at 1x — now snaps.
+    // away - far out of reach at 1x - now snaps.
     expect(snapToNearestPoint(60, 100, [near], 1)).toEqual({ x: 60, y: 100 });
     expect(snapToNearestPoint(60, 100, [near], 0.25)).toEqual({ x: 100, y: 100 });
   });
@@ -89,7 +89,7 @@ describe('slope', () => {
     });
   });
 
-  it('refuses BEFORE collecting anything — a refused tool must not bank points', () => {
+  it('refuses BEFORE collecting anything - a refused tool must not bank points', () => {
     expect(resolveMeasureClick(click({ tool: 'slope', slopeReady: false, pending: [P(1, 1)] })).kind).toBe('refuse');
   });
 
@@ -129,13 +129,13 @@ describe('distance', () => {
     expect(r).toEqual({ kind: 'record', tool: 'distance', points: [P(0, 0), P(10, 20)], labelAt: P(5, 10) });
   });
 
-  it('carries no slope — it is not that kind of measurement', () => {
+  it('carries no slope - it is not that kind of measurement', () => {
     const r = resolveMeasureClick(click({ tool: 'distance', pending: [P(0, 0)], point: P(1, 1) }));
     if (r.kind !== 'record') throw new Error('unreachable');
     expect(r.slope).toBeUndefined();
   });
 
-  it('needs no axes at all — a distance in pixels is still a real measurement', () => {
+  it('needs no axes at all - a distance in pixels is still a real measurement', () => {
     expect(
       resolveMeasureClick(click({ tool: 'distance', pending: [P(0, 0)], point: P(1, 1), slopeReady: false, toData: null })).kind
     ).toBe('record');
@@ -151,7 +151,7 @@ describe('angle', () => {
   it('⚑ REORDERS vertex-first clicks into [arm, vertex, arm]', () => {
     // The user clicks the VERTEX first (the tips bar says so), but both the
     // canvas and measurementValue() read the middle entry as the vertex.
-    // Storing the click order would measure the angle at an ARM instead — and
+    // Storing the click order would measure the angle at an ARM instead - and
     // the number still looks perfectly plausible, which is what makes it nasty.
     const vertex = P(0, 0);
     const armA = P(10, 0);
@@ -167,7 +167,7 @@ describe('angle', () => {
 });
 
 describe('area, and a tool not yet chosen', () => {
-  it('keeps accumulating vertices — the card’s Finish button closes it', () => {
+  it('keeps accumulating vertices - the card’s Finish button closes it', () => {
     for (const pending of [[], [P(0, 0)], [P(0, 0), P(1, 0)], [P(0, 0), P(1, 0), P(1, 1)]]) {
       const r = resolveMeasureClick(click({ tool: 'area', pending, point: P(9, 9) }));
       expect(r.kind, `${pending.length} down`).toBe('collect');

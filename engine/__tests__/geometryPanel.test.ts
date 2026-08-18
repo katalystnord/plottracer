@@ -6,7 +6,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /** `Object.hasOwn` in a repo that compiles to ES2020. Asking whether the KEY is
- * there, not whether reading it gives undefined — which is the whole question
+ * there, not whether reading it gives undefined - which is the whole question
  * wherever an absent field means "does not apply". */
 const hasKey = (obj: object, key: string): boolean => Object.prototype.hasOwnProperty.call(obj, key);
 
@@ -104,7 +104,7 @@ describe('geometry state on the dataset', () => {
   });
 
   it('leaves the series’ OTHER outputs alone', () => {
-    // The metadata record is shared — the curve fit and the error-bar relation
+    // The metadata record is shared - the curve fit and the error-bar relation
     // live in it too. Writing geometry by replacing the record instead of
     // extending it would silently delete them, and the user would find out at
     // export time.

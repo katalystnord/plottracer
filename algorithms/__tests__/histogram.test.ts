@@ -8,7 +8,7 @@ describe('histogram bins', () => {
       expect(bin).toEqual({ binStart: 20, binEnd: 30, value: 47 });
     });
 
-    it('is independent of click order — right corner first gives the same bin', () => {
+    it('is independent of click order - right corner first gives the same bin', () => {
       const left: BinCorner = { x: 20, y: 47 };
       const right: BinCorner = { x: 30, y: 47 };
       expect(binFromCorners(right, left)).toEqual(binFromCorners(left, right));
@@ -25,7 +25,7 @@ describe('histogram bins', () => {
       expect(bin).toEqual({ binStart: -5, binEnd: -1, value: -12 });
     });
 
-    it('leaves valueErr unset — nothing captures uncertainty yet', () => {
+    it('leaves valueErr unset - nothing captures uncertainty yet', () => {
       expect(binFromCorners({ x: 0, y: 1 }, { x: 1, y: 1 }).valueErr).toBeUndefined();
     });
   });
@@ -60,7 +60,7 @@ describe('histogram bins', () => {
       expect(bins[1]).toEqual({ binStart: 10, binEnd: 20, value: 8 });
     });
 
-    it('does not re-sort — capture order is kept so table and export agree', () => {
+    it('does not re-sort - capture order is kept so table and export agree', () => {
       const bins = binsFromCorners([
         [{ x: 30, y: 1 }, { x: 40, y: 1 }],
         [{ x: 0, y: 5 }, { x: 10, y: 5 }],

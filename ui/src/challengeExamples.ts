@@ -1,12 +1,12 @@
 /**
- * Trace Challenge — the UI-side manifest (v1.2 game). This is where the committed
+ * Trace Challenge - the UI-side manifest (v1.2 game). This is where the committed
  * ground-truth JSON is pulled into the bundle (Vite resolves JSON imports), keyed
  * by the SAME `EXAMPLES` id used to load the figure. Kept out of `engine/` so the
  * pure round logic stays asset-free and node-testable.
  *
  * Pool = 13 examples across 7 scoring families: XY curves + scatter (Phase A),
  * bar / histogram / box (Phase B), the three v2.0 bar variants, and the two
- * non-Cartesian records — spider (N×1D) and pie (1.5D intervals).
+ * non-Cartesian records - spider (N×1D) and pie (1.5D intervals).
  */
 import type { ChallengeTruth, ChallengeFamily, ChallengeGrade } from '../../engine/traceChallenge.js';
 
@@ -26,7 +26,7 @@ import pieExplodedTruth from '../../samples/pie-exploded-market-share.truth.json
 
 export interface ChallengeMeta {
   family: ChallengeFamily;
-  /** How much work the round is — see ChallengeGrade. Drives the weighted draw
+  /** How much work the round is - see ChallengeGrade. Drives the weighted draw
    * (2 easy / 1 medium / 1 hard), so a game is the same shape whichever rounds
    * come up. */
   grade: ChallengeGrade;
@@ -57,7 +57,7 @@ export interface ChallengeMeta {
  * not, and the mismatch is the MODEL showing through rather than an oversight:
  * a spider's `axes` is an ARRAY (one scale per spoke, the N×1D record) and a pie
  * has no axes block at all (its scale is a `total`). Translating at this
- * boundary is the same thing an import filter does — the files stay faithful to
+ * boundary is the same thing an import filter does - the files stay faithful to
  * the figures, and `engine/` keeps one type.
  */
 const spiderRaw = spiderTruth as unknown as {
@@ -125,7 +125,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   xy: {
     family: 'curve',
     grade: 'hard',
-    instruction: 'Trace the stress–strain curve — place points along it, left to right.',
+    instruction: 'Trace the stress–strain curve - place points along it, left to right.',
     truth: xyTruth as unknown as ChallengeTruth,
   },
   // The two multi-curve rounds ask for ONE curve only (David, playtest: four is a
@@ -134,7 +134,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'xy-multi': {
     family: 'curve',
     grade: 'easy',
-    instruction: 'Trace just the top curve — Blend A (the highest line).',
+    instruction: 'Trace just the top curve - Blend A (the highest line).',
     truth: {
       ...(multiTruth as unknown as ChallengeTruth),
       series: [(multiTruth as unknown as ChallengeTruth).series[0]!],
@@ -143,7 +143,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   dashed: {
     family: 'curve',
     grade: 'hard',
-    instruction: 'Trace just Formulation A — the solid curve (the highest one).',
+    instruction: 'Trace just Formulation A - the solid curve (the highest one).',
     truth: {
       ...(dashedTruth as unknown as ChallengeTruth),
       series: [(dashedTruth as unknown as ChallengeTruth).series[0]!],
@@ -158,19 +158,19 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   histogram: {
     family: 'histogram',
     grade: 'medium',
-    instruction: 'Trace the histogram — click the two top corners of each bar (bin start, then bin end).',
+    instruction: 'Trace the histogram - click the two top corners of each bar (bin start, then bin end).',
     truth: histogramTruth as unknown as ChallengeTruth,
   },
   bar: {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace the bar chart — click the top of each bar, left to right.',
+    instruction: 'Trace the bar chart - click the top of each bar, left to right.',
     truth: barTruth as unknown as ChallengeTruth,
   },
   boxplot: {
     family: 'box',
     grade: 'hard',
-    instruction: 'Trace each box — place Min, Q1, Median, Q3, Max per box (the tips bar shows what’s next).',
+    instruction: 'Trace each box - place Min, Q1, Median, Q3, Max per box (the tips bar shows what’s next).',
     truth: boxTruth as unknown as ChallengeTruth,
   },
   // ⚑ THE v2.0 BAR VARIANTS, added 2026-08-10. All three score through the
@@ -180,7 +180,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-grouped': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the Control bars — the dark blue ones, left to right.',
+    instruction: 'Trace just the Control bars - the dark blue ones, left to right.',
     truth: {
       ...(barGroupedTruth as unknown as ChallengeTruth),
       series: [(barGroupedTruth as unknown as ChallengeTruth).series[0]!],
@@ -192,7 +192,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-grouped-missing': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the Control bars — the dark blue ones, left to right.',
+    instruction: 'Trace just the Control bars - the dark blue ones, left to right.',
     truth: {
       ...(barMissingTruth as unknown as ChallengeTruth),
       series: [(barMissingTruth as unknown as ChallengeTruth).series[0]!],
@@ -203,7 +203,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-stacked': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the bottom segment of each bar — Materials.',
+    instruction: 'Trace just the bottom segment of each bar - Materials.',
     truth: {
       ...(barStackedTruth as unknown as ChallengeTruth),
       series: [(barStackedTruth as unknown as ChallengeTruth).series[0]!],
@@ -216,7 +216,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   spider: {
     family: 'spider',
     grade: 'easy',
-    instruction: 'Place one point on each axis of the Chitosan film profile — see the legend for its colour.',
+    instruction: 'Place one point on each axis of the Chitosan film profile - see the legend for its colour.',
     truth: spiderChallengeTruth,
   },
   // ⚑ Graded MEDIUM on 6 clicks, against bar's EASY on 12. What is being asked
@@ -227,7 +227,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   pie: {
     family: 'pie',
     grade: 'medium',
-    instruction: 'Click each slice boundary on the rim — start at the top (12 o’clock) and work clockwise.',
+    instruction: 'Click each slice boundary on the rim - start at the top (12 o’clock) and work clockwise.',
     truth: pieChallengeTruth,
   },
   // ⚑ THE BOSS LEVEL (v2.1). A pulled-out slice does not share the pie's centre,
@@ -245,7 +245,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'pie-exploded': {
     family: 'pie',
     grade: 'hard',
-    instruction: 'Click each slice boundary — start at the top (12 o’clock) and work clockwise.',
+    instruction: 'Click each slice boundary - start at the top (12 o’clock) and work clockwise.',
     truth: pieExplodedChallengeTruth,
   },
 };

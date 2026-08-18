@@ -173,7 +173,7 @@ describe('sampleCurveFitLine', () => {
 /**
  * Nonlinear models (v1.5). The solver itself is proved in
  * algorithms/__tests__/nonlinearFit.test.ts by recovering known parameters from
- * analytic data; these cover the PLUMBING — that a model reaches the fit, comes
+ * analytic data; these cover the PLUMBING - that a model reaches the fit, comes
  * back on the stored state, survives save/load, and that fits written before
  * models existed still read as polynomials.
  */

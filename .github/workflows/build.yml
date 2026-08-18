@@ -1,6 +1,6 @@
 name: Build desktop binaries
 
-# Produces the PlotTracer installers on each platform's own runner — the only way
+# Produces the PlotTracer installers on each platform's own runner - the only way
 # to get a real macOS .dmg / Windows .exe (they can't be cross-built on Linux).
 # Run it by hand from the Actions tab (workflow_dispatch), or automatically when a
 # version tag is pushed. On a tag push it also PUBLISHES a GitHub Release with the
@@ -19,8 +19,8 @@ concurrency:
 
 jobs:
   # ⚑ THE DURABLE HALF OF THE TYPECHECK GATE. Until v2.1.0 this workflow ran
-  # `npm ci` and the packager and NOTHING else — no typecheck, no lint, no tests
-  # — so a commit that did not compile could be built, tagged and PUBLISHED. It
+  # `npm ci` and the packager and NOTHING else - no typecheck, no lint, no tests
+  # - so a commit that did not compile could be built, tagged and PUBLISHED. It
   # nearly was: `vite build` strips types rather than checking them, exactly as
   # vitest does, so nothing in the pipeline would have said a word.
   # tools/git-hooks/pre-commit is the fast local half; this is the half that
@@ -35,21 +35,24 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # ⚑ The half that survives a fresh clone and `--no-verify`, for the style
+      # rule as well as the types. See tools/no-em-dashes.sh for why it exists.
+      - run: ./tools/no-em-dashes.sh
       - run: npm run typecheck
       - run: npm run lint
       # ⚑⚑ UNTIL 2026-08-17 THIS PIPELINE NEVER RAN A TEST. A tag could be
       # pushed, built and PUBLISHED with the whole board unexecuted anywhere but
-      # the maintainer's own machine — and the local pre-commit hook only
+      # the maintainer's own machine - and the local pre-commit hook only
       # typechecks, which `--no-verify` walks past. 3,600-odd tests in about a
       # minute is the cheapest gate this project has ever been offered.
       # ⚑ Unit only, and NOT because the rest does not matter: the e2e suites
       # drive a real Electron app on a virtual display and take ~22 minutes.
       # Running them here would trade a fast trustworthy gate for a slow flaky
-      # one. **So this proves the pure layers, not the app** — his hands on the
+      # one. **So this proves the pure layers, not the app** - his hands on the
       # built package remain the only instrument pointing outward, and the local
       # `npm test` remains the only one that drives the real thing.
       # ⚑ The split is `vitest.unit.config.ts`, which excludes by the pattern
-      # `*.e2e.test.ts` rather than by a list — and `e2eContainment.test.ts`
+      # `*.e2e.test.ts` rather than by a list - and `e2eContainment.test.ts`
       # enforces that every Electron-launching file is named that way, so a new
       # one cannot escape the pattern the way it would escape a list.
       - run: npm run test:unit
@@ -99,15 +102,15 @@ jobs:
           # ⚑ 1 day, not 14. These artifacts exist only to ferry the installers
           # from the three matrix jobs to the release job, which runs minutes later
           # in the same workflow. ARTIFACTS count against the account's storage
-          # quota; RELEASE ASSETS on a public repo do not — so keeping ~500 MB of
+          # quota; RELEASE ASSETS on a public repo do not - so keeping ~500 MB of
           # them alive for a fortnight after they have already been attached to the
           # release was paying storage for a copy nobody reads. A hand-run
           # (workflow_dispatch) build publishes no release, so its artifacts are the
-          # only output — one day is still enough to download them.
+          # only output - one day is still enough to download them.
           retention-days: 1
 
   # On a version-tag push, gather every platform's installer and publish a public
-  # GitHub Release with them attached — this is what the website's Download links
+  # GitHub Release with them attached - this is what the website's Download links
   # point at. A hand (workflow_dispatch) run skips this and just leaves artifacts.
   # A tag with a hyphen (v1.0.0-rc.3) is marked a pre-release; a clean tag (v1.0.0)
   # is a full release and becomes "Latest".

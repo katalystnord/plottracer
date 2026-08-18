@@ -1,20 +1,20 @@
 /**
- * B4 — ⚑⚑ A CAP IS NOT A POINT ON THE CURVE EITHER.
+ * B4 - ⚑⚑ A CAP IS NOT A POINT ON THE CURVE EITHER.
  *
  * The sweep after the export defect (a found bug is a search query, not a
  * ticket closed): WHO ELSE walks a series' pixels as though every one of them
  * were a data point? Two, both deriving something from the whole series:
  *
- *   · `getFitPoints`  (algorithms/curveFit.ts) — a polynomial fitted through
+ *   · `getFitPoints`  (algorithms/curveFit.ts) - a polynomial fitted through
  *     the error caps as well as the data. Nothing refuses it, and the fitted
  *     line is drawn over the figure, so the user meets a curve that is wrong
  *     by however wide the bars are.
- *   · `getGeometryPoints` (algorithms/geometry.ts) — arc length and area over
+ *   · `getGeometryPoints` (algorithms/geometry.ts) - arc length and area over
  *     a path that zig-zags out to every cap and back.
  *
  * ⚑ AND GEOMETRY HAD THE OPPOSITE FAILURE AT THE SAME TIME. Its refusal asks
- * `dataset.hasSlots()` — "a Box Plot's tuples are independent measurements, not
- * a traced curve" — which is right about a Box Plot and wrong about an XY
+ * `dataset.hasSlots()` - "a Box Plot's tuples are independent measurements, not
+ * a traced curve" - which is right about a Box Plot and wrong about an XY
  * scatter that has acquired extents. So the same series was simultaneously
  * REFUSED geometry (because it now has slots) and, had the refusal not fired,
  * would have measured the caps. The shape question, one layer down: ask what
@@ -73,7 +73,7 @@ describe('a curve fit reads the data, not its uncertainty', () => {
     const fit = 'curveFit' in result ? result.curveFit : null;
     expect(fit).not.toBeNull();
     // y = x exactly. Fitted through the caps the SLOPE survives (they are
-    // symmetric) but R² collapses and `n` counts three times the readings — so
+    // symmetric) but R² collapses and `n` counts three times the readings - so
     // the assertions that bite are the goodness of fit and the point count, not
     // the coefficients.
     expect(fit!.n).toBe(4);
@@ -108,7 +108,7 @@ describe('geometry reads the data, not its uncertainty', () => {
 
   it('⚑ a genuine tuple type is STILL refused', () => {
     // The companion assertion. Box Plot's five letter values are independent
-    // measurements, not a traced curve — that refusal must survive the change
+    // measurements, not a traced curve - that refusal must survive the change
     // that stopped error slots triggering it.
     const s = session();
     expect(s.applyBoxPlotGroups()).toBe(true);

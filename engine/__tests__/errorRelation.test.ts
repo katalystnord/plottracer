@@ -28,7 +28,7 @@ function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   }
 }
 
-describe('errorRelation — storage on the dataset itself', () => {
+describe('errorRelation - storage on the dataset itself', () => {
   it('round-trips a relation through the dataset metadata', () => {
     const ds = new Dataset();
     expect(getErrorRelation(ds)).toBeNull();
@@ -102,7 +102,7 @@ describe('errorRelation — storage on the dataset itself', () => {
   });
 });
 
-describe('errorRelation — finding the series related to one', () => {
+describe('errorRelation - finding the series related to one', () => {
   const build = () => {
     const target = new Dataset();
     target.name = 'Sample A';
@@ -130,7 +130,7 @@ describe('errorRelation — finding the series related to one', () => {
   });
 });
 
-describe('errorRelation — the integrity cascade (relating BY NAME has to pay for itself)', () => {
+describe('errorRelation - the integrity cascade (relating BY NAME has to pay for itself)', () => {
   it('retargets every relation pointing at a renamed series', () => {
     const datasets = [new Dataset(), new Dataset()];
     setErrorRelation(datasets[0]!, { role: 'upper', of: 'Sample A' });
@@ -155,7 +155,7 @@ describe('errorRelation — the integrity cascade (relating BY NAME has to pay f
   });
 });
 
-describe('CalibrationSession — the error relation (checkpoint 77)', () => {
+describe('CalibrationSession - the error relation (checkpoint 77)', () => {
   const session = () => new CalibrationSession(XY_AXES_CONFIG) as CalibrationSession<XYAxes>;
 
   it('declares and reads back a relation between two series', () => {
@@ -183,7 +183,7 @@ describe('CalibrationSession — the error relation (checkpoint 77)', () => {
     );
   });
 
-  it('a rename carries its relations with it — the link does not go stale', () => {
+  it('a rename carries its relations with it - the link does not go stale', () => {
     // The bug this prevents is silent: the whisker simply stops being drawn,
     // and nothing on screen says why.
     const s = session();
@@ -243,12 +243,12 @@ describe('CalibrationSession — the error relation (checkpoint 77)', () => {
     expect(bars[0]!.yUpper).toBeUndefined();
   });
 
-  it('resolves nothing before calibration — a cap has no meaning in pixel space', () => {
+  it('resolves nothing before calibration - a cap has no meaning in pixel space', () => {
     const s = session();
     expect(s.getResolvedErrorBars(0)).toEqual([]);
   });
 
-  it('a dedupe rename on load does NOT retarget — first occurrence keeps the name', () => {
+  it('a dedupe rename on load does NOT retarget - first occurrence keeps the name', () => {
     // Deliberate divergence from renameDataset. A dedupe rename disambiguates
     // rather than changes identity: a file saying `of: "A"` while holding two
     // "A"s never said which, so it resolves to the first -- which still holds

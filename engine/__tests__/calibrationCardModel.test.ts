@@ -5,9 +5,9 @@ import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 /**
  * ⚑⚑ THE CALIBRATION CARD'S CASES, as outcomes rather than conclusions.
  *
- * David's design, 2026-08-17: every calibrated type is two stages — calibrate
+ * David's design, 2026-08-17: every calibrated type is two stages - calibrate
  * the axes (ending **Calibrate**), then read what those axes make readable
- * (ending **Read cells** / **Read categories**) — and *"the whole two-stage
+ * (ending **Read cells** / **Read categories**) - and *"the whole two-stage
  * process should just fold down to one row."*
  *
  * ⚑ These live in `engine/` for the reason the whole refactor exists: the same
@@ -27,7 +27,7 @@ const base: CalibrationCardInput = {
 const GRID = { label: 'Grid', ending: 'Read cells' };
 
 describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
-  it('nothing captured yet — there is no calibration to show', () => {
+  it('nothing captured yet - there is no calibration to show', () => {
     expect(calibrationCardModel({ ...base, figureCaptured: false }).stage).toBe('capture');
   });
 
@@ -37,7 +37,7 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
     expect(m.ending).toBe('Calibrate');
     expect(m.foldedLine.status).toBe('3/8 set');
     expect(m.showsWalk).toBe(true);
-    // ⚑ ONE AT A TIME WHILE WORKING — the second stage is not shown yet even
+    // ⚑ ONE AT A TIME WHILE WORKING - the second stage is not shown yet even
     // though the type has one, because you are not in it.
     expect(m.showsSecondStage).toBe(false);
   });
@@ -68,7 +68,7 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
     expect(m.showsSecondStage).toBe(false);
   });
 
-  it('⚑⚑ both done and UNFOLDED: both stages at once — the review view', () => {
+  it('⚑⚑ both done and UNFOLDED: both stages at once - the review view', () => {
     // ⚑ This is the one that looks like it contradicts "one at a time", and does
     // not: unfolding a FINISHED card is a different act from unfolding a WORKING
     // one. While you work the card is a workspace; once done it is a record.
@@ -85,7 +85,7 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
 describe('⚑⚑ one stage at a time is NOT a hidden next step', () => {
   it('names the second stage while you are still calibrating, without its controls', () => {
     // The card's own history: gating the stage's button on having something to
-    // read "removed the button entirely before detection had found anything —
+    // read "removed the button entirely before detection had found anything -
     // the flow lost its visible next step again". A greyed control says what
     // comes next; a missing one says nothing.
     const m = calibrationCardModel({ ...base, secondStage: GRID });
@@ -138,7 +138,7 @@ describe('⚑⚑ a finished card you OPEN can still act', () => {
 });
 
 describe('a type with NO second stage finishes at calibration', () => {
-  it('is DONE the moment it is calibrated — it never enters a stage it lacks', () => {
+  it('is DONE the moment it is calibrated - it never enters a stage it lacks', () => {
     const m = calibrationCardModel({ ...base, calibrated: true, expanded: false });
     expect(m.stage).toBe('done');
     expect(m.ending).toBeNull();
@@ -154,7 +154,7 @@ describe('a type with NO second stage finishes at calibration', () => {
 describe('the folded line asserts only what has happened', () => {
   it('⚑ names the second stage only once it has produced a reading', () => {
     // A label with no reading behind it would claim work that has not been done
-    // — the same rule that stops a generated grid being drawn like a measured
+    // - the same rule that stops a generated grid being drawn like a measured
     // one. Declared-but-unfinished shows nothing.
     const m = calibrationCardModel({ ...base, secondStage: GRID, calibrated: true });
     expect(m.foldedLine.secondStage).toBeNull();
@@ -168,8 +168,8 @@ describe('the folded line asserts only what has happened', () => {
   });
 });
 
-describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card — a thirteenth cannot diverge', () => {
-  it('is not vacuous — the registry is populated', () => {
+describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card - a thirteenth cannot diverge', () => {
+  it('is not vacuous - the registry is populated', () => {
     expect(ALL_AXES_TYPE_CONFIGS.length).toBeGreaterThanOrEqual(12);
   });
 
@@ -178,7 +178,7 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card — a thirteenth can
       const declared = config.secondStage;
       if (declared) {
         // ⚑ A declaration must be usable: both halves non-blank, because both
-        // reach the screen — one on the folded line, one on a button.
+        // reach the screen - one on the folded line, one on a button.
         expect(declared.label.trim().length).toBeGreaterThan(0);
         expect(declared.ending.trim().length).toBeGreaterThan(0);
       }
@@ -204,14 +204,14 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card — a thirteenth can
     // 'heatmap']` above a comment that said Line *"wants one and deliberately
     // has none yet… that changes when v2.3 moves it onto a banded axis, and this
     // assertion is what will say so."* It said so: moving Line onto the banded
-    // axis turned it red, which is what a pin is for — the fourth entry arrives
+    // axis turned it red, which is what a pin is for - the fourth entry arrives
     // with a reason attached rather than unnoticed.
     const withStage = ALL_AXES_TYPE_CONFIGS.filter((c) => c.secondStage).map((c) => c.id).sort();
     expect(withStage).toEqual(['bar', 'boxplot', 'categorical', 'heatmap']);
   });
 
   it('⚑ every type that marks CATEGORY TICKS declares the stage that marks them', () => {
-    // The two capabilities describe the same work and must not drift apart —
+    // The two capabilities describe the same work and must not drift apart -
     // `categoryTicks` says where the ticks anchor, `secondStage` says the card
     // has a stage for placing them.
     for (const c of ALL_AXES_TYPE_CONFIGS) {

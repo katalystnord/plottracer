@@ -13,7 +13,7 @@ import type { CalibStepInfo } from '../axesTypeConfigs.js';
 import type { CapHandle } from '../calibrationSession.js';
 
 /**
- * These assert the BOOLEANS on a marker — which ones Konva may drag, and which
+ * These assert the BOOLEANS on a marker - which ones Konva may drag, and which
  * must stay out of its hit graph so the press underneath reaches the stage.
  * Three shipped defects lived in exactly those booleans (v1.3's caps, v2.0.1's
  * hauled datum, the pie ring's swallowed closing click), and none of them was
@@ -90,7 +90,7 @@ describe('calibration handles', () => {
     const midWalk = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated: false, mode: 'calibrate' }));
     expect(midWalk.every((x) => x.draggable === false)).toBe(true);
 
-    // Once calibrated, still inert outside Calibrate — a handle on the origin
+    // Once calibrated, still inert outside Calibrate - a handle on the origin
     // would otherwise swallow the click meant to drop a data point there.
     for (const mode of ['place-point', 'pan', 'select', 'error-bars']) {
       const m = buildCanvasMarkers(base({ steps, placedPoints: placed, mode }));
@@ -113,7 +113,7 @@ describe('calibration handles', () => {
   });
 
   it('label spider handles with the VALUE alone, and everything else with step=values', () => {
-    // ⚑ "Axis 5=80, Biodegradation" — six of those sprawled across the plot,
+    // ⚑ "Axis 5=80, Biodegradation" - six of those sprawled across the plot,
     // repeating axis names the figure already prints.
     const spider = buildCanvasMarkers(
       base({ axesKind: 'spider', steps: [step('a1', 'Axis 5')], placedPoints: { a1: { px: 1, py: 2, values: ['80', 'Biodegradation'] } } })
@@ -150,7 +150,7 @@ describe('calibration handles', () => {
 
   it('carry the STAGGER a config asks for, so labels on one line do not collide', () => {
     // ⚑ The heatmap's four colour-key clicks land along one strip, where every
-    // handle's outward direction is the same direction — so leaning away cannot
+    // handle's outward direction is the same direction - so leaning away cannot
     // separate them and the config says which ones hang below instead. Which
     // steps stagger is the config's knowledge, never this module's.
     const staggered = { ...step('kv1', 'Key value 1'), labelBelow: true };
@@ -159,7 +159,7 @@ describe('calibration handles', () => {
     );
     expect(m[0]!.labelBelow).toBe(true);
     // …and a step that did not ask carries no key at all, not an explicit
-    // `undefined` — the exactOptionalPropertyTypes rule labelAway follows.
+    // `undefined` - the exactOptionalPropertyTypes rule labelAway follows.
     expect('labelBelow' in m[1]!).toBe(false);
   });
 });
@@ -184,14 +184,14 @@ describe('inactive series are context, never a click target', () => {
     expect(inactive[0]!.color).toBe('rgb(1, 2, 3)');
   });
 
-  it('drop their dots entirely when dense — the LINE carries the shape', () => {
+  it('drop their dots entirely when dense - the LINE carries the shape', () => {
     // Even tiny dots mush into a furry band, and an inactive series has no
     // selection to preserve.
     const m = buildCanvasMarkers(base({ allDatasetsData: [view(1, false, [1, 2, 3], dense(40))] }));
     expect(m.filter((x) => x.id.startsWith('inactive-point-'))).toHaveLength(0);
   });
 
-  it('skip the ACTIVE series — its own points are pushed later, interactive', () => {
+  it('skip the ACTIVE series - its own points are pushed later, interactive', () => {
     // Drawing it here too would put a second, non-draggable dot under every
     // active point, and the press would land on whichever Konva hit first.
     const m = buildCanvasMarkers(
@@ -209,7 +209,7 @@ describe('inactive series are context, never a click target', () => {
   });
 });
 
-describe('data points — the draggable rules that shipped as defects', () => {
+describe('data points - the draggable rules that shipped as defects', () => {
   const three = { dataPoints: sparse(3), dataPointRoles: [null, null, null] };
 
   it('are draggable in the ordinary editing modes', () => {
@@ -219,7 +219,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
     }
   });
 
-  it('are inert in Pan and Measure — a measure click must pass THROUGH the marker', () => {
+  it('are inert in Pan and Measure - a measure click must pass THROUGH the marker', () => {
     // It used to let a measure click grab and move a data point.
     for (const mode of ['pan', 'measure']) {
       const m = points(buildCanvasMarkers(base({ ...three, mode })));
@@ -230,7 +230,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
   it('are inert in Error-bars for the TARGET series only', () => {
     // ⚑ v2.0.1: the press that recorded a cap also hauled the datum to wherever
     // the drag ended. But a blanket freeze made caps uncorrectable, and the
-    // lower cap is MIRRORED by the app — so an uncorrectable cap exports a
+    // lower cap is MIRRORED by the app - so an uncorrectable cap exports a
     // symmetry the figure never showed.
     const target = points(
       buildCanvasMarkers(base({ ...three, mode: 'error-bars', activeDatasetIndex: 2, errorTargetIndex: 2 }))
@@ -243,10 +243,10 @@ describe('data points — the draggable rules that shipped as defects', () => {
     expect(capSeries.every((x) => x.draggable === true)).toBe(true);
   });
 
-  it("⚑⚑ a CAP of the target series stays draggable — B4 put it in that series", () => {
+  it("⚑⚑ a CAP of the target series stays draggable - B4 put it in that series", () => {
     // The rule above scoped the inertness to the TARGET series so that a cap,
     // living in a series of its own, stayed correctable. B4 moves the cap ONTO
-    // the datum's record, so it is a pixel of the target series — and the same
+    // the datum's record, so it is a pixel of the target series - and the same
     // rule froze it. Measured on the built app: dragging the mirrored lower cap
     // did nothing at all, while three on-screen strings promised it would.
     //
@@ -277,7 +277,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
 
   it('⚑ a cap is not numbered like a data point', () => {
     // The label is the point's ordinal. A cap is part of a reading, not another
-    // reading — numbering it says a one-point series has three points, the same
+    // reading - numbering it says a one-point series has three points, the same
     // claim the series list was making before `datumCount`.
     const markers = points(
       buildCanvasMarkers(
@@ -295,7 +295,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
   });
 
   it('leave the hit graph while they are the ring-closing target', () => {
-    // ⚑ To close a pie ring you must click the first boundary — which has a
+    // ⚑ To close a pie ring you must click the first boundary - which has a
     // marker on it, and a draggable marker takes the press for its own drag, so
     // the click that closes the ring was the one click the figure ignored.
     const m = points(buildCanvasMarkers(base({ ...three, ringClosingIndex: 0 })));
@@ -305,14 +305,14 @@ describe('data points — the draggable rules that shipped as defects', () => {
 
   it('say so on the figure while closing is on offer, and stop when it is not', () => {
     const closing = points(buildCanvasMarkers(base({ ...three, ringClosingIndex: 0 })));
-    expect(closing[0]!.label).toBe('1 — click to close the ring');
+    expect(closing[0]!.label).toBe('1 - click to close the ring');
     expect(closing[1]!.label).toBe('2');
 
     const notClosing = points(buildCanvasMarkers(base({ ...three })));
     expect(notClosing[0]!.label).toBe('1');
   });
 
-  it('never let an interpolated sample be dragged — a drag is wiped on the next rebuild', () => {
+  it('never let an interpolated sample be dragged - a drag is wiped on the next rebuild', () => {
     const m = points(
       buildCanvasMarkers(base({ dataPoints: sparse(2), dataPointRoles: ['anchor', 'interpolated'] }))
     );
@@ -321,7 +321,7 @@ describe('data points — the draggable rules that shipped as defects', () => {
   });
 });
 
-describe('data points — selection and size', () => {
+describe('data points - selection and size', () => {
   it('follow the marquee in Select and the single active point elsewhere', () => {
     const sel = points(
       buildCanvasMarkers(base({ dataPoints: sparse(3), dataPointRoles: [null, null, null], mode: 'select', selectedPointIndices: [0, 2], activePointIndex: 1 }))
@@ -340,11 +340,11 @@ describe('data points — selection and size', () => {
     );
     expect(m[0]!.radius).toBe(6.5);
     expect(m[1]!.radius).toBe(2.5);
-    // ⚑ ABSENT, not undefined — ImageCanvas's own default of 5 applies.
+    // ⚑ ABSENT, not undefined - ImageCanvas's own default of 5 applies.
     expect('radius' in m[2]!).toBe(false);
   });
 
-  it('label an interpolated sample with nothing — the anchors are the record', () => {
+  it('label an interpolated sample with nothing - the anchors are the record', () => {
     const m = points(buildCanvasMarkers(base({ dataPoints: sparse(2), dataPointRoles: ['anchor', 'interpolated'] })));
     expect(m[0]!.label).toBe('1');
     expect(m[1]!.label).toBe('');
@@ -371,7 +371,7 @@ describe('a dense active series draws no dots except the selected one', () => {
     expect(m[0]!.draggable).toBe(true);
   });
 
-  it('always draws anchors and interpolated samples — they are not the furry band', () => {
+  it('always draws anchors and interpolated samples - they are not the furry band', () => {
     const roles2 = pts.map((_, i) => (i === 3 ? 'anchor' : i === 4 ? 'interpolated' : null));
     const m = points(buildCanvasMarkers(base({ dataPoints: pts, dataPointRoles: roles2 })));
     expect(m.map((x) => x.id)).toEqual(['point-3', 'point-4']);
@@ -401,7 +401,7 @@ describe('radialLabelCentre', () => {
     expect(radialLabelCentre('spider', spider)).toEqual({ x: 5, y: 6 });
   });
 
-  it('gives an XY plot no centre — the middle of the axes is not a place labels should flee', () => {
+  it('gives an XY plot no centre - the middle of the axes is not a place labels should flee', () => {
     expect(radialLabelCentre('xy', pie)).toBeUndefined();
     expect(radialLabelCentre('bar', spider)).toBeUndefined();
   });
@@ -418,7 +418,7 @@ describe('radialLabelCentre', () => {
       base({ dataPoints: sparse(1), dataPointRoles: [null], labelAway: { x: 1, y: 2 } })
     );
     expect(points(withCentre)[0]!.labelAway).toEqual({ x: 1, y: 2 });
-    // ⚑ ABSENT, not undefined — "does not apply", the exactOptionalPropertyTypes rule.
+    // ⚑ ABSENT, not undefined - "does not apply", the exactOptionalPropertyTypes rule.
     const without = points(buildCanvasMarkers(base({ dataPoints: sparse(1), dataPointRoles: [null] })));
     expect('labelAway' in without[0]!).toBe(false);
   });
@@ -427,13 +427,13 @@ describe('radialLabelCentre', () => {
 describe('buildSeriesLines', () => {
   const fallbackColor = '#fallback';
 
-  it('draws nothing for grouped types — a box plot gets glyphs, not a curve', () => {
+  it('draws nothing for grouped types - a box plot gets glyphs, not a curve', () => {
     expect(
       buildSeriesLines({ hasSlots: true, allDatasetsData: [view(0, true, [1, 1, 1], dense(40))], dataPoints: dense(40), datasetInfos: [info(0, true, [1, 1, 1])], fallbackColor })
     ).toEqual([]);
   });
 
-  it('draws nothing for a scatter — polylineRuns finds no runs', () => {
+  it('draws nothing for a scatter - polylineRuns finds no runs', () => {
     expect(
       buildSeriesLines({ hasSlots: false, allDatasetsData: [], dataPoints: sparse(6), datasetInfos: [info(0, true, [1, 1, 1])], fallbackColor })
     ).toEqual([]);
@@ -450,7 +450,7 @@ describe('buildSeriesLines', () => {
     expect(lines.map((l) => l.color)).toEqual(['rgb(1, 2, 3)', 'rgb(7, 8, 9)']);
   });
 
-  it('gives a sparse INACTIVE series no line — it stays dots', () => {
+  it('gives a sparse INACTIVE series no line - it stays dots', () => {
     const lines = buildSeriesLines({
       hasSlots: false,
       allDatasetsData: [view(1, false, [1, 2, 3], sparse(6))],

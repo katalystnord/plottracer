@@ -17,7 +17,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `projectContainer.ts` scored 57.77% with 50 of its
  * mutants uncovered outright. The existing suite round-trips a project
- * successfully — which is the happy path — and leaves untested the three
+ * successfully - which is the happy path - and leaves untested the three
  * things that decide what happens when the file is NOT what was expected:
  *
  *  - `isZipContainer` / `isTarArchive` (21 mutants between them). These are
@@ -34,12 +34,12 @@ import type { XYAxes } from '../../core/axes/xy.js';
  * The rule this file serves is the project's own: **guards belong in the
  * model, and the model has more than one entrance.** A container is the
  * second entrance, and a malformed one must be refused with words that name
- * what is wrong — never accepted into a half-built session.
+ * what is wrong - never accepted into a half-built session.
  */
 
 const PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-/** The PNG's payload, reusable as any mime's bytes — the sniffing under test
+/** The PNG's payload, reusable as any mime's bytes - the sniffing under test
  *  is about the DECLARED mime, not about decoding the picture. */
 const PNG_B64 = PNG_DATA_URL.split(',')[1]!;
 
@@ -121,7 +121,7 @@ describe('the tar sniffer reads ustar at its POSIX offset', () => {
 
   it('⚑ refuses a buffer one byte too short to hold the magic', () => {
     // 262 bytes is the minimum that contains offsets 257..261. At 261 the last
-    // byte read is `undefined`, which compares false anyway — but the length
+    // byte read is `undefined`, which compares false anyway - but the length
     // guard is what keeps that from being an accident.
     expect(isTarArchive(tarLike(261))).toBe(false);
     expect(isTarArchive(new Uint8Array(0))).toBe(false);

@@ -24,14 +24,14 @@ import { scoreRound, scoreOrderedRound } from '../../algorithms/challengeScore.j
  * proves the truth READERS agree with the committed files. It cannot see the
  * half that actually breaks: whether the round's calibration can be adopted at
  * all, and whether a PERFECT trace of the figure scores as perfect. Two of the
- * three defects this file was written against were in that gap —
+ * three defects this file was written against were in that gap -
  *
  *   1. a repeating step left at its minimum silently keeps the first three
  *      placed points and drops the rest, calibrating the round to a figure that
  *      is not the one on screen; and
  *   2. a spoke's two calibration fields (value, name) are POSITIONAL, so
  *      swapping them parses the axis name as the number and every reading is
- *      null — with a card that still says "calibrated".
+ *      null - with a card that still says "calibrated".
  *
  * Both produce a playable round that marks a correct trace wrong. Neither is
  * visible to a reader test.
@@ -101,7 +101,7 @@ describe('a spider round, end to end', () => {
     expect(session.getSpiderTable().axisRawNames[5]).toBe('Cost index');
   });
 
-  it('⚑ a PERFECT trace scores as perfect — no misses, no extras, no error', () => {
+  it('⚑ a PERFECT trace scores as perfect - no misses, no extras, no error', () => {
     // The end-to-end claim: clicking exactly where the truth says, through the
     // real session, comes back out as the truth. Everything else in the round
     // is a variation on this.
@@ -218,12 +218,12 @@ describe('a pie round, end to end', () => {
 
 
 /**
- * THE EXPLODED PIE — the pool's fourth HARD round (v2.1).
+ * THE EXPLODED PIE - the pool's fourth HARD round (v2.1).
  *
  * ⚑ WHY IT IS A BOSS LEVEL RATHER THAN A LONGER ONE. A pulled-out slice does not
  * share the pie's centre, so it is measured about its OWN apex. Measured about
  * the shared centre instead, the config's own comment puts a 90-degree slice
- * about 8 degrees out — a wrong number with nothing on screen looking wrong. The
+ * about 8 degrees out - a wrong number with nothing on screen looking wrong. The
  * chain breaks there too (a pulled-out slice shares no boundary with anyone), so
  * its two edges are a pair of their own.
  *
@@ -257,7 +257,7 @@ const EXPLODED: ChallengeTruth = {
  * player who never noticed the pulled-out slice.
  *
  * A non-exploded slice following another non-exploded one needs only its END
- * edge — the chain already pre-opened it holding the shared boundary. After an
+ * edge - the chain already pre-opened it holding the shared boundary. After an
  * exploded slice there is no chain to inherit, so both edges are clicked.
  */
 function traceExplodedPie(
@@ -300,7 +300,7 @@ describe('the exploded-pie round', () => {
     expect(score.penaltySeconds).toBeLessThan(1);
   });
 
-  it('⚑ MISSING the explosion reads the pulled-out slice wrong — the round’s whole point', () => {
+  it('⚑ MISSING the explosion reads the pulled-out slice wrong - the round’s whole point', () => {
     // Without this the round is just a longer pie and the HARD grade is a
     // decoration. The player who never armed it gets a plausible number that is
     // not the figure's.
@@ -335,12 +335,12 @@ describe('the exploded-pie round', () => {
  * A BAR ROUND, PLAYED THE WAY THE APP ACTUALLY RECORDS A BAR (v2.1 audit).
  *
  * ⚑ THE GAP THIS FILE WAS MISSING. Spider, pie, histogram and box all had an
- * end-to-end round test; bar did not — and bar is the family with SIX of the
+ * end-to-end round test; bar did not - and bar is the family with SIX of the
  * pool's rounds. Since the v2.0 bar model a bar is a two-slot INTERVAL captured
  * as a drag-box, and `handleBoxRect` records TWO pixels per bar. The round
  * scorer was still reading raw dataset pixels, one per click, so a perfect trace
  * of six bars handed twelve numbers to a scorer expecting six and paired them
- * against the wrong truth entries — about 193 seconds of penalty on a flawless
+ * against the wrong truth entries - about 193 seconds of penalty on a flawless
  * run, and the round was only "correct" if the player single-clicked, which
  * leaves every bar half-captured and exports no value at all.
  */

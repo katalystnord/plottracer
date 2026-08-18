@@ -27,7 +27,7 @@ import { plottracer } from '../index.mjs';
  * once a path is supplied: ESLint then returns a single severity-1 warning,
  * "No matching configuration found", and runs no rules at all. The first draft
  * asserted `toHaveLength(1)` and passed on THAT warning rather than on any
- * finding — a green test proving the rule was never invoked.
+ * finding - a green test proving the rule was never invoked.
  *
  * Every assertion below therefore checks the ruleId too, so a message that is
  * not ours can never satisfy it.
@@ -68,7 +68,7 @@ describe('calibrate-must-refuse', () => {
     ).toHaveLength(0);
   });
 
-  it('accepts one that DELEGATES its refusals — the false positive that bit first', () => {
+  it('accepts one that DELEGATES its refusals - the false positive that bit first', () => {
     // XYAxes' real shape. Reading only the method body called this dead.
     expect(
       lint(
@@ -81,7 +81,7 @@ describe('calibrate-must-refuse', () => {
     ).toHaveLength(0);
   });
 
-  it('accepts a calibrate that takes NO input — there is nothing to refuse', () => {
+  it('accepts a calibrate that takes NO input - there is nothing to refuse', () => {
     // ImageAxes: pixelToData returns the pixel unchanged.
     expect(lint(`class A { calibrate() { return true; } }`, 'calibrate-must-refuse')).toHaveLength(0);
   });
@@ -92,7 +92,7 @@ describe('calibrate-must-refuse', () => {
 });
 
 describe('no-dynamic-regexp', () => {
-  it('catches a RegExp built by interpolation — the wpdImport crash', () => {
+  it('catches a RegExp built by interpolation - the wpdImport crash', () => {
     // A folder called "Fig 3 (rev 2)" threw on open.
     const out = lint('const re = new RegExp(`^${folder}/`);', 'no-dynamic-regexp');
     expect(out).toHaveLength(1);
@@ -116,14 +116,14 @@ describe('no-raw-number-parse', () => {
   // The rule is scoped to core/axes/, so the filename is part of the input.
   const lintAxes = (code: string) => lint(code, 'no-raw-number-parse');
 
-  it('catches a declared value parsed without InputParser — the MapAxes bug', () => {
+  it('catches a declared value parsed without InputParser - the MapAxes bug', () => {
     // "1,000" becomes 1 and every distance is 1000x wrong, silently.
     expect(lintAxes('const len = parseFloat(cp.dx);')).toHaveLength(1);
     expect(lintAxes("const t = parseFloat(String(meta['pieTotal']));")).toHaveLength(1);
     expect(lintAxes("const s = parseFloat(globalValues['scale']);")).toHaveLength(1);
   });
 
-  it('accepts parsing a PIXEL — the false positive that bit first', () => {
+  it('accepts parsing a PIXEL - the false positive that bit first', () => {
     expect(lintAxes('const xp = parseFloat(String(pxi));')).toHaveLength(0);
   });
 

@@ -1,6 +1,6 @@
 /**
  * Pure positioning math for the floating cursor-following zoom loupe (see
- * CLAUDE.md "Product #1 — rebuild design": offset from the cursor so it
+ * CLAUDE.md "Product #1 - rebuild design": offset from the cursor so it
  * doesn't cover the point about to be clicked, edge-of-screen clamped,
  * modeled on Photoshop/Figma-style detail loupes rather than the fixed-
  * position zoom panels every reference tool used).
@@ -11,8 +11,8 @@ export interface LoupePosition {
   top: number;
 }
 
-/** A rectangle (container-local coords) the loupe should not overlap — the
- * open tool card / rail (David, 2026-07-20: "overlay + dodge" — the cards keep
+/** A rectangle (container-local coords) the loupe should not overlap - the
+ * open tool card / rail (David, 2026-07-20: "overlay + dodge" - the cards keep
  * floating over the figure, but the loupe hops clear of them so it never hides
  * behind, or draws over, the card you're driving). */
 export interface AvoidRect {
@@ -43,8 +43,8 @@ export const DEFAULT_LOUPE_OFFSET: LoupeOffset = { dx: 24, dy: -24 };
 
 /**
  * Compute the top-left position of a loupeWidth x loupeHeight panel so it
- * sits offset from (cursorX, cursorY) — by default up and to the right,
- * away from the point under the cursor — and never spills outside a
+ * sits offset from (cursorX, cursorY) - by default up and to the right,
+ * away from the point under the cursor - and never spills outside a
  * containerWidth x containerHeight viewport.
  */
 export function positionLoupe(

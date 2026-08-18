@@ -9,13 +9,13 @@
  * at higher density, and "only some points carry error" needs no support at all
  * because the error series simply has fewer points.
  *
- * **No format invention — both halves already round-trip.** The error series is
+ * **No format invention - both halves already round-trip.** The error series is
  * a `Dataset` in `datasetColl`; the relationship is a key in that dataset's own
  * metadata, which `core/plotData.ts` serializes and restores generically
  * (`:637` writes `dsData.metadata`, `:453` calls `setMetadata`). This is the
  * same extension point checkpoint 27 used for `curveFit` and checkpoint 66 used
  * for the graph type, and upstream deep-clones metadata keys it does not
- * recognise — so a WPD user can still open our file, and CLAUDE.md's hard
+ * recognise - so a WPD user can still open our file, and CLAUDE.md's hard
  * constraint ("preserve the JSON project file format exactly") holds without
  * an exception.
  *

@@ -1,10 +1,10 @@
 /**
- * Project container (`.zip`) — checkpoint 94, see CLAUDE.md and
+ * Project container (`.zip`) - checkpoint 94, see CLAUDE.md and
  * docs/project-container-design.md.
  *
  * Checkpoint 25's project file was a single JSON blob with the image inlined as
  * a base64 data URL (see engine/projectFile.ts). That is honest but not
- * inspectable — the design doc's §4 makes the case: the image is a megabyte of
+ * inspectable - the design doc's §4 makes the case: the image is a megabyte of
  * base64 buried in JSON, so "it's plain text" is technically true and
  * practically worthless. This module packages the same ProjectFile as a `.zip`
  * holding a readable `project.json` plus the image as a *real* file entry
@@ -15,7 +15,7 @@
  * calibration/dataset half stays entirely in engine/projectFile.ts +
  * core/plotData.ts. This module only splits the image out of / folds it back
  * into a ProjectFile, then hands off to the exact same deserializeProject the
- * JSON path uses — one deserialization path, not two (the "parallel path"
+ * JSON path uses - one deserialization path, not two (the "parallel path"
  * smell the tenet audit warns about).
  *
  * WHY zip and not tar (the design doc's §4, and checkpoint 74's import/export
@@ -121,7 +121,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /** Splits `data:<mime>;base64,<payload>`. Returns null for anything that is not
- * a base64 data URL — which is all the canvas/image loader ever produce. */
+ * a base64 data URL - which is all the canvas/image loader ever produce. */
 function parseDataURL(dataURL: string): { mime: string; b64: string } | null {
   const m = /^data:([^;,]+);base64,(.*)$/s.exec(dataURL);
   if (!m) return null;
@@ -129,7 +129,7 @@ function parseDataURL(dataURL: string): { mime: string; b64: string } | null {
 }
 
 /**
- * ZIP local-file-header magic — "PK\x03\x04". A project file starting with this
+ * ZIP local-file-header magic - "PK\x03\x04". A project file starting with this
  * is a container; a legacy JSON project starts with `{`. This is the whole
  * backward-compatibility story: open reads bytes, checks this, and routes.
  */
@@ -138,7 +138,7 @@ export function isZipContainer(bytes: Uint8Array): boolean {
 }
 
 /**
- * Is this a `.tar` archive — the shape another digitizer's project arrives in?
+ * Is this a `.tar` archive - the shape another digitizer's project arrives in?
  *
  * Reads the POSIX `ustar` magic at offset 257, which is where the format puts it,
  * rather than trusting an extension. Same rule as isZipContainer above and for the
@@ -146,8 +146,8 @@ export function isZipContainer(bytes: Uint8Array): boolean {
  *
  * ⚑ This is what lets ONE "Open Project" read every format we support. A foreign
  * archive used to need its own dialog, IPC channel, file filter and menu item, all
- * naming one tool — the first-class status tenet 5 rules out ("no allegiance at the
- * code level — licensing and attribution ONLY"). Adding the next digitizer means
+ * naming one tool - the first-class status tenet 5 rules out ("no allegiance at the
+ * code level - licensing and attribution ONLY"). Adding the next digitizer means
  * adding a sniffer beside this one; no UI changes at all.
  *
  * Deliberately narrow: it recognises the CONTAINER, not whose project is inside.
@@ -156,7 +156,7 @@ export function isZipContainer(bytes: Uint8Array): boolean {
  */
 export function isTarArchive(bytes: Uint8Array): boolean {
   if (bytes.length < 262) return false;
-  // 'ustar' — POSIX (followed by "00") and GNU (followed by " \0") both start here.
+  // 'ustar' - POSIX (followed by "00") and GNU (followed by " \0") both start here.
   return (
     bytes[257] === 0x75 &&
     bytes[258] === 0x73 &&
@@ -169,7 +169,7 @@ export function isTarArchive(bytes: Uint8Array): boolean {
 /**
  * Builds a `.zip` project from a ProjectFile: a readable `project.json` plus the
  * image as a real file entry. Returns {error} only if the image is not a base64
- * data URL we can split out (it always is, in practice — the canvas and loader
+ * data URL we can split out (it always is, in practice - the canvas and loader
  * produce nothing else).
  */
 export function serializeProjectZip(file: ProjectFile): ProjectResult<Uint8Array> {
@@ -209,7 +209,7 @@ export function deserializeProjectZip(bytes: Uint8Array): ProjectResult<Deserial
   } catch (err) {
     return { error: err instanceof Error && err.name === 'ZipTooLargeError'
       ? err.message
-      : 'Could not open project — the archive is unreadable.' };
+      : 'Could not open project - the archive is unreadable.' };
   }
   const jsonBytes = files[PROJECT_ENTRY];
   if (!jsonBytes) return { error: 'Not a PlotTracer project archive (no project.json).' };
@@ -217,7 +217,7 @@ export function deserializeProjectZip(bytes: Uint8Array): ProjectResult<Deserial
   try {
     json = JSON.parse(strFromU8(jsonBytes)) as ContainerJson;
   } catch {
-    return { error: 'Could not open project — project.json is not valid JSON.' };
+    return { error: 'Could not open project - project.json is not valid JSON.' };
   }
   const ref = json.image as ContainerImageRef | undefined;
   if (!ref?.path || typeof ref.mime !== 'string') {
@@ -295,7 +295,7 @@ export function deserializeMultiFigureZip(bytes: Uint8Array): ProjectResult<Dese
   } catch (err) {
     return { error: err instanceof Error && err.name === 'ZipTooLargeError'
       ? err.message
-      : 'Could not open project — the archive is unreadable.' };
+      : 'Could not open project - the archive is unreadable.' };
   }
   const jsonBytes = files[PROJECT_ENTRY];
   if (!jsonBytes) return { error: 'Not a PlotTracer project archive (no project.json).' };
@@ -303,7 +303,7 @@ export function deserializeMultiFigureZip(bytes: Uint8Array): ProjectResult<Dese
   try {
     json = JSON.parse(strFromU8(jsonBytes)) as MultiFigureContainerJson;
   } catch {
-    return { error: 'Could not open project — project.json is not valid JSON.' };
+    return { error: 'Could not open project - project.json is not valid JSON.' };
   }
   if (!Array.isArray(json.figures)) return { error: 'Project archive is not a multi-figure project.' };
   // Fold each figure's image entry back into an inlined data URL.

@@ -1,5 +1,5 @@
 /**
- * Measurement containers — the shape a saved measurement takes in the file.
+ * Measurement containers - the shape a saved measurement takes in the file.
  *
  * Originally a full port of wpd-core's core/connectedPoints.js
  * (WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0; see
@@ -7,12 +7,12 @@
  * plotData.ts's measurement serialize/deserialize has a hard dependency on
  * these classes.
  *
- * ⚑ NO LONGER A FULL PORT — reduced to what this app actually reaches
+ * ⚑ NO LONGER A FULL PORT - reduced to what this app actually reaches
  * (2026-07-31, the pre-launch dead-code sweep; the mutation run scored this
  * file at 20% with 82 mutants no test could even reach, which is what a
  * wholly unreachable API surface looks like from the outside).
  *
- * What went, and why it was safe: upstream's INTERACTIVE editing API — the
+ * What went, and why it was safe: upstream's INTERACTIVE editing API - the
  * selection pair (`selectNearestPoint`/`isPointSelected`/
  * `getSelectedConnectionAndPoint`/`unselectConnectionAndPoint` and the two
  * `_selected*` fields), in-place editing (`setPointAt`/`getPointAt`/
@@ -22,7 +22,7 @@
  * does measurement interaction in its own overlay layer (ui/'s MeasureCard +
  * the Konva overlay, with values derived by core/measurementValues.ts), and
  * only ever uses these classes as SERIALIZATION containers. We hold no
- * allegiance to the upstream API at the code level (tenet 5) — carrying a
+ * allegiance to the upstream API at the code level (tenet 5) - carrying a
  * parallel, unreachable editing model was a standing invitation to wire the
  * wrong one up.
  *
@@ -33,7 +33,7 @@
  * rather than merely existing.
  *
  * One deliberate simplification kept from the original port: upstream's
- * constructor sets `this.page = 1` when `wpd.appData.isMultipage()` — PDF/
+ * constructor sets `this.page = 1` when `wpd.appData.isMultipage()` - PDF/
  * multi-page session UI state, not measurement data, with no equivalent in a
  * headless core.
  */

@@ -1,21 +1,21 @@
 /**
- * The NAMES on a heatmap's axes (v2.2) — "the label is the coordinate".
+ * The NAMES on a heatmap's axes (v2.2) - "the label is the coordinate".
  *
  * ⚑⚑ WHY A HEATMAP NEEDS THIS AND AN XY CHART DOES NOT. The settled record asks
- * one question per axis — is it a CATEGORY or a VALUE? — and all four
+ * one question per axis - is it a CATEGORY or a VALUE? - and all four
  * combinations are published: gene × sample, treatment × time, field × field.
  * On a value axis the coordinate is a number the calibration already produces.
  * On a CATEGORY axis the coordinate is the printed name, and until it is
  * recorded the export hands back `1, 2, 3` for what the figure calls `BRCA1,
- * TP53, EGFR` — numbers that are not wrong so much as not the answer. A
+ * TP53, EGFR` - numbers that are not wrong so much as not the answer. A
  * correlation matrix or a confusion matrix exported that way cannot be rejoined
  * to anything.
  *
  * ⚑ TYPING A NAME IS RECORDING, NOT INTERPRETING (tenet 9). The name is printed
  * on the figure; transcribing it is the same act as typing the value of a
  * calibration tick, which the whole tool already rests on. What would be
- * interpretation is INVENTING one — inferring "Sample 4" from a sequence, or
- * fabricating a name for an unlabelled band — and nothing here does that: an
+ * interpretation is INVENTING one - inferring "Sample 4" from a sequence, or
+ * fabricating a name for an unlabelled band - and nothing here does that: an
  * unnamed cell keeps its numeric coordinates and exports an empty label.
  *
  * ⚑ ONE LIST PER AXIS, INDEXED BY CELL, and deliberately NOT `core/categoryAxis.ts`.
@@ -31,8 +31,8 @@
  * Split what the user typed into one label per cell.
  *
  * ⚑ COMMAS SEPARATE, AND DOUBLE QUOTES PROTECT A COMMA INSIDE A NAME. Twelve
- * gene names in one field is the gesture that fits a sidebar — a box per row
- * would be a column of twelve inputs — and the CSV convention is the one
+ * gene names in one field is the gesture that fits a sidebar - a box per row
+ * would be a column of twelve inputs - and the CSV convention is the one
  * readers already know, which matters because a label like `Treatment A, 10 mg`
  * is ordinary in published figures and splitting it in half would be a silent
  * loss of exactly the thing being recorded.
@@ -50,7 +50,7 @@ export function parseLabelList(text: string): string[] {
     const ch = text[i]!;
     if (quoted) {
       // A doubled quote inside a quoted field is one literal quote, as CSV has
-      // it — so a name that really contains `"` is still expressible.
+      // it - so a name that really contains `"` is still expressible.
       if (ch === '"' && text[i + 1] === '"') {
         field += '"';
         i++;
@@ -73,7 +73,7 @@ export function parseLabelList(text: string): string[] {
 }
 
 /**
- * The labels back as one line the user can edit — the same text they typed,
+ * The labels back as one line the user can edit - the same text they typed,
  * rebuilt from the record rather than remembered alongside it.
  *
  * ⚑ Quoting is re-applied where it is NEEDED and nowhere else, so a plain list
@@ -83,7 +83,7 @@ export function parseLabelList(text: string): string[] {
 export function formatLabelList(labels: readonly string[]): string {
   // ⚑ Trailing empties are dropped, because `reindexLabels` PADS a short list to
   // the grid's size and a reopened project would otherwise show the user
-  // "BRCA1, TP53, , , " — punctuation they did not type, growing every time the
+  // "BRCA1, TP53, , , " - punctuation they did not type, growing every time the
   // grid does. Empties BETWEEN names are kept: those are positions.
   const trimmed = [...labels];
   while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
@@ -113,12 +113,12 @@ export function labelAt(labels: readonly string[], index: number): string {
  * reads the opposite way to the cell indices.
  *
  * ⚑⚑ THE DEFECT THIS EXISTS TO STOP, found in the v2.2 audit. Cell row 0 is
- * `yMin` — the BOTTOM of the plot — while a person copying names off a
+ * `yMin` - the BOTTOM of the plot - while a person copying names off a
  * published heatmap reads them TOP-DOWN, because that is how the figure prints
  * them. So the first name typed was landing on the last row: every value
  * correct, every name filed against the wrong one, and nothing on screen saying
  * so. It is the same failure `moveDivider` refuses to allow when it will not
- * re-sort dividers — values right, filed wrong is the silent kind of wrong.
+ * re-sort dividers - values right, filed wrong is the silent kind of wrong.
  *
  * ⚑ PADDED FIRST, THEN REVERSED, and the order matters: three names on a
  * five-row figure belong to the top three rows, not to rows 0–2 counted from
@@ -144,7 +144,7 @@ export function reindexLabels(
 }
 
 /**
- * How many of an axis's cells are named — the sentence the card shows.
+ * How many of an axis's cells are named - the sentence the card shows.
  *
  * ⚑ IT COUNTS RATHER THAN VALIDATES, and says so plainly, because both
  * mismatches are things a user does on the way to being finished: fewer labels

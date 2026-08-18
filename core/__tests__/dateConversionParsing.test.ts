@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as dateConverter from '../dateConversion.js';
 
 /**
- * `toJD` — the string-to-timestamp parser behind every date-calibrated axis.
+ * `toJD` - the string-to-timestamp parser behind every date-calibrated axis.
  *
  * ⚑ WHY THIS FILE EXISTS. The 2026-07-31 mutation run scored
  * `core/dateConversion.ts` at **62.50%** with 123 mutants unnoticed. The
@@ -13,12 +13,12 @@ import * as dateConverter from '../dateConversion.js';
  *
  * ⚑ THIS FILE HAS A SILENT-WRONG-NUMBER HISTORY. `parse(0)` once returned a
  * 2026 timestamp because a NUMBER skipped the "looks like a date" guard and
- * was read as an hour of today — ordinary axis values silently became ~1.78e12.
+ * was read as an hour of today - ordinary axis values silently became ~1.78e12.
  * That specific bug is pinned in the sibling file; these cases pin the
  * machinery AROUND it, where the same class can recur.
  */
 
-describe('toJD via parse — the time-only branch', () => {
+describe('toJD via parse - the time-only branch', () => {
   it('⚑ reads a bare time as a time TODAY, not as a failure', () => {
     // The `hasDatePart` false branch fills year/month/date from `new Date()`,
     // and NOTHING had ever exercised it (`today.getMonth() + 1` mutated to
@@ -61,7 +61,7 @@ describe('toJD via parse — the time-only branch', () => {
   });
 });
 
-describe('toJD via parse — how many parts a date may have', () => {
+describe('toJD via parse - how many parts a date may have', () => {
   it('accepts a full date-and-time: six parts', () => {
     // The upper bound is 6 (y/m/d h:m:s); the bound itself mutated to `< 0`
     // and to `&&` and survived, so both sides of it need a case.
@@ -78,7 +78,7 @@ describe('toJD via parse — how many parts a date may have', () => {
   });
 });
 
-describe('toJD via parse — refusing what cannot be a time', () => {
+describe('toJD via parse - refusing what cannot be a time', () => {
   it('refuses non-numeric components rather than yielding NaN', () => {
     // ⚑ The isNaN chain at the heart of the function had ELEVEN surviving
     // mutants (each `||` to `&&`, each sub-clause). One case per position is
@@ -99,7 +99,7 @@ describe('toJD via parse — refusing what cannot be a time', () => {
     expect(dateConverter.parse('2019/03/07 04:05:60')).toBeNull();
   });
 
-  it('accepts the last valid value of each — the boundary the guards must admit', () => {
+  it('accepts the last valid value of each - the boundary the guards must admit', () => {
     // Without these the `>` guards could be `>=` and still pass everything
     // above.
     const asDate = new Date(dateConverter.parse('2019/03/07 23:59:59')!);
@@ -114,7 +114,7 @@ describe('toJD via parse — refusing what cannot be a time', () => {
   });
 });
 
-describe('toJD via parse — fractional seconds', () => {
+describe('toJD via parse - fractional seconds', () => {
   it('carries sub-second precision into the timestamp', () => {
     // A recorder chart can be read to fractions of a second; the msec branch
     // is how that survives.

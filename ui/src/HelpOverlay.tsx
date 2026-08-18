@@ -1,5 +1,5 @@
 /**
- * "How to use PlotTracer" — the in-the-moment card (v2.0).
+ * "How to use PlotTracer" - the in-the-moment card (v2.0).
  *
  * ⚑ WHAT THIS IS FOR, and the whole reason it can stay small: help you in the
  * MIDDLE of a job. Not a manual, not a tour. Somebody who is three clicks into
@@ -10,7 +10,7 @@
  * ⚑⚑ THE CONTENT RULE (settled with David, and it is why this is short):
  * the WORKFLOW lives in the app; everything VERSION-SPECIFIC lives in
  * MANUAL.md. Per-format export caveats, per-type calibration steps, what each
- * tool refuses and why — none of that belongs here. Two homes for one fact is
+ * tool refuses and why - none of that belongs here. Two homes for one fact is
  * exactly how the README came to promise a feature the app refuses, and how the
  * website came to advertise an export that did not exist. The workflow is the
  * stable part, so a card about the workflow cannot drift; a card that
@@ -18,13 +18,13 @@
  *
  * ⚑ THE MANUAL IS A BUTTON IN THE FOOTER, not a link in the prose. A first
  * draft put "Read the full manual" inline in the footer sentence and David cut
- * it — *"In the overlay?"* — then asked for it back as a button, bottom right.
+ * it - *"In the overlay?"* - then asked for it back as a button, bottom right.
  * The distinction is real and worth keeping: a link buried mid-sentence
  * interrupts a card you are scanning, while a button parked in the corner is
  * out of the reading path until you want it. Same content, opposite behaviour.
  *
  * ⚑ REACHABLE TWO WAYS, DELIBERATELY. F1 opens it, and so does a button in the
- * Help card. The button is not a convenience — a key is the only route means a
+ * Help card. The button is not a convenience - a key is the only route means a
  * first-time user never learns the thing exists, which fails the keystone rule
  * that every capability must be discoverable from what is on screen. The key is
  * for the second time onwards.
@@ -62,12 +62,12 @@ const WORKFLOW: Array<[string, string]> = [
   ['Calibrate', 'Click the prompted points and type their known values.'],
   ['Capture', 'Place points by hand, drag a box for a bar, or auto-extract by colour.'],
   ['Correct', 'Drag, nudge, delete. Nothing is committed until you export.'],
-  ['Export', 'CSV, XLSX, ODS, JSON, LaTeX, MATLAB, Python, R — or save the project.'],
+  ['Export', 'CSV, XLSX, ODS, JSON, LaTeX, MATLAB, Python, R - or save the project.'],
 ];
 
 /**
  * ⚑⚑ THE ICONS ARE THE POINT OF THIS LIST, not decoration (David's call).
- * The tool rail is icons ONLY — no labels — so a card that says "3 — Place
+ * The tool rail is icons ONLY - no labels - so a card that says "3 - Place
  * point" tells you the name of something you still cannot find. Showing the
  * SAME glyph the rail draws is what turns the row into a lookup: match the
  * picture, press the digit.
@@ -116,7 +116,7 @@ const DOCUMENT: Array<[string, string]> = [
  * three columns end at roughly the same height instead of the key columns
  * running 80px past the Tools list.
  *
- * ⚑ Right-click was MISSING entirely until this split made room for it — the
+ * ⚑ Right-click was MISSING entirely until this split made room for it - the
  * canvas has had a context menu since v1.1 and nothing in the app said so.
  */
 const MOUSE: Array<[string, string]> = [
@@ -280,7 +280,7 @@ export function HelpOverlay({ onClose, manualUrl }: HelpOverlayProps): React.Rea
               {WORKFLOW.map(([step, detail]) => (
                 <li key={step} style={{ marginBottom: 5, fontSize: 12.5, lineHeight: 1.4 }}>
                   <b style={{ color: theme.color.text.primary }}>{step}</b>
-                  <span style={{ color: theme.color.text.secondary }}> — {detail}</span>
+                  <span style={{ color: theme.color.text.secondary }}> - {detail}</span>
                 </li>
               ))}
             </ol>
@@ -315,7 +315,7 @@ export function HelpOverlay({ onClose, manualUrl }: HelpOverlayProps): React.Rea
           <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: theme.color.text.legend }}>
             <b>F1</b> reopens this card. Hold <b>Alt</b> for key tips on the buttons.
           </p>
-          {/* ⚑ Same button as the Help card's, deliberately — one affordance
+          {/* ⚑ Same button as the Help card's, deliberately - one affordance
               for one action, so it is recognisable in both places. window.open
               is enough: electron-main.cjs's setWindowOpenHandler routes http(s)
               to shell.openExternal and denies the window, so no IPC surface. */}
@@ -323,7 +323,7 @@ export function HelpOverlay({ onClose, manualUrl }: HelpOverlayProps): React.Rea
             type="button"
             data-testid="help-overlay-manual"
             onClick={() => window.open(manualUrl, '_blank', 'noreferrer')}
-            title="Open the full manual in your browser — every chart type, every export format, and what each tool refuses"
+            title="Open the full manual in your browser - every chart type, every export format, and what each tool refuses"
             style={{
               flex: '0 0 auto',
               padding: '6px 12px',

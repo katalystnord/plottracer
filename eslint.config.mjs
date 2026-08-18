@@ -79,7 +79,7 @@ export default tseslint.config(
     },
   },
   {
-    // ESM Node tooling (scripts/*.mjs) — same globals, but `import`/`export`
+    // ESM Node tooling (scripts/*.mjs) - same globals, but `import`/`export`
     // rather than require(), so it cannot share the commonjs block below.
     files: ['scripts/*.mjs', '*.config.mjs'],
     languageOptions: {

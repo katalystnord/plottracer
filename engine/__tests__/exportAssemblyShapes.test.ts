@@ -13,7 +13,7 @@ import { buildExportJson, buildExportSections, type ExportAssemblyInput } from '
  * (Histogram) and `tuples` (Bar, Box Plot, Pie).
  *
  * ⚑ WHY THIS FILE EXISTS. `exportAssembly.ts` scored 61.21%, and every
- * existing test builds an XY session — so both v2.0 branches of the shape
+ * existing test builds an XY session - so both v2.0 branches of the shape
  * switch were untested, in the file that decides what a v2.0 Bar export
  * actually contains.
  *
@@ -96,7 +96,7 @@ describe('a Bar export takes the TUPLE shape, not the flat one', () => {
 
   it('⚑ names the derived column from the TYPE, so Bar says "Value"', () => {
     // The label comes from the config's own derivedTupleValue, not a constant
-    // here — Histogram says "Height", Pie says "Value".
+    // here - Histogram says "Height", Pie says "Value".
     const s = barSession();
     captureBar(s, 150, 300, 'Flax');
     expect(buildExportSections(inputFor(s, 'bar'))[0]!.header).toContain('Value');
@@ -124,7 +124,7 @@ describe('a Bar export takes the TUPLE shape, not the flat one', () => {
   });
 
   it('⚑ takes the series name from the ACTIVE dataset, whatever it was renamed to', () => {
-    // The v2.0 audit replaced a hardcoded 'Series 1' fallback here with '' —
+    // The v2.0 audit replaced a hardcoded 'Series 1' fallback here with '' -
     // the same invented-name defect as Bar0/Slice0. The constant is gone, so
     // renaming the series must change the export; a surviving constant would
     // keep saying "Series 1".
@@ -197,7 +197,7 @@ describe('the shape switch is driven by the SESSION, not by configId', () => {
   it('a Bar session reports the tuple shape and a Histogram the bin shape', () => {
     // configId is a separate argument (it gates geometry). If the switch read
     // it instead of getExportShape(), passing the wrong one would change the
-    // export — these assert it does not.
+    // export - these assert it does not.
     expect(barSession().getExportShape()).toBe('tuples');
     expect(histogramSession().getExportShape()).toBe('bins');
   });
@@ -254,10 +254,10 @@ describe('precision reaches the tuple and bin builders', () => {
 });
 
 /**
- * ⚑⚑ A MULTI-SERIES BAR CHART EXPORTS EVERY SERIES — round-2 audit.
+ * ⚑⚑ A MULTI-SERIES BAR CHART EXPORTS EVERY SERIES - round-2 audit.
  *
  * `getTupleRows()` read the ACTIVE dataset only, and both the tuple section
- * builder and the tuple JSON builder were fed it directly — so a grouped or
+ * builder and the tuple JSON builder were fed it directly - so a grouped or
  * stacked Bar chart, v2.0's headline, exported ONE series to all nine formats
  * while the shared table on screen showed them all. The Active/All toggle was
  * hidden for tuple shapes, so nothing on screen offered a way to get the rest.
@@ -293,14 +293,14 @@ describe('a grouped Bar chart exports all of its series', () => {
 
   it('scope "active" still exports only the active series, untitled', () => {
     // The old behaviour is still available and still the default for a
-    // single-series figure — this is a widening, not a change of meaning.
+    // single-series figure - this is a widening, not a change of meaning.
     const sections = buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'active' }));
     expect(sections).toHaveLength(1);
     expect(sections[0]!.title).toBeUndefined();
     expect(Number(sections[0]!.rows[0]![sections[0]!.header.indexOf('Value')])).toBeCloseTo(10, 6);
   });
 
-  it('a single-series figure is byte-identical to before — no title appears', () => {
+  it('a single-series figure is byte-identical to before - no title appears', () => {
     const s = barSession();
     captureBar(s, 150, 300, 'Flax');
     const sections = buildExportSections(inputFor(s, 'bar', { scope: 'all' }));

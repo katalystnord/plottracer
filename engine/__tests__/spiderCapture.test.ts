@@ -8,7 +8,7 @@ import { serializeProject, deserializeProject } from '../projectFile.js';
  * Spider CAPTURE and EXPORT (v1.4 Stage 2).
  *
  * The one thing worth being paranoid about: a captured point's value must be read
- * against the spoke it was captured ON, taken from its slot — never against
+ * against the spoke it was captured ON, taken from its slot - never against
  * whichever ray it happens to sit nearest. The two agree for a click that landed on
  * its axis and diverge exactly when the user mis-clicked, which is the case where a
  * nearest-ray reading would export a number off a DIFFERENT axis's scale while the
@@ -78,7 +78,7 @@ describe('a captured point is read against ITS OWN axis', () => {
 
   it('⚑ does NOT re-read a mis-clicked point off the ray it sits nearest', () => {
     // The heart of it. Slot 0 is "Strength" (12 o'clock); this click is placed way
-    // over on the Weight ray. Read against Weight it would be 50 — a plausible
+    // over on the Weight ray. Read against Weight it would be 50 - a plausible
     // number off the wrong axis. Read against the axis it was captured on, its
     // projection onto that ray is what the record says, and the warning below is
     // what tells the user something is wrong.
@@ -92,7 +92,7 @@ describe('a captured point is read against ITS OWN axis', () => {
     expect(row.values[2]).not.toBeCloseTo(50, 6);
   });
 
-  it('exports Axis, Name, Value — independent variables first', () => {
+  it('exports Axis, Name, Value - independent variables first', () => {
     const session = THREE();
     session.addDataPoint(...spokePixel(0, 3, 50));
     expect(session.getExportFields()).toEqual(['Axis', 'Name', 'Value']);
@@ -114,7 +114,7 @@ describe('a captured point is read against ITS OWN axis', () => {
   });
 });
 
-describe('the wrong-axis notice — asked at capture time, never stored', () => {
+describe('the wrong-axis notice - asked at capture time, never stored', () => {
   it('fires for a click nearer a different axis than the slot it fills', () => {
     const session = THREE();
     const [px, py] = spokePixel(1, 3, 50); // on ray 1, while slot 0 is next
@@ -147,7 +147,7 @@ describe('the wrong-axis notice — asked at capture time, never stored', () => 
     expect(many.previewSpiderCapture(px + 8, py)).not.toBeNull();
   });
 
-  it('⚑ must be asked BEFORE the click is recorded — the snap erases its evidence', () => {
+  it('⚑ must be asked BEFORE the click is recorded - the snap erases its evidence', () => {
     // Not a quirk of the API: the point is snapped onto its axis, so afterwards
     // the stored pixel IS on the ray and there is nothing left to measure. This is
     // the whole reason the check is a capture-time question rather than a property
@@ -177,7 +177,7 @@ describe('a captured point is SNAPPED onto its axis', () => {
     // ⚑ David's call, 2026-07-27. The value was always the projection; what the
     // snap adds is that the dot the user sees IS the number recorded. And once
     // they can see the point sitting on the axis they stop aiming
-    // perpendicular-accurately — so a stored perpendicular offset would no longer
+    // perpendicular-accurately - so a stored perpendicular offset would no longer
     // mean "mis-click", it would mean "the app told me not to care", which is a
     // worse thing to keep than nothing.
     const session = THREE();
@@ -198,7 +198,7 @@ describe('a captured point is SNAPPED onto its axis', () => {
   });
 
   it('keeps a point on its axis when it is DRAGGED or nudged', () => {
-    // Every move converges on updateDataPointPixel — drag, arrow nudge, value
+    // Every move converges on updateDataPointPixel - drag, arrow nudge, value
     // edit. Without the snap there, a drag would lift the point back off its ray.
     const session = THREE();
     session.addDataPoint(...spokePixel(0, 3, 50));
@@ -246,7 +246,7 @@ describe('a captured point is SNAPPED onto its axis', () => {
 
     // And a DRAG on a non-spider chart is untouched too. This is the path that
     // runs for every graph type, so a snap not gated on the type would quietly
-    // pull XY points around — the grouped capture path above would never show it.
+    // pull XY points around - the grouped capture path above would never show it.
     session.updateDataPointPixel(0, 210, 190);
     const moved = session.getDataPoints()[0]!;
     expect(moved.px).toBe(210);
@@ -258,7 +258,7 @@ describe('the live axis is drawn on the figure', () => {
   it('emphasises the ray the capture cursor is filling, and follows it round', () => {
     // ⚑ PREVENTION, not correction. Spoke order is deliberately unenforced at
     // calibration, so the cursor walks the spokes in CALIBRATION order, which need
-    // not match the visual order round the chart — a user going clockwise by eye
+    // not match the visual order round the chart - a user going clockwise by eye
     // can drift out of step and click the wrong vertex. Showing which ray is live
     // is what stops that happening, rather than reporting it afterwards.
     const session = THREE();
@@ -275,7 +275,7 @@ describe('the live axis is drawn on the figure', () => {
   });
 
   it('draws the live ray in the colour-match magenta, not the step colour', () => {
-    // ⚑ Spider rays inherit the shared ORIGIN step's colour, which is green — and a
+    // ⚑ Spider rays inherit the shared ORIGIN step's colour, which is green - and a
     // green highlight over a green series is no highlight at all. The bundled
     // example has exactly that (Cellulose is green), and on screen the emphasis was
     // simply invisible. This magenta is the app's existing "pointing at the image"
@@ -296,7 +296,7 @@ describe('the live axis is drawn on the figure', () => {
     expect(segments).toHaveLength(3);
   });
 
-  it('emphasises nothing DURING calibration — the card already marks the step', () => {
+  it('emphasises nothing DURING calibration - the card already marks the step', () => {
     const session = new CalibrationSession(SPIDER_AXES_CONFIG);
     session.handleCalibrationClick(100, 100);
     const [px, py] = spokePixel(0, 3);
@@ -328,7 +328,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
       const [px, py] = spokePixel(i, 3, 40);
       const index = dataset.addPixel(px, py);
       // ⚑ FILED INTO A TUPLE, like a real project's points. This fixture used to
-      // leave them loose, which made it quietly test two things at once — and once
+      // leave them loose, which made it quietly test two things at once - and once
       // an axis-less point became something the load path DROPS, the mismatch test
       // was asserting the survival of points that are no longer data at all. The
       // count mismatch is what this fixture is for; the points must be sound.
@@ -341,7 +341,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
   }
 
   it('leaves the recorded slots alone when their COUNT disagrees with the axes', () => {
-    // ⚑ Renaming is safe when the counts match — it is a pure relabel. When they
+    // ⚑ Renaming is safe when the counts match - it is a pure relabel. When they
     // differ, slot k of an existing tuple no longer means the axis it was recorded
     // against, and rewriting the names would make the table assert a pairing
     // nobody measured: exactly the failure the error-bar record is parked on. The
@@ -353,13 +353,13 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
 
   it('DROPS a point that belongs to no axis, rather than keeping it as nulls', () => {
     // ⚑ David, 2026-07-27: "a point that belongs to no tuple carries NO meaning,
-    // and should not be allowed." On an N x 1D chart the datum is the PAIR — the
-    // vector and the position along it — so a pixel with no axis stands for no
+    // and should not be allowed." On an N x 1D chart the datum is the PAIR - the
+    // vector and the position along it - so a pixel with no axis stands for no
     // number and belongs in no row. It is a mark on an image, not data.
     //
     // This REPLACES the older behaviour, which exported such points as
     // [null, '', null]. That was honest as far as it went, and right while the
-    // alternative on the table was defaulting them onto spoke 0 — but it kept a
+    // alternative on the table was defaulting them onto spoke 0 - but it kept a
     // meaningless thing alive through save, reload and every reader downstream.
     // The click path cannot create one (every capture files into a slot), so the
     // file is the only door and the guard belongs on it.
@@ -369,7 +369,7 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
   });
 
   it('drops ONLY the axis-less ones, and leaves a properly filed point alone', () => {
-    // The guard must not become a blunt "grouped dataset from a file, discard" — a
+    // The guard must not become a blunt "grouped dataset from a file, discard" - a
     // real project's points are all in slots, and every one of them must survive.
     const built = calibratedSpider(['100', '100', '100'], ['Strength', 'Weight', 'Cost']);
     const axes = built.getAxes()!;
@@ -377,8 +377,8 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
     dataset.name = 'Series 1';
     dataset.setSlotNames(['Strength', 'Weight', 'Cost']);
     const filed = dataset.addPixel(...spokePixel(0, 3, 40));
-    dataset.addTuple(filed); // slot 0 — a real reading
-    dataset.addPixel(...spokePixel(1, 3, 40)); // in no tuple — not a datum
+    dataset.addTuple(filed); // slot 0 - a real reading
+    dataset.addPixel(...spokePixel(1, 3, 40)); // in no tuple - not a datum
 
     const session = new CalibrationSession(SPIDER_AXES_CONFIG);
     session.loadCalibrated(axes, [dataset]);
@@ -391,8 +391,8 @@ describe('the load path refuses to restructure data it cannot re-pair', () => {
 /**
  * N x 1D, not 1.5D (David's taxonomy, 2026-07-27).
  *
- * A spider reused the Box Plot slot machinery — rightly, the capture
- * workflow is the same — but it is not the same KIND of thing. A box's five
+ * A spider reused the Box Plot slot machinery - rightly, the capture
+ * workflow is the same - but it is not the same KIND of thing. A box's five
  * numbers describe one distribution and only together; a spider's six describe six
  * independent measurements that happen to share an origin. Every rule keyed on
  * "has slots" inherited the box's meaning, and this is where that shows.
@@ -416,7 +416,7 @@ describe('a spider profile is a row of independent readings', () => {
   });
 
   it('offers the freed slot as the next thing to capture', () => {
-    // The gap is not a hole to tidy away, it is the worklist — the same thing the
+    // The gap is not a hole to tidy away, it is the worklist - the same thing the
     // axis-aware trace leaves behind when it refuses a ray.
     const session = THREE();
     for (let i = 0; i < 3; i++) session.addDataPoint(...spokePixel(i, 3, 50));
@@ -458,7 +458,7 @@ describe('a spider profile is a row of independent readings', () => {
     // series that has no readings yet leaves the cursor's tupleIndex null, and the
     // capture path then created the tuple with `addTuple`, which ALWAYS writes slot
     // 0. So the tips bar said "Cost index", the live ray highlighted spoke 6, the
-    // marker snapped to ray 6 — and the reading was filed as Axis 1, carrying the
+    // marker snapped to ray 6 - and the reading was filed as Axis 1, carrying the
     // value that point projects to on ray 1 (typically negative). The sibling path
     // `addSpiderTracePoints` documents this exact trap and avoids it; this one
     // walked into it.
@@ -485,7 +485,7 @@ describe('a spider profile is a row of independent readings', () => {
     // A box plot's cursor walks its members as a unit: letting it be aimed would
     // allow a box built out of order and left permanently half-made.
     //
-    // ⚑ This test first used XY, which has no slots at all — so the FIRST
+    // ⚑ This test first used XY, which has no slots at all - so the FIRST
     // clause of the guard answered and the capability check was never reached. It
     // asserted the right thing and could not fail (caught by neutering the very
     // clause it claims to cover). Box Plot carries its groups from the start, so
@@ -500,7 +500,7 @@ describe('Clear all points leaves a spider able to capture again', () => {
   it('keeps the axis slots, so the next capture is still filed against an axis', () => {
     // ⚑ The data-loss chain the release audit caught, from two of the same day's
     // changes meeting. `clearPoints` restores only `config.defaultSlots`, and
-    // a spider HAS none — its slots come from the calibrated axes. So the series
+    // a spider HAS none - its slots come from the calibrated axes. So the series
     // came back with no slots at all: every later capture took the ungrouped path,
     // unsnapped and invisible in the table, and the new load-time drop then deleted
     // every one of them on reopen. Silent loss, on an ordinary path.
@@ -514,7 +514,7 @@ describe('Clear all points leaves a spider able to capture again', () => {
   });
 
   it('so the load-time drop has nothing to take from a re-captured series', () => {
-    // The drop guard's premise — "the click path cannot make an axis-less point" —
+    // The drop guard's premise - "the click path cannot make an axis-less point" -
     // is only true once the above holds. This is that premise, tested.
     const session = THREE();
     session.clearPoints();
@@ -529,8 +529,8 @@ describe('Clear all points leaves a spider able to capture again', () => {
 
 describe('an axis can be renamed from the spreadsheet', () => {
   it('writes the new name into the CALIBRATION, so everything derived follows', () => {
-    // ⚑ The name is the one transcribed thing on the row — everything else was read
-    // off the pixels — so a typo must be fixable without re-walking the calibration.
+    // ⚑ The name is the one transcribed thing on the row - everything else was read
+    // off the pixels - so a typo must be fixable without re-walking the calibration.
     // It belongs to the AXIS, not to any point, which is why this goes to the
     // calibration and re-derives rather than being stored a second time.
     const session = THREE();
@@ -547,10 +547,10 @@ describe('an axis can be renamed from the spreadsheet', () => {
     expect(session.getSpiderTable().columns[0]!.values.every((v) => v !== null)).toBe(true);
   });
 
-  it('SURVIVES a save and reopen — the name reaches the persisted calibration', () => {
+  it('SURVIVES a save and reopen - the name reaches the persisted calibration', () => {
     // ⚑ The release audit's finding, and the comment above that method asserted the
     // opposite of what it did. The name went to the session map, the live axes and
-    // the slot names — three DERIVED copies — while SERIALIZATION reads it from the
+    // the slot names - three DERIVED copies - while SERIALIZATION reads it from the
     // calibration point's `dz`, which nothing updated. Fix the typo, save, reopen,
     // and the typo is back.
     //

@@ -10,7 +10,7 @@ import {
 import type { XYAxes } from '../../core/axes/xy.js';
 
 /**
- * Checkpoint 87 — switching graph type keeps a compatible calibration.
+ * Checkpoint 87 - switching graph type keeps a compatible calibration.
  *
  * XY and Histogram share `XY_AXES_CONFIG.steps` byte-for-byte, so re-clicking
  * four calibration points to change a graph-type LABEL was pure waste (and the
@@ -44,7 +44,7 @@ describe('calibrationCompatible', () => {
   });
 });
 
-describe('adoptCalibration — the transplant', () => {
+describe('adoptCalibration - the transplant', () => {
   it('carries an XY calibration into a Histogram session without re-clicking', () => {
     const xy = new CalibrationSession(XY_AXES_CONFIG);
     calibrateXY(xy);
@@ -60,7 +60,7 @@ describe('adoptCalibration — the transplant', () => {
     expect(b).toEqual(a);
   });
 
-  it('carries the OPTIONS too — a log axis stays log', () => {
+  it('carries the OPTIONS too - a log axis stays log', () => {
     const xy = new CalibrationSession(XY_AXES_CONFIG);
     calibrateXY(xy, true); // log Y over 1..1000
 
@@ -71,7 +71,7 @@ describe('adoptCalibration — the transplant', () => {
     expect(hist.getAxes()!.pixelToData(100, 200)).toEqual(xy.getAxes()!.pixelToData(100, 200));
   });
 
-  it('leaves the adopting session\'s data alone — it transplants calibration only', () => {
+  it('leaves the adopting session\'s data alone - it transplants calibration only', () => {
     const xy = new CalibrationSession(XY_AXES_CONFIG);
     calibrateXY(xy);
     xy.addDataPoint(200, 200);

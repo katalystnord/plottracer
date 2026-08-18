@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "errorbar-tensile-cure.png",
-    "note": "Synthetic ground truth \u2014 value + absolute upper/lower cap per point (deltas are derived)."
+    "note": "Synthetic ground truth - value + absolute upper/lower cap per point (deltas are derived)."
   },
   "graphType": "xy",
   "axes": {

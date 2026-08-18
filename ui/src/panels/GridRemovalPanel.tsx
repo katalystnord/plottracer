@@ -3,19 +3,19 @@ import { FloatingPanel } from '../FloatingPanel.js';
 import { GridRemovalIcon, EyedropperIcon } from '../icons.js';
 
 /**
- * The Grid Removal fold-out — INPUTS only, like every other rail/chrome card
+ * The Grid Removal fold-out - INPUTS only, like every other rail/chrome card
  * (the v1.1 rail redesign: fold-outs take settings, results go to the sidebar
  * or the canvas).
  *
  * ⚑ `close()` before arming the eyedropper. The card overlays the canvas, so
  * leaving it open would put the panel between the cursor and the gridline the
- * user has just been told to click — the same class of defect as a marker
+ * user has just been told to click - the same class of defect as a marker
  * eating the press it was drawn to invite.
  *
  * ⚑ DISABLED WITHOUT AN IMAGE, like Export, zoom and undo beside it. This panel
  * alone opened on an empty canvas, offering a colour picker, a tolerance and a
  * Remove button whose only possible outcome was the sentence 'No image loaded.'
- * — an interface inviting an action it already knows must fail. Every control
+ * - an interface inviting an action it already knows must fail. Every control
  * around it was gated on `canvasHasImage` and this one was not; a v1.x
  * oversight, not a v2.2 regression.
  */

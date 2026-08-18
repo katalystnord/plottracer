@@ -7,18 +7,18 @@ import { Calibration } from '../calibration.js';
  * Ternary calibration.
  *
  * ⚑ WHY THIS FILE EXISTS. Like polar, `core/axes/ternary.ts` has no upstream
- * test to port — WebPlotDigitizer has none, and Engauge does not implement
+ * test to port - WebPlotDigitizer has none, and Engauge does not implement
  * ternary at all (its coordinate types are Cartesian and Polar, which is why our
  * own .dig reader refuses anything else by name). Nobody has ever verified this
  * maths.
  *
  * That absence turns out not to matter, because a ternary plot has a DEFINING
  * PROPERTY: the three components sum to a constant. That is stronger than any
- * borrowed fixture — it holds for every pixel, so it can be asserted over
+ * borrowed fixture - it holds for every pixel, so it can be asserted over
  * thousands of generated ones rather than a handful of chosen ones. This is the
  * first use of fast-check in the tree.
  *
- * Geometry: corner A at (0,200), corner B at (200,200) — the two calibration
+ * Geometry: corner A at (0,200), corner B at (200,200) - the two calibration
  * points the implementation actually reads. The apex is then implied.
  */
 
@@ -31,7 +31,7 @@ function ternary({ range100 = false, normal = true } = {}): TernaryAxes {
   return axes;
 }
 
-describe('TernaryAxes — the defining property', () => {
+describe('TernaryAxes - the defining property', () => {
   it('sums to 1 for ANY pixel, anywhere on the canvas', () => {
     // The invariant that makes a ternary plot a ternary plot. Asserted as a
     // property over generated pixels rather than as a handful of examples: a
@@ -69,7 +69,7 @@ describe('TernaryAxes — the defining property', () => {
   it('holds the sum even where the components go negative', () => {
     // ⚑ Worth pinning explicitly (tenets 9 and 10): a pixel outside the triangle
     // produces NEGATIVE components, and the app does not clamp them. That is
-    // correct — clamping would be interpretation, and a reading outside the
+    // correct - clamping would be interpretation, and a reading outside the
     // triangle is a fact about where the user clicked, not an error to hide.
     // The sum still holds, which is what makes the negative value trustworthy
     // rather than garbage.
@@ -79,7 +79,7 @@ describe('TernaryAxes — the defining property', () => {
   });
 });
 
-describe('TernaryAxes — the corners', () => {
+describe('TernaryAxes - the corners', () => {
   const axes = ternary();
 
   it('reads calibration corner A as a pure first component', () => {
@@ -97,7 +97,7 @@ describe('TernaryAxes — the corners', () => {
   });
 
   it('reads the implied apex as a pure third component', () => {
-    // The apex is not a calibration point — it falls out of the equilateral
+    // The apex is not a calibration point - it falls out of the equilateral
     // geometry at height L*sin(60°) above the base. If the root-3 factor were
     // wrong this is the point that would move.
     const apexY = 200 - 200 * Math.sin(Math.PI / 3);
@@ -108,7 +108,7 @@ describe('TernaryAxes — the corners', () => {
   });
 });
 
-describe('TernaryAxes — orientation', () => {
+describe('TernaryAxes - orientation', () => {
   it('ROTATES which component is which, without disturbing the sum', () => {
     // Inverted orientation is a relabelling of the same geometry: (a,b,c)
     // becomes (c,a,b). Asserted as the relationship between the two readings
@@ -123,7 +123,7 @@ describe('TernaryAxes — orientation', () => {
   });
 });
 
-describe('TernaryAxes — what it does NOT provide', () => {
+describe('TernaryAxes - what it does NOT provide', () => {
   it('ships the unimplemented dataToPixel stub', () => {
     expect(ternary().dataToPixel(0.5, 0.3, 0.2)).toEqual({ x: 0, y: 0 });
   });
@@ -145,11 +145,11 @@ describe('TernaryAxes.calibrate refuses too few calibration points (v2.0 audit)'
 });
 
 /**
- * ⚑ COINCIDENT CORNERS — refused by the model, like map.ts's zero-length scale.
+ * ⚑ COINCIDENT CORNERS - refused by the model, like map.ts's zero-length scale.
  *
  * `L` is the pixel distance between corners A and B, and every reading divides
  * by it. Two corners on one pixel made L zero, every value read back null, and
- * `calibrate()` returned true — so TERNARY_AXES_CONFIG.buildAxes's
+ * `calibrate()` returned true - so TERNARY_AXES_CONFIG.buildAxes's
  * `if (!ok) return { error: ... }` was a refusal that could never fire.
  *
  * The click path keeps the corners apart (`distinctPixelSteps`); a loaded

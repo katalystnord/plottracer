@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { polylineRuns } from '../seriesLine.js';
 
-describe('polylineRuns — connect dense curves, leave scatters as dots (checkpoint 131)', () => {
+describe('polylineRuns - connect dense curves, leave scatters as dots (checkpoint 131)', () => {
   it('returns one run spanning a dense per-column traced curve', () => {
     // 500 points ~1px apart in x with a smooth y -- the stress-strain trace shape
     // that rendered as a furry band of overlapping dots.

@@ -1,10 +1,10 @@
 /**
- * Bin glyph geometry (checkpoint 66) — the on-canvas drawing that makes a
+ * Bin glyph geometry (checkpoint 66) - the on-canvas drawing that makes a
  * captured histogram bin *look* like a bin, mirroring what
  * engine/boxPlotGlyph.ts does for a Box Plot tuple.
  *
  * Without it, a captured bin renders as two unrelated numbered dots and the
- * user has to hold the pairing in their head — the interval, which is the
+ * user has to hold the pairing in their head - the interval, which is the
  * whole point of capturing a histogram properly, would be the one thing not
  * actually visible. (Caught driving the real app, checkpoint 66.)
  *

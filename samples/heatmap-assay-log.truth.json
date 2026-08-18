@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "heatmap-assay-log.png",
-    "note": "Synthetic ground truth \u2014 a LOG colour key, drawn cell borders, and TWO CATEGORY AXES."
+    "note": "Synthetic ground truth - a LOG colour key, drawn cell borders, and TWO CATEGORY AXES."
   },
   "graphType": "heatmap",
   "axes": {

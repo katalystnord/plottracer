@@ -5,14 +5,14 @@ import { Calibration } from '../../core/calibration.js';
 import { Dataset } from '../../core/dataset.js';
 
 /**
- * The variable-length calibration (v1.4, Spider) — the one genuinely new mechanism
+ * The variable-length calibration (v1.4, Spider) - the one genuinely new mechanism
  * in the version.
  *
  * ⚑ Every axes type before this declared a FIXED `steps` array (XY 4, Bar 2, Polar
  * 3, Ternary 3, CCR 5), and ~10 sites read `config.steps` directly. The step list is
  * now a property of the SESSION, and the danger is precisely that a missed
  * `config.steps` read keeps working on all eight fixed-shape types while silently
- * seeing one step on a spider — reporting a complete calibration with no axes placed.
+ * seeing one step on a spider - reporting a complete calibration with no axes placed.
  * So these tests exercise the step list through the session, on both entrances.
  */
 
@@ -61,7 +61,7 @@ describe('the step list is variable, and comes from the session', () => {
     expect(steps[2]!.valueFields.map((f) => f.key)).toEqual(['value2', 'name2']);
   });
 
-  it('grows with addRepeat — a figure with nine axes is not a special case', () => {
+  it('grows with addRepeat - a figure with nine axes is not a special case', () => {
     const session = newSpider();
     for (let i = 0; i < 6; i++) expect(session.addRepeat()).toBe(true);
     expect(session.getRepeatCount()).toBe(9);
@@ -97,7 +97,7 @@ describe('the step list is variable, and comes from the session', () => {
   it('clamps the step cursor when the list shrinks underneath it', () => {
     // Place ALL four axes, so the cursor is sitting one past the end, then drop one.
     // Unclamped the cursor stays at 5 against a 4-step list, and the card's progress
-    // line reads "step 6 of 5" — a count of steps that do not exist.
+    // line reads "step 6 of 5" - a count of steps that do not exist.
     const session = newSpider();
     session.addRepeat();
     session.handleCalibrationClick(100, 100);
@@ -160,7 +160,7 @@ describe('undo carries the spoke count', () => {
 
     session.restoreState(before);
     // Without this, the card keeps reading "4 axes" after an undo of the click
-    // that made it 4 — the action is on the stack and pressing undo does nothing.
+    // that made it 4 - the action is on the stack and pressing undo does nothing.
     expect(session.getRepeatCount()).toBe(3);
     expect(session.getSteps().map((s) => s.key)).toEqual(['origin', 'spoke1', 'spoke2', 'spoke3']);
   });
@@ -173,7 +173,7 @@ describe('undo carries the spoke count', () => {
 
     session.restoreState(before);
     expect(session.getRepeatCount()).toBe(4);
-    // ⚑ The placed points came back either way — `placed` IS in the snapshot. What
+    // ⚑ The placed points came back either way - `placed` IS in the snapshot. What
     // was missing was the step list to hang them on, so spoke4 was left an ORPHAN:
     // a placed calibration point no step referenced, invisible to the calibration
     // and silently inherited by the next "+ axis". The invariant is that the two
@@ -249,7 +249,7 @@ describe('calibrating a spider through the click path', () => {
     // And in the CALIBRATION itself, which is what gets written to the file.
     const cal = session.getAxes()!.calibration!;
     for (let i = 1; i < cal.getCount(); i++) expect(cal.getPoint(i)!.dy).toBe('20');
-    // The centre point carries the value AS ENTERED — it is asked for on the centre
+    // The centre point carries the value AS ENTERED - it is asked for on the centre
     // click now, like every other value (David, 2026-07-27). The per-spoke copies
     // above are what a reader uses, and are what a future per-axis override would
     // change; this one records what the user typed.
@@ -275,7 +275,7 @@ describe('calibrating a spider through the click path', () => {
     expect(ok.getAxes()!.isLog()).toBe(true);
   });
 
-  it('offers no pixel-reuse buttons — a spider has nothing to reuse', () => {
+  it('offers no pixel-reuse buttons - a spider has nothing to reuse', () => {
     const session = newSpider();
     session.handleCalibrationClick(100, 100);
     session.confirmCalibrationValues(['0']);
@@ -307,7 +307,7 @@ describe('calibrating a spider through the click path', () => {
   });
 });
 
-describe('the OTHER entrance — loading an already-calibrated spider', () => {
+describe('the OTHER entrance - loading an already-calibrated spider', () => {
   /** A spider built outside any session, as deserializing a project file gives it. */
   function loadedSpider(n: number): SpiderAxes {
     const cal = new Calibration(3);
@@ -338,7 +338,7 @@ describe('the OTHER entrance — loading an already-calibrated spider', () => {
     const placed = session.getPlacedPoints();
     expect(Object.keys(placed)).toHaveLength(6);
     // ⚑ The name rides in the calibration's third slot. A 2-slot Calibration would
-    // drop it while every number still read back correctly — a silent loss.
+    // drop it while every number still read back correctly - a silent loss.
     expect(placed['spoke3']!.values).toEqual(['10', 'A2']);
   });
 
@@ -352,7 +352,7 @@ describe('the OTHER entrance — loading an already-calibrated spider', () => {
 
   it('reads the centre value back off every loaded axis', () => {
     // Stored per spoke, so a reopened project restores it without a global field to
-    // extract it into — the workflow asks once, the file keeps one copy per axis.
+    // extract it into - the workflow asks once, the file keeps one copy per axis.
     const session = newSpider();
     session.loadCalibrated(loadedSpider(4), [new Dataset(1)]);
     expect(session.getAxes()!.getSpokes().map((s) => s.centreValue)).toEqual([2, 2, 2, 2]);

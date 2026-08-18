@@ -4,36 +4,36 @@
  * See core/mathFunctions.ts for porting-provenance notes.
  *
  * Two deliberate scope simplifications (see CLAUDE.md "Current scoped
- * task — Step 1"), both isolated to auto-detection state, never to
+ * task - Step 1"), both isolated to auto-detection state, never to
  * calibration/dataset data itself:
  *
  * 1. Auto-detection data (`wpd.AutoDetectionData`) and grid-detection
  *    data (`wpd.GridDetectionData`) are explicitly out of Step 1's scope
  *    (they live in autoDetection.js/gridDetectionCore.js, not ported).
  *    Stored/returned here as opaque, already-JSON-shaped blobs instead of
- *    reconstructed class instances — round-trips faithfully for a real
+ *    reconstructed class instances - round-trips faithfully for a real
  *    project file's raw data, but `getAutoDetectionDataForDataset`
  *    returns `undefined` when absent rather than auto-creating a default
- *    instance (the original's `new wpd.AutoDetectionData()` fallback) —
+ *    instance (the original's `new wpd.AutoDetectionData()` fallback) -
  *    there is no class to instantiate yet. A future step that ports
  *    autoDetection.js should restore that auto-create behavior.
  * 2. `getAxesForDataset`/`getAxesForMeasurement` etc. use a `Map` keyed
- *    by object identity — unchanged from the original, just noting it
+ *    by object identity - unchanged from the original, just noting it
  *    since it means two `Dataset` instances are only "the same" by
  *    reference, matching JS's original semantics exactly.
  *
  * ⚑ v2.0 GROUNDWORK, NOT A PORT: `_categoryAxisColl`/`_datasetCategoryAxisMap`
  * and their accessors below have no upstream counterpart. `CategoryAxis`
  * (core/categoryAxis.ts) is new for the bar model, added here rather than in
- * a new file because the additive-map pattern it needs — a collection plus
- * an identity-keyed binding — is exactly what `_objectAxesMap` already does
+ * a new file because the additive-map pattern it needs - a collection plus
+ * an identity-keyed binding - is exactly what `_objectAxesMap` already does
  * for value axes, so this mirrors that shape deliberately rather than
  * inventing a second one. Wired into `CalibrationSession`/`projectFile.ts`
- * and serialize()/deserialize() in a later v2.0 phase — additively, into the
+ * and serialize()/deserialize() in a later v2.0 phase - additively, into the
  * SAME version [4, 2] shape this file already writes: `categoryAxisColl`/
  * `categoryAxisName` are both omitted-when-unused, so an older reader (or a
  * plain XY/polar/spider project that never uses one) sees a byte-identical
- * file. No version bump ever became necessary for the bar model — the
+ * file. No version bump ever became necessary for the bar model - the
  * tuple/slot machinery it rides on (`_tuples`, per-pixel metadata) was
  * already fully generic before this release touched it.
  */
@@ -69,7 +69,7 @@ export interface DocumentMetadata {
   [key: string]: unknown;
 }
 
-/** Permissive shape covering every axes type's serialized fields — mirrors the original's loose per-type object building. */
+/** Permissive shape covering every axes type's serialized fields - mirrors the original's loose per-type object building. */
 export interface SerializedAxesData {
   name: string;
   type: string;
@@ -138,7 +138,7 @@ export interface SerializedDatasetData {
 export interface SerializedCategoryAxisData {
   name: string;
   categories: string[];
-  /** v2.1: the category TICK geometry, and additive again — absent for every
+  /** v2.1: the category TICK geometry, and additive again - absent for every
    * axis whose owner never marked one, which is every project written before
    * this and every bar chart the user simply did not need it for. An older
    * reader drops the key and reads the name list exactly as before.
@@ -155,7 +155,7 @@ export interface SerializedCategoryGeometry {
   /** The two placed points that ARE the category axis. */
   edges: [{ x: number; y: number }, { x: number; y: number }];
   convention: TickConvention;
-  /** Parameters in (0,1), strictly increasing. Validated on load — see
+  /** Parameters in (0,1), strictly increasing. Validated on load - see
    * CategoryAxis.restoreTickParams. */
   ticks: number[];
   /** Present only when the user dragged a tick, so a reopened project still
@@ -165,13 +165,13 @@ export interface SerializedCategoryGeometry {
    * Whether the user actually DECLARED a category count.
    *
    * ⚑ STORED, NEVER INFERRED. This is the flag `categoriesFollowBands()` gates
-   * on — declared, and a bar's category is derived from the band it falls in;
+   * on - declared, and a bar's category is derived from the band it falls in;
    * not declared, and it is read from the index stored at capture. The load
    * door used to guess it back as `getCategoryCount() > 0`, which is a
    * different fact: categories also come into existence one at a time on the
    * UN-ticked path (`reserveEmptyCategorySlot`). So "axis marked, no count
-   * typed, some bars captured" — reachable by opening the fold-out and pressing
-   * Done — round-tripped into band mode, and EVERY ROW SILENTLY REORDERED. One
+   * typed, some bars captured" - reachable by opening the fold-out and pressing
+   * Done - round-tripped into band mode, and EVERY ROW SILENTLY REORDERED. One
    * Ctrl+Z was enough to trigger it. Found by two independent reviewers,
    * v2.1 audit.
    */
@@ -188,7 +188,7 @@ export interface SerializedMeasurementData {
 }
 
 /**
- * ⚑⚑ THE HEATMAP'S RECORD — the grid, the axis NAMES, and the cells a person
+ * ⚑⚑ THE HEATMAP'S RECORD - the grid, the axis NAMES, and the cells a person
  * read themselves. A LAYER ON TOP OF THE CALIBRATION, not part of it.
  *
  * David, 2026-08-16, as a rule for every graph type: *"Anything detected on the
@@ -202,7 +202,7 @@ export interface SerializedMeasurementData {
  * metadata across; this is the fix that removes the need for a copy, because the
  * record was never the calibration's to hold.
  *
- * ⚑ Mirrors `SerializedCategoryAxisData` deliberately — that is the precedent
+ * ⚑ Mirrors `SerializedCategoryAxisData` deliberately - that is the precedent
  * for a per-session thing that lives outside the axes and serialises in its own
  * right, and the heatmap should have been built on it.
  *
@@ -212,7 +212,7 @@ export interface SerializedMeasurementData {
  */
 export interface SerializedHeatmapLayer {
   /** Divider parameters per axis, and where the axes SAT when they were
-   * recorded — used only to say "these have moved since", never to place
+   * recorded - used only to say "these have moved since", never to place
    * anything. */
   grid?: {
     x: number[];
@@ -222,7 +222,7 @@ export interface SerializedHeatmapLayer {
       y: [{ px: number; py: number }, { px: number; py: number }];
     };
   };
-  /** One name per BAND, per axis. Empty lists are the norm — a value × value
+  /** One name per BAND, per axis. Empty lists are the norm - a value × value
    * heatmap has nothing to name. */
   labels?: { x: string[]; y: string[] };
   /** `"col,row"` → position on the colour key, for cells a person read
@@ -235,7 +235,7 @@ export interface SerializedHeatmapLayer {
  *
  * ⚑ DROPPED WHOLE when malformed, never half-read. A grid with two good
  * dividers and one `"x"` would otherwise place boundaries the user never put
- * anywhere — and on a heatmap a wrong boundary has no visible symptom, because
+ * anywhere - and on a heatmap a wrong boundary has no visible symptom, because
  * the colour IS the value.
  */
 function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
@@ -251,7 +251,7 @@ function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
   if (src.grid) {
     const x = numbers(src.grid.x);
     const y = numbers(src.grid.y);
-    // Two dividers bound one band — the smallest grid that is a grid.
+    // Two dividers bound one band - the smallest grid that is a grid.
     if (x && y && x.length >= 2 && y.length >= 2) {
       out.grid = { x, y, ...(src.grid.axisAt ? { axisAt: src.grid.axisAt } : {}) };
     }
@@ -262,7 +262,7 @@ function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
   if (src.readings && typeof src.readings === 'object') {
     const kept: Record<string, number> = {};
     for (const [key, v] of Object.entries(src.readings)) {
-      // The model's own key format, and a POSITION ON THE KEY — anything else
+      // The model's own key format, and a POSITION ON THE KEY - anything else
       // would land a number on a cell nobody touched, or on a stretch of key
       // that has no ink.
       //
@@ -271,7 +271,7 @@ function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
       // this one asked only for a finite number, so a hand-edited or foreign
       // file could carry `5` and have it extrapolated into an ordinary-looking
       // value attributed to ink that does not exist. Finding A5 fixed "one line
-      // at two entrances" — and there were three.
+      // at two entrances" - and there were three.
       //
       // ⚑ DROPPED, not clamped. The cell then falls back to what its own COLOUR
       // says, which is a real measurement off real ink; clamping would invent a
@@ -329,7 +329,7 @@ export class PlotData {
     this._heatmapLayer = null;
   }
 
-  /** The heatmap's record. Null for every other type — and for a heatmap that
+  /** The heatmap's record. Null for every other type - and for a heatmap that
    * has none yet, which is not the same as an empty one. */
   setHeatmapLayer(layer: SerializedHeatmapLayer | null): void {
     this._heatmapLayer = layer;
@@ -375,7 +375,7 @@ export class PlotData {
     return this._axesColl.length;
   }
 
-  /** v2.0 groundwork — see the file header. Mirrors addAxes/getAxesColl/
+  /** v2.0 groundwork - see the file header. Mirrors addAxes/getAxesColl/
    * deleteAxes/setAxesForDataset/getAxesForDataset exactly, for CategoryAxis
    * instead of AnyAxes. */
   addCategoryAxis(ax: CategoryAxis): void {
@@ -475,12 +475,12 @@ export class PlotData {
     return this._objectAxesMap.get(ms) as AnyAxes | null | undefined;
   }
 
-  /** See file header note 1 — returns undefined rather than auto-creating a default instance (class not ported in Step 1). */
+  /** See file header note 1 - returns undefined rather than auto-creating a default instance (class not ported in Step 1). */
   getAutoDetectionDataForDataset(ds: Dataset): unknown {
     return this._datasetAutoDetectionDataMap.get(ds);
   }
 
-  /** See file header note 1 — returns undefined rather than auto-creating a default instance. */
+  /** See file header note 1 - returns undefined rather than auto-creating a default instance. */
   getGridDetectionData(): unknown {
     return this._gridDetectionData;
   }
@@ -774,7 +774,7 @@ export class PlotData {
         }
 
         if (dsData.autoDetectionData != null) {
-          // See file header note 1 — stored as an opaque blob, not reconstructed.
+          // See file header note 1 - stored as an opaque blob, not reconstructed.
           this.setAutoDetectionDataForDataset(ds, dsData.autoDetectionData);
         }
       }

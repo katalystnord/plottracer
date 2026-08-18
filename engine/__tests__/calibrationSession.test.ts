@@ -37,7 +37,7 @@ function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   }
 }
 
-describe('Polar P2 optional θ — a field labelled "unused" must not block Confirm', () => {
+describe('Polar P2 optional θ - a field labelled "unused" must not block Confirm', () => {
   it('confirms P2 with r filled and θ left blank, then calibrates', () => {
     const session = new CalibrationSession(POLAR_AXES_CONFIG);
     expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin (no value)
@@ -494,7 +494,7 @@ describe('Interpolation-assist stores the series in curve order (rc.2 fix)', () 
   });
 });
 
-// v1.3 — the role has to reach the EXPORT, not just the canvas. It already
+// v1.3 - the role has to reach the EXPORT, not just the canvas. It already
 // round-tripped through the project file; a CSV/JSON handed to anyone else
 // flattened an assigned anchor and an invented spline sample into the same
 // thing (the v0.6 audit's highest-value deferred finding).
@@ -555,7 +555,7 @@ describe('interpolation roles reach the export rows (v1.3)', () => {
 // reader transcribes it off the tick labels. Until now there was nowhere to put
 // it (Bar's export read metadata.label but nothing could write it; the
 // categorical line exported a bare ordinal).
-describe('categorical-X labels (v1.3 #9) — v2.0: Bar is now 2 clicks (a tuple), not 1', () => {
+describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), not 1', () => {
   // ⚑ Bar's category name moved from the per-POINT API (getPointLabels/
   // setPointLabel, one label per pixel) to the per-TUPLE API (getTupleLabel/
   // setTupleLabel, one label per captured bar) once BAR_AXES_CONFIG declared
@@ -1624,21 +1624,21 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
 });
 
 /**
- * Checkpoint 68 — per-axes calibration options.
+ * Checkpoint 68 - per-axes calibration options.
  *
  * WPD exposes every one of these on its calibration sidebar
  * (`wpd-core/templates/_sidebars.html:251-527`); we hardcoded them to literals
  * across 6 of 7 axes types until now, which the 2026-07-15 parity re-audit
- * ranked as its biggest finding — log axes, table stakes for scientific
+ * ranked as its biggest finding - log axes, table stakes for scientific
  * figures, were unreachable. See CLAUDE.md.
  */
-describe('CalibrationSession — per-axes calibration options (checkpoint 68)', () => {
+describe('CalibrationSession - per-axes calibration options (checkpoint 68)', () => {
   it('seeds every option from its declared default', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     expect(session.getOptions()).toEqual({ isLogX: 'false', isLogY: 'false', skipRotation: 'false' });
   });
 
-  it('reads a log Y axis correctly — the capability that was unreachable', () => {
+  it('reads a log Y axis correctly - the capability that was unreachable', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.setOption('isLogY', 'true');
     // Y1=1 @ py 300, Y2=1000 @ py 0 -> three decades over 300px.
@@ -1738,11 +1738,11 @@ describe('CalibrationSession — per-axes calibration options (checkpoint 68)', 
  * Guardrails found by the third-pass parity audit (2026-07-15).
  *
  * Both are silent-wrong-output paths: the calibration reports success and
- * every value reads back unusable, with nothing on screen saying so — the
+ * every value reads back unusable, with nothing on screen saying so - the
  * exact failure this project's record-first principle singles out. Checkpoint 68
  * made log axes reachable, which made the first one live.
  */
-describe('CalibrationSession — calibration guardrails (third-pass audit)', () => {
+describe('CalibrationSession - calibration guardrails (third-pass audit)', () => {
   function calibrateXY(session: CalibrationSession<XYAxes>, x1: string, x2: string, y1: string, y2: string) {
     session.handleCalibrationClick(100, 300); session.confirmCalibrationValues([x1]);
     session.handleCalibrationClick(400, 300); session.confirmCalibrationValues([x2]);
@@ -1797,7 +1797,7 @@ describe('CalibrationSession — calibration guardrails (third-pass audit)', () 
 });
 
 /**
- * Checkpoint 72 — the guard CLASSES, not two more instances.
+ * Checkpoint 72 - the guard CLASSES, not two more instances.
  *
  * An adversarial review of checkpoint 69 found it had "fixed two instances of
  * two bug classes and was written as if it fixed the classes". Both were still
@@ -1808,11 +1808,11 @@ describe('CalibrationSession — calibration guardrails (third-pass audit)', () 
  *    silently no-opped on Ternary (a/b/c) and CCR (t1r2/t2r2), and never
  *    covered the drag path at all.
  * Both are now declared per config, so the guard cannot be forgotten for a new
- * type — and it runs before any axes class sees the values, because every axes
+ * type - and it runs before any axes class sees the values, because every axes
  * class reports success on degenerate input.
  */
-describe('CalibrationSession — guard classes (checkpoint 72)', () => {
-  it('refuses a log BAR scale through zero — a bar baseline IS zero, the most natural input', () => {
+describe('CalibrationSession - guard classes (checkpoint 72)', () => {
+  it('refuses a log BAR scale through zero - a bar baseline IS zero, the most natural input', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     session.setOption('isLog', 'true');
     session.handleCalibrationClick(10, 300);
@@ -1835,7 +1835,7 @@ describe('CalibrationSession — guard classes (checkpoint 72)', () => {
     expect(session.getCalibrationError()).toMatch(/log radial scale cannot pass through zero/);
   });
 
-  it('never offers reuse across TERNARY corners — the case the old heuristic missed', () => {
+  it('never offers reuse across TERNARY corners - the case the old heuristic missed', () => {
     const session = new CalibrationSession(TERNARY_AXES_CONFIG);
     session.handleCalibrationClick(100, 300); // A placed; now at B
     expect(session.getCurrentStep()?.key).toBe('b');
@@ -1855,7 +1855,7 @@ describe('CalibrationSession — guard classes (checkpoint 72)', () => {
     session.confirmCalibrationValues(['10']);
     expect(session.runCalibration()).toBe(true);
 
-    // Drag X2 onto X1 — no reuse button involved.
+    // Drag X2 onto X1 - no reuse button involved.
     session.updateCalibPointPixel('x2', 100, 300);
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toMatch(/same pixel/);
@@ -1956,7 +1956,7 @@ describe('CalibrationSession interpolation-assist (checkpoint 120)', () => {
     expect(roles.filter((r) => r === 'interpolated').length).toBeGreaterThan(0);
   });
 
-  it('REFUSES to move a derived sample — the guard is in the model, not a UI handler', () => {
+  it('REFUSES to move a derived sample - the guard is in the model, not a UI handler', () => {
     // ⚑ v1.3 put this guard in commitDataPointEdit, a UI handler whose own comment
     // called itself "the model-side rule". The v1.3 gate walked around it: click an
     // italic (read-only) table row to select it, then press an arrow key, and the
@@ -2011,7 +2011,7 @@ describe('CalibrationSession interpolation-assist (checkpoint 120)', () => {
   });
 });
 
-describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoint 129)', () => {
+describe('removeTuple - delete a whole Box Plot box / Histogram bin (checkpoint 129)', () => {
   function twoBoxes(session: CalibrationSession<BarAxes>) {
     calibrateStandardBar(session);
     session.runCalibration();
@@ -2089,7 +2089,7 @@ describe('removeTuple — delete a whole Box Plot box / Histogram bin (checkpoin
   });
 });
 
-describe('sortByNearestNeighbour — manual NN reorder (checkpoint 130)', () => {
+describe('sortByNearestNeighbour - manual NN reorder (checkpoint 130)', () => {
   it('reorders out-of-order points into a nearest-neighbour path, keeping every point', () => {
     const session = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
     calibrateStandardXY(session);
@@ -2166,7 +2166,7 @@ describe('sortByNearestNeighbour — manual NN reorder (checkpoint 130)', () => 
     expect(session.getDataPoints()).toHaveLength(3);
   });
 
-  it('preserves per-pixel metadata (a loaded value override) through the sort — regression for the ckpt-130 audit HIGH', () => {
+  it('preserves per-pixel metadata (a loaded value override) through the sort - regression for the ckpt-130 audit HIGH', () => {
     // A plain ungrouped series LOADED from a project can carry per-pixel metadata
     // a click-placed one never does: a manual value `overrides` (and a Bar's
     // per-point `label`), both read at export. The first cut of
@@ -2245,7 +2245,7 @@ describe('what a graph type declares it CAN DO (v1.5)', () => {
   });
 });
 
-describe('transformAllPixels — the whole document tracks an edited image', () => {
+describe('transformAllPixels - the whole document tracks an edited image', () => {
   // ⚑ This method had NO test file at all: a scoped mutation run (2026-08-03)
   // put 10 no-coverage mutants in it. It is what carries calibration handles,
   // a half-placed pending click, and every series' points through a coordinate
@@ -2275,7 +2275,7 @@ describe('transformAllPixels — the whole document tracks an edited image', () 
     return { x: v[0]!, y: v[1]! };
   };
 
-  it('⚑ moves every pixel yet PRESERVES every data value — the whole point', () => {
+  it('⚑ moves every pixel yet PRESERVES every data value - the whole point', () => {
     // The invariant the doc comment claims: the handles move with the image, so
     // recalibration lands on the same numbers. Asserting the invariant rather
     // than the coordinates catches errors no single-point check can, because
@@ -2284,7 +2284,7 @@ describe('transformAllPixels — the whole document tracks an edited image', () 
     const before = [dataOf(session, 0, 0), dataOf(session, 0, 1), dataOf(session, 1, 0)];
     const pixelsBefore = session.getDatasets()[0]!.getAllPixels().map((p) => ({ ...p }));
 
-    // A horizontal flip about x = 500 — the image edit, applied to the document.
+    // A horizontal flip about x = 500 - the image edit, applied to the document.
     session.transformAllPixels((px, py) => ({ x: 500 - px, y: py }));
 
     const after = [dataOf(session, 0, 0), dataOf(session, 0, 1), dataOf(session, 1, 0)];
@@ -2368,7 +2368,7 @@ describe('transformAllPixels — the whole document tracks an edited image', () 
   });
 });
 
-describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar / Pie)', () => {
+describe('checkValues - the refusals a LOADED file must meet too (CCR / Polar / Pie)', () => {
   // ⚑ `checkValues` is where the "calibrate() cannot fail" family lives: five
   // separate instances have shipped where a class returned true on input that
   // made every reading null or 0. These entries are DECLARED rather than
@@ -2398,7 +2398,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
       return session;
     }
 
-    it('the happy path really does calibrate — so the refusals below mean something', () => {
+    it('the happy path really does calibrate - so the refusals below mean something', () => {
       const session = ccrReadyToCalibrate();
       expect(session.runCalibration()).toBe(true);
       expect(session.getCalibrationError()).toBeNull();
@@ -2425,7 +2425,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
       expect(session.getCalibrationError()).toMatch(/Chart Start Time/);
     });
 
-    it('refuses an R0 that is a DATE — a radius is not a moment', () => {
+    it('refuses an R0 that is a DATE - a radius is not a moment', () => {
       // ⚑ R0/R2 reject `isDate` as well as non-numbers, which the Time field
       // deliberately accepts. That asymmetry is the whole point of separate
       // guards, and only a date input can tell the two apart.
@@ -2467,14 +2467,14 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
      * A polar session walked to the end.
      *
      * ⚑ The LAST confirm now runs the type's own `checkValues`, so a walk
-     * carrying a bad value is refused THERE rather than at Calibrate — the
+     * carrying a bad value is refused THERE rather than at Calibrate - the
      * refusal moved to the earliest moment the whole calibration is known. The
      * pending pixel stays and the point is not placed, which is what lets the
      * user correct the value in the box instead of re-clicking.
      *
      * These tests exist to pin the REFUSAL and its wording, so they place the
      * final point through the model directly when the walk is expected to
-     * refuse — the calibration under test is the one a LOADED FILE would also
+     * refuse - the calibration under test is the one a LOADED FILE would also
      * present, and that door has never gone through `confirmCalibrationValues`.
      */
     function polarReadyToCalibrate(r1 = '6', theta1 = '0', r2 = '12', theta2 = '') {
@@ -2484,7 +2484,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
       expect(session.confirmCalibrationValues([r1, theta1])).toBe(true);
       expect(session.handleCalibrationClick(600, 400)).toBe('awaiting-value'); // P2
       if (!session.confirmCalibrationValues([r2, theta2])) {
-        // Refused at the click — the walk itself already caught it. Load the
+        // Refused at the click - the walk itself already caught it. Load the
         // same calibration the file door would, so the message can be asserted.
         session.adoptCalibration({
           placed: {
@@ -2517,7 +2517,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
       expect(session.getCalibrationError()).toMatch(/P1.*r value/);
     });
 
-    it("refuses P1's r when it is a DATE — a radius is not a moment", () => {
+    it("refuses P1's r when it is a DATE - a radius is not a moment", () => {
       const session = polarReadyToCalibrate('2024/03/04');
       expect(session.runCalibration()).toBe(false);
       expect(session.getCalibrationError()).toMatch(/P1.*r value/);
@@ -2547,7 +2547,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
       expect(session.getCalibrationError()).toMatch(/P2.*r value/);
     });
 
-    it('⚑ does NOT refuse a junk θ2 — it is optional and the class never reads it', () => {
+    it('⚑ does NOT refuse a junk θ2 - it is optional and the class never reads it', () => {
       // The config comment says theta2 is deliberately unchecked. A guard added
       // there would reject a file the app itself can produce (θ2 blank), so this
       // asserts the ABSENCE of a refusal, which no other test would notice.
@@ -2558,7 +2558,7 @@ describe('checkValues — the refusals a LOADED file must meet too (CCR / Polar 
   });
 });
 
-describe('removeDataPoints — deleting several at once, and what a selection MEANS', () => {
+describe('removeDataPoints - deleting several at once, and what a selection MEANS', () => {
   // ⚑ A scoped mutation run (2026-08-03) left 15 no-coverage mutants here. The
   // ones that matter are the DESCENDING SORTS: removal shifts every later
   // index, so deleting high-index-first is what makes a multi-point delete
@@ -2621,7 +2621,7 @@ describe('removeDataPoints — deleting several at once, and what a selection ME
 
     expect(session.getTupleRows()).toHaveLength(1);
     expect(session.getDataPoints()).toHaveLength(5);
-    // Box 1 is what survived — its Min is py 480 -> (500-480)/400*10 = 0.5.
+    // Box 1 is what survived - its Min is py 480 -> (500-480)/400*10 = 0.5.
     expect(session.getTupleRows()[0]!.points[0]!.data![0]).toBeCloseTo(0.5, 6);
   });
 
@@ -2658,13 +2658,13 @@ describe('adoptCalibration and the config’s own defaults', () => {
   /**
    * ⚑ THE THIRD ENTRANCE TO THE SAME STATE. The constructor seeds
    * `globalValues` from the config's `globalFields` defaults, and `reset()`
-   * does it again with a comment saying why — "a prefilled global (the pie's
+   * does it again with a comment saying why - "a prefilled global (the pie's
    * total and sweep) must survive a reset the same way it survives a fresh
    * session". `adoptCalibration` did neither: it assigned the caller's map
    * outright, so adopting a calibration that named no globals wiped the pie's
    * `total: 100` and `sweep: 360` prefills.
    *
-   * ⚑ AND THE FAILURE IS SILENT IN THE WORST WAY. Nothing throws — the guard
+   * ⚑ AND THE FAILURE IS SILENT IN THE WORST WAY. Nothing throws - the guard
    * for a blank global simply refuses, `adoptCalibration` returns false, and
    * every calibration point is still sitting placed on the figure. The card
    * shows a full calibration that did not happen.

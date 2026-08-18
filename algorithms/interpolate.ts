@@ -1,5 +1,5 @@
 /**
- * Interpolation-assist — checkpoint 119, the v0.6 answer for MONOCHROME
+ * Interpolation-assist - checkpoint 119, the v0.6 answer for MONOCHROME
  * dash-differentiated technical figures (David): when several curves are the same
  * colour and differ only by dash pattern, colour-filtering cannot separate them,
  * and connectivity (Segment Fill) cannot follow a broken line. The human places a

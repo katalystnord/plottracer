@@ -16,13 +16,13 @@ import { Calibration } from '../../core/calibration.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 
 /**
- * The axis-aware colour trace, orchestrated (v1.4) — and its landing in the record.
+ * The axis-aware colour trace, orchestrated (v1.4) - and its landing in the record.
  *
  * ⚑ Well-founded where the bar case was not. Auto-extract is refused on bars because
  * every mechanism it has returns the MIDDLE of a filled shape, and a bar's value is
  * its end: the number was never the datum. On a radar chart the datum IS where the
  * series crosses the axis, and a crossing is exactly what this measures. What still
- * has to hold is the refusal — an ambiguous ray must reach the record as an empty
+ * has to hold is the refusal - an ambiguous ray must reach the record as an empty
  * slot the user is then asked for, never as the outermost run silently chosen.
  */
 
@@ -51,7 +51,7 @@ function blankImage(): Uint8ClampedArray {
   return data;
 }
 
-/** Draw a ring of `rgb` at `radius` — a closed radar polygon, as far as a ray
+/** Draw a ring of `rgb` at `radius` - a closed radar polygon, as far as a ray
  * walking outward can tell, crossing every spoke at the same distance. */
 function drawRing(data: Uint8ClampedArray, radius: number, rgb: [number, number, number], thickness = 4): void {
   for (let y = 0; y < H; y++) {
@@ -82,14 +82,14 @@ function calibratedSpider(names: string[], values: string[]): CalibrationSession
 const THREE = () => calibratedSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
 
 /** A drawn line has WIDTH, and the reading is its outer edge, so an expectation is
- * "within a few percent of THAT axis's range" — never an exact number. Stated per
+ * "within a few percent of THAT axis's range" - never an exact number. Stated per
  * axis on purpose: a tolerance in absolute units would be meaningless on a figure
  * whose axes run to 5 and to 1000.
  *
  * ⚠️ THIS FILE CANNOT SEE THE REAL BIAS, and the tolerance below should not be
  * read as evidence that it is small. `drawSeries` strokes lines between vertices
  * and draws NO MARKERS, while the bundled PNG this stands for draws a marker at
- * every vertex — and the marker, not the stroke, is what the outer-edge reading
+ * every vertex - and the marker, not the stroke, is what the outer-edge reading
  * lands on (see SpokeRun.atPx). Measured through the real figure the over-read is
  * ~4.8px, about one marker radius; measured here it is ~1px, half a stroke. The
  * fixture is an easier figure than the example it represents. */
@@ -150,7 +150,7 @@ describe('runSpiderTrace', () => {
     expect(result.readings[0]!.point).toBeNull();
     expect(result.readings[0]!.value).toBeNull();
     expect(result.readings[0]!.runs).toHaveLength(2); // the evidence rides along
-    // The other two axes are unaffected — a doubtful ray poisons only itself.
+    // The other two axes are unaffected - a doubtful ray poisons only itself.
     expect(result.readings[1]!.reason).toBeNull();
     expect(result.readings[2]!.reason).toBeNull();
   });
@@ -213,7 +213,7 @@ describe('addSpiderTracePoints', () => {
 
   it('leaves a refused axis EMPTY, and asks for it next', () => {
     // ⚑ The refusal has to survive all the way into the record. A skipped slot is
-    // not a gap in the data — it is the worklist: the capture cursor lands on it, so
+    // not a gap in the data - it is the worklist: the capture cursor lands on it, so
     // the user is asked for exactly the axis the trace could not read.
     const session = THREE();
     const img = blankImage();
@@ -232,7 +232,7 @@ describe('addSpiderTracePoints', () => {
     // ⚑ The trap in the shortest implementation: the dataset primitive that CREATES
     // a tuple puts its pixel in slot 0. A trace whose first offered reading is for
     // axis 2 (because axis 0 was ambiguous) would then have the right number filed
-    // against the wrong axis — worse than the empty slot it should have left.
+    // against the wrong axis - worse than the empty slot it should have left.
     const session = calibratedSpider(['A', 'B', 'C'], ['10', '100', '1000']);
     const img = blankImage();
     drawRing(img, R / 2, RED);
@@ -247,7 +247,7 @@ describe('addSpiderTracePoints', () => {
 
   it('never overwrites a reading the user placed by hand', () => {
     // A trace ASSISTS. Running it after fixing one axis by eye must not silently
-    // undo that fix — so it fills the open slots and leaves the rest alone.
+    // undo that fix - so it fills the open slots and leaves the rest alone.
     const session = THREE();
     session.addDataPoint(...spokePixel(0, 3, R * 0.9)); // 90 on Strength, placed by hand
     const img = blankImage();
@@ -290,7 +290,7 @@ describe('addSpiderTracePoints', () => {
  * each ray head-on at a distance chosen by the test. A real radar series is a
  * POLYGON: each edge runs between two adjacent vertices, so the ray meets the ink at
  * a corner, and the corner is the datum. The figure this uses is the one shipped in
- * samples/, with six axes of six DIFFERENT ranges (120, 60, 25, 100, 80, 5) — so a
+ * samples/, with six axes of six DIFFERENT ranges (120, 60, 25, 100, 80, 5) - so a
  * reading that came off a shared scale, or off the wrong spoke, cannot pass by
  * looking plausible.
  *
@@ -335,7 +335,7 @@ describe('the bundled example, traced end to end', () => {
     return data;
   }
 
-  /** A 3px-wide stroke from a to b — a drawn plot line, not a mathematical one. */
+  /** A 3px-wide stroke from a to b - a drawn plot line, not a mathematical one. */
   function stroke(
     data: Uint8ClampedArray,
     a: { x: number; y: number },
@@ -384,7 +384,7 @@ describe('the bundled example, traced end to end', () => {
    * ⚑ The markers were missing here, and their absence is what let this test
    * credit the real figure's ~4.8px over-read to a ~1px stroke bias for three
    * releases: the synthetic figure could not exhibit the defect it was supposed to
-   * be watching. It draws the same KIND of figure as the bundled PNG now — but the
+   * be watching. It draws the same KIND of figure as the bundled PNG now - but the
    * accuracy claim belongs to the PNG test below, which reads the shipped ink. */
   function drawSeries(data: Uint8ClampedArray, axes: SpiderAxes, values: number[], rgb: [number, number, number]) {
     const vertices = values.map((v, i) => axes.dataToPixel(i, v));
@@ -403,7 +403,7 @@ describe('the bundled example, traced end to end', () => {
   it('recovers every published value, on six axes of six different ranges', () => {
     const axes = axesFromTruth();
     const img = whiteImage();
-    // All three series drawn, as the figure has them — the trace must separate them
+    // All three series drawn, as the figure has them - the trace must separate them
     // by colour, not by being the only ink on the page.
     truth.series.forEach((series, s) => drawSeries(img, axes, series.points.map((p) => p.value), COLOURS[s]!));
 
@@ -415,7 +415,7 @@ describe('the bundled example, traced end to end', () => {
         const range = truth.axes[i]!.max - truth.axes[i]!.centre;
         expect(reading.reason, `${series.name} / ${truth.axes[i]!.name}`).toBeNull();
         // Within 2% of that axis's OWN range. The reading is the outer edge of the
-        // ink, so it sits out by half a stroke HERE — and by a whole marker radius
+        // ink, so it sits out by half a stroke HERE - and by a whole marker radius
         // on the real figure, which this synthetic one does not draw (see the note
         // on expectValue above). Bounded and the same on every axis either way. A reading taken off a NEIGHBOURING axis, off a shared scale,
         // or from the middle of the ink misses by far more than this on a figure
@@ -445,7 +445,7 @@ describe('the bundled example, traced end to end', () => {
 describe('a spider export carries every series, read against its own spoke', () => {
   it('exports each reading with the axis it was CAPTURED on', () => {
     // ⚑ The release audit's finding. Grouped types routed to `getTupleRows`, which
-    // is ACTIVE-SERIES-ONLY and reads values through `pixelToData` — the NEAREST
+    // is ACTIVE-SERIES-ONLY and reads values through `pixelToData` - the NEAREST
     // ray. So the screen showed three series and the file carried one, and the one
     // it carried was read off whichever ray each point happened to sit closest to,
     // not the axis it was recorded against. On a spider those coincide for a clean
@@ -463,7 +463,7 @@ describe('a spider export carries every series, read against its own spoke', () 
     expect(first.map((r) => r.values[1])).toEqual(['Strength', 'Weight', 'Cost']);
     first.forEach((r) => expect(Math.round(r.values[2] as number)).toBe(50));
 
-    // ...and the SECOND series is a separate, complete set — not absent.
+    // ...and the SECOND series is a separate, complete set - not absent.
     const second = session.getExportRows(1);
     expect(second).toHaveLength(3);
     second.forEach((r) => expect(Math.round(r.values[2] as number)).toBe(25));
@@ -479,7 +479,7 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     expect(THREE().getExportShape()).toBe('flat');
   });
 
-  it('answers tuples for a Box Plot — including one reached as a Bar toggle, and for plain Bar\'s own interval record (v2.0)', () => {
+  it('answers tuples for a Box Plot - including one reached as a Bar toggle, and for plain Bar\'s own interval record (v2.0)', () => {
     // ⚑ Why this cannot be a static config field alone. Box Plot is two doors: its
     // own graph type, and a toggle that gives a BAR session Min/Q1/Median/Q3/Max.
     // The second has a config that says nothing about tuples.
@@ -514,7 +514,7 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
  * ⚑⚑ THE SHIPPED PNG, not a figure this test drew.
  *
  * The block above strokes lines between vertices and draws NO MARKERS, so it can
- * only ever exhibit a half-stroke bias — while the real figure draws a marker at
+ * only ever exhibit a half-stroke bias - while the real figure draws a marker at
  * every vertex, and the vertex is exactly where the crossing is measured. Its 2%
  * tolerance was wide enough to absorb the real error while crediting it to the
  * wrong cause: a test that invents its own geometry proves self-consistency, not
@@ -572,7 +572,7 @@ describe('the bundled example PNG, traced as it ships', () => {
       .map((r) => `${r.name} / ${r.axis}: read ${r.read.toFixed(2)} vs ${r.published} (${(100 * r.fraction).toFixed(2)}%, ${r.px.toFixed(2)}px)`)
       .join('\n');
     const worst = Math.max(...rows.map((r) => r.fraction));
-    // 1.5% of each axis's own range. ⚑ The bound is set by ONE reading — Cellulose
+    // 1.5% of each axis's own range. ⚑ The bound is set by ONE reading - Cellulose
     // film's tensile strength, a spike at 110 of 120 whose neighbours are 9 and
     // 4.3. At a vertex that sharp the polygon's two edges hug the ray, so the ink
     // reaches further back towards the centre than the marker does and drags the
@@ -582,11 +582,11 @@ describe('the bundled example PNG, traced as it ships', () => {
     expect(worst, table).toBeLessThan(0.015);
   });
 
-  it('carries no systematic outward bias — the marker radius is not a reading', () => {
+  it('carries no systematic outward bias - the marker radius is not a reading', () => {
     // ⚑ The DIAGNOSTIC assertion, and the one that failed before the fix. A
     // vertex marker is ~4.9px in radius; reading a run's outer end put every
     // value that far out, uniformly, on every axis at once. The mean signed
-    // error in pixels is what sees it — individual errors can cancel in a
+    // error in pixels is what sees it - individual errors can cancel in a
     // percentage, a constant bias cannot hide in a mean.
     const errors = tracedErrors();
     const meanPx = errors.reduce((s, e) => s + e.px, 0) / errors.length;

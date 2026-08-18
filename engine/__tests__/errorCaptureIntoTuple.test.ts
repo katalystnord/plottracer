@@ -1,10 +1,10 @@
 /**
- * B4 — the capture gesture writes the cap onto the DATUM'S OWN RECORD.
+ * B4 - the capture gesture writes the cap onto the DATUM'S OWN RECORD.
  *
  * Named failing tests first (CLAUDE.md gate 2), named for the CASE.
  *
  * ⚑ What changes: dragging from a data point out to its cap used to CREATE a
- * series ("SD upper"), give it an `errorRelation`, and put the cap pixel in it —
+ * series ("SD upper"), give it an `errorRelation`, and put the cap pixel in it -
  * after which which datum the cap belonged to was re-guessed on every read. Now
  * the cap goes into the datum's own tuple, so the pairing is a fact rather than
  * an inference.
@@ -80,7 +80,7 @@ describe('capturing a cap writes it onto the datum, not into a new series', () =
     expect(bar.yLower, 'the mirror is placed too').toBeCloseTo(3, 6);
   });
 
-  it('⚑⚑ two datums whose caps share an x each keep their OWN — the defect, end to end', () => {
+  it('⚑⚑ two datums whose caps share an x each keep their OWN - the defect, end to end', () => {
     // David's capture as a session test rather than a unit one. Under the old
     // nearest-x rule both points' caps resolved to point 1.
     const s = session();
@@ -121,7 +121,7 @@ describe('capturing a cap writes it onto the datum, not into a new series', () =
 
   it('⚑⚑ a DIFFERENT error kind goes to its own related series, not over the first', () => {
     // ⚠️ THE BUG THIS REPLACES. The first draft skipped adoption when slots
-    // already existed and wrote the second kind into the FIRST kind's slots — so
+    // already existed and wrote the second kind into the FIRST kind's slots - so
     // a 95% CI reading was stored under a column headed "SD upper". Silent
     // mislabelling, and the test here previously ASSERTED that as correct.
     //
@@ -153,7 +153,7 @@ describe('capturing a cap writes it onto the datum, not into a new series', () =
 
   it('⚑⚑ re-dragging one cap does NOT re-symmetrize the other', () => {
     // The core of the model (David, 2026-07-16): the mirror is a STARTING
-    // POSITION, not a constraint — an asymmetric bar is just a bar whose cap you
+    // POSITION, not a constraint - an asymmetric bar is just a bar whose cap you
     // moved. My first draft wrote the mirror on every capture, so re-dragging
     // the upper would have snapped a deliberately-moved lower back to symmetry,
     // destroying a measurement on the exact feature this rework exists to serve.

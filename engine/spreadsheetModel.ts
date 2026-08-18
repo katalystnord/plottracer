@@ -1,11 +1,11 @@
 /**
- * The multi-series data spreadsheet's MODEL — what the table is made of, as
+ * The multi-series data spreadsheet's MODEL - what the table is made of, as
  * opposed to how it is drawn.
  *
  * The table itself stays in `ui/src/Workspace.tsx`: it is text inputs, click
  * handlers, sticky headers and inline styles, and none of that belongs in a
  * framework-agnostic module. What lives here is the part that is not really
- * rendering at all — the RULES:
+ * rendering at all - the RULES:
  *
  *   - which series/rows/values the table shows, and how many rows a RAGGED
  *     multi-series table has;
@@ -17,7 +17,7 @@
  *   - ⚑ Column ORDER USED TO LIVE HERE, in `seriesColumns`, after the screen led
  *     with Category while the categorical EXPORT appended it last (David caught
  *     it 2026-07-26). That function was DELETED 2026-08-03: it had zero callers
- *     — the table builds its columns inline and never adopted it — so the drift
+ *     - the table builds its columns inline and never adopted it - so the drift
  *     it was written to prevent was never actually prevented, while the function
  *     sitting here tested and green read as though it were. Re-introduce it WIRED
  *     when the v2.1 Workspace split restructures the table; an uninstalled
@@ -56,13 +56,13 @@ export interface SpreadsheetSeries {
   labels: string[];
   /** For an ERROR-CAP series: each row's signed offset from the datum it
    * resolves to. Empty for every other series, which is what the table keys on
-   * to show a single Δ column instead of X/Y — the cap's own x is the datum's x
+   * to show a single Δ column instead of X/Y - the cap's own x is the datum's x
    * by construction, so printing it is three columns of one number. See
    * CalibrationSession.getErrorCapDeltas. */
   deltas: (number | null)[];
   /** ⚑⚑ Which PIXEL each row is, so a click still addresses a real point.
    * Row index stopped being pixel index when a datum's caps became pixels of
-   * its own series (B4) — every outward call from the table takes a pixel
+   * its own series (B4) - every outward call from the table takes a pixel
    * index, and a row without its own would address the point two along. Plain
    * `0..n-1` for a series carrying no error. */
   pixelIndices: number[];
@@ -72,7 +72,7 @@ export interface SpreadsheetSeries {
    * about left and right, and four columns of blanks assert an emptiness nobody
    * looked for. Empty for a series with no error. */
   errorColumns: { role: ErrorRole; label: string }[];
-  /** Per row, one value per `errorColumns` entry — the cap's ABSOLUTE position
+  /** Per row, one value per `errorColumns` entry - the cap's ABSOLUTE position
    * on that role's axis, `null` where that side was never captured.
    * ⚑ Absolutes rather than deltas, measured not chosen: in the delta form "no
    * bound" and "a bound of size zero" are the same number, which is tenet 9's
@@ -87,7 +87,7 @@ export interface SpreadsheetSeries {
  *
  * `allDatasetsData` and `datasetInfos` are passed in rather than re-read from
  * the session because the component already memoises both and uses them
- * elsewhere — asking twice would risk the two views disagreeing mid-render.
+ * elsewhere - asking twice would risk the two views disagreeing mid-render.
  */
 export function buildSpreadsheetSeries(
   allDatasetsData: readonly DatasetPointsView[],
@@ -98,7 +98,7 @@ export function buildSpreadsheetSeries(
     const pixelIndices = session.getDatumPixelIndices(d.index);
     // ⚑ The session's own answer, NOT a second computation here. The export
     // asks the same two questions, and a column that exists on screen but not
-    // in the file is this project's own case study — see getErrorColumns.
+    // in the file is this project's own case study - see getErrorColumns.
     // Row-aligned with `pixelIndices` by construction: both walk the tuples in
     // order and skip a tuple with no datum.
     const errorColumns = session.getErrorColumns(d.index);
@@ -138,7 +138,7 @@ export function spreadsheetMaxRows(series: readonly SpreadsheetSeries[]): number
  * Does this chart get a Category column?
  *
  * ⚑ Bar-kind is NOT sufficient. Box Plot and Histogram are bar-kind too, but
- * they have SLOTS and render the tuple table above — which has carried its own
+ * they have SLOTS and render the tuple table above - which has carried its own
  * name field since v0.5. Keying on bar-kind alone would give them a second,
  * competing name column.
  */
@@ -146,7 +146,7 @@ export function showsCategoryColumn(axesKind: string, hasSlots: boolean): boolea
   return axesKind === 'bar' && !hasSlots;
 }
 
-/** A spline-derived sample has no independent existence — the next anchor move
+/** A spline-derived sample has no independent existence - the next anchor move
  * rebuilds it from the anchors. */
 export function isDerivedAt(roles: readonly (PointRole | null)[], row: number): boolean {
   return roles[row] === 'interpolated';
@@ -158,7 +158,7 @@ export function isDerivedAt(roles: readonly (PointRole | null)[], row: number): 
  * Three conditions, all necessary: only XY carries free numeric values; only
  * the ACTIVE series is edited ("you edit the series you're working on"); and a
  * derived sample refuses, because an edit there is silently wiped by the next
- * rebuild. It reads muted and italic instead, pointing at the anchors — which
+ * rebuild. It reads muted and italic instead, pointing at the anchors - which
  * ARE editable, and which the curve follows.
  */
 export function isCellEditable(axesKind: string, seriesActive: boolean, derived: boolean): boolean {

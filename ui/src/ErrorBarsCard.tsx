@@ -136,7 +136,7 @@ export interface ErrorSeriesRow {
  * The error kinds a caption usually names, OFFERED as a datalist.
  *
  * ⚑ Not a picker, and not a default. The card asks for a NAME because the kind
- * is not in the geometry — it is printed in the caption, and only the user can
+ * is not in the geometry - it is printed in the caption, and only the user can
  * read it. Listing the common words makes transcription quicker; preselecting
  * one would make a reading up, which is the thing `engine/errorRelation.ts`
  * refused an `errorKind` field over.
@@ -150,7 +150,7 @@ export interface ErrorBarsCardProps {
   onTargetChange: (index: number) => void;
   baseName: string;
   onBaseNameChange: (name: string) => void;
-  /** Error series that exist already — the visible proof a relation was stored. */
+  /** Error series that exist already - the visible proof a relation was stored. */
   existing: ErrorSeriesRow[];
   onSelectSeries?: (index: number) => void;
   /** Refusal from the last gesture, shown until the next one. */
@@ -249,7 +249,7 @@ export function ErrorBarsCard({
                 <strong>{baseName.trim()} lower</strong>.
               </>
             ) : (
-              <>Name the error as the figure&rsquo;s caption does — its columns take that name.</>
+              <>Name the error as the figure&rsquo;s caption does - its columns take that name.</>
             )}
           </Hint>
 
@@ -261,19 +261,19 @@ export function ErrorBarsCard({
             <Hint data-testid="error-bars-hint">Calibrate the chart first.</Hint>
           ) : !targetHasPoints ? (
             <Hint data-testid="error-bars-hint">
-              Place at least one point on <strong>{targets.find((t) => t.index === targetIndex)?.name}</strong> first —
+              Place at least one point on <strong>{targets.find((t) => t.index === targetIndex)?.name}</strong> first -
               an error bar hangs off a data point.
             </Hint>
           ) : (
             <Hint data-testid="error-bars-hint">
               {/* ⚑ The third sentence used to read "pick its series under
-                  Recorded below, then drag the cap" — a precondition that no
+                  Recorded below, then drag the cap" - a precondition that no
                   longer exists. A cap lives on its datum's own record now (B4),
                   so it belongs to the series you are already working on and is
                   draggable where it stands. That instruction described the
                   hidden mode David could not have discovered; it would now
                   describe one that is not there at all. */}
-              Drag from a data point out to its error cap. A cap is placed on each side — the lower one mirrored as a
+              Drag from a data point out to its error cap. A cap is placed on each side - the lower one mirrored as a
               starting position. Drag either cap to where the figure draws it.
             </Hint>
           )}

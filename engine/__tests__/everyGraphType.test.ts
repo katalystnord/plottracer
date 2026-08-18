@@ -5,14 +5,14 @@ import type { AxesTypeConfig, CalibratedAxes, AxesOption } from '../axesTypeConf
 import { ALL_TYPES, labelOf, calibratedHealthy } from './fixtures/anyType.js';
 
 /**
- * ⚑⚑⚑ THE INVARIANTS EVERY GRAPH TYPE MUST SATISFY — and the point is that a
+ * ⚑⚑⚑ THE INVARIANTS EVERY GRAPH TYPE MUST SATISFY - and the point is that a
  * NEW type is enrolled automatically.
  *
  * David, 2026-08-16, after I re-derived the "a heatmap always has a numeric
  * scale" premise inside the very file whose header condemns it: *"I do NOT want
  * to come back to this problem for the next chart type, i.e. bubble graphs."*
  *
- * ⚠️ WHY IT KEPT COMING BACK — it was never a belief anyone held. **A new graph
+ * ⚠️ WHY IT KEPT COMING BACK - it was never a belief anyone held. **A new graph
  * type joined the app by being added to a UI dropdown list, and joined nothing
  * else.** The one enumerable list of types lived in `ui/src/Workspace.tsx`,
  * private, ordering the picker. So every cross-type check hand-listed its types,
@@ -39,10 +39,10 @@ function exportedConfigs(): { name: string; config: AxesTypeConfig<CalibratedAxe
     .map(([name, config]) => ({ name, config: config as AxesTypeConfig<CalibratedAxes> }));
 }
 
-describe('⚑⚑ every graph type is REGISTERED — a type cannot join the app silently', () => {
+describe('⚑⚑ every graph type is REGISTERED - a type cannot join the app silently', () => {
   it('the registry holds exactly the configs this module exports', () => {
-    // ⚑⚑ THE KEYSTONE. Both sides are DERIVED — one from the module's own
-    // exports, one from the registry — so neither can be quietly edited to agree
+    // ⚑⚑ THE KEYSTONE. Both sides are DERIVED - one from the module's own
+    // exports, one from the registry - so neither can be quietly edited to agree
     // with the other. A list that agrees with itself proves nothing; this is the
     // same move `ADDS_POINT_ON_CLICK` makes for the click router.
     // ⚑ THIS is what makes a bubble chart's arrival noisy instead of silent:
@@ -53,13 +53,13 @@ describe('⚑⚑ every graph type is REGISTERED — a type cannot join the app s
   });
 
   it('every registered type has a UNIQUE id, since the id is how a file names its type', () => {
-    // A duplicate id means a saved project reopens as the wrong graph type —
+    // A duplicate id means a saved project reopens as the wrong graph type -
     // `ALL_AXES_TYPE_CONFIGS.find(c => c.id === …)` takes the first match.
     const ids = ALL_AXES_TYPE_CONFIGS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('is not vacuous — the registry is populated and the shape filter finds things', () => {
+  it('is not vacuous - the registry is populated and the shape filter finds things', () => {
     // ⚑ Without this the two assertions above would BOTH pass on an empty
     // registry and an export filter that matched nothing, which is exactly how a
     // structural test goes quiet without failing.
@@ -69,12 +69,12 @@ describe('⚑⚑ every graph type is REGISTERED — a type cannot join the app s
 });
 
 /**
- * ⚑⚑ WHAT `runCalibration` PROMISES ABOUT METADATA, ENFORCED — v2.2 audit
+ * ⚑⚑ WHAT `runCalibration` PROMISES ABOUT METADATA, ENFORCED - v2.2 audit
  * finding A4, built 2026-08-17 (pass 5).
  *
  * `runCalibration` used to copy the previous axes' metadata onto the new object.
- * That carry is GONE (v2.2, 2026-08-16) — the heatmap's record moved onto the
- * session, so there was nothing left to copy — and the code says why, ending
+ * That carry is GONE (v2.2, 2026-08-16) - the heatmap's record moved onto the
+ * session, so there was nothing left to copy - and the code says why, ending
  * with a claim:
  *
  * > *"Everything else in axes metadata … is DECLARED during calibration and
@@ -89,11 +89,11 @@ describe('⚑⚑ every graph type is REGISTERED — a type cannot join the app s
  *
  * ⚑ The audit memo recorded this check as done and pointed at THIS FILE. It was
  * not here. A ✅ beside a design is the same false evidence as a comment beside
- * unenforced code — the next reader checks, sees the claim, and stops looking.
+ * unenforced code - the next reader checks, sees the claim, and stops looking.
  *
  * ▶ THE FAILURE IT GUARDS, specifically: a `buildAxes` that stamps a key only
  * while some option is ON. Turn that option off, rebuild, and the key is simply
- * absent — and with nothing carried across, absent is permanent. No type does
+ * absent - and with nothing carried across, absent is permanent. No type does
  * this today (the heatmap's `heatmapXKind: xCategory ? 'category' : 'value'`
  * varies the VALUE, never whether the KEY is written); this is what keeps it
  * that way for the thirteenth.
@@ -101,7 +101,7 @@ describe('⚑⚑ every graph type is REGISTERED — a type cannot join the app s
  * ⚠️ A COMPANION TEST WAS WRITTEN AND DELETED, deliberately, and it is worth
  * saying why: it calibrated, re-calibrated with the same inputs, and compared
  * the metadata. `buildAxes` is deterministic and nothing is carried, so both
- * builds are the same build — the test could not fail, and it would have sat
+ * builds are the same build - the test could not fail, and it would have sat
  * here looking like coverage of the invariant above. **Coverage-shaped is worse
  * than absent**, which is the finding this whole pass keeps re-deriving. Varying
  * the OPTIONS is what makes the two builds genuinely different.
@@ -134,7 +134,7 @@ describe('⚑⚑ a type stamps the SAME metadata keys whatever its options say',
         const session = calibratedHealthy(id, config);
         session.setOption(option.key, value);
 
-        // ⚑ A flip may be REFUSED, and legitimately so — a heatmap with a
+        // ⚑ A flip may be REFUSED, and legitimately so - a heatmap with a
         // CATEGORY colour key is refused on purpose, naming what it would cost.
         // A refusal leaves the previous axes in place, so there is no new build
         // to compare; skipping it is right, but skipping SILENTLY is how a loop
@@ -150,7 +150,7 @@ describe('⚑⚑ a type stamps the SAME metadata keys whatever its options say',
     });
   }
 
-  it('is not vacuous — flips actually reached a build', () => {
+  it('is not vacuous - flips actually reached a build', () => {
     // Without this, every flip being refused would leave the whole describe
     // green while comparing nothing. The number is a floor, not a fixture: it
     // only has to prove the loop did work.

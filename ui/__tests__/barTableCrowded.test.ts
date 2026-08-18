@@ -24,7 +24,7 @@ describe('the crowded-category message', () => {
     expect(msg).toContain('Hemp');
   });
 
-  it('⚑ says the reading is NOT SHOWN — the whole point is that the table lies without it', () => {
+  it('⚑ says the reading is NOT SHOWN - the whole point is that the table lies without it', () => {
     expect(crowdedMessage([{ categoryIndex: 0 }], names, 'bar')).toContain('not shown');
   });
 

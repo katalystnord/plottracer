@@ -3,17 +3,17 @@ import { XYAxes } from '../axes/xy.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * XY calibration maths — the most-used axes type in the app.
+ * XY calibration maths - the most-used axes type in the app.
  *
  * ⚑ WHY THIS FILE EXISTS. `core/axes/xy.ts` is a faithful port of wpd-core's
  * `core/axes/xy.js`, and mutation testing scored it 45.13% with 52 mutants that
- * NO test reaches. Our suite exercises XYAxes constantly — through sessions,
- * exports, project round-trips — but never asserts its maths directly: before
+ * NO test reaches. Our suite exercises XYAxes constantly - through sessions,
+ * exports, project round-trips - but never asserts its maths directly: before
  * this file, `dataToPixel` was asserted only for spider, the one axes class that
  * is original work rather than a port (and which scores 83.41%).
  *
  * Cases marked "WPD" are ADAPTED FROM WebPlotDigitizer's `tests/xy_axes_tests.js`
- * (Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0 — the same licence as this
+ * (Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0 - the same licence as this
  * project, which is what makes porting legitimate).
  *
  * The calibration shape throughout is WPD's own: four points in a 99x99 box,
@@ -33,7 +33,7 @@ function calibrated(
   return axes;
 }
 
-/** X1=(0,99)=0, X2=(99,99)=100, Y1=(0,99)=0, Y2=(0,0)=10 — the ordinary "L". */
+/** X1=(0,99)=0, X2=(99,99)=100, Y1=(0,99)=0, Y2=(0,0)=10 - the ordinary "L". */
 const ORDINARY: [number, number, string, string][] = [
   [0, 99, '0', '0'],
   [99, 99, '100', '0'],
@@ -49,7 +49,7 @@ const ROTATED_90: [number, number, string, string][] = [
   [99, 99, '0', '100'],
 ];
 
-describe('XYAxes — linear (WPD)', () => {
+describe('XYAxes - linear (WPD)', () => {
   it('round-trips the midpoint through dataToPixel and back', () => {
     const axes = calibrated(ORDINARY);
     const px = axes.dataToPixel(50, 5);
@@ -71,14 +71,14 @@ describe('XYAxes — linear (WPD)', () => {
 
     const data = axes.pixelToData(99 / 2, 99 / 2);
     // ⚑ WPD's own test labels these two backwards ("pixelToData, X" over the
-    // data[1] assertion). The assertions are right, the labels are not — named
+    // data[1] assertion). The assertions are right, the labels are not - named
     // correctly here rather than inheriting the slip.
     expect(data[0], 'X').toBeCloseTo(5, 12);
     expect(data[1], 'Y').toBeCloseTo(50, 12);
   });
 });
 
-describe('XYAxes — rotation correction', () => {
+describe('XYAxes - rotation correction', () => {
   // ⚑ WPD has THREE tests for this flag (linear/90°/log, each with
   // noRotationCorrection = true) and all three are inert: they use PERPENDICULAR
   // axes, where the correction is a measured no-op, and then assert exactly the
@@ -107,14 +107,14 @@ describe('XYAxes — rotation correction', () => {
 
     expect(corrected[0]).toBeCloseTo(3.5507, 3);
     expect(uncorrected[0]).toBeCloseTo(5.0505, 3);
-    // A 42% divergence in x — if the flag were ignored these would be equal.
+    // A 42% divergence in x - if the flag were ignored these would be equal.
     expect(Math.abs(corrected[0]! - uncorrected[0]!)).toBeGreaterThan(1);
     // y is unaffected by the lean, which is what makes the x difference legible.
     expect(corrected[1]).toBeCloseTo(uncorrected[1]!, 12);
   });
 });
 
-describe('XYAxes — log scales (WPD)', () => {
+describe('XYAxes - log scales (WPD)', () => {
   it('places a point by decade across an extreme range', () => {
     // X: 1e-5 -> 1e12 over 99px. Y: 1e-20 -> 1 over 99px.
     const axes = calibrated(
@@ -150,7 +150,7 @@ describe('XYAxes — log scales (WPD)', () => {
   });
 
   it('round-trips a point back out of a log calibration', () => {
-    // WPD frames this as a "log base 2" test, which is a red herring — the
+    // WPD frames this as a "log base 2" test, which is a red herring - the
     // maths is log10 either way and the powers of 2 are just the values chosen.
     // What it uniquely adds is the pixelToData direction on a log axis, which
     // the cases above do not cover.
@@ -174,7 +174,7 @@ describe('XYAxes — log scales (WPD)', () => {
 });
 
 /**
- * ⚑ THE LOG AXIS THAT CANNOT EXIST — refused by the MODEL, not only by the UI.
+ * ⚑ THE LOG AXIS THAT CANNOT EXIST - refused by the MODEL, not only by the UI.
  *
  * `Math.log(0)` is −Infinity and `Math.log(negative)` is NaN, and
  * `processCalibration` fed both straight into the transform matrix and then
@@ -182,7 +182,7 @@ describe('XYAxes — log scales (WPD)', () => {
  * back null.
  *
  * The interactive path already refused this (calibrationSession's
- * `logScaleGuards`), and its comment named the defect exactly — "every value
+ * `logScaleGuards`), and its comment named the defect exactly - "every value
  * reads back NaN while calibrate() still reports success (core/axes/xy.ts:88)".
  * But the model has MORE THAN ONE ENTRANCE: `core/plotData.ts` calls
  * `calibrate()` when loading a project and never inspects the result, and the
@@ -256,7 +256,7 @@ describe('a log axis whose endpoints cannot be logged is refused', () => {
 });
 
 /**
- * ⚑ getBounds UNDOES THE NEGATIVE-DECADE REFLECTION — round-2 audit.
+ * ⚑ getBounds UNDOES THE NEGATIVE-DECADE REFLECTION - round-2 audit.
  *
  * For an axis calibrated −100..−1 the stored xmin/xmax hold log10(−x); the
  * reflection is applied in `pixelToData` and was never undone here, so

@@ -1,5 +1,5 @@
 /**
- * Trace Challenge — all game UI (v1.2), rendered over the normal workspace and
+ * Trace Challenge - all game UI (v1.2), rendered over the normal workspace and
  * driven entirely by props from Workspace (which owns the game state + round
  * setup). Four phases: `intro` (rules modal), `playing` (a floating HUD with the
  * round counter, live timer, instruction and Done), `reveal` (a non-blocking
@@ -105,13 +105,13 @@ function Intro({ roundCount, onConfirmStart, onCancel }: ChallengeOverlayProps) 
             instruction, <strong>trace it by placing points</strong>, then hit <strong>Done</strong>.
           </p>
           <p style={{ margin: '0 0 8px' }}>
-            You&apos;re racing the clock — and every error <em>adds</em> time. Miss a point, place it sloppily, or leave a
+            You&apos;re racing the clock - and every error <em>adds</em> time. Miss a point, place it sloppily, or leave a
             curve half-traced and seconds pile on. <strong>Lowest total time wins.</strong>
           </p>
           <p style={{ margin: 0, color: theme.color.text.legend }}>
-            Use whatever tools the round offers — auto-trace by colour, flood-fill, guide points or by hand. Bar and
+            Use whatever tools the round offers - auto-trace by colour, flood-fill, guide points or by hand. Bar and
             histogram rounds have Auto-extract too, and using it is fair game. Where a round&apos;s buttons are greyed
-            out — the box plot and the pie — that figure has no automatic path and you place the points yourself.
+            out - the box plot and the pie - that figure has no automatic path and you place the points yourself.
             Ready?
           </p>
         </div>
@@ -331,7 +331,7 @@ function Results({ roundCount, totalAdjusted, highScores, qualifies, onSaveHighS
             Best times
           </div>
           <ol data-testid="challenge-highscores" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {highScores.length === 0 && <li style={{ color: theme.color.text.legend }}>No scores yet — you&apos;re first!</li>}
+            {highScores.length === 0 && <li style={{ color: theme.color.text.legend }}>No scores yet - you&apos;re first!</li>}
             {highScores.map((h, i) => (
               <li
                 key={i}

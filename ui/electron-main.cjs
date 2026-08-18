@@ -18,7 +18,7 @@ const { attachCloseGuard } = require('./electron-close-guard.cjs')
 
 // no-sandbox is a Linux AppImage/seccomp workaround (the deb postinst + afterPack
 // wrapper cover the same need). Gated to Linux so macOS and Windows keep their OS
-// renderer sandbox — a decoder/parser bug in a malicious figure then runs
+// renderer sandbox - a decoder/parser bug in a malicious figure then runs
 // contained. disable-gpu stays cross-platform (unchanged behaviour).
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox')

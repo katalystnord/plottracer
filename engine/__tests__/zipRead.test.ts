@@ -5,11 +5,11 @@ import { deserializeProjectZip, isMultiFigureContainer } from '../projectContain
 import { isStarryProject } from '../starryImport.js';
 
 /**
- * ⚑ The archives this app opens are HANDED TO IT — a project file emailed to a
+ * ⚑ The archives this app opens are HANDED TO IT - a project file emailed to a
  * user, or a foreign digitiser's file someone downloaded. `unzipSync` inflates
  * every entry with no ceiling, so a small archive declaring gigabytes freezes or
- * kills the app with nothing on screen. These pin the refusal, and — just as
- * importantly — pin that an ordinary project still opens.
+ * kills the app with nothing on screen. These pin the refusal, and - just as
+ * importantly - pin that an ordinary project still opens.
  */
 
 /**
@@ -18,7 +18,7 @@ import { isStarryProject } from '../starryImport.js';
  * ⚑ This is what a zip bomb actually is, and building it by patching the size
  * fields rather than by compressing half a gigabyte of zeros matters twice
  * over: it is the honest shape of the attack (a few kB claiming gigabytes), and
- * it keeps the test fast — the first version of this helper really did allocate
+ * it keeps the test fast - the first version of this helper really did allocate
  * 512 MB and cost the suite 13 seconds to assert a refusal that never inflates
  * anything.
  *
@@ -77,7 +77,7 @@ describe('unzipBounded', () => {
     expect(() => unzipBounded(b, 1024)).toThrow(ZipTooLargeError);
   });
 
-  it('refuses BEFORE inflating — the declared size is what is checked', () => {
+  it('refuses BEFORE inflating - the declared size is what is checked', () => {
     // 3 GB declared. Any implementation that inflated first would exhaust
     // memory rather than return; that it throws promptly is the whole point.
     expect(() => unzipBounded(bomb(3 * 1024 * 1024 * 1024))).toThrow(ZipTooLargeError);
@@ -135,7 +135,7 @@ describe('the open paths are bounded, not just the helper', () => {
   /**
    * ⚑ THIS TEST HAD TO BE REWRITTEN BECAUSE THE FIRST VERSION WAS VACUOUS. It
    * fed the sniffers a bomb and asserted they returned `false` without
-   * throwing — which was ALREADY TRUE before the fix, because both sniffers
+   * throwing - which was ALREADY TRUE before the fix, because both sniffers
    * catch everything and answer `false`. It would have passed against the
    * defect it was written to pin.
    *
@@ -145,7 +145,7 @@ describe('the open paths are bounded, not just the helper', () => {
    * answers "not mine"; reading only `project.json` succeeds and it answers
    * correctly. One bit decides it, deterministically, with no timing.
    */
-  it('the SNIFFERS read only project.json — proven by a corrupt sibling entry', () => {
+  it('the SNIFFERS read only project.json - proven by a corrupt sibling entry', () => {
     const starry = zipSync({
       'project.json': strToU8(JSON.stringify({ axisSets: [{ id: 1 }] })),
       'image.png': new Uint8Array(4096).fill(7),

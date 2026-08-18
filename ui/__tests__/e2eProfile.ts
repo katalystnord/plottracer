@@ -4,7 +4,7 @@
  * ⚑⚑ WHY A PROFILE AT ALL. The e2e suite had none, so for its whole life it ran
  * against the developer's REAL PlotTracer user-data directory: the run WROTE
  * into his installed app's storage, and anything the app persists survived from
- * one run to the next — a shared mutable fixture nobody declared. The sidebar
+ * one run to the next - a shared mutable fixture nobody declared. The sidebar
  * test found it the expensive way. It asserts the panel opens at its DEFAULT
  * width, then drags the handle to ~563px, which v2.2 made PERSISTENT. It passed
  * once, stored the width it had just dragged to, and failed on every run after
@@ -12,7 +12,7 @@
  * state outliving the run, not flakiness.**
  *
  * ⚑ `mkdtemp` rather than one fixed path, so two overlapping runs (a subset
- * while a full board is going — routine here) cannot share a profile and
+ * while a full board is going - routine here) cannot share a profile and
  * corrupt each other.
  *
  * ⚑⚑ SWEPT AT START, NOT AT EXIT. The first cleanup ran in a
@@ -22,15 +22,15 @@
  *
  * ⚑⚑ AND THEN THE REPLACEMENT LEAKED TOO, WHICH IS WHY THIS IS A MODULE.
  * (v2.2 audit pass 5, 2026-08-17, under "a fix can BE the defect".) The sweep
- * read its clock as `fs.statSync(os.tmpdir()).mtimeMs` — **the mtime of /tmp,
+ * read its clock as `fs.statSync(os.tmpdir()).mtimeMs` - **the mtime of /tmp,
  * not the time.** That is only ever "now" by coincidence: /tmp's mtime moves
  * when a top-level entry is added or removed, so on a busy desktop it tracks
- * the clock and the six-hour rule appears to work, while on a quiet machine —
- * a fresh CI container, a box where the app has not run in days — it is
+ * the clock and the six-hour rule appears to work, while on a quiet machine -
+ * a fresh CI container, a box where the app has not run in days - it is
  * whenever the last profile was made. Measured on a simulated idle tmp:
  * profiles ten hours old, **reaped by the code as written: 0. With a real
- * clock: 2.** The same shape a third time — state that outlives the run,
- * unnoticed because nothing ever fails because of it — and SELF-MASKING on the
+ * clock: 2.** The same shape a third time - state that outlives the run,
+ * unnoticed because nothing ever fails because of it - and SELF-MASKING on the
  * one machine anybody would test it on.
  *
  * ▶ So the sweep is a pure function taking its clock and its directory as
@@ -50,7 +50,7 @@ export const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 /**
  * Delete this suite's abandoned profiles from `dir`, returning what was reaped.
  *
- * @param now milliseconds since the epoch — passed in, never read from the
+ * @param now milliseconds since the epoch - passed in, never read from the
  * filesystem. The bug this signature exists to prevent is described above.
  */
 export function sweepStaleProfiles(

@@ -54,14 +54,14 @@ import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js
  * re-aligns with the embedded image on reopen.
  *
  * **`value`/`note` are GONE (checkpoint 82), and their absence is the fix.**
- * They held the card's formatted string — `"45.0°"`, `"12.5 px"` — produced by
+ * They held the card's formatted string - `"45.0°"`, `"12.5 px"` - produced by
  * `toPrecision(4)`, and that string was the only copy of the number anywhere.
  * The record is `tool` + `points`, which is everything needed to derive the
  * value (`core/measurementValues.ts`); a stored value would be a second source
  * of truth that goes stale the moment the scale or calibration changes. This is
  * the same reason a dataset stores pixels and not values.
  *
- * `label` stays, but only as the drawing's own text placeholder — the canvas
+ * `label` stays, but only as the drawing's own text placeholder - the canvas
  * label is re-derived at render, so what is written here is not read back as
  * truth. Our file is ours to shape (tenet 6); a 0.2.0 project simply carries a
  * `value` key nothing reads. */
@@ -83,7 +83,7 @@ export interface SerializedMeasureScale {
  * dimensions BEFORE this crop and `rect` is the region kept, in that pre-crop
  * image's own pixels. Crops are baked (checkpoint 63 shifts the whole document
  * by the crop origin and discards the outside), so this is a *citation* of
- * where the figure came from — "the top-left panel of the source" — not a
+ * where the figure came from - "the top-left panel of the source" - not a
  * recipe to re-crop, which would need the original bytes we no longer keep.
  * Recorded, not inferred: every field is measured off the drag the user made. */
 export interface ProvenanceCrop {
@@ -94,7 +94,7 @@ export interface ProvenanceCrop {
 
 /** The document a figure was extracted from, when that is not simply the image
  * file itself (checkpoint 97). For a PDF, `name` is the PDF's file name and
- * `page` the 1-based page the figure was rendered from — "paper.pdf · p.4", the
+ * `page` the 1-based page the figure was rendered from - "paper.pdf · p.4", the
  * citation the design doc (§2/§3) wants. Recorded off the open + the page shown
  * (tenet 9), never inferred. For a plain image the source *is* the image, so
  * `image.fileName` already carries it and this stays absent. */
@@ -105,7 +105,7 @@ export interface ProvenanceSource {
 
 /** Where a figure came from. Deliberately our own top-level project field
  * (tenet 6, our file is ours), NOT WPD's `documentMetadata` file/page-index
- * structure — that models "which of N loaded files does dataset D belong to",
+ * structure - that models "which of N loaded files does dataset D belong to",
  * the wrong shape for single-figure origin, and forcing it in would be *more*
  * modeling, not less (tenet 10). A container: the `source` document (checkpoint
  * 97) and the `crops` applied (checkpoint 95). Absent in pre-95 files; `source`
@@ -188,7 +188,7 @@ export interface DeserializedProject {
    * A fresh empty CategoryAxis for any file that predates this or a session
    * whose graph type never uses one. */
   categoryAxis: CategoryAxis;
-  /** The heatmap's RECORD (v2.2) — its grid, its axis names and the cells a
+  /** The heatmap's RECORD (v2.2) - its grid, its axis names and the cells a
    * person read themselves. Pass straight to `loadCalibrated`. Null for every
    * type that is not a heatmap and for a heatmap whose grid was never read;
    * it is a LAYER on the calibration, never part of it. */
@@ -276,7 +276,7 @@ export function serializeProject<A extends CalibratedAxes>(
   // comment on the "round-trips a Box Plot session" test that caught it.)
   const hasCategoryAxis = categoryAxis.getCategoryCount() > 0;
   if (hasCategoryAxis) plotData.addCategoryAxis(categoryAxis);
-  // ⚑ The heatmap's RECORD — its grid, its axis names and the cells a person
+  // ⚑ The heatmap's RECORD - its grid, its axis names and the cells a person
   // read themselves. A LAYER on top of the calibration (David, 2026-08-16), so
   // it travels beside the category axis rather than inside the axes' metadata,
   // and it follows the same omit-when-empty discipline: null for every type
@@ -360,7 +360,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // Falls back to a fresh empty one for any file predating this (every
     // file before v2.0), the same fallback loadCalibrated itself applies.
     categoryAxis: plotData.getCategoryAxisColl()[0] ?? new CategoryAxis(),
-    // Null for a file that carries none — which is every project that is not a
+    // Null for a file that carries none - which is every project that is not a
     // heatmap, and every heatmap whose grid was never read.
     heatmapLayer: plotData.getHeatmapLayer(),
     imageDataURL: data.image.dataURL,
@@ -507,7 +507,7 @@ export function serializeMultiFigureProject(
   const out: FigureFile[] = [];
   for (const f of figures) {
     const single = serializeProject(f.session, f.imageDataURL, f.imageFileName, f.measures, f.provenance);
-    if ('error' in single) return { error: `Can't save "${f.name}" — ${single.error}` };
+    if ('error' in single) return { error: `Can't save "${f.name}" - ${single.error}` };
     const fig: FigureFile = { name: f.name, image: single.image, plotData: single.plotData };
     if (single.measurements) fig.measurements = single.measurements;
     if (single.measureScale) fig.measureScale = single.measureScale;
@@ -544,7 +544,7 @@ export function deserializeMultiFigureProject(raw: unknown): ProjectResult<Deser
       measureScale: f.measureScale,
       provenance: f.provenance,
     });
-    if ('error' in single) return { error: `Figure "${typeof f.name === 'string' && f.name ? f.name : '?'}" — ${single.error}` };
+    if ('error' in single) return { error: `Figure "${typeof f.name === 'string' && f.name ? f.name : '?'}" - ${single.error}` };
     figures.push({ ...single, name: typeof f.name === 'string' && f.name ? f.name : `Figure ${figures.length + 1}` });
   }
   const active = typeof data.activeFigure === 'number' && data.activeFigure >= 0 && data.activeFigure < figures.length ? data.activeFigure : 0;

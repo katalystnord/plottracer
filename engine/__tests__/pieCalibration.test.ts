@@ -5,7 +5,7 @@ import { Calibration } from '../../core/calibration.js';
 import { Dataset } from '../../core/dataset.js';
 
 /**
- * The pie's calibration — two clicks and two transcribed numbers.
+ * The pie's calibration - two clicks and two transcribed numbers.
  *
  * ⚑ Every refusal here is checked on BOTH entrances, the click path and a loaded
  * file, because `PieAxes.calibrate` reports success on degenerate input exactly like
@@ -22,7 +22,7 @@ function newPie(): CalibrationSession<PieAxes> {
  * then the two global values.
  *
  * ⚑ NOTHING CLICKS A CENTRE. The outline is the entire calibration and the centre is
- * fitted through it — which is the only way a donut works at all, since its centre is
+ * fitted through it - which is the only way a donut works at all, since its centre is
  * not drawn. Each outline click completes outright ('point-placed'): the points carry
  * no per-click value, because the total and the sweep belong to the whole figure. */
 function outlineAt(deg: number): [number, number] {
@@ -44,7 +44,7 @@ function calibrate(
   return session.runCalibration();
 }
 
-/** Build the axes the way a FILE does — calibrate() directly, no session walk. */
+/** Build the axes the way a FILE does - calibrate() directly, no session walk. */
 function loadedPie(total: string, sweep: string): PieAxes {
   const cal = new Calibration(2);
   for (const a of [90, 0, -90]) {
@@ -65,7 +65,7 @@ function loadedPie(total: string, sweep: string): PieAxes {
 }
 
 /** A loaded session carries its globals in the axes metadata, which is where
- * core/plotData.ts puts them — so the load path must be given them the same way. */
+ * core/plotData.ts puts them - so the load path must be given them the same way. */
 function loadSession(total: string, sweep: string): CalibrationSession<PieAxes> {
   const session = new CalibrationSession(PIE_AXES_CONFIG);
   const axes = loadedPie(total, sweep);
@@ -87,7 +87,7 @@ describe('calibrating a pie through the click path', () => {
   });
 
   it('prefills the total with 100 and the sweep with 360', () => {
-    // ⚑ Defaults the user WALKS PAST, not inventions — the spider's centre-value rule.
+    // ⚑ Defaults the user WALKS PAST, not inventions - the spider's centre-value rule.
     // Left alone they read the slices as percentages of a whole circle, which is what
     // a pie is; changed, they read in the figure's own units. They are GLOBAL rather
     // than tied to a click, because neither belongs to any one point.
@@ -154,7 +154,7 @@ describe('the pie refuses the same things on both entrances', () => {
   ] as const) {
     it(`refuses a ${label} total, by click and by file`, () => {
       // ⚑ A sector is a fraction of a whole, so a pie cannot show a negative quantity
-      // — IBM's own documented rule for the type, arrived at here independently.
+      // - IBM's own documented rule for the type, arrived at here independently.
       const session = newPie();
       expect(calibrate(session, total)).toBe(false);
       expect(session.getCalibrationError()).toMatch(/total must be a positive number/i);
@@ -177,7 +177,7 @@ describe('the pie refuses the same things on both entrances', () => {
     });
   }
 
-  it('accepts a healthy pie on both entrances — the guards add no false positive', () => {
+  it('accepts a healthy pie on both entrances - the guards add no false positive', () => {
     const session = newPie();
     expect(calibrate(session)).toBe(true);
     expect(session.getCalibrationError()).toBeNull();
@@ -192,14 +192,14 @@ describe('the pie captures sectors as intervals', () => {
   it('declares the two-slot tuple a sector is', () => {
     // ⚑ Not a new shape: a histogram bin is ['Bin start','Bin end'] and uses the same
     // tuple machinery. A sector is the same interval, which is also what v2.0's bar
-    // model generalises — so pie reaches the record we already have.
+    // model generalises - so pie reaches the record we already have.
     expect(PIE_AXES_CONFIG.defaultSlots).toEqual(['Sector start', 'Sector end']);
     expect(PIE_AXES_CONFIG.tupleNoun).toBe('sector');
     // Losing an edge leaves no sector at all, unlike a spider's independent rays.
     expect(PIE_AXES_CONFIG.tupleMembers).toBe('object');
   });
 
-  it('is 1.5D — one magnitude, and a name that is not a coordinate', () => {
+  it('is 1.5D - one magnitude, and a name that is not a coordinate', () => {
     expect(PIE_AXES_CONFIG.dataDim).toBe(1);
     expect(PIE_AXES_CONFIG.valueLabels).toEqual(['Value']);
   });

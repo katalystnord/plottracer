@@ -1,5 +1,5 @@
 /**
- * What a measurement IS, numerically — the fourth "dataProviders" defect
+ * What a measurement IS, numerically - the fourth "dataProviders" defect
  * (checkpoint 82), and the file `core/exportValues.ts:31` has been pointing at
  * since checkpoint 76 without it existing.
  *
@@ -10,12 +10,12 @@
  *  1. The glyph was baked into the value, so a consumer had to re-parse our own
  *     display format to get a number back.
  *  2. **`fmtNum` is `Number(n.toPrecision(4))`, and that string was the ONLY
- *     copy.** The raw double was never stored — not in the record, not in the
+ *     copy.** The raw double was never stored - not in the record, not in the
  *     project file, not in the CSV. A slope of `1.23456789` was destroyed at
  *     capture and unrecoverable from a saved project. The interpretation *was*
  *     the recording, which is the exact inversion tenet 9 exists to prevent.
  *
- * **The fix is not "store the number too" — it is to stop storing a value at
+ * **The fix is not "store the number too" - it is to stop storing a value at
  * all.** A measurement's record is its **pixels** (already captured, already
  * serialized in the project file) plus which tool made it. The value is
  * *derived*, here, on demand. That is the same model the datasets already use
@@ -25,7 +25,7 @@
  *
  * **It also makes Set-scale retroactive**, which was a separate logged defect:
  * measurements taken before a scale existed used to stay in pixels forever,
- * because the string was frozen at capture. Derived values simply re-derive —
+ * because the string was frozen at capture. Derived values simply re-derive -
  * the same way re-calibrating an axis re-derives every data point. Nothing
  * special was needed for it; it falls out of recording the right thing.
  *
@@ -33,10 +33,10 @@
  * Distance → `['Distance']`, Angle → `['Angle']`, Area → `['Area']`. We add
  * Slope, which WPD has no counterpart for. Upstream also emits a `Label`
  * column and Area's `Perimeter`; both are real and deliberately out of scope
- * here — this checkpoint changes what a value *is*, not how many there are.
+ * here - this checkpoint changes what a value *is*, not how many there are.
  *
  * Pure per CLAUDE.md's leg (c): no DOM, no engine imports. The axes arrives as
- * a structural type, and formatting stays in `ui/` — a `core/` module that
+ * a structural type, and formatting stays in `ui/` - a `core/` module that
  * returned `"45.0°"` would be re-committing the defect.
  */
 
@@ -58,14 +58,14 @@ export interface MeasureScale {
  * neither, and a distance with no scale is still a real measurement in px. */
 export interface MeasureContext {
   scale?: MeasureScale | null;
-  /** Only Slope needs this — it is the one measurement in the CHART's units. */
+  /** Only Slope needs this - it is the one measurement in the CHART's units. */
   axes?: { pixelToData(px: number, py: number): number[] } | null;
 }
 
 /**
  * A derived measurement: raw numbers plus the unit they are in.
  *
- * `values` are **numbers, never strings** — that is the whole point. `unit` is
+ * `values` are **numbers, never strings** - that is the whole point. `unit` is
  * reported separately so a consumer can read the magnitude without parsing a
  * glyph off it, and so `ui/` can render "45.0°" without `core/` deciding what
  * "45.0" should look like.
@@ -95,7 +95,7 @@ function polygonArea(points: readonly Point2D[]): number {
  * incomplete.
  *
  * **Every call derives from scratch**, so a later Set-scale or re-calibration
- * is reflected immediately and everywhere — screen, table and export cannot
+ * is reflected immediately and everywhere - screen, table and export cannot
  * drift apart, because there is only one place the number comes from.
  */
 export function measurementValue(
@@ -157,7 +157,7 @@ export function measurementValue(
   }
 }
 
-/** Slope's Δx/Δy in chart units — the detail the card shows beside the slope.
+/** Slope's Δx/Δy in chart units - the detail the card shows beside the slope.
  * Derived like everything else here rather than frozen into a note string. */
 export function slopeDeltas(
   points: readonly Point2D[],
@@ -174,7 +174,7 @@ export function slopeDeltas(
   return { dx: x2 - x1, dy: y2 - y1 };
 }
 
-/** The measurement's pixel-space magnitude — what the card shows as the
+/** The measurement's pixel-space magnitude - what the card shows as the
  * secondary "12.5 px" note when a scale is in play. Kept here so the pixel and
  * scaled forms cannot drift. */
 export function measurementPixelValue(tool: MeasureTool, points: readonly Point2D[]): number | null {

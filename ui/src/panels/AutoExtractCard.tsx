@@ -11,7 +11,7 @@ export const COLOR_TRACE_PREVIEW_RGBA: readonly [number, number, number, number]
 export interface AutoExtractCardProps {
   mode: ToolMode;
   config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind'>;
-  /** What one captured shape is called on this type — "bar", "bin", "box". */
+  /** What one captured shape is called on this type - "bar", "bin", "box". */
   tupleNoun: string;
   onSetMechanism: (mode: ToolMode) => void;
 
@@ -38,14 +38,14 @@ export interface AutoExtractCardProps {
 }
 
 /**
- * The Auto-extract umbrella card (v0.8, David) — one wand tool fronting the
+ * The Auto-extract umbrella card (v0.8, David) - one wand tool fronting the
  * three tracing mechanisms. The selector switches MODE (each keeps its own
  * canvas behaviour) and shows that mechanism's controls, which used to live in
  * three places (sidebar / top-bar panel / tips).
  *
  * ⚑ The card is click-THROUGH (`pointerEvents: 'none'`) and only its actual
  * controls re-enable pointer events. It floats over the figure, and Guide
- * points / Flood-fill work by clicking the curve UNDER it — without this, a
+ * points / Flood-fill work by clicking the curve UNDER it - without this, a
  * click in the card's footprint silently did nothing, which is the recurring
  * "I clicked and nothing happened" failure this project keeps rediscovering.
  */
@@ -164,13 +164,13 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
             {config.autoExtractKind === 'along-axes' ? (
               <>
                 Walks each calibrated axis outward and records the value where the
-                series&rsquo; colour crosses it — one reading per axis. A ray the colour
+                series&rsquo; colour crosses it - one reading per axis. A ray the colour
                 crosses more than once is left EMPTY for you to place, and named below.
                 The highlighted pixels show what the trace reads.
               </>
             ) : config.autoExtractKind === 'bounding-box' ? (
               <>
-                Finds every {tupleNoun} of that colour and records its own bounding box —
+                Finds every {tupleNoun} of that colour and records its own bounding box -
                 measured directly, never a midpoint. {tupleNoun.charAt(0).toUpperCase()}
                 {tupleNoun.slice(1)}s of the identical colour touching with no gap between
                 them are read as one merged {tupleNoun}. The highlighted pixels show what
@@ -178,7 +178,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
               </>
             ) : (
               <>
-                Selects every pixel of a series&rsquo; colour — a dashed or marker-only line
+                Selects every pixel of a series&rsquo; colour - a dashed or marker-only line
                 extracts in one pass. Pick the colour, choose curve or scattered points, then Trace.
                 The highlighted pixels show what the trace reads.
               </>
@@ -271,7 +271,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
             </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {/* B1 — restrict the trace to a rectangle drawn DIRECTLY on the
+            {/* B1 - restrict the trace to a rectangle drawn DIRECTLY on the
                 image (v1.2). No arm-first toggle: the hint tells the user
                 the gesture exists (so it's discoverable, not tribal), and
                 the ✕ clears it back to the whole image. */}
@@ -280,7 +280,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
                 type="button"
                 data-testid="color-trace-region-clear"
                 onClick={() => onClearRegion()}
-                title="Clear the region — trace the whole image again"
+                title="Clear the region - trace the whole image again"
               >
                 Region {Math.round(colorTraceRegion.width)}×{Math.round(colorTraceRegion.height)} px ✕
               </button>
@@ -298,8 +298,8 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
             <span data-testid="color-trace-preview" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 12, height: 12, borderRadius: 2, background: `rgb(${COLOR_TRACE_PREVIEW_RGBA[0]}, ${COLOR_TRACE_PREVIEW_RGBA[1]}, ${COLOR_TRACE_PREVIEW_RGBA[2]})`, flex: '0 0 auto' }} />
               {colorTraceMask.count === 0
-                ? 'No pixels match — repick the colour or raise the tolerance.'
-                : `${colorTraceMask.count.toLocaleString()} px highlighted (${colorTraceMask.pct.toFixed(1)}% of the image)${colorTraceMask.pct > 25 ? ' — a lot; if it grabbed the grid/axes, lower the tolerance or run Grid Removal first.' : '.'}`}
+                ? 'No pixels match - repick the colour or raise the tolerance.'
+                : `${colorTraceMask.count.toLocaleString()} px highlighted (${colorTraceMask.pct.toFixed(1)}% of the image)${colorTraceMask.pct > 25 ? ' - a lot; if it grabbed the grid/axes, lower the tolerance or run Grid Removal first.' : '.'}`}
             </span>
           )}
           {colorTraceInfo && (

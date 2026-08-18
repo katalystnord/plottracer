@@ -17,7 +17,7 @@ export interface SeriesPanelProps {
   supportsStackGroups: boolean;
   /** The in-flight rename, or null when the field shows the stored name. */
   nameDraft: string | null;
-  /** Why the draft name is refused — shown under the field. */
+  /** Why the draft name is refused - shown under the field. */
   nameNotice: string | null;
   colorAnchor: HTMLElement | null;
   onColorAnchorChange: (anchor: HTMLElement | null) => void;
@@ -28,7 +28,7 @@ export interface SeriesPanelProps {
   onRemove: (index: number) => void;
   onRenameDraft: (index: number, name: string) => void;
   onCommitRename: (index: number, name: string) => void;
-  /** Takes a "#rrggbb" string — the swatches and the hex field both speak hex. */
+  /** Takes a "#rrggbb" string - the swatches and the hex field both speak hex. */
   onSetColor: (index: number, hex: string) => void;
   /** Adding a series needs axes to place points against. */
   canAddSeries: boolean;
@@ -39,7 +39,7 @@ export interface SeriesPanelProps {
 }
 
 /**
- * The Series panel — which series you are working on, its colour and name.
+ * The Series panel - which series you are working on, its colour and name.
  *
  * ⚑ The colour swatches are OUR OWN palette rather than the native
  * `<input type="color">` dialog, which CRASHES this Electron build on Linux.

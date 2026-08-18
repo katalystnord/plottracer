@@ -11,7 +11,7 @@ import { readTar, entryText } from '../tarRead.js';
  *
  * The padding is the sharp one. Data is padded up to a 512-byte boundary, so
  * an off-by-one in `ceil(size / BLOCK)` does not corrupt the entry being read
- * — it lands the reader in the middle of the next file and every entry after
+ * - it lands the reader in the middle of the next file and every entry after
  * it is garbage or silently absent. This is the import path for someone
  * else's project, which is why the file's own comment says it throws rather
  * than returning a partial result.

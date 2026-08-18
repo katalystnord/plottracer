@@ -3,12 +3,12 @@ import { SpiderAxes } from '../axes/spider.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * SpiderAxes — v1.4. Original work, no upstream counterpart to compare against, so
+ * SpiderAxes - v1.4. Original work, no upstream counterpart to compare against, so
  * these tests are written against the GEOMETRY rather than against a reference
  * implementation's output.
  *
  * The figure used throughout: origin at (100,100), three spokes of length 100px at
- * 12 o'clock, 4 o'clock and 8 o'clock — deliberately UNEQUALLY spaced in one test,
+ * 12 o'clock, 4 o'clock and 8 o'clock - deliberately UNEQUALLY spaced in one test,
  * because equal angles are exactly what the only prior art (ChartSense, CHI 2017)
  * assumes and this model does not.
  *
@@ -42,7 +42,7 @@ function threeSpokes(): SpiderAxes {
 }
 
 describe('SpiderAxes.calibrate', () => {
-  it('accepts a variable number of spokes — the figure decides, not the class', () => {
+  it('accepts a variable number of spokes - the figure decides, not the class', () => {
     // Every other axes type has a FIXED point count baked in (XY 4, Bar 2, Polar 3,
     // Ternary 3, CCR 5). A spider has as many axes as the chart drew.
     for (const n of [1, 3, 5, 12]) {
@@ -57,7 +57,7 @@ describe('SpiderAxes.calibrate', () => {
     }
   });
 
-  it('refuses an origin with no spokes — that is not a scale', () => {
+  it('refuses an origin with no spokes - that is not a scale', () => {
     const cal = new Calibration(3);
     cal.addPoint(100, 100, '0', '0', '');
     const axes = new SpiderAxes();
@@ -65,12 +65,12 @@ describe('SpiderAxes.calibrate', () => {
     expect(axes.isCalibrated()).toBe(false);
   });
 
-  it('refuses a spoke point placed ON the origin — no direction, no length', () => {
+  it('refuses a spoke point placed ON the origin - no direction, no length', () => {
     const { ok } = calibrateSpider([[100, 100, '10', '0', 'A']]);
     expect(ok).toBe(false);
   });
 
-  it('refuses a centre equal to the known value — every pixel would read the same', () => {
+  it('refuses a centre equal to the known value - every pixel would read the same', () => {
     // The spider analogue of Polar's RadialDistinctGuard: two points at the same
     // value give a zero scale, and an unguarded class would report success and then
     // hand back a constant for the whole figure.
@@ -108,7 +108,7 @@ describe('SpiderAxes.calibrate', () => {
     expect(axes.getSpokes().map((s) => s.centreValue)).toEqual([20, 20]);
   });
 
-  it('gives every spoke its OWN scale — unequal ranges work by construction', () => {
+  it('gives every spoke its OWN scale - unequal ranges work by construction', () => {
     // ChartSense assumes all axes share one scale and excludes 2.58% of its own
     // corpus for failing that. Placing a known point on each axis gives per-axis
     // ranges for free.
@@ -121,7 +121,7 @@ describe('SpiderAxes.calibrate', () => {
 
   it('handles UNEQUAL angles between adjacent spokes', () => {
     // The other ChartSense assumption (another 2.58% of their corpus). Nothing here
-    // infers a spoke's direction by rotating a neighbour — each is measured.
+    // infers a spoke's direction by rotating a neighbour - each is measured.
     const { ok, axes } = calibrateSpider([
       [100, 0, '10', '0', 'A'],
       [200, 100, '10', '0', 'B'],
@@ -132,7 +132,7 @@ describe('SpiderAxes.calibrate', () => {
   });
 
   it('leaves an unnamed spoke unnamed, and falls back positionally for display', () => {
-    // A name is transcription, not measurement — so an absent one is not invented.
+    // A name is transcription, not measurement - so an absent one is not invented.
     const { axes } = calibrateSpider([[100, 0, '10', '0', '']]);
     expect(axes.getSpokes()[0]!.name).toBe('');
     expect(axes.getSpokeLabel(0)).toBe('Axis 1');
@@ -148,7 +148,7 @@ describe('SpiderAxes.projectOnSpoke', () => {
 
   it('reports the PERPENDICULAR distance from the ray, so a wrong-spoke click can be warned about', () => {
     // ⚑ The whole point of not silently snapping to the nearest ray. A click 30px to
-    // the side of spoke 0 still yields a value — projected — but says how far off it
+    // the side of spoke 0 still yields a value - projected - but says how far off it
     // was, which is what the capture workflow warns on.
     const axes = threeSpokes();
     const projection = axes.projectOnSpoke(0, 130, 50)!;
@@ -194,7 +194,7 @@ describe('SpiderAxes.projectOnSpoke', () => {
     expect(axes.projectOnSpoke(0, 100, 0)!.value).toBeCloseTo(100, 10);
   });
 
-  it('honours a non-zero shared centre — an axis truncated at 20', () => {
+  it('honours a non-zero shared centre - an axis truncated at 20', () => {
     const { axes } = calibrateSpider([[100, 0, '100', '20', 'A']]);
     expect(axes.projectOnSpoke(0, 100, 100)!.value).toBeCloseTo(20, 10);
     expect(axes.projectOnSpoke(0, 100, 50)!.value).toBeCloseTo(60, 10);
@@ -209,7 +209,7 @@ describe('SpiderAxes.nearestSpoke and pixelToData', () => {
     expect(axes.nearestSpoke(40, 135)!.index).toBe(2);
   });
 
-  it('pixelToData reads one value, off the nearest spoke — the live-readout contract', () => {
+  it('pixelToData reads one value, off the nearest spoke - the live-readout contract', () => {
     const axes = threeSpokes();
     expect(axes.pixelToData(100, 50)).toHaveLength(1);
     expect(axes.pixelToData(100, 50)[0]).toBeCloseTo(50, 10);
@@ -227,7 +227,7 @@ describe('SpiderAxes.nearestSpoke and pixelToData', () => {
   });
 });
 
-describe('nearestSpoke on an EVEN axis count — the collinear-opposites trap', () => {
+describe('nearestSpoke on an EVEN axis count - the collinear-opposites trap', () => {
   /** Six equally spaced spokes, so axis i and axis i+3 are exactly opposite. */
   function sixSpokes(): SpiderAxes {
     const spokes: Array<[number, number, string, string, string]> = [];
@@ -242,7 +242,7 @@ describe('nearestSpoke on an EVEN axis count — the collinear-opposites trap', 
 
   it('⚑ picks the ray a point is ON, not its exact opposite', () => {
     // Found by driving the six-axis sample: the app said a click was "0 px off the
-    // Cost index axis and nearer Water-vapour barrier" — impossible, and produced
+    // Cost index axis and nearer Water-vapour barrier" - impossible, and produced
     // by measuring to the infinite LINE, on which an opposite spoke is identical.
     // Every unit fixture had three spokes, which has no opposite pairs.
     const axes = sixSpokes();
@@ -274,8 +274,8 @@ describe('nearestSpoke on an EVEN axis count — the collinear-opposites trap', 
   });
 
   it('falls back to the centre distance when every ray points away', () => {
-    // At the origin itself nothing is "nearer" by perpendicular offset — all are
-    // zero — so the answer must at least be a real spoke rather than undefined.
+    // At the origin itself nothing is "nearer" by perpendicular offset - all are
+    // zero - so the answer must at least be a real spoke rather than undefined.
     const axes = sixSpokes();
     expect(axes.nearestSpoke(100, 100)).not.toBeNull();
   });
@@ -305,7 +305,7 @@ describe('SpiderAxes.dataToPixel', () => {
     expect(logAxes.projectOnSpoke(0, pixel.x, pixel.y)!.value).toBeCloseTo(37, 8);
   });
 
-  it('answers NaN — never {0,0} — where there is no pixel', () => {
+  it('answers NaN - never {0,0} - where there is no pixel', () => {
     // ⚑ {0,0} is BOTH a real image coordinate and the sentinel every stubbed
     // dataToPixel returns, so answering it here would be indistinguishable from
     // "this type cannot invert" and would draw a point in the corner of the image.

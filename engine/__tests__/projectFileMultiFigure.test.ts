@@ -16,7 +16,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `projectFile.ts` scored 66.37% with 94 surviving
  * mutants, and the hottest lines by far are in
- * `deserializeMultiFigureProject` (lines 515–533, 38 mutants between them) —
+ * `deserializeMultiFigureProject` (lines 515–533, 38 mutants between them) -
  * the door every multi-figure project comes through. The existing suite
  * round-trips a healthy two-figure project; nothing tested what happens when
  * one figure is broken, when the active index is out of range, or when a
@@ -64,7 +64,7 @@ describe('assembling a multi-figure project', () => {
 
   it('⚑ NAMES the figure that could not be saved, not just that one failed', () => {
     // With several figures open, "calibration incomplete" is useless without
-    // knowing which one — the user cannot act on it.
+    // knowing which one - the user cannot act on it.
     const uncalibrated = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
     const r = serializeMultiFigureProject(
       [figure('Good'), { name: 'Broken one', session: uncalibrated as unknown as CalibrationSession<CalibratedAxes>, imageDataURL: PNG }],
@@ -75,7 +75,7 @@ describe('assembling a multi-figure project', () => {
 
   it('⚑⚑ carries a heatmap\u2019s RECORD per figure, not just the calibration', () => {
     // ⚑ The multi-figure path delegates to `serializeProject` per figure and
-    // converges on `deserializeProject`, so the layer travels BY CONSTRUCTION —
+    // converges on `deserializeProject`, so the layer travels BY CONSTRUCTION -
     // which is exactly the kind of claim that has been wrong here before. The
     // heatmap's grid, names and hand-read cells are a LAYER on the calibration
     // (David, 2026-08-16), and a layer that reached the single-figure file but
@@ -261,7 +261,7 @@ describe('the provenance crop validator', () => {
 
   /**
    * The validator runs on the READ path (`readProvenance`), which is the door
-   * a hand-edited or foreign file comes through — the write path stores what
+   * a hand-edited or foreign file comes through - the write path stores what
    * the app itself computed. So each crop is posted through deserialize.
    */
   function cropSurvives(crop: unknown): boolean {
@@ -279,7 +279,7 @@ describe('the provenance crop validator', () => {
 
   it('⚑ drops a crop with a non-finite number rather than carrying NaN into the record', () => {
     // Provenance says where the figure came from. A NaN there is not a
-    // smaller truth than a missing crop — it is a false one.
+    // smaller truth than a missing crop - it is a false one.
     expect(cropSurvives({ ...good, fromWidth: NaN })).toBe(false);
     expect(cropSurvives({ ...good, fromHeight: Infinity })).toBe(false);
     expect(cropSurvives({ ...good, rect: { ...good.rect, width: NaN } })).toBe(false);

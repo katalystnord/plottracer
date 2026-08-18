@@ -85,7 +85,7 @@ describe('colorFilter', () => {
     expect(mask[4]).toBe(1);
   });
 
-  it('feeds pointsFromColumnRuns directly — a dashed vertical curve traces in one run', () => {
+  it('feeds pointsFromColumnRuns directly - a dashed vertical curve traces in one run', () => {
     // A broken (dashed) vertical red line at x=2 that Segment Fill's connectivity
     // could not span, but colour-filtering can.
     const w = 5, h = 8;

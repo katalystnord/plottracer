@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InputParser } from '../inputParser.js';
 
 /**
- * `InputParser` — the gate every typed calibration value passes through, and
+ * `InputParser` - the gate every typed calibration value passes through, and
  * the STATE it reports about what it just read.
  *
  * ⚑ WHY THIS FILE EXISTS. The 2026-07-31 mutation run scored
@@ -10,23 +10,23 @@ import { InputParser } from '../inputParser.js';
  * whole-string RULE well (the checkpoint-81 divergence: "1,000", "5 kg",
  * "1.2.3" are refused where upstream's prefix `parseFloat` accepted them) and
  * stays. What nothing covered is the OTHER half of this class's job: the four
- * public flags — `isValid`, `isDate`, `isArray`, `formatting` — which callers
+ * public flags - `isValid`, `isDate`, `isArray`, `formatting` - which callers
  * branch on to decide whether a value is a date, a number, or nothing.
  *
  * ⚑ THOSE FLAGS ARE READ BY EVERY AXES CLASS'S VALIDATION. `!ip.isValid ||
  * ip.isDate || typeof v !== 'number'` is the refusal in Bar, Polar, CCR and
  * Spider. If a flag is stale or wrong, a calibration is accepted that should
- * have been refused — the exact silently-wrong-number class tenet 1 exists to
- * prevent — and the mutation run showed every one of the three resets at the
+ * have been refused - the exact silently-wrong-number class tenet 1 exists to
+ * prevent - and the mutation run showed every one of the three resets at the
  * top of `parse` could be flipped with the suite green.
  */
 
-describe('InputParser — the flags describe THIS call, not a previous one', () => {
+describe('InputParser - the flags describe THIS call, not a previous one', () => {
   /**
    * ⚑ THE STATE-LEAK CASES. A single parser is deliberately reused across many
    * values: one `ip` walks every spoke in SpiderAxes.calibrate, and all four
    * fields in CircularChartRecorderAxes.calibrate. So every flag must be reset
-   * per call — and each reset mutated to a no-op and survived, because no test
+   * per call - and each reset mutated to a no-op and survived, because no test
    * had ever parsed twice with the same instance.
    */
   it('clears isDate when a NUMBER follows a date', () => {
@@ -82,7 +82,7 @@ describe('InputParser — the flags describe THIS call, not a previous one', () 
   });
 });
 
-describe('InputParser — what each kind of input reports', () => {
+describe('InputParser - what each kind of input reports', () => {
   it('a plain number: valid, not a date, no formatting', () => {
     const ip = new InputParser();
     expect(ip.parse('42')).toBe(42);
@@ -148,7 +148,7 @@ describe('InputParser — what each kind of input reports', () => {
   });
 });
 
-describe('InputParser — arrays', () => {
+describe('InputParser - arrays', () => {
   it('reads a bracketed numeric list, flagging it as an array and not a date', () => {
     const ip = new InputParser();
     expect(ip.parse('[1, 2, 3]')).toEqual([1, 2, 3]);
@@ -171,7 +171,7 @@ describe('InputParser — arrays', () => {
     expect(times.isDate).toBe(true);
   });
 
-  it('needs BOTH brackets — a half-bracketed string is not an array', () => {
+  it('needs BOTH brackets - a half-bracketed string is not an array', () => {
     const ip = new InputParser();
     expect(ip.parse('[1, 2')).toBeNull();
     expect(ip.isArray).toBe(false);

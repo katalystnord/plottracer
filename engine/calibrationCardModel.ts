@@ -1,10 +1,10 @@
 /**
- * WHAT THE CALIBRATION CARD SHOWS — decided here, rendered in `ui/`.
+ * WHAT THE CALIBRATION CARD SHOWS - decided here, rendered in `ui/`.
  *
  * ⚑⚑ WHY THIS FILE EXISTS. David, 2026-08-17: *"the biggest aim here is
  * CONSISTENCY across all code, and moving code out to where it can be tested."*
- * The card's decisions lived as conditions inside `Workspace.tsx` — 21
- * `heatmapActive` branches alone — where **mutation testing cannot see them at
+ * The card's decisions lived as conditions inside `Workspace.tsx` - 21
+ * `heatmapActive` branches alone - where **mutation testing cannot see them at
  * all** and the only other instrument is an 18-minute Electron run. So they
  * diverged: three graph types grew three different second stages, three endings
  * and three folded lines, each locally reasonable.
@@ -13,7 +13,7 @@
  * BODY into a pure engine function and leave the component rendering it. Every
  * case below is a unit test that runs in milliseconds.
  *
- * ⚑⚑ THE MODEL — every calibrated type is TWO STAGES:
+ * ⚑⚑ THE MODEL - every calibrated type is TWO STAGES:
  *   1. calibrate the axes, ending with **Calibrate**;
  *   2. read what those axes make readable, ending with **Read cells** /
  *      **Read categories**.
@@ -31,7 +31,7 @@
 
 /** Which stage the card is in. */
 export type CardStage =
-  /** No figure captured — nothing to calibrate yet. */
+  /** No figure captured - nothing to calibrate yet. */
   | 'capture'
   /** Walking the calibration steps. */
   | 'calibrating'
@@ -49,9 +49,9 @@ export interface CalibrationCardInput {
   placed: number;
   steps: number;
   /** Has the second stage produced its reading? False when there is no second
-   * stage — the card is done at calibration. */
+   * stage - the card is done at calibration. */
   secondStageComplete: boolean;
-  /** What the second stage reports once complete — "25 cells read". Blank until
+  /** What the second stage reports once complete - "25 cells read". Blank until
    * then. Supplied by the caller, which is the only thing that has it. */
   secondStageSummary?: string;
   /** Has the user opened the card? A FINISHED card is folded by default. */
@@ -69,7 +69,7 @@ export interface CalibrationCardModel {
     secondStage: string | null;
   };
   /** Which sections the body shows. Both true only on a finished, unfolded card
-   * — the review view. */
+   * - the review view. */
   showsWalk: boolean;
   showsSecondStage: boolean;
   /**
@@ -77,7 +77,7 @@ export interface CalibrationCardModel {
    *
    * ⚑⚑ ONE STAGE AT A TIME MUST NOT MEAN A HIDDEN NEXT STEP. The card's own
    * history records the cost: gating the stage's button on having something to
-   * read *"removed the button entirely before detection had found anything —
+   * read *"removed the button entirely before detection had found anything -
    * the flow lost its visible next step again, one state earlier. A greyed
    * control says 'this is what comes next'; a missing one says nothing at
    * all."* So while you are still calibrating, the second stage is NAMED and
@@ -93,7 +93,7 @@ export interface CalibrationCardModel {
 /**
  * The card, from the session's own state.
  *
- * ⚑ Pure: no React, no DOM, no session object — just the facts the card turns
+ * ⚑ Pure: no React, no DOM, no session object - just the facts the card turns
  * on. That is what lets every case below be a millisecond-long unit test rather
  * than a screenshot.
  */
@@ -117,7 +117,7 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
         ? 'second-stage'
         : 'done';
 
-  // ⚑ A type with no second stage is DONE at calibration — it never enters
+  // ⚑ A type with no second stage is DONE at calibration - it never enters
   // 'second-stage', so it cannot show a stage it does not have.
   const done = stage === 'done';
 
@@ -127,7 +127,7 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
       title: 'Calibration',
       status: calibrated ? 'Calibrated ✓' : `${placed}/${steps} set`,
       // ⚑ Only once the stage has actually produced something. A label with no
-      // reading behind it would assert work that has not happened — the same
+      // reading behind it would assert work that has not happened - the same
       // rule that stops a generated grid being drawn like a measured one.
       secondStage:
         secondStage && secondStageComplete
@@ -142,17 +142,17 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
     showsSecondStage:
       stage === 'second-stage' || (done && expanded && secondStage !== undefined),
     // ⚑ Named from the moment there is a card to name it on, so the next step is
-    // never invisible — see the field's own note.
+    // never invisible - see the field's own note.
     // ⚑⚑ VISIBLE WHILE YOU ARE IN IT, folded card or not. Calibrating AUTO-FOLDS
     // the card (the walk's own ending), and stage 2 is the step you are on the
-    // moment that happens — so requiring `expanded` here hid the current step
+    // moment that happens - so requiring `expanded` here hid the current step
     // behind the fold that had just closed on the previous one. Named while
     // calibrating too, but only with the card open, because then it is a
     // preview rather than the step you are on.
     showsSecondStageHeader:
       secondStage !== undefined && (stage === 'second-stage' || (stage !== 'capture' && expanded)),
     // ⚑⚑ AND A FINISHED CARD YOU HAVE OPENED OFFERS IT AGAIN. Folded, there is
-    // nothing to end — the line is a record. But you opened it in order to
+    // nothing to end - the line is a record. But you opened it in order to
     // change something, and without the action that is the dead end this card
     // already fixed once: *"the grid was gone and Read cells was therefore
     // disabled."* Re-reading is the whole point of the review view.

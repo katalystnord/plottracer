@@ -4,7 +4,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * `getExportRows` — what actually reaches a file.
+ * `getExportRows` - what actually reaches a file.
  *
  * ⚑ WHY THIS FILE EXISTS. A mutation run flagged 34 mutants here, clustered on
  * three things that are all tenet-9 sensitive: the PRECISION mode (whether a
@@ -46,7 +46,7 @@ function calibratedCategorical(): CalibrationSession<BarAxes> {
   return s;
 }
 
-describe('getExportRows — refusals', () => {
+describe('getExportRows - refusals', () => {
   it('exports nothing before the axes exist', () => {
     const s = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
     s.addDataPoint(150, 200);
@@ -62,11 +62,11 @@ describe('getExportRows — refusals', () => {
   });
 });
 
-describe('getExportRows — the precision opt-in', () => {
+describe('getExportRows - the precision opt-in', () => {
   it('⚑ rounds to the figure\'s own resolution by default, and does NOT in full mode', () => {
     // The default rounds each value to ~half a pixel, because a digitized
     // reading cannot be more precise than the pixels it came from. Full
-    // precision emits every computed digit — which is a DIFFERENT claim, and
+    // precision emits every computed digit - which is a DIFFERENT claim, and
     // the reason it is opt-in rather than the default.
     const s = calibratedXY();
     s.addDataPoint(163, 217); // deliberately off any round number
@@ -95,7 +95,7 @@ describe('getExportRows — the precision opt-in', () => {
   });
 });
 
-describe('getExportRows — the interpolation role', () => {
+describe('getExportRows - the interpolation role', () => {
   it('is ABSENT for an ordinary point, so an untouched series exports as before', () => {
     const s = calibratedXY();
     s.addDataPoint(150, 200);
@@ -112,14 +112,14 @@ describe('getExportRows — the interpolation role', () => {
     const roles = s.getExportRows(0).map((r) => r.role);
     expect(roles.filter((r) => r === 'anchor').length).toBe(3);
     expect(roles.filter((r) => r === 'interpolated').length).toBeGreaterThan(0);
-    // Nothing else — no third kind, and no undefined masquerading as a role.
+    // Nothing else - no third kind, and no undefined masquerading as a role.
     expect(new Set(roles)).toEqual(new Set(['anchor', 'interpolated']));
   });
 });
 
-describe('getExportRows — categorical line', () => {
+describe('getExportRows - categorical line', () => {
   it('⚑ ranks by LEFT-TO-RIGHT pixel order, whatever order they were captured in', () => {
-    // X is an ordinal DERIVED at export time — a view of the recorded pixels,
+    // X is an ordinal DERIVED at export time - a view of the recorded pixels,
     // never a stored coordinate. Capturing right-to-left must still rank from
     // the left.
     //

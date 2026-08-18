@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { theme } from '../theme.js';
 // ⚑ The formula used to live in this file. It moved to `../contrast.js` when
 // the heatmap matrix needed it at RUNTIME (a cell's fill is not known in
-// advance), and the test imports it rather than keeping a second copy — the
+// advance), and the test imports it rather than keeping a second copy - the
 // theme's tokens and the matrix's cells are now held to one implementation.
 import { INK_DARK, INK_LIGHT, contrastRatio, textOn } from '../contrast.js';
 
@@ -63,11 +63,11 @@ describe('WCAG AA contrast (4.5:1 for normal text, 3:1 for large/UI components)'
 
 /**
  * ⚑⚑ THE HEATMAP MATRIX PAINTS ITS OWN BACKGROUNDS, so its text colour cannot
- * be a token — it is decided per cell, from the fill the cell's VALUE earned.
+ * be a token - it is decided per cell, from the fill the cell's VALUE earned.
  * This is the half of B16 that was recorded and never built, and its absence is
  * why the tint was weakened to a pale wash that no longer matched the figure.
  */
-describe('textOn — which ink is legible on a cell painted by its own value', () => {
+describe('textOn - which ink is legible on a cell painted by its own value', () => {
   it('prints WHITE on a dark fill and BLACK on a light one', () => {
     // viridis's two ends, which is the case David actually reported: its
     // darkest purple washed out to a pale lavender rather than let white text in.
@@ -79,7 +79,7 @@ describe('textOn — which ink is legible on a cell painted by its own value', (
 
   it('clears the WCAG AA floor on EVERY colour, which is what makes a full-strength tint safe', () => {
     // ⚑ The property that matters is not "it picks sensibly" but "there is no
-    // fill on which the number becomes unreadable" — otherwise raising the tint
+    // fill on which the number becomes unreadable" - otherwise raising the tint
     // trades a colour defect for a legibility one, which is the exact swap that
     // produced the wash in the first place.
     // ⚠️ A colour ramp is a 1-D path through this cube, so sweeping the ramp

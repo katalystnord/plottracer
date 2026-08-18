@@ -4,7 +4,7 @@
  *
  * ⚑ This exists because Konva output is not DOM-inspectable: the workspace e2e can
  * assert WHICH ray is live (via a hidden readout) but not that the canvas draws it
- * any differently — verified by neutering the rendering, after which the e2e still
+ * any differently - verified by neutering the rendering, after which the e2e still
  * passed. Screenshotting the app on the Xvfb display closes that gap without
  * taking over anyone's screen.
  *
@@ -20,7 +20,7 @@ import { ozoneArgs } from './e2eContainment.js';
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const RUN = process.env['SPIDER_SHOT'] === '1';
 
-// ⚑ CONTAINMENT — see `./e2eContainment.ts`. This harness EXISTS to grab a
+// ⚑ CONTAINMENT - see `./e2eContainment.ts`. This harness EXISTS to grab a
 // frame off the virtual display, so an undeclared run is doubly wrong here.
 // ⚑ Asked AT the launch, not at module scope: this file is SKIPPED unless
 // SPIDER_SHOT=1, and a harness that never launches must not refuse.

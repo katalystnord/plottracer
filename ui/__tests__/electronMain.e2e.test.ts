@@ -27,7 +27,7 @@ import { ozoneArgs } from './e2eContainment.js';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-// ⚑ CONTAINMENT — see `./e2eContainment.ts`. THIS is the file that landed on
+// ⚑ CONTAINMENT - see `./e2eContainment.ts`. THIS is the file that landed on
 // David's screen on 2026-08-17: a suite run excluded `workspace.e2e.test.ts` by
 // name and this one launched anyway, because the gate treated an absent
 // variable as permission. It now refuses, AT the launch below.
@@ -331,7 +331,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
   }, 30000);
 });
 
-describe('ui/electron-main.cjs — a foreign digitizer\'s .tar, imported through Open Project (checkpoint 88; unified v1.4)', () => {
+describe('ui/electron-main.cjs - a foreign digitizer\'s .tar, imported through Open Project (checkpoint 88; unified v1.4)', () => {
   // Build a real WPD .tar the way a real project is shaped: info.json + wpd.json
   // (upstream's own six-figure fixture) + a bundled image. Reading someone
   // else's format is the migration route off the old app (tenet 6); a tar we

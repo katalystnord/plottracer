@@ -1,24 +1,24 @@
 import { theme } from '../theme.js';
 
 /**
- * Click-to-edit table cells — the typed twin of dragging a marker.
+ * Click-to-edit table cells - the typed twin of dragging a marker.
  *
  * ⚑ NOT a permanent boxed field (David, 2026-07-27, re Spider): *"now a user
- * thinks he HAS to add something"*. Everything here is optional — an axis or
- * category the figure prints illegibly is still real — so at rest a cell looks
+ * thinks he HAS to add something"*. Everything here is optional - an axis or
+ * category the figure prints illegibly is still real - so at rest a cell looks
  * like the rest of the table, and an unnamed one reads as a dash exactly like a
  * value nobody recorded. The dashed underline is the whole affordance.
  *
  * ⚑⚑ AND IT HAS TO BE VISIBLE AT 100% (v2.3, E3). It was drawn in
- * `border.hover` — #dddddd, the FAINTEST colour in the palette, and a HOVER
- * token used for a resting state — under text in `text.legend`, the colour this
+ * `border.hover` - #dddddd, the FAINTEST colour in the palette, and a HOVER
+ * token used for a resting state - under text in `text.legend`, the colour this
  * app uses for inert hints. So the one editable control on a heatmap band
  * advertised itself in two colours that both mean "not interactive". David,
  * looking straight at it: *"I'm testing now, and no, I cannot see that I can."*
  * Then, told where to click, it worked first time. Legible at 3× magnification
  * is not legible.
- * ⚑ Now `border.regular`. The component's own claim — that the underline IS the
- * affordance — is only true if the underline can be seen.
+ * ⚑ Now `border.regular`. The component's own claim - that the underline IS the
+ * affordance - is only true if the underline can be seen.
  *
  * ⚑ ONE component per kind, not one per CALL SITE. `EditableValue` serves both
  * the XY table and the spider table, which had hand-rolled the same input/span
@@ -74,7 +74,7 @@ export function EditableValue({
           if (e.key === 'Enter') onCommit();
           else if (e.key === 'Escape') onCancel();
         }}
-        // The cell around this one SELECTS its row — the same rule `EditableName`
+        // The cell around this one SELECTS its row - the same rule `EditableName`
         // below has always followed. Without it, clicking into the box you are
         // already typing in re-fires that selection and toggles it back OFF,
         // taking the canvas highlight with it mid-edit.
@@ -97,12 +97,12 @@ export function EditableValue({
 
 export interface EditableNameProps {
   editing: boolean;
-  /** The name as stored — empty means unnamed, and shows a dash. */
+  /** The name as stored - empty means unnamed, and shows a dash. */
   name: string;
   /**
    * What to show at rest when the name is empty, instead of the dash.
    *
-   * ⚑ A dash is right where something ELSE in the row identifies it — a bar's
+   * ⚑ A dash is right where something ELSE in the row identifies it - a bar's
    * value, a spider axis's reading. It is wrong where the name is the row's ONLY
    * identifier: a heatmap's category column rendered five dashes and the rows
    * became indistinguishable, so the table stopped saying which cell was which.
@@ -115,7 +115,7 @@ export interface EditableNameProps {
   width: number;
   onStartEdit: () => void;
   onChange: (name: string) => void;
-  /** Close the editor and commit — the caller owns both halves. */
+  /** Close the editor and commit - the caller owns both halves. */
   onFinish: () => void;
 }
 
@@ -158,7 +158,7 @@ export function EditableName({
       style={{ cursor: 'text', borderBottom: `1px dashed ${theme.color.border.regular}` }}
     >
       {name === '' ? (
-        <span style={{ color: theme.color.text.legend }}>{emptyDisplay ?? '—'}</span>
+        <span style={{ color: theme.color.text.legend }}>{emptyDisplay ?? '-'}</span>
       ) : (
         name
       )}

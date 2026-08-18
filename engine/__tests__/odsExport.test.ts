@@ -12,7 +12,7 @@ const contentOf = (sections: readonly TableSection[]): string => partOf(sections
  * ⚑ Substring assertions cannot see a document fall apart: strike the XML
  * prolog, or a namespace the document's own element names depend on, and every
  * `toContain` in this file still passes. Parsing is what asks the question the
- * user cares about — will a reader open this.
+ * user cares about - will a reader open this.
  */
 const parse = (xml: string): Record<string, never> => {
   const verdict = XMLValidator.validate(xml);
@@ -74,7 +74,7 @@ describe('sectionsToOds', () => {
   });
 
   it('leaves a blank cell BLANK, never a zero', () => {
-    // A cell nobody measured must not arrive as a measurement of zero — the rule
+    // A cell nobody measured must not arrive as a measurement of zero - the rule
     // the rest of the export already follows for nulls.
     const content = strFromU8(unzipSync(sectionsToOds(SECTIONS))['content.xml']!);
     expect(content).toContain('<table:table-cell/>');
@@ -124,7 +124,7 @@ describe('sectionsToOds', () => {
 
 /**
  * The document as a DOCUMENT. Everything above asks what `content.xml` CONTAINS;
- * these ask whether it is a file a reader will accept — the prolog, the root
+ * these ask whether it is a file a reader will accept - the prolog, the root
  * element, and the namespace declarations that every prefixed name in it depends
  * on. `table:table` without `xmlns:table` is not a table, it is an error.
  */
@@ -144,7 +144,7 @@ describe('sectionsToOds writes a document a reader can open', () => {
     expect(root['@office:version']).toBe('1.3');
   });
 
-  it('carries no text of its own — only what the figure put in the cells', () => {
+  it('carries no text of its own - only what the figure put in the cells', () => {
     // Tables, rows and cells are joined with NOTHING. Any separator would land
     // in the spreadsheet as content, between cells, where a reader would show it.
     expect(textNodesOf(contentOf(SECTIONS))).toBe('xy12.53n/a4whatvalueslope0.42');
@@ -175,7 +175,7 @@ describe('sectionsToOds cell values', () => {
   });
 
   it('writes a non-finite number as TEXT, never as a numeric value', () => {
-    // office:value="NaN" is not a number to a spreadsheet — it is a broken cell,
+    // office:value="NaN" is not a number to a spreadsheet - it is a broken cell,
     // and the reader is free to show 0. Anything that cannot be a float has to
     // travel as the text it is, so the reader sees that no number was measured.
     const cells = cellsOf([[Number.NaN, Number.POSITIVE_INFINITY]]);
@@ -186,7 +186,7 @@ describe('sectionsToOds cell values', () => {
   });
 
   it('leaves a null or undefined cell blank, whichever entrance it came from', () => {
-    // `Cell` is `string | number`, so TypeScript forbids these at this door —
+    // `Cell` is `string | number`, so TypeScript forbids these at this door -
     // but the rows are assembled from exported values and read back out of
     // project and foreign files, and the guard is here because that door is not
     // the only one. A 0 in place of "not measured" is the failure it prevents.

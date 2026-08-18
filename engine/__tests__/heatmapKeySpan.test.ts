@@ -4,18 +4,18 @@ import { valueAtParam } from '../../algorithms/colorScale.js';
 import { roundToResolution } from '../../core/exportPrecision.js';
 
 /**
- * ⚑⚑ WHAT THE COLOUR KEY READS AT ITS TWO ENDS — the third axis's extent, on
+ * ⚑⚑ WHAT THE COLOUR KEY READS AT ITS TWO ENDS - the third axis's extent, on
  * screen the moment the key is calibrated.
  *
  * THE CASE, from the built 2.2.0 package on 2026-08-17. David calibrated a key
- * printed `10¹` / `10²` — *"IC50 (nM, log scale)"* — and typed 10 and 100 at
+ * printed `10¹` / `10²` - *"IC50 (nM, log scale)"* - and typed 10 and 100 at
  * those two ticks, which is the correct transcription. He did not tick **Log**,
  * because nothing asked and an unticked box never says *this key is linear*.
  * The key was read linearly, exactly as instructed, and thirty cells came out
  * on a span of −38 … 169: several of them negative, for a concentration.
  *
  * ⚑ NOTHING WAS WRONG. A linear key that goes negative is a perfectly legal
- * diverging key — temperature, anomaly, log-fold change — which is why nothing
+ * diverging key - temperature, anomaly, log-fold change - which is why nothing
  * refused it and why nothing here refuses it either. David: *"There can easily
  * be instances where crossing zero is perfectly reasonable. Just think of
  * temperature on a heatmap."* The bundled example's own key is *Peak
@@ -34,7 +34,7 @@ const KV1 = { px: 460, py: 1025, values: ['10'] };
 const KV2 = { px: 940, py: 1025, values: ['100'] };
 
 describe('⚑⚑ the colour key reports the extent it was calibrated to', () => {
-  it('LOG: the key reads 3 … 589 — positive at both ends, as a concentration must be', () => {
+  it('LOG: the key reads 3 … 589 - positive at both ends, as a concentration must be', () => {
     const span = keySpanFromClicks(K1, K2, KV1, KV2, true)!;
     expect(span).not.toBeNull();
     expect(span.from).toBeCloseTo(2.94, 1);
@@ -43,7 +43,7 @@ describe('⚑⚑ the colour key reports the extent it was calibrated to', () => 
     expect(span.from).toBeGreaterThan(0);
   });
 
-  it('LINEAR: the SAME clicks read −38 … 169 — the morning that prompted this', () => {
+  it('LINEAR: the SAME clicks read −38 … 169 - the morning that prompted this', () => {
     // ⚑ Not a defect and not refused. This is what the user asked for, and the
     // point is only that it is now VISIBLE before the cells are read.
     const span = keySpanFromClicks(K1, K2, KV1, KV2, false)!;
@@ -51,7 +51,7 @@ describe('⚑⚑ the colour key reports the extent it was calibrated to', () => 
     expect(span.to).toBeCloseTo(169.4, 1);
   });
 
-  it('⚑ the two readings of one key differ by more than a rounding — they differ in SIGN', () => {
+  it('⚑ the two readings of one key differ by more than a rounding - they differ in SIGN', () => {
     // The whole argument for showing the number: a user cannot mistake one of
     // these lines for the other, whereas thirty cells of plausible numbers are
     // indistinguishable by eye.
@@ -61,12 +61,12 @@ describe('⚑⚑ the colour key reports the extent it was calibrated to', () => 
     expect(Math.sign(asLog.from)).toBe(1);
   });
 
-  it('needs NO image — the extent is known the instant the fourth click lands', () => {
+  it('needs NO image - the extent is known the instant the fourth click lands', () => {
     // ⚑ Structural, and the reason this lives in engine/ rather than ui/: the
     // span was previously computed in `readCellsFor`, i.e. only once the cells
     // had been read, which is after the damage. Sampling the ramp is what a
     // READING needs; the ends need geometry and two numbers.
-    expect(keySpanFromClicks.length).toBe(5); // k1, k2, kv1, kv2, log — no image
+    expect(keySpanFromClicks.length).toBe(5); // k1, k2, kv1, kv2, log - no image
   });
 
   it('carries the strip CENTRELINE, so the readout and the cursor cannot disagree', () => {
@@ -82,7 +82,7 @@ describe('⚑⚑ the extent is reported to the precision the PIXELS support', ()
    * David, on a key printed 0…100 whose extent read `-0.04515`: *"I think we
    * should round the numbers in the colour key calibration to something
    * reasonable."* Five decimals off a ~1,030-pixel bar claims a precision the
-   * ink does not have — the tool asserting more than it measured, which is the
+   * ink does not have - the tool asserting more than it measured, which is the
    * same tenet-9 line as drawing a boundary nobody placed.
    *
    * ⚑ The rule is the exports' own: round so the last kept digit sits at half a
@@ -125,7 +125,7 @@ describe('⚑⚑ the extent is reported to the precision the PIXELS support', ()
 
   it('refuses to round by a step it could not measure', () => {
     // `roundToResolution` returns the value UNCHANGED on a non-finite or
-    // non-positive step — full precision, never coerced toward zero, which was
+    // non-positive step - full precision, never coerced toward zero, which was
     // "the whole bug" its own comment records.
     expect(round(1.23456789, NaN)).toBe(1.23456789);
     expect(round(1.23456789, 0)).toBe(1.23456789);
@@ -141,7 +141,7 @@ describe('the extent refuses rather than inventing one', () => {
     expect(keySpanFromClicks(K1, K2, { ...KV1, values: ['high'] }, KV2, false)).toBeNull();
   });
 
-  it('a LOG key whose labels are not both positive — no log scale passes through zero', () => {
+  it('a LOG key whose labels are not both positive - no log scale passes through zero', () => {
     expect(keySpanFromClicks(K1, K2, { ...KV1, values: ['0'] }, KV2, true)).toBeNull();
     expect(keySpanFromClicks(K1, K2, { ...KV1, values: ['-10'] }, KV2, true)).toBeNull();
     // …and the same key read LINEARLY is fine, because zero is an ordinary value.
@@ -153,7 +153,7 @@ describe('the extent refuses rather than inventing one', () => {
   });
 });
 
-describe('valueAtParam — the one expression of a key\'s scale', () => {
+describe('valueAtParam - the one expression of a key\'s scale', () => {
   it('⚑ is what BOTH the readings and the extent come out of', () => {
     // The extraction is the point: `valueAtPosition` delegates here, and so does
     // `keySpanFromClicks`. Finding A2 of this release was one idea in three

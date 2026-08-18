@@ -1,4 +1,4 @@
-// Local hot-reload development entry for ui/ (CLAUDE.md "Product #1 —
+// Local hot-reload development entry for ui/ (CLAUDE.md "Product #1 -
 // rebuild design" spike, checkpoint 1). Loads the Vite dev server (npm run
 // ui:dev must be running separately) for hot-reload during development; a
 // --built flag loads the static Vite build output instead, for previewing
@@ -47,7 +47,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'PlotTracer — engine/ui dev preview',
+    title: 'PlotTracer - engine/ui dev preview',
     // Match electron-main.cjs, which removed the native menu in v1.6 to free
     // Alt for the key-tips. See ui/electron-menu.cjs for what that cost.
     autoHideMenuBar: true,

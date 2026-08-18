@@ -3,13 +3,13 @@ import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * Capturing a bar — two clicks, opposite corners (v2.0).
+ * Capturing a bar - two clicks, opposite corners (v2.0).
  *
  * A bar is a 2-slot OBJECT tuple (`BAR_INTERVAL_SLOTS`), same shape as pie's
- * sector / histogram's bin — see `BAR_AXES_CONFIG` in calibrationSession.ts.
+ * sector / histogram's bin - see `BAR_AXES_CONFIG` in calibrationSession.ts.
  * These tests exercise the sign convention specifically: a baseline-anchored
  * bar signs by comparing calibrated VALUES to the declared baseline (never
- * raw pixel position — see the file's own comment on why that would be
+ * raw pixel position - see the file's own comment on why that would be
  * backwards for a bar below baseline); a floating bar (no declared
  * baseline) signs by drag/click order instead, since there is no reference
  * to compare against.
@@ -346,21 +346,21 @@ describe('addBarDetectBoxes (v2.0, Phase 7) -- colour-detected boxes, the SAME r
  * ⚑ THE TWO SLOT GUARDS MUST AGREE, and for a while they did not.
  *
  * `setSlotCursor` was loosened in the v2.0 pre-launch audit so Bar's 2-slot
- * object tuple could aim at a particular corner — needed because a plain click
+ * object tuple could aim at a particular corner - needed because a plain click
  * (rather than a drag) leaves a bar half-made, and with two such bars the
  * cursor could otherwise only ever default to the first gap.
  *
  * `addDataPoint`'s NEW-TUPLE branch was not loosened with it. It asked only
  * `tupleMembers === 'independent'`, and every other shape fell through to
  * `dataset.addTuple`, which ALWAYS writes slot 0. So a cursor aimed at a new
- * Bar tuple's second corner filed the click as its FIRST — recording a bar's
+ * Bar tuple's second corner filed the click as its FIRST - recording a bar's
  * top edge as its bottom, with a plausible wrong number and nothing on screen
  * to say so. Exactly the defect the v1.4 spider audit fixed for independent
  * slots, in the branch right beside it.
  *
  * Not reachable through today's UI (the Bar table only aims at tuples that
  * already exist, and `nextSlot` resets the group to 0 when it hands back a new
- * tuple) — which is the reason to fix it in the MODEL rather than leave it: the
+ * tuple) - which is the reason to fix it in the MODEL rather than leave it: the
  * guard lived in the session while the model had a second entrance.
  */
 describe('aiming the cursor at a slot of a tuple that does not exist yet', () => {
@@ -373,8 +373,8 @@ describe('aiming the cursor at a slot of a tuple that does not exist yet', () =>
     session.addDataPoint(150, 300);
 
     const tuple = session.getDataset().getAllTuples()[0]!;
-    expect(tuple[0]).toBeNull();      // Bar start — untouched
-    expect(tuple[1]).not.toBeNull();  // Bar end — where the click was aimed
+    expect(tuple[0]).toBeNull();      // Bar start - untouched
+    expect(tuple[1]).not.toBeNull();  // Bar end - where the click was aimed
   });
 
   it('still starts at slot 0 when the cursor was never aimed', () => {

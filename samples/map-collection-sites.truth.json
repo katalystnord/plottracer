@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "map-collection-sites.png",
-    "note": "Synthetic ground truth \u2014 each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."
+    "note": "Synthetic ground truth - each site's (x, y) in km from the bottom-left corner (the Map origin). Calibrate on the 200 km scale bar with origin = bottom-left; the axes fill the image so the corner is (0,0). The landmass is decoration."
   },
   "graphType": "map",
   "axes": {

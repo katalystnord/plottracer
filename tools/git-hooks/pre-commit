@@ -8,7 +8,7 @@
 # and `npm run typecheck` simply was not run. It was caught two commits later, by
 # hand. The gate existed; it was skipped because the tests were green.
 #
-# ⚑ AND CI WOULD NOT HAVE CAUGHT IT EITHER — the workflow ran `npm ci` and the
+# ⚑ AND CI WOULD NOT HAVE CAUGHT IT EITHER - the workflow ran `npm ci` and the
 # packager and nothing else, and `vite build` strips types too. This hook is the
 # fast half of the fix; `.github/workflows/build.yml`'s `check` job is the half
 # that survives a fresh clone and `--no-verify`.
@@ -19,6 +19,18 @@
 # Skipping is deliberate and visible: `git commit --no-verify`.
 
 set -uo pipefail
+
+# ⚑ EM-DASHES FIRST, because it costs milliseconds and applies to every file
+# type - a docs-only commit is exactly the one that reintroduces them. David,
+# 2026-08-18: *"they should never be used. Ever again."* A style decision that
+# lives only in a preference is one nobody can act on later, which is the same
+# reason this project turns agreed designs into named tests.
+if [ -x "$(git rev-parse --show-toplevel)/tools/no-em-dashes.sh" ]; then
+  if ! "$(git rev-parse --show-toplevel)/tools/no-em-dashes.sh"; then
+    echo "pre-commit: REFUSED - see above. Or commit deliberately with --no-verify." >&2
+    exit 1
+  fi
+fi
 
 # Only TypeScript can break a typecheck, so a docs- or notes-only commit pays
 # nothing. Uses the STAGED list, which is what is about to be committed.
@@ -34,7 +46,7 @@ if ! command -v npm >/dev/null 2>&1; then
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
 fi
 if ! command -v npm >/dev/null 2>&1; then
-  echo "pre-commit: npm not found — cannot typecheck. Fix your PATH, or commit with --no-verify." >&2
+  echo "pre-commit: npm not found - cannot typecheck. Fix your PATH, or commit with --no-verify." >&2
   exit 1
 fi
 
@@ -46,7 +58,7 @@ echo "pre-commit: typechecking (~10s)…"
 if ! npm run --silent typecheck; then
   cat >&2 <<'MSG'
 
-pre-commit: REFUSED — the tree does not typecheck.
+pre-commit: REFUSED - the tree does not typecheck.
 
   A green test run does not mean the code compiles: vitest strips types rather
   than checking them, and so does the production build. That is exactly how a

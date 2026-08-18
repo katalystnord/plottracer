@@ -11,7 +11,7 @@ const { attachCloseGuard } = require('../electron-close-guard.cjs') as {
 /**
  * The confirm-on-close guard (v1.0.2, audit finding B1). The module takes
  * ipcMain + win as parameters precisely so its state machine is testable
- * without launching Electron — the native close DIALOG itself is manually
+ * without launching Electron - the native close DIALOG itself is manually
  * verified (a structural e2e gap, like the native menu accelerators).
  */
 function makeIpcMain() {
@@ -53,7 +53,7 @@ function makeWin() {
 
 const closeEvent = () => ({ preventDefault: vi.fn() });
 
-describe('attachCloseGuard — the confirm-on-close state machine', () => {
+describe('attachCloseGuard - the confirm-on-close state machine', () => {
   it('does NOT intercept a close before the renderer signals ready', () => {
     const ipcMain = makeIpcMain();
     const win = makeWin();

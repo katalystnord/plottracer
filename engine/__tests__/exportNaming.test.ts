@@ -43,7 +43,7 @@ describe('exportBaseName', () => {
 
   it('⚑ never returns an EMPTY stem, however the name is shaped', () => {
     // Each of these strips to nothing, which a plain replace-chain would turn
-    // into a filename of ".csv" — hidden on Unix and rejected on Windows.
+    // into a filename of ".csv" - hidden on Unix and rejected on Windows.
     for (const name of ['.png', '   ', '  .png', '/home/david/', 'C:\\dir\\', '.gitignore']) {
       expect(exportBaseName(name), name).not.toBe('');
       expect(exportBaseName(name), name).toBe('data');

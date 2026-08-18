@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "heatmap-timecourse.png",
-    "note": "Synthetic ground truth \u2014 a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins."
+    "note": "Synthetic ground truth - a CATEGORY axis (treatments) against a VALUE axis (time), with unequal time bins."
   },
   "graphType": "heatmap",
   "axes": {

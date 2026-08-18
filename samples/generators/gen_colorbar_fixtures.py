@@ -3,12 +3,12 @@
 Seeded generators for the COLOUR BAR test fixtures (v2.2 heatmaps, phase 1).
 
 ⚑ WHY THESE EXIST RATHER THAN A SYNTHETIC RAMP DRAWN IN THE TEST. A test that
-draws its own figure proves the code self-consistent and nothing else — that is
+draws its own figure proves the code self-consistent and nothing else - that is
 how the spider over-read hid for three releases (its synthetic radar chart had
 no markers, so it showed a 1px bias where the real PNG showed 4.8px). A colour
 key is exactly the wrong place to repeat that mistake: the whole risk in a
-heatmap is that a colour shifted by RENDERING — anti-aliasing, an alpha-blended
-cell edge, JPEG chroma quantisation — inverts to a silently wrong NUMBER. None
+heatmap is that a colour shifted by RENDERING - anti-aliasing, an alpha-blended
+cell edge, JPEG chroma quantisation - inverts to a silently wrong NUMBER. None
 of those exist in a ramp a test writes byte by byte.
 
 So each fixture is a REAL matplotlib render, and each ships the truth it was
@@ -27,7 +27,7 @@ The four figures, and the question each one asks:
                               colour change, so the reported band must WIDEN
                               there rather than stay confidently narrow.
   heatmap-jet-jpeg.png ...... the same figure round-tripped through JPEG at
-                              quality 35 — the silent-wrong-number case. The
+                              quality 35 - the silent-wrong-number case. The
                               claim under test is not that the error is small; it
                               is that the error is REPORTED.
   key-cyclic.png ............ a cyclic key on its own (`twilight`). Both ends are
@@ -68,7 +68,7 @@ SEED = 20260811
 X_EDGES = [0.0, 1.0, 3.5, 4.0, 6.0, 9.0]
 Y_EDGES = [0.0, 2.0, 2.5, 5.0, 8.0]
 VMIN, VMAX = -40.0, 120.0
-# Two ticks matplotlib actually draws and labels on this key — the pair a user
+# Two ticks matplotlib actually draws and labels on this key - the pair a user
 # would click to say "this position is −20, that one is 100".
 TICK_VALUES = [-20.0, 100.0]
 
@@ -101,11 +101,11 @@ def make_heatmap(name, cmap, values):
     fig.canvas.draw()
 
     # The key's own extent, inset by 2px so the strip is inside the frame the
-    # colorbar draws around itself — which is where a user would click too.
+    # colorbar draws around itself - which is where a user would click too.
     box = cbar.ax.get_window_extent()
     y_mid = (box.y0 + box.y1) / 2
     # ⚑ THE STRIP IS INSET AND THE VALUE SCALE IS NOT DERIVED FROM IT. Position 0
-    # of an inset strip is NOT vmin — it is vmin plus whatever those 2px are
+    # of an inset strip is NOT vmin - it is vmin plus whatever those 2px are
     # worth, which on this key is 0.6 °C. Declaring it as vmin put a real bias
     # into the truth file and it showed up as the extraction "missing" its own
     # band. The app has the same problem and the same answer: calibrate from two
@@ -191,12 +191,12 @@ def make_cyclic_key(name):
     mixture rather than the pure red the colormap defines. 256 is also what a
     real key holds.
 
-    ⚑ MEASURED, NOT ASSUMED — the first versions of this fixture were wrong,
+    ⚑ MEASURED, NOT ASSUMED - the first versions of this fixture were wrong,
     in the same way twice. Sampling `hsv` at 512 pixel CENTRES never reaches hue
     360°, and the gradient's outermost columns are ANTI-ALIASED against the axes
     boundary (they came out at 241 rather than 255), so the two ends of the
     sampled strip landed 21–27 RGB units apart. The module then correctly
-    reported ONE candidate — on that render the ends really were
+    reported ONE candidate - on that render the ends really were
     distinguishable, and a test asserting otherwise would have been asserting a
     figure that did not exist.
 
@@ -241,7 +241,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     rng = np.random.default_rng(SEED)
     # A smooth field plus noise, so neighbouring cells differ by a lot in some
-    # places and very little in others — both regimes in one figure.
+    # places and very little in others - both regimes in one figure.
     base = np.array(
         [[VMIN + (VMAX - VMIN) * ((r + 1) * (c + 2)) / 30.0 for c in range(len(X_EDGES) - 1)]
          for r in range(len(Y_EDGES) - 1)]

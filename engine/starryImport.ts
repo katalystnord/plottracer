@@ -2,22 +2,22 @@
  * Import a StarryDigitizer project (`.zip`).
  *
  * StarryDigitizer is MIT-licensed, which permits literal reuse with
- * attribution — but nothing is reused here. This reads its FORMAT, which is all
+ * attribution - but nothing is reused here. This reads its FORMAT, which is all
  * an importer ever needs, and the licence note matters only because it is the
  * one source in this codebase where reading the source to learn the format was
  * itself unproblematic (see reference notes on per-source licence care).
  *
- *   StarryDigitizer — Copyright (c) 2021 MATO Tomoya, MIT licence.
+ *   StarryDigitizer - Copyright (c) 2021 MATO Tomoya, MIT licence.
  *   https://github.com/t29mato/starry-digitizer
  *
  * ⚑⚑ THE COLLISION THAT SHAPES THIS MODULE. A StarryDigitizer project is a zip
- * containing `project.json` and `image.png` — the SAME container shape and the
+ * containing `project.json` and `image.png` - the SAME container shape and the
  * SAME entry names as our own project archive. So the leading zip magic cannot
  * tell them apart, and neither can the entry names: only a key INSIDE
  * project.json can. Ours carries `plotTracerProject: 1`; theirs carries
  * `axisSets`. Before this was noticed, opening one of their projects reached our
  * own deserializer, parsed its project.json happily, and died with "Project
- * archive is missing its image reference" — a confusing wrong answer for a file
+ * archive is missing its image reference" - a confusing wrong answer for a file
  * we can in fact read. That is why sniffing has to be allowed to look inside a
  * container rather than at the first four bytes.
  *
@@ -35,7 +35,7 @@
  *   image.png | image.jpg | image.jpeg
  *
  * It maps almost one-to-one onto our XY axes: four calibration points carrying
- * their own values, plus per-axis log flags — so nothing has to be reconstructed
+ * their own values, plus per-axis log flags - so nothing has to be reconstructed
  * the way an Engauge three-point system does.
  */
 
@@ -48,7 +48,7 @@ import type { AnyAxes } from '../core/plotData.js';
 
 export type StarryResult<T> = T | { error: string };
 
-/** The entry every StarryDigitizer project keeps its data in — the same name we
+/** The entry every StarryDigitizer project keeps its data in - the same name we
  * use for ours, which is exactly why the marker inside it is what decides. */
 const PROJECT_ENTRY = 'project.json';
 
@@ -82,7 +82,7 @@ interface StarryProjectJson {
  * format has. Deliberately checks for `axisSets` AND the absence of our own
  * marker, so a future file carrying both could never be claimed by mistake.
  *
- * Returns false rather than throwing on anything unreadable — a sniffer's job is
+ * Returns false rather than throwing on anything unreadable - a sniffer's job is
  * to answer "is this mine", and the reader that follows reports the real error.
  */
 export function isStarryProject(bytes: Uint8Array): boolean {
@@ -149,7 +149,7 @@ function axisPoint(a: StarryAxis | undefined): { px: number; py: number; value: 
  *
  * Refuses with a reason rather than importing a partial project: an axis set
  * missing a calibration point, or one whose points cannot fix a scale, is an
- * error the UI shows — not a figure whose numbers are quietly wrong.
+ * error the UI shows - not a figure whose numbers are quietly wrong.
  */
 export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedStarryFigure> {
   let files: Record<string, Uint8Array>;
@@ -158,7 +158,7 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
   } catch (err) {
     return { error: err instanceof Error && err.name === 'ZipTooLargeError'
       ? err.message
-      : 'Could not open this project — the archive is unreadable.' };
+      : 'Could not open this project - the archive is unreadable.' };
   }
   const entry = files[PROJECT_ENTRY];
   if (!entry) return { error: 'This is not a StarryDigitizer project (no project.json inside it).' };
@@ -167,7 +167,7 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
   try {
     json = JSON.parse(strFromU8(entry)) as StarryProjectJson;
   } catch {
-    return { error: "Could not open this project — its project.json is not valid JSON." };
+    return { error: "Could not open this project - its project.json is not valid JSON." };
   }
 
   const axisSets = Array.isArray(json.axisSets) ? json.axisSets : [];
@@ -189,12 +189,12 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
   const y1 = axisPoint(active.y1);
   const y2 = axisPoint(active.y2);
   if (!x1 || !x2 || !y1 || !y2) {
-    return { error: "This StarryDigitizer project's axes are incomplete — all four calibration points are needed." };
+    return { error: "This StarryDigitizer project's axes are incomplete - all four calibration points are needed." };
   }
 
   // ⚑ Values go in as TEXT. Calibration parses them through InputParser, which
   // tries a DATE first, so a bare number in 0..23 would become an hour-of-day
-  // timestamp — the trap engine/digImport.ts documents at length.
+  // timestamp - the trap engine/digImport.ts documents at length.
   const calib = new Calibration(2);
   calib.addPoint(x1.px, x1.py, String(x1.value), '0');
   calib.addPoint(x2.px, x2.py, String(x2.value), '0');
@@ -214,7 +214,7 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
     return {
       error:
         active.xIsLogScale || active.yIsLogScale
-          ? "This StarryDigitizer project's log axes could not be calibrated — a log scale needs axis values greater than zero."
+          ? "This StarryDigitizer project's log axes could not be calibrated - a log scale needs axis values greater than zero."
           : "This StarryDigitizer project's axes could not be calibrated.",
     };
   }

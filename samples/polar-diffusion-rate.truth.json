@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "polar-diffusion-rate.png",
-    "note": "Synthetic ground truth \u2014 (angle\u00b0, radius) samples."
+    "note": "Synthetic ground truth - (angle\u00b0, radius) samples."
   },
   "graphType": "polar",
   "axes": {

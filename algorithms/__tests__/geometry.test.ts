@@ -68,7 +68,7 @@ describe('geometry', () => {
   });
 
   it('switches to shoelace polygon area when closed=true', () => {
-    // A right triangle (0,0)-(5,0)-(5,5) — closed vs open area should differ.
+    // A right triangle (0,0)-(5,0)-(5,5) - closed vs open area should differ.
     const points = [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }];
     const open = computeGeometry(points, false)!;
     const closed = computeGeometry(points, true)!;

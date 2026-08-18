@@ -13,7 +13,7 @@ import { readHeatmap, type HeatmapCellReading } from '../../algorithms/heatmapRe
  * was drawn from (v2.2, phase 3).
  *
  * ⚑ THIS IS THE FIRST TEST THAT ASKS THE PRODUCT'S OWN QUESTION. Phase 1 asked
- * "where on the key is this colour", phase 2 "what is that position worth" —
+ * "where on the key is this colour", phase 2 "what is that position worth" -
  * both against colours the test picked. Here nothing is picked: a calibrated
  * frame, a calibrated key and a grid go in, and a MATRIX comes out, cell by
  * cell, exactly as a user would get it. Graph in → reliable data out, measured.
@@ -86,7 +86,7 @@ function read(file: string): { cells: HeatmapCellReading[]; fig: TruthFigure } {
   return { cells: cells!, fig };
 }
 
-/** Truth for a cell, matched by its declared bounds rather than by index — an
+/** Truth for a cell, matched by its declared bounds rather than by index - an
  * index match would still line up if the matrix came out transposed. */
 function truthFor(fig: TruthFigure, cell: HeatmapCellReading) {
   const found = fig.cells.find(
@@ -120,7 +120,7 @@ describe('reading a whole heatmap off a real render', () => {
 
   it('reads every cell to a fraction of a degree', () => {
     // 20 cells, unequal, on a −40..120 °C key. Measured: max 0.64 °C, mean 0.26
-    // — half a lookup-table entry, the floor any inversion through this key can
+    // - half a lookup-table entry, the floor any inversion through this key can
     // reach.
     const { cells, fig } = read('heatmap-viridis.png');
     const errors = cells.map((c) => Math.abs(c.reading!.value - truthFor(fig, c).value));
@@ -139,7 +139,7 @@ describe('reading a whole heatmap off a real render', () => {
     }
   });
 
-  it('a cell that reports itself CLEAN is right — 42 of 42, across three figures', () => {
+  it('a cell that reports itself CLEAN is right - 42 of 42, across three figures', () => {
     // ⚑⚑ THE PRODUCT'S CLAIM, at the level a user actually sees it. A cell says
     // it is clean when its colour sits exactly on the key's ramp (distance 0) AND
     // the whole cell is that colour (uniformity 1). Measured across all three
@@ -150,7 +150,7 @@ describe('reading a whole heatmap off a real render', () => {
     // distance. The ninth did not: JPEG happened to land that cell on a colour
     // the key really does print, so distance was 0 and the reading was wrong by
     // 0.3 °C with nothing in the colour to show it. What caught it was
-    // UNIFORMITY — only 43% of the cell was the colour we read. The third
+    // UNIFORMITY - only 43% of the cell was the colour we read. The third
     // evidence channel earned its place on its first outing against a real
     // figure, on the one case the other two could not see.
     let looksClean = 0;
@@ -178,7 +178,7 @@ describe('reading a whole heatmap off a real render', () => {
     expect(missed).toBeGreaterThan(0);
   });
 
-  it('says a degraded figure is degraded — 2 clean cells out of 20', () => {
+  it('says a degraded figure is degraded - 2 clean cells out of 20', () => {
     // The counterpart to the claim above, and what stops it being vacuous: the
     // verdict has to be able to say NO. On the same 20 cells, quality-35 JPEG
     // leaves only two that can vouch for themselves.
@@ -192,7 +192,7 @@ describe('reading a whole heatmap off a real render', () => {
     // ⚑ The third piece of evidence, and the one the other two cannot give: a
     // cell's colour can sit exactly on the ramp while a third of the cell is ink
     // that is not data. On a clean `pcolormesh` every cell is one flat colour,
-    // so uniformity is 1 — which is what makes a lower number elsewhere mean
+    // so uniformity is 1 - which is what makes a lower number elsewhere mean
     // something.
     const { cells } = read('heatmap-viridis.png');
     expect(cells.every((c) => c.uniformity === 1)).toBe(true);
@@ -226,7 +226,7 @@ describe('reading a whole heatmap off a real render', () => {
     // ⚑ The failure a uniform lattice would produce is a shifted matrix that
     // still looks like a matrix. Every column here is a different width, so a
     // reader that assumed equal spacing would sample the wrong cells from the
-    // second column on — and would still return 20 plausible numbers.
+    // second column on - and would still return 20 plausible numbers.
     const { cells, fig } = read('heatmap-viridis.png');
     const widths = [...new Set(cells.map((c) => c.xMax - c.xMin))].sort((a, b) => a - b);
     expect(widths).toEqual([0.5, 1, 2, 2.5, 3]);

@@ -7,8 +7,8 @@ import type { AxesTypeConfig, CalibratedAxes } from './calibrationSession.js';
  * `engine/captureProgress.ts` gives at the top of its own file: a decision kept
  * inside the React component is reachable only by launching Electron, so the
  * feedback loop on it is the ~20-minute e2e and mutation testing cannot see it
- * at all. `autoExtractModesFor` decides which rail buttons a graph type offers —
- * a capability question, answered from the type's declared `autoExtractKind` —
+ * at all. `autoExtractModesFor` decides which rail buttons a graph type offers -
+ * a capability question, answered from the type's declared `autoExtractKind` -
  * and it had no unit test of its own until it moved out.
  */
 

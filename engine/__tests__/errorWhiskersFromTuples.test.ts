@@ -1,8 +1,8 @@
 /**
  * The drawn whisker reads the datum's own record, not a guess.
  *
- * ⚑ `getErrorWhiskers` is the design's own safety argument — *"the rendering is
- * the check on what the storage leaves implicit"* — and checkpoint 85 exists
+ * ⚑ `getErrorWhiskers` is the design's own safety argument - *"the rendering is
+ * the check on what the storage leaves implicit"* - and checkpoint 85 exists
  * because it and the record had DIVERGED, matching caps by different rules on a
  * rotated calibration, so the glyph could pair a cap to a different datum than
  * the export reported. A check computed differently from the thing it checks is
@@ -34,7 +34,7 @@ function session() {
   return s;
 }
 
-/** Place datums, then attach caps to named tuples — the B4 storage shape. */
+/** Place datums, then attach caps to named tuples - the B4 storage shape. */
 function withTupleCaps(
   s: ReturnType<typeof session>,
   datums: Array<{ x: number; y: number }>,
@@ -43,14 +43,14 @@ function withTupleCaps(
   const ds = s.getDatasets()[0]!;
   for (const d of datums) ds.addPixel(d.x, d.y);
   const slots = errorSlotNames('SD');
-  ds.adoptSlots(slots); // AFTER the datums, BEFORE the caps — order matters
+  ds.adoptSlots(slots); // AFTER the datums, BEFORE the caps - order matters
   for (const c of caps) {
     ds.addToTupleAt(c.tuple, slotForRole(c.role, slots.length), ds.addPixel(c.x, c.y));
   }
   return ds;
 }
 
-/** Every point each drawn whisker touches — its `bar` (datum→cap) and its `cap`
+/** Every point each drawn whisker touches - its `bar` (datum→cap) and its `cap`
  * (the perpendicular tick), each a `GlyphSegment` of `{from, to}`. */
 function whiskerSpans(s: ReturnType<typeof session>) {
   return s.getErrorWhiskers().map((w) => [w.bar.from, w.bar.to, w.cap.from, w.cap.to]);
@@ -66,7 +66,7 @@ describe('a whisker is drawn from the datum the record names', () => {
   it('⚑⚑ two datums whose caps share an x each draw to their OWN datum', () => {
     // The mis-pairing, at the RENDERING. Under nearest-x both caps resolve to
     // datum A, so the figure showed two whiskers hanging off one point while the
-    // other sat bare — the picture agreeing with the wrong record rather than
+    // other sat bare - the picture agreeing with the wrong record rather than
     // catching it.
     const s = session();
     withTupleCaps(
@@ -114,7 +114,7 @@ describe('a whisker is drawn from the datum the record names', () => {
   });
 });
 
-describe('the imported shape still draws — no regression', () => {
+describe('the imported shape still draws - no regression', () => {
   it('caps in a related series are still whiskered', () => {
     // A WPD file, or any of ours written before B4. The old path stays because
     // an import genuinely arrives this way (tenet 6).

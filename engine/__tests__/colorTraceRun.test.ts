@@ -23,7 +23,7 @@ const WHITE: [number, number, number] = [255, 255, 255];
 const RED: [number, number, number] = [220, 30, 30];
 
 describe('runColorTrace', () => {
-  it('traces a DASHED, sloping red curve by colour — one point per column, in x order', () => {
+  it('traces a DASHED, sloping red curve by colour - one point per column, in x order', () => {
     const w = 10, h = 10;
     const img = makeImage(w, h, WHITE);
     // A rising dashed line: y decreases as x increases, with gaps (only even x drawn).
@@ -63,7 +63,7 @@ describe('runColorTrace', () => {
 describe('calibrationBoxRegion', () => {
   it('returns the bounding box of the calibration point pixels (the plot rectangle)', () => {
     // XY: X1,X2 on the x-axis (bottom), Y1,Y2 on the y-axis (left). Their bbox is
-    // the plot rectangle — the region that excludes the title, axis lines and
+    // the plot rectangle - the region that excludes the title, axis lines and
     // tick labels a colour trace would otherwise grab (same colour, outside box).
     const placed = {
       x1: { px: 68, py: 637 },

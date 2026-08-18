@@ -2,13 +2,13 @@ import { createContext, useEffect, useState } from 'react';
 import { IS_MAC } from './platform.js';
 
 /**
- * "Hold Alt to see every keyboard route" — v1.6's key-tips (David, referencing
+ * "Hold Alt to see every keyboard route" - v1.6's key-tips (David, referencing
  * ONLYOFFICE / Office KeyTips).
  *
  * ⚑ WHY THIS EXISTS, and it is the keystone rather than decoration. The design
  * keystone lists **shortcut-only paths** as an explicit FAIL: *if the keyboard is the
- * only way, he never sees it.* Every accelerator in the top bar was exactly that —
- * `Ctrl+O`, `Ctrl+S`, the zoom keys — knowable only by already knowing. Badges on
+ * only way, he never sees it.* Every accelerator in the top bar was exactly that -
+ * `Ctrl+O`, `Ctrl+S`, the zoom keys - knowable only by already knowing. Badges on
  * demand convert that knowledge into on-screen state without cluttering the default
  * view, which is progressive disclosure in the sense the keystone allows.
  *
@@ -34,7 +34,7 @@ import { IS_MAC } from './platform.js';
  *
  * Deliberately does NOT `preventDefault`. With the menu gone Alt does nothing on
  * Windows/Linux, and on macOS Option is a live text-entry modifier (it types special
- * characters) — swallowing it would break typing in every value and rename field to
+ * characters) - swallowing it would break typing in every value and rename field to
  * power a hint.
  */
 export function useKeyTips(): boolean {
@@ -53,7 +53,7 @@ export function useKeyTips(): boolean {
       else if (e.key !== 'Alt') setShowing(false);
     }
     // ⚑ Alt+Tab away and the keyup lands in the OTHER window, so without these the
-    // badges stay on screen for as long as the app is left alone — the first thing
+    // badges stay on screen for as long as the app is left alone - the first thing
     // anyone tries after pressing Alt.
     function clear() {
       setShowing(false);

@@ -246,12 +246,12 @@ import { HelpOverlay } from './HelpOverlay.js';
 /**
  * The digitizing workspace: pick an axes type, load an image, calibrate,
  * then click to place data points. This component is a thin view over
- * engine/calibrationSession.ts's framework-agnostic state machine — all
+ * engine/calibrationSession.ts's framework-agnostic state machine - all
  * the calibration-flow and point-placement logic lives there, tested
  * directly with vitest rather than only through slow Electron+Playwright
  * launches. CalibrationSession is a plain mutable class, not React state,
  * so it's held in a ref with a version counter forcing re-renders after
- * each mutating call — the same pattern already used for ImageCanvas's
+ * each mutating call - the same pattern already used for ImageCanvas's
  * engine/canvasView.ts functions, just applied to a stateful class
  * instead of pure functions.
  *
@@ -320,7 +320,7 @@ import { HelpOverlay } from './HelpOverlay.js';
  * from the top-level icons/ directory, see icons.tsx's own header
  * comment) laid out as two thin vertical rails flanking the canvas
  * ("Canvas-dominant layout, two thin icon-only vertical tool rails",
- * CLAUDE.md's "Product #1 — rebuild design"): a left tool-mode rail
+ * CLAUDE.md's "Product #1 - rebuild design"): a left tool-mode rail
  * (Pan/Calibrate/Place Point) and a right point-action rail (Remove
  * last point/Clear points, shown once calibrated). Every icon button
  * carries a numbered keyboard shortcut (1/2/3 for the tool modes, "no
@@ -463,7 +463,7 @@ interface RecordedMeasurement {
  *
  * **`value`/`note` used to be stored on the record**, and that was the defect:
  * `fmtNum` is `toPrecision(4)`, so the rounded string was the only copy of the
- * number — the raw double never reached the record, the project file or the
+ * number - the raw double never reached the record, the project file or the
  * CSV, and a slope of 1.23456789 was destroyed at capture. Worse, being frozen
  * at capture is what made Set-scale one-way: a distance measured before a scale
  * existed kept its "12.5 px" text forever.
@@ -479,7 +479,7 @@ function measureDisplay(
   ctx: { scale?: MeasureScaleState | null; axes?: { pixelToData(px: number, py: number): number[] } | null }
 ): { value: string; note?: string } {
   const raw = measurementValue(m.tool, m.overlay.points, ctx);
-  if (!raw) return { value: '—' };
+  if (!raw) return { value: '-' };
   const n = raw.values[0]!;
   if (m.tool === 'slope') {
     const d = slopeDeltas(m.overlay.points, ctx.axes);
@@ -607,12 +607,12 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  *  pick a point off the curve. See engine/seriesLine.ts for the curve/scatter rule. */
 
 /** The heatmap grid's one colour, shared by the dashed lines on the canvas and
- * the handles that move them — so the thing you grab is visibly the thing that
+ * the handles that move them - so the thing you grab is visibly the thing that
  * moves. */
 /**
  * ⚑⚑ THE SAME VIOLET THE BAR CHART'S CATEGORY TICKS USE, imported rather than
  * re-chosen. David: *"the points for the grids are difficult to spot, and we
- * should reuse the tick graphics we had for the bar graph"* — and then: *"We had
+ * should reuse the tick graphics we had for the bar graph"* - and then: *"We had
  * all of this already in the design, and you still went and invented everything
  * again. Why??"* He is right: the settled design says v2.1's category ticks are
  * the structural FOUNDATION for the heatmap grid, and a boundary you place on an
@@ -631,7 +631,7 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
  * (engine/xlsxExport.ts); the rest render as text via engine/tableFormats.ts. */
 type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 
-// ⚑ v2.0: names shortened to drop the redundant "Type — " prefix (David) --
+// ⚑ v2.0: names shortened to drop the redundant "Type - " prefix (David) --
 // the Open Example card grid now shows the graph-type ICON per row (the
 // same glyph GraphTypeCardPicker.tsx uses, keyed off `axes`), so restating
 // the type in the label is now the icon's job.
@@ -897,7 +897,7 @@ export function Workspace() {
     | { x: number; y: number; kind: 'measure'; id: string }
     | { x: number; y: number; kind: 'empty' }
     // ⚑ THE SAME MENU, one more target (B16). A heatmap cell's menu says which
-    // instrument read it — and reusing this one means it opens, closes, escapes
+    // instrument read it - and reusing this one means it opens, closes, escapes
     // and anchors exactly like every other right-click in the app.
     | { x: number; y: number; kind: 'heatmap-cell'; col: number; row: number }
     | null
@@ -961,7 +961,7 @@ export function Workspace() {
   /**
    * ⚑ REMEMBERED, not just widened. The rail was already resizable and reset to
    * 320 on every launch, so dragging it wider was work the user redid each
-   * session — David: *"make the data out card a little wider by default to
+   * session - David: *"make the data out card a little wider by default to
    * accommodate the wider datasets."* A bigger default alone would have left the
    * forgetting intact one size along. `readPanelWidth` clamps, so a hand-edited
    * entry cannot smuggle a width past the drag handle's own limits.
@@ -989,7 +989,7 @@ export function Workspace() {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = sidebarWidth;
-      // ⚑ ONE CLAMP, shared with the store — the drag and the saved value cannot
+      // ⚑ ONE CLAMP, shared with the store - the drag and the saved value cannot
       // disagree about what a legal width is.
       let latest = startWidth;
       const onMove = (ev: MouseEvent) => {
@@ -1074,9 +1074,9 @@ export function Workspace() {
    * with, like the category-tick panel: its summary line is on screen from the
    * start, so the feature is discoverable without the card growing over the
    * figure before anyone has asked it to. */
-  /** Which band's name is being typed, per axis — the same one-at-a-time editor
+  /** Which band's name is being typed, per axis - the same one-at-a-time editor
    * the bar chart's category column uses. */
-  /** The cell the user picked, in grid indices — the one thing tying a row of
+  /** The cell the user picked, in grid indices - the one thing tying a row of
    * the results to the square it was read from. */
   /**
    * The picked cells, as `col,row` keys.
@@ -1085,7 +1085,7 @@ export function Workspace() {
    * multiple cells... I cannot select a range of cells, or click cells on the
    * heatmap to select them... I cannot select a whole column for example."* The
    * heatmap had its own single-cell pick while the app has had marquee-drag and
-   * Shift-click multi-select for DATA POINTS since v1.2 — a parallel mechanism
+   * Shift-click multi-select for DATA POINTS since v1.2 - a parallel mechanism
    * doing less, which is the pattern this release keeps repeating.
    *
    * ⚑ Kept as keys rather than as `{col,row}` objects so membership is a lookup
@@ -1099,7 +1099,7 @@ export function Workspace() {
    * The values are STORED ON THE THIRD AXIS. Changing a value in a cell MOVES
    * THE VALUE on the third axis that records the value, and nothing else!"* So
    * an edited cell travels with the key when the key is recalibrated, exactly as
-   * a data point travels with its axes — there is nothing here that a
+   * a data point travels with its axes - there is nothing here that a
    * recalibration would leave behind disagreeing with its neighbours.
    */
   const [heatmapCellReadings, setHeatmapCellReadings] =
@@ -1110,7 +1110,7 @@ export function Workspace() {
    * ⚑⚑ `seed` IS WHAT THE EDITOR OPENED WITH, and it is load-bearing: an editor
    * that opens and closes without a keystroke must record NOTHING. Without it,
    * committing on blur wrote the seeded number back as a reading, so merely
-   * looking at a cell stamped it as user-read — a measurement nobody took,
+   * looking at a cell stamped it as user-read - a measurement nobody took,
    * indistinguishable in the file from one they did.
    */
   const [editingHeatmapValue, setEditingHeatmapValue] = useState<
@@ -1122,7 +1122,7 @@ export function Workspace() {
    * ⚑ BESIDE THE TABLE, not on the Heatmap card. The card is where the key and
    * the grid are set up; the cell was typed into in the results panel, and a
    * refusal that appears in a fold-out somewhere else is one the user never
-   * connects to the thing they just did. Pattern 5 in CLAUDE.md — refusals fire
+   * connects to the thing they just did. Pattern 5 in CLAUDE.md - refusals fire
    * AT the gesture.
    */
   const [heatmapValueError, setHeatmapValueError] = useState<string | null>(null);
@@ -1130,12 +1130,12 @@ export function Workspace() {
    * The colour under the key's cursor WHILE it is being dragged.
    *
    * ⚑⚑ THE PREVIEW IS AN INSTRUMENT, not decoration. You drag until the swatch
-   * matches the cell in the figure — which turns B7's whole justification
+   * matches the cell in the figure - which turns B7's whole justification
    * ("their eye is the better instrument") into a gesture, because an eye
    * comparing two colours is far more sensitive than an eye estimating a number
    * off a ramp.
-   * ⚑ It is the ACTUAL INK under the cursor, read straight from the image — not
-   * a colour computed from the ramp — so the preview cannot disagree with the
+   * ⚑ It is the ACTUAL INK under the cursor, read straight from the image - not
+   * a colour computed from the ramp - so the preview cannot disagree with the
    * key it is sitting on.
    * ⚠️ NEVER ON THE FIGURE. The figure is the immutable record and everything
    * floats above it (David, confirming: *"the preview lands on the table cell
@@ -1147,7 +1147,7 @@ export function Workspace() {
   const [heatmapDragTint, setHeatmapDragTint] = useState<
     { col: number; row: number; rgb: readonly [number, number, number] } | null
   >(null);
-  /** The single pick, for everything that still means "the one cell in hand" —
+  /** The single pick, for everything that still means "the one cell in hand" -
    * the readout, the canvas outline, the value the card names. Null unless
    * exactly one is picked, because "which cell?" has no answer for a range. */
   const selectedCell = useMemo(() => {
@@ -1182,7 +1182,7 @@ export function Workspace() {
     },
     []
   );
-  // ⚑ Keyed by the rendered COPY, not the band — the long form shows a band's
+  // ⚑ Keyed by the rendered COPY, not the band - the long form shows a band's
   // name once per cell, and one editor per copy fights itself for focus. See
   // `renderEditableName`'s `editKey`.
   const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | string | null>(null);
@@ -1198,8 +1198,8 @@ export function Workspace() {
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
   const [projectError, setProjectError] = useState<string | null>(null);
-  /** What an import could not carry across, in plain words. NOT an error — the
-   * figure opened — so it gets its own surface rather than borrowing the red
+  /** What an import could not carry across, in plain words. NOT an error - the
+   * figure opened - so it gets its own surface rather than borrowing the red
    * one. A foreign project that quietly loses half its content is the failure
    * this codebase has killed more than once, so these are shown, not logged. */
   const [projectNotice, setProjectNotice] = useState<string | null>(null);
@@ -1226,8 +1226,8 @@ export function Workspace() {
    * exists so the overlay and the card can read it during a render. Every write
    * goes through `applyHeatmapGrid`, so the two cannot drift.
    *
-   * ⚠️ This comment used to say the opposite — that the grid was view state
-   * only, lost on Save — and it stayed that way for a commit after persistence
+   * ⚠️ This comment used to say the opposite - that the grid was view state
+   * only, lost on Save - and it stayed that way for a commit after persistence
    * shipped. A comment describing a limitation that has been fixed is read as
    * current by the next person; grade the comments against the code, not only
    * the prose.
@@ -1235,7 +1235,7 @@ export function Workspace() {
    * ⚑ Everything the buttons DO is in `engine/heatmapRun.ts`. What is left in
    * this file is which state to set. */
   /**
-   * ⚑⚑ THE GRID IS STORED AS PARAMETERS, not data coordinates — David's rule:
+   * ⚑⚑ THE GRID IS STORED AS PARAMETERS, not data coordinates - David's rule:
    * *"The grid is not absolute, but in relation to the calibrated axis
    * position."* Renamed along with the meaning, so every reader had to be
    * revisited rather than silently keeping a number that now means something
@@ -1252,7 +1252,7 @@ export function Workspace() {
    * ⚑ THE TEXT is the state and the parsed list is derived, not the other way
    * round: a user mid-way through typing `A, B, ` has a trailing separator that
    * a parse-and-reformat round trip would keep eating under their hands. The
-   * record — the parsed list — is written to the axes on every change, so what
+   * record - the parsed list - is written to the axes on every change, so what
    * is SAVED is always the list and never the punctuation.
    */
   const [heatmapXLabels, setHeatmapXLabels] = useState('');
@@ -1263,7 +1263,7 @@ export function Workspace() {
    * read, and an export that captured a stale array would write the previous
    * figure's numbers. */
   const heatmapCellsRef = useRef<HeatmapRow[]>([]);
-  /** The colour key's own span, captured when the cells were read — the third
+  /** The colour key's own span, captured when the cells were read - the third
    * axis's extent, which the export carries beside the readings taken on it. */
   const heatmapKeyRef = useRef<{ from: number; to: number; log: boolean } | undefined>(undefined);
   useEffect(() => {
@@ -1295,7 +1295,7 @@ export function Workspace() {
   // pixel diameter (scatter only).
   const [colorTraceShape, setColorTraceShape] = useState<'curve' | 'scatter'>('curve');
   const [colorTraceMinBlob, setColorTraceMinBlob] = useState(3);
-  // B1 — an optional plot-box rectangle (image-pixel space) the trace is limited
+  // B1 - an optional plot-box rectangle (image-pixel space) the trace is limited
   // to, so a legend swatch / axis label of the same colour outside it is ignored.
   // Drawn by a DIRECT marquee drag on the image (v1.2): no arm-first toggle -- the
   // drag is live whenever By-colour is active (bar the eyedropper), unifying it
@@ -1342,7 +1342,7 @@ export function Workspace() {
     nearestLabel: string;
     offRayPx: number;
     /** The tool and series it was raised under. Rendering is gated on these still
-     * matching, which is how the notice expires WITHOUT an effect that clears it —
+     * matching, which is how the notice expires WITHOUT an effect that clears it -
      * a self-expiring value rather than state to be swept up after. */
     mode: ToolMode;
     seriesIndex: number;
@@ -1350,7 +1350,7 @@ export function Workspace() {
 
   const session = sessionRef.current;
   const config = session.getConfig();
-  // `version` is a deliberately unused dependency of the memos below — it
+  // `version` is a deliberately unused dependency of the memos below - it
   // exists only to force recomputation after a mutation to the ref-held
   // session, which React can't see on its own.
   void version;
@@ -1744,7 +1744,7 @@ export function Workspace() {
     if (
       !window.confirm(
         'Capture the figure to work from.\n\n' +
-          'Is the ENTIRE figure — plot, axes, tick labels and title — clearly visible in the view? ' +
+          'Is the ENTIRE figure - plot, axes, tick labels and title - clearly visible in the view? ' +
           'Zoom or pan first if any of it is off-screen or too small.\n\n' +
           'The captured figure becomes the image you calibrate and trace on.'
       )
@@ -1783,7 +1783,7 @@ export function Workspace() {
   // Apply bakes an arbitrary-angle rotation (grows the canvas to the rotated
   // bounds) through the same document-aligning path as rotate/flip/crop.
   //
-  // ⚑ CORRECTED 2026-07-17 — the paragraph that used to sit here was FALSE, and
+  // ⚑ CORRECTED 2026-07-17 - the paragraph that used to sit here was FALSE, and
   // it was this feature's whole justification. It read: "WPD's XY calibration is
   // built with noRotation=true ... it reads x from pixel-x and y from pixel-y
   // assuming screen-aligned axes ... which is exactly the point of a deskew: you
@@ -1850,7 +1850,7 @@ export function Workspace() {
    *
    * ⚑ The grid starts as ONE cell spanning the calibration, and its outer
    * boundaries are ordinary dividers from that moment on. They are not a claim
-   * about where the plot box is — they are simply the only span the session
+   * about where the plot box is - they are simply the only span the session
    * knows, and detection fills in between them.
    */
   const heatmapBounds = useCallback((): { xMin: number; xMax: number; yMin: number; yMax: number } | null => {
@@ -1872,12 +1872,12 @@ export function Workspace() {
   const heatmapActive = axesTypeId === HEATMAP_AXES_CONFIG.id;
 
   /**
-   * The grid as the user sees it: what has been recorded, or — before anything
-   * has — the one cell a finished calibration already implies.
+   * The grid as the user sees it: what has been recorded, or - before anything
+   * has - the one cell a finished calibration already implies.
    *
    * ⚑⚑ THE GRID CONTROLS WERE AN INVISIBLE PRECONDITION WITHOUT THIS. The
    * overlay, the drag handles and the boundary buttons all appeared only after
-   * pressing Detect or Read, and nothing on screen said so — the keystone
+   * pressing Detect or Read, and nothing on screen said so - the keystone
    * persona's named failure mode, and worst on exactly the figures that need the
    * grid most: a continuous field draws no cell boundaries at all, so detection
    * has nothing to find and its user could reasonably conclude the grid is
@@ -1887,10 +1887,10 @@ export function Workspace() {
    * writing state. Nothing goes into the axes' metadata until the user actually
    * changes something: an untouched grid is recoverable from the calibration it
    * came from, and a file that carried it would be storing a copy of something
-   * derivable — the same rule that keeps the colour key's SAMPLES out of the
+   * derivable - the same rule that keeps the colour key's SAMPLES out of the
    * project file. Every edit path below records the result.
    */
-  /** The record the text boxes stand for — parsed once per render rather than at
+  /** The record the text boxes stand for - parsed once per render rather than at
    * each of the three places that need it. */
   const heatmapLabels = useMemo<HeatmapLabels>(
     () => ({ x: parseLabelList(heatmapXLabels), y: parseLabelList(heatmapYLabels) }),
@@ -1901,12 +1901,12 @@ export function Workspace() {
    * The band counts the CALIBRATION declared, per axis.
    *
    * ⚑ David: *"Why do I have to FIRST tell it that there are 5 rows in the
-   * calibration, and then 5 again? That should carry over."* It does — the walk
+   * calibration, and then 5 again? That should carry over."* It does - the walk
    * asks once, for BOTH axis kinds, and this is the only reader.
    *
    * ⚑⚑ IT NO LONGER RETURNS NULL FOR A VALUE AXIS. That null is what the grid
    * panel's own Columns/Rows boxes existed to fill, which made two places to
-   * answer one question — and only one of them was reachable on a numeric axis.
+   * answer one question - and only one of them was reachable on a numeric axis.
    */
   const heatmapCounts = useCallback((): { columns: number; rows: number } => {
     const axes = sessionRef.current.getAxes();
@@ -1928,7 +1928,7 @@ export function Workspace() {
     }
     if (!session.isCalibrated()) return null;
     // ⚑⚑ NO GRID UNTIL ONE HAS BEEN MEASURED. This used to fall back to an
-    // evenly divided lattice the moment the count was known — geometry we
+    // evenly divided lattice the moment the count was known - geometry we
     // INVENTED, drawn as confidently as one we had read off the figure. On any
     // figure whose columns are not evenly spaced (0, 1, 2, 4, 8, 24 is an
     // ordinary time axis) that grid is visibly wrong, and David: *"it will look
@@ -1937,10 +1937,10 @@ export function Workspace() {
     // ⚑ Tenet 9, in its plainest form. The COUNT is a declaration the user made;
     // the POSITIONS were ours. Drawing them as one thing said we had measured
     // something we had not. An even lattice is still available for a continuous
-    // field — but it is asked for, never asserted.
+    // field - but it is asked for, never asserted.
     return null;
     // `version` is the only signal React has that the ref-held session mutated,
-    // so it is listed deliberately even though the body does not read it —
+    // so it is listed deliberately even though the body does not read it -
     // without it this would freeze at "not calibrated yet" (see the same note
     // above the memo block further down).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1970,7 +1970,7 @@ export function Workspace() {
    * metadata. Writing the state without the metadata gives a grid that vanishes
    * on Save; writing the metadata without the state gives one that is saved and
    * invisible. The undo snapshot serializes the axes, so this is also what makes
-   * a grid edit undoable — without any new snapshot field.
+   * a grid edit undoable - without any new snapshot field.
    */
   /**
    * Change one part of the heatmap's record, leaving the rest alone.
@@ -1980,14 +1980,14 @@ export function Workspace() {
    * metadata keys. Merging here is what lets a name edit leave the grid alone
    * without every caller knowing the layer's shape.
    * ⚑ It lives on the SESSION, so a Save and an undo both find it through
-   * `captureState` — the door `categoryAxis` already uses. It is no longer in
+   * `captureState` - the door `categoryAxis` already uses. It is no longer in
    * axes metadata, so re-calibrating cannot touch it and nothing has to copy it
    * across (David: *"anything detected sits on TOP of the calibration"*).
    */
   const patchHeatmapLayer = useCallback((patch: Partial<SerializedHeatmapLayer>) => {
     const current = sessionRef.current.getHeatmapLayer() ?? {};
     const next: SerializedHeatmapLayer = { ...current, ...patch };
-    // An empty layer is NO layer — so a heatmap that has been cleared writes no
+    // An empty layer is NO layer - so a heatmap that has been cleared writes no
     // key at all rather than an empty one, exactly as the grid already does.
     for (const key of Object.keys(next) as (keyof SerializedHeatmapLayer)[]) {
       if (next[key] === undefined) delete next[key];
@@ -1997,13 +1997,13 @@ export function Workspace() {
 
   const applyHeatmapGrid = useCallback((grid: HeatmapState | null) => {
     // ⚑ Detection reads the INK and a dragged handle lands on a PIXEL, so both
-    // arrive in data coordinates. Converting here — at the one writer — is what
+    // arrive in data coordinates. Converting here - at the one writer - is what
     // keeps the store parametric without every caller having to know.
     const placedNow = sessionRef.current.getPlacedPoints();
     const spans = heatmapAxisSpans(placedNow, sessionRef.current.getAxes());
     const base = grid === null || spans === null ? null : heatmapGridToParams(grid, spans);
     // ⚑ Stamped where the axes SIT right now, so the app can later say "these
-    // have moved since" — the one thing David's rule 4 needs, and nothing more.
+    // have moved since" - the one thing David's rule 4 needs, and nothing more.
     const stamp = heatmapAxisStamp(placedNow);
     const params = base === null ? null : stamp ? { ...base, axisAt: stamp } : base;
     setHeatmapGridParams(params);
@@ -2025,7 +2025,7 @@ export function Workspace() {
    * naming a column is saved and undone by machinery that already exists.
    *
    * ⚑ THE CELLS ARE RE-READ so the table shows the name the moment it is typed.
-   * The values do not change — a name cannot move a boundary — but a table that
+   * The values do not change - a name cannot move a boundary - but a table that
    * kept showing bare indices while the card said the axis was named would be
    * the same self-contradiction the detect message was.
    */
@@ -2038,7 +2038,7 @@ export function Workspace() {
       if (!axes || !grid) return;
       // ⚑⚑ TYPED IN READING ORDER, STORED PER CELL. The first row name belongs
       // to the row at the TOP of the figure, which is the LAST cell index on an
-      // ordinary upward-y plot — see `labelsForCells`. Storing the typed order
+      // ordinary upward-y plot - see `labelsForCells`. Storing the typed order
       // verbatim filed every name against the wrong row, silently.
       const typed: HeatmapLabels = { x: parseLabelList(xText), y: parseLabelList(yText) };
       const labels = labelsForCells(typed, grid, axes);
@@ -2055,7 +2055,7 @@ export function Workspace() {
   );
 
   /**
-   * Take the heatmap's record back OUT of the session — the load path, and the
+   * Take the heatmap's record back OUT of the session - the load path, and the
    * undo path.
    *
    * ⚑ TWO ENTRANCES, ONE CALL. A project file and an undo snapshot both arrive
@@ -2071,7 +2071,7 @@ export function Workspace() {
    * Read every cell of a given grid, or say it cannot be done.
    *
    * ⚑ EXTRACTED so the FORWARD path and the UNDO path cannot drift apart. They
-   * had drifted: a grid edit re-read, and taking the same edit back CLEARED —
+   * had drifted: a grid edit re-read, and taking the same edit back CLEARED -
    * so one undo cost the whole table. David chose symmetry: *"Re-read, matching
    * the forward path."*
    * ⚑ Takes the readings as an ARGUMENT rather than off state, because the undo
@@ -2105,7 +2105,7 @@ export function Workspace() {
   const restoreHeatmapGrid = useCallback(() => {
     const axes = sessionRef.current.getAxes();
     // ⚑⚑ ONE READ, of ONE LAYER. This used to be three reads of three axes
-    // metadata keys — which is what let a re-calibration empty all three at
+    // metadata keys - which is what let a re-calibration empty all three at
     // once. The grid, the names and the user's own readings are one record and
     // they now come back together, from the session rather than from the axes.
     const layer = sessionRef.current.getHeatmapLayer();
@@ -2131,12 +2131,12 @@ export function Workspace() {
     // ⚑⚑ RE-READ, DON'T EMPTY. Undoing a divider nudge used to clear the whole
     // results table, on the sound-sounding principle that a table describing the
     // previous grid measures a figure that no longer exists. But the FORWARD
-    // path re-reads, so one undo cost strictly more than the edit it took back —
+    // path re-reads, so one undo cost strictly more than the edit it took back -
     // including cells a person had read by hand. David: *"Re-read, matching the
     // forward path."* The readings themselves survive either way (they are
     // stored as positions on the key), but the table they belong to did not.
-    // ⚑ Falls back to empty exactly where a read is impossible — no image yet on
-    // the load path, or no colour key — which is the old behaviour, kept for the
+    // ⚑ Falls back to empty exactly where a read is impossible - no image yet on
+    // the load path, or no colour key - which is the old behaviour, kept for the
     // case that actually needed it.
     const reread = restoredGrid ? readCellsFor(restoredGrid, restoredReadings) : null;
     setHeatmapCells(reread?.rows ?? []);
@@ -2149,14 +2149,14 @@ export function Workspace() {
    * A divider was dragged. Move it, or leave everything exactly as it was.
    *
    * ⚑ THE REFUSAL IS THE FEATURE. `dragDivider` will not let a boundary cross
-   * its neighbour, and when it refuses, this does nothing at all — React
+   * its neighbour, and when it refuses, this does nothing at all - React
    * re-renders the handle from unchanged state, so it springs back to where it
    * was and the user sees the divider stop. Re-sorting instead would keep the
    * geometry valid and renumber every cell past it: every value still correct,
    * every one filed under the wrong column.
    *
    * ⚑ THE CELLS ARE RE-READ, not left stale. A table describing the previous
-   * grid is a measurement of a figure that no longer exists — the rule the
+   * grid is a measurement of a figure that no longer exists - the rule the
    * Geometry card already follows. Re-reading only happens once cells exist, so
    * a user adjusting the grid before pressing Read cells is not surprised by a
    * table appearing under their hands.
@@ -2167,7 +2167,7 @@ export function Workspace() {
    * ⚑⚑ DETECTION'S REPORT IS CLEARED, and a screenshot is what caught this: the
    * card read *"Grid: 6 × 4 cells"* directly above *"5 columns, matching the 4
    * boundaries found"*. The sentence was true when it was written and describes
-   * a proposal the user has since overruled — a panel contradicting itself about
+   * a proposal the user has since overruled - a panel contradicting itself about
    * the same figure, which is the fourth-and-counting instance of the class
    * `engine/guidanceTip.ts` exists to document. A report of a measurement that no
    * longer describes the grid is not stale wording, it is a wrong statement.
@@ -2179,7 +2179,7 @@ export function Workspace() {
       setHeatmapDetectMessage('');
       applyHeatmapGrid(next);
       // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
-      // they drifted — this one re-read, the other emptied the table — so the
+      // they drifted - this one re-read, the other emptied the table - so the
       // symmetry is now structural rather than a thing to remember.
       if (heatmapCells.length > 0) {
         const result = readCellsFor(next, heatmapCellReadings);
@@ -2207,7 +2207,7 @@ export function Workspace() {
   );
 
   /**
-   * Add a boundary on one axis — the hand `detectGrid` tells the user to use.
+   * Add a boundary on one axis - the hand `detectGrid` tells the user to use.
    *
    * ⚑ THE NEW BOUNDARY IS SELECTED IMMEDIATELY. It lands in the middle of the
    * widest cell, which is where a missed rule usually is but not always where
@@ -2220,7 +2220,7 @@ export function Workspace() {
       if (!heatmapShownGrid) return;
       const added = addDivider(heatmapShownGrid, axis);
       if (added === null) {
-        setHeatmapError('There is no room for another boundary — the widest cell is already as thin as a boundary.');
+        setHeatmapError('There is no room for another boundary - the widest cell is already as thin as a boundary.');
         return;
       }
       setHeatmapError(null);
@@ -2243,7 +2243,7 @@ export function Workspace() {
 
   /** What the card shows about the picked boundary. Recomputed from the GRID
    * rather than remembered at click time, so a boundary that has since been
-   * dragged reads out where it is now — and one that stopped existing (undo, a
+   * dragged reads out where it is now - and one that stopped existing (undo, a
    * reopened file, a fresh detection) stops being offered for removal. */
   const selectedBoundary = useMemo(() => {
     if (!heatmapShownGrid || !selectedDividerId) return null;
@@ -2257,7 +2257,7 @@ export function Workspace() {
     const axes = sessionRef.current.getAxes();
     const bounds = heatmapBounds();
     if (!img || !axes || !bounds) {
-      setHeatmapError('Finish the calibration first — the grid is measured against it.');
+      setHeatmapError('Finish the calibration first - the grid is measured against it.');
       return;
     }
     const start = heatmapShownGrid ?? initialGridFor(bounds, heatmapCounts());
@@ -2274,7 +2274,7 @@ export function Workspace() {
       ...(rows !== undefined ? { rows } : {}),
     });
     // ⚑ Held and set AFTER the grid change below, because the edit path CLEARS
-    // this — correctly, since an edit invalidates the previous report.
+    // this - correctly, since an edit invalidates the previous report.
     // Detection's own report is the one thing that survives its own grid change,
     // being a statement about that change.
     const message = result.message;
@@ -2282,18 +2282,18 @@ export function Workspace() {
     // nothing would throw away work the user had already accepted, to report a
     // failure the message has already reported.
     // ⚑⚑ AND IT IS AN UNDO STEP. David, on the built package: *"undo removed the
-    // whole grid. :-O"* — because detection took no snapshot, so a Ctrl+Z after
+    // whole grid. :-O"* - because detection took no snapshot, so a Ctrl+Z after
     // reading jumped back past the detection to the last calibration step and
     // the grid went with it.
     // ⚑ THE ASYMMETRY WAS THE TELL: EDITING a divider committed, and CREATING
     // the grid did not. Adjusting the record was undoable while making it was
-    // invisible — so undo could only ever take back more than the user did.
+    // invisible - so undo could only ever take back more than the user did.
     if (result.grid !== null) {
       // ⚑⚑ THROUGH THE EDIT PATH, BECAUSE DETECT IS A GRID CHANGE. This called
-      // the raw `applyHeatmapGrid`, which stores the grid and nothing else — so
+      // the raw `applyHeatmapGrid`, which stores the grid and nothing else - so
       // a table already read went on describing the grid it was read from.
       // Invisible whenever detection returned the SAME grid, and glaring the
-      // moment it did not: David saw "Grid — 5 × 4 cells" beside a matrix of 12.
+      // moment it did not: David saw "Grid - 5 × 4 cells" beside a matrix of 12.
       // ⚑ The rule was already written on the path that gets it right: *"A report
       // of a measurement that no longer describes the grid is not stale wording,
       // it is a wrong statement."* One rule, two callers, one not using it.
@@ -2306,7 +2306,7 @@ export function Workspace() {
    * Lay an evenly spaced grid over the plot, because the user asked for one.
    *
    * ⚑⚑ THE LATTICE IS NOW A REQUEST. It used to be drawn automatically the
-   * moment a count was known, which asserted boundaries nobody had measured —
+   * moment a count was known, which asserted boundaries nobody had measured -
    * and on a figure with unequal columns it was visibly wrong on every use. What
    * survives is the case that genuinely needs it: a continuous field draws no
    * cell boundaries at all, so a sampling lattice is the honest reading, and the
@@ -2316,7 +2316,7 @@ export function Workspace() {
     const bounds = heatmapBounds();
     const counts = heatmapCounts();
     if (!bounds || !Number.isInteger(counts.columns) || !Number.isInteger(counts.rows)) {
-      setHeatmapError('Finish the calibration first — an even grid is spaced across it.');
+      setHeatmapError('Finish the calibration first - an even grid is spaced across it.');
       return;
     }
     setHeatmapError(null);
@@ -2325,7 +2325,7 @@ export function Workspace() {
     // lattice is a change to the record, so taking it back must not cost more.
     commit();
     setHeatmapDetectMessage(
-      `Even ${counts.columns} × ${counts.rows} grid laid over the plot — these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`
+      `Even ${counts.columns} × ${counts.rows} grid laid over the plot - these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`
     );
   }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts]);
 
@@ -2335,7 +2335,7 @@ export function Workspace() {
    * ⚑ ONE READ PATH, and the user's own readings are an argument to it rather
    * than a pass over the result. `readHeatmapCells` applies them through the
    * SAME `valueAtPosition` ours come out of, so their number and ours are
-   * comparable by construction — patching the rows afterwards would be a second
+   * comparable by construction - patching the rows afterwards would be a second
    * transform, and the two would disagree the first time the key was
    * recalibrated.
    */
@@ -2345,7 +2345,7 @@ export function Workspace() {
     const axes = sessionRef.current.getAxes();
     const bounds = heatmapBounds();
     if (!img || !axes || !bounds) {
-      setHeatmapError('Finish the calibration first — the cells are read through it.');
+      setHeatmapError('Finish the calibration first - the cells are read through it.');
       return;
     }
     const image = { data: img.data, width: img.width, height: img.height };
@@ -2361,10 +2361,10 @@ export function Workspace() {
       return;
     }
     // ⚑⚑ NO GRID, NO CELLS. This used to fall back to an evenly divided lattice
-    // and read the figure through it — every value filed under boundaries nobody
+    // and read the figure through it - every value filed under boundaries nobody
     // had measured, and the numbers look exactly as trustworthy as measured ones.
     // A heatmap's cells ARE its grid; without one there is nothing to report.
-    // ⚑ The key's ENDS are its extent — `vmin`/`vmax` in the generator that drew
+    // ⚑ The key's ENDS are its extent - `vmin`/`vmax` in the generator that drew
     // the figure. Recorded here, where the scale exists, rather than recomputed
     // at export time from something that may have moved.
     const keyFrom = valueAtPosition(scale, 0);
@@ -2376,7 +2376,7 @@ export function Workspace() {
     const grid = heatmapShownGrid;
     if (!grid) {
       setHeatmapError(
-        'No grid yet — detect the boundaries the figure draws, or overlay an even grid from the Grid fold-out, then read the cells.'
+        'No grid yet - detect the boundaries the figure draws, or overlay an even grid from the Grid fold-out, then read the cells.'
       );
       return;
     }
@@ -2393,25 +2393,25 @@ export function Workspace() {
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
     setHeatmapError(result.error);
-    // ⚑⚑ E1 — DETECTION'S REPORT RETIRES WHEN THE CELLS ARE READ. "5 columns,
+    // ⚑⚑ E1 - DETECTION'S REPORT RETIRES WHEN THE CELLS ARE READ. "5 columns,
     // matching the 4 boundaries found" describes the step BEFORE this one, and
     // `result.summary` beside it describes the figure better ("25 cells read,
     // all clean"). Leaving it up is a card still reporting a proposal after the
     // proposal has been acted on.
     //
-    // ⚑ THE SAME RULE ADDING A BOUNDARY ALREADY FOLLOWS, one step later —
+    // ⚑ THE SAME RULE ADDING A BOUNDARY ALREADY FOLLOWS, one step later -
     // *"the user overruled the proposal; the proposal stops describing the
     // grid."* Here the user did not overrule it, they USED it, which retires it
     // just as completely.
     //
     // ⚑ It is not tidiness. By this point both fold-outs are collapsed and the
     // message still sits ON the figure, over the plot's top-left corner, with no
-    // fold to hide in — so until now there was no way to dismiss it at all.
+    // fold to hide in - so until now there was no way to dismiss it at all.
     // David, on the built package: *"it would be nice to be able to collapse the
     // calibration card more at this stage, when its work is done."*
     //
     // ⚑ In the SHARED read rather than in the button, so the boundary-drag and
-    // undo paths retire it too — the same reasoning that put the re-read here.
+    // undo paths retire it too - the same reasoning that put the re-read here.
     setHeatmapDetectMessage('');
     return result.error === null && result.rows.length > 0;
   }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid]);
@@ -2420,7 +2420,7 @@ export function Workspace() {
    * The Grid card's ENDING: read the cells, then close the card.
    *
    * ⚑⚑ ONLY THE BUTTON FOLDS. The same read runs when a boundary is dragged and
-   * when a cell is corrected — folding there would shut the card the user is
+   * when a cell is corrected - folding there would shut the card the user is
    * working in, and the adjust-then-look loop is real (a drag re-reads by
    * itself). So the fold belongs to the GESTURE that means "I am finished
    * defining this grid", not to the reading.
@@ -2434,12 +2434,12 @@ export function Workspace() {
     if (runHeatmapRead()) {
       // ⚑⚑ THE ENDING FOLDS THE CARD, not a fold-out inside it. Read cells is
       // stage 2's ending and the card has ONE fold now, so finishing collapses
-      // the whole two-stage card to its single line — which is the behaviour
+      // the whole two-stage card to its single line - which is the behaviour
       // David asked for and, before this, the reason the grid panel had a fold
       // of its own at all.
       setCalibExpanded(false);
       // ⚑⚑ THE READ IS ITS OWN UNDO STEP. It produces the entire table, and it
-      // took no snapshot — so undo had nothing to land on between "grid
+      // took no snapshot - so undo had nothing to land on between "grid
       // detected" and "calibration finished", and took the grid with it.
       // ⚑ Committed HERE rather than inside `runHeatmapRead`, because that same
       // read runs on every divider drag and every corrected cell, and both of
@@ -2469,7 +2469,7 @@ export function Workspace() {
   /**
    * Commit the number the user typed into a cell.
    *
-   * ⚑⚑ IT MOVES THE CELL ALONG THE COLOUR KEY — the third axis's inverse — which
+   * ⚑⚑ IT MOVES THE CELL ALONG THE COLOUR KEY - the third axis's inverse - which
    * is the identical gesture to editing a data point's y, where `dataToPixel`
    * repositions the point. `setCellReading` holds the refusal (a log key has no
    * zero and no negative side), so the model refuses at the gesture and the
@@ -2482,7 +2482,7 @@ export function Workspace() {
     if (!edit) return;
     // ⚑ AN EDITOR THAT WAS OPENED AND CLOSED IS NOT A READING. Nothing was
     // typed, so nothing is recorded, nothing is re-read and no undo entry is
-    // made — the alternative silently converted a glance into a measurement.
+    // made - the alternative silently converted a glance into a measurement.
     if (edit.value === edit.seed) return;
     const img = imageCanvasRef.current?.getImageData();
     const image = img ? { data: img.data, width: img.width, height: img.height } : null;
@@ -2495,10 +2495,10 @@ export function Workspace() {
       : { scale: null };
     // ⚑ SAID, not swallowed. There is no way to place a value on a key that
     // cannot be read, and a typed number that simply vanished would look like
-    // the app ignoring the user — the failure mode this whole feature answers.
+    // the app ignoring the user - the failure mode this whole feature answers.
     if (!scale) {
       setHeatmapValueError(
-        'The colour key cannot be read, so there is no scale to place that value on — recalibrate the key first.'
+        'The colour key cannot be read, so there is no scale to place that value on - recalibrate the key first.'
       );
       return;
     }
@@ -2516,7 +2516,7 @@ export function Workspace() {
     applyHeatmapCellReadings(readings);
   }, [applyHeatmapCellReadings, editingHeatmapValue, heatmapCellReadings]);
 
-  /** Hand the cell back to the colour key — the other half of B16's menu.
+  /** Hand the cell back to the colour key - the other half of B16's menu.
    * ⚑ NOT `useKeyReadingForCell`: a plain function whose name begins with "use"
    * is a React hook as far as every lint rule and every reader is concerned. */
   const readCellFromKey = useCallback(
@@ -2526,7 +2526,7 @@ export function Workspace() {
     [applyHeatmapCellReadings, heatmapCellReadings]
   );
 
-  /** Which instrument read this cell — read off the ROW, so the menu can never
+  /** Which instrument read this cell - read off the ROW, so the menu can never
    * disagree with the number and the tint the user is looking at. */
   const heatmapCellSourceAt = useCallback(
     (col: number, row: number): 'colour' | 'user' | 'ocr' =>
@@ -2568,7 +2568,7 @@ export function Workspace() {
    * extent on the other axis.
    *
    * ⚑ Built through the axes' `dataToPixel`, so a rotated calibration draws a
-   * rotated grid — the lines land on the figure's own cells rather than on the
+   * rotated grid - the lines land on the figure's own cells rather than on the
    * screen's rows and columns.
    */
   const heatmapOverlay = useMemo(() => {
@@ -2600,7 +2600,7 @@ export function Workspace() {
   /** Mark a text edit in progress from a handler declared ABOVE the ref.
    *
    * ⚑ The React Compiler refuses a ref mutation that appears earlier in the
-   * component than the `useRef` it belongs to — and it reports the refusal at
+   * component than the `useRef` it belongs to - and it reports the refusal at
    * every OTHER mutation site, eight of them, in code that had not changed.
    * Same unmasking trap the v2.1 split hit: the compiler stops at its first
    * bailout, so one new one makes a pile of latent ones visible at once. */
@@ -2741,7 +2741,7 @@ export function Workspace() {
     const target = activePointIndex != null && activePointIndex < count ? activePointIndex : count - 1;
     // Route through the series-kind-aware removeDataPoints for: error-bar series
     // (cascade the parent's caps / remove the whole cap pair), AND a MID-sequence
-    // delete on a grouped box/histogram series (remove the whole box/bin) —
+    // delete on a grouped box/histogram series (remove the whole box/bin) -
     // matching the Eraser, Select+Del and right-click doors (2026-07-22 audits:
     // this door orphaned caps AND peeled one member off a completed tuple). The
     // LAST point still uses removeLastPoint below, whose group-cursor walk-back
@@ -2974,7 +2974,7 @@ export function Workspace() {
       setActivePointIndex(null);
       setAxesTypeId(id);
       // A replaced session means a new figure/calibration, so the By-colour trace
-      // region (the old calibration box, in the old pixel space) is stale — clear
+      // region (the old calibration box, in the old pixel space) is stale - clear
       // it here so every session-swap path is covered, not just resetDocument
       // (2026-07-22 audit A1).
       setColorTraceRegion(null);
@@ -2984,7 +2984,7 @@ export function Workspace() {
       setProjectNotice(null);
       // ⚑ The heatmap's grid and its cells describe the figure that just went
       // away. A stale matrix left on screen is a measurement of a figure that no
-      // longer exists — the same rule the Geometry card follows, and the reason
+      // longer exists - the same rule the Geometry card follows, and the reason
       // this clearing belongs in the SHARED swap rather than in one caller.
       setHeatmapGridParams(null);
       setHeatmapCells([]);
@@ -3317,7 +3317,7 @@ export function Workspace() {
     },
     [setPending]
   );
-  /** Every measurement's DERIVED display form (checkpoint 82) — the single
+  /** Every measurement's DERIVED display form (checkpoint 82) - the single
    * source the card, the clipboard and the canvas labels all read. Recomputed
    * when the scale or the calibration changes, which is what makes Set-scale
    * retroactive instead of one-way. */
@@ -3489,7 +3489,7 @@ export function Workspace() {
           return;
         }
         case 'select-cell': {
-          // ⚑ `cellIndexAt` is the MODEL's own answer to "which cell is this?" —
+          // ⚑ `cellIndexAt` is the MODEL's own answer to "which cell is this?" -
           // the same function the reader uses, so the square that lights up is
           // the square the value came from, and a click outside the grid selects
           // nothing rather than the nearest thing.
@@ -3500,7 +3500,7 @@ export function Workspace() {
           const hit = cellIndexAt(heatmapShownGrid.xDividers, heatmapShownGrid.yDividers, dx, dy);
           // ⚑ A bare canvas click REPLACES the pick, the way clicking one data
           // point does. Shift-adding from the figure needs the modifier, which
-          // this route does not carry — the table is where a range is built,
+          // this route does not carry - the table is where a range is built,
           // and the figure stays "show me this one".
           if (hit) pickCells([cellKey(hit.col, hit.row)], false);
           else setSelectedCells(new Set());
@@ -3552,7 +3552,7 @@ export function Workspace() {
    * release.
    *
    * ⚑ A CLICK IS STILL A CLICK. Under 3px of travel is not a drag, so it places
-   * the first corner and the walk asks for the second — the gesture is added,
+   * the first corner and the walk asks for the second - the gesture is added,
    * not swapped for the one people already know.
    */
   const handleKeyCornerDrag = useCallback(
@@ -3635,7 +3635,7 @@ export function Workspace() {
     (rect: { x: number; y: number; width: number; height: number }) => {
       // ⚑⚑ ON A MATRIX TYPE THE MARQUEE YIELDS CELLS, NOT POINT INDICES. A
       // heatmap has no data points for a box to catch, so Select's flagship
-      // gesture caught nothing at all — the same hidden-mode defect as the bare
+      // gesture caught nothing at all - the same hidden-mode defect as the bare
       // click, one gesture along. `cellKeysInRect` applies the identical rule
       // this function applies to points, so Select means one thing in this app.
       if (heatmapActive) {
@@ -3747,13 +3747,13 @@ export function Workspace() {
   );
 
 
-  /** The live calibration value boxes, in field order — so Enter can hand on to
+  /** The live calibration value boxes, in field order - so Enter can hand on to
    * the next one. A ref rather than a query: the boxes are rebuilt whenever the
    * step reshapes, and a stale testid lookup would focus a box that is no longer
    * the one being asked for. */
   const valueInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  /** The calibration value being corrected, as raw in-progress text — so typing
+  /** The calibration value being corrected, as raw in-progress text - so typing
    * does not re-run the calibration on every keystroke. Applied on blur/Enter,
    * exactly as `editingCell` does for a data point's value. */
   const [editingCalibValue, setEditingCalibValue] = useState<
@@ -3776,7 +3776,7 @@ export function Workspace() {
       // declare (config.commonOrigin), not this file's to name.
       // ⚑⚑ FOLLOW THE CHAIN, because a type may share more than one pixel. A
       // heatmap shares BOTH corners of its plot box, and the first share
-      // (X start & Y start) completes without a value on a category axis — so a
+      // (X start & Y start) completes without a value on a category axis - so a
       // single pass placed it and stopped, leaving the second share (X end & Y
       // end) never offered. Each turn of this loop PLACES a point, so it cannot
       // spin; it stops as soon as a step needs something typed, or nothing more
@@ -3789,7 +3789,7 @@ export function Workspace() {
           commonOrigin,
           step?.key,
           session.getPlacedPoints(),
-          // ⚑ The step AS THE WALK CURRENTLY SHAPES IT — a heatmap's category
+          // ⚑ The step AS THE WALK CURRENTLY SHAPES IT - a heatmap's category
           // edge takes no typed value, so there is nothing to prefill into it.
           step ?? undefined
         );
@@ -3818,7 +3818,7 @@ export function Workspace() {
       commit();
       // ⚑⚑ A HEATMAP READS ITS BOUNDARIES OFF THE FIGURE, HERE. The design said
       // the assist for a drawn-cell figure is *"DETECT the boundaries and
-      // PROPOSE the grid; the user adjusts"* — and detection sat behind a
+      // PROPOSE the grid; the user adjusts"* - and detection sat behind a
       // fold-out nobody was told about, while an evenly divided lattice was
       // drawn instead. David: *"Why does it not automatically jump towards the
       // detect grid?"* Because nothing made it. Now the calibration that
@@ -3826,7 +3826,7 @@ export function Workspace() {
       //
       // ⚑ It runs AFTER commit so the axes exist to measure against, and it is
       // safe when there is nothing to find: `detectGrid` reports rather than
-      // invents, and a figure with no drawn cells simply gets no grid — which is
+      // invents, and a figure with no drawn cells simply gets no grid - which is
       // the honest answer until the user asks for a lattice.
       if (heatmapActive) queueMicrotask(() => runHeatmapDetect());
     } else {
@@ -3899,14 +3899,14 @@ export function Workspace() {
   /**
    * Apply a corrected calibration value.
    *
-   * ⚑ The model owns the rules — `setCalibrationValues` runs the same guard the
-   * walk does and re-calibrates live — so this only closes the editor and
+   * ⚑ The model owns the rules - `setCalibrationValues` runs the same guard the
+   * walk does and re-calibrates live - so this only closes the editor and
    * commits to history. A REFUSED edit leaves the old value standing, which is
    * why the editor closes either way: the card then shows what the model has.
    */
   // ⚑ A plain function, not a `useCallback`. The React Compiler refuses to
   // memoize this one ("existing memoization could not be preserved") and an
-  // event handler called from a map has nothing to gain from it — a hook that
+  // event handler called from a map has nothing to gain from it - a hook that
   // is not doing its job is worse than no hook, and suppressing the rule would
   // hide the fact that it never was memoized.
   const commitCalibValueEdit = (edit: { key: string; index: number; value: string }) => {
@@ -4081,7 +4081,7 @@ export function Workspace() {
   }, [session, commit]);
 
   /**
-   * "Reset calibration" — which, despite its label, clears the whole document.
+   * "Reset calibration" - which, despite its label, clears the whole document.
    *
    * The blast radius is deliberate (slope measurements and every data value
    * are defined *by* the calibration, so keeping them across a re-calibration
@@ -4089,7 +4089,7 @@ export function Workspace() {
    * unrecoverable** until checkpoint 71: `session.reset()` discards every
    * series and point, `clearMeasurements()` takes the measurements and the
    * Set-scale, and `history.reset()` emptied past *and* future so Ctrl+Z
-   * couldn't bring any of it back — while `markClean()` also disarmed the
+   * couldn't bring any of it back - while `markClean()` also disarmed the
    * unsaved-work guard. A user who traced 200 points, noticed one handle a few
    * pixels off, and clicked the button that says "Reset calibration" lost
    * everything with no dialog and no undo. Verified: 250 points across 2
@@ -4098,7 +4098,7 @@ export function Workspace() {
    * Two changes make it honest, both mirroring what WPD already does
    * (`controllers/axesCalibration.js:526,552-575` confirms twice before
    * dropping an axes):
-   *  - **confirm first**, but only when there is something to lose — resetting
+   *  - **confirm first**, but only when there is something to lose - resetting
    *    a half-placed calibration with no data must stay a free action, or the
    *    dialog becomes noise the user learns to dismiss.
    *  - **commit, don't reset the history**, so Ctrl+Z restores everything. The
@@ -4118,7 +4118,7 @@ export function Workspace() {
     if (
       losesWork &&
       !window.confirm(
-        'Reset calibration will also clear every data point, series and measurement — the values depend on the calibration. This can be undone with Ctrl+Z. Continue?'
+        'Reset calibration will also clear every data point, series and measurement - the values depend on the calibration. This can be undone with Ctrl+Z. Continue?'
       )
     ) {
       return;
@@ -4161,7 +4161,7 @@ export function Workspace() {
 
   const saveProject = useCallback(async () => {
     if (!window.electronAPI) {
-      setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
+      setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
       return;
     }
 
@@ -4258,12 +4258,12 @@ export function Workspace() {
 
   /**
    * Load a calibrated figure into a fresh session and reset the document around
-   * it — the shared core of opening our own project (JSON) and importing a WPD
+   * it - the shared core of opening our own project (JSON) and importing a WPD
    * figure (.tar). Extracted at checkpoint 88 so the two are one path, not a
    * parallel one (the exact smell the tenet audit warns about): they differ only
    * in where the axes/datasets/image come from, not in how they land.
    *
-   * `measurements` is empty for a WPD import — WPD has no measurement concept.
+   * `measurements` is empty for a WPD import - WPD has no measurement concept.
    */
   const loadCalibratedFigure = useCallback(
     (fig: {
@@ -4457,7 +4457,7 @@ export function Workspace() {
    * current one. Stashes the live figure into the array (registering it as
    * figure 1 the first time we split), re-enters the source's page flipper as a
    * clean document, and makes the new (still-uncaptured) figure active. The user
-   * then flips to the page they want and captures — that capture bakes the new
+   * then flips to the page they want and captures - that capture bakes the new
    * figure in place. Only reachable when a source is retained (no ceremony for a
    * plain single image). */
   const getAnotherFigureFromSource = useCallback(async () => {
@@ -4499,7 +4499,7 @@ export function Workspace() {
       // Re-enter the retained doc as a fresh document (loadPdfPageAsImage runs
       // resetForNewImage). The current figure is already stashed, so wiping the
       // live refs is safe. Its image loads async; the new record's imageDataURL is
-      // filled on the next stash — the live session is the fresh one right now.
+      // filled on the next stash - the live session is the fresh one right now.
       await loadPdfPageAsImage(doc, 1, src.name);
       figs.push({
         id: ++figureIdRef.current,
@@ -4625,7 +4625,7 @@ export function Workspace() {
 
 
 
-  // --- Import a foreign digitizer's project archive (.tar) — checkpoint 88 ------
+  // --- Import a foreign digitizer's project archive (.tar) - checkpoint 88 ------
   // The migration route off the old app (tenet 6: interop happens at the file
   // level). The engine was ported at checkpoint 74 (engine/wpdImport.ts) with
   // zero callers; this is the wiring. A `.tar` holds N figures on one image, so
@@ -4712,7 +4712,7 @@ export function Workspace() {
 
   const openProject = useCallback(async () => {
     if (!window.electronAPI) {
-      setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
+      setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
       return;
     }
     if (!confirmDiscardIfDirty()) return;
@@ -4807,7 +4807,7 @@ export function Workspace() {
       try {
         parsed = JSON.parse(new TextDecoder().decode(bytes));
       } catch {
-        setProjectError('Could not open project — not a PlotTracer project (.zip) or valid JSON.');
+        setProjectError('Could not open project - not a PlotTracer project (.zip) or valid JSON.');
         return;
       }
       result = deserializeProject(parsed);
@@ -4848,7 +4848,7 @@ export function Workspace() {
     // save dialog. Binary formats (xlsx/png) never call it.
     async (format: ExportFormat, target: 'file' | 'clipboard' = 'file') => {
       if (!window.electronAPI) {
-        setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
+        setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
         return;
       }
       const exportAxes = session.getAxes();
@@ -4912,7 +4912,7 @@ export function Workspace() {
         const sections = buildExportSections(assembly);
         // XLSX is a binary workbook: build the bytes and save through the same
         // base64 IPC path the .zip project save uses (checkpoint 93), then done.
-        // ⚑ OpenDocument first among the spreadsheet formats — it is the ISO
+        // ⚑ OpenDocument first among the spreadsheet formats - it is the ISO
         // standard (26300), several EU administrations require ODF for public
         // documents, and it costs no dependency: an .ods is a ZIP of three XML
         // parts and this repo already writes ZIPs with fflate for project files.
@@ -4988,7 +4988,7 @@ export function Workspace() {
   // `-annotated` suffix keeps it from overwriting the source image beside it.
   const saveImage = useCallback(async () => {
     if (!window.electronAPI) {
-      setProjectError('electronAPI is not available — this UI must run inside the Electron dev harness (npm run ui:electron).');
+      setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
       return;
     }
     const dataUrl = imageCanvasRef.current?.getCompositePngDataURL();
@@ -5185,7 +5185,7 @@ export function Workspace() {
 
   // Default the By-colour trace region to the calibration box (2026-07-22
   // walkthrough: a whole-image trace grabbed the title, axis lines and tick
-  // labels — same colour as the curve — so the traced curve "crept" outside the
+  // labels - same colour as the curve - so the traced curve "crept" outside the
   // plot). XY only: for polar/ternary the calibration-point bbox is not the plot
   // area, so leave those unrestricted.
   const defaultTraceRegion = useCallback((): FilterRegion | null => {
@@ -5202,7 +5202,7 @@ export function Workspace() {
 
   useEffect(() => {
     if (mode !== 'color-trace') return;
-    // On ENTERING By-colour mode, pre-fill the region with the calibration box —
+    // On ENTERING By-colour mode, pre-fill the region with the calibration box -
     // only when nothing is set yet, so a user-drawn or deliberately cleared
     // region wins. It renders as the existing, adjustable "Restrict to a box".
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -5519,7 +5519,7 @@ export function Workspace() {
   /* eslint-disable react-hooks/exhaustive-deps */
   const dataPoints = useMemo(() => session.getDataPoints(), [session, version]);
   const dataPointRoles = useMemo(() => session.getDataPointRoles(), [session, version]);
-  // Which of the active series' pixels are error CAPS (B4) — the marker layer
+  // Which of the active series' pixels are error CAPS (B4) - the marker layer
   // draws and freezes them differently from the readings they hang off.
   const activeCapRoles = useMemo(
     () => session.getCapPixelRoles(session.getActiveDatasetIndex()),
@@ -5532,8 +5532,8 @@ export function Workspace() {
    * The key's cursor: where the picked cell sits on the colour key, and the
    * strip it slides along.
    *
-   * ⚑ Built from the row's OWN `keyPosition` — the third coordinate the record
-   * now carries — so typing a value moves the marker with no sync code at all.
+   * ⚑ Built from the row's OWN `keyPosition` - the third coordinate the record
+   * now carries - so typing a value moves the marker with no sync code at all.
    * One source of truth; the marker cannot drift from the number beside it.
    *
    * ⚑ Null unless exactly one cell is picked, matching the picked-cell line: a
@@ -5548,7 +5548,7 @@ export function Workspace() {
     const k2 = placedPoints['k2'];
     if (!k1 || !k2) return null;
     // ⚑⚑ THE STRIP, NOT THE CORNERS. `k1`/`k2` are opposite corners, so the line
-    // between them is the key's DIAGONAL — drawing on it tilted the caliper and
+    // between them is the key's DIAGONAL - drawing on it tilted the caliper and
     // let it drift off the bar, and it is not the line `buildColorScale` samples
     // along. `keyCursorStrip` is that same line, and it measures the thickness.
     const strip = keyCursorStrip(k1, k2);
@@ -5557,12 +5557,12 @@ export function Workspace() {
   }, [heatmapActive, selectedCell, heatmapCells, placedPoints]);
 
   /**
-   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS — computed as soon as the key is
+   * WHAT THE COLOUR KEY READS AT ITS TWO ENDS - computed as soon as the key is
    * calibrated, which is the whole point of it.
    *
    * ⚑⚑ THESE NUMBERS ALREADY EXISTED. `heatmapKeyRef` has carried
    * `{ from, to, log }` into every export as the `Colour key` section since
-   * v2.2 — but it is filled in `readCellsFor`, i.e. AFTER the cells are read,
+   * v2.2 - but it is filled in `readCellsFor`, i.e. AFTER the cells are read,
    * which is after the damage. The same two calls a few hundred lines up
    * (`valueAtPosition(scale, 0)` / `(scale, 1)`) run here the moment the four
    * key clicks are down, so the extent is on screen while the user is still
@@ -5573,7 +5573,7 @@ export function Workspace() {
    * geometry over the four key clicks, and it uses the same `valueAtParam` the
    * readings come out of. Sampling the ramp is what a READING needs; the ENDS
    * need only where the labelled ticks sit along the strip and what they say.
-   * Every decision is in `engine/heatmapRun.ts` where a unit test can reach it —
+   * Every decision is in `engine/heatmapRun.ts` where a unit test can reach it -
    * nothing in `ui/` is reachable by anything but an 18-minute Electron run.
    */
   const heatmapKeySpan = useMemo(() => {
@@ -5589,7 +5589,7 @@ export function Workspace() {
   /**
    * The cursor moved: show the ink under it, on the TABLE cell.
    *
-   * ⚑ One pixel read, not a re-sample of the whole strip — the colour a position
+   * ⚑ One pixel read, not a re-sample of the whole strip - the colour a position
    * on the key is worth IS the ink at that position, so there is nothing to
    * compute and nothing that could disagree with the figure.
    */
@@ -5617,7 +5617,7 @@ export function Workspace() {
    * The cursor was dropped: record the position it landed on.
    *
    * ⚑⚑ THE DRAG IS THE PRIMITIVE. The record stores a POSITION on the key, so
-   * this writes it outright — where typing a number has to be converted first.
+   * this writes it outright - where typing a number has to be converted first.
    * It is the same gesture as sliding a data point along its axis, on the axis
    * a heatmap keeps its values on.
    */
@@ -5647,13 +5647,13 @@ export function Workspace() {
   const steps = useMemo(() => session.getSteps(), [session, version]);
 
   /**
-   * WHAT THE CALIBRATION CARD SHOWS — decided in `engine/`, rendered here.
+   * WHAT THE CALIBRATION CARD SHOWS - decided in `engine/`, rendered here.
    *
    * ⚑⚑ THE COMPONENT NO LONGER DECIDES. Which stage you are in, what the folded
    * line says and what ends the current stage all come from
    * `calibrationCardModel`, where 24 unit tests reach them in milliseconds. The
    * same decisions as conditions in this file were invisible to mutation testing
-   * and reachable only by an 18-minute Electron run — which is why three graph
+   * and reachable only by an 18-minute Electron run - which is why three graph
    * types grew three different second stages.
    *
    * ⚑ `secondStageComplete` is the one fact only this component has: whether the
@@ -5701,7 +5701,7 @@ export function Workspace() {
   const hasSlots = useMemo(() => session.hasSlots(), [session, version]);
   const pointGroupNames = useMemo(() => session.getSlotNames(), [session, version]);
   const tupleRows = useMemo(() => session.getTupleRows(), [session, version]);
-  // Declared by the type when its datum is the TUPLE rather than its members — the
+  // Declared by the type when its datum is the TUPLE rather than its members - the
   // pie's slice value, which lives in the difference between its two boundaries.
   const derivedTupleColumn = config.derivedTupleValue ?? null;
   const axesOptions = useMemo(() => session.getOptions(), [session, version]);
@@ -5734,7 +5734,7 @@ export function Workspace() {
   // reachable whenever a paged source is retained (design §8).
   const sourceRetained = sourcePdfBundled;
   const figureNavButtonStyle: React.CSSProperties = {
-    // Top-justified against the card (David) — so on a tall expanded card the
+    // Top-justified against the card (David) - so on a tall expanded card the
     // arrows sit up by its header rather than floating at its vertical middle.
     alignSelf: 'flex-start',
     background: theme.color.background.primary,
@@ -5755,7 +5755,7 @@ export function Workspace() {
   const categoryMarkers = useMemo(() => categoryTickMarkers(categoryOverlay), [categoryOverlay]);
 
   /**
-   * A grab handle on every heatmap divider — ORDINARY CANVAS MARKERS, so they
+   * A grab handle on every heatmap divider - ORDINARY CANVAS MARKERS, so they
    * inherit dragging, hit-testing and the zoom/pan transform from the machinery
    * every other handle already uses. The category ticks took the same route for
    * the same reason.
@@ -5775,14 +5775,14 @@ export function Workspace() {
   }, [heatmapShownGrid, session, version]);
 
   /**
-   * The grid's boundaries as TICK MARKS — the marked axis a bar chart already
+   * The grid's boundaries as TICK MARKS - the marked axis a bar chart already
    * draws, not a row of dots.
    *
    * ⚑⚑ David, twice: *"We still have points and not selectable tick markers
    * that we said that we were going to reuse from bar tick characterisation.
    * We said that we were going to stop inventing new things and REUSE things
    * that we already have."* The old `dividerHandles` produced bare markers 16px
-   * outside the plot and borrowed only the COLOUR from v2.1's category ticks —
+   * outside the plot and borrowed only the COLOUR from v2.1's category ticks -
    * no axis line, no tick marks, a second mechanism for a solved problem.
    *
    * ⚑ THE SELECTED ONE IS STILL DRAWN BIGGER, because the card names a boundary
@@ -5812,11 +5812,11 @@ export function Workspace() {
   // to leave the highlight where the NEXT capture would go, so it pointed at one
   // axis while the selection sat on another.
   //
-  // ⚑ "Picked", not merely "selected" — see pickedPointIndex. Keying this on
+  // ⚑ "Picked", not merely "selected" - see pickedPointIndex. Keying this on
   // activePointIndex alone silently broke the highlight's OTHER job: placing a point
   // selects it, so the ray stopped on the axis just filled instead of moving to the
   // next one to fill, which is the drift-prevention the ray exists for. Caught by an
-  // e2e test that already asserted the walk round the chart — a reminder that a fix
+  // e2e test that already asserted the walk round the chart - a reminder that a fix
   // can be the defect, and that the suite has to run before the commit, not after.
   const calibPreview = useMemo(
     () =>
@@ -6020,7 +6020,7 @@ export function Workspace() {
         : markers,
     [markers, categoryMarkers, heatmapHandles]
   );
-  /** ⚑ ONE GLYPH LAYER, three contributors — a histogram's bins, a bar chart's
+  /** ⚑ ONE GLYPH LAYER, three contributors - a histogram's bins, a bar chart's
    * marked category axis, and a heatmap's grid. The third joined here rather
    * than getting a layer of its own, because it IS the second thing: the same
    * `categoryAxisGlyphs`, fed a different axis. */
@@ -6086,7 +6086,7 @@ export function Workspace() {
         display={fmtValue(value)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
-        title="Click to edit — moves the point on the canvas"
+        title="Click to edit - moves the point on the canvas"
         width={56}
         onStartEdit={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
         onChange={(v) => setEditingCell({ index, axis, value: v })}
@@ -6116,7 +6116,7 @@ export function Workspace() {
       display={fmtValue(value)}
       testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
       testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
-      title="Click to edit — moves the point along its own axis"
+      title="Click to edit - moves the point along its own axis"
       width={64}
       align="right"
       onStartEdit={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
@@ -6161,7 +6161,7 @@ export function Workspace() {
                     {opt.label}
                   </label>
                 ) : opt.kind === 'choice' ? (
-                  /* ⚑⚑ RADIOS, NOT A DROPDOWN — the rule v2.1's category ticks
+                  /* ⚑⚑ RADIOS, NOT A DROPDOWN - the rule v2.1's category ticks
                      already wrote down: *"both readings have to be visible
                      without a click, because the user is being asked which one
                      their figure prints."* A `<select>` hides the alternative
@@ -6171,14 +6171,14 @@ export function Workspace() {
 
                      ⚑ NO "three or more falls back to a select" BRANCH. Every
                      `choice` in the config table has exactly two options, so
-                     that branch could not fire — and a guard that cannot fire is
+                     that branch could not fire - and a guard that cannot fire is
                      the shape this codebase has been bitten by five times. When
                      a third option first appears, it can be decided with a real
                      case in front of us.
 
                      ⚑ The `name` scopes exclusivity to this option, which is
                      what keeps X and Y independent: an axis is Values OR
-                     Categories, but BOTH axes may be Categories — that is the
+                     Categories, but BOTH axes may be Categories - that is the
                      commonest heatmap there is. */
                   <span key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <span>{opt.label}</span>
@@ -6187,7 +6187,7 @@ export function Workspace() {
                         "each type offers its own options" inventory finds them.
                         The individual radios take their own prefix rather than
                         `calib-option-<key>-<value>`, which would make one option
-                        answer that inventory two or three times — and the values
+                        answer that inventory two or three times - and the values
                         themselves contain hyphens (`bottom-left`), so the key
                         could not be recovered by trimming. */}
                     <fieldset
@@ -6235,13 +6235,13 @@ export function Workspace() {
     title: string,
     width: number,
     /** What an UNNAMED one reads as at rest, where a dash would leave the row
-     * unidentifiable — see `EditableNameProps.emptyDisplay`. */
+     * unidentifiable - see `EditableNameProps.emptyDisplay`. */
     emptyDisplay?: string,
     /**
      * Which RENDERED COPY this is, when one thing appears in more than one place.
      *
      * ⚑⚑ THE LONG FORM REPEATS A BAND'S NAME ONCE PER CELL, so keying the editor
-     * on the band alone mounted one `autoFocus` input per copy — each blurring
+     * on the band alone mounted one `autoFocus` input per copy - each blurring
      * the last, and `onBlur` closes the editor. The name became impossible to
      * open the moment a band spanned more than one row, which is every heatmap
      * now that a MEASURED axis has bands too (case A1). Identity is the copy;
@@ -6295,7 +6295,7 @@ export function Workspace() {
    * Rename one heatmap CATEGORY, from the cell the user clicked.
    *
    * ⚑⚑ THE TABLE WORKS IN CELL INDICES AND THE BOXES WORK IN READING ORDER, so
-   * the edit is applied in cell space and converted back — through the SAME
+   * the edit is applied in cell space and converted back - through the SAME
    * `labelsForCells`, which is its own inverse. Writing the cell index straight
    * into the typed text would put the name on the mirror-image band on any
    * ordinary upward-y figure, which is the exact defect the audit found this
@@ -6318,8 +6318,8 @@ export function Workspace() {
 
   /**
    * ⚑ AN UNNAMED BAND STILL HAS TO BE IDENTIFIABLE. The name column is the only
-   * thing distinguishing one categorical row from another, so a bare dash — the
-   * right answer where a bar's value sits beside it — turned five rows into five
+   * thing distinguishing one categorical row from another, so a bare dash - the
+   * right answer where a bar's value sits beside it - turned five rows into five
    * dashes. It falls back to the ORDINAL CENTRE, which is what the record holds
    * and what the export writes, so the table agrees with the file before anyone
    * types a thing.
@@ -6331,7 +6331,7 @@ export function Workspace() {
       `heatmap-x-name-${bandIndex}`, `Column ${bandIndex + 1}`,
       'Click to name this column, as the figure prints it', 90,
       // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
-      // `0.4991` — its band-centre ordinal to four decimals — which is
+      // `0.4991` - its band-centre ordinal to four decimals - which is
       // indistinguishable from a MEASURED coordinate, on the one type where
       // that distinction has no other symptom. David read it as the value axis
       // having lost its numbers. The header already says `C1`, so the decimal
@@ -6348,7 +6348,7 @@ export function Workspace() {
       `heatmap-y-name-${bandIndex}`, `Row ${bandIndex + 1}`,
       'Click to name this row, as the figure prints it', 90,
       // ⚑⚑ NO ORDINAL AS THE EMPTY DISPLAY (E4). An unnamed band used to read
-      // `0.4991` — its band-centre ordinal to four decimals — which is
+      // `0.4991` - its band-centre ordinal to four decimals - which is
       // indistinguishable from a MEASURED coordinate, on the one type where
       // that distinction has no other symptom. David read it as the value axis
       // having lost its numbers. The header already says `R1`, so the decimal
@@ -6359,13 +6359,13 @@ export function Workspace() {
     );
 
   /**
-   * One heatmap cell's VALUE — click to edit, exactly as the XY and spider
+   * One heatmap cell's VALUE - click to edit, exactly as the XY and spider
    * tables' values have been since v1.3.
    *
    * ⚑⚑ THE TYPED TWIN OF A MEASUREMENT, and the same component that serves the
    * other two: a person who can read a hatched cell we can only average is
    * taking a reading, and it goes into the record the way ours does. The dashed
-   * underline is the whole affordance — nothing has to be known in advance for
+   * underline is the whole affordance - nothing has to be known in advance for
    * it to be found.
    *
    * ⚑ The seed is the number AS SHOWN, without its brackets: a user reopening
@@ -6382,7 +6382,7 @@ export function Workspace() {
         display={display}
         testIdEdit={`heatmap-value-edit-${cell.col}-${cell.row}`}
         testIdValue={`heatmap-value-${cell.col}-${cell.row}`}
-        title="Click to edit — moves this cell along the colour key"
+        title="Click to edit - moves this cell along the colour key"
         width={64}
         align="right"
         onStartEdit={() =>
@@ -6412,7 +6412,7 @@ export function Workspace() {
     heatmapHasGrid: heatmapShownGrid !== null,
     heatmapHasCells: heatmapCells.length > 0,
     // ⚑ The caliper is drawn only for a SINGLE picked cell, and the tip names it
-    // only when it is there to be dragged — same source of truth as the marker.
+    // only when it is there to be dragged - same source of truth as the marker.
     heatmapCellPicked: selectedCell !== null,
     isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
     mode,
@@ -6441,7 +6441,7 @@ export function Workspace() {
     activePointIsAnchor: activePointIndex != null && dataPointRoles[activePointIndex] === 'anchor',
     // Boolean(), not `!== null`: the branch this feeds was written as
     // `if (activeHandleKey)`, and the two answers differ on the empty string.
-    // No step key is empty, so nothing changes today — but the translation
+    // No step key is empty, so nothing changes today - but the translation
     // should not be the thing you have to reason about to know that.
     hasActiveHandle: Boolean(activeHandleKey),
     hasSlots,
@@ -6539,7 +6539,7 @@ export function Workspace() {
     <KeyTipsContext.Provider value={keyTips}>
     <AppShell style={{ ['--sidebar-width' as string]: `${sidebarWidth}px` } as CSSProperties}>
       <TopBar>
-        {/* Clear all points — top-left, matching Ketcher's "new/clear document"
+        {/* Clear all points - top-left, matching Ketcher's "new/clear document"
             position (David 2026-07-22). Icon-only; still confirms before wiping
             the series. The per-point Eraser lives on the rail. */}
         <TopBarGroup>
@@ -6561,7 +6561,7 @@ export function Workspace() {
           <TopBarButton
             type="button"
             data-testid="open-image-button"
-            title="Open an image or PDF to digitize — PNG, JPG, GIF, BMP, WEBP, SVG, PDF (or drag-and-drop / paste one)"
+            title="Open an image or PDF to digitize - PNG, JPG, GIF, BMP, WEBP, SVG, PDF (or drag-and-drop / paste one)"
             onClick={() => imageCanvasRef.current?.openImage()}
           >
             <ImageIcon /> Open Image
@@ -6598,7 +6598,7 @@ export function Workspace() {
           <TopBarButton
             type="button"
             data-testid="save-project"
-            title="Save the whole project — image, calibration and points — as a PlotTracer project file you can reopen later"
+            title="Save the whole project - image, calibration and points - as a PlotTracer project file you can reopen later"
             onClick={saveProject}
           >
             <SaveIcon /> Save Project
@@ -6721,7 +6721,7 @@ export function Workspace() {
             gap: 4,
           }}
         >
-          {/* Figure jumper (checkpoint 110, design §8) — ◀ ▶ flanking the
+          {/* Figure jumper (checkpoint 110, design §8) - ◀ ▶ flanking the
               calibration card (top-justified), with the "Figure X of Y" counter
               BELOW the card (David). Shown only at ≥2 figures (§0). Jumping to a
               figure lands your eye on its calibration state. */}
@@ -6814,7 +6814,7 @@ export function Workspace() {
               {axes ? 'Calibrated ✓' : `${Object.keys(placedPoints).length}/${steps.length} set`}
             </span>
             {/* ⚑⚑ THE SECOND STAGE'S OWN STATUS, on the same line. David's
-                design: a finished card is ONE row — "Calibration · Calibrated ✓
+                design: a finished card is ONE row - "Calibration · Calibrated ✓
                 · 20 cells read ✓ · Reset calibration". It appears only once the
                 stage has actually produced a reading, so the line never claims
                 work that has not happened. */}
@@ -6832,8 +6832,8 @@ export function Workspace() {
             )}
             {!isCalibrating && !axes && (
               // ⛑ THE SAME TEAL AS THE OTHER TWO. This ends the calibration
-              // walk and auto-folds its card (checkpoint 86) — the identical
-              // role Done and Read cells play — and it was the plainest control
+              // walk and auto-folds its card (checkpoint 86) - the identical
+              // role Done and Read cells play - and it was the plainest control
               // in the panel while being the one every extracted value depends
               // on. David spotted the inconsistency from the other end.
               <button
@@ -6884,7 +6884,7 @@ export function Workspace() {
                       {step.label}
                     </span>
                     {step.valueFields.length === 0 ? (
-                      <span style={{ color: theme.color.text.legend }}>{placed ? 'placed' : active ? 'click image' : '—'}</span>
+                      <span style={{ color: theme.color.text.legend }}>{placed ? 'placed' : active ? 'click image' : '-'}</span>
                     ) : editing ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                         {pendingValueFields.map((vf, vi) => (
@@ -6900,9 +6900,9 @@ export function Workspace() {
                                the last one. David: *"when I just pressed enter, I
                                want it to jump to the box... I can press tab (do
                                not remove that capability) but it is not as
-                               intuitive."* A step with two fields — a heatmap
+                               intuitive."* A step with two fields - a heatmap
                                axis's coordinate and its band count, a polar
-                               point's r and θ — used to swallow Enter entirely:
+                               point's r and θ - used to swallow Enter entirely:
                                `confirmDataValue` refuses while a required field
                                is blank, so the key did nothing at all and the
                                only way on was a reach for Tab or the mouse.
@@ -6910,7 +6910,7 @@ export function Workspace() {
                                does not replace one.
                                ⚑ The text is SELECTED on arrival, so typing
                                overwrites a prefilled value rather than appending
-                               to it — a shared corner arrives with its number
+                               to it - a shared corner arrives with its number
                                already there. */
                             onKeyDown={(e) => {
                               if (e.key !== 'Enter') return;
@@ -6932,14 +6932,14 @@ export function Workspace() {
                     ) : placed ? (
                       /* ⚑⚑ EDITABLE WHERE IT IS SHOWN. This was plain text, so a
                          mistyped calibration number could only be corrected by
-                         Reset calibration — discarding the whole walk. David,
+                         Reset calibration - discarding the whole walk. David,
                          staring at a log colour key that refused his 0 and told
                          him to enter a positive value: *"And I don't see how I
                          can edit the points at this point during the calibration
                          even?"* There was no way; the app asked for something it
                          did not let him do.
                          ⚑ Every other value in the app is editable where it is
-                         displayed — a data point's value in the table, a
+                         displayed - a data point's value in the table, a
                          category's name. The calibration value, which everything
                          else is measured against, was the exception. */
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -6953,7 +6953,7 @@ export function Workspace() {
                             display={v}
                             testIdEdit={`calib-edit-${step.key}-${vi}`}
                             testIdValue={`calib-value-${step.key}-${vi}`}
-                            title="Click to edit — re-reads every value through the corrected calibration"
+                            title="Click to edit - re-reads every value through the corrected calibration"
                             width={52}
                             onStartEdit={() =>
                               setEditingCalibValue({ key: step.key, index: vi, value: v })
@@ -6967,7 +6967,7 @@ export function Workspace() {
                         ))}
                       </span>
                     ) : (
-                      <span style={{ color: theme.color.text.legend }}>{active ? 'click image' : '—'}</span>
+                      <span style={{ color: theme.color.text.legend }}>{active ? 'click image' : '-'}</span>
                     )}
                   </div>
                 );
@@ -7014,20 +7014,20 @@ export function Workspace() {
               </button>
               {/* ⚑ The type's OWN noun, not "axes". Written when spider was the only
                   variable-length calibration, so the wording was simply spider's: a
-                  pie's outline read "3 axes — add one for every axis the chart draws",
+                  pie's outline read "3 axes - add one for every axis the chart draws",
                   which is wrong twice over. The config has always declared the noun
                   (`repeatingStep.noun`); the two buttons either side of this already
                   use it. Caught by the pie e2e. */}
               <span data-testid="repeat-count" style={{ color: theme.color.text.legend }}>
                 {session.getRepeatCount()}{' '}
-                {session.getRepeatCount() === 1 ? repeatingStep.noun : repeatingStep.nounPlural} —{' '}
+                {session.getRepeatCount() === 1 ? repeatingStep.noun : repeatingStep.nounPlural} -{' '}
                 {repeatingStep.hint}
               </span>
             </div>
           )}
           {/* ⚑⚑ NOT OFFERED WHERE IT IS ALWAYS ON (B12). A heatmap's two axes
               span exactly one rectangle, so three of its corners carry the whole
-              transform — three points are the AFFINE MINIMUM. The checkbox
+              transform - three points are the AFFINE MINIMUM. The checkbox
               existed to fold a fourth click away; where three is the only
               sensible walk, unticking it can only ask for a worse one, and an
               option nobody should choose is an option that should not be there.
@@ -7051,27 +7051,27 @@ export function Workspace() {
                 const labelOf = (key: string) => steps.find((st) => st.key === key)?.label ?? key;
                 const shared = pairs.map((p) => `${labelOf(p.from)} & ${labelOf(p.to)}`).join(', ');
                 return pairs.length > 1
-                  ? `Shared corners — ${shared} are the same points`
-                  : `Common origin — ${shared} are the same point`;
+                  ? `Shared corners - ${shared} are the same points`
+                  : `Common origin - ${shared} are the same point`;
               })()}
             </label>
           )}
           {/* ⚑⚑ THE GRID IS A DATA DEFINITION, SO IT LIVES ON THE CALIBRATION
-              CARD — a fold-down beside the bar chart's category ticks, not a
+              CARD - a fold-down beside the bar chart's category ticks, not a
               card of its own in the sidebar (David: "it is part of setting up
               the data definition / calibration. NOT outputs"). The cells it
               produces go to the Cells panel, where every other type's output
               already is; what stays here is only what DESCRIBES the figure. */}
           {/* ⚑ VISIBLE FROM THE START, closed, with a summary saying what it
-              needs — so the grid is discoverable before it exists rather than
+              needs - so the grid is discoverable before it exists rather than
               appearing out of nowhere once the last value is typed.
               ⚠️ It was briefly gated on "calibrated" because an e2e failed with
               the open fold-down covering the pixels the walk asks you to click.
               That was a FIXED-WINDOW-SIZE artefact, not a defect: a user with a
               figure to see makes the window bigger, and that is their call. A
               fixed display size is authoritative about CONTENT and only
-              suggestive about LAYOUT — the harness is not the judge of this. */}
-          {/* ⚑⚑ ONLY WHILE THE SECOND STAGE IS SHOWING — the model decides, not
+              suggestive about LAYOUT - the harness is not the judge of this. */}
+          {/* ⚑⚑ ONLY WHILE THE SECOND STAGE IS SHOWING - the model decides, not
               `heatmapActive`. A finished card stops offering "Read cells" for
               cells it has already read; unfolding a finished card brings the
               whole stage back, because at that point the card is a record
@@ -7305,7 +7305,7 @@ export function Workspace() {
                         <button
                           type="button"
                           data-testid="category-replace-axis"
-                          title="Re-place axis — click both ends of the category axis again. Any ticks you moved are lost."
+                          title="Re-place axis - click both ends of the category axis again. Any ticks you moved are lost."
                           onClick={() => {
                             // ⚑ BOTH ends, which is what the label says. Reusing
                             // P1 here made the start impossible to correct: P1 is
@@ -7324,7 +7324,7 @@ export function Workspace() {
                         <button
                           type="button"
                           data-testid="category-remove-ticks"
-                          title="Remove ticks — drop the marks and the empty categories they created. Named categories and captured bars are kept."
+                          title="Remove ticks - drop the marks and the empty categories they created. Named categories and captured bars are kept."
                           onClick={() => {
                             // Takes back the empty categories the declaration
                             // created; keeps any that were named or have a bar.
@@ -7345,14 +7345,14 @@ export function Workspace() {
               )}
             </div>
           )}
-          {/* Per-axes calibration options (checkpoint 68) — log scales,
+          {/* Per-axes calibration options (checkpoint 68) - log scales,
               orientations, units. WPD has always offered these; we hardcoded
               them to literals across 6 of 7 axes types, which the parity
               re-audit ranked its biggest finding (log axes, table stakes for
               scientific figures, were unreachable).
 
               ⚑ POST-CALIBRATION GATE REMOVED (checkpoint 86). This block used to
-              carry `!axes`, so once you calibrated the options VANISHED — notice
+              carry `!axes`, so once you calibrated the options VANISHED - notice
               Y is log after tracing 200 points and the only way to say so was a
               destructive Reset that discards every point (a tenet-1 violation:
               the workflow trapped you). The engine always handled it
@@ -7360,7 +7360,7 @@ export function Workspace() {
               the UI hid the control. Now it renders whenever the card is
               expanded, and the card AUTO-FOLDS on calibrate (see runCalibration),
               so the footprint stays a thin chip by default and the tall state is
-              opt-in — which is what keeps this from bringing back ckpt 68's
+              opt-in - which is what keeps this from bringing back ckpt 68's
               real, e2e-caught problem: options row makes the card taller, taller
               card covers where you click on the figure. Same reasoning applies
               to Common origin above, which stays `!axes` deliberately: it is
@@ -7377,7 +7377,7 @@ export function Workspace() {
                 // three axes and each has the same kind of properties, so the
                 // card says so: the row IS the axis, and everything on it
                 // belongs to that axis. Types that declare no `group` keep the
-                // single flowing row they have today — nothing else moves.
+                // single flowing row they have today - nothing else moves.
                 //
                 // ⚑ Rendering is unchanged per control; only the arrangement is
                 // read from the declaration. The grouping is a fact about the
@@ -7437,15 +7437,15 @@ export function Workspace() {
                   to know that to HAVE to open the 'lower part' of the calibration
                   card to be able to read the cells, even though everything looks
                   ready. That is a UI design fault."* The screen said `Calibrated
-                  ✓`, `▶ Grid — 5 × 5 cells` and detection's own "5 columns,
-                  matching the 4 boundaries found" — everything reads READY — and
+                  ✓`, `▶ Grid - 5 × 5 cells` and detection's own "5 columns,
+                  matching the 4 boundaries found" - everything reads READY - and
                   the one action that finishes the job was inside a closed
                   fold-out inside a closed card.
                   ⚠️ AND THE "ENDING" FIX MADE IT WORSE: Read cells FOLDS the card
                   behind it, so the second read was buried too. Fixing "the flow
                   has no ending" created "the flow has no visible NEXT STEP", and
                   the fix has to keep both properties at once.
-                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES — which
+                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES - which
                   is this feature's own established answer to an undiscoverable
                   gesture, not a new one. `Reset to key` is already offered both
                   on the picked-cell line and in the right-click menu, in the same
@@ -7453,7 +7453,7 @@ export function Workspace() {
                   one label, one style; the fold-out keeps its ending and the
                   header line carries the next step. */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* ⚑⚑ NO SECOND TRIANGLE. The card has ONE fold — David's design: the
+              {/* ⚑⚑ NO SECOND TRIANGLE. The card has ONE fold - David's design: the
                   whole two-stage process folds to one row, and unfolding it shows
                   both stages at once. A nested fold-out meant the user had to open
                   two things to see what one card had recorded, and it is how the
@@ -7464,19 +7464,19 @@ export function Workspace() {
               >
                 {heatmapGridSummary(heatmapShownGrid)}
               </span>
-              {/* ⚑ Only once there IS a grid to read — the same gate the button
+              {/* ⚑ Only once there IS a grid to read - the same gate the button
                   inside the fold-out uses, so the two cannot get out of step. */}
               {/* ⚠️ DISABLED, NEVER ABSENT, when there is no grid to read yet.
                   Gating this on `heatmapShownGrid` removed the button entirely
-                  before detection had found anything — which is the very defect
+                  before detection had found anything - which is the very defect
                   this button exists to fix: the flow lost its visible next step
                   again, one state earlier. A greyed control says "this is what
                   comes next"; a missing one says nothing at all.
                   ⚑ Same semantics the button inside the fold-out had (it was
-                  always rendered, `disabled={!canRead}`) — moving a control must
+                  always rendered, `disabled={!canRead}`) - moving a control must
                   not quietly change when it exists. */}
                             {/* ⚑⚑ THE MODEL DECIDES WHETHER THERE IS ANYTHING TO END. A card
-                  whose cells are already read offers no "Read cells" — the
+                  whose cells are already read offers no "Read cells" - the
                   ending belongs to the stage you are IN, and on a finished card
                   you are past it. Wired to `cardModel.ending` rather than to a
                   condition of its own, so the button and the model that governs
@@ -7484,7 +7484,7 @@ export function Workspace() {
               {/* ⚑⚑ ONLY IN THE SECOND STAGE. Gating on `ending !== null` was
                   wrong and the screenshot said so: during stage 1 the ending is
                   "Calibrate", so this button borrowed stage 1's word AND kept
-                  stage 2's handler — a control labelled for one step that
+                  stage 2's handler - a control labelled for one step that
                   performed another. The stage is the gate; the ending is only
                   its label. */}
               {cardModel.ending !== null && cardModel.stage !== 'calibrating' && (
@@ -7495,8 +7495,8 @@ export function Workspace() {
                   disabled={!heatmapShownGrid}
                   title={
                     heatmapShownGrid
-                      ? 'Read every cell through the colour key — the cells appear in the Cells panel'
-                      : 'Detect the grid first, or overlay an even one — there are no cells to read yet'
+                      ? 'Read every cell through the colour key - the cells appear in the Cells panel'
+                      : 'Detect the grid first, or overlay an even one - there are no cells to read yet'
                   }
                   style={endsCardButton(!!heatmapShownGrid)}
                 >
@@ -7504,7 +7504,7 @@ export function Workspace() {
                 </button>
               )}
               </div>
-              {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID — outside the
+              {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID - outside the
                   fold-out, because it is the answer to "did you measure this or
                   make it up?" and that question is live the moment a grid
                   appears. It sat INSIDE the fold-out, so a detected grid and an
@@ -7519,14 +7519,14 @@ export function Workspace() {
                   {heatmapDetectMessage}
                 </span>
               )}
-              {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID — David's rule 4: *"should the
+              {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID - David's rule 4: *"should the
                   axis underneath it change so drastically that a new grid
                   detection needs to take place, then we should warn the user of
                   that, and ask for a new grid detection to take place, and not
                   make abstract models around it."*
                   ⚑ It states the FACT (the axes moved), the CONSEQUENCE (the
                   grid came with them, which is what a parametric store does) and
-                  the ACTION — and deliberately does NOT claim to know whether
+                  the ACTION - and deliberately does NOT claim to know whether
                   the grid still lines up. That judgement is the abstract model,
                   and only the person looking at the figure can make it.
                   ⚑ Outside the fold-out, beside the detect message, for the same
@@ -7543,7 +7543,7 @@ export function Workspace() {
               )}
               {/* ⚑⚑ THE STAGE'S CONTROLS follow the STAGE; the row above only
                   NAMES it. While you are still calibrating the grid is named and
-                  disabled — "this is what comes next" — and its controls wait.
+                  disabled - "this is what comes next" - and its controls wait.
                   Removing the name entirely is the defect this card already
                   fixed once: *"the flow lost its visible next step again."* */}
               {cardModel.showsSecondStage && (
@@ -7831,7 +7831,7 @@ export function Workspace() {
               <IconButton
                 testId="mode-select"
                 icon={<ActiveIcon />}
-                label={`Select — ${active.label}: ${active.hint}. Click for more modes; Del removes, arrows nudge.`}
+                label={`Select - ${active.label}: ${active.hint}. Click for more modes; Del removes, arrows nudge.`}
                 shortcut="5"
                 pressed={mode === 'select'}
                 disabled={!axes}
@@ -7871,7 +7871,7 @@ export function Workspace() {
           <IconButton
             testId="mode-eraser"
             icon={<EraseIcon />}
-            label="Erase a point — click a point to remove it"
+            label="Erase a point - click a point to remove it"
             pressed={mode === 'eraser'}
             disabled={dataPoints.length === 0}
             disabledReason="Add data points first"
@@ -7929,7 +7929,7 @@ export function Workspace() {
                     type="button"
                     data-testid={`select-mode-${id}`}
                     aria-pressed={on}
-                    title={`${label} — ${hint}`}
+                    title={`${label} - ${hint}`}
                     onClick={() => {
                       setSelectSubMode(id);
                       setSelectFoldoutOpen(false);
@@ -8240,12 +8240,12 @@ export function Workspace() {
               Delete measurement
             </MenuItem>
           )}
-          {/* ⚑⚑ B16 — WHICH INSTRUMENT READ THIS CELL. All three sources are
+          {/* ⚑⚑ B16 - WHICH INSTRUMENT READ THIS CELL. All three sources are
               MEASUREMENTS and they fail in opposite ways, so this is a choice of
               instrument, not a declared-versus-measured flag. Two entries today;
               OCR lands as a THIRD one in v2.3 rather than as a retrofit of some
               other mechanism.
-              ⚑ The menu CHANGES the source — the cell already SHOWS it, tinted
+              ⚑ The menu CHANGES the source - the cell already SHOWS it, tinted
               with the colour it was read from or bracketed where a person read
               it, so nothing here has to be discovered to know what is going on. */}
           {ctxMenu?.kind === 'heatmap-cell' && [
@@ -8269,8 +8269,8 @@ export function Workspace() {
                 const cell = heatmapCells.find(
                   (c) => c.col === ctxMenu.col && c.row === ctxMenu.row
                 );
-                // ⚑ SET, not `pickCells`. A plain pick TOGGLES — clicking the
-                // one cell already picked clears it — which is right for a click
+                // ⚑ SET, not `pickCells`. A plain pick TOGGLES - clicking the
+                // one cell already picked clears it - which is right for a click
                 // on the table and wrong here: the menu names this cell, so
                 // choosing an entry from it can only ever mean "this one".
                 setSelectedCells(new Set([cellKey(ctxMenu.col, ctxMenu.row)]));
@@ -8348,10 +8348,10 @@ export function Workspace() {
             }}
           >
             {eyedropper === 'grid'
-              ? 'Pipette armed — click a gridline on the image to sample its colour'
+              ? 'Pipette armed - click a gridline on the image to sample its colour'
               : eyedropper === 'trace'
-              ? 'Pipette armed — click the curve on the image to sample the colour to trace'
-              : 'Pipette armed — click the series’ curve on the image to take its colour'}
+              ? 'Pipette armed - click the curve on the image to sample the colour to trace'
+              : 'Pipette armed - click the series’ curve on the image to take its colour'}
             <button
               type="button"
               data-testid="eyedropper-cancel"
@@ -8443,7 +8443,7 @@ export function Workspace() {
               "Calibrated ✓" status and the bottom tips bar already say it. */}
           {hasSlots && (
             <p data-testid="slot-status">
-              {/* ⚑ v2.0, 2026-07-30: the visible "Next: {slot} — {tuple} (N of M
+              {/* ⚑ v2.0, 2026-07-30: the visible "Next: {slot} - {tuple} (N of M
                   filled)" sentence that used to live here (a v1.6 split from the
                   tips bar, on the theory that it was STATE rather than an
                   instruction) is GONE -- David, seeing "Slice0"/"Slice1" on Pie
@@ -8467,7 +8467,7 @@ export function Workspace() {
               <span data-testid="calib-preview-segments" style={{ display: 'none' }}>
                 {calibPreview.segments.length}
               </span>
-              {/* Which ray is drawn as the live one — the axis the cursor fills. */}
+              {/* Which ray is drawn as the live one - the axis the cursor fills. */}
               <span data-testid="calib-preview-emphasis" style={{ display: 'none' }}>
                 {calibPreview.segments.findIndex((s) => s.emphasis)}
               </span>
@@ -8488,7 +8488,7 @@ export function Workspace() {
                     same precedent as box-plot-glyph-count. >0 for a dense trace, 0
                     for a sparse/scatter series. */}
                 {/* ⚑ The canvas outline is Konva and not DOM-inspectable, so the
-                    picked cell is mirrored here for e2e — the same precedent as
+                    picked cell is mirrored here for e2e - the same precedent as
                     series-line-runs and box-plot-glyph-count beside it. */}
                 <span data-testid="heatmap-selected-cell" style={{ display: 'none' }}>
                   {selectedCell ? `${selectedCell.col},${selectedCell.row}` : ''}
@@ -8496,7 +8496,7 @@ export function Workspace() {
                 {/* ⚑ How MANY are picked, which the single-cell readout above
                     cannot say: "which cell?" has no answer for a range. */}
                 {/* ⚑ The key's cursor is Konva, so nothing else can assert it
-                    exists or where it sits — the same precedent as
+                    exists or where it sits - the same precedent as
                     series-line-runs and calib-preview-segments beside it. Its
                     POSITION is what a test needs, because the handle sits
                     wherever the picked cell's own reading puts it. */}
@@ -8522,7 +8522,7 @@ export function Workspace() {
                   <button
                     type="button"
                     data-testid="sort-nn"
-                    title="Reorder points into a continuous path (nearest-neighbour) — for scattered or out-of-order points"
+                    title="Reorder points into a continuous path (nearest-neighbour) - for scattered or out-of-order points"
                     onClick={sortNearestNeighbour}
                     style={{ fontSize: theme.font.size.small, padding: '1px 8px', cursor: 'pointer' }}
                   >
@@ -8536,7 +8536,7 @@ export function Workspace() {
                   honours it, the tuple/bin/error-bar tables do not. */}
               {/* ⚑ Tuple shapes get the toggle too (round-2 audit). Hidden for
                   them, a grouped Bar chart exported one series to every format
-                  with nothing on screen offering the rest — while the v2.0
+                  with nothing on screen offering the rest - while the v2.0
                   shared table showed them all. Bins stay single-series: a
                   histogram has one. */}
               {(session.getExportShape() === 'flat' || session.getExportShape() === 'tuples') && (
@@ -8576,13 +8576,13 @@ export function Workspace() {
             {/* ⚑⚑ THE COUNT LIVES WITH THE RECORD, not with the card that made
                 it. Read cells now FOLDS the Grid card, so a summary rendered
                 inside it would be filed away in a closed fold-out at the exact
-                moment it becomes true — and "20 cells read; 3 need a look" is
+                moment it becomes true - and "20 cells read; 3 need a look" is
                 the one line that says whether to trust any of these numbers. It
                 is a statement about the OUTPUT, so it belongs where the output
                 is: the same input/output split the rail redesign settled and
                 this feature has now honoured three times.
                 ⚑ The ERROR stays on the card, because a refusal must sit beside
-                the button that produced it — and the card does not fold when
+                the button that produced it - and the card does not fold when
                 the read fails. */}
             {heatmapSummary && (
               <p
@@ -8715,12 +8715,12 @@ export function Workspace() {
               figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
             </div>
           )}
-          {/* Wrong-axis notice (v1.4, Spider) — shown as the click happens, and
+          {/* Wrong-axis notice (v1.4, Spider) - shown as the click happens, and
               deliberately NOT stored.
 
               ⚑ It has to be captured at click time because the point is SNAPPED
               onto its axis: afterwards the stored pixel is on its ray and there is
-              no "off" left to measure. That snap is the right trade — once the dot
+              no "off" left to measure. That snap is the right trade - once the dot
               visibly sits on the axis the user stops aiming perpendicular-accurately,
               correctly, so a stored perpendicular offset would look like an error
               signal while actually recording that the app told them not to care.
@@ -8734,7 +8734,7 @@ export function Workspace() {
               style={{ padding: '4px 2px 0', color: theme.color.error, fontSize: 12 }}
             >
               That click was {Math.round(captureNotice.offRayPx)} px off the{' '}
-              {captureNotice.capturedOnLabel} axis and nearer {captureNotice.nearestLabel} — it was
+              {captureNotice.capturedOnLabel} axis and nearer {captureNotice.nearestLabel} - it was
               recorded on {captureNotice.capturedOnLabel}, the axis the cursor was filling. Undo if
               you meant {captureNotice.nearestLabel}.
             </div>
@@ -8813,7 +8813,7 @@ export function Workspace() {
             gets a clear warning here in the bottom row -- recompute or clear it. */}
         {geometryState && geometryError && (
           <span data-testid="geometry-stale-callout" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 12, color: theme.color.error, flex: '0 0 auto', whiteSpace: 'nowrap' }}>
-            ⚠ {activeInfo?.name ?? 'Series'} · geometry can’t recompute — {geometryError}
+            ⚠ {activeInfo?.name ?? 'Series'} · geometry can’t recompute - {geometryError}
           </span>
         )}
         {/* Capture figure moved to the "Capture figure first" prompt IN the
@@ -8945,7 +8945,7 @@ export function Workspace() {
           >
             <strong style={{ fontSize: theme.font.size.regular, fontWeight: 700 }}>Choose a figure to import</strong>
             <p style={{ fontSize: theme.font.size.small, color: theme.color.text.legend, margin: '6px 0 12px' }}>
-              This project holds {wpdFigures.length} calibrated figures on one image. Import one — you
+              This project holds {wpdFigures.length} calibrated figures on one image. Import one - you
               can open the project again to import another.
             </p>
             {wpdFigures.map((fig) => {

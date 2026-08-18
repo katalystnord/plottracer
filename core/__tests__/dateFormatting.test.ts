@@ -6,15 +6,15 @@ import { parse, formatDateNumber, getFormatString } from '../dateConversion.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `core/dateConversion.ts` is a faithful port of
  * wpd-core's `core/dateConverter.js`, and mutation testing put it at 45.4% with
- * **151 surviving mutants** — the worst survivor count in `core/`. The reason is
+ * **151 surviving mutants** - the worst survivor count in `core/`. The reason is
  * visible in our own suite: every case in `dateConversion.test.ts` exercises
  * `parse()` (the number-vs-string guard and calendar validity), and NOTHING
  * exercises `formatDateNumber` or `getFormatString`. Those two are token
- * substitution over yyyy/mm/mmm/mmmm/dd/hh/ii/ss/frac — many branches, no
+ * substitution over yyyy/mm/mmm/mmmm/dd/hh/ii/ss/frac - many branches, no
  * assertions. We ported the maths and left its verification upstream.
  *
  * The cases below are ADAPTED FROM WebPlotDigitizer's own `tests/date_tests.js`
- * (Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0 — the same licence as this
+ * (Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0 - the same licence as this
  * project, which is what makes porting them legitimate; contrast Engauge, whose
  * GPL-2.0 forces clean-room). Their API and ours match exactly: `parse`,
  * `formatDateNumber(n, fmt)`, `getFormatString(s)`.
@@ -23,7 +23,7 @@ import { parse, formatDateNumber, getFormatString } from '../dateConversion.js';
  * which our inputParserGuards/plotData suites already cover.
  */
 
-describe('getFormatString — inferring a format from what the user typed', () => {
+describe('getFormatString - inferring a format from what the user typed', () => {
   // The rule is positional, not semantic: it counts separator-delimited parts
   // and switches on whether a '/' is present at all. That makes the boundary
   // between "date-ish" and "time-ish" input the interesting thing to pin.
@@ -35,13 +35,13 @@ describe('getFormatString — inferring a format from what the user typed', () =
     expect(getFormatString('2017/10/12 12:10:45')).toBe('yyyy/mm/dd hh:ii:ss');
   });
 
-  it('ignores a fractional second — seconds are the finest field it names', () => {
+  it('ignores a fractional second - seconds are the finest field it names', () => {
     // The extra ".66" does not become a sixth part; the format stops at ss.
     expect(getFormatString('2017/10/12 12:10:45.66')).toBe('yyyy/mm/dd hh:ii:ss');
   });
 });
 
-describe('formatDateNumber — every token, against one known instant', () => {
+describe('formatDateNumber - every token, against one known instant', () => {
   // 2017/10/12 05:11:55.41. One parse, many renderings: if the serial were
   // wrong every assertion would move together, so these pin the FORMATTING.
   const val = parse('2017/10/12 5:11:55.41')!;
@@ -79,7 +79,7 @@ describe('formatDateNumber — every token, against one known instant', () => {
   });
 });
 
-describe('formatDateNumber — partial dates', () => {
+describe('formatDateNumber - partial dates', () => {
   it('formats a day-precision date at every coarser precision', () => {
     const val = parse('2023/1/1')!;
     expect(formatDateNumber(val, 'yyyy')).toBe('2023');

@@ -1,28 +1,28 @@
 /**
- * WHERE AN e2e's WINDOWS GO — the one place that decides it.
+ * WHERE AN e2e's WINDOWS GO - the one place that decides it.
  *
  * David works on ONE machine. A run that takes over the screen stops him
  * working AND pins the CPU while it does it, so containment is a hard
- * requirement, not a courtesy — and a run that is going to land on his screen
+ * requirement, not a courtesy - and a run that is going to land on his screen
  * should REFUSE before it costs him anything, rather than discover it visually.
  *
  * ⚑ THE ARGUMENT, not an env hint. Three things look like they should contain
  * an Electron app on this machine and DO NOT (all measured 2026-07-27):
- *   - `xvfb-run` alone — Ozone prefers Wayland and ignores DISPLAY;
- *   - unsetting WAYLAND_DISPLAY — Ozone finds the socket via XDG_RUNTIME_DIR;
+ *   - `xvfb-run` alone - Ozone prefers Wayland and ignores DISPLAY;
+ *   - unsetting WAYLAND_DISPLAY - Ozone finds the socket via XDG_RUNTIME_DIR;
  *   - ELECTRON_OZONE_PLATFORM_HINT=x11, and `app.commandLine.appendSwitch(
- *     'ozone-platform', …)` inside the entry — both applied AFTER the platform
+ *     'ozone-platform', …)` inside the entry - both applied AFTER the platform
  *     is chosen.
  * Only `--ozone-platform=x11` as a LAUNCH ARGUMENT works, which is why this
  * returns args rather than setting anything.
  *
  * ⚑⚑ WHY IT REFUSES, AND WHY THAT IS THE WHOLE POINT (2026-08-17). This gate
- * used to be three identical copies — `workspace.e2e`, `electronMain.e2e` and
- * `spiderShot.e2e` each wrote it out — and every copy treated an ABSENT
+ * used to be three identical copies - `workspace.e2e`, `electronMain.e2e` and
+ * `spiderShot.e2e` each wrote it out - and every copy treated an ABSENT
  * variable as "fine, launch anyway". So the contained path was the OPT-IN and
  * the developer's real screen was the DEFAULT: forgetting the variable was not
  * an error, it was normal operation. It cost David exactly that, the morning
- * this was written — a suite run that excluded `workspace.e2e.test.ts` by name
+ * this was written - a suite run that excluded `workspace.e2e.test.ts` by name
  * still launched `electronMain.e2e.test.ts` onto his desktop, because the
  * runner remembered one GUI file out of three and the harness had no opinion.
  * The standing order is headless-by-default and his screen by explicit request;
@@ -30,7 +30,7 @@
  *
  * ⚠️ WHAT THIS DOES **NOT** PROVE. `PLOTTRACER_OZONE_PLATFORM=x11` with
  * `DISPLAY=:0` still lands on his real screen through Xwayland, and nothing
- * here can tell a virtual display from a real one — `:99` is a convention, not
+ * here can tell a virtual display from a real one - `:99` is a convention, not
  * a fact the harness can check. So this guard catches the FORGOTTEN case, which
  * is the one that actually happens; it is not a containment proof. The proof is
  * still positive evidence, counted on the display itself:
@@ -46,7 +46,7 @@
  *     env -u WAYLAND_DISPLAY DISPLAY=:99 PLOTTRACER_OZONE_PLATFORM=x11 npx vitest run
  */
 
-/** Set this to launch on the real screen deliberately — the exception the
+/** Set this to launch on the real screen deliberately - the exception the
  * standing order allows for, made explicit so it cannot happen by omission. */
 const REAL_SCREEN_OPT_IN = 'PLOTTRACER_REAL_SCREEN';
 
@@ -71,7 +71,7 @@ const REFUSAL = [
 /**
  * The launch arguments that place this run's windows somewhere deliberate.
  *
- * @throws if neither containment nor the real-screen opt-in has been declared —
+ * @throws if neither containment nor the real-screen opt-in has been declared -
  * before the app starts, so nothing is drawn and no CPU is spent.
  */
 export function ozoneArgs(env: NodeJS.ProcessEnv = process.env): string[] {

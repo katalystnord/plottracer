@@ -29,19 +29,19 @@ import { SCATTER_MATCH_THRESHOLD } from '../../algorithms/challengeScore.js';
  * The truth-readers behind The Trace Challenge, traced against the REAL
  * committed `.truth.json` files.
  *
- * ⚑ WHY THIS FILE EXISTS. `traceChallenge.ts` scored 33.78% — the worst file
- * in the codebase — with 41 of its 49 mutants uncovered outright. Five of its
+ * ⚑ WHY THIS FILE EXISTS. `traceChallenge.ts` scored 33.78% - the worst file
+ * in the codebase - with 41 of its 49 mutants uncovered outright. Five of its
  * nine exports had no test at all: `truthValueRange`, `truthHistogramPoints`,
  * `truthBarValues`, `truthBoxValues` and `valueToPy`.
  *
  * These read the ground truth the game SCORES AGAINST. A defect here does not
- * make the game fail — it makes it mark a correct trace wrong, or a wrong one
+ * make the game fail - it makes it mark a correct trace wrong, or a wrong one
  * right, with nothing on screen to question. `truthBoxValues` reading its five
  * numbers in the wrong order is the sharpest case: min/q1/median/q3/max are
  * all plausible values for each other.
  *
- * ⚑ Per the project's own rule — a test that invents its own geometry proves
- * SELF-CONSISTENCY, not truth — these trace the committed truth files the app
+ * ⚑ Per the project's own rule - a test that invents its own geometry proves
+ * SELF-CONSISTENCY, not truth - these trace the committed truth files the app
  * actually ships, not fixtures written to match the code.
  */
 
@@ -61,7 +61,7 @@ describe('the value range scoring normalises against', () => {
 
   it('⚑ falls back to 1 on a degenerate axis rather than dividing by zero', () => {
     // Every score divides by this. A flat truth axis would make each error
-    // infinite, so every trace scores zero — including a perfect one.
+    // infinite, so every trace scores zero - including a perfect one.
     const flat = { ...BAR, axes: { y: { label: 'v', min: 7, max: 7 } } } as ChallengeTruth;
     expect(truthValueRange(flat)).toBe(1);
   });
@@ -86,7 +86,7 @@ describe('axis ranges for the ordered scorers', () => {
 
   it('⚑ substitutes 1 for a MISSING x axis, which bar and box genuinely have', () => {
     // Bar/box truth carries no x axis at all. Without the fallback xRange is
-    // 0 and any scorer that divides by it produces Infinity — and the comment
+    // 0 and any scorer that divides by it produces Infinity - and the comment
     // says this is inert for those types, which only holds if it is 1.
     expect(BAR.axes!.x).toBeUndefined();
     expect(truthAxisRanges(BAR).xRange).toBe(1);
@@ -290,7 +290,7 @@ describe('starting a round pre-calibrated', () => {
 });
 
 /**
- * ⚑ THE TWO BAR TRUTH SHAPES — a trap laid for whoever extends the Challenge.
+ * ⚑ THE TWO BAR TRUTH SHAPES - a trap laid for whoever extends the Challenge.
  *
  * The shipped truth files describe bars in TWO different ways:
  *
@@ -298,7 +298,7 @@ describe('starting a round pre-calibrated', () => {
  *   bar-floating-temperature points are { category, start, end }
  *
  * `truthBarValues` reads `p.value`, so it handles the first and silently
- * yields `NaN` for the second — and a NaN flows straight into the scorer,
+ * yields `NaN` for the second - and a NaN flows straight into the scorer,
  * which would mark a perfect trace as wrong with no error anywhere.
  *
  * It is not live today: only seven examples are in the Challenge pool and the
@@ -312,7 +312,7 @@ describe('the bar truth shapes the Challenge can actually score', () => {
     expect(truthBarValues(BAR).every((v) => Number.isFinite(v[0]))).toBe(true);
   });
 
-  it('⚑ CANNOT yet score the interval-shaped truth — this is the guard, not a bug report', () => {
+  it('⚑ CANNOT yet score the interval-shaped truth - this is the guard, not a bug report', () => {
     // A floating bar's datum is its span, and the truth records both ends.
     // If this ever starts passing, `truthBarValues` has learned the second
     // shape and the example may join the pool.
@@ -418,7 +418,7 @@ describe('the WEIGHTED round draw (v2.1)', () => {
 
 
 /**
- * SPIDER AND PIE (v2.1) — the two families whose truth files do NOT match
+ * SPIDER AND PIE (v2.1) - the two families whose truth files do NOT match
  * `ChallengeTruth` as shipped, because neither figure has one value axis. The
  * UI reshapes them at import (`ui/src/challengeExamples.ts`); these tests do the
  * same reshape from the same committed files, so a change to either file's
@@ -469,7 +469,7 @@ const PIE: ChallengeTruth = {
   series: pieRaw.series,
 };
 
-describe('spider truth — one scale per spoke', () => {
+describe('spider truth - one scale per spoke', () => {
   it('⚑ normalises each spoke by ITS OWN range, not a shared one', () => {
     // The whole point of the N×1D record. Cost index tops out at 5 and tensile
     // strength at 120; scored against a single range, a 0.4 slip on cost would
@@ -578,7 +578,7 @@ describe('spider truth — one scale per spoke', () => {
   });
 });
 
-describe('pie truth — the whole, and the slices read against it', () => {
+describe('pie truth - the whole, and the slices read against it', () => {
   it('reads the slice values in the figure’s own order', () => {
     expect(truthPieValues(PIE)).toEqual([[42], [23], [18], [9], [8]]);
   });
@@ -598,7 +598,7 @@ describe('pie truth — the whole, and the slices read against it', () => {
     expect(truthValueRange(noTotal)).toBe(1);
   });
 
-  it('⚑ the slice values sum to the total — the figure’s own consistency check', () => {
+  it('⚑ the slice values sum to the total - the figure’s own consistency check', () => {
     const sum = truthPieValues(PIE).reduce((a, v) => a + v[0]!, 0);
     expect(sum).toBeCloseTo(PIE.total!, 6);
   });
@@ -687,7 +687,7 @@ describe('⚑ the pie reveal draws every boundary the player had to click (v2.1 
     }
   ).calibration.slices;
 
-  it('a plain pie needs one ray per slice — every boundary is shared', () => {
+  it('a plain pie needs one ray per slice - every boundary is shared', () => {
     expect(pieRevealRays(plain)).toHaveLength(plain.length);
   });
 

@@ -1,20 +1,20 @@
 /**
- * Blob detector — checkpoint 122, the SCATTER-PLOT auto-extraction algorithm.
+ * Blob detector - checkpoint 122, the SCATTER-PLOT auto-extraction algorithm.
  *
  * The colour filter says "these pixels are the series' colour"; for a CURVE we
  * reduce that mask one-point-per-column (Averaging Window, segmentFill.ts's
  * pointsFromColumnRuns). A SCATTER plot is different: each datum is a separate
- * marker, so the right reduction is one point per connected BLOB — the marker's
+ * marker, so the right reduction is one point per connected BLOB - the marker's
  * centroid. Averaging Window would merge two markers sharing a column, or split
  * one tall marker into several; blob detection records exactly one point where
  * each marker sits.
  *
- * Adapted from WPD's BlobDetectorAlgo (blobdetector.js, AGPL-3.0 like us — tenets
+ * Adapted from WPD's BlobDetectorAlgo (blobdetector.js, AGPL-3.0 like us - tenets
  * 5/8: take the mechanism, not its DOM param tables / `_wasRun` flags). The flood
  * is the mask-space sibling of segmentFill.ts's `floodFill`: same connected-region
  * idea, but over the binary colour mask (8-connected) rather than the RGB image
  * from a seed. WPD's 0.5-px centre offset and equivalent-circle diameter filter
- * are kept; its `moment` metadata is dropped — nothing downstream reads it, and
+ * are kept; its `moment` metadata is dropped - nothing downstream reads it, and
  * tenet 10 says don't record modeling we don't need.
  *
  * ⚑ Tenet 9: the centroid is MEASURED (the marker's pixel position), not
@@ -55,12 +55,12 @@ export interface Blob {
 }
 
 export interface BlobDetectOptions {
-  /** Record each accepted blob's own pixel indices — see `Blob.members`. */
+  /** Record each accepted blob's own pixel indices - see `Blob.members`. */
   trackMembership?: boolean;
   /** Reject blobs whose equivalent diameter is below this (px). Default 0 (keep
-   * all) — a small value drops single-pixel noise and antialiasing edges. */
+   * all) - a small value drops single-pixel noise and antialiasing edges. */
   minDiameter?: number;
-  /** Reject blobs whose equivalent diameter exceeds this (px). Default Infinity —
+  /** Reject blobs whose equivalent diameter exceeds this (px). Default Infinity -
    * a finite value drops a merged grid/axis blob that the tolerance grabbed. */
   maxDiameter?: number;
 }
@@ -70,7 +70,7 @@ export interface BlobDetectOptions {
  * emits) and return one centroid per blob, keeping only those whose
  * equivalent-circle diameter falls in [minDiameter, maxDiameter]. 8-connected,
  * so a marker's diagonal antialiasing stays one blob. Each pixel is visited once
- * (O(width·height)); no fill cap is needed — a huge blob is simply reported and
+ * (O(width·height)); no fill cap is needed - a huge blob is simply reported and
  * then rejected by maxDiameter, never traversed twice.
  */
 export function detectBlobs(

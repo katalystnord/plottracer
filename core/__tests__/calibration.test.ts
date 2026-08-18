@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Calibration } from '../calibration.js';
 
 /**
- * `Calibration` — the store every axes class reads its points out of.
+ * `Calibration` - the store every axes class reads its points out of.
  *
  * ⚑ WHY THIS FILE EXISTS. The 2026-07-31 full mutation run scored
  * `core/calibration.ts` at **50.77%**, one of the weakest files in the tree,
@@ -19,12 +19,12 @@ import { Calibration } from '../calibration.js';
  * calibration, which is the failure mode tenet 1 exists to prevent.
  *
  * Cases are written against the SURVIVING MUTANTS the report named, so each
- * one has a specific wrong behaviour it rules out — the boundary tests below
+ * one has a specific wrong behaviour it rules out - the boundary tests below
  * exist because `index < 0` mutated to `<= 0`, and `index >= length` to
  * `> length`, both survived.
  */
 
-/** Two points, values as (dx, dy) pairs — the 2-slot shape every axes but
+/** Two points, values as (dx, dy) pairs - the 2-slot shape every axes but
  * spider uses. */
 function twoPointCalibration(): Calibration {
   const cal = new Calibration(2);
@@ -33,7 +33,7 @@ function twoPointCalibration(): Calibration {
   return cal;
 }
 
-describe('Calibration — the shape it was constructed with', () => {
+describe('Calibration - the shape it was constructed with', () => {
   it('reports its own dimension count, which decides where each point s values live', () => {
     // getDimensions had NO test at all; its body could be emptied and nothing
     // noticed. It is the stride used to index `_dp`, so it is not cosmetic.
@@ -75,7 +75,7 @@ describe('Calibration — the shape it was constructed with', () => {
   });
 });
 
-describe('Calibration.changePointPx — what a handle drag calls', () => {
+describe('Calibration.changePointPx - what a handle drag calls', () => {
   it('moves the named point and leaves every other point and value untouched', () => {
     const cal = twoPointCalibration();
     cal.changePointPx(0, 111, 222);
@@ -83,7 +83,7 @@ describe('Calibration.changePointPx — what a handle drag calls', () => {
     expect(cal.getPoint(1)).toEqual({ px: 30, py: 40, dx: '1', dy: '200', dz: null });
   });
 
-  it('moves the LAST point — the boundary the `>= length` guard must still admit', () => {
+  it('moves the LAST point - the boundary the `>= length` guard must still admit', () => {
     const cal = twoPointCalibration();
     cal.changePointPx(1, 55, 66);
     expect(cal.getPoint(1)!.px).toBe(55);
@@ -100,7 +100,7 @@ describe('Calibration.changePointPx — what a handle drag calls', () => {
   });
 });
 
-describe('Calibration.setDataAt — what a value edit calls', () => {
+describe('Calibration.setDataAt - what a value edit calls', () => {
   it('replaces that point s values without moving its pixel', () => {
     const cal = twoPointCalibration();
     cal.setDataAt(0, '5', '500');
@@ -108,7 +108,7 @@ describe('Calibration.setDataAt — what a value edit calls', () => {
     expect(cal.getPoint(1)!.dx).toBe('1'); // the neighbour is untouched
   });
 
-  it('writes the LAST point s values — the boundary again', () => {
+  it('writes the LAST point s values - the boundary again', () => {
     const cal = twoPointCalibration();
     cal.setDataAt(1, '9', '900');
     expect(cal.getPoint(1)!.dx).toBe('9');
@@ -140,7 +140,7 @@ describe('Calibration.setDataAt — what a value edit calls', () => {
   });
 });
 
-describe('Calibration.findNearestPoint — the hit test behind handle picking', () => {
+describe('Calibration.findNearestPoint - the hit test behind handle picking', () => {
   it('returns the nearest point s index, measured as real 2-D distance', () => {
     // ⚑ Pins the DISTANCE ARITHMETIC: the squared-difference product mutated
     // to a division survived, because nothing asserted which of several points
@@ -181,7 +181,7 @@ describe('Calibration.findNearestPoint — the hit test behind handle picking', 
   });
 });
 
-describe('Calibration — the selection set', () => {
+describe('Calibration - the selection set', () => {
   it('selects a point, reports it selected, and lists it', () => {
     const cal = twoPointCalibration();
     expect(cal.isPointSelected(0)).toBe(false);
@@ -191,7 +191,7 @@ describe('Calibration — the selection set', () => {
     expect(cal.getSelectedPoints()).toEqual([0]);
   });
 
-  it('selects INDEX 0 like any other — the boundary both `indexOf` guards mutate around', () => {
+  it('selects INDEX 0 like any other - the boundary both `indexOf` guards mutate around', () => {
     // ⚑ `indexOf(index) < 0` mutated to `>= 0` and `<= 0`, and
     // `isPointSelected`'s `>= 0` to `> 0`, all survived. Index 0 is the value
     // that separates them: at `> 0`, selecting point 0 reads back as NOT

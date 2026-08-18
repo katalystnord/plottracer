@@ -1,22 +1,22 @@
 /**
- * Error-bar geometry — a port of the error-bar capture the OLD app already
+ * Error-bar geometry - a port of the error-bar capture the OLD app already
  * ships (`ui-patches/overrides.js:755-944`, `ui-patches/api-bridge.js:100-134`),
  * which the `engine/`/`ui/` rebuild dropped.
  *
  * Found by the third-pass parity audit (2026-07-15). Worth stating plainly,
- * because CLAUDE.md long described uncertainty capture as the "frontier — build,
+ * because CLAUDE.md long described uncertainty capture as the "frontier - build,
  * unclaimed by the field": **we had already built it.** An "Error Bars" axes
  * type, one-click Value/Upper/Lower groups, a direction-aware glyph and a
  * structured JSON export all run under `npm start` today. This is restore + extend.
  *
  * Why error bars matter here more than anywhere else: for downstream modelling,
- * uncertainty *is* the scientific signal — "12 MPa ± 3" is a different claim from
+ * uncertainty *is* the scientific signal - "12 MPa ± 3" is a different claim from
  * "12 ± 0.1". Digitizing only the centre manufactures false precision, which is
  * the "silently poisoning downstream data" failure the record-first principle
  * exists to prevent. Notably even StarryDigitizer (which feeds Starrydata's
  * 194k+ curves) throws error away.
  *
- * **Schema note — deliberately absolute, not deltas.** `{x, y, yUpper, yLower}`
+ * **Schema note - deliberately absolute, not deltas.** `{x, y, yUpper, yLower}`
  * matches what the old app's structured export has always emitted
  * (`api-bridge.js:130-131`). CLAUDE.md's error section sketches
  * `{x, y, xErr?, yErr?}` as an ideal, but a shipped schema beats a sketch: this
@@ -38,7 +38,7 @@ export interface ErrorBarCorner {
  * One error bar: the centre value plus the absolute positions of its whiskers.
  *
  * Every field beyond `x` is optional because a tuple is captured over several
- * clicks and is legitimately half-built in between — and because a real figure
+ * clicks and is legitimately half-built in between - and because a real figure
  * may carry only an upper bound. A missing field means "not captured", never
  * "zero".
  */
@@ -54,8 +54,8 @@ export interface ErrorBarPoint {
 /**
  * Which side of its datum an error series records.
  *
- * The taxonomy CLAUDE.md calls "genuinely new work" — symmetric Y, asymmetric
- * Y, X error, a 2D cross — is not four features; it is these four roles in
+ * The taxonomy CLAUDE.md calls "genuinely new work" - symmetric Y, asymmetric
+ * Y, X error, a 2D cross - is not four features; it is these four roles in
  * combination (docs/error-bars-design.md). A confidence band is the same model
  * at higher density, so it needs nothing added either.
  */
@@ -65,7 +65,7 @@ export const ERROR_ROLES: readonly ErrorRole[] = ['upper', 'lower', 'left', 'rig
 
 /** The `ErrorBarPoint` field each role writes. */
 /** The `ErrorBarPoint` field each role writes. ⚑ Exported because three modules
- * need the same mapping and a private copy each is how they drift — the reuse
+ * need the same mapping and a private copy each is how they drift - the reuse
  * rule, on eleven lines. */
 export const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'> = {
   upper: 'yUpper',
@@ -79,7 +79,7 @@ export const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRig
  *
  * An upper/lower cap sits directly above/below its datum: it shares the datum's
  * x and differs in y, so x is what identifies it. A left/right cap is the
- * transpose — it shares the datum's y and differs in x — so matching it by x
+ * transpose - it shares the datum's y and differs in x - so matching it by x
  * would compare the very quantity the cap exists to displace, and would pair a
  * whisker with whichever unrelated datum happened to sit under its tip. Each
  * role therefore matches on its *invariant* axis.
@@ -99,7 +99,7 @@ export interface ErrorCapSeries {
 }
 
 /**
- * Which datum a cap belongs to — the model's one derived relationship, in ONE
+ * Which datum a cap belongs to - the model's one derived relationship, in ONE
  * place (checkpoint 85, finding A6).
  *
  * Exported because the *rendering* must ask the same question the *record* does.
@@ -107,12 +107,12 @@ export interface ErrorCapSeries {
  * here in DATA space, while `engine/calibrationSession.ts`'s `getErrorWhiskers`
  * matched in PIXEL space to avoid needing an axes. Since checkpoint 68 turned
  * rotation correction on by default, data-x is a linear combination of pixel-x
- * *and* pixel-y — so on a rotated calibration the two disagreed and **the glyph
+ * *and* pixel-y - so on a rotated calibration the two disagreed and **the glyph
  * could pair a cap to a different datum than the record did.**
  *
  * That is worse than a wrong drawing. The design's whole safety argument is
  * *"the rendering is the check on what the storage leaves implicit"*
- * (docs/error-bars-design.md) — a check computed differently from the thing it
+ * (docs/error-bars-design.md) - a check computed differently from the thing it
  * checks is not a check. One function, both callers.
  *
  * Returns -1 when there is nothing to match against.
@@ -144,7 +144,7 @@ function nearestIndex(data: readonly ErrorBarCorner[], cap: ErrorBarCorner, axis
  * **This is where the model's one deliberate omission is paid for.** The link
  * we store is series→series, not point→point (David, 2026-07-16: *"per series,
  * not points… But we at least visually have to resolve it down to individual
- * points"*), so the point correspondence is not in the file — it is derived
+ * points"*), so the point correspondence is not in the file - it is derived
  * here, at render and export time, exactly as docs/error-bars-design.md
  * specifies.
  *
@@ -152,28 +152,28 @@ function nearestIndex(data: readonly ErrorBarCorner[], cap: ErrorBarCorner, axis
  * datum-first rule would give all 200 points of a dense curve a whisker from
  * whatever cap lay nearest, inventing error the figure never drew. Cap-first
  * means an error series with four caps produces four whiskers and the rest of
- * the curve carries none — which is the common case, not an edge case (authors
+ * the curve carries none - which is the common case, not an edge case (authors
  * routinely draw error on every Nth point), and it costs nothing to support.
  *
  * There is no distance threshold. A cap that lands nowhere near a datum still
- * resolves to the nearest one and draws a visibly wrong whisker — which is the
+ * resolves to the nearest one and draws a visibly wrong whisker - which is the
  * point: the rendering is the check on what the storage leaves implicit, the
  * same argument as Check Calibration and the CCR arc preview. A threshold would
  * silently drop the cap instead, hiding the mistake it exists to reveal.
  *
  * Returns one entry per datum, in the target series' own order. `y` is always
  * the datum's own; the role fields appear only where a cap resolved, never
- * nulled or zeroed — "not measured" must not read downstream as a value.
+ * nulled or zeroed - "not measured" must not read downstream as a value.
  *
- * **This is PROCESSING, not the record — which is why one field per role costs
+ * **This is PROCESSING, not the record - which is why one field per role costs
  * nothing.** A figure showing *both* SD and 95% CI whiskers relates two series
  * as `upper`, and this shape has a single `yUpper`, so a paired view of it can
  * show only one. That is not data loss: **the record is the series and their
  * relations**, and both survive intact in the file and in the relational export
- * (verified — they emit as `SD upper Y` and `95% CI upper Y`, distinct columns
+ * (verified - they emit as `SD upper Y` and `95% CI upper Y`, distinct columns
  * the user named). Any processing happens *after* recording and cannot reach
  * back. A caller wanting both simply resolves each error series on its own,
- * which is what rendering does anyway — one whisker set per series.
+ * which is what rendering does anyway - one whisker set per series.
  *
  * Arbitration is by *distance* rather than argument order, so a paired view at
  * least does not change with series order.

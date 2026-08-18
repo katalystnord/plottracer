@@ -1,7 +1,7 @@
 /**
- * TIFF rendering (B7) — the multipage-scan sibling of pdfRender.ts.
+ * TIFF rendering (B7) - the multipage-scan sibling of pdfRender.ts.
  *
- * Chromium's <img> cannot decode TIFF, so — exactly like PDF — a TIFF is decoded
+ * Chromium's <img> cannot decode TIFF, so - exactly like PDF - a TIFF is decoded
  * to a raster here (UTIF, MIT) and fed in as an image. A multipage TIFF is one
  * `LoadedDocument` with N pages; a single-page TIFF is the same shape with one.
  * Historic scientific / engineering scans are commonly (multipage) TIFF, which is
@@ -9,7 +9,7 @@
  *
  * UTIF.decode parses only the page directories (fast, no pixel work); the actual
  * pixel decode (decodeImage → toRGBA8) is deferred to renderPage, so only the
- * pages a user visits are decompressed — the same lazy shape pdf.js gives us.
+ * pages a user visits are decompressed - the same lazy shape pdf.js gives us.
  */
 import * as UTIF from 'utif2';
 import type { LoadedDocument } from './pagedDocument.js';

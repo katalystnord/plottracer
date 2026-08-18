@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from '../seriesNames.js';
 import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
 
-describe('seriesNames — the rules', () => {
+describe('seriesNames - the rules', () => {
   it('accepts a name nothing else holds', () => {
     expect(datasetNameError('Sample A', ['Series 1', 'Series 2'])).toBeNull();
   });
@@ -33,7 +33,7 @@ describe('seriesNames — the rules', () => {
   });
 });
 
-describe('uniqueDatasetName — for names the user did not type', () => {
+describe('uniqueDatasetName - for names the user did not type', () => {
   it('returns the name untouched when it is free', () => {
     expect(uniqueDatasetName('Sample A', ['Series 1'])).toBe('Sample A');
   });
@@ -48,7 +48,7 @@ describe('uniqueDatasetName — for names the user did not type', () => {
   });
 });
 
-describe('dedupeDatasetNames — the load path', () => {
+describe('dedupeDatasetNames - the load path', () => {
   it('leaves an already-unique project untouched', () => {
     expect(dedupeDatasetNames(['A', 'B', 'C'])).toEqual(['A', 'B', 'C']);
   });
@@ -68,7 +68,7 @@ describe('dedupeDatasetNames — the load path', () => {
   });
 });
 
-describe('CalibrationSession — the guards (checkpoint 75)', () => {
+describe('CalibrationSession - the guards (checkpoint 75)', () => {
   const names = (s: CalibrationSession<never>) => s.getDatasets().map((d) => d.name);
   const session = () => new CalibrationSession(XY_AXES_CONFIG as never) as unknown as CalibrationSession<never>;
 

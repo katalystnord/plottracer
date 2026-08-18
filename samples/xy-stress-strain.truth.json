@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "xy-stress-strain.png",
-    "note": "Synthetic ground truth \u2014 a dense sampling of the plotted curve (continuous: the truth is the curve)."
+    "note": "Synthetic ground truth - a dense sampling of the plotted curve (continuous: the truth is the curve)."
   },
   "graphType": "xy",
   "axes": {

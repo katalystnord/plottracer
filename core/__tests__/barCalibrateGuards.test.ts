@@ -3,12 +3,12 @@ import { BarAxes } from '../axes/bar.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * Checkpoint 81 — finding A2: `BarAxes.calibrate` always returned `true`.
+ * Checkpoint 81 - finding A2: `BarAxes.calibrate` always returned `true`.
  *
  * Upstream reads its values with a bare `parseFloat`, never checks validity,
  * and ends with an unconditional `return true`. So Bar reported SUCCESS on
- * input XYAxes refuses — and that made
- * `BAR_AXES_CONFIG.buildAxes`'s own error message ("Calibration failed — check
+ * input XYAxes refuses - and that made
+ * `BAR_AXES_CONFIG.buildAxes`'s own error message ("Calibration failed - check
  * the entered data values are valid numbers") **dead code that could never
  * fire**. The message was written, wired, and unreachable.
  */
@@ -29,7 +29,7 @@ describe('BarAxes.calibrate refuses what it used to accept silently', () => {
     expect(axes.isCalibrated()).toBe(false);
   });
 
-  it('refuses a thousands separator — Bar inherits the whole-string rule for free', () => {
+  it('refuses a thousands separator - Bar inherits the whole-string rule for free', () => {
     // Not a Bar-specific check: this comes from InputParser (ckpt 81's class
     // fix), which is the point of routing Bar through it rather than giving Bar
     // its own copy of the rule.
@@ -41,7 +41,7 @@ describe('BarAxes.calibrate refuses what it used to accept silently', () => {
     expect(calibrateBar('0', '1.2.3').ok).toBe(false);
   });
 
-  it('refuses a date — BarAxes has no date concept to honour one with', () => {
+  it('refuses a date - BarAxes has no date concept to honour one with', () => {
     expect(calibrateBar('0', '2024/01/01').ok).toBe(false);
   });
 

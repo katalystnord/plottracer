@@ -76,13 +76,13 @@ export interface ExportAssemblyInput {
    *
    * ⚑ EVERY OTHER SHAPE READS ITS ROWS OFF THE DATASETS; this one cannot. A
    * heatmap's values are read from the IMAGE through the grid, and neither the
-   * image nor the reading lives in the session — so the cells arrive the same
+   * image nor the reading lives in the session - so the cells arrive the same
    * way `measures` does, resolved by the caller that has them. Absent or empty
    * means the user has not pressed Read cells yet, and the export says so
    * rather than writing an empty table that looks like an empty figure.
    */
   heatmapCells?: readonly HeatmapExportCell[];
-  /** The colour key's own extent — the third axis's span. Absent when the key
+  /** The colour key's own extent - the third axis's span. Absent when the key
    * could not be read, in which case nothing is written rather than a guess. */
   heatmapKey?: HeatmapKeyExport;
 }
@@ -221,7 +221,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
  * than a rendered string is what lets one assembly serve all of them.
  */
 /**
- * A series' own per-datum extents, in the shape the CSV layer takes — or
+ * A series' own per-datum extents, in the shape the CSV layer takes - or
  * nothing at all when it carries no error, so an ordinary series exports
  * byte-for-byte as it did before.
  *
@@ -264,12 +264,12 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   const exportShape = session.getExportShape();
   if (exportShape === 'heatmap') {
     // ⚑ The record FIRST, the convenience view second. A reader opening the file
-    // meets the long form — bounds, centre, value and the evidence for it —
+    // meets the long form - bounds, centre, value and the evidence for it -
     // before the pivoted matrix, which is derived from it.
     const cells = input.heatmapCells ?? [];
     sections.push(heatmapCellsSection(cells, rounder));
     sections.push(heatmapMatrixSection(cells));
-    // ⚑ Last, because it describes the FIGURE rather than the data — a reader
+    // ⚑ Last, because it describes the FIGURE rather than the data - a reader
     // scanning for values meets those first.
     if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
   } else if (exportShape === 'bins') {

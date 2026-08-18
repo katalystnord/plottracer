@@ -2,20 +2,20 @@
  * Read an Engauge Digitizer project (`.dig`).
  *
  * ⚑⚑ CLEAN-ROOM. Engauge Digitizer is GPL-2.0, which is NOT compatible with our
- * AGPL-3.0. Everything below was written from the FILE FORMAT — the structure of
- * real `.dig` documents, read as data — and never from Engauge's C++. CLAUDE.md
+ * AGPL-3.0. Everything below was written from the FILE FORMAT - the structure of
+ * real `.dig` documents, read as data - and never from Engauge's C++. CLAUDE.md
  * states the rule ("clean-room reimplementations ... written from the algorithm
  * description, never ported from its GPL-2.0 C++"); this module is the same rule
  * applied to a file format. Reading a format is always fine; taking code is what
  * the licence governs.
  *
  * ⚑ For the same reason the committed fixtures in `__tests__/fixtures/dig/` are
- * OURS, authored from the format — Engauge's own test corpus is GPL-2.0 data and
+ * OURS, authored from the format - Engauge's own test corpus is GPL-2.0 data and
  * does not belong in this tree. That corpus was used as a local verification
  * pass only (see PROVENANCE.md).
  *
  * WHY THIS EXISTS (David, 2026-07-28): reading many formats positions PlotTracer
- * downstream of the whole field — data flows in and stops here. That makes the
+ * downstream of the whole field - data flows in and stops here. That makes the
  * one-way rule a strategy rather than a limitation, so nothing in this module
  * has, or may grow, a matching writer.
  *
@@ -54,7 +54,7 @@
  *     rather than failing with an XML parse error, per the project's standing
  *     rule that an unsupported file is told what it is.
  *  2. **Curve points carry ONLY a screen position.** Engauge recomputes graph
- *     coordinates from the calibration on load, exactly as we do — so importing
+ *     coordinates from the calibration on load, exactly as we do - so importing
  *     is a matter of carrying the pixels and rebuilding the axes, and no value
  *     in the file is re-derived or second-guessed here (tenet 9).
  *
@@ -90,7 +90,7 @@ export interface DigCurve {
 
 /** A parsed `.dig`, before it becomes our axes and datasets. */
 export interface DigProject {
-  /** Engauge's own document version, e.g. "11.0" — reported, never branched on
+  /** Engauge's own document version, e.g. "11.0" - reported, never branched on
    * for anything but the binary refusal above. */
   version: string;
   coordsType: 'Cartesian' | 'Polar';
@@ -113,7 +113,7 @@ export interface DigProject {
 /**
  * Does this look like an Engauge XML document?
  *
- * Sniffs the CONTENT, never the extension — the same discipline the rest of the
+ * Sniffs the CONTENT, never the extension - the same discipline the rest of the
  * open path documents, since users rename files. A `.dig` is XML whose doctype
  * or root element names Engauge, which is specific enough that no other XML we
  * read could be mistaken for one.
@@ -159,8 +159,8 @@ const IMAGE_MAGIC: { mime: string; magic: number[] }[] = [
  *
  * The payload is a Qt-serialized image, so the encoded bytes carry a short
  * framing header before the image's own magic number (a 4-byte word in every
- * document examined). Rather than hardcode that width — which would break the
- * moment a version framed it differently — we locate the image by ITS OWN magic
+ * document examined). Rather than hardcode that width - which would break the
+ * moment a version framed it differently - we locate the image by ITS OWN magic
  * and ignore whatever precedes it. Searching a short prefix keeps a corrupt
  * payload from scanning megabytes.
  */
@@ -194,7 +194,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-/** Attribute reader — fast-xml-parser gives attributes an `@` prefix. */
+/** Attribute reader - fast-xml-parser gives attributes an `@` prefix. */
 function attr(node: unknown, name: string): string | null {
   if (typeof node !== 'object' || node === null) return null;
   const v = (node as Record<string, unknown>)['@' + name];
@@ -233,7 +233,7 @@ function readPoints(curveNode: unknown): { x: number; y: number }[] {
 }
 
 /**
- * Parse a `.dig` into its parts. Refuses — with a reason naming what it found —
+ * Parse a `.dig` into its parts. Refuses - with a reason naming what it found -
  * rather than returning a half-read project.
  */
 export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
@@ -261,7 +261,7 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
   try {
     doc = parser.parse(text) as Record<string, unknown>;
   } catch (e) {
-    return { error: `Could not read this Engauge project — ${e instanceof Error ? e.message : String(e)}` };
+    return { error: `Could not read this Engauge project - ${e instanceof Error ? e.message : String(e)}` };
   }
 
   // The Document is normally the root, but Engauge also writes it wrapped in an
@@ -293,7 +293,7 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
           imageDataURL = `data:${found.mime};base64,${bytesToBase64(raw.subarray(found.offset))}`;
         }
       } catch {
-        // A corrupt image payload is not fatal — the calibration and the traced
+        // A corrupt image payload is not fatal - the calibration and the traced
         // points are still worth importing, and the caller reports the miss.
         imageDataURL = null;
       }
@@ -302,8 +302,8 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
 
   // --- the coordinate system ----------------------------------------------
   // Two shapes across the format's life, both still in the wild:
-  //   • <Document><CoordSystem>…  — one or MORE, as repeated siblings
-  //   • <Document><Coords/>…      — Engauge 6.3, flat, no wrapper
+  //   • <Document><CoordSystem>…  - one or MORE, as repeated siblings
+  //   • <Document><Coords/>…      - Engauge 6.3, flat, no wrapper
   // The second is why the fallback is the Document itself.
   //
   // ⚑ There is NO <CoordSystems> wrapper element. This code used to look for one
@@ -412,7 +412,7 @@ export interface ImportedDigFigure {
   datasets: Dataset[];
   imageDataURL: string | null;
   /** Things the file held that we could not carry, in plain words. Shown to the
-   * user rather than swallowed — an import that quietly drops half a project is
+   * user rather than swallowed - an import that quietly drops half a project is
    * the failure this codebase has killed repeatedly. */
   notes: string[];
 }
@@ -427,7 +427,7 @@ export interface ImportedDigFigure {
  * position and the graph coordinates the user typed. Our XYAxes takes FOUR: two
  * that fix the X scale and two that fix the Y scale. Both describe the same
  * affine map from pixels to data, so this is a change of REPRESENTATION, not a
- * re-modelling — nothing is estimated, fitted or assumed (tenets 9 + 10).
+ * re-modelling - nothing is estimated, fitted or assumed (tenets 9 + 10).
  *
  * In the ordinary case the three points form an "L": two share a graph Y (they
  * fix X) and two share a graph X (they fix Y), with one corner point in both
@@ -442,8 +442,8 @@ export interface ImportedDigFigure {
  * give the two pairs explicitly (IsXOnly marks the X pair), so they need no
  * reconstruction at all.
  *
- * Returns null when the points cannot fix a system — collinear, degenerate, or
- * an arrangement that is not an L — so the caller refuses instead of importing a
+ * Returns null when the points cannot fix a system - collinear, degenerate, or
+ * an arrangement that is not an L - so the caller refuses instead of importing a
  * calibration that silently means something else.
  */
 function buildXYCalibration(
@@ -501,7 +501,7 @@ function buildXYCalibration(
     }
   }
 
-  // No "L" — Engauge lets the three points sit anywhere, so fall back to the
+  // No "L" - Engauge lets the three points sit anywhere, so fall back to the
   // general case: solve the affine map the three correspondences define, then
   // express it as the four points our axes wants. Still exact (three
   // correspondences determine an affine map uniquely), but the calibration will
@@ -512,7 +512,7 @@ function buildXYCalibration(
 
 /** Format a number for Calibration, which parses its values as TEXT.
  *
- * ⚑ NOT cosmetic — this is load-bearing. `InputParser.parse` tries a DATE first,
+ * ⚑ NOT cosmetic - this is load-bearing. `InputParser.parse` tries a DATE first,
  * and a bare JavaScript number in 0..23 parses as an hour-of-day: `parse(0)`
  * returns a 2026 timestamp while `parse('0')` returns 0. Passing numbers here
  * therefore turned ordinary axis values like 0, 1 and 10 into dates and silently
@@ -535,8 +535,8 @@ function inv2(m: [number, number, number, number]): [number, number, number, num
  *
  * Our axes builds its transform from the two pixel difference vectors and the
  * anchor values, so handing it the pre-images of
- *   (x0,y0) (x1,y0)   — differing only in X
- *   (x0,y0) (x0,y1)   — differing only in Y
+ *   (x0,y0) (x1,y0)   - differing only in X
+ *   (x0,y0) (x0,y1)   - differing only in Y
  * reproduces the identical map. Values are chosen inside the figure's own range
  * so the calibration still reads sensibly to a human.
  */
@@ -571,7 +571,7 @@ function buildXYFromAffine(
     N[2] * Minv[0] + N[3] * Minv[2], N[2] * Minv[1] + N[3] * Minv[3],
   ];
   const Ainv = inv2(A);
-  if (!Ainv) return null; // the axes are degenerate — no invertible mapping
+  if (!Ainv) return null; // the axes are degenerate - no invertible mapping
   const C = [gx[2]! - (A[0] * p3.screen.x + A[1] * p3.screen.y), gy[2]! - (A[2] * p3.screen.x + A[3] * p3.screen.y)];
 
   // Pick two distinct values per axis, spanning what the file actually used.
@@ -593,7 +593,7 @@ function buildXYFromAffine(
   const P3 = pre(x0, y0);
   const P4 = pre(x0, y1);
 
-  // Back to natural units — our axes re-applies the log itself.
+  // Back to natural units - our axes re-applies the log itself.
   const ux = (v: number) => (isLogX ? Math.pow(10, v) : v);
   const uy = (v: number) => (isLogY ? Math.pow(10, v) : v);
 
@@ -614,14 +614,14 @@ function buildXYFromAffine(
  *
  * Engauge stores polar axis points with theta in the graph X slot and radius in
  * graph Y. Our PolarAxes wants the origin first, then two points carrying the
- * radial scale. The origin is the point whose radius is zero — identified from
+ * radial scale. The origin is the point whose radius is zero - identified from
  * the file, not assumed to be first.
  */
 function buildPolarCalibration(pts: DigAxisPoint[]): Calibration | null {
   const origin = pts.find((p) => Math.abs(p.graph.y) < 1e-12);
   const radial = pts.filter((p) => p !== origin && Math.abs(p.graph.y) > 1e-12);
   if (!origin || radial.length < 2) return null;
-  // Strings, not numbers — see numText for why that distinction is load-bearing.
+  // Strings, not numbers - see numText for why that distinction is load-bearing.
   const calib = new Calibration(2);
   calib.addPoint(origin.screen.x, origin.screen.y, '0', '0');
   calib.addPoint(radial[0]!.screen.x, radial[0]!.screen.y, numText(radial[0]!.graph.y), numText(radial[0]!.graph.x));
@@ -656,7 +656,7 @@ export function importEngaugeFigure(project: DigProject): DigResult<ImportedDigF
     if (!calib) {
       return {
         error:
-          "This Engauge project's polar axes are incomplete — PlotTracer needs the centre point and two points at a known radius.",
+          "This Engauge project's polar axes are incomplete - PlotTracer needs the centre point and two points at a known radius.",
       };
     }
     const polar = new PolarAxes();
@@ -682,7 +682,7 @@ export function importEngaugeFigure(project: DigProject): DigResult<ImportedDigF
       return {
         error:
           project.isLogX || project.isLogY
-            ? "This Engauge project's log axes could not be calibrated — a log scale needs axis values greater than zero."
+            ? "This Engauge project's log axes could not be calibrated - a log scale needs axis values greater than zero."
             : "This Engauge project's axes could not be calibrated.",
       };
     }

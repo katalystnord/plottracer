@@ -19,7 +19,7 @@ import type { RGB } from '../colorFilter.js';
 /**
  * ⚑ MUTATION: 96.30% (359 killed / 14 survived / 0 uncovered), measured with a
  * throwaway Stryker config scoped to `algorithms/colorBar.ts`. The 14 survivors
- * were each read and are EQUIVALENT — they cannot change an output:
+ * were each read and are EQUIVALENT - they cannot change an output:
  *
  *   - the RGB bounding-box loop run over a 4th channel a colour does not have
  *     (`rgb[3]` is undefined, so neither comparison fires);
@@ -27,9 +27,9 @@ import type { RGB } from '../colorFilter.js';
  *   - the window buffer's initial contents, which are cleared each iteration;
  *   - three of the sampling window's out-of-bounds guards, where the read yields
  *     `undefined` rather than a wrapped pixel and the medoid keeps its first
- *     candidate either way. ⚑ The guard that DOES matter — the one preventing a
+ *     candidate either way. ⚑ The guard that DOES matter - the one preventing a
  *     read from wrapping onto the next row, which returns a real colour from
- *     somewhere else — is killed by "never lets the window WRAP" below;
+ *     somewhere else - is killed by "never lets the window WRAP" below;
  *   - `i < n` in the band scan, where `d[n]` is undefined and compares false;
  *   - a band's stored end index, used only in a containment test it cannot flip;
  *   - dropping half the winner-band predicate, since bands are ordered and
@@ -43,7 +43,7 @@ import type { RGB } from '../colorFilter.js';
  * `.stryker-tmp` afterwards.
  */
 
-/** A colour key expressed as a function of position, 0..1 — the ground truth
+/** A colour key expressed as a function of position, 0..1 - the ground truth
  * these tests invert back to. */
 type RGBRamp = (u: number) => RGB;
 
@@ -89,7 +89,7 @@ const cyclicRamp: RGBRamp = (u) => {
   return [v, v, v];
 };
 
-/** A key quantised into 8 flat entries, the way every real colormap is — a
+/** A key quantised into 8 flat entries, the way every real colormap is - a
  * lookup table, not a continuous function. Exaggerated so one entry is 25px. */
 const lutRamp: RGBRamp = (u) => {
   const step = Math.min(7, Math.floor(u * 8));
@@ -106,7 +106,7 @@ const lutRamp: RGBRamp = (u) => {
  * position order disagree. An earlier version had them agreeing, which left the
  * rival sort untested while looking as though it tested it.
  *
- * A NON-MONOTONE key is not exotic — a diverging map (cold–white–warm) revisits
+ * A NON-MONOTONE key is not exotic - a diverging map (cold–white–warm) revisits
  * pale colours on both sides of its centre, and any key drawn over a background
  * gradient can too. It is the case where a single "nearest colour" answer is
  * least defensible.
@@ -140,8 +140,8 @@ const KEY_H = 21;
 /**
  * A strip built straight from a ramp, WITHOUT the sampling entrance's checks.
  *
- * ⚑ For fixtures that are deliberately coarse — `lutRamp` is an eight-entry
- * table, exaggerating a real colormap's 256 — because `sampleColorBar` now
+ * ⚑ For fixtures that are deliberately coarse - `lutRamp` is an eight-entry
+ * table, exaggerating a real colormap's 256 - because `sampleColorBar` now
  * REFUSES a key showing that few colours, and rightly: eight colours cannot
  * yield a continuous reading, so a number derived from one would be invented.
  * The tests below are about how a plateau is INVERTED, which is a different
@@ -169,7 +169,7 @@ function stripOf(ramp: RGBRamp, thickness = 1): ColorBarStrip {
   return result.strip!;
 }
 
-describe('stripFromCorners — the gesture a person can actually aim at', () => {
+describe('stripFromCorners - the gesture a person can actually aim at', () => {
   it('takes the ramp along the LONGER side, whichever way the bar lies', () => {
     // ⚑ Which way the key runs is a property of the figure, not a declaration.
     const flat = stripFromCorners({ x: 10, y: 100 }, { x: 210, y: 130 })!;
@@ -218,7 +218,7 @@ describe('stripFromCorners — the gesture a person can actually aim at', () => 
 });
 
 describe('a MONOCHROME key is not a banded one', () => {
-  /** Grey, but spanning only 100…160 — a low-contrast key of the kind a
+  /** Grey, but spanning only 100…160 - a low-contrast key of the kind a
    * black-and-white figure prints. */
   const faintGrey: RGBRamp = (u) => {
     const g = Math.round(100 + u * 60);
@@ -233,7 +233,7 @@ describe('a MONOCHROME key is not a banded one', () => {
   it('accepts a faint greyscale ramp, which an absolute threshold would refuse', () => {
     // ⚑⚑ David: *"Non-colour / monochrome heatmaps are going to be a problem
     // though."* They are the case that decides how banding is measured. This key
-    // moves 0.3 of an RGB unit per sample — far below any fixed noise floor — so
+    // moves 0.3 of an RGB unit per sample - far below any fixed noise floor - so
     // counting levels against an absolute distance sees one long plateau and
     // calls an ordinary monochrome key banded. Counted against its OWN spread it
     // resolves as finely as a full-range ramp does.
@@ -251,7 +251,7 @@ describe('a MONOCHROME key is not a banded one', () => {
   });
 
   it('reads a faint grey key to the same POSITIONS a bright one gives', () => {
-    // ⚑ Accepting it is only half the claim — the readings have to be right.
+    // ⚑ Accepting it is only half the claim - the readings have to be right.
     // Low contrast costs PRECISION (the band is wider), not accuracy.
     const faint = stripOf(faintGrey);
     for (const u of [0.15, 0.5, 0.85]) {
@@ -271,7 +271,7 @@ describe('sampleColorBar', () => {
     expect(strip.samples[strip.samples.length - 1]!.rgb).toEqual([255, 255, 255]);
   });
 
-  it('reads the key in either direction — t follows the click order, not the image', () => {
+  it('reads the key in either direction - t follows the click order, not the image', () => {
     const img = makeKey(KEY_W, KEY_H, greyRamp);
     const backwards = sampleColorBar(img, KEY_W, KEY_H, { x: KEY_W - 1, y: 10 }, { x: 0, y: 10 });
     expect(backwards.reason).toBeNull();
@@ -286,7 +286,7 @@ describe('sampleColorBar', () => {
     expect(result.reason).toBeNull();
     const ts = result.strip!.samples.map((s) => s.t);
     expect(result.strip!.samples).toHaveLength(KEY_W - 10);
-    // The surviving positions keep their true t — the gap is a gap, not a shift.
+    // The surviving positions keep their true t - the gap is a gap, not a shift.
     expect(ts).not.toContain(100 / (KEY_W - 1));
     expect(ts).toContain(99 / (KEY_W - 1));
     expect(ts).toContain(110 / (KEY_W - 1));
@@ -353,7 +353,7 @@ describe('sampleColorBar', () => {
       );
     });
 
-    it('refuses a strip that is one flat colour — the across-the-bar mis-click', () => {
+    it('refuses a strip that is one flat colour - the across-the-bar mis-click', () => {
       // Down the key's short axis: every pixel is the same colour, so every cell
       // in the figure would invert to the same meaningless position.
       const result = sampleColorBar(img, KEY_W, KEY_H, { x: 100, y: 0 }, { x: 100, y: KEY_H - 1 });
@@ -391,7 +391,7 @@ describe('sampleColorBar', () => {
       // exactly the limit is a small key, not a mis-click.
       //
       // ⚑ On its own tiny image, because an 8px slice of the 201px key above
-      // spans only ~18 RGB units and is rightly refused as flat — the two
+      // spans only ~18 RGB units and is rightly refused as flat - the two
       // thresholds are independent and testing one through the other tests
       // neither.
       const short = MIN_STRIP_LENGTH_PX + 1;
@@ -444,7 +444,7 @@ describe('sampleColorBar', () => {
 
 describe('sampleColorBar at the edge of the image', () => {
   it('reads a key lying on the image border, using only the pixels that exist', () => {
-    // A key cropped flush to the edge of a screenshot — half the thickness
+    // A key cropped flush to the edge of a screenshot - half the thickness
     // window is off-image at every position. The samples must come from the
     // pixels that are there rather than from a padded or wrapped guess.
     const img = makeKey(KEY_W, KEY_H, greyRamp);
@@ -493,7 +493,7 @@ describe('sampleColorBar at the edge of the image', () => {
 
   it('never lets the window WRAP onto the next row of the buffer', () => {
     // ⚑ An image is a flat array, so the pixel "one to the right of the last
-    // column" is a real, readable pixel — the first one of the NEXT ROW. On a
+    // column" is a real, readable pixel - the first one of the NEXT ROW. On a
     // key running down the right-hand edge of a figure, a missing bounds check
     // therefore does not crash and does not read noise: it reads a genuine
     // colour from somewhere else entirely, which inverts to a genuine wrong
@@ -542,7 +542,7 @@ describe('sampleColorBar at the edge of the image', () => {
 
 describe('medoidColor', () => {
   it('returns a colour that was actually present, never a blend', () => {
-    // A mean would return [128,128,128] — a colour on neither side of the
+    // A mean would return [128,128,128] - a colour on neither side of the
     // border, and on a real key a position the figure never asserted.
     expect(medoidColor([[0, 0, 0], [0, 0, 0], [255, 255, 255]])).toEqual([0, 0, 0]);
   });
@@ -618,11 +618,11 @@ describe('positionOnStrip', () => {
 
 /**
  * ⚑⚑ THE OTHER DIRECTION. `invertColor` answers "what value is this ink?";
- * this answers "what ink is this value?" — and David's rule for v2.2 makes the
+ * this answers "what ink is this value?" - and David's rule for v2.2 makes the
  * second one the only one allowed to reach the screen: *"the colour / tint
  * ALWAYS == a number… the colour we show is only its REPRESENTATION."*
  */
-describe('colorAtPosition — the key read FORWARDS', () => {
+describe('colorAtPosition - the key read FORWARDS', () => {
   it('returns a sample’s own colour at that sample’s own position', () => {
     const strip = stripOf(greyRamp);
     const at0 = colorAtPosition(strip, 0)!;
@@ -633,7 +633,7 @@ describe('colorAtPosition — the key read FORWARDS', () => {
 
   it('interpolates BETWEEN two samples rather than snapping to the nearer one', () => {
     // Snapping would quantise the rendered colour to the key's own sampling
-    // pitch, so two cells a hair apart in value would be drawn identically —
+    // pitch, so two cells a hair apart in value would be drawn identically -
     // which is the very confusion the mirroring is supposed to remove.
     const strip: ColorBarStrip = {
       samples: [
@@ -648,7 +648,7 @@ describe('colorAtPosition — the key read FORWARDS', () => {
     expect(colorAtPosition(strip, 0.25)).toEqual([25, 50, 10]);
   });
 
-  it('interpolates by POSITION, not by sample index — a key with transparent gaps is unevenly spaced', () => {
+  it('interpolates by POSITION, not by sample index - a key with transparent gaps is unevenly spaced', () => {
     // `sampleColorBar` DROPS positions where every pixel was transparent rather
     // than guessing them, so `samples` is not a uniform grid and walking it by
     // index would place every colour wrong after the first gap.
@@ -667,10 +667,10 @@ describe('colorAtPosition — the key read FORWARDS', () => {
     expect(colorAtPosition(gappy, 0.45)).toEqual([45, 45, 45]);
   });
 
-  it('clamps past either end — the key has no ink beyond itself', () => {
+  it('clamps past either end - the key has no ink beyond itself', () => {
     // A cell can sit past an end (a clipped figure, or a value typed outside the
     // key's span). It must still be DRAWN, and the only honest colour is the
-    // end's own — inventing an extrapolated one would show a colour the figure
+    // end's own - inventing an extrapolated one would show a colour the figure
     // does not contain.
     const strip = stripOf(greyRamp);
     expect(colorAtPosition(strip, -0.4)).toEqual(colorAtPosition(strip, 0));
@@ -725,7 +725,7 @@ describe('invertColor', () => {
     expect(reading.t).toBeCloseTo((tA + tB) / 2, 4);
   });
 
-  it('reports a narrow band on a steep ramp — the key measured against itself', () => {
+  it('reports a narrow band on a steep ramp - the key measured against itself', () => {
     const strip = stripOf(greyRamp);
     const reading = invertColor(strip, greyRamp(0.5))!;
     // Grey climbs ~2.2 RGB units per pixel, so the noise floor buys a couple of
@@ -760,7 +760,7 @@ describe('invertColor', () => {
     expect(reading.rivals).toHaveLength(1);
     expect(reading.t).toBeCloseTo(0.25, 2);
     expect(reading.rivals[0]!.t).toBeCloseTo(0.75, 2);
-    // Both are tight bands — this is ambiguity, not imprecision.
+    // Both are tight bands - this is ambiguity, not imprecision.
     expect(reading.tHigh - reading.tLow).toBeLessThan(0.05);
     expect(reading.rivals[0]!.tHigh - reading.rivals[0]!.tLow).toBeLessThan(0.05);
   });
@@ -768,8 +768,8 @@ describe('invertColor', () => {
   it('says how far off the ramp a colour that is not on the key sits', () => {
     // A gridline, a printed number, a significance asterisk. Green is nowhere on
     // a grey key: the nearest point is ~189 RGB units away, and THAT is the
-    // signal the caller acts on. The band widens to match — a quarter of the key
-    // — so nothing here reads as a confident position either.
+    // signal the caller acts on. The band widens to match - a quarter of the key
+    // - so nothing here reads as a confident position either.
     const strip = stripOf(greyRamp);
     const reading = invertColor(strip, [0, 200, 0])!;
     expect(reading.distance).toBeGreaterThan(150);
@@ -793,8 +793,8 @@ describe('invertColor', () => {
     // ⚑ REGRESSION PIN. A cell tinted off the ramp (an alpha-blended border, a
     // JPEG smear, an asterisk clipping the sample) is exactly where a wrong
     // number is most likely and least visible. The first form of the band rule
-    // reported it as a POINT — zero width, the most confident reading the module
-    // could emit — because every sample is by definition at least `distance`
+    // reported it as a POINT - zero width, the most confident reading the module
+    // could emit - because every sample is by definition at least `distance`
     // away from a colour that sits off the ramp.
     const strip = stripOf(greyRamp);
     const clean = invertColor(strip, greyRamp(0.5))!;
@@ -813,7 +813,7 @@ describe('invertColor', () => {
     // ⚑ A real colormap is a 256-entry table, so a key repeats each colour over
     // a stretch of pixels. `lutRamp` exaggerates it to 25 pixels per entry, which
     // is what a large figure or a coarse key gives. Returning the first tied
-    // position — what a plain argmin does — biases EVERY reading to the low end
+    // position - what a plain argmin does - biases EVERY reading to the low end
     // of its plateau by half a plateau, in the same direction every time.
     const strip = rawStripOf(lutRamp);
     const reading = invertColor(strip, lutRamp(0.5))!;
@@ -854,7 +854,7 @@ describe('invertColor', () => {
 
   it('interpolates into the step BELOW a plateau as readily as the one above', () => {
     // The refinement looks both ways out of a plateau. Only ever testing the
-    // upper side would leave a whole branch of the key unread — and a heatmap's
+    // upper side would leave a whole branch of the key unread - and a heatmap's
     // low cells are as much data as its high ones.
     const strip = rawStripOf(lutRamp);
     const boundary = strip.samples.findIndex((s) => s.rgb[0] === 144);
@@ -872,7 +872,7 @@ describe('invertColor', () => {
 
   it('refines into the step below even when the plateau is the key’s FIRST entry', () => {
     // The segment on the low side of index 1 is the key's very first one, and an
-    // off-by-one in the refinement's bounds skips exactly that one — leaving the
+    // off-by-one in the refinement's bounds skips exactly that one - leaving the
     // bottom of every key read a step coarser than the rest of it.
     const strip: ColorBarStrip = {
       samples: [
@@ -885,7 +885,7 @@ describe('invertColor', () => {
       thickness: 1,
     };
     // 70 is 70% of the way up the FIRST segment, and nearest to the sample at
-    // t = 0.5 — so the plateau found is index 1 and the refinement must walk
+    // t = 0.5 - so the plateau found is index 1 and the refinement must walk
     // back into the segment before it.
     const reading = invertColor(strip, [70, 70, 70])!;
     expect(reading.distance).toBeCloseTo(0, 6);
@@ -898,7 +898,7 @@ describe('invertColor', () => {
     const strip = rawStripOf(lutRamp);
     const reading = invertColor(strip, [120, 108, 108])!;
     // Projecting (12,0,0) onto the step's direction (36,36,36) leaves
-    // (8,-4,-4) — a distance of sqrt(96).
+    // (8,-4,-4) - a distance of sqrt(96).
     expect(reading.distance).toBeCloseTo(Math.sqrt(96), 6);
   });
 
@@ -920,7 +920,7 @@ describe('invertColor', () => {
   });
 
   it('reports a POINT, not a band, when no sampled position is within tolerance', () => {
-    // ⚑ A key with one tiny step and one enormous one — a discrete or badly
+    // ⚑ A key with one tiny step and one enormous one - a discrete or badly
     // drawn scale. The colour sits exactly on the long step, so the reading is
     // exact, but no SAMPLED position is within the tolerance that the tiny local
     // step sets. Widening the band to the nearest samples would claim an extent
@@ -946,7 +946,7 @@ describe('invertColor', () => {
 
   it('survives a strip that carries no second colour at all', () => {
     // `checkStripSamples` refuses this at the sampling entrance, so it can only
-    // arrive from a project file — and the model's other entrance must not
+    // arrive from a project file - and the model's other entrance must not
     // divide by a step of zero or hand back a NaN position.
     const strip: ColorBarStrip = {
       samples: [
@@ -968,7 +968,7 @@ describe('invertColor', () => {
   it('picks the band the colour is actually in, not the first one found', () => {
     // ⚑ Three stretches of this key are consistent with a mid grey, and the
     // LAST one is the exact match. Returning whichever band came first in the
-    // scan would silently swap a reading for its rival — and on a key like this
+    // scan would silently swap a reading for its rival - and on a key like this
     // the swapped number is perfectly plausible, so nothing downstream could
     // catch it.
     const strip = stripOf(dipRamp);
@@ -1020,7 +1020,7 @@ describe('invertColor', () => {
       thickness: 1,
     });
     // Coarse on the left, fine on the right, and the reverse. The band must be
-    // the same either way — it follows the FINER neighbour in both.
+    // the same either way - it follows the FINER neighbour in both.
     const fineRight = invertColor(asymmetric(40, 6), [100, 100, 100])!;
     const fineLeft = invertColor(asymmetric(6, 40), [100, 100, 100])!;
     expect(fineRight.tHigh - fineRight.tLow).toBeCloseTo(fineLeft.tHigh - fineLeft.tLow, 10);
@@ -1030,7 +1030,7 @@ describe('invertColor', () => {
     expect(coarse.tHigh - coarse.tLow).toBeGreaterThan(fineRight.tHigh - fineRight.tLow);
   });
 
-  it('is null for a strip with fewer than two samples — the model’s other entrance', () => {
+  it('is null for a strip with fewer than two samples - the model’s other entrance', () => {
     expect(invertColor({ samples: [], from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, thickness: 1 }, [0, 0, 0])).toBeNull();
     expect(
       invertColor(

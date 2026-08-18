@@ -1,11 +1,11 @@
 /**
- * Trace Challenge — scoring a finished round, and revealing its answer.
+ * Trace Challenge - scoring a finished round, and revealing its answer.
  *
  * ⚑⚑ WHY THIS FILE EXISTS. Both functions under test spent their whole life
  * inside `Workspace.tsx` as a `useCallback` and a `useMemo`, which put them
  * beyond every instrument this project owns: unit tests cannot reach into a
  * 9,200-line component, and mutation testing cannot see `ui/` at all. The GAME'S
- * ENTIRE CORRECTNESS — whether a perfect trace scores as a perfect trace — was
+ * ENTIRE CORRECTNESS - whether a perfect trace scores as a perfect trace - was
  * carried by two blocks nothing could test. Moving them to `engine/` is what
  * makes the tests below possible; the tests are the point, not the move.
  *

@@ -3,27 +3,27 @@
  *
  * ⚑ AN ASSIST. IT PROPOSES; IT NEVER SWEEPS. This returns candidate boundaries
  * WITH the evidence for each one, and the user accepts, moves or ignores them.
- * That is the rule the bar work arrived at the hard way — every unconditional
- * image technique measured on real figures FAILED, and every gated one worked —
+ * That is the rule the bar work arrived at the hard way - every unconditional
+ * image technique measured on real figures FAILED, and every gated one worked -
  * and a grid is the best possible case for it, because a wrong divider is
  * visible on screen the instant it is drawn. Nothing here decides anything.
  *
  * ⚑ WHAT A BOUNDARY IS, MEASURED RATHER THAN ASSUMED: a position where the
  * colour changes, consistently, all the way ACROSS the figure. That covers both
- * of the ways a figure draws one — a printed white rule and a bare colour
- * discontinuity — without needing to know which it is looking at, and it is why
+ * of the ways a figure draws one - a printed white rule and a bare colour
+ * discontinuity - without needing to know which it is looking at, and it is why
  * the scan runs the full height of the plot box rather than sniffing for lines:
  * a change that only happens in part of a column is data, not a boundary.
  *
  * ⚑ A DRAWN RULE PRODUCES TWO CHANGES, one at each of its edges, and a naive
  * peak finder reports a 2px-wide border as two boundaries 2px apart. Peaks
  * within a few pixels are merged and the boundary placed at their weighted
- * centre — which is the middle of the rule, where the boundary actually is.
+ * centre - which is the middle of the rule, where the boundary actually is.
  *
  * ⚑ THE COUNT IS A CHECK, NEVER A TARGET. A caller that knows how many columns
  * the figure has can compare it against what was found and REPORT A MISS. What
  * it must never do is relax the threshold until the count comes out right: that
- * is approach C from the bar work, which won its metric by erasing short bars —
+ * is approach C from the bar work, which won its metric by erasing short bars -
  * a visible failure traded for an invisible one.
  *
  * Pure: bytes in, positions out. No axes, no DOM.
@@ -34,7 +34,7 @@ import type { RGB } from './colorFilter.js';
 
 /**
  * The plot box, as four corners in image pixels, in the order
- * `[origin, alongX, alongY, opposite]` — i.e. the projections of
+ * `[origin, alongX, alongY, opposite]` - i.e. the projections of
  * (xMin,yMin), (xMax,yMin), (xMin,yMax), (xMax,yMax). Four rather than two
  * because a scanned figure is rotated, and its columns are not the image's.
  */
@@ -44,7 +44,7 @@ export interface DetectDividersOptions {
   /** How many lines to sample across the figure at each position. */
   crossSamples?: number;
   /** Peaks closer together than this (in positions along the axis) are one
-   * boundary — a drawn rule's two edges. */
+   * boundary - a drawn rule's two edges. */
   mergeWithin?: number;
   /**
    * How big a colour change counts as a boundary, in RGB units.
@@ -66,8 +66,8 @@ const DEFAULT_MIN_STRENGTH = 8;
  *
  * ⚑ MEASURED, not guessed, and the first number was too small. A printed rule
  * shows up as a change at EACH of its edges, so the two peaks sit roughly its
- * width plus its anti-aliasing apart: a 2.5pt border at 100 dpi — an ordinary
- * choice, and what the bundled IC50 example uses — put them 4.3px apart on one
+ * width plus its anti-aliasing apart: a 2.5pt border at 100 dpi - an ordinary
+ * choice, and what the bundled IC50 example uses - put them 4.3px apart on one
  * axis and 5.0px apart on the other. A five-pixel window merged the first and
  * split the second, so the same figure reported the right number of columns and
  * one row too many. Eight covers a rule up to about 7px.
@@ -75,7 +75,7 @@ const DEFAULT_MIN_STRENGTH = 8;
  * ⚑ A REAL TRADE-OFF, stated rather than tuned away: two GENUINE boundaries
  * closer together than this merge into one. At that width the cell between them
  * is eight pixels across and the reader insets a fifth of it, so there is
- * essentially nothing there to read — but a caller working on a very dense
+ * essentially nothing there to read - but a caller working on a very dense
  * matrix can lower it, and the proposal is visible on screen either way.
  */
 const DEFAULT_MERGE_PX = 8;
@@ -83,7 +83,7 @@ const DEFAULT_MERGE_PX = 8;
 /** One proposed boundary. */
 export interface DividerCandidate {
   /** Where it sits along the axis, 0 at the box's origin edge and 1 at the far
-   * one. The caller converts to data coordinates through its own axes — this
+   * one. The caller converts to data coordinates through its own axes - this
    * module never sees them. */
   position: number;
   /** The colour change measured there, in RGB units. Bigger is a firmer
@@ -109,8 +109,8 @@ export interface DetectDividersResult {
  * `axis` is which direction to scan ALONG: `'x'` walks from the origin corner
  * towards `alongX`, sampling lines that run parallel to the y edge.
  *
- * ⚑ INTERIOR ONLY. The box's own two edges are boundaries by construction —
- * the user drew them when they calibrated — so they are not proposed and not
+ * ⚑ INTERIOR ONLY. The box's own two edges are boundaries by construction -
+ * the user drew them when they calibrated - so they are not proposed and not
  * hunted for. A caller building a grid adds them itself.
  */
 export function detectDividers(
@@ -129,8 +129,8 @@ export function detectDividers(
   const mergeWithin = options.mergeWithin ?? DEFAULT_MERGE_PX / steps;
 
   // One representative colour per position, per cross-sample line. The medoid
-  // across a short run of the cross direction keeps a single stray pixel — a
-  // gridline in the OTHER direction, a label overhanging the box — from
+  // across a short run of the cross direction keeps a single stray pixel - a
+  // gridline in the OTHER direction, a label overhanging the box - from
   // registering as a change everywhere it crosses.
   let previous: RGB[] | null = null;
   const profile: number[] = [];
@@ -149,7 +149,7 @@ export function detectDividers(
   return { candidates: peaksOf(profile, steps, minStrength, mergeWithin), profile };
 }
 
-/** How many pixel steps the axis spans — the longer of the box's two edges in
+/** How many pixel steps the axis spans - the longer of the box's two edges in
  * that direction, so nothing is scanned at less than pixel resolution. */
 function stepsAlong(box: PlotBox, axis: 'x' | 'y'): number {
   const [origin, alongX, alongY, opposite] = box;
@@ -194,8 +194,8 @@ function pixelAt(
  * distances, not the mean.
  *
  * ⚑ The median is what makes a boundary mean "all the way across". One cell's
- * worth of change in a column of twenty — the top row of a heatmap changing
- * where nothing else does, which is DATA — moves a mean enough to look like a
+ * worth of change in a column of twenty - the top row of a heatmap changing
+ * where nothing else does, which is DATA - moves a mean enough to look like a
  * boundary and leaves a median alone.
  */
 function meanChange(a: readonly RGB[], b: readonly RGB[]): number {
@@ -229,8 +229,8 @@ function peaksOf(
     if (v < minStrength) continue;
     // ⚑ THE BOX'S OWN EDGES ARE NOT DISCOVERIES. A figure's axis spine, or
     // simply the step from the paper to the first cell, is the largest change in
-    // the whole profile — measured at 222 RGB units on the viridis fixture,
-    // three times any real boundary — and proposing it would hand the user two
+    // the whole profile - measured at 222 RGB units on the viridis fixture,
+    // three times any real boundary - and proposing it would hand the user two
     // dividers on top of the edges they already placed. Anything within a
     // merge-width of either end is that edge.
     const position = (i + 0.5) / steps;
@@ -268,7 +268,7 @@ function peaksOf(
  *
  * ⚑ THE COUNT CHECKS THE ANSWER; IT DOES NOT PRODUCE IT. This reports agreement
  * or a miss and stops there. Nothing in this module widens a threshold until the
- * count is satisfied — the discipline the bar work paid for, where the approach
+ * count is satisfied - the discipline the bar work paid for, where the approach
  * that relaxed until the number came out right won the metric by erasing the
  * evidence.
  */
@@ -287,7 +287,7 @@ export function reconcileWithCount(
  *
  * ⚑ Returns null rather than a short grid when there are not enough candidates.
  * A grid with a boundary missing looks exactly like a grid, and its cells are
- * silently twice as wide as the figure's — so the user is told, and places the
+ * silently twice as wide as the figure's - so the user is told, and places the
  * rest by hand.
  */
 export function proposeDividers(
@@ -305,7 +305,7 @@ export function proposeDividers(
   return [0, ...chosen, 1];
 }
 
-/** Every candidate above the floor, as a grid — for the caller that has no count
+/** Every candidate above the floor, as a grid - for the caller that has no count
  * to declare. The same list, with the box's edges added. */
 export function proposeAllDividers(candidates: readonly DividerCandidate[]): number[] {
   return [0, ...[...candidates].map((c) => c.position).sort((a, b) => a - b), 1];

@@ -1,17 +1,17 @@
 /**
- * A banded axis — two placed edges, a declared count, and the dividers between
+ * A banded axis - two placed edges, a declared count, and the dividers between
  * them (v2.2). It has NO IDEA what the axis means.
  *
- * ⚑⚑ EXTRACTED, NOT WRITTEN. Every function below — `tickCountFor`,
+ * ⚑⚑ EXTRACTED, NOT WRITTEN. Every function below - `tickCountFor`,
  * `generateTickParams`, `dividerParamsFrom`, `bandIndexForParam`,
- * `pointAtParam`, `paramAtPoint` — is v2.1's category-tick geometry, moved here
+ * `pointAtParam`, `paramAtPoint` - is v2.1's category-tick geometry, moved here
  * unchanged; `core/categoryAxis.ts` now imports and re-exports them so its eight
  * consumers see no change. What is new is only the SEPARATION: that class was
  * two things fused, a banded axis and a shared NAME LIST that a bar chart's
  * datasets bind to, and only the second half is bar-specific.
  *
  * The heatmap design said v2.1's category ticks were the structural foundation,
- * and the build read *"NOT `core/categoryAxis.ts` — a heatmap has two
+ * and the build read *"NOT `core/categoryAxis.ts` - a heatmap has two
  * independent axes, so binding it there would make one axis rename the other"*
  * as covering the whole class. True of the names; false of the bands. From that
  * one over-application came a second divider store, a second set of marker
@@ -20,12 +20,12 @@
  * again, which is what makes a 2.5D type's third axis an axis rather than a
  * mechanism bolted beside two.
  *
- * ⚑⚑ PARAMETER SPACE IS THE WHOLE TRICK — 0 at the first edge, 1 at the second,
+ * ⚑⚑ PARAMETER SPACE IS THE WHOLE TRICK - 0 at the first edge, 1 at the second,
  * never pixels and never data coordinates. It is what makes David's two layers
  * work: *"the tick dividers are dependent on the axis end points. If the axis
  * moves, they do too."* In parameters that is true by construction, with no
- * synchronisation pass to forget. A store of ABSOLUTE coordinates — which is
- * what the first heatmap grid used — cannot express it at all: a bare number
+ * synchronisation pass to forget. A store of ABSOLUTE coordinates - which is
+ * what the first heatmap grid used - cannot express it at all: a bare number
  * cannot say whether it should follow the axis or stay where it was put.
  *
  * ⚑ PLACING the edges and MOVING them are different verbs. Placing defines the
@@ -42,13 +42,13 @@
  * (v2.1). Measured, not guessed: across the 381 bar charts in the ICPR ground
  * truth that carry an `_x-tick-type`, 242 (63.5%) print a tick UNDER each
  * category (matplotlib, ggplot) and 139 (36.5%) print one BETWEEN them (Excel).
- * Neither is safe to assume, so it is a switchable declaration — offered as a
+ * Neither is safe to assume, so it is a switchable declaration - offered as a
  * toggle beside the category count rather than as a question, because flipping
  * it moves the marks on screen and the answer is then visible on the figure.
  */
 export type TickConvention = 'centred' | 'edge';
 
-/** The least separation two ticks may have, as a parameter along the axis —
+/** The least separation two ticks may have, as a parameter along the axis -
  * sub-pixel on any real figure.
  *
  * ⚑ Shared by the drag and the LOAD door on purpose. `moveTick` leaves this much
@@ -101,7 +101,7 @@ export function generateTickParams(convention: TickConvention, categoryCount: nu
  * The N+1 dividers bounding N bands, in parameter space.
  *
  * ⚑ BOTH conventions resolve to the same N+1 dividers, and the two axis EDGES
- * are what completes either set — in `edge` the ticks are already dividers, in
+ * are what completes either set - in `edge` the ticks are already dividers, in
  * `centred` the dividers are the midpoints between adjacent ticks. Using the
  * edges as the outer two is INTERNAL: on screen they stay the axis, and nothing
  * tells the user they double as ticks.
@@ -120,7 +120,7 @@ export function dividerParamsFrom(
 /**
  * Which band a parameter falls in, given `dividers` from `dividerParamsFrom`.
  *
- * ⚑ The outermost bands are UNBOUNDED — anything left of the first divider is
+ * ⚑ The outermost bands are UNBOUNDED - anything left of the first divider is
  * category 0 and anything right of the last is category N-1. A bar sitting just
  * outside the declared span still belongs to the category it is nearest, which
  * is what a reader would say looking at the figure.
@@ -132,8 +132,8 @@ export function bandIndexForParam(t: number, dividers: readonly number[]): numbe
 /**
  * ⚑⚑ THE ONE BAND LOOKUP, with its out-of-range policy NAMED at the call site.
  *
- * The v2.2 audit's reuse pass found this loop written out THREE times — here,
- * in `core/heatmapGrid.ts`'s `bandOf`, and inline in `engine/barDetectRun.ts` —
+ * The v2.2 audit's reuse pass found this loop written out THREE times - here,
+ * in `core/heatmapGrid.ts`'s `bandOf`, and inline in `engine/barDetectRun.ts` -
  * under TWO policies. Grepping for the name found nothing; grepping for the loop
  * found all three.
  *
@@ -144,14 +144,14 @@ export function bandIndexForParam(t: number, dividers: readonly number[]): numbe
  * That difference is real and it survives; what did not survive is each site
  * expressing it by writing the loop again.
  *
- * ⚠️ THE THIRD SITE NEVER STATED A CHOICE — and its clamp is why a legend
+ * ⚠️ THE THIRD SITE NEVER STATED A CHOICE - and its clamp is why a legend
  * swatch lands in a real category instead of being reported as unplaceable
  * (v2.4, parked). Behaviour there is UNCHANGED by this consolidation; what
  * changes is that the policy is now a word someone had to type, so the v2.4 fix
  * is a one-word decision rather than an archaeology exercise.
  *
  * ⚑ `outside` has no default, deliberately. A default is how a policy gets taken
- * without being chosen — the same lesson as `readHeatmapCells`'s `kinds`.
+ * without being chosen - the same lesson as `readHeatmapCells`'s `kinds`.
  */
 export function bandIndexIn(
   dividers: readonly number[],
@@ -161,7 +161,7 @@ export function bandIndexIn(
   const bands = dividers.length - 1;
   if (bands < 1 || !Number.isFinite(v)) return null;
   // ⚑ The far edge belongs to the LAST band under both policies, so the end of a
-  // grid is not a gap — the loop's fallthrough is what delivers that, and the
+  // grid is not a gap - the loop's fallthrough is what delivers that, and the
   // refusal below must not steal it.
   if (outside === 'refuse' && (v < dividers[0]! || v > dividers[bands]!)) return null;
   for (let i = 0; i < bands; i++) {
@@ -171,12 +171,12 @@ export function bandIndexIn(
 }
 
 /**
- * ⚑⚑ THE AFFINE CORE — a value's position along a span, and back.
+ * ⚑⚑ THE AFFINE CORE - a value's position along a span, and back.
  *
  * "0 at one end, 1 at the other" was expressed TWICE: here in 2-D image space
  * (`paramAtPoint` / `pointAtParam`), and in `core/heatmapGrid.ts` in 1-D data
- * space. They were never two ideas — **the 1-D case IS the 2-D case with the
- * perpendicular component absent** — but nothing said so and nothing enforced
+ * space. They were never two ideas - **the 1-D case IS the 2-D case with the
+ * perpendicular component absent** - but nothing said so and nothing enforced
  * it, which is how a heatmap grid ended up with a parameter frame of its own.
  *
  * ⚑ Extracted rather than merely documented (David's call): a reason that lives
@@ -184,7 +184,7 @@ export function bandIndexIn(
  * is now literally `valueOfSpan` per component, and `heatmapGrid` composes these
  * two directly.
  *
- * ⚠️ `paramAtPoint` CANNOT compose from these — it is a PROJECTION, because it
+ * ⚠️ `paramAtPoint` CANNOT compose from these - it is a PROJECTION, because it
  * must also place points that are OFF the axis. So instead of claiming they are
  * the same code, a test asserts they give the same ANSWER wherever both are
  * defined ("AGREES WITH paramAtPoint FOR A POINT ON THE AXIS"). That is the
@@ -195,7 +195,7 @@ export function bandIndexIn(
  * parameter is ordinary rather than an error.
  */
 export function paramOfSpan(v: number, from: number, to: number): number {
-  // ⚑ NaN, not Infinity, for a span of nothing — the same degeneracy
+  // ⚑ NaN, not Infinity, for a span of nothing - the same degeneracy
   // `paramAtPoint` refuses, for the same reason recorded there: a span that
   // underflows to zero divides to ±Infinity, which sails through any caller
   // that only checks for NaN.
@@ -214,7 +214,7 @@ export function pointAtParam(
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint],
   t: number
 ): CategoryAxisPoint {
-  // ⚑ The affine core, once per component — so this and the heatmap grid are
+  // ⚑ The affine core, once per component - so this and the heatmap grid are
   // the same arithmetic rather than two copies of it.
   const [a, b] = edges;
   return { x: valueOfSpan(t, a.x, b.x), y: valueOfSpan(t, a.y, b.y) };
@@ -251,7 +251,7 @@ function isUsablePoint(p: CategoryAxisPoint | undefined): p is CategoryAxisPoint
 
 /** The squared length of the axis, as the arithmetic that will actually divide
  * by it computes it. Zero here is the exact condition `paramAtPoint` cannot
- * survive — which is NOT the same as "the two points are equal", since a
+ * survive - which is NOT the same as "the two points are equal", since a
  * denormally short axis underflows to zero with distinct endpoints. */
 function axisLengthSq(a: CategoryAxisPoint, b: CategoryAxisPoint): number {
   const dx = b.x - a.x;
@@ -263,13 +263,13 @@ function axisLengthSq(a: CategoryAxisPoint, b: CategoryAxisPoint): number {
 
 
 export class BandedAxis {
-  /** The two placed points that ARE the axis — its line, direction and span.
+  /** The two placed points that ARE the axis - its line, direction and span.
    * Null until placed. Never presented as ticks. */
   private _edges: [CategoryAxisPoint, CategoryAxisPoint] | null = null;
 
   private _convention: TickConvention = 'centred';
 
-  /** Tick positions as parameters along the axis — see `generateTickParams`. */
+  /** Tick positions as parameters along the axis - see `generateTickParams`. */
   private _tickParams: number[] = [];
 
   /** Whether any tick has been dragged since the last generation. Regeneration
@@ -280,14 +280,14 @@ export class BandedAxis {
   /** How many bands the user has DECLARED. Zero until they say.
    *
    * ⚑ Stored here, unlike `CategoryAxis` where the count IS the name list's
-   * length — because an axis with no names still has bands. That coupling is
+   * length - because an axis with no names still has bands. That coupling is
    * exactly what made a value axis unable to have a grid. */
   private _count = 0;
 
   /**
    * PLACE the two edges, generating ticks from scratch.
    *
-   * ⚑ Refuses a degenerate axis rather than reporting success on it — the
+   * ⚑ Refuses a degenerate axis rather than reporting success on it - the
    * `calibrate()`-that-cannot-fail shape this project has found five times. Two
    * coincident edges make `paramAtPoint` divide by zero, so every tick, divider
    * and band assignment reads back NaN with nothing on screen wrong.
@@ -305,7 +305,7 @@ export class BandedAxis {
    * ⚑⚑ THE ONE THING A HEATMAP NEEDS THAT A BAR CHART DOES NOT. Bar places its
    * axis once and freezes it, so `setEdges`'s regeneration is right there. A
    * heatmap's axis is its CALIBRATION, which stays draggable like every other
-   * graph type's — and dragging it must move the grid without throwing away a
+   * graph type's - and dragging it must move the grid without throwing away a
    * grid the user has tuned. In parameter space that is simply "do not
    * regenerate"; the pixels follow because they were never stored.
    */
@@ -361,7 +361,7 @@ export class BandedAxis {
    * Drop the bands, keeping the axis line itself.
    *
    * ⚑ The state a NAME LIST has before anyone has said how many categories
-   * there are — `CategoryAxis` reaches it whenever its list is empty. A heatmap
+   * there are - `CategoryAxis` reaches it whenever its list is empty. A heatmap
    * axis never does: "zero columns" is not a figure, which is why `setCount`
    * refuses it at the declaration door. Two different facts, so two methods,
    * rather than one door that accepts a meaningless count to keep the other
@@ -385,7 +385,7 @@ export class BandedAxis {
    * Rebuild the evenly spaced ticks from the edges, the convention and the
    * count, discarding any manual adjustment.
    *
-   * ⚑ Callers must warn BEFORE calling this when `hasAdjustments()` — silently
+   * ⚑ Callers must warn BEFORE calling this when `hasAdjustments()` - silently
    * reverting someone's corrections is the failure that flag exists to prevent.
    */
   regenerate(): boolean {
@@ -404,7 +404,7 @@ export class BandedAxis {
    * regenerated instead.
    *
    * ⚑ THE LOAD PATH IS THE MODEL'S OTHER ENTRANCE. A stored tick list must be
-   * finite, strictly inside the axis, and SPACED — not merely increasing —
+   * finite, strictly inside the axis, and SPACED - not merely increasing -
    * because `moveTick` leaves EPS on each side and a hand-edited file that got
    * in under a weaker rule puts the model in a state no sequence of clicks can
    * produce. It REPAIRS rather than refusing: ticks are an aid, so regenerating
@@ -416,7 +416,7 @@ export class BandedAxis {
     const expected = tickCountFor(this._convention, this._count);
     // ⚑⚑ THE COMPARISON IS SLACKENED BY ONE ULP, and the exact figure matters.
     // "moveTick clamps to prev + EPS" is not true in floating point:
-    // `(0.25 + 1e-6) - 0.25` is 9.999999999732445e-7 — BELOW EPS — and rounds
+    // `(0.25 + 1e-6) - 0.25` is 9.999999999732445e-7 - BELOW EPS - and rounds
     // down like that at 78 of the 299 tick positions generated for N = 2..24.
     // Comparing against EPS exactly therefore rejects tick sets the drag itself
     // just produced, and a rejected set is REGENERATED with `_adjusted` reset,
@@ -457,7 +457,7 @@ export class BandedAxis {
     return this._tickParams.map((t) => pointAtParam(edges, t));
   }
 
-  /** The N+1 dividers bounding the N bands — see `dividerParamsFrom`. */
+  /** The N+1 dividers bounding the N bands - see `dividerParamsFrom`. */
   getDividerParams(): number[] {
     if (!this._edges) return [];
     return dividerParamsFrom(this._convention, this._tickParams);
@@ -478,7 +478,7 @@ export class BandedAxis {
    *
    * Clamped strictly between its neighbours (and inside the edges), so a tick
    * can never cross another or leave the span. That keeps tick *i* the divider
-   * for band *i* by construction — reordering under the drag would silently
+   * for band *i* by construction - reordering under the drag would silently
    * reassign every band beyond it.
    */
   moveTick(index: number, point: CategoryAxisPoint): boolean {
@@ -499,7 +499,7 @@ export class BandedAxis {
   }
 
   /** Which band `point` falls in, projected onto the axis. Null when there is no
-   * geometry to answer with. The outermost bands are unbounded — a cell drawn a
+   * geometry to answer with. The outermost bands are unbounded - a cell drawn a
    * pixel past the plot box belongs to the band it is nearest. */
   bandIndexAt(point: CategoryAxisPoint): number | null {
     const edges = this._edges;

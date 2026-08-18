@@ -3,7 +3,7 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See core/mathFunctions.ts for porting-provenance notes.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL — one deliberate divergence, checkpoint 81. See
+ * ⚑ NO LONGER BYTE-FAITHFUL - one deliberate divergence, checkpoint 81. See
  * parseWholeNumber below. Upstream prefix-parses with `parseFloat`, so any
  * trailing garbage is silently discarded and the user is told nothing. Under
  * tenet 1 ("graph in → RELIABLE data out") that is the worst failure we can
@@ -14,7 +14,7 @@
 import * as dateConverter from './dateConversion.js';
 
 /**
- * `input` as a number, but **only if the WHOLE string is one** — else null.
+ * `input` as a number, but **only if the WHOLE string is one** - else null.
  *
  * **The divergence, and why it earns itself** (found by execution 2026-07-17,
  * during what was logged as a Bar-only defect and turned out to be this):
@@ -37,18 +37,18 @@ import * as dateConverter from './dateConversion.js';
  * date path claims *before* this runs.
  *
  * **This also closes parity gap 8b, whose stated defence was doubly wrong.**
- * It argued the ISO date was (a) *"INHERITED, NOT OURS — byte-for-byte
- * upstream's, so we are at parity and the tenet holds"* — parity with WPD is
- * not a defence for anything (tenet 5) — and (b) *"NOT a cheap fix: WPD accepts
+ * It argued the ISO date was (a) *"INHERITED, NOT OURS - byte-for-byte
+ * upstream's, so we are at parity and the tenet holds"* - parity with WPD is
+ * not a defence for anything (tenet 5) - and (b) *"NOT a cheap fix: WPD accepts
  * equations in calibration values, so `2024-01-01` is genuinely ambiguous
  * between a date and a subtraction."* **Verified by execution: equations do NOT
  * work.** `"2+3"` yields `2`, not 5; there is no equation evaluation anywhere in
  * this file, ours or upstream. There was never anything for the `-` to be
- * ambiguous *with*. (CLAUDE.md's "value transforms are NOT unreachable —
+ * ambiguous *with*. (CLAUDE.md's "value transforms are NOT unreachable -
  * equations already work" rule-out is false for the same reason.)
  *
  * **Empty string is refused explicitly**, because `Number("")` is `0` where
- * `parseFloat("")` was `NaN` — the one place a naive swap would have made
+ * `parseFloat("")` was `NaN` - the one place a naive swap would have made
  * things worse, turning a blank field into a silent zero.
  *
  * **Known, deliberate non-change:** `"10/2"` still reads as a *date*

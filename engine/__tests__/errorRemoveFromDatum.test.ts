@@ -6,7 +6,7 @@
  * bar to a point or line."*
  *
  * ⚑ The removal is not a MODE being switched off. In the tuple record a point
- * whose extent slots are all null IS a plain point — identical in the record to
+ * whose extent slots are all null IS a plain point - identical in the record to
  * one that never had error. So "remove the error bars from this point" is
  * "clear its extents", and there is no error-ness left over to turn off.
  *
@@ -72,7 +72,7 @@ describe('removing the error from a point leaves the point', () => {
     expect(bars[1]!.yLower).toBeDefined();
   });
 
-  it('the cap pixels really go — no stray points left behind', () => {
+  it('the cap pixels really go - no stray points left behind', () => {
     // ⚑ The defect that started this rework was orphaned caps floating on the
     // canvas with no datum under them. Nulling the slot without removing the
     // pixel would recreate it in a new place.
@@ -115,7 +115,7 @@ describe('removing the error from a point leaves the point', () => {
   });
 });
 
-describe('deleting the POINT takes its error with it — the cascade', () => {
+describe('deleting the POINT takes its error with it - the cascade', () => {
   it('the datum and both its caps go together', () => {
     // ⚑ The orphaned-cap defect, made inexpressible: they are one tuple, so
     // there is no second store that could survive the delete.

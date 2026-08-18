@@ -12,7 +12,7 @@ import path from 'node:path';
  * drifts from code silently, because nothing executes prose.
  *
  * So the test reads BOTH files and checks the card's table against the
- * handlers' own source. It cannot prove a key WORKS — an e2e does that — but it
+ * handlers' own source. It cannot prove a key WORKS - an e2e does that - but it
  * catches the failure that actually happens: someone renumbers a tool, or
  * deletes a binding, and the help card keeps promising the old one.
  *
@@ -32,7 +32,7 @@ const ENGINE = path.join(UI_SRC, '..', '..', 'engine');
 const overlay = readFileSync(path.join(UI_SRC, 'HelpOverlay.tsx'), 'utf8');
 const workspace = readFileSync(path.join(UI_SRC, 'Workspace.tsx'), 'utf8');
 /**
- * Workspace.tsx PLUS the panels it renders — the rail's markup is spread across
+ * Workspace.tsx PLUS the panels it renders - the rail's markup is spread across
  * both since the v2.1 split, so a card claiming to show "the rail's own glyph"
  * has to be checked against wherever that glyph is actually used. Reading the
  * directory rather than listing files means a panel added later is covered
@@ -47,7 +47,7 @@ const railMarkup =
     .filter((f) => f.endsWith('.tsx'))
     .map((f) => readFileSync(path.join(PANELS, f), 'utf8'))
     .join('\n');
-/** The global keydown ladder — where every shortcut the card lists is decided. */
+/** The global keydown ladder - where every shortcut the card lists is decided. */
 const keyboard = readFileSync(path.join(ENGINE, 'keyboardActions.ts'), 'utf8');
 
 /** Pull the rows out of one of the card's tables, as [key, description]. The
@@ -82,7 +82,7 @@ describe('the editing and document keys exist in the handlers', () => {
   });
 
   it('Shift really is the COARSE nudge, not the fine one', () => {
-    // The card says "Shift + arrows — nudge coarsely". Reversed, the card would
+    // The card says "Shift + arrows - nudge coarsely". Reversed, the card would
     // still read plausibly while telling the user the opposite of the truth.
     expect(keyboard).toMatch(/shiftKey \? 5 : 0\.5/);
   });
@@ -118,7 +118,7 @@ describe('the card is reachable both ways, which is the keystone requirement', (
     expect(workspace).toMatch(/setHelpOverlayOpen\(true\)/);
   });
 
-  it('a VISIBLE button opens it too — a key-only route is undiscoverable', () => {
+  it('a VISIBLE button opens it too - a key-only route is undiscoverable', () => {
     // If this ever fails because someone removed the button "since F1 does it",
     // that is the regression: a first-time user cannot press a key they have
     // never been told about.
@@ -129,7 +129,7 @@ describe('the card is reachable both ways, which is the keystone requirement', (
 
 describe('the tool rows show the rail’s OWN glyphs', () => {
   // ⚑ David's call, and it is the keystone rule rather than decoration: the
-  // rail is icons with no labels, so "3 — Place point" names something the
+  // rail is icons with no labels, so "3 - Place point" names something the
   // user still cannot find. The card has to show the picture to be a lookup.
   const RAIL_ICONS = [
     'HandIcon',
@@ -175,7 +175,7 @@ describe('the card stays a card', () => {
     // release in the manual. A version number reaching the SCREEN means the
     // rule has started to erode.
     //
-    // ⚑ Comments are stripped first, and that is not a loophole — the first
+    // ⚑ Comments are stripped first, and that is not a loophole - the first
     // version of this assertion ran over the whole file and failed on this
     // component's own header ("the in-the-moment card (v2.0)"), which no user
     // will ever read. An assertion that fires on prose the rule does not
@@ -229,7 +229,7 @@ describe('the card stays a card', () => {
     expect(between).not.toContain('height: 1, background');
   });
 
-  it('keeps the workflow to six steps — it is a reminder, not a tour', () => {
+  it('keeps the workflow to six steps - it is a reminder, not a tour', () => {
     expect(tableRows('WORKFLOW')).toHaveLength(6);
   });
 });

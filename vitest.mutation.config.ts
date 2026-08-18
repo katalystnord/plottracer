@@ -10,7 +10,7 @@ import { defineConfig } from 'vitest/config';
 // screen.
 //
 // File parallelism is left ON here (the root config disables it because the e2e
-// files contend over Electron launches — a constraint that does not apply to
+// files contend over Electron launches - a constraint that does not apply to
 // the pure suites this config runs).
 export default defineConfig({
   test: {

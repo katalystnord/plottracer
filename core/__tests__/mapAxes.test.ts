@@ -3,7 +3,7 @@ import { MapAxes } from '../axes/map.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * Map calibration — a scale bar, not a pair of axes.
+ * Map calibration - a scale bar, not a pair of axes.
  *
  * ⚑ WHY THIS FILE EXISTS. `core/axes/map.ts` is a faithful port of wpd-core's
  * `core/axes/map.js`, scored 43.55% by mutation testing with 26 mutants no test
@@ -12,7 +12,7 @@ import { Calibration } from '../calibration.js';
  * cases port directly.
  *
  * ADAPTED FROM WebPlotDigitizer's `tests/map_axes_tests.js` (Copyright (C) 2025
- * Ankit Rohatgi, AGPL-3.0 — the same licence as this project).
+ * Ankit Rohatgi, AGPL-3.0 - the same licence as this project).
  *
  * The calibration throughout: two points 10px apart vertically, declared to span
  * 100 m. So the scale is 10 m per pixel, and every expected number below is
@@ -33,7 +33,7 @@ function calibrated(
   return axes;
 }
 
-describe('MapAxes — top-left origin (WPD)', () => {
+describe('MapAxes - top-left origin (WPD)', () => {
   const axes = calibrated('100', 'top-left', 500);
 
   it('reads a pixel straight down the scale, y increasing downwards', () => {
@@ -55,7 +55,7 @@ describe('MapAxes — top-left origin (WPD)', () => {
   });
 });
 
-describe('MapAxes — bottom-left origin (WPD)', () => {
+describe('MapAxes - bottom-left origin (WPD)', () => {
   const axes = calibrated('100', 'bottom-left', 500);
 
   it('flips y against the image height', () => {
@@ -75,10 +75,10 @@ describe('MapAxes — bottom-left origin (WPD)', () => {
   });
 });
 
-describe('MapAxes — what it does NOT provide', () => {
+describe('MapAxes - what it does NOT provide', () => {
   it('has no dataToPixel: the port ships WPD\'s unimplemented stub', () => {
     // Stated rather than left to be discovered. A map calibration is a scale
-    // bar, so there is no inverse mapping to a unique pixel — the same reason
+    // bar, so there is no inverse mapping to a unique pixel - the same reason
     // Bar ships an unimplemented dataToPixel. Asserted so that if someone ever
     // implements it, this test fails and forces the decision to be deliberate.
     const axes = calibrated('100', 'top-left', 500);
@@ -106,18 +106,18 @@ describe('MapAxes.calibrate refuses too few calibration points (v2.0 audit)', ()
 });
 
 /**
- * ⚑ A SCALE THAT MEASURES NOTHING — refused, rather than reported as success.
+ * ⚑ A SCALE THAT MEASURES NOTHING - refused, rather than reported as success.
  *
  * `processCalibration` divided by `dist` (the pixel length of the reference
  * line) and multiplied by `scaleLength` (its real-world length), and returned
  * true whatever those were. MAP_AXES_CONFIG.buildAxes even carries
- * `if (!ok) return { error: 'Calibration failed — ...' }` — a refusal that
+ * `if (!ok) return { error: 'Calibration failed - ...' }` - a refusal that
  * could never fire, which is the "a check that did not run looks exactly like
  * a check that passed" shape.
  *
  * The reachable case is not exotic. A user drawing a scale bar and typing 0
  * for its length got a calibration that reported success, showed no error, and
- * made EVERY distance and area read exactly 0 — a silently wrong number on the
+ * made EVERY distance and area read exactly 0 - a silently wrong number on the
  * primary path, with nothing on screen to question. A non-numeric entry read
  * null instead; coincident endpoints likewise.
  */
@@ -168,9 +168,9 @@ describe('a reference line that cannot set a scale is refused', () => {
 });
 
 /**
- * ⚑ THE SCALE LENGTH GOES THROUGH InputParser — round-2 audit.
+ * ⚑ THE SCALE LENGTH GOES THROUGH InputParser - round-2 audit.
  *
- * It was the last calibration value in the app still using `parseFloat` — a
+ * It was the last calibration value in the app still using `parseFloat` - a
  * PREFIX parser. `core/inputParser.ts`'s own doc-table records what that
  * costs: `"1,000"` became `1`, i.e. *"Every value 1000x wrong"*, and `"5 kg"`
  * became `5`. The app-wide fix was to parse the WHOLE string with `Number()`
@@ -216,7 +216,7 @@ describe('the reference length is parsed the way every other value is', () => {
     expect(readX('2.5')).toBeCloseTo(5, 6);
   });
 
-  it('still refuses what it refused before — zero, negative, empty, non-numeric', () => {
+  it('still refuses what it refused before - zero, negative, empty, non-numeric', () => {
     expect(readX('0')).toBeNull();
     expect(readX('-5')).toBeNull();
     expect(readX('')).toBeNull();

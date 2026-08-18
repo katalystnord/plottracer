@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatLabelList, labelAt, labelCoverage, parseLabelList, reindexLabels } from '../heatmapLabels.js';
 
 /**
- * The names on a heatmap's axes — "the label is the coordinate" (v2.2).
+ * The names on a heatmap's axes - "the label is the coordinate" (v2.2).
  *
  * ⚑ The record shape is a plain list per axis, indexed by cell, so these tests
  * are about the two things that can silently lose data: a name that contains the
@@ -14,13 +14,13 @@ describe('parseLabelList', () => {
     expect(parseLabelList('BRCA1, TP53 , EGFR')).toEqual(['BRCA1', 'TP53', 'EGFR']);
   });
 
-  it('is empty for an empty field — no labels, not one blank one', () => {
+  it('is empty for an empty field - no labels, not one blank one', () => {
     expect(parseLabelList('')).toEqual([]);
     expect(parseLabelList('   ')).toEqual([]);
   });
 
   it('KEEPS AN EMPTY SLOT, so a gap does not renumber the axis', () => {
-    // ⚑ Dropping the blank would move C onto column 2 — every later cell filed
+    // ⚑ Dropping the blank would move C onto column 2 - every later cell filed
     // under the wrong name while every value stayed right.
     expect(parseLabelList('A,,C')).toEqual(['A', '', 'C']);
     expect(parseLabelList('A,B,')).toEqual(['A', 'B', '']);
@@ -49,7 +49,7 @@ describe('formatLabelList', () => {
 
   it('drops TRAILING empties, which padding creates and the user never typed', () => {
     // ⚑ `reindexLabels` pads a short list to the grid's size; without this a
-    // reopened project showed "BRCA1, TP53, , , " — punctuation growing every
+    // reopened project showed "BRCA1, TP53, , , " - punctuation growing every
     // time the grid did. Gaps BETWEEN names are positions and stay.
     expect(formatLabelList(['A', 'B', '', ''])).toBe('A, B');
     expect(formatLabelList(['A', '', 'C'])).toBe('A, , C');
@@ -62,7 +62,7 @@ describe('formatLabelList', () => {
   });
 });
 
-describe('reindexLabels — the order the figure is READ in', () => {
+describe('reindexLabels - the order the figure is READ in', () => {
   it('leaves a list alone when the cells run the way the figure reads', () => {
     expect(reindexLabels(['A', 'B', 'C'], 3, false)).toEqual(['A', 'B', 'C']);
   });
@@ -76,7 +76,7 @@ describe('reindexLabels — the order the figure is READ in', () => {
 
   it('PADS BEFORE REVERSING, so a short list names the rows it was read from', () => {
     // ⚑ Three names on a five-row figure belong to the TOP three rows. Reversing
-    // without padding would slide them two rows down the figure — a silent
+    // without padding would slide them two rows down the figure - a silent
     // mis-filing that looks like a shorter list, not like a wrong one.
     expect(reindexLabels(['a', 'b', 'c'], 5, true)).toEqual(['', '', 'c', 'b', 'a']);
     expect(reindexLabels(['a', 'b', 'c'], 5, false)).toEqual(['a', 'b', 'c', '', '']);
@@ -97,7 +97,7 @@ describe('reindexLabels — the order the figure is READ in', () => {
     expect(reindexLabels(['a'], 1.5, true)).toEqual(['a']);
     // ⚑ NaN is the one that needs the guard, and mutation is what showed it:
     // -1 and 1.5 fall out the same way with or without it, but `Array.from({
-    // length: NaN })` is EMPTY — the names would be dropped, not reordered.
+    // length: NaN })` is EMPTY - the names would be dropped, not reordered.
     expect(reindexLabels(['a', 'b'], NaN, true)).toEqual(['a', 'b']);
   });
 });

@@ -6,7 +6,7 @@ import { findFitModel } from '../nonlinearFit.js';
  * EQUATION STRING and the INITIAL GUESS.
  *
  * ⚑ WHY THIS FILE EXISTS. `nonlinearFit.ts` carries 168 mutants no test
- * notices — the most of any file outside `calibrationSession.ts` — and they
+ * notices - the most of any file outside `calibrationSession.ts` - and they
  * cluster in exactly these two places, because the existing tests all assert
  * on *fitted parameters* and never on the string beside them or on where the
  * search started.
@@ -20,7 +20,7 @@ import { findFitModel } from '../nonlinearFit.js';
  *   and which one depends entirely on where it starts. The guesses here are
  *   built from MEASURED features of the data (the tallest point, the y-weighted
  *   spread, the half-height crossing) precisely so the start is a reading and
- *   not a default — a guess that quietly degrades to a constant still fits
+ *   not a default - a guess that quietly degrades to a constant still fits
  *   most textbook curves, so the failure hides.
  */
 
@@ -40,7 +40,7 @@ describe('the equation string a user copies out', () => {
 
   it('⚑ writes zero as "0", not as scientific notation', () => {
     // The `n !== 0` guard: 0 has magnitude below 1e-4, so without it every
-    // zero parameter would print as "0.0000e+0" — technically true, and
+    // zero parameter would print as "0.0000e+0" - technically true, and
     // unreadable in a caption.
     expect(exponential.formatEquation([0, 0])).toBe('y = 0·e^(0·x)');
   });
@@ -48,7 +48,7 @@ describe('the equation string a user copies out', () => {
   it('switches to scientific notation for very small and very large magnitudes', () => {
     // A digitized figure spans real physical scales; 0.0000123 rendered at
     // five significant digits is fine, but 1230000 becomes "1230000" and
-    // 0.00000123 becomes "0.00000123" — both lose the reader.
+    // 0.00000123 becomes "0.00000123" - both lose the reader.
     expect(exponential.formatEquation([1.23e-5, 1])).toBe('y = 1.2300e-5·e^(1·x)');
     expect(exponential.formatEquation([1.23e7, 1])).toBe('y = 1.2300e+7·e^(1·x)');
   });
@@ -62,7 +62,7 @@ describe('the equation string a user copies out', () => {
   });
 
   it('uses the magnitude, so a large NEGATIVE number is scientific too', () => {
-    // `Math.abs` — without it, −1.23e7 tests as "less than 1e6" and prints in
+    // `Math.abs` - without it, −1.23e7 tests as "less than 1e6" and prints in
     // full, while −1.23e-5 tests as "not less than 1e-4" and does the same.
     expect(exponential.formatEquation([-1.23e7, -1.23e-5])).toBe('y = -1.2300e+7·e^(-1.2300e-5·x)');
   });
@@ -113,7 +113,7 @@ function gaussianSamples(a: number, b: number, c: number, xs: number[]) {
 describe("the Gaussian's guess is read off the data", () => {
   it('takes the peak from the TALLEST point, not the first or the middle one', () => {
     // The peak's height and position are both directly measurable, and the
-    // scan must actually compare — mutated to always keep pts[0] it would
+    // scan must actually compare - mutated to always keep pts[0] it would
     // still fit any curve whose first point happens to be highest.
     const pts = [
       { x: 0, y: 1 },
@@ -197,7 +197,7 @@ describe("the logistic's guess is read off the data", () => {
   it('⚑ puts the midpoint at the HALF-HEIGHT crossing, not at the first point', () => {
     // The defining feature of an S-curve, and the one the LM search is least
     // able to recover on its own: started at the wrong end of the rise the fit
-    // flattens instead of turning. Half of 8 is 4, so x = 5 is the crossing —
+    // flattens instead of turning. Half of 8 is 4, so x = 5 is the crossing -
     // and it is neither the first point nor the middle of the x range.
     const pts = [
       { x: 0, y: 0.1 },
@@ -257,7 +257,7 @@ describe("the logistic's guess is read off the data", () => {
 
 describe('a model with a degenerate width evaluates to NaN rather than to Infinity', () => {
   it('Gaussian: a zero width is refused at evaluation', () => {
-    // Not a guard against the guess — LM can WALK a parameter to zero. NaN
+    // Not a guard against the guess - LM can WALK a parameter to zero. NaN
     // makes the trial step fail its finite check and be rejected; Infinity
     // would compare as "not better" only by luck.
     expect(Number.isNaN(gaussian.evaluate([1, 0, 0], 1))).toBe(true);

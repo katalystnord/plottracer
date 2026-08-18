@@ -6,7 +6,7 @@ import { sweepStaleProfiles, freshProfile, E2E_PROFILE_PREFIX, SIX_HOURS_MS } fr
 
 /**
  * ⚑⚑ THE CASE, as an outcome: *given profiles older than six hours, the sweep
- * removes them — whatever else has or has not touched the directory.*
+ * removes them - whatever else has or has not touched the directory.*
  *
  * It did not. The sweep read its clock as `fs.statSync(os.tmpdir()).mtimeMs`,
  * which is the mtime of /tmp rather than the time, so the six-hour rule was
@@ -36,7 +36,7 @@ function aged(name: string, hours: number): string {
 }
 
 describe('⚑⚑ the abandoned-profile sweep', () => {
-  it('reaps a profile older than six hours on an IDLE directory — the case that failed', () => {
+  it('reaps a profile older than six hours on an IDLE directory - the case that failed', () => {
     // ⚑ THE REGRESSION. The directory's own mtime is set to the same moment the
     // profiles were made, which is exactly what an idle /tmp looks like: nothing
     // but this suite has touched it. Reading the clock from the directory made
@@ -53,7 +53,7 @@ describe('⚑⚑ the abandoned-profile sweep', () => {
     expect(fs.readdirSync(sandbox)).toEqual([]);
   });
 
-  it('leaves a LIVE run\'s profile alone — no live run is six hours old', () => {
+  it('leaves a LIVE run\'s profile alone - no live run is six hours old', () => {
     aged(`${E2E_PROFILE_PREFIX}live`, 0);
     expect(sweepStaleProfiles(sandbox, Date.now())).toEqual([]);
     expect(fs.readdirSync(sandbox)).toEqual([`${E2E_PROFILE_PREFIX}live`]);
@@ -80,11 +80,11 @@ describe('⚑⚑ the abandoned-profile sweep', () => {
     expect(sweepStaleProfiles(path.join(sandbox, 'nope'), Date.now())).toEqual([]);
   });
 
-  it('is not vacuous — the clock is an ARGUMENT, so a wrong clock is expressible', () => {
+  it('is not vacuous - the clock is an ARGUMENT, so a wrong clock is expressible', () => {
     // ⚑ This is the test that would have caught the original: hand the sweep the
     // clock the old code used (the directory's own mtime, on an idle directory)
     // and it reaps nothing, while the real clock reaps both. If the signature
-    // ever goes back to reading the time itself, this stops compiling — which is
+    // ever goes back to reading the time itself, this stops compiling - which is
     // the point of the seam.
     aged(`${E2E_PROFILE_PREFIX}aaa`, 10);
     const tenHoursAgo = Date.now() - 10 * 60 * 60 * 1000;

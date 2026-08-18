@@ -88,7 +88,7 @@ describe('splitting a run at declared dividers', () => {
     expect(splitRunAtDividers(columns, [0, 20]).pieces[0]!.columns).toBe(21);
   });
 
-  it('answers nothing for fewer than two dividers — there is no band', () => {
+  it('answers nothing for fewer than two dividers - there is no band', () => {
     const columns = bar(0, 10, 20);
     expect(splitRunAtDividers(columns, [])).toEqual({ pieces: [], emptyBands: [] });
     expect(splitRunAtDividers(columns, [5])).toEqual({ pieces: [], emptyBands: [] });
@@ -101,7 +101,7 @@ describe('splitting a run at declared dividers', () => {
     expect(pieces[1]!.min).toBe(60);
   });
 
-  it('⚑ the median genuinely SORTS — a band whose columns arrive out of order', () => {
+  it('⚑ the median genuinely SORTS - a band whose columns arrive out of order', () => {
     // Every other fixture here has uniform columns, so ordering cannot matter
     // and the sort was untested: mutation showed the comparator could be
     // removed or inverted with the suite still green. A ragged top -- a grid
@@ -162,7 +162,7 @@ describe('reconciling against the declared count', () => {
     });
   });
 
-  it('⚑ REPORTS ONLY — it changes nothing about the split it was given', () => {
+  it('⚑ REPORTS ONLY - it changes nothing about the split it was given', () => {
     // If this ever retried, relaxed a threshold, or filled a gap, it would be
     // approach C with extra steps: erasing a visible failure by manufacturing
     // the expected answer.
@@ -203,7 +203,7 @@ describe('reading the columns out of the blob’s OWN pixels', () => {
     expect(cols[0]).toEqual({ at: 2, min: 3, max: 9 });
   });
 
-  it('⚑ READS NOTHING that is not the blob’s own — the whole point of the change', () => {
+  it('⚑ READS NOTHING that is not the blob’s own - the whole point of the change', () => {
     // A legend swatch sits in the same colour, inside the run's bounding box,
     // and used to be measured as part of it. It is not in the blob's membership,
     // so it contributes nothing.
@@ -215,7 +215,7 @@ describe('reading the columns out of the blob’s OWN pixels', () => {
     expect(Math.min(...swatchInsideTheBbox.map((p) => Math.floor(p / 20)))).toBeLessThan(10);
   });
 
-  it('has no gap columns to omit — a blob only contains ink', () => {
+  it('has no gap columns to omit - a blob only contains ink', () => {
     // Two disconnected rects would be two BLOBS; within one, every column of the
     // membership has ink by construction, so there is nothing to filter.
     const cols = runColumnsFromMembers([...rect(10, 1, 4, 2, 8), ...rect(10, 5, 4, 6, 8)], 10, 'x');

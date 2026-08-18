@@ -1,6 +1,6 @@
 /**
  * Canvas-dominant window shell (checkpoint 39, see CLAUDE.md's "Product #1
- * — rebuild design" and the checkpoint 39 notes). Mirrors Ketcher's own
+ * - rebuild design" and the checkpoint 39 notes). Mirrors Ketcher's own
  * editor-window structure -- a single CSS-Grid frame with named areas, an
  * intrinsic-width icon rail, and the canvas as the dominant `1fr` cell that
  * absorbs all remaining space (`packages/ketcher-react/src/script/ui/App/
@@ -296,7 +296,7 @@ export const RightSidebar = styled('div')({
  *
  * ⚑ It carries a visible GRIP (David, 2026-07-27). A 7px strip that only reveals
  * itself on hover is a capability you have to already suspect is there before you
- * can find it — the keystone's "he can only use what he sees" applied to a control
+ * can find it - the keystone's "he can only use what he sees" applied to a control
  * rather than to a workflow. The grip is always drawn, faintly, and firms up under
  * the cursor; the hit area stays the full-height strip, so the target is no harder
  * to acquire than before. */

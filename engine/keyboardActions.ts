@@ -8,7 +8,7 @@ import type { AxesTypeConfig, CalibratedAxes } from './axesTypeConfigs.js';
  * ⚑ WHY THIS MOVED OUT (v2.1, the Workspace split). The keydown handler is not
  * a lookup table, it is a PRECEDENCE LADDER: Enter and Escape each resolve
  * innermost-first, and every editing key is gated on the mode that owns it. The
- * gating is not decoration — it is a v0.6.0 release-gate finding. Without it a
+ * gating is not decoration - it is a v0.6.0 release-gate finding. Without it a
  * data-point selection left over from Place Point was silently nudged or
  * deleted by arrows/Del while the user was in Measure aiming at something else:
  * a wrong-target edit with no visible cause.
@@ -28,7 +28,7 @@ export interface KeyPress {
   shiftKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
-  /** Focus is in an INPUT/TEXTAREA/contenteditable — resolved by the caller,
+  /** Focus is in an INPUT/TEXTAREA/contenteditable - resolved by the caller,
    * since only the DOM knows. */
   targetIsTextField: boolean;
 }
@@ -38,7 +38,7 @@ export interface KeyboardState {
   measureTool: string | null;
   figureCaptured: boolean;
   canvasHasImage: boolean;
-  /** The axes are built — `session.getAxes()` is non-null. */
+  /** The axes are built - `session.getAxes()` is non-null. */
   isCalibrated: boolean;
   /** A crop rectangle has been drawn and awaits Apply. */
   hasCropRect: boolean;
@@ -66,7 +66,7 @@ export interface KeyboardState {
    */
   dataPointRoles: () => readonly (PointRole | null)[];
   autoExtractKind: AxesTypeConfig<CalibratedAxes>['autoExtractKind'];
-  /** Any series has at least one point — the Error bars button's own guard. */
+  /** Any series has at least one point - the Error bars button's own guard. */
   hasAnyPoints: () => boolean;
 }
 
@@ -96,7 +96,7 @@ export type KeyAction =
   | { type: 'toggle-auto-extract' }
   | { type: 'toggle-error-bars' }
   | { type: 'toggle-measure' }
-  /** Fire a rail/panel button by test id — the fly-outs open through their own
+  /** Fire a rail/panel button by test id - the fly-outs open through their own
    * button so a disabled one cannot be triggered by key. */
   | { type: 'click'; selector: string }
   /** The press belongs to this handler and does nothing further. Distinct from
@@ -141,7 +141,7 @@ export function nudgeDelta(key: string, shiftKey: boolean, canvasScale: number):
 }
 
 /**
- * Q/W walk the selection between points — previous (Q), next (W) — so a point
+ * Q/W walk the selection between points - previous (Q), next (W) - so a point
  * placed earlier is reachable by keyboard, not only by clicking.
  *
  * Derived interpolation samples are SKIPPED (you never nudge those), so on an
@@ -170,7 +170,7 @@ export function stepSelectablePoint(
  * 1 Calibrate · 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
  * 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9) are fly-out
  * panels: opened by triggering their rail button, skipped when disabled.
- * Clear-all (top bar) and the Eraser have NO key — both destructive, kept out of
+ * Clear-all (top bar) and the Eraser have NO key - both destructive, kept out of
  * the 0-9 run.
  */
 export function resolveDigit(key: string, s: KeyboardState): KeyAction | null {

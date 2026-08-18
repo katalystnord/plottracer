@@ -153,7 +153,7 @@ describe('buildSeriesJSON', () => {
   it('carries the deltas beside the absolute cap positions, nulling a row with no cap', () => {
     // Both, deliberately (see SeriesForCSV.deltas): the absolutes are the record,
     // the deltas are what matplotlib's yerr takes. A null says "no cap on this
-    // row" — never a 0, which would read as an error bar of zero length.
+    // row" - never a 0, which would read as an error bar of zero length.
     const doc = JSON.parse(
       buildSeriesJSON(
         [{ name: 'Upper', rows: [row([0, 2]), row([1, 4])], relation: { role: 'upper', of: 'S' }, deltas: [1, null] }],
@@ -245,7 +245,7 @@ describe('curve fit export (v0.8)', () => {
 
   it('the fitted-curve section is its own titled block of sampled points', () => {
     const csv = renderTable([fittedCurveSection(fit, ['X', 'Y'])], 'csv');
-    expect(csv).toBe('Fitted curve — Series 1\nX,Y\n0,1\n1,3');
+    expect(csv).toBe('Fitted curve - Series 1\nX,Y\n0,1\n1,3');
   });
 
   // ⚑ v1.5: a fit that did NOT settle must not leave the app looking like one
@@ -273,7 +273,7 @@ describe('curve fit export (v0.8)', () => {
 
   it('marks the sampled-curve block too, because that block can be taken on its own', () => {
     const csv = renderTable([fittedCurveSection(unsettled, ['X', 'Y'])], 'csv');
-    expect(csv.split('\n')[0]).toBe('Fitted curve — Series 1 (did not settle)');
+    expect(csv.split('\n')[0]).toBe('Fitted curve - Series 1 (did not settle)');
   });
 
   // ⚑ Every other test here hands the labels in, so the column names a caller
@@ -380,7 +380,7 @@ describe('curve fit export (v0.8)', () => {
 
   it('the Geometry per-point section is its own titled 1-based block', () => {
     const csv = renderTable([geometryTableSection('S', geom, ['X', 'Y'])], 'csv');
-    expect(csv).toBe('Geometry per-point — S\npoint,X,Y,cumulative_length,curvature\n1,0,0,0,0\n2,3,4,5,1.5');
+    expect(csv).toBe('Geometry per-point - S\npoint,X,Y,cumulative_length,curvature\n1,0,0,0,0\n2,3,4,5,1.5');
   });
 
   it('names the per-point x/y columns even when the caller supplies no labels', () => {
@@ -398,7 +398,7 @@ describe('curve fit export (v0.8)', () => {
   });
 });
 
-// v1.3 — the anchor/interpolated role rides out with the data.
+// v1.3 - the anchor/interpolated role rides out with the data.
 //
 // The tenet-9 claim the product rests on is that a reader can tell what a human
 // put on the figure from what the app invented. That held for the PROJECT FILE
@@ -419,7 +419,7 @@ describe('interpolation role in exports (v1.3)', () => {
     );
   });
 
-  it('leaves an ordinary series byte-identical — no role column at all', () => {
+  it('leaves an ordinary series byte-identical - no role column at all', () => {
     // The column's PRESENCE is the signal. A plain trace must not grow an empty
     // column, or every existing consumer's parser shifts for nothing.
     const plain: ExportRow[] = [{ px: 100, py: 200, values: [1, 10] }];

@@ -24,7 +24,7 @@ function names(session: CalibrationSession<never>) {
   return session.getDatasetInfos().map((i) => i.name);
 }
 
-describe('captureErrorCap — the drag gesture', () => {
+describe('captureErrorCap - the drag gesture', () => {
   function calibratedWithAPoint() {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);
@@ -36,8 +36,8 @@ describe('captureErrorCap — the drag gesture', () => {
   it('places the dragged cap AND its mirror, on the datum\'s own record', () => {
     // ⚠️ MIGRATED for v2.3's B4. This asserted the two RELATED SERIES the gesture
     // used to create; the reading now lives in the datum's own tuple. The
-    // BEHAVIOUR asserted is unchanged — dragged cap where released, mirror
-    // reflected across the datum — and it is now read through the primitive
+    // BEHAVIOUR asserted is unchanged - dragged cap where released, mirror
+    // reflected across the datum - and it is now read through the primitive
     // rather than by reaching into `getDatasets()[1]`. That reaching is exactly
     // why 25 tests here broke at once: 41 assertions went to storage and none
     // through the primitive, the same diagnosis the production code had.
@@ -84,7 +84,7 @@ describe('captureErrorCap — the drag gesture', () => {
     expect(session.getResolvedErrorBars(0)[1]!.yUpper, 'and not a cap').toBeUndefined();
   });
 
-  it('works on a BAR chart — the case a data-space mirror would have refused', () => {
+  it('works on a BAR chart - the case a data-space mirror would have refused', () => {
     // BarAxes.dataToPixel was a stub returning {x:0,y:0} when this test was
     // written (it's real since v2.0, core/axes/bar.ts) -- an earlier draft
     // mirrored in data space and would have had to disable the tool here, or
@@ -153,7 +153,7 @@ describe('captureErrorCap — the drag gesture', () => {
     expect(bars.every((b) => b.yUpper !== undefined && b.yLower !== undefined)).toBe(true);
   });
 
-  it('a moved cap stays moved — nothing re-symmetrizes the pair', () => {
+  it('a moved cap stays moved - nothing re-symmetrizes the pair', () => {
     // The core of the model (David, 2026-07-16): the mirror is a starting
     // position, not a constraint. An asymmetric bar is just a bar whose cap you
     // moved, so capturing a SECOND bar must not disturb the first.
@@ -196,7 +196,7 @@ describe('captureErrorCap — the drag gesture', () => {
     expect(names(session as never)).toEqual(['Sample A']);
   });
 
-  it('refuses an unnamed error series — the name is the only meaning we record', () => {
+  it('refuses an unnamed error series - the name is the only meaning we record', () => {
     const session = calibratedWithAPoint();
     expect(
       session.captureErrorCap({
@@ -224,8 +224,8 @@ describe('captureErrorCap — the drag gesture', () => {
   it('refuses to hijack an existing series that is not error for this target', () => {
     // ⚠️ MIGRATED: the FIRST error kind now goes into the datum's tuple and
     // creates no series, so there is no name to collide with. The refusal still
-    // matters on the FALLBACK path — a SECOND kind, which keeps the related-series
-    // storage — so the case is exercised there.
+    // matters on the FALLBACK path - a SECOND kind, which keeps the related-series
+    // storage - so the case is exercised there.
     const session = calibratedWithAPoint();
     session.captureErrorCap({
       targetIndex: 0,
@@ -248,7 +248,7 @@ describe('captureErrorCap — the drag gesture', () => {
 
   it('a rename of the target follows through to the relation (checkpoint 77 cascade)', () => {
     // ⚠️ MIGRATED for the same reason. A tuple-recorded kind needs no relation to
-    // retarget — the caps are IN the series being renamed — so the cascade is
+    // retarget - the caps are IN the series being renamed - so the cascade is
     // asserted where relations still exist: a second error kind.
     const session = calibratedWithAPoint();
     session.captureErrorCap({
@@ -275,7 +275,7 @@ describe('captureErrorCap — the drag gesture', () => {
   });
 });
 
-describe('nearestDatumPixel — snapping the drag start', () => {
+describe('nearestDatumPixel - snapping the drag start', () => {
   it('snaps to a real point of the target series', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);
@@ -310,7 +310,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   }
 
   it('cascade: deleting a data point takes its error bar (both caps), leaving the other point whole', () => {
-    // ⚠️ MIGRATED. The cascade is now STRUCTURAL — a datum and its caps are one
+    // ⚠️ MIGRATED. The cascade is now STRUCTURAL - a datum and its caps are one
     // tuple, so there is no second store that could survive the delete. It used
     // to be a deliberate sweep across the related series, which is exactly the
     // kind of arrangement that had already failed once: the trashcan left four
@@ -330,7 +330,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   it('⚑ deleting ONE cap removes only it, so a one-sided bar is reachable', () => {
     // ⚠️⚠️ A DELIBERATE CHANGE OF BEHAVIOUR, not a migration. Deleting a cap used
     // to remove its matched PAIR ("a selected cap stands for its whole error
-    // bar", David 2026-07-22). That rule made a ONE-SIDED bar unreachable — and
+    // bar", David 2026-07-22). That rule made a ONE-SIDED bar unreachable - and
     // the app itself places the mirrored cap, so a user recording only an upper
     // bound had no way to remove the lower one it invented for them.
     //
@@ -349,7 +349,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
 
     const bar = session.getResolvedErrorBars(0)[0]!;
     expect(bar.yUpper, 'the upper is gone').toBeUndefined();
-    expect(bar.yLower, 'the lower remains — a one-sided bar').toBeDefined();
+    expect(bar.yLower, 'the lower remains - a one-sided bar').toBeDefined();
     expect(session.getResolvedErrorBars(0), 'both data points untouched').toHaveLength(2);
   });
 
@@ -424,7 +424,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 200, y: 170 }, baseName: 'SD' }); // vertical
     session.captureErrorCap({ targetIndex: 0, datumPixel: { x: 200, y: 200 }, capPixel: { x: 230, y: 200 }, baseName: 'SD' }); // horizontal
     // ⚠️ MIGRATED: all four arms of one base now live in the SAME tuple, as four
-    // role slots — which is what makes their independence structural rather than
+    // role slots - which is what makes their independence structural rather than
     // a rule about which series to sweep.
     const ds = session.getDatasets()[0]!;
     const slots = ds.getSlotNames();
@@ -446,7 +446,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   it('deleting a cap when its sibling was already removed (asymmetric bar) drops just that cap, no throw', () => {
     // ⚠️ MIGRATED. Under the tuple record this is simply a slot that is already
     // null, which is the ordinary "not captured" state rather than a special
-    // case — so the throw this guarded against has nowhere to come from.
+    // case - so the throw this guarded against has nowhere to come from.
     const session = twoPointsWithErrorBars();
     const ds = session.getDatasets()[0]!;
     const slots = ds.getSlotNames();
@@ -465,7 +465,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   });
 });
 
-describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
+describe('errorCapDragLine - the axis-lock a cap is dragged along', () => {
   // ⚑ Before this block the whole method was UNREACHED: a scoped Stryker run
   // (2026-08-03) put 26 no-coverage mutants in it, the largest such cluster in
   // calibrationSession.ts. It is what keeps captureErrorCap's invariant holding
@@ -551,7 +551,7 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
   it('a cap cannot outlive its datum series at all', () => {
     // ⚠️ MIGRATED, and the case has DISSOLVED rather than moved. It mattered
     // because caps lived in their OWN series, which survived the deletion of the
-    // series they described — `clearErrorRelationsTo` then had to demote them so
+    // series they described - `clearErrorRelationsTo` then had to demote them so
     // they stopped claiming to be caps. In the tuple record the caps ARE the
     // series' own points, so removing it removes them: nothing is left to
     // constrain, and nothing is left to demote.
@@ -566,12 +566,12 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(session.errorCapDragLine(0, 0), 'nothing survives to be a cap').toBeNull();
   });
 
-  it('CONSTRAINS a cap on a BAR chart — and still lets it be placed at all', () => {
+  it('CONSTRAINS a cap on a BAR chart - and still lets it be placed at all', () => {
     // ⚠️ UPDATED 2026-08-17. This used to assert the opposite: Bar's
     // `pixelToData` returns `[value]`, so `capFreeDirection` gave up on the
     // missing second coordinate and every cap on a bar chart was UNCONSTRAINED.
     // Measured across the type table, that was 5 of 12 types where a DIAGONAL
-    // cap could be recorded — against David's *"error bars align with an axis,
+    // cap could be recorded - against David's *"error bars align with an axis,
     // either horizontal or vertical; there cannot be one in between"*
     // (2026-08-17), and he asked for it closed.
     //
@@ -700,7 +700,7 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     // ⚠️ MIGRATED to the DELTA PROJECTION of the primitive: `getErrorCapDeltas`
     // answers per error-cap SERIES, which a tuple-recorded kind does not have.
     // The invariant is unchanged and now reads off the same object the drawing
-    // and the export do — which is the whole point of having a primitive.
+    // and the export do - which is the whole point of having a primitive.
     const bar = session.getResolvedErrorBars(0)[0]!;
     expect(deltasFromBar(bar).yLower).toBeCloseTo(-8, 6);
   });
@@ -740,7 +740,7 @@ describe('errorCapDragLine — the axis-lock a cap is dragged along', () => {
     expect(d.yLower).toBeCloseTo(-3, 6);
   });
 
-  it('is EMPTY for a series that is not an error series — never zero', () => {
+  it('is EMPTY for a series that is not an error series - never zero', () => {
     // 0 would read as "measured, and equal". Absence is the honest answer.
     const session = calibratedWithACappedPoint();
     expect(session.getErrorCapDeltas(0)).toEqual([]);

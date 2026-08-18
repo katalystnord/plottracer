@@ -1,15 +1,15 @@
 /**
- * B4, the UI half — ⚑⚑ ERROR SLOTS ARE AN ADDITION TO A SERIES, NOT A CHANGE OF
+ * B4, the UI half - ⚑⚑ ERROR SLOTS ARE AN ADDITION TO A SERIES, NOT A CHANGE OF
  * WHAT THE SERIES IS.
  *
  * The model half (commits 1–10 plus the capture switch) puts a datum's caps on
- * its own tuple. That gives every series that carries error a `_tuples` array —
+ * its own tuple. That gives every series that carries error a `_tuples` array -
  * and `hasSlots()` answers "does this dataset have named slots", so from that
  * moment an XY scatter reported itself as a TUPLE-SHAPED graph type. It is not
  * one. It is an XY scatter with extents on its points.
  *
  * ⚑⚑ CLAUDE.md pattern 1, in its second incarnation: *"does this belong to the
- * TYPE, or to an AXIS?"* — here, to the TYPE or to the SERIES. A heatmap's third
+ * TYPE, or to an AXIS?"* - here, to the TYPE or to the SERIES. A heatmap's third
  * dimension was collapsed into a property of a cell; this is the mirror mistake,
  * a property of a series inflating into a property of the type. The cost is the
  * same shape too: everything downstream forks.
@@ -18,21 +18,21 @@
  * hypothetical:
  *
  *   · the XY data panel switched to the tuple table, which prints `data[0]` per
- *     slot — so a point at (5, 5) with caps at 7 and 3 exported as
+ *     slot - so a point at (5, 5) with caps at 7 and 3 exported as
  *     `Value 5 · SD upper 5 · SD lower 5`. **The y coordinate and both readings
  *     were gone, silently, and the record underneath was correct all along.**
  *   · `isBarIntervalShape` compares the slot COUNT to `BAR_INTERVAL_SLOTS.length`,
  *     so a bar chart lost its category table the moment one error bar was added.
  *   · `computeSlotCursorFor` scans for the first empty member, which after a
- *     one-sided capture is 'SD left' — so reloading a project aimed the next
+ *     one-sided capture is 'SD left' - so reloading a project aimed the next
  *     click at an error slot.
  *
  * ⚑ The distinction these tests pin is between two questions that `hasSlots()`
  * was answering at once:
  *
- *   STORAGE — "are the pixels filed into tuples?" -> Dataset.hasSlots(), which
+ *   STORAGE - "are the pixels filed into tuples?" -> Dataset.hasSlots(), which
  *             the capture path still asks and which stays true.
- *   SHAPE   — "is this a tuple-shaped graph type?" -> the type's OWN slots, with
+ *   SHAPE   - "is this a tuple-shaped graph type?" -> the type's OWN slots, with
  *             the error tail removed. This is what the panels and the export ask.
  */
 import { describe, expect, it } from 'vitest';
@@ -140,7 +140,7 @@ describe('an XY series that gained error slots is still an XY series', () => {
     expect(xyWithError().getExportShape()).toBe('flat');
   });
 
-  it("the panel's slot names are the type's own — none, for XY", () => {
+  it("the panel's slot names are the type's own - none, for XY", () => {
     expect(xyWithError().getSlotNames()).toEqual([]);
   });
 
@@ -154,7 +154,7 @@ describe('an XY series that gained error slots is still an XY series', () => {
     expect(s.getErrorSlotNames()).toEqual([]);
   });
 
-  it('⚑ the STORAGE path is untouched — a later datum still gets its own tuple', () => {
+  it('⚑ the STORAGE path is untouched - a later datum still gets its own tuple', () => {
     // The companion assertion for what must STILL work: routing the SHAPE
     // question away from `hasSlots()` must not route the CAPTURE question away
     // with it, or the next point would land as a loose pixel that no tuple owns
@@ -170,7 +170,7 @@ describe('an XY series that gained error slots is still an XY series', () => {
 });
 
 describe('the capture cursor never aims at an error slot', () => {
-  /** Reopen a session's data the way a project file does — the entrance that
+  /** Reopen a session's data the way a project file does - the entrance that
    * recomputes the slot cursor from the tuples, since the cursor is not part of
    * the file (see computeSlotCursorFor). */
   const reopen = (s: CalibrationSession<never>) => {
@@ -182,7 +182,7 @@ describe('the capture cursor never aims at an error slot', () => {
   it('⚑⚑ reopening a project does not point the next click at "SD left"', () => {
     // `computeSlotCursorFor` walks to the first EMPTY member. After a capture
     // the mirrored pair fills upper and lower, so the tuple's first empty member
-    // is 'SD left' — and the cursor is recomputed on every load, which aimed the
+    // is 'SD left' - and the cursor is recomputed on every load, which aimed the
     // next click there. An error slot is filled by DRAGGING a cap, never by the
     // click walk, so it must not be a destination.
     const reloaded = reopen(xyWithError() as never);
@@ -192,7 +192,7 @@ describe('the capture cursor never aims at an error slot', () => {
     expect(reloaded.getDataset().getAllTuples(), 'the click opened its OWN tuple').toHaveLength(2);
   });
 
-  it('⚑⚑ the LIVE cursor does not walk into one either — the second entrance', () => {
+  it('⚑⚑ the LIVE cursor does not walk into one either - the second entrance', () => {
     // ⚠️ FOUND BY A FIXTURE WITH FOUR POINTS INSTEAD OF ONE. `computeSlotCursorFor`
     // was fixed first, and it is only the LOAD entrance; `nextSlot` advances the
     // cursor during capture and had the same whole-tuple scan. Measured, with
@@ -204,7 +204,7 @@ describe('the capture cursor never aims at an error slot', () => {
     //
     // The fourth capture then refused, because the point it was dragged from was
     // not a datum any more. "Guards belong in the model, and the model has more
-    // than one entrance" — the third time this file's own comments say so.
+    // than one entrance" - the third time this file's own comments say so.
     const s = xySession();
     for (const px of [120, 160, 200, 240]) {
       const py = 400 - px;

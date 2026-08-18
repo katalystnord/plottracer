@@ -3,7 +3,7 @@
  *
  * ⚑ WHY IT IS A MODULE NOW. The formula lived in `__tests__/contrast.test.ts`,
  * where it guarded the theme's fixed tokens. The heatmap matrix needs the same
- * arithmetic at RUNTIME — a cell is painted in whatever colour its value is
+ * arithmetic at RUNTIME - a cell is painted in whatever colour its value is
  * worth, so which of black or white is legible on it cannot be decided in
  * advance. Copying the formula into the component would have left two of them
  * to disagree; the test now imports this one, so the tokens and the cells are
@@ -52,12 +52,12 @@ export const INK_DARK = '#000000';
 export const INK_LIGHT = '#ffffff';
 
 /**
- * Which ink to print on a given background — the better-contrasting of black
+ * Which ink to print on a given background - the better-contrasting of black
  * and white.
  *
  * ⚑⚑ THIS IS WHAT LETS THE MATRIX MIRROR THE FIGURE AT ALL. The tint used to be
  * weakened to `alpha 0.35` over white, justified in its own comment as *"so the
- * numbers stay black and legible on a dark palette"* — a workaround that made
+ * numbers stay black and legible on a dark palette"* - a workaround that made
  * viridis's darkest purple render as a pale lavender, so the table and the
  * figure were visibly different colours. B16 had already recorded the real
  * answer (*"cell text contrast must follow the fill, or half the matrix is
@@ -69,7 +69,7 @@ export const INK_LIGHT = '#ffffff';
  * which is exactly why it was weakened in the first place.
  *
  * ⚑ There is no threshold to invent. Whichever ink has the higher ratio wins,
- * and on any background one of them clears the 4.5:1 floor — the worst case is
+ * and on any background one of them clears the 4.5:1 floor - the worst case is
  * a mid-grey, where both sit near 5:1.
  */
 export function textOn(background: readonly [number, number, number]): string {

@@ -6,7 +6,7 @@ import path from 'node:path';
  * The dialog must never offer a format the loader cannot decode.
  *
  * Checkpoint 65 established this: offering `tiff`/`pdf` was a **hidden
- * failure** — the native dialog listed them, Chromium's `<img>` decoder
+ * failure** - the native dialog listed them, Chromium's `<img>` decoder
  * couldn't read them, and the user got a blank canvas. That checkpoint pared
  * the filter back to formats that genuinely decode.
  *
@@ -19,7 +19,7 @@ import path from 'node:path';
  *
  * Hence this file. The invariant is a *cross-file agreement* between the main
  * process's dialog filter and the renderer's own statement of what it can
- * decode, so it is checked by reading both — a running app cannot be asked
+ * decode, so it is checked by reading both - a running app cannot be asked
  * "what would you offer?" without a dialog, and the two constants live either
  * side of the IPC boundary.
  */
@@ -84,7 +84,7 @@ describe('Open dialog filters (checkpoint 65 invariant)', () => {
  * The same invariant, one door along: the Open PROJECT dialog must not offer a
  * format no importer claims, and must not omit one that works.
  *
- * The extension list is duplicated by necessity — engine/importRegistry.ts is
+ * The extension list is duplicated by necessity - engine/importRegistry.ts is
  * the real list, and ui/electron-ipc.cjs is the main process, which cannot
  * import the renderer's TypeScript. A duplicated constant with no test is
  * exactly how the pdf regression above shipped, so the agreement is asserted by

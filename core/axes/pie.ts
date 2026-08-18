@@ -1,5 +1,5 @@
 /**
- * PieAxes — pie, donut, half-pie and gauge figures.
+ * PieAxes - pie, donut, half-pie and gauge figures.
  *
  * ⚑ ORIGINAL WORK, not a port. WebPlotDigitizer, Engauge and StarryDigitizer have no
  * pie mode; PlotDigitizer is the one competitor that does, which is why this is on the
@@ -7,12 +7,12 @@
  *
  * THE MODEL (David, 2026-07-28 / 2026-07-29)
  *
- * A pie inherently shows FRACTIONS OF A WHOLE — that is what "partition of a disc"
+ * A pie inherently shows FRACTIONS OF A WHOLE - that is what "partition of a disc"
  * means, and it holds however the sectors are labelled.
  *
  * ⚑ SO A PIE CANNOT FAIL TO ADD UP, and no arithmetic here should ever suggest it
  * might. The printed labels are VALUES WITH A UNIT, and their sum IS the total: a
- * figure labelled 45 / 68 / 18 / 35 / 18 has a total of 184 — of percents, dollars,
+ * figure labelled 45 / 68 / 18 / 35 / 18 has a total of 184 - of percents, dollars,
  * kilograms, whatever the author chose to write. 184 is not "184% of something else"
  * needing an explanation; it is simply the whole, and the whole is always 100% of the
  * pie. Type 184 as the total and every reading here reproduces the figure's own
@@ -21,25 +21,25 @@
  * ⚑ THE TOTAL TURNS A SHAPE INTO VALUES, and that is the whole trick. Every other axes
  * type transcribes known values at known positions (X1=0, X2=10; the spider's centre
  * value). A pie has no axis to click, but it has exactly one number that does this job
- * — the whole. It is asked once, prefilled 100, and everything follows:
+ * - the whole. It is asked once, prefilled 100, and everything follows:
  *
  *     value = (sector angle / sweep) x total
  *
  * Left at 100 the values come out as percent; type the total printed in a donut's hole
  * and they come out in the figure's own units. Same field, same transcription, no
- * modes. This follows the spider's own rule — a default the user walks past and can
+ * modes. This follows the spider's own rule - a default the user walks past and can
  * change, not an invention.
  *
- * ⚑ AND THAT VALUE IS WHAT GETS STORED, because it is what regenerates the figure —
+ * ⚑ AND THAT VALUE IS WHAT GETS STORED, because it is what regenerates the figure -
  * both figures. A bar chart plots it directly (David's acceptance test: if the stored
  * value cannot be redrawn as a bar chart, we stored the wrong thing), and the pie
  * comes back via `angle = value / total x sweep`. The two boundary pixels stay in the
- * dataset as every series' pixels do, so the raw geometry is never lost — it is simply
+ * dataset as every series' pixels do, so the raw geometry is never lost - it is simply
  * not what the value column holds.
  *
  * ⚑ 360° IS NEVER A CONSTANT HERE. The whole is whatever the figure draws. That
- * collapses IBM TBM Studio's four documented variants — Standard, Standard Half,
- * Donut, Donut Half — into one path: a donut is an inner radius the angle does not
+ * collapses IBM TBM Studio's four documented variants - Standard, Standard Half,
+ * Donut, Donut Half - into one path: a donut is an inner radius the angle does not
  * care about, a half pie is a smaller sweep, and a gauge is one sector plus a
  * remainder. No variant, no detection, nothing to get wrong on a chart type we guessed
  * at.
@@ -52,7 +52,7 @@
  *
  * ⚑ THE FRAME IS AN ELLIPSE, WITH THE CIRCLE AS ITS DEGENERATE CASE (decided
  * 2026-07-28). A tilted or photographed pie is a circle under an AFFINE map, which
- * does not preserve angles but IS exactly invertible — so measuring in the (a, b)
+ * does not preserve angles but IS exactly invertible - so measuring in the (a, b)
  * basis below and taking the angle there is right for both, with the inverse being
  * the identity for a true circle. One code path, no branch that can be wrong. The
  * v1.6 capture flow only offers the circle (b is derived as a's perpendicular), so
@@ -61,7 +61,7 @@
  *
  * ⚑ NO ERROR NUMBER. A pie does not give us one. Boundaries are SHARED between
  * neighbouring sectors, so clicking one twice measures the user's aim rather than the
- * figure — the same reason the spider's off-ray distance is measured and deliberately
+ * figure - the same reason the spider's off-ray distance is measured and deliberately
  * not recorded. The sum of sectors closing on the sweep is an identity, not a check.
  */
 
@@ -75,7 +75,7 @@ const TWO_PI = Math.PI * 2;
  * Normalise any angle into [0, 2π).
  *
  * ⚑ Snaps the top of the range back to zero. The fitted centre lands a few
- * float-ulps off exact — 100.00000000000003 rather than 100 — so a boundary at
+ * float-ulps off exact - 100.00000000000003 rather than 100 - so a boundary at
  * precisely 0° computes atan2(-1e-16, r), a hair BELOW zero, and wraps to 359.9999…°
  * instead. Sector values never noticed, because the difference is normalised too, but
  * a live readout would flicker between 0.0° and 360.0° at the top of every pie, and
@@ -107,7 +107,7 @@ export class PieAxes {
   private bx = 0;
   private by = 0;
   /**
-   * How much of a turn the figure draws — a full pie is 2π, a half pie π.
+   * How much of a turn the figure draws - a full pie is 2π, a half pie π.
    *
    * ⚑ TRANSCRIBED ON THE RIM STEP, never derived from a slice click. Letting the last
    * boundary double as the end of the circumference would mix calibration with data
@@ -120,7 +120,7 @@ export class PieAxes {
    * The whole, as asked once on the rim step and prefilled 100.
    *
    * ⚑ THIS IS ONLY THE DEFAULT. The total is stored PER SERIES, because a donut's
-   * rings are separate series and each ring is its own whole — two rings can be
+   * rings are separate series and each ring is its own whole - two rings can be
    * different years, currencies or bases. Asked once, written to every series, so a
    * per-ring override later is a UI change with no migration. Same shape, and same
    * reasoning, as the spider asking for the centre value once and storing it per spoke;
@@ -137,19 +137,19 @@ export class PieAxes {
   }
 
   /**
-   * Calibrate from points around the OUTLINE — three or more — with the centre and
+   * Calibrate from points around the OUTLINE - three or more - with the centre and
    * radius FITTED rather than clicked.
    *
    * ⚑ THE CENTRE IS DERIVED, and that is the whole reason for this shape (David,
    * 2026-07-29). A donut has no visible centre at all: its boundaries stop at the
    * inner radius, so there is nothing to click. PlotDigitizer, the one competitor
-   * with a pie mode, instructs the user to "approximate the origin" — an eyeball
+   * with a pie mode, instructs the user to "approximate the origin" - an eyeball
    * guess sitting underneath every value in the figure. Fitting the rim replaces
    * that guess with arithmetic. The outline points remain ordinary calibration
    * handles, so correcting the fit is the same drag that corrects any other type.
    *
    * ⚑ Reports success on degenerate input, like every other axes class in this
-   * directory — except where the geometry simply does not exist (collinear points
+   * directory - except where the geometry simply does not exist (collinear points
    * describe no circle). The value refusals live in the config's `checkValues`, run
    * inside checkGuards, so BOTH entrances see them.
    */
@@ -170,7 +170,7 @@ export class PieAxes {
     // looked wrong. `derivedTupleValue` reads exactly these two fields, so
     // this was wrong at CAPTURE time, not only across a round trip.
     // (v2.0 pre-launch audit, round 2.)
-    // ⚑⚑ A TOTAL OR SWEEP THAT CANNOT PRODUCE A READING IS REFUSED — the fifth
+    // ⚑⚑ A TOTAL OR SWEEP THAT CANNOT PRODUCE A READING IS REFUSED - the fifth
     // instance of this project's "calibrate() that cannot fail" shape, and the
     // first found by a tool rather than by hand (a type-aware `no-base-to-string`
     // pass, 2026-08-01).
@@ -178,12 +178,12 @@ export class PieAxes {
     // `plotData.ts` reads these two out of a PROJECT FILE as
     // `parseFloat(String(meta['pieTotal'] ?? '100'))`. A file whose metadata
     // holds anything that is not a string stringifies to "[object Object]" and
-    // parseFloat returns NaN — measured, not inferred: the axes came back with
+    // parseFloat returns NaN - measured, not inferred: the axes came back with
     // `defaultTotal: NaN` and `isCalibrated: true`, so the project reopened
     // looking fine with every sector reading NaN.
     //
     // ZERO is the same defect wearing a different face. `value = (angle / sweep)
-    // x total`, so a zero total makes every slice read exactly 0 — a plausible
+    // x total`, so a zero total makes every slice read exactly 0 - a plausible
     // number, no error, nothing on screen wrong. That is the map scale-length
     // bug verbatim. A zero sweep divides by zero.
     //
@@ -192,7 +192,7 @@ export class PieAxes {
     // sector is a fraction of a whole, so a pie cannot show a negative
     // quantity") and a sweep outside (0, 360]. My first draft of this guard
     // allowed a negative total on the grounds that `valuePerPixel` takes its
-    // magnitude — which would have made the class and the session disagree about
+    // magnitude - which would have made the class and the session disagree about
     // the same figure. Read the existing guard's reasoning before adding one
     // beside it.
     if (!Number.isFinite(defaultTotal) || defaultTotal <= 0) return false;
@@ -203,7 +203,7 @@ export class PieAxes {
 
     if (tilted) {
       // ⚑ A TILTED OR 3D PIE. The figure is an AFFINE image of the circle, and an
-      // affine map does not preserve angles — read one flat and a real 2:1 figure
+      // affine map does not preserve angles - read one flat and a real 2:1 figure
       // turns a 7% slice into 13.4% while the readings still sum to 100, so nothing
       // looks wrong. The fitted semi-axes ARE the images of two orthogonal circle
       // radii, so expressing a pixel in that basis (see angleAt) applies the inverse
@@ -232,12 +232,12 @@ export class PieAxes {
     this.cx = circle.x0;
     this.cy = circle.y0;
     // A circle is the degenerate ellipse: any orthogonal basis of equal length gives
-    // the same angle DIFFERENCES, and a sector is a difference — so the frame is
+    // the same angle DIFFERENCES, and a sector is a difference - so the frame is
     // simply axis-aligned at the fitted radius.
     this.ax = circle.radius;
     this.ay = 0;
     // b is a rotated a quarter-turn. In image space y runs DOWN, so this fixes the
-    // handedness of every angle below — consistently, which is all that matters.
+    // handedness of every angle below - consistently, which is all that matters.
     this.bx = -this.ay;
     this.by = this.ax;
 
@@ -251,7 +251,7 @@ export class PieAxes {
   }
 
   /** How far the outline points stray from the fitted circle (RMS pixels). A
-   * property of the FIGURE — a rim that will not sit on a circle is telling you the
+   * property of the FIGURE - a rim that will not sit on a circle is telling you the
    * pie is tilted. Reported, never acted on: the app does not infer tilt. */
   getFitResidual(): number {
     return this.residual;
@@ -277,13 +277,13 @@ export class PieAxes {
     return Math.hypot(this.ax, this.ay);
   }
 
-  /** The total asked once for the whole figure — the value each new series starts from.
+  /** The total asked once for the whole figure - the value each new series starts from.
    * The series' own stored total is what a reading actually uses. */
   getDefaultTotal(): number {
     return this.defaultTotal;
   }
 
-  /** Centre of the pie in pixels — the default apex for every unexploded sector. */
+  /** Centre of the pie in pixels - the default apex for every unexploded sector. */
   getCentre(): { x: number; y: number } {
     return { x: this.cx, y: this.cy };
   }
@@ -294,7 +294,7 @@ export class PieAxes {
    * `apex` defaults to the calibrated centre; an exploded sector passes its own, which
    * is the entire handling explosion needs (translation preserves angles). Measuring
    * in the (a, b) basis rather than with a bare atan2 is what makes a tilted pie work
-   * unchanged once the frame stops being a circle — for a circle the two agree.
+   * unchanged once the frame stops being a circle - for a circle the two agree.
    */
   angleAt(px: number, py: number, apex?: { x: number; y: number }): number {
     const ox = apex ? apex.x : this.cx;
@@ -309,19 +309,19 @@ export class PieAxes {
   }
 
   /**
-   * The point on the rim at the same angle as (px, py) — the pixel moved onto the ring
+   * The point on the rim at the same angle as (px, py) - the pixel moved onto the ring
    * without turning it.
    *
    * ⚑ IT CANNOT CHANGE THE READING, and that is a property of the arithmetic rather
    * than a tolerance we chose. `angleAt` is `atan2(v, u)` on the basis coordinates, and
    * this scales (u, v) by a positive factor; scaling a vector does not move its atan2.
-   * So snapping is presentation, provably — the recorded value before and after is the
+   * So snapping is presentation, provably - the recorded value before and after is the
    * same number, not merely a close one.
    *
    * ⚑ NORMALISED IN THE (a, b) FRAME, not by nearest-point geometry. On a tilted pie
    * the nearest point of the ellipse is NOT along the ray from the centre, so a
    * Euclidean snap would quietly turn the boundary and change the value. Working in
-   * the frame is both simpler and the only version that is exact — and it needs no
+   * the frame is both simpler and the only version that is exact - and it needs no
    * separate path for the tilted case.
    *
    * `apex` defaults to the calibrated centre; an exploded sector passes its own, so its
@@ -350,7 +350,7 @@ export class PieAxes {
    * pie's own frame, travelling positively). This is the one place the model's
    * arithmetic lives:  value = (angle / sweep) x total.
    *
-   * `total` is the SERIES' total, passed in rather than read off the axes — see
+   * `total` is the SERIES' total, passed in rather than read off the axes - see
    * `defaultTotal` for why each ring owns its own whole.
    */
   sectorValue(startAngle: number, endAngle: number, total: number): number {
@@ -359,7 +359,7 @@ export class PieAxes {
   }
 
   /**
-   * One pixel carries no value on a pie — a sector needs two boundaries — so this
+   * One pixel carries no value on a pie - a sector needs two boundaries - so this
    * reports the pixel's ANGLE in degrees, which is what the live readout can honestly
    * show while a boundary is being placed. The sector's value is derived from the pair
    * once the tuple is complete, exactly as a histogram bin's is from its two corners.
@@ -373,7 +373,7 @@ export class PieAxes {
   }
 
   /**
-   * Not implemented, matching bar/polar/ternary/map/ccr/spider — only XY and Image
+   * Not implemented, matching bar/polar/ternary/map/ccr/spider - only XY and Image
    * genuinely invert. A pie could not invert usefully anyway: a VALUE names a sector's
    * angular width, which is a whole arc rather than a point, so there is no single
    * pixel to return. Declared because `CalibratedAxes` requires it; callers must not

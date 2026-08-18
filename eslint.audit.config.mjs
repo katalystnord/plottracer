@@ -1,10 +1,10 @@
-// THROWAWAY type-aware audit config — a second opinion, not the build's linter.
+// THROWAWAY type-aware audit config - a second opinion, not the build's linter.
 //
 // The committed eslint.config.mjs extends `tseslint.configs.recommended`, which
 // is SYNTACTIC ONLY. This one turns on the type-aware set, which uses type
 // information the build already computes. The rule that earns it:
 //
-//   @typescript-eslint/no-unnecessary-condition — flags a check that can never
+//   @typescript-eslint/no-unnecessary-condition - flags a check that can never
 //   be false. That is literally the shape of the `calibrate()` refusals that
 //   could never fire (project_calibrate_cannot_fail_defect).
 //
@@ -43,7 +43,7 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Noise for this pass — they are style opinions, not defect finders, and
+      // Noise for this pass - they are style opinions, not defect finders, and
       // they would bury the rules that actually encode a failure mode.
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/restrict-template-expressions': 'off',

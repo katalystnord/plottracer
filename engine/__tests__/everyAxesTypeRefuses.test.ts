@@ -10,13 +10,13 @@ import { BarAxes } from '../../core/axes/bar.js';
 import { ALL_TYPES, labelOf, clickHealthy, calibratedHealthy } from './fixtures/anyType.js';
 
 /**
- * ⚑⚑ EVERY graph type must be ABLE to refuse — the class-wide regression test.
+ * ⚑⚑ EVERY graph type must be ABLE to refuse - the class-wide regression test.
  *
  * The 2026-07-31 pre-launch audit found the same defect in FOUR axes classes at
  * once: `calibrate()` returned `true` on input that made every reading null,
  * NaN or a constant 0. `MAP_AXES_CONFIG` and `TERNARY_AXES_CONFIG` even
- * CARRIED the refusal already — `if (!ok) return { error: ... }` in
- * `buildAxes` — and it could never fire, because the thing it asked could
+ * CARRIED the refusal already - `if (!ok) return { error: ... }` in
+ * `buildAxes` - and it could never fire, because the thing it asked could
  * never answer no. A check that did not run looks exactly like a check that
  * passed.
  *
@@ -31,8 +31,8 @@ import { ALL_TYPES, labelOf, clickHealthy, calibratedHealthy } from './fixtures/
  * that cannot produce a reading.
  *
  * ⚠️⚠️ THIS FILE SAID "EVERY" AND MEANT ELEVEN (found 2026-08-17, v2.2 audit
- * pass 4). The list above was hand-written, so the HEATMAP — the largest type
- * this project has built — was never asked whether it can refuse anything, for
+ * pass 4). The list above was hand-written, so the HEATMAP - the largest type
+ * this project has built - was never asked whether it can refuse anything, for
  * the whole of v2.2, green throughout. That is A6 (`axesConfigTable.test.ts`
  * listing eleven of twelve) arriving in a SECOND file: pass 1 fixed the
  * instance and nobody swept for the shape, which is precisely what
@@ -66,7 +66,7 @@ describe('a calibration with every point on ONE pixel is refused', () => {
   for (const [id, config] of ALL_TYPES) {
     const name = labelOf(id);
     it(`${name} refuses it, rather than reporting success`, () => {
-      // Not about the wording — about the answer. A type that says yes here
+      // Not about the wording - about the answer. A type that says yes here
       // has an axes class that cannot fail, which is the defect this file
       // exists to catch.
       expect(calibrateAllAtOnePoint(config, '1')).toBe(false);
@@ -94,7 +94,7 @@ describe('a calibration whose values are all IDENTICAL is refused', () => {
   const VALUELESS_CLICKS = ['ternary', 'map', 'pie'];
   const valued = ALL_TYPES.filter(([id]) => !VALUELESS_CLICKS.includes(id));
 
-  it('is not vacuous — the exclusions above name types that EXIST', () => {
+  it('is not vacuous - the exclusions above name types that EXIST', () => {
     // ⚑ An exclusion list keyed by a string nobody checks is how a filter goes
     // quiet: rename a type's id and the exclusion silently stops matching (or,
     // worse, keeps matching nothing while reading as deliberate).
@@ -110,15 +110,15 @@ describe('a calibration whose values are all IDENTICAL is refused', () => {
   }
 });
 
-describe('the healthy calibrations still succeed — the guard must not over-reach', () => {
+describe('the healthy calibrations still succeed - the guard must not over-reach', () => {
   // ⚑ EVERY type, not a sample. The first version pinned only four, so a
   // `return false` planted in any of the other seven classes would have passed
   // all of this file's refusal assertions. An anti-vacuity control that covers
   // part of the set leaves the rest of the set unproven.
   for (const [id, config] of ALL_TYPES) {
     it(`${labelOf(id)} calibrates from healthy pixels and distinct values`, () => {
-      // ⚑ `calibratedHealthy` asserts the success itself — distinct ascending
-      // values (10, 20, 30…), valid on a log scale and as a radius — and reports
+      // ⚑ `calibratedHealthy` asserts the success itself - distinct ascending
+      // values (10, 20, 30…), valid on a log scale and as a radius - and reports
       // the type's own refusal message if it says no.
       calibratedHealthy(id, config);
     });
@@ -126,7 +126,7 @@ describe('the healthy calibrations still succeed — the guard must not over-rea
 });
 
 describe('the model refuses on its own, not only through the session', () => {
-  it('⚑ BarAxes.calibrate answers false — the file-load door depends on it', () => {
+  it('⚑ BarAxes.calibrate answers false - the file-load door depends on it', () => {
     // `core/plotData.ts` calls calibrate() directly when opening a project and
     // never inspects the session. If the refusal lived only in the session,
     // every one of these would open clean and read a constant.

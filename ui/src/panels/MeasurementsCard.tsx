@@ -3,7 +3,7 @@ import { SidebarSection, SidebarHeading } from '../layout.js';
 import { measureIcons, type MeasureRef, type MeasureToolId } from '../MeasureCard.js';
 
 /**
- * The Measurements OUTPUT card (v1.1 step 2) — the recorded measurements, moved
+ * The Measurements OUTPUT card (v1.1 step 2) - the recorded measurements, moved
  * out of the Measure fold-out so the rail card holds INPUTS only.
  *
  * ⚑ Every value here is DERIVED, never stored: `measureDisplay` re-reads the

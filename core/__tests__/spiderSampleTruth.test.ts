@@ -10,8 +10,8 @@ import { Calibration } from '../calibration.js';
  * ⚑ What is actually at risk here is the PIXEL CONVENTION. The generator works in
  * matplotlib's display space (origin bottom-left, y UP) and y-flips into the image
  * space the app calibrates in (origin top-left, y DOWN). Get that flip wrong and
- * the truth file still looks entirely reasonable — every number is right, the
- * anchors are all inside the image — but the chart calibrates MIRRORED, and every
+ * the truth file still looks entirely reasonable - every number is right, the
+ * anchors are all inside the image - but the chart calibrates MIRRORED, and every
  * extracted value comes off the wrong spoke. Nothing else in the suite would catch
  * it, because no other test reads this file.
  *
@@ -54,7 +54,7 @@ describe('the bundled spider example ships a calibration the app can use', () =>
     for (const s of truth.series) expect(s.points).toHaveLength(6);
   });
 
-  it('gives each axis its OWN range — the case the figure exists to exercise', () => {
+  it('gives each axis its OWN range - the case the figure exists to exercise', () => {
     // A figure whose axes shared one scale would not test anything the field's
     // only prior art (ChartSense) cannot already do.
     const maxima = truth.axes.map((a) => a.max);
@@ -66,7 +66,7 @@ describe('the bundled spider example ships a calibration the app can use', () =>
     expect(new Set(truth.axes.map((a) => a.centre))).toEqual(new Set([0]));
   });
 
-  it('⚑ is not Y-FLIPPED — axis 1 is ABOVE the centre in image pixels', () => {
+  it('⚑ is not Y-FLIPPED - axis 1 is ABOVE the centre in image pixels', () => {
     // The whole reason this file has a test. Image space runs y DOWNWARD, so the
     // 12-o'clock spoke must have a SMALLER py than the origin. A flipped export
     // would put it below and calibrate a mirrored chart that still reads plausibly.

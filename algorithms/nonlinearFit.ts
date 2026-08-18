@@ -1,16 +1,16 @@
 /**
- * Nonlinear curve fitting — standard models solved by Levenberg–Marquardt.
+ * Nonlinear curve fitting - standard models solved by Levenberg–Marquardt.
  *
  * Until now fitting was polynomial only (algorithms/curveFit.ts, normal
  * equations). A polynomial can be made to pass near almost anything by raising
  * its degree, which is exactly what makes it a poor description of a process
  * that is actually exponential, saturating, or a peak. These models say
  * something about the SHAPE instead, and their parameters have meaning a reader
- * can use — a rate, a half-max, a width.
+ * can use - a rate, a half-max, a width.
  *
  * ⚑ THIS IS INTERPRETATION, AND IT STAYS SEPARATE (tenet 9). A fit is not the
- * record. It already lives apart everywhere it appears — its own export block,
- * its own key in the JSON, never mixed into the traced points — and nothing here
+ * record. It already lives apart everywhere it appears - its own export block,
+ * its own key in the JSON, never mixed into the traced points - and nothing here
  * changes a single recorded pixel. The rule this module adds to that: **when the
  * fit does not converge, say so.** A model that failed must never be shown as a
  * plausible curve, because a drawn line is read as a result.
@@ -18,7 +18,7 @@
  * WHY LEVENBERG–MARQUARDT. It interpolates between gradient descent (reliable
  * far from the solution) and Gauss–Newton (fast near it) by one damping term, so
  * it is the standard choice for small least-squares problems and needs no
- * derivatives supplied by hand — the Jacobian here is numeric. Tenet 10 says the
+ * derivatives supplied by hand - the Jacobian here is numeric. Tenet 10 says the
  * simplest thing that works, and for five models with 2–3 parameters each this
  * is it; nothing here needs a general optimiser.
  *
@@ -27,7 +27,7 @@
  * start from the data rather than from a constant: the three log-linearisable
  * models (exponential, power, logarithmic) start from an exact linear least
  * squares fit in transformed space, and the two shaped models start from
- * measured features — the peak for a Gaussian, the range and midpoint for a
+ * measured features - the peak for a Gaussian, the range and midpoint for a
  * logistic. That is also why each model states which points it CAN use: a
  * logarithm needs x > 0, and refusing is better than quietly dropping the rest
  * of the series.
@@ -48,7 +48,7 @@ export interface FitModel {
   evaluate(params: readonly number[], x: number): number;
   /**
    * A starting point derived from the data. Returns null when the data cannot
-   * support one — the caller then refuses with `requires` rather than starting
+   * support one - the caller then refuses with `requires` rather than starting
    * LM somewhere arbitrary.
    */
   initialGuess(points: readonly Point2D[]): number[] | null;
@@ -60,8 +60,8 @@ export interface FitModel {
    *
    * Separate from `initialGuess` on purpose. A guess may only need some points
    * (an exponential is linearised through the positive y values but is perfectly
-   * defined at the rest), whereas a point outside the model's DOMAIN — ln(0), a
-   * fractional power of a negative x — makes the residual non-finite and the
+   * defined at the rest), whereas a point outside the model's DOMAIN - ln(0), a
+   * fractional power of a negative x - makes the residual non-finite and the
    * whole fit meaningless. Without this the refusal degrades to "could not be
    * fitted", which tells the user nothing they can act on.
    *
@@ -116,7 +116,7 @@ export const FIT_MODELS: readonly FitModel[] = [
     paramNames: ['a', 'b'],
     evaluate: (p, x) => p[0]! * Math.exp(p[1]! * x),
     requires: 'every y value to be greater than zero',
-    // ln y = ln a + b·x — exact linear fit in log space.
+    // ln y = ln a + b·x - exact linear fit in log space.
     initialGuess: (pts) => {
       const usable = pts.filter((p) => p.y > 0);
       if (usable.length < 2) return null;
@@ -175,7 +175,7 @@ export const FIT_MODELS: readonly FitModel[] = [
       const d = x - p[1]!;
       return p[0]! * Math.exp(-(d * d) / (2 * c * c));
     },
-    requires: 'a visible peak — at least three points',
+    requires: 'a visible peak - at least three points',
     // Start from measured features: the tallest point is the peak, and the
     // spread of x weighted by y is the width.
     initialGuess: (pts) => {
@@ -216,7 +216,7 @@ export const FIT_MODELS: readonly FitModel[] = [
     },
     requires: 'at least three points spanning the rise',
     // Plateau from the largest y, midpoint from where y is nearest half that,
-    // and a width a quarter of the x span — all read off the data.
+    // and a width a quarter of the x span - all read off the data.
     initialGuess: (pts) => {
       if (pts.length < 3) return null;
       const ys = pts.map((p) => p.y);
@@ -267,7 +267,7 @@ function sumSquares(
  * Returns null only when the very first evaluation is unusable (a start that
  * produces no finite residual at all); otherwise it always returns the best
  * parameters it reached, with `converged` saying whether it settled. That
- * distinction is the point — the caller must be able to tell "this is the answer"
+ * distinction is the point - the caller must be able to tell "this is the answer"
  * from "this is where it got to".
  */
 export function levenbergMarquardt(
@@ -334,7 +334,7 @@ export function levenbergMarquardt(
       try {
         delta = solveLinearSystem(A, Jtr);
       } catch {
-        // Singular even when damped — damp harder rather than give up.
+        // Singular even when damped - damp harder rather than give up.
         lambda *= 10;
         continue;
       }
@@ -370,7 +370,7 @@ export function levenbergMarquardt(
 /** Goodness of fit for an arbitrary model.
  *
  * ⚑ R² is reported because readers expect it, but for a NONLINEAR model it is
- * not a proportion of explained variance and is not bounded below by 0 — a bad
+ * not a proportion of explained variance and is not bounded below by 0 - a bad
  * fit can produce a negative value. The RMS residual is the honest headline
  * number and is in the data's own units. */
 export function modelFitStats(
@@ -411,7 +411,7 @@ export interface FitModelOutcome {
 /**
  * Fit one named model to points, start to finish.
  *
- * Refuses — naming what the model needs — rather than fitting a subset of the
+ * Refuses - naming what the model needs - rather than fitting a subset of the
  * data behind the user's back. Dropping the points a model cannot use would
  * silently change what was fitted, and the number would look just as confident.
  */
@@ -421,7 +421,7 @@ export function fitModel(
 ): FitModelOutcome | { error: string } {
   if (points.length < model.paramNames.length) {
     return {
-      error: `Not enough points for ${model.label} — need at least ${model.paramNames.length}, have ${points.length}.`,
+      error: `Not enough points for ${model.label} - need at least ${model.paramNames.length}, have ${points.length}.`,
     };
   }
   // Domain first: a point the model cannot be evaluated at makes every residual

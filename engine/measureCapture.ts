@@ -5,10 +5,10 @@ import type { MeasureTool, Point2D } from '../core/measurementValues.js';
  * measurement. Recording it, and formatting anything, stay in `ui/`.
  *
  * ⚑ THE ONE RULE THIS FILE MUST NOT BREAK, from `core/measurementValues.ts`:
- * *"formatting stays in ui/ — a core/ module that returned `"45.0°"` would be
+ * *"formatting stays in ui/ - a core/ module that returned `"45.0°"` would be
  * re-committing the defect."* A measurement's record is its PIXELS plus which
  * tool made it; every value is derived on demand, which is what makes Set-scale
- * retroactive. So `record` hands back points and, for a slope, a raw NUMBER —
+ * retroactive. So `record` hands back points and, for a slope, a raw NUMBER -
  * never a display string.
  */
 
@@ -19,7 +19,7 @@ export interface MeasureClickInput {
   pending: readonly Point2D[];
   /** Set-scale is armed: two clicks a known real distance apart. */
   settingScale: boolean;
-  /** Null behaves as Area — accumulate until the user closes it. */
+  /** Null behaves as Area - accumulate until the user closes it. */
   tool: MeasureTool | null;
   /** A slope needs a calibrated XY chart; nothing else does. */
   slopeReady: boolean;
@@ -28,7 +28,7 @@ export interface MeasureClickInput {
 }
 
 export type MeasureClickResult =
-  /** Not enough points yet — hold these and wait. */
+  /** Not enough points yet - hold these and wait. */
   | { kind: 'collect'; points: Point2D[] }
   /** Both set-scale points are down; the value+unit form takes over. */
   | { kind: 'scale-draft'; points: Point2D[]; distancePx: number }
@@ -39,13 +39,13 @@ export type MeasureClickResult =
 const mid = (a: Point2D, b: Point2D): Point2D => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 /**
- * Snap a measurement vertex onto a nearby active-series DATA point (v1.1) —
+ * Snap a measurement vertex onto a nearby active-series DATA point (v1.1) -
  * David's *"measure from one identified point"*.
  *
  * ⚑ The threshold is ~12 SCREEN px, converted into the click's own space by
  * dividing by the zoom, so the snap feels the same at every magnification
  * rather than growing as you zoom in. Ties keep the first point found, and a
- * click with nothing near it is returned untouched — snapping is an assist, so
+ * click with nothing near it is returned untouched - snapping is an assist, so
  * it must never move a vertex the user placed deliberately in open space.
  */
 export function snapToNearestPoint(
@@ -86,7 +86,7 @@ export function resolveMeasureClick({
   }
 
   if (tool === 'slope') {
-    // ⚑ axesKind, not id — a calibrated HISTOGRAM is XY underneath and measures
+    // ⚑ axesKind, not id - a calibrated HISTOGRAM is XY underneath and measures
     // a slope perfectly well. Resolved by the caller and passed as a capability.
     if (!slopeReady || !toData) return { kind: 'refuse', message: 'Calibrate an XY chart first to measure a slope.' };
     if (points.length < 2) return { kind: 'collect', points };

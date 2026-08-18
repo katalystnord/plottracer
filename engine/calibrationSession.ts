@@ -246,7 +246,7 @@ import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './serie
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
 
-// ⚑ The axes-type configuration system lives in its own module since v2.0 — the
+// ⚑ The axes-type configuration system lives in its own module since v2.0 - the
 // eleven graph-type declarations plus the shape they satisfy. RE-EXPORTED here
 // so every existing import of a config or a config type keeps working
 // unchanged; a move that also churned call sites could not be verified by the
@@ -273,16 +273,16 @@ import {
 
 /** How a point of an interpolation-assist series came to exist.
  *
- * `anchor` — the user ASSIGNED it: they judged by eye where the curve runs and
+ * `anchor` - the user ASSIGNED it: they judged by eye where the curve runs and
  * put a guide point there. That is a human decision about the figure, not a
  * measurement taken off it (the whole reason interpolation-assist exists is the
  * monochrome dashed curve no filter can follow).
- * `interpolated` — the spline DERIVED it from the anchors either side. Nobody
+ * `interpolated` - the spline DERIVED it from the anchors either side. Nobody
  * looked at the figure at this x at all.
  *
  * An ordinary placed/traced point carries no role (`null`): it isn't part of an
  * interpolation series, so the distinction doesn't apply to it. Keeping the two
- * stored words as the exported vocabulary is deliberate (David, 2026-07-25) —
+ * stored words as the exported vocabulary is deliberate (David, 2026-07-25) -
  * we export the fact the record holds, and leave "so is it trustworthy?" to the
  * reader (tenets 9 + 10). */
 export type PointRole = 'anchor' | 'interpolated';
@@ -319,7 +319,7 @@ export interface SessionSnapshot {
    * undo that didn't restore it would leave the data and the settings
    * disagreeing. */
   optionValues: Record<string, string>;
-  /** How many repeats the variable-length calibration is unrolled to — the spider's
+  /** How many repeats the variable-length calibration is unrolled to - the spider's
    * spoke count (0 for every fixed-shape type). Part of the snapshot because both
    * rail buttons that change it commit an undo entry, and it is the one piece of
    * session shape that cannot be re-derived from the serialized plotData: an
@@ -444,19 +444,19 @@ function validCursorFor(
 
 /**
  * One drawn error whisker: the bar out to the cap, the cap tick itself, the
- * SERIES' colour for the bar, and — when the cap can be dragged — the marker it
+ * SERIES' colour for the bar, and - when the cap can be dragged - the marker it
  * is.
  *
  * ⚑⚑ THE `capMarkerId` IS WHAT MAKES THE DRIFT INEXPRESSIBLE. During a drag
  * Konva moves the marker and nothing else, so anything drawn from the model is
- * frozen until release — which is precisely why the ball and the whisker end
+ * frozen until release - which is precisely why the ball and the whisker end
  * used to separate on screen (David: *"they are moved independently from the
  * bars when moving them"*). With the whisker able to say WHICH marker its cap
  * is, the renderer redraws bar and cap from that live position, and there is no
  * longer a second thing that can lag behind.
  *
  * ⚑ Absent for an INACTIVE series' whisker, which is context rather than a
- * handle — the same rule its data points already follow.
+ * handle - the same rule its data points already follow.
  */
 /**
  * One of a datum's error caps, as the canvas needs it: which side it records,
@@ -511,7 +511,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * core/categoryAxis.ts for why. */
   private categoryAxis: CategoryAxis = new CategoryAxis();
   /**
-   * ⚑⚑ THE HEATMAP'S RECORD — its grid, its axis NAMES, and the cells a person
+   * ⚑⚑ THE HEATMAP'S RECORD - its grid, its axis NAMES, and the cells a person
    * read themselves. A LAYER ON TOP OF THE CALIBRATION.
    *
    * David, 2026-08-16, as a rule for every type: *"Anything detected on the
@@ -521,12 +521,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚠️ It used to live in AXES METADATA, which is precisely why a
    * re-calibration emptied it: `runCalibration` ends with
    * `this.axes = result.axes`, a brand-new object. Held here, beside
-   * `categoryAxis` — the type that already got this right — the two are
+   * `categoryAxis` - the type that already got this right - the two are
    * independent by construction and nothing has to be copied across.
    */
   private heatmapLayer: SerializedHeatmapLayer | null = null;
 
-  /** How many times `config.repeatingStep` is currently unrolled — the spoke count
+  /** How many times `config.repeatingStep` is currently unrolled - the spoke count
    * of the spider being calibrated. Meaningless (and left at 0) for every
    * fixed-shape type. */
   private repeatCount: number;
@@ -560,7 +560,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The steps this session is actually walking — the config's fixed steps, plus
+   * The steps this session is actually walking - the config's fixed steps, plus
    * `repeatCount` copies of its repeating group.
    *
    * ⚑ EVERY read of the step list must come through here rather than
@@ -571,7 +571,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSteps(): readonly CalibStepInfo[] {
     const repeating = this.config.repeatingStep;
-    // ⚑ An option can change what a step ASKS FOR — a heatmap axis declared as
+    // ⚑ An option can change what a step ASKS FOR - a heatmap axis declared as
     // categories wants a count, not a coordinate. Applied here because this is
     // the one place the step list is read from (see the note above), so a
     // reshaped walk cannot be missed by anything downstream.
@@ -602,7 +602,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.config.repeatingStep;
   }
 
-  /** Add one more repeat — one more spoke to place. Returns false for a type that
+  /** Add one more repeat - one more spoke to place. Returns false for a type that
    * has no repeating group, or once a calibration is already live (the handles are
    * placed; changing the shape underneath them is a re-calibration, via reset). */
   addRepeat(): boolean {
@@ -615,7 +615,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Drop the LAST repeat, along with anything already placed for it.
    *
    * Refuses below `min`, and clamps the step cursor so removing the step you were
-   * standing on leaves you on a step that exists — otherwise `getCurrentStep()`
+   * standing on leaves you on a step that exists - otherwise `getCurrentStep()`
    * returns null and the card reads "ready to calibrate" with a hole in the middle
    * of the placed points.
    */
@@ -651,14 +651,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "X is categories" turns X start from a step that takes a typed value into
     // one that takes none, and a pixel clicked a moment earlier was then stuck:
     // nothing on screen could finish it, because the thing that finishes it is
-    // the value box that just disappeared. Reshaping mid-walk is legitimate —
-    // the user is telling us what the figure is — so the pixel is kept and the
+    // the value box that just disappeared. Reshaping mid-walk is legitimate -
+    // the user is telling us what the figure is - so the pixel is kept and the
     // point completed, rather than the click being thrown away.
     if (this.pendingPixel) {
       this.completeValuelessStep(this.pendingPixel.px, this.pendingPixel.py);
     }
     // ⚑⚑ AN OPTION CAN INVALIDATE VALUES ALREADY TYPED. Switching the colour key
-    // to Log makes a 0 that was legitimate a moment ago impossible — and with
+    // to Log makes a 0 that was legitimate a moment ago impossible - and with
     // nothing re-checking, the walk carried on and refused at Calibrate. The
     // question is only answerable once every point is placed (a log scale needs
     // BOTH key values to say whether it passes through zero), so that is when it
@@ -685,7 +685,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.config.defaultSlots) dataset.setSlotNames([...this.config.defaultSlots]);
     // ...and for a type whose slots are DERIVED from the axes (Spider), from the
     // live calibration. Without this, "+ Add series" on a calibrated spider gave a
-    // series with no slots at all, so its points had no axis to be read against —
+    // series with no slots at all, so its points had no axis to be read against -
     // the same "every series gets the graph type's capture shape" reason the
     // static list above is applied here rather than at the one call site, just for
     // the half of the shape that only exists once the axes do.
@@ -707,7 +707,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The calibration INPUTS — the placed handles, options and global fields, but
+   * The calibration INPUTS - the placed handles, options and global fields, but
    * not the data (checkpoint 87). What you need to reproduce a calibration in a
    * different session.
    *
@@ -731,7 +731,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Adopt a calibration captured from a COMPATIBLE config (see
    * `calibrationCompatible`) and re-run it. Returns whether it calibrated.
    *
-   * Options are filtered to this config's own keys — a compatible config has the
+   * Options are filtered to this config's own keys - a compatible config has the
    * same *steps* but may not carry every option, and an unknown key would just
    * be dead weight. Data is untouched: the caller clears or keeps it, because
    * whether last session's *points* mean anything under the new graph type is a
@@ -845,13 +845,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * How many DATA POINTS a series holds — its pixels, minus the ones that are
+   * How many DATA POINTS a series holds - its pixels, minus the ones that are
    * error caps.
    *
    * ⚑⚑ David's e2e read `Series 1 (3)` for one point with an error bar. The
    * caps are pixels of the series now (B4), so a plain `getCount()` reports the
    * reading's uncertainty as two more readings. A cap is part of a point, not
-   * another point — the Error-bars card says so in words: *"an error bar hangs
+   * another point - the Error-bars card says so in words: *"an error bar hangs
    * off a data point."*
    *
    * ⚑ Subtractive rather than per-pixel classification: one pass over the
@@ -872,11 +872,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * The pixel indices that are DATA POINTS, in the order the record pairs them
-   * with their extents — what the data panel puts one row on.
+   * with their extents - what the data panel puts one row on.
    *
    * ⚑⚑ ROW INDEX STOPPED BEING PIXEL INDEX when caps became pixels of the
-   * series they belong to. Everything the table hands back outward — select,
-   * nudge, delete, rename, edit a value — is a PIXEL index, so a row that does
+   * series they belong to. Everything the table hands back outward - select,
+   * nudge, delete, rename, edit a value - is a PIXEL index, so a row that does
    * not carry its own would address the point two along. It would land on a
    * real point, which is the worst kind of wrong.
    *
@@ -900,14 +900,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The error columns a series actually records — one per role that was
+   * The error columns a series actually records - one per role that was
    * MEASURED, under the user's own word for the error ('SD upper').
    *
    * ⚑⚑ ONE PLACE, READ BY BOTH THE PANEL AND THE EXPORT, so a column cannot
    * exist on screen and be missing from the file. That divergence is this
    * project's own case study: the screen led with Category while the
-   * categorical export appended it last, and `seriesColumns` — written in
-   * `spreadsheetModel` to prevent exactly that — was never wired, so it read
+   * categorical export appended it last, and `seriesColumns` - written in
+   * `spreadsheetModel` to prevent exactly that - was never wired, so it read
    * as cover while the drift went on happening.
    *
    * ⚑ MEASURED, not merely possible. All four roles exist in every error
@@ -926,7 +926,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * Per datum row, that series' error readings — ABSOLUTE positions on each
+   * Per datum row, that series' error readings - ABSOLUTE positions on each
    * role's axis, aligned with `getErrorColumns`, `null` where a side was never
    * captured.
    *
@@ -936,7 +936,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * `yerr` of 0 and draws a cap sitting exactly on the value. The delta is a
    * projection, emitted alongside by `getErrorDeltaRows`, never instead.
    *
-   * Row-aligned with `getDatumPixelIndices` by construction — both walk the
+   * Row-aligned with `getDatumPixelIndices` by construction - both walk the
    * tuples in order and skip a tuple with no datum.
    */
   getErrorRows(index: number): (number | null)[][] {
@@ -947,7 +947,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
   }
 
-  /** The same rows as `getErrorRows`, as SIGNED OFFSETS from the datum — what
+  /** The same rows as `getErrorRows`, as SIGNED OFFSETS from the datum - what
    * matplotlib's `yerr` and Excel's error bars take directly. A subtraction,
    * not an inference: both ends were measured, so their difference assumes
    * nothing. Absent stays absent. */
@@ -968,7 +968,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * or the uncertainty around one?" has an answer and the overlay has to use
    * it. Empty for a series carrying no error, so every other type is untouched.
    *
-   * ⚑ One pass over the tuples, not `capRoleInTuples` per pixel — the same
+   * ⚑ One pass over the tuples, not `capRoleInTuples` per pixel - the same
    * reason `datumCount` is subtractive.
    */
   getCapPixelRoles(index: number): (CapHandle | null)[] {
@@ -985,14 +985,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // drawing. `updateDataPointPixel` runs the drag through
         // `errorCapDragLine` + `constrainCap`, so a cap that leaves the value
         // axis is put back on release. Handing the RENDERER the identical answer
-        // is what stops the gesture leaning on screen and snapping afterwards —
+        // is what stops the gesture leaning on screen and snapping afterwards -
         // pattern 4, "is a CONSTRAINED gesture bound to its constraint ON
         // SCREEN?", and the reason it must be this call rather than the bar's
         // current direction is the rule this file already states elsewhere: a
         // check computed differently from the thing it checks is not a check.
         //
         // ⚑ `null` on the axes that genuinely cannot say (polar, ternary, map,
-        // ccr, whose `dataToPixel` is still a stub) — there the cap is
+        // ccr, whose `dataToPixel` is still a stub) - there the cap is
         // unconstrained, which is the documented default, and the drag is free.
         caps[pixelIndex] = { role, line: this.errorCapDragLine(index, pixelIndex) };
       }
@@ -1052,7 +1052,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑⚑ A 1-D AXES CARRIES ITS ONE VALUE IN BOTH FIELDS, and that is the read
     // side of a rule the CAPTURE side already states. `capFreeDirection`:
     // *"a 1-D axes HAS only that axis, so on a horizontal bar chart a drag that
-    // `roleFromDrag` names `right` still runs along the value axis — the role
+    // `roleFromDrag` names `right` still runs along the value axis - the role
     // names a SIDE, and the axis is a fact about the chart."* Reading the same
     // record has to make the same allowance.
     //
@@ -1061,12 +1061,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // nothing: `[{x: 0}]`, no roles, no columns. Before B4 that cost nothing
     // visible, because a bar's caps were a SEPARATE SERIES and its rows reached
     // the file as ordinary readings. Folding them onto the datum routed them
-    // through this projection instead — so a recorded measurement stopped
+    // through this projection instead - so a recorded measurement stopped
     // reaching the export at all.
     //
     // ⚑ Correct at every consumer: `errorBarsFromTuples` takes `cap.y` for
     // upper/lower and `cap.x` for left/right, and `deltasFromBar` subtracts the
-    // matching field — so whichever side the user dragged, the absolute and the
+    // matching field - so whichever side the user dragged, the absolute and the
     // delta are the value and its offset.
     //
     // ▶ OPEN, and deliberately not settled here: the 1.5D taxonomy says a bar's
@@ -1105,7 +1105,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * For an ERROR-CAP series, each cap's signed offset from the datum it
-   * resolves to — the ± the figure is actually communicating.
+   * resolves to - the ± the figure is actually communicating.
    *
    * ⚑ This is what a reader wants and what a plotting library takes. Asked what
    * numbers you would need to REDRAW the figure, the answer is x, y, −Δ and +Δ:
@@ -1114,7 +1114,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * cap's own x, which is the datum's x by construction (David, 2026-08-03).
    *
    * ⚑ A delta is SUBTRACTION, not inference. Both ends were measured off the
-   * pixels, so computing their difference assumes nothing — unlike halving one
+   * pixels, so computing their difference assumes nothing - unlike halving one
    * cap into a symmetric ±, which would invent the other side. The absolute
    * positions stay the record; this is derived at read time, the same split
    * bar and pie already make with `derivedTupleValue`.
@@ -1125,7 +1125,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * the whisker glyph draws with, so the table cannot disagree with the canvas.
    *
    * `null` for a cap that resolves to no datum, and `[]` for a series that is
-   * not an error series at all — never 0, which would read as "measured, and
+   * not an error series at all - never 0, which would read as "measured, and
    * equal".
    */
   getErrorCapDeltas(index: number): (number | null)[] {
@@ -1230,21 +1230,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
     //
     // Storage was never the limit here and this is not a restriction: any number
     // of error series may relate to one parent, and that mechanism is untouched.
-    // The real ceiling is the RESOLVED PRIMITIVE — `ErrorBarPoint` has one
+    // The real ceiling is the RESOLVED PRIMITIVE - `ErrorBarPoint` has one
     // `yUpper`, and `resolveErrorBars` arbitrates nearest-wins between two series
-    // claiming a role — and that ceiling predates this work entirely. So the
+    // claiming a role - and that ceiling predates this work entirely. So the
     // first kind is UPGRADED to a stored pairing and every further kind stays
     // exactly where it was, rather than anything being taken away.
     //
     // ⚠️ The first draft instead skipped adoption and wrote the second kind into
-    // the FIRST kind's slots — so a 95% CI reading was recorded under a column
+    // the FIRST kind's slots - so a 95% CI reading was recorded under a column
     // headed "SD upper". Silent mislabelling, and my own test pinned it as
     // correct ("a second capture must not rename the columns"), which is right
     // for another cap of the SAME kind and wrong for a different one.
     //
     // ⚑ Measured before settling for this: of 556,894 Europe PMC figure captions
     // mentioning error bars, 40 say "inner/outer error bars" and 3 say "two sets
-    // of error bars" — order one in ten thousand. Captions pairing error bars
+    // of error bars" - order one in ten thousand. Captions pairing error bars
     // with a SHADED BAND are 14,220, ~350× more common, and that is a second
     // CARRIER rather than a second cap set.
     const ownSlots = ds.getSlotNames();
@@ -1285,13 +1285,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
     write(role, cap);
     // ⚑⚑ THE MIRROR IS A STARTING POSITION, NOT A CONSTRAINT (David, 2026-07-16)
-    // — so it is only ever placed into an EMPTY slot. An asymmetric bar is just
+    // - so it is only ever placed into an EMPTY slot. An asymmetric bar is just
     // a bar whose cap you moved, and re-dragging the other side must not undo
     // that.
     //
     // ⚠️ The first draft wrote the mirror unconditionally. Re-capturing the upper
     // cap on a datum whose lower you had deliberately dragged out would have
-    // snapped that lower back to symmetry — silently destroying a measurement,
+    // snapped that lower back to symmetry - silently destroying a measurement,
     // on the very feature ("asymmetric error bars") this rework exists to make
     // workable.
     const opposite = oppositeRole(role);
@@ -1308,7 +1308,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The tuple whose DATUM (slot 0) sits at this pixel — the point a cap drag
+   * The tuple whose DATUM (slot 0) sits at this pixel - the point a cap drag
    * started from.
    *
    * ⚑ Nearest rather than exact: the UI snaps the drag's start to a datum, but
@@ -1379,7 +1379,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const color = entry.dataset.colorRGB.getRGB();
       // ⚑⚑ ONLY THE ACTIVE SERIES' CAPS CAN BE DRAGGED, so only they have a
       // marker to name. An inactive series' whisker is context: drawn, never
-      // grabbed — exactly as its data points already are.
+      // grabbed - exactly as its data points already are.
       const active = entryIndex === this.activeDatasetIndex;
       // ⚑⚑ THE STORED PAIRING NEEDS NO MATCHING AT ALL. Where the extents live in
       // the datum's own tuple (v2.3 B4), the tuple SAYS which cap belongs to
@@ -1439,7 +1439,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const index = matchCapToDatum(dataValues, capData, relation.role);
         if (index < 0) continue;
         // ⚑ The IMPORT path: a cap here is a point of its own related series, so
-        // it is draggable only when THAT series is active — and its marker index
+        // it is draggable only when THAT series is active - and its marker index
         // is its position in that series, which this loop is walking.
         whiskers.push({
           ...computeWhiskerGlyph(pixelOf[index]!, { x: cap.x, y: cap.y }),
@@ -1465,14 +1465,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         axesKind: this.config.axesKind,
         // The UNROLLED steps, not the config's. A spider's spokes exist only in
         // the session, and passing the config's single origin step would leave the
-        // preview unable to name — or colour — any ray the user has placed.
+        // preview unable to name - or colour - any ray the user has placed.
         steps: this.getSteps(),
       },
       this.placed,
       // ⚑ An explicit override wins over the capture cursor (David, 2026-07-27):
       // selecting a point must move the live-ray highlight to THAT point's axis.
       // Without it the highlight only ever tracked where the next capture would
-      // go, so clicking a recorded point on another spoke left the wrong ray lit —
+      // go, so clicking a recorded point on another spoke left the wrong ray lit -
       // the highlight would be pointing at one axis while the selection was on
       // another, which is worse than no highlight at all.
       liveSpokeIndex != null && liveSpokeIndex >= 0
@@ -1485,13 +1485,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The calibration step for the spoke the capture cursor is filling, so the
    * canvas can draw that ray as the live one (v1.4, Spider).
    *
-   * Nothing is emphasised during the calibration walk — the active step already
+   * Nothing is emphasised during the calibration walk - the active step already
    * has its own highlight on the card, and there is no capture cursor yet.
    *
    * ⚑ What actually carries that is the slot check: a spider's groups are
    * derived from the calibrated axes, so they do not exist until calibration
    * succeeds. The `!this.axes` test below is defence in depth and is NOT covered by
-   * a failing-first test — neutering it changes nothing today, because no state
+   * a failing-first test - neutering it changes nothing today, because no state
    * has this type's groups without its axes. Said plainly rather than left as a
    * comment implying a guarantee the tests do not check.
    */
@@ -1508,13 +1508,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * nothing to remove.
    *
    * ⚑⚑ THIS IS NOT A MODE BEING SWITCHED OFF. In the tuple record a point whose
-   * extent slots are all null IS a plain point — identical to one that never
-   * carried error — so there is no error-ness left over to turn off and no flag
+   * extent slots are all null IS a plain point - identical to one that never
+   * carried error - so there is no error-ness left over to turn off and no flag
    * to clear. David asked for *"functionality to add and REMOVE a error bar to a
    * point"*; the model makes REMOVE mean exactly "clear its extents".
    *
    * ⚑ The cap PIXELS are removed, not merely unlinked. Nulling the slot alone
-   * would leave them floating on the canvas with no datum under them — which is
+   * would leave them floating on the canvas with no datum under them - which is
    * the orphaned-cap defect that started this whole rework, recreated in a new
    * place. High index to low, refreshing after each removal, the same contract
    * `removeTuple` honours.
@@ -1522,7 +1522,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⛔ Deliberately does NOT drop the series' error slots when the last cap goes.
    * The columns are the user's own word for what the error is, and a series that
    * had error and now has none is still a series they intend to record error on
-   * — silently renaming its columns back would be the tool deciding it knew
+   * - silently renaming its columns back would be the tool deciding it knew
    * better.
    */
   removeErrorFromDatum(datasetIndex: number, tupleIndex: number): boolean {
@@ -1730,7 +1730,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.config.id === 'categorical')
       return this.anyPointLabels() ? ['Position', 'Category', 'Value'] : ['Position', 'Value'];
     // Spider (v1.4): `Axis, Name, Value`, the same independent-variables-first
-    // shape. Unconditional, unlike Categorical's Name column — a spoke's name is
+    // shape. Unconditional, unlike Categorical's Name column - a spoke's name is
     // asked for as part of CALIBRATING the axis, so the column always exists even
     // when a particular axis was left unnamed (it exports blank, and blank is the
     // honest reading: that axis's name was never transcribed).
@@ -1795,18 +1795,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * numbers, not a formatted date string or a label in slot 0. The contract is
    * about what leaves the app, not what it draws with. */
   /**
-   * The shape this session's data takes in an export file — the one place that
+   * The shape this session's data takes in an export file - the one place that
    * knows, because it depends on BOTH the graph type and the active series.
    *
    * ⚑ Box Plot is reachable two ways: as its own graph type, and as a toggle that
    * gives a Bar session Min/Q1/Median/Q3/Max groups. So a static config field
-   * cannot answer alone — a bar-with-box-groups series exports as tuples while the
+   * cannot answer alone - a bar-with-box-groups series exports as tuples while the
    * type says nothing. That dynamic case is what the UI's old `hasSlots()`
    * test was really catching, mixed in with three identity checks.
    *
    * ⚑ And a grouped type whose slots are INDEPENDENT (a spider) is flat: its rows
    * are per reading, carrying the axis each was captured on, across every series.
-   * The tuple table would give one series read off the nearest ray — the v1.4
+   * The tuple table would give one series read off the nearest ray - the v1.4
    * audit's export defect.
    */
   getExportShape(): 'flat' | 'tuples' | 'bins' | 'heatmap' {
@@ -1835,11 +1835,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return r === 'anchor' || r === 'interpolated' ? r : undefined;
     };
     // ⚑⚑ Categorical line: X is the CATEGORY THE READING SITS IN, read off the
-    // marked category axis — the same band mechanism Bar and Box Plot use
+    // marked category axis - the same band mechanism Bar and Box Plot use
     // (`core/bandedAxis.ts`). Value comes from the BarAxes value calibration.
     //
     // ⚠️⚠️ IT USED TO BE THE POINT'S ORDINAL, ranked left-to-right at export
-    // time, and that was this type's tenet-11 failure — the only one of twelve.
+    // time, and that was this type's tenet-11 failure - the only one of twelve.
     // Rank was computed PER SERIES, so a series missing one category slid every
     // later reading a category to the left. Measured: two series, the second
     // with no reading for the middle category, and the SAME category exported as
@@ -1955,14 +1955,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ THE RECORD IS SNAPPED, and that is deliberate (David, 2026-07-27). A spoke
    * is a 1-D scale: the value is the click projected onto the ray, and the
    * perpendicular component is discarded either way. What settles it is not the
-   * arithmetic but the FEEDBACK LOOP — once the point visibly sits on the axis,
+   * arithmetic but the FEEDBACK LOOP - once the point visibly sits on the axis,
    * the user stops aiming perpendicular-accurately, correctly, because they can
    * see it does not matter. From that moment the perpendicular offset no longer
    * means "this person mis-clicked"; it means "this person was told not to care."
    * Storing it would preserve a number that LOOKS like an error signal and is not,
    * which a downstream reader would reasonably trust. Better not to keep it.
    *
-   * The wrong-axis check therefore moves to CAPTURE time — see
+   * The wrong-axis check therefore moves to CAPTURE time - see
    * previewSpiderCapture, whose answer is shown as the click happens and never
    * stored, matching the fact that no other graph type records such a thing.
    *
@@ -1988,17 +1988,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * Tidy a boundary click onto the pie's rim — but only one that was aiming at it.
+   * Tidy a boundary click onto the pie's rim - but only one that was aiming at it.
    *
    * ⚑ THE VALUE CANNOT MOVE. `PieAxes.snapToRim` scales the click's vector in the
    * (a, b) frame, and scaling does not change an atan2, so the recorded angle before
    * and after is the SAME number. This is cosmetic by construction, which is why it is
-   * allowed to happen silently — unlike the spider's spoke snap, which really does
+   * allowed to happen silently - unlike the spider's spoke snap, which really does
    * discard the off-ray distance and therefore has `previewSpiderCapture` to say so.
    *
    * ⚑ AND ONLY NEAR THE RIM, which is the donut. A click on an inner ring is entirely
-   * legitimate — angles are scale-invariant, which is the whole reason ONE calibration
-   * reads every ring — so snapping it out to the rim would drag the marker off the ink
+   * legitimate - angles are scale-invariant, which is the whole reason ONE calibration
+   * reads every ring - so snapping it out to the rim would drag the marker off the ink
    * it was measuring and make the app look like it had misunderstood the figure. The
    * band is a fraction of the radius rather than a pixel count so it scales with the
    * figure instead of being generous on a small one and useless on a large one.
@@ -2008,7 +2008,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * ⚑ Public, and that is the whole design. A closing click that only works if you
    * already know it exists is the "shortcut-only path" the keystone rule names as a
-   * failure, so the canvas asks this on hover and draws the target — the affordance is
+   * failure, so the canvas asks this on hover and draws the target - the affordance is
    * on screen before it is used, not discovered by accident afterwards.
    *
    * Available only when closing is actually meaningful: a pie, calibrated, with a
@@ -2070,13 +2070,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * What a click at (px, py) would be captured as right now — the axis it would
+   * What a click at (px, py) would be captured as right now - the axis it would
    * fill, and whether it sits nearer a DIFFERENT one (v1.4, Spider).
    *
    * ⚑ Asked BEFORE the click is recorded, because the snap is what destroys the
    * evidence: afterwards the stored point is on its ray and there is no "off" left
    * to measure. The caller shows this as it happens and throws it away. Returns
-   * null when there is nothing to say — a different graph type, no calibration, or
+   * null when there is nothing to say - a different graph type, no calibration, or
    * a click already nearest the axis it is filling.
    */
   previewSpiderCapture(px: number, py: number): {
@@ -2127,11 +2127,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The heatmap's record — read and written as a whole.
+   * The heatmap's record - read and written as a whole.
    *
    * ⚑ A LAYER, not part of the calibration: adjusting the axes cannot touch it
    * and it cannot touch them. Null for every type that is not a heatmap, and
-   * for a heatmap whose grid has not been read — which is not the same as an
+   * for a heatmap whose grid has not been read - which is not the same as an
    * empty one.
    */
   getHeatmapLayer(): SerializedHeatmapLayer | null {
@@ -2267,7 +2267,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * Tag a dataset as one LAYER of a stacked-bar group (v2.0, Phase 5) — an
+   * Tag a dataset as one LAYER of a stacked-bar group (v2.0, Phase 5) - an
    * arbitrary shared string naming the stack (e.g. "left"/"right" for the
    * two independent sides of a diverging chart, or any name that groups the
    * participating series). Stored as ordinary dataset-level metadata
@@ -2275,12 +2275,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * setMetadata), so it round-trips through project save/load and undo/redo
    * with zero new serialization code.
    *
-   * ⚑ Capture itself needs nothing special once a dataset is tagged — each
+   * ⚑ Capture itself needs nothing special once a dataset is tagged - each
    * segment is still its own ordinary drag-box (BAR_AXES_CONFIG). What DOES
    * change is the derived VALUE: see its `derivedTupleValue.compute`, which
    * reads this tag back via getTupleRows' ctx and switches to an unsigned
    * span, because a stacked segment's near end is never the chart's
-   * declared baseline — not even the bottommost layer — so the ordinary
+   * declared baseline - not even the bottommost layer - so the ordinary
    * baseline-relative/floating-direction sign convention does not apply.
    * Pass `null` to remove a dataset from whichever stack it was in.
    */
@@ -2330,7 +2330,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const entry of this.datasetEntries) {
       const dataset = entry.dataset;
       // ⚑ No `hasSlots()` guard. A dataset that arrived with no slots at all
-      // has no tuples either, so EVERY one of its points is axis-less — which is
+      // has no tuples either, so EVERY one of its points is axis-less - which is
       // exactly the case this is for, not one to skip. (It was written with that
       // guard first, and the file-with-no-groups test said so.)
       const owned = new Set<number>();
@@ -2367,7 +2367,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   ): void {
     this.categoryAxis = categoryAxis ?? new CategoryAxis();
     // ⚑ Explicit, not defaulted-to-keep: this is a LOAD, so a layer the caller
-    // did not supply means the file had none — and leaving the previous
+    // did not supply means the file had none - and leaving the previous
     // figure's grid in place is exactly the stale-state defect the clears
     // above exist for.
     this.heatmapLayer = heatmapLayer ?? null;
@@ -2379,7 +2379,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // reopened into a session still sitting at the default 3 would render 3
     // handles, walk 3 steps, and re-save a project with six axes deleted. Same
     // "the model has more than one entrance" class as the guards below, reached by
-    // a different route — there, a file skipped a refusal; here, a file's own
+    // a different route - there, a file skipped a refusal; here, a file's own
     // shape is overwritten by a default.
     if (cal && this.config.repeatingStep) {
       this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.fixedSteps.length);
@@ -2459,7 +2459,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const axesSelfCheck = axes as unknown as { isCalibrated?: () => boolean } | null;
     if (!this.calibrationError && axesSelfCheck?.isCalibrated?.() === false) {
       this.calibrationError =
-        'This project\u2019s calibration could not be read \u2014 check the calibration values, then press Calibrate to redo it.';
+        'This project\u2019s calibration could not be read - check the calibration values, then press Calibrate to redo it.';
     }
     this.axes = axes;
     const finalDatasets = datasets.length > 0 ? datasets : [new Dataset(this.config.dataDim)];
@@ -2497,8 +2497,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ A POINT WITH NO AXIS IS NOT A DATUM (David, 2026-07-27): "a point that
     // belongs to no tuple carries NO meaning, and should not be allowed."
     //
-    // On an N x 1D chart the datum is the PAIR — the vector and the position along
-    // it — so a pixel outside every tuple stands for no number and belongs in no
+    // On an N x 1D chart the datum is the PAIR - the vector and the position along
+    // it - so a pixel outside every tuple stands for no number and belongs in no
     // row. It is a mark on an image, not data. The click path cannot make one
     // (every capture files into a slot), so the file is the door, which is the same
     // second entrance the guards above exist for.
@@ -2559,18 +2559,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * Place the current step from a pixel when the step asks for nothing typed,
-   * and move the walk on. Returns false — placing nothing — when the step does
+   * and move the walk on. Returns false - placing nothing - when the step does
    * have fields to fill.
    *
    * ⚑⚑ ONE RULE, THREE ENTRANCES. "A point with nothing to type is finished the
    * moment it has a pixel" was written out separately at each way in, and the
    * ways in kept disagreeing: a CLICK completed such a step, a REUSED pixel left
-   * it pending (b866d14 — "common origin does nothing on a category axis"), and
+   * it pending (b866d14 - "common origin does nothing on a category axis"), and
    * an OPTION TOGGLE that reshapes the step under a pixel already waiting did
    * the same thing again. David, having clicked the first corner and then ticked
    * "X is categories": *"the first point is left hanging and without focus."* It
    * was: X start lost its value field, so the input and its ✓ button vanished,
-   * and the only thing that could have finished the point went with them —
+   * and the only thing that could have finished the point went with them -
    * 0/8 set, a stranded marker on the figure, and the tips bar still asking for
    * a value nothing could accept. Adding a fourth copy of the rule was how this
    * kept happening, so there is now one.
@@ -2676,7 +2676,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const { tupleIndex, groupIndex } = entry.slotCursor;
       if (tupleIndex === null) {
         // ⚑ BUILD THE TUPLE EMPTY AND FILE BY SLOT where the slots are independent
-        // (N x 1D). `addTuple` always writes slot 0 — fine for a box plot, whose
+        // (N x 1D). `addTuple` always writes slot 0 - fine for a box plot, whose
         // cursor starts at Min and walks in order, and WRONG the moment a capture
         // can start anywhere: aiming at "Cost index" on a series with no readings
         // yet recorded the click as Axis 1, at the value that point projects to on
@@ -2774,7 +2774,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     } else {
       const index = bestInsertionIndex(pixels, { x: px, y: py });
       dataset.insertPixel(index, px, py);
-      // ⚑ THE GUESS STANDS DOWN ONCE THE BANDS ANSWER — the same gate the tuple
+      // ⚑ THE GUESS STANDS DOWN ONCE THE BANDS ANSWER - the same gate the tuple
       // path already has (`!this.categoriesFollowBands() && !prefillTuple…`).
       // Prefill exists to copy a name from the nearest already-named point in
       // another series, i.e. to GUESS which category this reading means. A
@@ -2808,7 +2808,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * Record an axis-aware colour trace's readings into this series' spider slots
-   * (v1.4) — one entry per spoke, in spoke order, null where the trace declined to
+   * (v1.4) - one entry per spoke, in spoke order, null where the trace declined to
    * offer one. The grouped sibling of addSegmentFillPoints: a spider trace DOES
    * have a natural slot for every reading, because it searched one ray per slot.
    *
@@ -2816,7 +2816,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * trace assists; it never overwrites a reading the user placed by hand, so
    * running it after fixing one axis by eye cannot silently undo that fix. The
    * cursor is then recomputed to the first slot still open, exactly as loading a
-   * project does — so whatever the trace refused is what the user is next asked
+   * project does - so whatever the trace refused is what the user is next asked
    * for, and the refusals become the worklist.
    *
    * ⚑ Every point goes through the same snapToSpoke as a click. The tracer's
@@ -3206,7 +3206,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getPointLabels(datasetIndex: number): string[] {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry) return [];
-    // ⚑⚑ WITH THE AXIS MARKED, THE BAND IS THE CATEGORY'S IDENTITY — so the name
+    // ⚑⚑ WITH THE AXIS MARKED, THE BAND IS THE CATEGORY'S IDENTITY - so the name
     // lives with the BAND, and every series reads the same one. This is the
     // point-level counterpart of what `getTupleLabel` already does for a bar,
     // and its absence was the other half of Line's tenet-11 failure: a position
@@ -3214,7 +3214,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // With the name copied onto each point, two series could disagree about what
     // category 2 is called and nothing could say which was right.
     //
-    // ⚑ A category nobody has named reads BLANK, never `Category 2` — the
+    // ⚑ A category nobody has named reads BLANK, never `Category 2` - the
     // fabricated-name defect v2.1 removed from Bar and Pie.
     const banded = this.categoriesFollowBands();
     return entry.dataset.getAllPixels().map((p) => {
@@ -3235,7 +3235,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const dataset = this.activeEntry.dataset;
     if (pointIndex < 0 || pointIndex >= dataset.getAllPixels().length) return;
     // ⚑⚑ RENAMING A POINT'S CATEGORY RENAMES THE BAND, for every series at once
-    // — which is correct, because one band IS one category. Word for word the
+    // - which is correct, because one band IS one category. Word for word the
     // rule `setTupleLabel` already states for a marked bar chart: *"with the
     // axis marked, the BAND is the category's identity."* None of the
     // reuse-or-create reasoning the unmarked path needs applies here; that
@@ -3260,7 +3260,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ Through `getPointLabels`, not the raw metadata, so it sees a name
     // wherever the name actually LIVES. Once the category axis is marked the
     // names belong to the bands, and reading the pixels' own metadata reported
-    // "nobody transcribed anything" for a fully-named figure — which silently
+    // "nobody transcribed anything" for a fully-named figure - which silently
     // dropped the Category column out of the export.
     return this.datasetEntries.some((_e, i) => this.getPointLabels(i).some((l) => l.length > 0));
   }
@@ -3355,15 +3355,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * Whether a bar's category is DERIVED from the declared bands rather than
-   * stored on the pixel (v2.1) — true exactly while the category axis is marked.
+   * stored on the pixel (v2.1) - true exactly while the category axis is marked.
    *
    * ⚑ THIS IS WHAT MAKES "adjust a tick and the bars re-home" WORK. A stored
    * index is a second copy of a fact the geometry already answers, and the two
    * disagree the moment a divider moves: the bar sits in band 2 and the file
    * still says 3. Deriving it means there is nothing to go stale.
    *
-   * ⚑ The usual objection to deriving — that a derived link has no model
-   * entrance to guard, the lesson the error-bar cap/datum link taught — does not
+   * ⚑ The usual objection to deriving - that a derived link has no model
+   * entrance to guard, the lesson the error-bar cap/datum link taught - does not
    * apply here, because there is nothing to guard. A band index is a pure
    * function of a pixel and the declared dividers; it cannot be inconsistent,
    * only recomputed.
@@ -3460,12 +3460,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * Tuple-shaped counterpart of prefillCategoryLabel (v2.0). A bar is now TWO
-   * pixels (its dragged corners), not one, so a NEW TUPLE — not a new pixel —
+   * pixels (its dragged corners), not one, so a NEW TUPLE - not a new pixel -
    * is the thing that needs a category name, and the donor search/ambiguity
    * guard both need to compare TUPLES (via getTupleLabel-style scanning and
    * each tuple's PRIMARY pixel for position) rather than raw pixel indexes.
    * Same algorithm, same fail-safe-on-ambiguity rule as prefillCategoryLabel
-   * — see its doc comment for the full reasoning, not repeated here.
+   * - see its doc comment for the full reasoning, not repeated here.
    *
    * Bar-only (`config.id === 'bar'`, not just `axesKind === 'bar'`): Box Plot
    * shares BarAxes but a box has no comparable "one repeated category set
@@ -3473,7 +3473,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * `Bar<i>`-via-autoLabelTuple default.
    *
    * Returns whether it wrote a name, so the caller can fall back to
-   * autoLabelTuple's plain default when there is no donor — mirroring how
+   * autoLabelTuple's plain default when there is no donor - mirroring how
    * the old per-point path left a name blank rather than inventing one.
    *
    * ⚑ v2.0: assigns the donor's CATEGORYINDEX, not a copied string -- the new
@@ -3554,7 +3554,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * Whether the active series' GRAPH TYPE is tuple-shaped (Box Plot, Bar, Pie,
-   * Histogram) — the question the panels and the exporter ask.
+   * Histogram) - the question the panels and the exporter ask.
    *
    * ⚑⚑ NOT `Dataset.hasSlots()`, and the difference is B4's whole UI half.
    * Adding error to an XY point files it into a tuple, so the STORAGE gains
@@ -3566,7 +3566,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.ownSlots(this.activeEntry.dataset).length > 0;
   }
 
-  /** The type's own slots on a dataset, with any error tail removed — the
+  /** The type's own slots on a dataset, with any error tail removed - the
    * SHAPE question. Every caller that asks what a series looks like goes
    * through here; the capture path keeps asking `Dataset.hasSlots()`, which is
    * the STORAGE question and stays true. */
@@ -3599,7 +3599,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /**
    * The already-placed calibration pixel that seeds the category axis's first
-   * edge — the value origin, which sits on that edge in an ordinary bar chart.
+   * edge - the value origin, which sits on that edge in an ordinary bar chart.
    * Null when the type has no categories or the seed step is not placed yet.
    *
    * ⚑ Offered, never imposed: this is what lets the UI put the first edge down
@@ -3614,7 +3614,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return seed ? { px: seed.px, py: seed.py } : null;
   }
 
-  /** The LABEL of that seed handle — 'P1' on a bar chart, 'V1' on a Line — so
+  /** The LABEL of that seed handle - 'P1' on a bar chart, 'V1' on a Line - so
    * the prompt can name the handle this figure actually has. Blank when the type
    * has no categories. See `CategoryPanelInput.seedLabel` for what naming the
    * wrong one cost. */
@@ -3649,7 +3649,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.categoryAxis.moveTick(index, point);
   }
 
-  /** Drop the marks, keeping every category — for RE-PLACING the axis, where the
+  /** Drop the marks, keeping every category - for RE-PLACING the axis, where the
    * user is fixing where it runs, not abandoning the categories they named. */
   clearCategoryAxisGeometry(): boolean {
     if (!this.supportsCategoryTicks()) return false;
@@ -3665,7 +3665,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * five behind as phantom rows with no way to delete them, and the next bar
    * captured then appended a SIXTH (code review, 2026-08-10). "Remove ticks"
    * means "I did not want this declaration", so it takes back what the
-   * declaration created — and nothing else.
+   * declaration created - and nothing else.
    *
    * ⚑ A category is kept if it is NAMED or if any bar is filed under it. Only
    * the untouched leftovers go, so nothing a user typed or captured is lost to a
@@ -3731,7 +3731,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** Store a tuple's category index on its primary pixel, stripping it from the
-   * others — the same write shape setTupleLabel and the prefill both use. */
+   * others - the same write shape setTupleLabel and the prefill both use. */
   private writeTupleCategoryIndex(dataset: Dataset, tupleIndex: number, categoryIndex: number): void {
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple) return;
@@ -3756,7 +3756,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * Null whenever there is nothing declared, so a caller passing this straight
    * through gets exactly the pre-v2.1 behaviour when the user has not marked
-   * anything — the un-ticked path stays untouched by construction.
+   * anything - the un-ticked path stays untouched by construction.
    *
    * ⚑ The direction is MEASURED from the marked axis, not read off the
    * "Horizontal bars" option: the two are independent declarations today and
@@ -3765,7 +3765,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   categoryDividersForDetect(): {
     dividers: number[];
     categoryAxis: 'x' | 'y';
-    /** True when the axis was marked in DECREASING image coordinate — right to
+    /** True when the axis was marked in DECREASING image coordinate - right to
      * left, or bottom to top, which is the natural direction for a horizontal
      * bar chart.
      *
@@ -3808,7 +3808,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** The active series' error columns, under the name the user gave the error
-   * ('SD upper', 'SD lower', …) — empty when it carries none. Separate from
+   * ('SD upper', 'SD lower', …) - empty when it carries none. Separate from
    * `getSlotNames` because they are separate ideas: those are what the type
    * measures, these are what a reading's uncertainty is called. */
   getErrorSlotNames(index?: number): string[] {
@@ -3864,10 +3864,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The cursor otherwise walks to the first open slot it finds, which is right
    * while stepping round a chart and useless once there are two gaps: the second
    * one cannot be reached until the first is filled. This is the deliberate route
-   * to a particular gap — the table's empty cells call it.
+   * to a particular gap - the table's empty cells call it.
    *
    * ⚑ REFUSES A SLOT THAT IS ALREADY FILLED. Capturing into it would overwrite
-   * that slot's pixel index and orphan the point it displaced — a reading lost
+   * that slot's pixel index and orphan the point it displaced - a reading lost
    * with nothing on screen to say so. Re-taking a reading is delete-then-place,
    * two visible steps, not one silent one.
    *
@@ -3893,7 +3893,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.config.tupleMembers !== 'independent' && !this.isBarIntervalShape(dataset)) return false;
     // ⚑ The type's OWN slots: aiming the cursor at an error slot would make the
     // next click fill it, which is the same defect nextSlot and
-    // computeSlotCursorFor were fixed for — this is the entrance the TABLE uses.
+    // computeSlotCursorFor were fixed for - this is the entrance the TABLE uses.
     if (groupIndex < 0 || groupIndex >= this.ownSlots(dataset).length) return false;
     if (tupleIndex !== null) {
       const tuple = dataset.getAllTuples()[tupleIndex];
@@ -4068,7 +4068,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
   }
 
-  /** Record the apex on the tuple's own primary pixel — the same per-pixel metadata
+  /** Record the apex on the tuple's own primary pixel - the same per-pixel metadata
    * channel the category label uses, so it round-trips through the project file
    * without a new home in the format. */
   private setSectorApex(tupleIndex: number, x: number, y: number): void {
@@ -4195,12 +4195,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The spider table (v1.4): one ROW per axis, one COLUMN per series —
+   * The spider table (v1.4): one ROW per axis, one COLUMN per series -
    * `# | Category | Series 1 | Series 2 | …` (David, 2026-07-27).
    *
    * ⚑ Why this shape and not the grouped table's. The slot table shows the
    * ACTIVE series only, so adding a second series made the first one's readings
-   * vanish from the screen — caught by driving the app, not by any test. Every
+   * vanish from the screen - caught by driving the app, not by any test. Every
    * ungrouped type already shows all series at once, so the grouped table was the
    * outlier. Rows-as-axes is also the layout a radar chart's own data is published
    * in, and it stays compact as series are added instead of growing sideways by
@@ -4216,7 +4216,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getSpiderTable(): {
     axisNames: string[];
-    /** The names AS STORED — empty where the figure's own label was illegible and
+    /** The names AS STORED - empty where the figure's own label was illegible and
      * the user left it blank. `axisNames` carries the positional fallback for
      * display; an editable field must show this one, or it offers "Axis 3" as if
      * someone had typed it (the same invented-value trap the calibration card's
@@ -4249,7 +4249,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
           const pixelIndex = pointIndices[axisIndex];
           if (pixelIndex == null) return null;
           const p = entry.dataset.getPixel(pixelIndex);
-          // Read against THIS axis, never the nearest ray — the same rule the
+          // Read against THIS axis, never the nearest ray - the same rule the
           // export follows, for the same reason.
           return spider.projectOnSpoke(axisIndex, p.x, p.y)?.value ?? null;
         });
@@ -4267,26 +4267,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The bar table (v2.0): `# | Category | Series 1 | Series 2 | …` — one ROW
+   * The bar table (v2.0): `# | Category | Series 1 | Series 2 | …` - one ROW
    * per CATEGORY, one COLUMN per series, mirroring getSpiderTable's own
    * shape and reasoning exactly (David: "we need to store them, series by
    * series, as columns. Like this [spider's table]").
    *
    * ⚑ Replaces the per-series switching table Bar used to fall into
    * (`hasSlots` below): that table showed the ACTIVE series' bars only, so a
-   * second series' bars vanished from the screen the moment you switched —
+   * second series' bars vanished from the screen the moment you switched -
    * the same defect getSpiderTable's own comment describes, on the same
    * underlying table.
    *
    * Rows are the canonical CategoryAxis, in ITS OWN order (not any one
-   * series' capture order) — the whole point of a shared axis is that every
+   * series' capture order) - the whole point of a shared axis is that every
    * series aligns to the same row regardless of which order each series was
    * captured in. A series with no bar for a given category yet leaves that
    * cell null, exactly like Spider's own empty cells.
    */
   getBarCategoryTable(): {
     categoryNames: string[];
-    /** The names AS STORED — empty where a bar was captured but never
+    /** The names AS STORED - empty where a bar was captured but never
      * named (autoLabelTuple's v2.0 change: position alone is enough for
      * OUR identification, so nothing is invented here). `categoryNames`
      * carries the positional fallback for display; an editable field must
@@ -4369,7 +4369,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return { categoryNames, categoryRawNames, columns, crowded };
   }
 
-  /** Renames a category directly by its canonical CategoryAxis index — the
+  /** Renames a category directly by its canonical CategoryAxis index - the
    * bar table's own counterpart of setSpokeName, and simpler than
    * setTupleLabel: a shared table's row already names an EXISTING,
    * unambiguous categoryIndex (there is nothing to look up or merge, unlike
@@ -4460,14 +4460,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** Which already-placed steps' pixels the current step could reuse instead of a new click
-   * (e.g. X1 and Y1 sharing one physical origin pixel — a common real calibration pattern). */
+   * (e.g. X1 and Y1 sharing one physical origin pixel - a common real calibration pattern). */
   getReusableSteps(): CalibStepInfo[] {
     if (this.axes || this.pendingPixel) return [];
     const current = this.getCurrentStep();
     if (!current) return [];
     // A repeating calibration has nothing to reuse, and offering it would invite a
-    // real mistake. Reuse exists for the shared-corner case — X1 and Y1 being one
-    // physical pixel — but a spider's origin is shared BY CONSTRUCTION (placed
+    // real mistake. Reuse exists for the shared-corner case - X1 and Y1 being one
+    // physical pixel - but a spider's origin is shared BY CONSTRUCTION (placed
     // once, used by every spoke), and two spokes on one pixel is two axes pointing
     // the same way, recorded as if the figure drew them that way.
     if (this.config.repeatingStep) return [];
@@ -4498,7 +4498,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // does. Leaving it pending instead is what made "common origin" appear to do
     // nothing on a heatmap's CATEGORY axis: the shared pixel was taken, the walk
     // then waited for a value the step does not have, and no confirm button
-    // exists to give it one — so the calibration simply stopped. David: *"the
+    // exists to give it one - so the calibration simply stopped. David: *"the
     // common origin does not work when you have a categorial axis."* See
     // completeValuelessStep for why the rule lives in one place now.
     if (this.completeValuelessStep(source.px, source.py)) return true;
@@ -4521,7 +4521,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return v === '' && field.optional ? (field.blankValue ?? '0') : v;
     });
     // ⚑⚑ REFUSED AT THE CLICK, NOT EIGHT STEPS LATER. The type's own
-    // `checkValues` already knows this answer — it just was not consulted until
+    // `checkValues` already knows this answer - it just was not consulted until
     // Calibrate, so a value the model could reject immediately was accepted,
     // carried through the rest of the walk, and rejected at the end with no clue
     // which click caused it. David hit it on a LOG COLOUR KEY: the strip's ends
@@ -4536,14 +4536,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // what was typed and the user corrects it in place rather than re-clicking.
     const candidate = { px: this.pendingPixel.px, py: this.pendingPixel.py, values: filled };
     // ⚑⚑ ASKED THE MOMENT THE WALK IS COMPLETE, not at Calibrate. A type's
-    // `checkValues` answers about a WHOLE calibration — Polar reports "P2's r
-    // value must be a number" before P2 exists — so it cannot be asked halfway
+    // `checkValues` answers about a WHOLE calibration - Polar reports "P2's r
+    // value must be a number" before P2 exists - so it cannot be asked halfway
     // and cannot be diffed either, because the complaint simply MOVES from one
     // missing point to the next as the walk fills in.
     //
     // ⚑ So the last confirm is where it fires, which is also the EARLIEST
     // HONEST point for the case that prompted this: a log colour key is only
-    // wrong once BOTH labelled ticks are known — one value alone cannot say
+    // wrong once BOTH labelled ticks are known - one value alone cannot say
     // whether the scale passes through zero. David clicked the strip's end and
     // typed 0, and learned about it eight steps later at Calibrate.
     //
@@ -4660,8 +4660,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑⚑ NOTHING IS CARRIED ACROSS ANY MORE, and that is the point.
     //
     // `buildAxes` returns a BRAND-NEW axes object, and this used to copy the old
-    // one's metadata onto it, because a heatmap kept part of its RECORD there —
-    // the grid, the axis names, and the cells a person read themselves — and a
+    // one's metadata onto it, because a heatmap kept part of its RECORD there -
+    // the grid, the axis names, and the cells a person read themselves - and a
     // re-calibration silently emptied all three.
     //
     // That was a symptom fix. David, 2026-08-16: *"Anything detected on the
@@ -4672,8 +4672,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     //
     // ⚑ MEASURED BEFORE DELETING, not assumed: with the carry disabled, exactly
     // TWO tests failed out of 3,303 and both were the heatmap's record keys.
-    // Everything else in axes metadata — the graph-type stamp, pie's total and
-    // sweep, the heatmap's log flag, axis kinds and tick conventions — is
+    // Everything else in axes metadata - the graph-type stamp, pie's total and
+    // sweep, the heatmap's log flag, axis kinds and tick conventions - is
     // DECLARED during calibration and rewritten by `buildAxes` on every build,
     // so it survives without help. `pieCapture.test.ts`'s "KEEPS them across a
     // RE-CALIBRATION, without anything copying them" is that measurement, kept.
@@ -4698,7 +4698,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * recorded pixels), so a re-calibration that keeps the same spoke count just
    * relabels. But when the COUNT changed, slot k of an existing tuple no longer
    * means the axis it was recorded against, and silently renaming would make the
-   * table assert a pairing nobody measured — the exact failure the error-bar
+   * table assert a pairing nobody measured - the exact failure the error-bar
    * record is parked on. In that case the recorded data keeps the names it was
    * captured under, and the mismatch stays visible rather than being papered over.
    */
@@ -4752,19 +4752,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * (`reserveEmptyCategorySlot`), and NOTHING gave one back: deleting a bar,
    * a point, or a whole series left the category behind. The shared v2.0 Bar
    * table draws its rows from the CategoryAxis, not from the tuples, so each
-   * deleted bar left a dead row with a null value and no tuple — and the
+   * deleted bar left a dead row with a null value and no tuple - and the
    * per-cell delete only renders where a value exists, so the ghost row had
    * **no delete affordance on any cell**. It rode into the saved file and
    * reloaded. Adding a replacement bar minted `Category 3` rather than reusing
    * the freed slot, and retyping the freed NAME hit `setTupleLabel`'s
    * sole-owner branch and renamed in place, leaving TWO identically named rows
-   * — after which `getCategoryIndex` resolved that name to the invisible one.
+   * - after which `getCategoryIndex` resolved that name to the invisible one.
    *
    * `CategoryAxis.removeCategory` had existed since v2.0 with zero callers;
    * its own doc says the wiring layer must check every bound dataset first,
    * and that layer was never written. This is it. Removing an index shifts
    * every later one, so the stored `categoryIndex` metadata is renumbered in
-   * the same pass — which is exactly why it could not be a bare call.
+   * the same pass - which is exactly why it could not be a bare call.
    * (Round-2 audit.)
    */
   private pruneOrphanedCategories(): void {
@@ -5149,13 +5149,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * in the spreadsheet. THAT I want to fix"*).
    *
    * ⚑ The name is the ONE thing on a spider that is transcribed rather than
-   * measured — everything else on that row was read off the pixels — so it is
+   * measured - everything else on that row was read off the pixels - so it is
    * editable for exactly the reason a bar's category name is, and correcting a
    * typo must not mean re-walking the calibration.
    *
    * ⚑ IT LIVES IN THE CALIBRATION, NOT ON THE POINTS. A spoke's name is a property
    * of the AXIS, so this writes it to that spoke's calibration point and re-derives
-   * — which is what carries it into the axes object, the slot names, the
+   * - which is what carries it into the axes object, the slot names, the
    * table and the export in one move, with no second copy to disagree. Same route a
    * dragged handle takes.
    */
@@ -5170,19 +5170,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     point.values[fieldIndex] = name;
     // ⚑ RELABEL, DO NOT RE-DERIVE (David: "I do not see how changing them should
     // re-drive anything"). A name carries no geometry, so nothing about the axes
-    // needs recomputing — and running the calibration to change a string would make
+    // needs recomputing - and running the calibration to change a string would make
     // a typo fix depend on that calibration still succeeding, which is a way for
     // renaming an axis to drop the calibration. The name goes onto the live axes,
     // and the capture slots are relabelled by the same in-place path a real
     // re-calibration uses (which preserves recorded tuples when the count matches).
     if (this.axes) {
       // ⚑ THE PERSISTED COPY FIRST. Serialization reads a spoke's name from its
-      // CALIBRATION POINT (`dz`), not from the live axes — so writing only the
+      // CALIBRATION POINT (`dz`), not from the live axes - so writing only the
       // derived copies made the rename vanish on save and reopen, and left undo
       // restoring a state where the table and the calibration card disagreed. The
       // comment here used to claim this was written "to that spoke's calibration
       // point"; it was not. Caught by the v1.4 release audit, which round-tripped
-      // through a real project file — the test that passed had reloaded from the
+      // through a real project file - the test that passed had reloaded from the
       // live axes and could never have seen it.
       const calibration = (this.axes as unknown as { calibration: Calibration | null }).calibration;
       const calibrationIndex = this.config.fixedSteps.length + index; // origin steps, then one per spoke
@@ -5199,14 +5199,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * where it is. True when the edit was accepted.
    *
    * ⚑⚑ THERE WAS NO WAY TO DO THIS. `updateCalibPointPixel` below has always let
-   * a placed point be dragged, so its GEOMETRY was editable — but nothing ever
+   * a placed point be dragged, so its GEOMETRY was editable - but nothing ever
    * set its values, so a mistyped number was frozen until Reset calibration
    * discarded the entire walk. David hit it at the worst moment: the app refused
    * his log colour key with *"enter positive values"* and gave him no way to
    * enter them. *"And I don't see how I can edit the points at this point during
    * the calibration even?"*
    *
-   * ⚑ Not a heatmap defect — every type has had it. It bites hardest here
+   * ⚑ Not a heatmap defect - every type has had it. It bites hardest here
    * because the walk is eight steps rather than four.
    *
    * ⚑ THE SAME GUARD AS THE WALK, because this is the model's second entrance to
@@ -5266,7 +5266,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "sticks" only until the next anchor moves, which silently discards it --
     // exactly the defect the read-only rows were added to close.
     if (role === 'interpolated') return;
-    // A spider point stays ON its axis however it is moved — drag, arrow nudge or
+    // A spider point stays ON its axis however it is moved - drag, arrow nudge or
     // value edit all land here. Without this a drag would lift the point off the
     // ray it belongs to, and the marker would once again sit somewhere that does
     // not correspond to its own exported value. The spoke comes from the point's
@@ -5356,7 +5356,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // its points must not quietly leave a Histogram that can't record a bin.
     if (this.config.defaultSlots) fresh.setSlotNames([...this.config.defaultSlots]);
     // ⚑ ...and the same for a type whose capture shape is DERIVED from the axes.
-    // A spider has no `defaultSlots` — its slots are its calibrated spokes —
+    // A spider has no `defaultSlots` - its slots are its calibrated spokes -
     // so clearing left the series with no slots at all. Every later capture then
     // took the ungrouped path: unsnapped, absent from the table, and deleted
     // wholesale by the load-time axis-less drop when the project was reopened.
@@ -5480,14 +5480,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.heatmapLayer = plotData.getHeatmapLayer();
     // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
     // Restored BEFORE `placed` and `stepIndex` below, since both are read against
-    // the step list this count decides. The other two entrances already handle it —
+    // the step list this count decides. The other two entrances already handle it -
     // loadCalibrated takes it from the file's own calibration length, reset() puts
-    // it back to the minimum — and this one was left out, so an undo of "+ axis"
+    // it back to the minimum - and this one was left out, so an undo of "+ axis"
     // changed nothing on screen, and an undo of "− axis" brought the placed point
     // back with no step to hang it on: an orphan the calibration could not see and
     // the next "+ axis" silently inherited. Same "the model has more than one
     // entrance" class as the guards in loadCalibrated, reached by a third route.
-    // Clamped to the config's own minimum rather than trusted outright — the same
+    // Clamped to the config's own minimum rather than trusted outright - the same
     // defensive posture as activeDatasetIndex below.
     const repeating = this.config.repeatingStep;
     this.repeatCount = repeating ? Math.max(repeating.min, snapshot.repeatCount) : 0;

@@ -9,7 +9,7 @@ import {
 
 describe('curveFit', () => {
   // Same exact 8-point parabola y = 0.3*(x-5)^2 + 1 verified live in the
-  // app this session (Curve Fit feature testing) — exact recovery
+  // app this session (Curve Fit feature testing) - exact recovery
   // expected: coefficients [8.5, -3, 0.3], R²=1.
   const points = Array.from({ length: 8 }, (_, i) => {
     const x = i * (10 / 7);
@@ -101,7 +101,7 @@ describe('a fit that overflowed must refuse, not return a curve', () => {
     expect(() => fitPolynomial(bigX, 9)).toThrow();
   });
 
-  it('does not blame the point count — that would send the user to fix the wrong thing', () => {
+  it('does not blame the point count - that would send the user to fix the wrong thing', () => {
     // 15 well-separated distinct points is plenty for degree 9. Reporting
     // "not enough distinct points" here is a wrong diagnosis, the same
     // tenet-7 defect as the map axes' `checkValues` message.

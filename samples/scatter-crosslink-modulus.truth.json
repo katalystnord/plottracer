@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "scatter-crosslink-modulus.png",
-    "note": "Synthetic ground truth \u2014 the exact values the figure was rendered from. For a self-test / accuracy score."
+    "note": "Synthetic ground truth - the exact values the figure was rendered from. For a self-test / accuracy score."
   },
   "graphType": "xy",
   "axes": {

@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "xy-dashed-release.png",
-    "note": "Synthetic ground truth \u2014 dense sampling of each dash-coded curve (monochrome; curves differ ONLY by dash style)."
+    "note": "Synthetic ground truth - dense sampling of each dash-coded curve (monochrome; curves differ ONLY by dash style)."
   },
   "graphType": "xy",
   "axes": {

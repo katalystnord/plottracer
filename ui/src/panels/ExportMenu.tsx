@@ -35,12 +35,12 @@ const CheckGlyph = () => (
 );
 
 /**
- * The Export menu — every output artifact, data or figure.
+ * The Export menu - every output artifact, data or figure.
  *
  * ⚑ The omission note is stated BEFORE the user picks a format, not discovered
  * afterwards (David, 2026-07-28), and every claim in it is verified against the
  * writers in engine/exportCapability.ts. Announcing a loss that does not happen
- * would be the same defect as hiding one that does — which is why roles,
+ * would be the same defect as hiding one that does - which is why roles,
  * categories, measurements and fits are NOT listed: they are carried.
  */
 

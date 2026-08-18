@@ -3,7 +3,7 @@ import { SidebarSection, SidebarHeading } from '../layout.js';
 import type { GeometryResult } from '../../../algorithms/geometry.js';
 
 /**
- * The Geometry OUTPUT card (v1.1 steps 2 + 4) — the derived stats, moved here
+ * The Geometry OUTPUT card (v1.1 steps 2 + 4) - the derived stats, moved here
  * from the fold-out so that card holds inputs only.
  *
  * ⚑ The result is DERIVED live from the current points, not stored: editing the
@@ -17,7 +17,7 @@ export interface GeometryCardProps {
   enabled: boolean;
   /** The live result, or null when it cannot currently be computed. */
   result: GeometryResult | null;
-  /** Why it cannot be computed — shown in place of the numbers. */
+  /** Why it cannot be computed - shown in place of the numbers. */
   error: string | null;
   seriesName: string;
   tableOpen: boolean;
@@ -77,7 +77,7 @@ export function GeometryCard({ enabled, result, error, seriesName, tableOpen, on
           </>
         ) : (
           <span data-testid="geometry-stale" style={{ color: theme.color.error }}>
-            ⚠ Can’t compute — {error}
+            ⚠ Can’t compute - {error}
           </span>
         )}
       </div>

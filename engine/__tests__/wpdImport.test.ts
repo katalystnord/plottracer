@@ -13,20 +13,20 @@ function ok<T>(r: T | { error: string }): T {
 }
 
 /**
- * Checkpoint 74 — importing a real WebPlotDigitizer project.
+ * Checkpoint 74 - importing a real WebPlotDigitizer project.
  *
  * Everything here runs against **upstream's own fixtures**
  * (`engine/__tests__/fixtures/wpd/*.json`), not files we wrote. The whole point of an
  * importer is reading someone else's bytes; a fixture we authored would only
  * prove we agree with ourselves.
  *
- * `wpd4.json` is a six-figure project (XY, Bar, Polar, Ternary, Map, Image) —
+ * `wpd4.json` is a six-figure project (XY, Bar, Polar, Ternary, Map, Image) -
  * which is what real WPD projects look like, and why the picker exists.
  */
 const REPO = path.resolve(__dirname, '../..');
 const fixture = (f: string): unknown => JSON.parse(fs.readFileSync(path.join(REPO, 'engine/__tests__/fixtures/wpd', f), 'utf8'));
 
-describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
+describe('wpdImport - reading real WPD projects (checkpoint 74)', () => {
   describe('listWpdFigures', () => {
     it('lists every figure in upstream\'s own multi-figure fixture', () => {
       const { figures } = ok(listWpdFigures(fixture('wpd4.json')));
@@ -46,7 +46,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
       expect(figures[0]!.unsupportedReason).toBeNull();
     });
 
-    it('binds each dataset to its OWN figure — not all datasets to the first', () => {
+    it('binds each dataset to its OWN figure - not all datasets to the first', () => {
       // The bug a naive import would have: taking getDatasets() wholesale.
       const { figures } = ok(listWpdFigures(fixture('wpd4.json')));
       expect(figures[0]!.datasetNames).toEqual(['xy data']);
@@ -54,7 +54,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
       expect(figures[3]!.datasetNames).toEqual(['ternary data']);
     });
 
-    it('reads a PRE-v4 project — the legacy deserializer nobody could reach', () => {
+    it('reads a PRE-v4 project - the legacy deserializer nobody could reach', () => {
       // ~100 lines of carefully-ported legacy handling in core/plotData.ts that
       // was 100% unreachable behind the old gate. wpd3_xy.json's envelope is
       // {wpd: ...}, not {version: ...}.
@@ -85,7 +85,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
       expect(fig.axes.pixelToData(100, 100).length).toBeGreaterThan(0);
     });
 
-    it('opens the FOURTH figure when asked — the picker\'s whole purpose', () => {
+    it('opens the FOURTH figure when asked - the picker\'s whole purpose', () => {
       const { plotData, figures } = ok(listWpdFigures(fixture('wpd4.json')));
       const fig = ok(importWpdFigure(plotData, figures, 3));
       expect(fig.configId).toBe('ternary');
@@ -100,7 +100,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
     });
   });
 
-  describe('readWpdArchive (.tar — the format that carries the image)', () => {
+  describe('readWpdArchive (.tar - the format that carries the image)', () => {
     let tarBytes: Uint8Array;
 
     beforeAll(() => {
@@ -114,7 +114,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
       tarBytes = new Uint8Array(fs.readFileSync(path.join(dir, 'p.tar')));
     });
 
-    it('finds the project by its info.json — the folder name is not fixed', () => {
+    it('finds the project by its info.json - the folder name is not fixed', () => {
       const arc = ok(readWpdArchive(tarBytes));
       expect((arc.wpdJson as { version: number[] }).version).toEqual([4, 0]);
     });
@@ -126,7 +126,7 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
       expect(arc.images[0]!.bytes.length).toBeGreaterThan(1000);
     });
 
-    it('feeds straight into the picker — tar to figures, end to end', () => {
+    it('feeds straight into the picker - tar to figures, end to end', () => {
       const arc = ok(readWpdArchive(tarBytes));
       const { figures } = ok(listWpdFigures(arc.wpdJson));
       expect(figures).toHaveLength(6);
@@ -144,13 +144,13 @@ describe('wpdImport — reading real WPD projects (checkpoint 74)', () => {
 });
 
 /**
- * ⚑ A PROJECT FOLDER NAME IS NOT A REGEX — round-2 audit.
+ * ⚑ A PROJECT FOLDER NAME IS NOT A REGEX - round-2 audit.
  *
  * The image-name strip built `new RegExp('^' + projectName + '/')` from a name
  * taken straight out of the archive. An entirely ordinary folder like
- * `Fig 3 (rev 2)` therefore either THREW — breaking this function's own
+ * `Fig 3 (rev 2)` therefore either THREW - breaking this function's own
  * `{error}` contract, and since no caller wraps it, leaving Open Project
- * silently doing nothing — or, for a name whose metacharacters happened to
+ * silently doing nothing - or, for a name whose metacharacters happened to
  * form a valid pattern, matched nothing and left the prefix on every image.
  */
 describe('a project folder name with regex metacharacters', () => {
@@ -166,7 +166,7 @@ describe('a project folder name with regex metacharacters', () => {
     return new Uint8Array(fs.readFileSync(path.join(dir, 'p.tar')));
   }
 
-  it('⚑ does not throw — an unterminated group broke the {error} contract', () => {
+  it('⚑ does not throw - an unterminated group broke the {error} contract', () => {
     expect(() => readWpdArchive(tarNamed('a(b'))).not.toThrow();
   });
 

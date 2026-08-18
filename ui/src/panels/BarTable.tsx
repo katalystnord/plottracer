@@ -61,7 +61,7 @@ export interface BarTableProps {
 }
 
 /**
- * The Bar table (v2.0): `# | Category | Series 1 | Series 2 | …` — one row per
+ * The Bar table (v2.0): `# | Category | Series 1 | Series 2 | …` - one row per
  * CATEGORY, one column per series, mirroring Spider's own table (David: *"we
  * need to store them, series by series, as columns. Like this"*).
  *
@@ -162,7 +162,7 @@ export function BarTable({
                   }}
                 >
                   {value == null ? (
-                    <span style={{ color: theme.color.text.legend }}>—</span>
+                    <span style={{ color: theme.color.text.legend }}>-</span>
                   ) : (
                     <>
                       {/* `tuple-derived-N`, not just this cell's own bar-cell-S-C

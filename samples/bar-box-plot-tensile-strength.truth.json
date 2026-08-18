@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "bar-box-plot-tensile-strength.png",
-    "note": "Synthetic ground truth \u2014 five-number summary per box."
+    "note": "Synthetic ground truth - five-number summary per box."
   },
   "graphType": "boxplot",
   "axes": {

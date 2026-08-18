@@ -4,7 +4,7 @@ export type AxesMetadata = Record<string, unknown>;
 
 /**
  * Common shape shared by all 7 axes types. `calibrate`/`dataToPixel`
- * signatures vary per concrete type (see each axes/*.ts file) — this is
+ * signatures vary per concrete type (see each axes/*.ts file) - this is
  * intentionally loose rather than forcing an exact shared signature,
  * matching how the original wpd-core axes classes were never actually
  * unified under one JS interface either.

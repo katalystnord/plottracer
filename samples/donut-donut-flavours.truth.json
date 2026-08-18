@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "donut-donut-flavours.png",
-    "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole \u2014 the total is 2500, NOT 100, so the calibration default must be changed to read it."
+    "note": "Synthetic ground truth. A donut chart about donuts. Absolute units with the total printed in the hole - the total is 2500, NOT 100, so the calibration default must be changed to read it."
   },
   "graphType": "pie",
   "total": 2500.0,

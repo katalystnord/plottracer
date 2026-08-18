@@ -4,12 +4,12 @@ import type { PieAxes } from '../../core/axes/pie.js';
 
 /**
  * ⚑⚑ THE TUPLE ARRAY IS SPLICED BY FOUR METHODS, AND THE PENDING APEX IS AN
- * INDEX INTO IT — v2.0 pre-launch audit, round 2.
+ * INDEX INTO IT - v2.0 pre-launch audit, round 2.
  *
  * `pendingExplodedTuple` pins an in-progress exploded slice to a tuple INDEX.
  * The v2.0 audit taught `removeTuple` and `discardTuple` to clear or shift it
  * when that array changes shape, and left `removeLastPoint` and
- * `removeDataPointAt` calling `dataset.removeTuple` directly — so pressing
+ * `removeDataPointAt` calling `dataset.removeTuple` directly - so pressing
  * Delete on the last point of an in-progress exploded sector stranded the
  * index, and the DISCARDED apex was later written onto whatever ordinary
  * sector next landed there. Nothing on screen was wrong except a stuck
@@ -52,9 +52,9 @@ describe('deleting the last point of an in-progress exploded slice', () => {
     s.addDataPoint(...rim(0)); // sector 0 complete, sector 1 chain-opened
 
     s.setNextSectorExploded(true);
-    s.addDataPoint(320, 220); // the apex — mints an EMPTY tuple, pins the index
+    s.addDataPoint(320, 220); // the apex - mints an EMPTY tuple, pins the index
     s.addDataPoint(...rim(60)); // first edge lands in that tuple
-    s.removeLastPoint(); // Delete — the tuple empties and is spliced out
+    s.removeLastPoint(); // Delete - the tuple empties and is spliced out
 
     // Carry on capturing ordinary sectors.
     s.addDataPoint(...rim(60));

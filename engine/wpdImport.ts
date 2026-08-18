@@ -2,8 +2,8 @@
  * Import a WebPlotDigitizer project (checkpoint 74).
  *
  * **Why this is the one-way door.** Compatibility splits in two (David,
- * 2026-07-15): *import* is one-way and must be faithful — we are reading
- * someone else's bytes — while *export* is ours and need only make sense.
+ * 2026-07-15): *import* is one-way and must be faithful - we are reading
+ * someone else's bytes - while *export* is ours and need only make sense.
  * Nobody round-trips projects between the two tools. So this is built while we
  * are still compatible, and afterwards we diverge freely.
  *
@@ -15,12 +15,12 @@
  * reporting*, not parsing.
  *
  * **Two facts about real WPD files that shape everything here:**
- *  1. **A bare `.json` carries no image** — every upstream fixture is
+ *  1. **A bare `.json` carries no image** - every upstream fixture is
  *     `{version, axesColl, datasetColl, measurementColl}` with no image key.
  *     WPD's image-bearing format is `.tar` (`info.json` + `wpd.json` + images,
  *     `services/saveResume.js:68-86`).
- *  2. **Real projects are multi-figure.** `wpd4.json` — upstream's own fixture
- *     — has six axes and six datasets. We render one figure at a time, so the
+ *  2. **Real projects are multi-figure.** `wpd4.json` - upstream's own fixture
+ *     - has six axes and six datasets. We render one figure at a time, so the
  *     user picks. Silently importing `axesColl[0]` and dropping five figures is
  *     exactly the class of failure this project killed twice on 2026-07-15.
  *     When multi-figure lands (parity gap #5) the picker becomes the fallback
@@ -33,17 +33,17 @@ import { readTar, entryText, type TarEntry } from './tarRead.js';
 
 export type WpdResult<T> = T | { error: string };
 
-/** One calibrated figure inside a WPD project — a row in the picker. */
+/** One calibrated figure inside a WPD project - a row in the picker. */
 export interface WpdFigure {
   /** Index into the project's axesColl. */
   index: number;
-  /** The axes' own name, e.g. "xy axes" — what the user called it in WPD. */
+  /** The axes' own name, e.g. "xy axes" - what the user called it in WPD. */
   name: string;
   /** WPD's class-name string, e.g. "XYAxes". */
   axesType: string;
   /** Our graph-type id, or null when we cannot open this figure yet. */
   configId: string | null;
-  /** Why it can't be opened — shown next to a disabled row. Null when fine. */
+  /** Why it can't be opened - shown next to a disabled row. Null when fine. */
   unsupportedReason: string | null;
   datasetNames: string[];
 }
@@ -58,7 +58,7 @@ export interface WpdArchive {
 
 /** WPD class name -> our graph-type id. Mirrors projectFile.ts's own map; kept
  * separate because that one describes *our* files and this one describes
- * theirs — they are free to diverge now, and will. */
+ * theirs - they are free to diverge now, and will. */
 const WPD_AXES_TO_CONFIG: Record<string, string> = {
   XYAxes: 'xy',
   BarAxes: 'bar',
@@ -79,7 +79,7 @@ function mimeFor(name: string): string {
  * Parse a WPD `.tar` into its project JSON and images.
  *
  * Locates the project by finding the archive's `info.json`, exactly as WPD does
- * (`saveResume.js:129-131`) — the folder name inside the archive is the project
+ * (`saveResume.js:129-131`) - the folder name inside the archive is the project
  * name and is not fixed.
  */
 export function readWpdArchive(bytes: Uint8Array): WpdResult<WpdArchive> {
@@ -87,12 +87,12 @@ export function readWpdArchive(bytes: Uint8Array): WpdResult<WpdArchive> {
   try {
     entries = readTar(bytes);
   } catch (e) {
-    return { error: `Could not read this .tar — ${e instanceof Error ? e.message : String(e)}` };
+    return { error: `Could not read this .tar - ${e instanceof Error ? e.message : String(e)}` };
   }
 
   const info = entries.find((e) => e.type === 'file' && e.name.endsWith('/info.json'));
   if (!info) {
-    return { error: "This .tar doesn't look like a WebPlotDigitizer project — no info.json inside it." };
+    return { error: "This .tar doesn't look like a WebPlotDigitizer project - no info.json inside it." };
   }
   const projectName = info.name.replace(/\/info\.json$/, '');
 
@@ -130,7 +130,7 @@ export function readWpdArchive(bytes: Uint8Array): WpdResult<WpdArchive> {
  * Read a WPD project's JSON and list the figures inside it.
  *
  * Handles both envelopes: v4 (`{version, axesColl, …}`) and pre-v4
- * (`{wpd: …}`) — `core/plotData.ts` ports both deserializers, and both are
+ * (`{wpd: …}`) - `core/plotData.ts` ports both deserializers, and both are
  * verified against upstream's own fixtures.
  *
  * Returns the live `PlotData` alongside, so the caller can import a chosen
@@ -145,10 +145,10 @@ export function listWpdFigures(wpdJson: unknown): WpdResult<{ plotData: PlotData
   try {
     ok = plotData.deserialize(wpdJson as never) as boolean | undefined;
   } catch (e) {
-    return { error: `Could not read this WebPlotDigitizer project — ${e instanceof Error ? e.message : String(e)}` };
+    return { error: `Could not read this WebPlotDigitizer project - ${e instanceof Error ? e.message : String(e)}` };
   }
   if (ok === false) {
-    return { error: 'Could not read this WebPlotDigitizer project — its data could not be parsed.' };
+    return { error: 'Could not read this WebPlotDigitizer project - its data could not be parsed.' };
   }
 
   const axesColl = plotData.getAxesColl();
@@ -212,7 +212,7 @@ export function importWpdFigure(
   const figure = figures.find((f) => f.index === index);
   if (!figure) return { error: `This project has no figure ${index}.` };
   if (figure.configId === null) {
-    return { error: `Can't open "${figure.name}" — ${figure.unsupportedReason}.` };
+    return { error: `Can't open "${figure.name}" - ${figure.unsupportedReason}.` };
   }
   const axes = plotData.getAxesColl()[index];
   if (!axes) return { error: `This project has no figure ${index}.` };

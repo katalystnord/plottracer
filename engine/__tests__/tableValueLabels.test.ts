@@ -9,7 +9,7 @@ import {
 import type { XYAxes } from '../../core/axes/xy.js';
 
 /**
- * Checkpoint 92 — the right-panel table's value-column headers come from the
+ * Checkpoint 92 - the right-panel table's value-column headers come from the
  * same source the export does, so the screen and the file cannot disagree.
  *
  * The bug it closes: the table drove off `config.valueLabels`, which had
@@ -31,7 +31,7 @@ function calibrateStdXY(s: CalibrationSession<XYAxes>) {
   expect(s.runCalibration()).toBe(true);
 }
 
-describe('getTableValueLabels — table headers match the file', () => {
+describe('getTableValueLabels - table headers match the file', () => {
   it('for CCR, shows Time/Magnitude (what the file writes), not t/value', () => {
     // The exact 5-step CCR calibration the engine's own suite uses.
     const s = new CalibrationSession(CIRCULAR_CHART_RECORDER_AXES_CONFIG);
@@ -65,7 +65,7 @@ describe('getTableValueLabels — table headers match the file', () => {
     expect(s.getTableValueLabels()).toEqual(['a', 'b', 'c']);
   });
 
-  it('for Bar, is the last dataDim of the labels — drops the leading Category', () => {
+  it('for Bar, is the last dataDim of the labels - drops the leading Category', () => {
     const s = new CalibrationSession(BAR_AXES_CONFIG);
     for (const [px, py, v] of [[100, 300, '0'], [100, 100, '10']] as const) {
       s.handleCalibrationClick(px, py);
@@ -106,7 +106,7 @@ describe('getTableValueLabels — table headers match the file', () => {
 // v1.2 #16 -- the table must format a date-calibrated column like the export
 // does, not show a raw serial. getTableDateFormats() gives the per-column format,
 // index-aligned with getTableValueLabels().
-describe('getTableDateFormats — per-column date format for the table', () => {
+describe('getTableDateFormats - per-column date format for the table', () => {
   it('exposes the date format for a date-calibrated X, null for numeric Y', () => {
     const s = new CalibrationSession(XY_AXES_CONFIG);
     // Slash dates for X (WPD's parser needs '/' or ':'); numeric Y.

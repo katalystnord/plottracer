@@ -8,14 +8,14 @@ import { PlotData } from '../plotData.js';
  * The v3 and v4 deserializers, against real upstream project files.
  *
  * ⚑ WHY THIS FILE EXISTS. After covering PlotData's relationship layer, 287
- * mutants still survived — almost all of them inside the deserializers
+ * mutants still survived - almost all of them inside the deserializers
  * themselves, which unit-constructed documents cannot reach. Those paths only
  * run against real files, and we hold four of them: genuine WebPlotDigitizer
  * projects, redistributable because WPD is AGPL-3.0 like us (see
  * engine/__tests__/fixtures/wpd/PROVENANCE.md).
  *
  * ⚑ THE PATTERN IS UPSTREAM'S, AND IT IS THE GOOD IDEA IN THEIR SUITE: every
- * assertion runs TWICE — once on the document as deserialized, and once on
+ * assertion runs TWICE - once on the document as deserialized, and once on
  * `deserialize(serialize(it))`. Reading a file correctly and being able to SAVE
  * what you read are different claims, and only the second one protects a user
  * who opens someone else's project and then presses Save.
@@ -24,7 +24,7 @@ import { PlotData } from '../plotData.js';
  * checks `axesCount === 1` for wpd3_xy and stops; the fixture actually carries
  * four datasets and a measurement, all of which must survive too.
  *
- * `engine/__tests__/wpdImport.test.ts` covers the IMPORT path — enumerating
+ * `engine/__tests__/wpdImport.test.ts` covers the IMPORT path - enumerating
  * figures, mapping them to our graph types, refusing what it cannot read. This
  * file covers the layer underneath: whether core/plotData.ts reads and rewrites
  * the bytes faithfully.
@@ -56,7 +56,7 @@ function bothWays(fixture: string): [PlotData, PlotData] {
 const shape = (pd: PlotData): [string, number][] =>
   pd.getDatasets().map((d) => [d.name, d.getCount()]);
 
-describe('PlotData — pre-v4 projects (the legacy deserializer)', () => {
+describe('PlotData - pre-v4 projects (the legacy deserializer)', () => {
   it.each(bothWays('wpd3_xy.json').map((pd, i) => [i === 0 ? 'as read' : 're-saved', pd] as const))(
     'reads a v3 XY project with all four series (%s)',
     (_stage, pd) => {
@@ -86,7 +86,7 @@ describe('PlotData — pre-v4 projects (the legacy deserializer)', () => {
   );
 });
 
-describe('PlotData — a v4 project with all six axes types', () => {
+describe('PlotData - a v4 project with all six axes types', () => {
   it.each(bothWays('wpd4.json').map((pd, i) => [i === 0 ? 'as read' : 're-saved', pd] as const))(
     'keeps every axes, dataset and binding (%s)',
     (_stage, pd) => {
@@ -115,13 +115,13 @@ describe('PlotData — a v4 project with all six axes types', () => {
   });
 });
 
-describe('PlotData — v4.2, with masks and measurements', () => {
+describe('PlotData - v4.2, with masks and measurements', () => {
   it.each(
     bothWays('wpd4_2_with_masks.json').map((pd, i) => [i === 0 ? 'as read' : 're-saved', pd] as const)
   )('keeps the document (%s)', (_stage, pd) => {
     expect(pd.getAxesCount()).toBe(6);
     expect(shape(pd)).toEqual([
-      // ⚑ 143 here against 144 in wpd4.json — the same figure with one point
+      // ⚑ 143 here against 144 in wpd4.json - the same figure with one point
       // masked out. Asserted as an exact count precisely because the two
       // fixtures differ by one: a deserializer that silently reinstated the
       // masked point would still look plausible.
@@ -142,8 +142,8 @@ describe('PlotData — v4.2, with masks and measurements', () => {
     // per-dataset side-channel in the format, and the only thing carried through
     // serialize by a separate map rather than alongside the dataset.
     //
-    // ⚑ We store the mask RUN-LENGTH ENCODED — an array of [start, length]
-    // pairs — where upstream expands it into a Set of pixel indices. So the two
+    // ⚑ We store the mask RUN-LENGTH ENCODED - an array of [start, length]
+    // pairs - where upstream expands it into a Set of pixel indices. So the two
     // codebases hold the same mask in different shapes, and upstream's own test
     // asserts the EXPANDED counts (264662 and 14710) for this very file. Summing
     // our runs and checking against those numbers is therefore a cross-check of

@@ -12,7 +12,7 @@ import type { RGB } from '../colorFilter.js';
 
 /**
  * ⚑ MUTATION: measured with a throwaway config scoped to `algorithms/colorScale.ts`
- * — see the note at the top of `colorBar.test.ts` for the recipe.
+ * - see the note at the top of `colorBar.test.ts` for the recipe.
  */
 
 const KEY_W = 201;
@@ -39,7 +39,7 @@ function greyStrip(): ColorBarStrip {
 const STRIP = greyStrip();
 
 /** The same samples on a strip of a chosen length, placed AWAY from the image
- * origin — so that `from` is not zero and cannot hide a sign error. */
+ * origin - so that `from` is not zero and cannot hide a sign error. */
 function offsetStrip(lengthPx: number): ColorBarStrip {
   return {
     samples: STRIP.samples,
@@ -50,7 +50,7 @@ function offsetStrip(lengthPx: number): ColorBarStrip {
 }
 
 /**
- * The colour this key prints at position `t` — read back OFF THE STRIP rather
+ * The colour this key prints at position `t` - read back OFF THE STRIP rather
  * than recomputed from the ramp formula.
  *
  * ⚑ The first version recomputed it and was wrong by one count per channel,
@@ -64,7 +64,7 @@ const colourAt = (t: number): RGB => {
   return STRIP.samples[index]!.rgb;
 };
 
-/** A scale whose two labelled ticks sit at 10% and 90% along the key — where a
+/** A scale whose two labelled ticks sit at 10% and 90% along the key - where a
  * figure's outermost printed labels usually are, INSIDE the ramp rather than at
  * its ends. */
 function scaleOf(valueAt10: number, valueAt90: number, log = false): ColorScale {
@@ -117,7 +117,7 @@ describe('checkColorScale', () => {
     // ⚑ A 256px strip, so one pixel of separation is exactly 1/256 of it and the
     // boundary is a clean binary fraction. On the 200px strip this first used,
     // the arithmetic landed a hair above 1.0 and "exactly the minimum" was never
-    // actually tested — the assertion passed for both sides of the comparison.
+    // actually tested - the assertion passed for both sides of the comparison.
     const apart = (px: number): ColorScale => ({
       strip: offsetStrip(256),
       ticks: [
@@ -132,7 +132,7 @@ describe('checkColorScale', () => {
 
   it('measures the strip’s length correctly enough to judge the threshold', () => {
     // ⚑ A 3-4-5 strip placed away from the origin: 120 across, 160 down, 200
-    // long. The two ticks sit 0.9px apart ALONG it — just inside the refusal.
+    // long. The two ticks sit 0.9px apart ALONG it - just inside the refusal.
     // Any error in the length moves that verdict: an over-long strip makes 0.9px
     // look like more than a pixel and lets it through, and a length that comes
     // out as NaN compares false against everything and lets it through too. This
@@ -227,7 +227,7 @@ describe('valueAtPosition', () => {
   it('EXTRAPOLATES past the labelled ticks instead of clamping', () => {
     // ⚑ The printed labels are almost never at the very ends of the ramp, so the
     // hottest and coldest cells in the figure lie OUTSIDE them. Clamping would
-    // flatten every one of them onto the last labelled value — and the extremes
+    // flatten every one of them onto the last labelled value - and the extremes
     // are usually the reason the figure exists.
     const scale = scaleOf(0, 100);
     expect(valueAtPosition(scale, 0)).toBeCloseTo(-12.5, 6);
@@ -365,12 +365,12 @@ describe('readColor', () => {
   });
 });
 
-describe('positionAtValue — the third axis inverts like the other two', () => {
+describe('positionAtValue - the third axis inverts like the other two', () => {
   /**
    * ⚑⚑ David: *"Heatmaps are a 2.5D graph type. The values are STORED ON THE
    * THIRD AXIS. Changing a value in a cell MOVES THE VALUE on the third axis
    * that records the value, and nothing else!"* Editing a cell is the same
-   * gesture as editing a data point's y — the point moves through the axes'
+   * gesture as editing a data point's y - the point moves through the axes'
    * inverse transform, just along the colour key rather than inside the plot.
    */
   it('round-trips against valueAtPosition on a linear key', () => {

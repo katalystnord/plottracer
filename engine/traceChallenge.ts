@@ -1,11 +1,11 @@
 /**
- * Trace Challenge — pure round logic (v1.2 game). No DOM, no React.
+ * Trace Challenge - pure round logic (v1.2 game). No DOM, no React.
  *
  * Holds the truth-file types, the round draw, the pre-calibration builder (turns a
  * truth `calibration` block into `session.adoptCalibration(...)` input so a round
  * starts already calibrated), and the small adapters that feed the scoring engine
  * (`algorithms/challengeScore.ts`). The actual truth JSON is imported in the UI
- * layer (`ui/src/challengeExamples.ts`) where Vite resolves assets — this module
+ * layer (`ui/src/challengeExamples.ts`) where Vite resolves assets - this module
  * stays asset-free so it unit-tests in plain node.
  */
 import type { Pt, AxisRanges } from '../algorithms/challengeScore.js';
@@ -21,9 +21,9 @@ export interface ChallengeAnchor {
   px: number;
   py: number;
   /** The number typed at this anchor. Absent for a value-less step (a pie's
-   * outline points are pure geometry — the rim carries no reading). */
+   * outline points are pure geometry - the rim carries no reading). */
   value?: number;
-  /** A second field the step asks for, positionally after the value — a spider
+  /** A second field the step asks for, positionally after the value - a spider
    * spoke's axis name. Absent where the step has only one field. */
   name?: string;
 }
@@ -34,8 +34,8 @@ export interface ChallengeCalibration {
   imageHeight: number;
   /**
    * One entry per calibration step key. An ARRAY value is a REPEATING step and
-   * expands to `key1 … keyN` — the same unrolling `CalibrationSession.getSteps`
-   * does — which is how a spider's spokes and a pie's outline arrive.
+   * expands to `key1 … keyN` - the same unrolling `CalibrationSession.getSteps`
+   * does - which is how a spider's spokes and a pie's outline arrive.
    */
   anchors: Record<string, ChallengeAnchor | ChallengeAnchor[]>;
   /** Pie only: the true slice edges, as recorded pixels. The reveal draws these
@@ -66,7 +66,7 @@ export interface ChallengeTruth {
   graphType: string;
   /**
    * `x` is absent for bar/box (value axis only), and the whole block is absent
-   * for spider and pie — NEITHER HAS ONE VALUE AXIS. A spider has one scale per
+   * for spider and pie - NEITHER HAS ONE VALUE AXIS. A spider has one scale per
    * spoke (`spokes` below) and a pie has a whole (`total`), so synthesising a
    * `y` here would have been a fabricated axis standing in for the real model.
    */
@@ -100,7 +100,7 @@ export interface AdoptCalibrationInput {
   globalValues: Record<string, string>;
   /**
    * How many copies of a REPEATING step the placed points need (a spider's
-   * spokes, a pie's outline). `adoptCalibration` does not read this — the caller
+   * spokes, a pie's outline). `adoptCalibration` does not read this - the caller
    * grows the session with `addRepeat()` first, because a session left at the
    * step minimum would drop every point past it on the floor.
    */
@@ -148,7 +148,7 @@ export function calibrationInputsFromAnchors(cal: ChallengeCalibration): AdoptCa
  * `|| 1` guards a degenerate `min===max` truth so scoring can't divide by zero.
  */
 export function truthValueRange(truth: ChallengeTruth): number {
-  // ⚑ `|| 1`, not `?? 1` — the file's own convention, and the one place it was
+  // ⚑ `|| 1`, not `?? 1` - the file's own convention, and the one place it was
   // not followed. A pie truth with `total: 0` divided by zero, and `Infinity`
   // seconds rode into the game total and the persisted high score.
   if (!truth.axes) return (truth.total ?? 0) || 1; // pie: the whole IS the range
@@ -172,7 +172,7 @@ export function truthSeriesPoints(truth: ChallengeTruth): Pt[][] {
   return truth.series.map((s) => s.points.map((p) => ({ x: Number(p.x), y: Number(p.y) })));
 }
 
-/** Histogram truth as (bin-centre, value) points — scored as a scatter. */
+/** Histogram truth as (bin-centre, value) points - scored as a scatter. */
 export function truthHistogramPoints(truth: ChallengeTruth): Pt[] {
   return (truth.series[0]?.points ?? []).map((p) => ({
     x: (Number(p.binStart) + Number(p.binEnd)) / 2,
@@ -219,12 +219,12 @@ export function anchorList(cal: ChallengeCalibration, key: string): readonly Cha
  * ⚑ WHY A SCATTER AND NOT THE ORDERED SCORER. A spider is N×1D: the spoke IS the
  * identity, so a skipped spoke must be a MISS on that spoke, not a shift that
  * makes every later reading score against the wrong axis. The ordered scorer
- * pairs by position and cascades on a gap — right for a bar chart, where order
+ * pairs by position and cascades on a gap - right for a bar chart, where order
  * is the only identity there is, and wrong here. Handing the index to the
  * scatter scorer as the x coordinate makes the identity part of the match.
  *
- * ⚑ AND WHY THE VALUE IS A FRACTION. Each spoke carries its OWN scale — 120 MPa
- * on one, 5 cost-index units on the next — so a raw error is not comparable
+ * ⚑ AND WHY THE VALUE IS A FRACTION. Each spoke carries its OWN scale - 120 MPa
+ * on one, 5 cost-index units on the next - so a raw error is not comparable
  * between them. Normalising per spoke is the same thing the figure does when it
  * draws them at a common radius.
  */
@@ -244,7 +244,7 @@ export function truthSpiderPoints(truth: ChallengeTruth): Pt[] {
  * neighbouring spokes closer together the more spokes a figure had: at N = 6 two
  * adjacent spokes are 0.2 apart and safely outside the scatter scorer's 0.15
  * match threshold, but at N = 8 they are 0.143 apart and a reading on the WRONG
- * spoke matches — which is precisely the cascade the scatter scorer was chosen
+ * spoke matches - which is precisely the cascade the scatter scorer was chosen
  * to prevent. With xRange 1 the spoke index is an exact identity at any N: one
  * spoke apart is 1.0, six times the threshold, forever. No shipped figure has
  * eight spokes; this is a property of the scoring, not of the current pool
@@ -255,7 +255,7 @@ export function spiderAxisRanges(_truth: ChallengeTruth): AxisRanges {
 }
 
 /** A user reading turned into the same (spoke index, fraction) space. `null`
- * readings — a spoke left empty — are dropped, which is what makes them count as
+ * readings - a spoke left empty - are dropped, which is what makes them count as
  * misses rather than as zeroes. */
 export function spiderUserPoints(
   values: readonly (number | null)[],
@@ -273,21 +273,21 @@ export function spiderUserPoints(
 }
 
 /**
- * One reading per TUPLE — the shape both bar and pie rounds score.
+ * One reading per TUPLE - the shape both bar and pie rounds score.
  *
  * ⚑ WHY THIS IS NOT "one reading per POINT". Since the v2.0 bar model a bar is a
  * two-slot INTERVAL captured as a drag-box, so the dataset holds TWO pixels per
  * bar and the value is `derivedTupleValue`, not either corner. The round scorer
- * read raw dataset points instead — one item per click — so a perfect drag of
+ * read raw dataset points instead - one item per click - so a perfect drag of
  * six bars handed twelve numbers to a scorer expecting six, paired them against
  * the wrong truth entries and charged about 193 seconds on a flawless run. The
  * round only scored "correctly" if the player SINGLE-CLICKED each bar, which
  * leaves every tuple half-filled and exports no value at all (v2.1 audit).
  *
  * `order`:
- * - `'left-to-right'` for bar — there is no x calibration, so pixel order along
+ * - `'left-to-right'` for bar - there is no x calibration, so pixel order along
  *   the category axis IS the identity, exactly as the export's rank column is.
- * - `'capture'` for pie — a slice's identity is its position in the walk around
+ * - `'capture'` for pie - a slice's identity is its position in the walk around
  *   the circle, which is the order it was captured in. Sorting a pie by pixel
  *   would scramble it.
  *
@@ -319,12 +319,12 @@ export function truthPieValues(truth: ChallengeTruth): number[][] {
 }
 
 /**
- * The rays a pie's reveal draws — one per BOUNDARY the player had to click.
+ * The rays a pie's reveal draws - one per BOUNDARY the player had to click.
  *
  * ⚑ NOT one per slice. On a plain pie every boundary belongs to two slices, so
  * drawing each slice's START covers all of them and the ring closes. A
- * PULLED-OUT slice shares nothing with anyone, so its far edge — and the
- * boundary above it — belong to no other slice and got no reveal at all: the
+ * PULLED-OUT slice shares nothing with anyone, so its far edge - and the
+ * boundary above it - belong to no other slice and got no reveal at all: the
  * round whose entire lesson is "the exploded slice has edges of its own" drew
  * only half of them, and the exploded wedge read as unenclosed (v2.1 audit).
  *
@@ -350,7 +350,7 @@ export function pieRevealRays(
 }
 
 /**
- * The true point on spoke `index` for `value`, in image pixels — the spider
+ * The true point on spoke `index` for `value`, in image pixels - the spider
  * reveal.
  *
  * Straight-line interpolation between the two anchors the spoke was calibrated
@@ -375,7 +375,7 @@ export function spiderPointAt(
 }
 
 /** Map a value on the value axis to an image-pixel `py`, from the p1/p2 anchors
- * (bar/box reveal — they have no x calibration, so the true values are drawn as
+ * (bar/box reveal - they have no x calibration, so the true values are drawn as
  * horizontal reference lines). */
 export function valueToPy(cal: ChallengeCalibration, value: number): number {
   const p1 = singleAnchor(cal, 'p1');
@@ -394,7 +394,7 @@ export function valueToPy(cal: ChallengeCalibration, value: number): number {
  * How much WORK a round is, graded (v2.1).
  *
  * ⚑ WHY THE GAME NEEDS THIS. The scoring currency is TIME, and the pool spans a
- * factor of ten in clicks — 61 for the stress–strain curve against 6 for a
+ * factor of ten in clicks - 61 for the stress–strain curve against 6 for a
  * spider. Drawn uniformly, one playthrough could be three long curves and
  * another three short bar charts, and their scores would not be comparable. The
  * grade is a property of the ROUND, so the draw can hold the shape of a game
@@ -420,7 +420,7 @@ export const DEFAULT_GRADE_PLAN: GradePlan = { easy: 2, medium: 1, hard: 1 };
  * Draw one game's rounds, `plan` many of each grade, without repeats.
  *
  * ⚑ A grade with too few members TOPS UP from whatever is left rather than
- * returning a short game — a player is owed four rounds even if the pool is
+ * returning a short game - a player is owed four rounds even if the pool is
  * lopsided, and a silently three-round game would read as a bug. The top-up is
  * deterministic in the shuffled order, so a seeded rng still reproduces a game
  * exactly.
@@ -461,7 +461,7 @@ export function drawRounds<T>(pool: readonly T[], target: number, rng: () => num
 }
 
 /**
- * What a finished round reads off the live session, in DATA space — the same
+ * What a finished round reads off the live session, in DATA space - the same
  * values the CSV export carries. Declared as the four reads the scorer actually
  * needs rather than as `CalibrationSession`, so this module stays free of the
  * session (and unit-tests against a literal).
@@ -493,7 +493,7 @@ export interface ChallengeScoredTupleRow {
  *
  * ⚑⚑ THE SWITCH IS EXHAUSTIVE ON PURPOSE, and that is the whole reason this
  * moved out of `Workspace.tsx`. It lived there as an `if / else if / … / else`
- * chain whose FINAL `else` was box-plot — so the eighth family, whenever one is
+ * chain whose FINAL `else` was box-plot - so the eighth family, whenever one is
  * added, would compile clean and be silently scored as a box. Nothing would
  * throw, nothing would fail, and the number would just be wrong. The
  * `never`-typed default turns that into a compile error at the moment the union
@@ -581,9 +581,9 @@ export interface ChallengeReveal {
  *
  * ⚑ Two different sources, and the split is the MODEL showing through rather
  * than a shortcut. Curve/scatter/histogram have an x calibration, so their truth
- * is PROJECTED through `dataToPixel`. Spider and pie have no such projection —
+ * is PROJECTED through `dataToPixel`. Spider and pie have no such projection -
  * a spoke's true point interpolates between the two anchors it was calibrated
- * from, and a pie's true edges are stored outright — so they are revealed from
+ * from, and a pie's true edges are stored outright - so they are revealed from
  * RECORDED PIXELS in the truth file. Bar and box have no x calibration either,
  * so a value can only be drawn as a horizontal line at its own height.
  *

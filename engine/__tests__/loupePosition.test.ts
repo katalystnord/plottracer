@@ -35,7 +35,7 @@ describe('positionLoupe', () => {
   });
 });
 
-describe('positionLoupe — dodging an open card (David: "overlay + dodge")', () => {
+describe('positionLoupe - dodging an open card (David: "overlay + dodge")', () => {
   // A left-anchored card covering roughly x:[0,260], y:[80,520] of an 800x600
   // container -- the shape a Measure/Auto-extract fold-out card makes.
   const card = { left: 0, top: 80, width: 260, height: 440 };

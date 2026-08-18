@@ -217,13 +217,13 @@ export class CircularChartRecorderAxes {
    *
    * ⚑ THIS RETURNS THE INPUT, NOT A RE-RENDERING OF IT, and that is the fix for
    * a project that could not be reopened. It used to format `tStart` back into a
-   * string using `timeFormat` — a format captured from a DIFFERENT field (the
+   * string using `timeFormat` - a format captured from a DIFFERENT field (the
    * first calibration point's own value). Two things fell out of that:
    *
    *   1. A CCR calibrated with plain NUMBERS has no date format at all, so this
    *      returned null, `plotData` serialized `startTime: null`, and reopening
    *      called `calibrate(..., null, ...)`, which fails at InputParser. The
-   *      project came back UNCALIBRATED — every reading gone — with the figure
+   *      project came back UNCALIBRATED - every reading gone - with the figure
    *      and the points still on screen.
    *   2. Even with a date format, it was the WRONG field's format: a dated first
    *      point with a numeric start time re-rendered that number as a date, and

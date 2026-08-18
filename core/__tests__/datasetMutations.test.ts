@@ -3,20 +3,20 @@ import { Dataset } from '../dataset.js';
 import { Color } from '../color.js';
 
 /**
- * `Dataset` — the model every captured point lives in.
+ * `Dataset` - the model every captured point lives in.
  *
  * ⚑ WHY THIS FILE EXISTS. The 2026-07-31 mutation run scored
  * `core/dataset.ts` at **66.59%** with 153 mutants unnoticed. Its siblings
  * (`datasetSelectionAndGroups.test.ts` and the plotData round-trips) cover
  * the tuple/slot machinery and the selection set; what nothing pinned is the
- * quieter half — the DEFAULTS a fresh dataset reports, the index bounds on
+ * quieter half - the DEFAULTS a fresh dataset reports, the index bounds on
  * every mutator, the metadata COUNT that `hasMetadata()` answers from, and
  * the permutation check in `reorderPixels`.
  *
  * ⚑ Two of these have bitten this project before, which is why they are worth
  * the ceremony: `removePixelAtIndex` once guarded only the upper bound, so a
  * negative index dereferenced `_dataPoints[-1]` and threw (fixed, and its
- * comment records the lesson — "the guard was in the session and the model has
+ * comment records the lesson - "the guard was in the session and the model has
  * more than one entrance"); and a reorder that silently re-pointed tuples at
  * whatever landed at their index was a real defect found by the pre-v2.0
  * audit. Both are pinned below.
@@ -29,7 +29,7 @@ function datasetOf(n: number): Dataset {
   return ds;
 }
 
-describe('Dataset — what a fresh one reports about itself', () => {
+describe('Dataset - what a fresh one reports about itself', () => {
   it('starts empty, unnamed-by-default, with no metadata and no groups', () => {
     // Every one of these defaults mutated to a different literal and survived,
     // because nothing asserted the STARTING state -- only states reached after
@@ -51,7 +51,7 @@ describe('Dataset — what a fresh one reports about itself', () => {
   });
 });
 
-describe('Dataset — index bounds on every mutator', () => {
+describe('Dataset - index bounds on every mutator', () => {
   it('setPixelAt moves the named point and ignores an out-of-range index', () => {
     const ds = datasetOf(3);
     ds.setPixelAt(1, 111, 222);
@@ -63,14 +63,14 @@ describe('Dataset — index bounds on every mutator', () => {
     // ⚑ A NEGATIVE index used to THROW here, not no-op: the guard was
     // `index < length` only, so `-1 < 3` passed and `_dataPoints[-1].x = ...`
     // died. Exactly the defect removePixelAtIndex's own comment describes
-    // being fixed — in that one method, while its two siblings kept it.
+    // being fixed - in that one method, while its two siblings kept it.
     expect(() => ds.setPixelAt(3, 999, 999)).not.toThrow(); // one past the end
     expect(() => ds.setPixelAt(-1, 999, 999)).not.toThrow();
     expect(ds.getCount()).toBe(3);
     expect(ds.getPixel(2)).toMatchObject({ x: 20, y: 40 });
   });
 
-  it('⚑ setMetadataAt refuses a negative index too — the third of the same guard', () => {
+  it('⚑ setMetadataAt refuses a negative index too - the third of the same guard', () => {
     const ds = datasetOf(2);
     expect(() => ds.setMetadataAt(-1, { categoryIndex: 0 })).not.toThrow();
     expect(() => ds.setMetadataAt(9, { categoryIndex: 0 })).not.toThrow();
@@ -78,7 +78,7 @@ describe('Dataset — index bounds on every mutator', () => {
     expect(ds.hasMetadata()).toBe(false);
   });
 
-  it('setPixelAt writes the LAST point — the boundary the bound must still admit', () => {
+  it('setPixelAt writes the LAST point - the boundary the bound must still admit', () => {
     const ds = datasetOf(3);
     ds.setPixelAt(2, 7, 8);
     expect(ds.getPixel(2)).toMatchObject({ x: 7, y: 8 });
@@ -107,7 +107,7 @@ describe('Dataset — index bounds on every mutator', () => {
   });
 });
 
-describe('Dataset — the metadata COUNT behind hasMetadata()', () => {
+describe('Dataset - the metadata COUNT behind hasMetadata()', () => {
   /**
    * ⚑ `_pixelMetadataCount` is incremented and decremented by hand across
    * three methods, and `hasMetadata()` is the single question every export
@@ -164,7 +164,7 @@ describe('Dataset — the metadata COUNT behind hasMetadata()', () => {
   });
 });
 
-describe('Dataset — insertPixel shifts the tuples that point past it', () => {
+describe('Dataset - insertPixel shifts the tuples that point past it', () => {
   it('⚑ re-points every tuple slot at or after the insertion, so a bar keeps its own corners', () => {
     // Tuples hold pixel INDEXES. Inserting shifts everything after the
     // insertion point by one, so any slot pointing there must move with it --
@@ -237,10 +237,10 @@ describe('Dataset.findNearestPixel', () => {
   });
 });
 
-describe('Dataset.reorderPixels — a permutation, checked rather than promised', () => {
+describe('Dataset.reorderPixels - a permutation, checked rather than promised', () => {
   /**
    * ⚑ THE DEFECT THIS DESCENDS FROM: reordering a series moved the pixels and
-   * left `_tuples` — which hold pixel INDEXES — pointing at whatever landed
+   * left `_tuples` - which hold pixel INDEXES - pointing at whatever landed
    * there. Found by the pre-v2.0 audit. The method now takes the ORDER so the
    * permutation is a fact it can verify, and six of its validation mutants
    * survived the last run.

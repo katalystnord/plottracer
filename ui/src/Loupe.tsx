@@ -4,7 +4,7 @@ import type { ViewState } from '../../engine/canvasView.js';
 import { theme } from './theme.js';
 
 /**
- * Floating cursor-following zoom loupe (CLAUDE.md "Product #1 — rebuild
+ * Floating cursor-following zoom loupe (CLAUDE.md "Product #1 - rebuild
  * design"): a rounded, Photoshop/Figma-style magnified detail view that
  * follows the cursor during calibration/point-placement, offset so it
  * doesn't cover the pixel about to be clicked, edge-of-screen clamped.
@@ -12,8 +12,8 @@ import { theme } from './theme.js';
  * just the DOM/canvas rendering of it.
  *
  * **It shows your own points as well as the image (checkpoint 83), and until
- * then it could not.** This component took `image` and nothing else — one
- * `drawImage` of the raw raster — so the app's flagship precision tool was
+ * then it could not.** This component took `image` and nothing else - one
+ * `drawImage` of the raw raster - so the app's flagship precision tool was
  * structurally unable to answer the single question it exists to answer:
  * *did the point I just placed land ON the curve?* You could magnify the curve
  * or look at your dot, never both. That is a tenet-1 defect (it is the
@@ -21,13 +21,13 @@ import { theme } from './theme.js';
  *
  * It also silently half-defeated checkpoint 58, which fixed the loupe freezing
  * during a marker drag by feeding the dragged marker's live position into the
- * hover state — while the loupe still could not draw the marker. That fix only
+ * hover state - while the loupe still could not draw the marker. That fix only
  * pays off now.
  *
  * WPD has done this since forever (`graphicsWidget.js:566-579`), but the hard
  * way: its data layer isn't separable, so it alpha-composites two contexts
  * pixel-by-pixel. Ours is a Konva layer with its own canvas, so this is one
- * `drawImage` from a canvas that already exists — no re-render, no `toCanvas()`.
+ * `drawImage` from a canvas that already exists - no re-render, no `toCanvas()`.
  * The reference tool showed us the idea; our architecture made it cheaper.
  */
 
@@ -42,8 +42,8 @@ interface LoupeProps {
   containerWidth: number;
   containerHeight: number;
   /**
-   * The Konva overlay's live canvas — data points, calibration reticles,
-   * glyphs, curve fit — composited over the magnified image (checkpoint 83).
+   * The Konva overlay's live canvas - data points, calibration reticles,
+   * glyphs, curve fit - composited over the magnified image (checkpoint 83).
    *
    * Passed as the canvas rather than the Konva layer so this component stays
    * ignorant of Konva, and takes the *live* element rather than a snapshot so
@@ -80,7 +80,7 @@ export function Loupe({
 
     // ⚑ DPR-SCALE THE BACKING STORE, for the same reason ImageCanvas does.
     // A CSS-resolution buffer gets SMOOTHLY upscaled by the browser to fill
-    // physical pixels, which defeats `imageSmoothingEnabled = false` — and
+    // physical pixels, which defeats `imageSmoothingEnabled = false` - and
     // nearest-neighbour is exactly what a plot digitizer needs. The loupe is
     // the one surface whose entire job is pixel precision, and it was the one
     // still soft on a HiDPI display. (Round-2 audit.)

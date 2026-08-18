@@ -17,7 +17,7 @@ const withLabel: TableSection = {
   ],
 };
 
-describe('renderTable — CSV/TSV', () => {
+describe('renderTable - CSV/TSV', () => {
   it('a lone untitled section is byte-identical to the old header+body CSV', () => {
     expect(renderTable([numeric], 'csv')).toBe('x,y\n0,0\n1,2.5');
   });
@@ -30,7 +30,7 @@ describe('renderTable — CSV/TSV', () => {
   });
 });
 
-describe('renderTable — LaTeX', () => {
+describe('renderTable - LaTeX', () => {
   it('emits a tabular with & separators, \\\\ row ends and \\hline rules', () => {
     const tex = renderTable([numeric], 'latex');
     expect(tex).toContain('\\begin{tabular}{rr}');
@@ -49,7 +49,7 @@ describe('renderTable — LaTeX', () => {
   });
 });
 
-describe('renderTable — MATLAB', () => {
+describe('renderTable - MATLAB', () => {
   it('an all-numeric section is a numeric matrix (header dropped, kept as a comment)', () => {
     const m = renderTable([numeric], 'matlab');
     expect(m).toContain('% columns: x, y');
@@ -71,7 +71,7 @@ describe('renderTable — MATLAB', () => {
   });
 });
 
-describe('renderTable — Python', () => {
+describe('renderTable - Python', () => {
   it('emits a list of rows with the header kept as the first row', () => {
     const py = renderTable([numeric], 'python');
     expect(py).toContain('# columns: x, y');
@@ -91,7 +91,7 @@ describe('renderTable — Python', () => {
   });
 });
 
-describe('renderTable — R (data.frame)', () => {
+describe('renderTable - R (data.frame)', () => {
   it('emits a data.frame with a named numeric vector per column', () => {
     const r = renderTable([numeric], 'r');
     expect(r).toContain('data <- data.frame(');

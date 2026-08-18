@@ -7,17 +7,17 @@ import { ImageAxes } from '../axes/image.js';
 import { DistanceMeasurement, AngleMeasurement } from '../connectedPoints.js';
 
 /**
- * `PlotData`'s relationship bookkeeping — the accessors nothing had asserted.
+ * `PlotData`'s relationship bookkeeping - the accessors nothing had asserted.
  *
  * ⚑ `plotData.ts` scored **45.97%** with **275 surviving mutants and 127 with no
- * coverage** — the largest uncovered block in the project, on the file that holds the
+ * coverage** - the largest uncovered block in the project, on the file that holds the
  * record's relationships and its serialiser. `plotDataRelationships.test.ts` covers
  * the binding between datasets and axes; this covers the surface it left: the
  * measurement side, the auto-detection and grid-detection stores, the top-colours
  * pass-through, and what `reset()` actually clears.
  *
  * Why it earns the time: **v2.0 changes the record**, and every one of these is a way
- * for a datum to lose the axes it is read against. That failure never throws — it
+ * for a datum to lose the axes it is read against. That failure never throws - it
  * produces a number computed against the wrong calibration, which is the exact shape
  * of the defects fixed in `reorderPixels` and `insertPixel` this month.
  */
@@ -33,7 +33,7 @@ describe('measurements are bound to axes, and unbound when deleted', () => {
     expect(plot.getAxesForMeasurement(ms)).toBe(axes);
   });
 
-  it('accepts null — a measurement deliberately bound to nothing', () => {
+  it('accepts null - a measurement deliberately bound to nothing', () => {
     // ⚑ null and undefined are DIFFERENT answers here: null means "explicitly
     // unbound", undefined means "never seen". A mutant collapsing them would make an
     // unbound measurement indistinguishable from an unknown one.
@@ -46,7 +46,7 @@ describe('measurements are bound to axes, and unbound when deleted', () => {
   });
 
   it('forgets the binding when the measurement is deleted', () => {
-    // Otherwise the map grows a reference to an object no longer in the document —
+    // Otherwise the map grows a reference to an object no longer in the document -
     // and a later serialise would write a relationship for something that is gone.
     const plot = new PlotData();
     const axes = new XYAxes();
@@ -72,7 +72,7 @@ describe('measurements are bound to axes, and unbound when deleted', () => {
 describe('a distance measurement auto-attaches to the axes that can scale it', () => {
   // ⚑ The one piece of behaviour in `addMeasurement`, and it was unasserted. A
   // DISTANCE is the only measurement with real-world units, so it attaches itself to
-  // a Map or Image axes if one exists — those are the two that can turn pixels into a
+  // a Map or Image axes if one exists - those are the two that can turn pixels into a
   // length. Getting this wrong does not throw; it reports a distance in the wrong
   // units, or in none.
   it('attaches to Map axes when one is present', () => {
@@ -122,7 +122,7 @@ describe('a distance measurement auto-attaches to the axes that can scale it', (
     expect(plot.getAxesForMeasurement(ms)).toBeUndefined();
   });
 
-  it('honours skipAutoAttach — the load path binds explicitly', () => {
+  it('honours skipAutoAttach - the load path binds explicitly', () => {
     // ⚑ Why the flag exists: deserialising a project must restore the binding the
     // FILE recorded, not re-derive one. Auto-attaching during a load would silently
     // overwrite a measurement the user had bound to something else.

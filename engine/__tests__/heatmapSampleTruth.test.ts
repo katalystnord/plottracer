@@ -10,19 +10,19 @@ import type { PlacedCalibPoint } from '../calibrationSession.js';
 
 /**
  * THE THREE BUNDLED HEATMAP EXAMPLES, traced against their own committed truth
- * (v2.2) — one per case the record enumerates, because a heatmap's two axes are
+ * (v2.2) - one per case the record enumerates, because a heatmap's two axes are
  * each independently a CATEGORY or a VALUE and a figure cannot demonstrate a
  * combination it does not have.
  *
  * ⚑ THE EXAMPLES ARE A PROMISE. Every one of them ships the exact values it was
  * rendered from, and a user can only judge this tool by whether what comes out
  * matches what went in. A bundled figure the app reads WRONG is worse than no
- * example at all — so each is traced here, end to end, by the same functions the
+ * example at all - so each is traced here, end to end, by the same functions the
  * card calls.
  *
  * ⚑ Each covers what the others cannot:
  *
- *   weld ....... VALUE × VALUE. UNEQUAL cells, no drawn borders — every boundary
+ *   weld ....... VALUE × VALUE. UNEQUAL cells, no drawn borders - every boundary
  *                is a bare colour discontinuity, and nothing about the answer
  *                can come from assuming a pitch.
  *   assay ...... CATEGORY × CATEGORY. Regular cells WITH printed white rules (a
@@ -34,8 +34,8 @@ import type { PlacedCalibPoint } from '../calibrationSession.js';
  *                time with unequal bins, so the two axes are captured by
  *                OPPOSITE means in one figure.
  *
- * ⚠️ The first two shipped as value × value only — the assay figure was DRAWN
- * with numeric axes because that was all the tool could calibrate — until David
+ * ⚠️ The first two shipped as value × value only - the assay figure was DRAWN
+ * with numeric axes because that was all the tool could calibrate - until David
  * read the calibration card: *"Both examples heatmaps only use value axis. That
  * does not hold."* An example drawn to fit the tool's limits hides the limit
  * twice: once here, and once from every user who takes the bundled figures as
@@ -90,7 +90,7 @@ function traceSample(name: string) {
     rows: truth.grid.y.length - 1,
   });
   // ⚑ STATED, not defaulted. `kinds` only flags the coordinates as ordinals for
-  // the export — it cannot move a value — so value×value is right for a
+  // the export - it cannot move a value - so value×value is right for a
   // truth comparison. Writing it down is the point: this file compares against
   // ground truth and had been asserting a default nobody chose.
   const read = readHeatmapCells(
@@ -135,7 +135,7 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
     expect(detected.grid!.xDividers).toHaveLength(truth.grid.x.length);
     truth.grid.x.forEach((want, i) => expect(detected.grid!.xDividers[i]).toBeCloseTo(want, 1));
     truth.grid.y.forEach((want, i) => expect(detected.grid!.yDividers[i]).toBeCloseTo(want, 1));
-    // The columns really are all different widths — if they were not, finding
+    // The columns really are all different widths - if they were not, finding
     // them would prove nothing.
     const widths = new Set(truth.grid.x.slice(1).map((v, i) => v - truth.grid.x[i]!));
     expect(widths.size).toBeGreaterThan(3);
@@ -146,7 +146,7 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
     expect(read.rows).toHaveLength(truth.cells.length);
     // ⚑ TWO DEGREES ABSOLUTE, and that is the key's own floor rather than a
     // slack tolerance: 256 lookup-table entries over a 60–780 °C key is 2.8 °C
-    // per entry, so half an entry — 1.4 °C — is the finest any inversion through
+    // per entry, so half an entry - 1.4 °C - is the finest any inversion through
     // this figure can be. Measured worst case: 1.4 °C.
     for (const row of read.rows) {
       const want = truthCellFor(truth, row);
@@ -158,7 +158,7 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
 
   it('IC50 assay: reads a LOG key correctly, which a linear read could not', () => {
     // ⚑ The claim that matters here: on a key spanning 3 to 600, reading the
-    // scale as linear is not slightly wrong, it is wrong by a factor — a cell
+    // scale as linear is not slightly wrong, it is wrong by a factor - a cell
     // worth 10 comes out near 200. Every cell landing within 1% of truth is only
     // possible if the logarithm is actually being applied.
     const { truth, read } = traceSample('heatmap-assay-log');
@@ -183,7 +183,7 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
     truth.grid.y.forEach((want, i) => expect(detected.grid!.yDividers[i]).toBeCloseTo(want, 1));
   });
 
-  it('both examples report every cell as clean — no example ships a warning', () => {
+  it('both examples report every cell as clean - no example ships a warning', () => {
     // ⚑ A bundled example the app cannot read confidently would teach a new user
     // that the tool is unreliable, on the very first thing they open.
     for (const name of ['heatmap-weld-temperature', 'heatmap-assay-log']) {
@@ -194,11 +194,11 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
   });
 });
 
-describe('the MIXED case — a category axis against a value axis', () => {
+describe('the MIXED case - a category axis against a value axis', () => {
   /**
    * ⚑⚑ THE THIRD OF FOUR ENUMERATED CASES, and until this figure existed
    * nothing demonstrated it: both bundled heatmaps were value × value, which is
-   * what David caught — *"Both examples heatmaps only use value axis. That does
+   * what David caught - *"Both examples heatmaps only use value axis. That does
    * not hold."* Rows here are named treatments with no coordinate at all;
    * columns are time, with UNEQUAL bins. The two axes are therefore captured by
    * opposite means in one figure, which is the case a same-kind figure cannot
@@ -221,7 +221,7 @@ describe('the MIXED case — a category axis against a value axis', () => {
       expect(want, `no truth cell at ${row.xMin},${row.yMin}`).toBeDefined();
       expect(Math.abs(row.value! - want.value)).toBeLessThan(1.5);
     }
-    // ⚑ A bundled example that ships a warning teaches the wrong thing — the
+    // ⚑ A bundled example that ships a warning teaches the wrong thing - the
     // narrow early bins of a real sampling schedule have to survive the reader.
     expect(summary).toMatch(/all clean/);
     expect(rows.every((r) => r.xIsCategory === false && r.yIsCategory === true)).toBe(true);
@@ -231,12 +231,12 @@ describe('the MIXED case — a category axis against a value axis', () => {
 describe('the SAME figure read through a CATEGORY calibration', () => {
   /**
    * ⚑⚑ TWO PATHS, ONE FIGURE, AND THEY MUST AGREE. The assay example's axes are
-   * genuinely categorical — compound × cell line — and it was drawn with numeric
+   * genuinely categorical - compound × cell line - and it was drawn with numeric
    * axes only because that is all the tool could calibrate when it was made
    * (David spotted the assumption from the calibration card: *"this assumes
    * value based axis, no?"*). Its bands are unit-wide, so a category
    * calibration's derived 0…N frame lands on exactly the same pixels as the
-   * value calibration's — which makes the two paths comparable, and any
+   * value calibration's - which makes the two paths comparable, and any
    * disagreement a defect rather than a difference of convention.
    *
    * ⚑ Nobody types a coordinate on this path. Two edge clicks and a COUNT.
@@ -298,7 +298,7 @@ describe('the SAME figure read through a CATEGORY calibration', () => {
         (c) => Math.abs(c.xMin - row.xMin) < 1e-6 && Math.abs(c.yMin - row.yMin) < 1e-6
       )!;
       expect(want, `no truth cell at ${row.xMin},${row.yMin}`).toBeDefined();
-      // A LOG key, so agreement is judged as a RATIO — an absolute tolerance
+      // A LOG key, so agreement is judged as a RATIO - an absolute tolerance
       // would be meaningless across 3…600 nM.
       expect(Math.abs(row.value! / want.value - 1)).toBeLessThan(0.05);
     }

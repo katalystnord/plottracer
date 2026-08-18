@@ -1,7 +1,7 @@
 /**
  * Faithful TypeScript port of the pure functions from
  * ui-patches/engauge-algos.js's Segment Fill section (built 2026-07,
- * clean-room reimplementation of the flood-fill curve-tracing concept —
+ * clean-room reimplementation of the flood-fill curve-tracing concept -
  * see that file's header for the original provenance note). Ported here
  * per CLAUDE.md's Step 1 scope: these were already proven framework-
  * independent this session; this is a straight TS port, not a rewrite.
@@ -17,9 +17,9 @@ export interface FloodFillResult {
    * The segment itself: 1 for each pixel that PASSED the colour test.
    *
    * **This used to be the BFS's `visited` array, and that was a live bug**
-   * (found by audit + execution, 2026-07-16). One array was doing two jobs —
+   * (found by audit + execution, 2026-07-16). One array was doing two jobs -
    * bookkeeping ("don't examine this pixel twice") and output ("this pixel is
-   * part of the curve") — and those are different sets: BFS must mark a pixel
+   * part of the curve") - and those are different sets: BFS must mark a pixel
    * examined *whether or not* it matches, or it re-examines it forever. So
    * every rejected pixel was landing in the exported mask, which is the fill
    * **dilated by one pixel** in every direction. A 1px-wide line exported three
@@ -137,7 +137,7 @@ const DEFAULT_RUN_GAP = 1;
  * are fixed; the distinction is kept because "loses data" and "invents data"
  * need different defences.
  *
- * Its own header named the assumption ("works perfectly for monotonic curves —
+ * Its own header named the assumption ("works perfectly for monotonic curves -
  * the primary at-scale use case") rather than deciding it. The shape of the
  * mistake is this repo's recurring one: a **capture convenience** ("scan the
  * columns, take the middle") promoted to a **data model**.
@@ -147,7 +147,7 @@ const DEFAULT_RUN_GAP = 1;
  * (`core/curve_detection/averagingWindowCore.js:52-83`), then merges only by
  * proximity in **both** x and y (`:105`), so two branches never collapse into
  * one another. Engauge keeps multiple runs per column too
- * (`src/Segment/SegmentFactory.cpp`, read for the concept only — GPL-2.0).
+ * (`src/Segment/SegmentFactory.cpp`, read for the concept only - GPL-2.0).
  * This ports WPD's model, simplified: a flood-filled segment is connected by
  * construction, so contiguity is the natural run boundary and needs no
  * equivalent of WPD's `yStep` averaging-window height.

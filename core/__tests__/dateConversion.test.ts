@@ -4,10 +4,10 @@ import { parse, formatDateNumber } from '../dateConversion.js';
 /**
  * The calibration-value date parser (`parse` -> `toJD`). A date typed as a
  * calibration endpoint sets the axis SCALE, so a silently-wrong parse is a
- * silently-wrong scale for the whole series — exactly the class Tenet 1 exists
+ * silently-wrong scale for the whole series - exactly the class Tenet 1 exists
  * to prevent.
  */
-describe('parse — valid dates round-trip', () => {
+describe('parse - valid dates round-trip', () => {
   it('parses a real date to a serial that formats back', () => {
     const serial = parse('2021/07/02');
     expect(serial).not.toBeNull();
@@ -23,7 +23,7 @@ describe('parse — valid dates round-trip', () => {
  * ⚑ A NUMBER IS NEVER A DATE (2026-07-28).
  *
  * The "must contain / or :" guard was applied only when the input was a STRING,
- * so a number went straight to toJD — which stringifies it, finds no date part,
+ * so a number went straight to toJD - which stringifies it, finds no date part,
  * and reads the value as an HOUR OF TODAY. `parse(0)` returned a timestamp for
  * midnight today while `parse('0')` correctly returned null, and only values
  * 0..23 were affected because toJD rejects hour > 23. That is why 100 behaved
@@ -35,7 +35,7 @@ describe('parse — valid dates round-trip', () => {
  * were made to pass text. A number carries no separator and so can never look
  * like a date; the guard simply has to apply whatever the type.
  */
-describe('parse — a bare number is a number, not an hour of today', () => {
+describe('parse - a bare number is a number, not an hour of today', () => {
   it('returns null for every whole number, including the 0..23 hour range', () => {
     for (const n of [0, 1, 5, 10, 12, 23, 24, 100, -5]) {
       expect(parse(n)).toBeNull();
@@ -59,10 +59,10 @@ describe('parse — a bare number is a number, not an hour of today', () => {
   });
 });
 
-describe('parse — an IMPOSSIBLE calendar date is rejected, not silently rolled over (A2)', () => {
+describe('parse - an IMPOSSIBLE calendar date is rejected, not silently rolled over (A2)', () => {
   // The field-range checks (month 1-12, day 1-31) pass 2021/02/31, but
   // setUTCDate then rolls it into March. Without the validity check the parser
-  // returned a serial for March 3 — a wrong axis anchor from a typo.
+  // returned a serial for March 3 - a wrong axis anchor from a typo.
   it('rejects Feb 31 rather than returning March 3', () => {
     expect(parse('2021/02/31')).toBeNull();
   });

@@ -5,7 +5,7 @@ import {
 
 describe('error bars', () => {
 
-  describe('resolveErrorBars — the series-to-series link, resolved per point', () => {
+  describe('resolveErrorBars - the series-to-series link, resolved per point', () => {
     // The model stores the link per SERIES; the point correspondence is derived
     // here (docs/error-bars-design.md). These tests are that derivation's
     // contract.
@@ -35,7 +35,7 @@ describe('error bars', () => {
       expect(bars[0]!.yUpper).toBeUndefined();
     });
 
-    it('leaves data with no cap carrying no error — the common case, not an edge case', () => {
+    it('leaves data with no cap carrying no error - the common case, not an edge case', () => {
       // Authors routinely draw error on every Nth point. Under the old tuple
       // model this was impossible (CLAUDE.md failure #3); here it costs nothing.
       const bars = resolveErrorBars(data, [{ role: 'upper', caps: [{ x: 6, y: 40 }] }]);
@@ -44,7 +44,7 @@ describe('error bars', () => {
       expect(bars[2]!.yUpper).toBe(40);
     });
 
-    it('resolves caps to data, not data to caps — so a dense curve gains no invented error', () => {
+    it('resolves caps to data, not data to caps - so a dense curve gains no invented error', () => {
       // The direction is the whole guard against fabricating uncertainty: a
       // datum-first rule would give all 200 points a whisker from the nearest
       // cap. Exactly one of these five data points was measured.
@@ -54,7 +54,7 @@ describe('error bars', () => {
       expect(bars[2]!.yUpper).toBe(12);
     });
 
-    it('matches X error by y, not by x — the axis the cap does not move along', () => {
+    it('matches X error by y, not by x - the axis the cap does not move along', () => {
       // A left/right cap shares its datum's y and is displaced in x. Matching
       // it by x would compare the very quantity the cap exists to displace.
       const column = [

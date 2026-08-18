@@ -152,7 +152,7 @@ describe('deserializeProjectZip', () => {
 
   it('rejects a non-zip and an archive missing its parts', () => {
     expect(deserializeProjectZip(new Uint8Array([1, 2, 3]))).toEqual({
-      error: 'Could not open project — the archive is unreadable.',
+      error: 'Could not open project - the archive is unreadable.',
     });
     // A zip with no project.json.
     const strayOnly = serializeProjectZip(calibratedProjectFile());

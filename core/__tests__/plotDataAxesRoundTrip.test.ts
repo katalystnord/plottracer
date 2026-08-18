@@ -13,7 +13,7 @@ import { SpiderAxes } from '../axes/spider.js';
 import { PieAxes } from '../axes/pie.js';
 
 /**
- * Every axes type through a full save-and-reopen — **the settings, not just
+ * Every axes type through a full save-and-reopen - **the settings, not just
  * the points.**
  *
  * ⚑ WHY THIS FILE EXISTS. `core/plotData.ts`'s `_deserializeVersion4` is the
@@ -25,7 +25,7 @@ import { PieAxes } from '../axes/pie.js';
  *
  * ⚑ THE FAILURE THIS GUARDS AGAINST IS SILENT AND TOTAL. If a log flag is
  * dropped on read, the file still opens, every point is still there, the
- * calibration still "succeeds" — and every value is wrong by orders of
+ * calibration still "succeeds" - and every value is wrong by orders of
  * magnitude. This exact class already bit this project once: TernaryAxes used
  * to serialize its orientation as a FUNCTION REFERENCE, which
  * `JSON.stringify` silently drops, so a Normal ternary reopened as Reverse
@@ -33,9 +33,9 @@ import { PieAxes } from '../axes/pie.js';
  * plotData.ts's own serialize; this file is what would have caught it.
  *
  * So each case below round-trips through REAL JSON (`JSON.parse(JSON
- * .stringify(...))`, not the in-memory object) — because the JSON step is
+ * .stringify(...))`, not the in-memory object) - because the JSON step is
  * where that bug lived, and an in-memory round trip would have sailed past
- * it — and asserts the reopened axes reports back the same settings AND
+ * it - and asserts the reopened axes reports back the same settings AND
  * reads the same value at the same pixel.
  */
 
@@ -154,7 +154,7 @@ describe('Polar axes survive a save and reopen', () => {
     expect(b.isRadialLog()).toBe(true);
   });
 
-  it('reads the same angle back after reopening — degrees stay degrees', () => {
+  it('reads the same angle back after reopening - degrees stay degrees', () => {
     // North is 90 degrees anticlockwise from east; if the degrees flag were
     // dropped the same pixel reads 1.5708 and nothing else complains.
     expect(polarAxes(true, false, false).pixelToData(100, 0)[1]).toBeCloseTo(90, 6);
@@ -175,10 +175,10 @@ describe('Ternary axes survive a save and reopen', () => {
     }).axes;
   }
 
-  it('⚑ keeps the ORIENTATION — the flag that once reopened as a dropped function reference', () => {
+  it('⚑ keeps the ORIENTATION - the flag that once reopened as a dropped function reference', () => {
     // The documented regression: serializing the METHOD instead of calling it
     // meant JSON.stringify dropped the key, Boolean(undefined) read false, and
-    // a Normal ternary silently reopened Reverse — permuting every datum. The
+    // a Normal ternary silently reopened Reverse - permuting every datum. The
     // round trip below goes through real JSON precisely so that failure mode
     // is reachable here.
     expect(ternaryAxes(false, true).isNormalOrientation()).toBe(true);
@@ -277,15 +277,15 @@ describe('Circular Chart Recorder axes survive a save and reopen', () => {
   /**
    * ⚑⚑ A CCR CALIBRATED WITH PLAIN NUMBERS COULD NOT BE REOPENED AT ALL.
    *
-   * Nothing requires a chart recorder's time axis to be dates — `buildAxes`
+   * Nothing requires a chart recorder's time axis to be dates - `buildAxes`
    * accepts any number, and such a chart calibrates, traces and exports
    * correctly. But `getStartTime` used to re-render `tStart` through
    * `timeFormat`, and a numeric time sets no format, so it returned NULL. The
    * writer then stored `startTime: null`, and the reader handed that null
    * straight to `calibrate`, where InputParser refuses it.
    *
-   * The result was a project that reopened UNCALIBRATED — figure there, points
-   * there, every reading gone — and, since the round-2 audit made the load door
+   * The result was a project that reopened UNCALIBRATED - figure there, points
+   * there, every reading gone - and, since the round-2 audit made the load door
    * honour `calibrate()`'s verdict, it now does so visibly rather than silently.
    * Either way the user's work is unreadable, which is a tenet-1 failure.
    */
@@ -330,7 +330,7 @@ describe('Circular Chart Recorder axes survive a save and reopen', () => {
 });
 
 describe('Spider axes survive a save and reopen', () => {
-  it('⚑ keeps every SPOKE — its name, its own centre value, and the count', () => {
+  it('⚑ keeps every SPOKE - its name, its own centre value, and the count', () => {
     // A spider's spokes live entirely in the calibration points, with the axis
     // NAME in the third slot (dz). plotData deliberately builds a 3-dimension
     // Calibration for this type; at 2 the names are dropped on the floor and
@@ -377,7 +377,7 @@ describe('Pie axes survive a save and reopen', () => {
    * serialize never looks at; what reaches the file is
    * `PIE_AXES_CONFIG.buildAxes`'s `setMetadata({pieTotal, pieSweep,
    * pieTilted})` in engine/calibrationSession.ts. So the fixture below sets
-   * that metadata exactly as the app does — a pie built through `core/` alone
+   * that metadata exactly as the app does - a pie built through `core/` alone
    * genuinely does NOT round-trip its total, which the last case pins
    * deliberately rather than leaving as folklore.
    */
@@ -408,7 +408,7 @@ describe('Pie axes survive a save and reopen', () => {
     expect(axes.getSweep()).toBeCloseTo(Math.PI, 9);
   });
 
-  it('⚑ keeps a TILTED pie tilted — reopening it as a circle would change every value', () => {
+  it('⚑ keeps a TILTED pie tilted - reopening it as a circle would change every value', () => {
     // Its own comment states the stakes: a tilted pie re-read flat turns a 7%
     // slice into 13.4% while the readings still sum to 100, so nothing looks
     // wrong. Five points minimum, because an ellipse has five degrees of
@@ -485,10 +485,10 @@ describe('the reopened project keeps its own relationships', () => {
 });
 
 /**
- * ⚑⚑ THE FIELDS THAT WERE SILENTLY LOST — v2.0 pre-launch audit, round 2.
+ * ⚑⚑ THE FIELDS THAT WERE SILENTLY LOST - v2.0 pre-launch audit, round 2.
  *
  * This file was written for exactly this failure class, and its Bar block
- * pinned `isLog` and `isRotated` — the two fields that PREDATE v2.0 — and
+ * pinned `isLog` and `isRotated` - the two fields that PREDATE v2.0 - and
  * stopped. The two v2.0 added, `hasBaseline` and `baselineValue`, were written
  * by nothing and read by nothing, so a saved Bar project reopened against
  * BarAxes's defaults and the ONE number the whole bar model exists to produce
@@ -514,7 +514,7 @@ describe('every Bar setting survives the round trip, not just the pre-v2.0 ones'
     return back.getAxesColl()[0] as unknown as BarAxes;
   }
 
-  it('⚑ carries hasBaseline=false — the FLOATING bar the two-corner drag exists for', () => {
+  it('⚑ carries hasBaseline=false - the FLOATING bar the two-corner drag exists for', () => {
     // Lost, this reopens as a baseline-anchored bar and every value changes.
     expect(roundTripBar(false, 0).hasDeclaredBaseline()).toBe(false);
   });

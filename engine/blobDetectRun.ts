@@ -1,5 +1,5 @@
 /**
- * Blob-detect orchestration (checkpoint 122) — the scatter-plot sibling of
+ * Blob-detect orchestration (checkpoint 122) - the scatter-plot sibling of
  * engine/colorTraceRun.ts. Same first stage (colour filter over the image), but
  * the reduction differs: colorTraceRun walks the mask into ONE curve (averaging
  * window → nearest-neighbour order → subsample); this returns ONE point per
@@ -29,7 +29,7 @@ const MIN_MATCHED_PIXELS = 3;
  * Detect scatter markers by colour: filter the image to the marker colour, then
  * reduce each connected blob to its centroid. `minDiameter`/`maxDiameter` (px)
  * drop noise specks and a merged grid/axis blob respectively. Fails with a clear
- * message when nothing matches the colour, or when every blob was filtered out —
+ * message when nothing matches the colour, or when every blob was filtered out -
  * rather than silently adding no points.
  */
 export function runBlobDetect(

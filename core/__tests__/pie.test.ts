@@ -3,7 +3,7 @@ import { PieAxes } from '../axes/pie.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * PieAxes — the geometry a pie's values are read from.
+ * PieAxes - the geometry a pie's values are read from.
  *
  * Every test here is a property of the MODEL rather than of this implementation:
  * what a sector is worth, what leaves it unchanged, and what the sweep does. The
@@ -12,7 +12,7 @@ import { Calibration } from '../calibration.js';
  */
 
 /**
- * Calibrate a pie centred at (100,100) with radius 50 — from OUTLINE points only.
+ * Calibrate a pie centred at (100,100) with radius 50 - from OUTLINE points only.
  *
  * ⚑ Nothing clicks a centre. The outline is the whole calibration and the centre is
  * fitted through it, because a donut has no visible centre to click; these tests
@@ -37,7 +37,7 @@ function at(deg: number, r = 50): [number, number] {
   return [100 + r * Math.cos(rad), 100 + r * Math.sin(rad)];
 }
 
-describe('PieAxes — fitting the circle', () => {
+describe('PieAxes - fitting the circle', () => {
   it('recovers the centre and radius from the outline alone', () => {
     const axes = pie();
     expect(axes.getCentre().x).toBeCloseTo(100, 9);
@@ -61,7 +61,7 @@ describe('PieAxes — fitting the circle', () => {
   });
 });
 
-describe('PieAxes — reading an angle', () => {
+describe('PieAxes - reading an angle', () => {
   it('measures the angle between two boundaries', () => {
     const axes = pie();
     const a = axes.angleAt(...at(0));
@@ -73,12 +73,12 @@ describe('PieAxes — reading an angle', () => {
     // ⚑ The fitted centre is a few ulps off exact, so a boundary at precisely 0°
     // computes a hair BELOW zero and would wrap to the top of the range. Values never
     // noticed (differences normalise), but the live readout would flicker between
-    // 0.0° and 360.0° — at twelve o'clock, which is where a pie's first boundary
+    // 0.0° and 360.0° - at twelve o'clock, which is where a pie's first boundary
     // usually sits.
     expect(pie().angleAt(...at(0))).toBeCloseTo(0, 9);
   });
 
-  it('is SCALE-INVARIANT — the same angle at any radius', () => {
+  it('is SCALE-INVARIANT - the same angle at any radius', () => {
     // ⚑ The donut case, and the reason the record is the ANGLE and not the arc length.
     // A 90° sector is a quarter of its ring whether that ring is 40px or 400px across;
     // arc lengths are not comparable between rings, angles are. So ONE calibration
@@ -90,7 +90,7 @@ describe('PieAxes — reading an angle', () => {
   });
 
   it('is unchanged when a sector is pulled out or resized', () => {
-    // Explosion is a TRANSLATION and a resize is a SCALE — both similarity transforms,
+    // Explosion is a TRANSLATION and a resize is a SCALE - both similarity transforms,
     // both angle-preserving. Measured at the sector's own apex, an exploded slice reads
     // exactly as it did before it was pulled out, which is the whole of the handling
     // explosion needs.
@@ -105,7 +105,7 @@ describe('PieAxes — reading an angle', () => {
   });
 });
 
-describe('PieAxes — what a sector is worth', () => {
+describe('PieAxes - what a sector is worth', () => {
   it('is its share of the whole, times the total', () => {
     const axes = pie(360, 100);
     const quarter = axes.sectorValue(axes.angleAt(...at(0)), axes.angleAt(...at(90)), 100);
@@ -134,7 +134,7 @@ describe('PieAxes — what a sector is worth', () => {
 
   it('measures against the SWEEP the figure draws, not against 360', () => {
     // ⚑ The half-pie trap, and the reason 360 is never a constant. On a 180° chart a
-    // 90° sector is HALF the whole, not a quarter — assume a full turn and every value
+    // 90° sector is HALF the whole, not a quarter - assume a full turn and every value
     // is silently halved.
     const half = pie(180, 100);
     const ninety = half.sectorValue(half.angleAt(...at(0)), half.angleAt(...at(90)), 100);
@@ -175,7 +175,7 @@ describe('how many digits a reading may honestly show', () => {
 });
 
 describe('snapping a boundary onto the rim', () => {
-  it('CANNOT change the reading — the snap is presentation, provably', () => {
+  it('CANNOT change the reading - the snap is presentation, provably', () => {
     // ⚑ The property the whole feature rests on. `angleAt` is atan2 on the basis
     // coordinates and `snapToRim` scales them by a positive factor; scaling never
     // moves an atan2. So this is not "close enough within tolerance" -- before and
@@ -209,7 +209,7 @@ describe('snapping a boundary onto the rim', () => {
     expect(axes.angleAt(s.x, s.y, apex)).toBeCloseTo(axes.angleAt(140, 150, apex), 12);
   });
 
-  it('leaves the apex itself alone — a point with no angle has none to preserve', () => {
+  it('leaves the apex itself alone - a point with no angle has none to preserve', () => {
     const axes = pie();
     const c = axes.getCentre();
     expect(axes.snapToRim(c.x, c.y)).toEqual({ x: c.x, y: c.y });
@@ -264,13 +264,13 @@ describe('snapping a TILTED pie', () => {
 });
 
 /**
- * ⚑⚑ THE FIFTH INSTANCE OF "calibrate() CANNOT FAIL" — found 2026-08-01 by a
+ * ⚑⚑ THE FIFTH INSTANCE OF "calibrate() CANNOT FAIL" - found 2026-08-01 by a
  * type-aware lint pass, not by hand.
  *
  * `no-base-to-string` flagged `parseFloat(String(meta['pieTotal'] ?? '100'))` in
  * plotData.ts's read path: the metadata comes out of a PROJECT FILE, so a value
  * that is not a string stringifies to "[object Object]" and parseFloat returns
- * NaN. `calibrate` then stored it and reported success — measured, not inferred:
+ * NaN. `calibrate` then stored it and reported success - measured, not inferred:
  * `defaultTotal: NaN` with `isCalibrated: true`, and every sector reading NaN.
  *
  * A total of ZERO is the same defect with a different face: `value = angle/sweep
@@ -279,7 +279,7 @@ describe('snapping a TILTED pie', () => {
  * by zero.
  *
  * Guarded in the CLASS rather than at the read site, because the model has more
- * than one entrance — the interactive path and the file path both land here.
+ * than one entrance - the interactive path and the file path both land here.
  */
 describe('a total or sweep that cannot produce a reading is REFUSED', () => {
   function calibrateWith(total: number, sweepDegrees = 360): PieAxes {
@@ -293,7 +293,7 @@ describe('a total or sweep that cannot produce a reading is REFUSED', () => {
     return axes;
   }
 
-  it('refuses a NaN total — the shape a hostile or corrupt project file produces', () => {
+  it('refuses a NaN total - the shape a hostile or corrupt project file produces', () => {
     const axes = calibrateWith(NaN);
     expect(axes.isCalibrated()).toBe(false);
   });
@@ -302,11 +302,11 @@ describe('a total or sweep that cannot produce a reading is REFUSED', () => {
     expect(calibrateWith(Infinity).isCalibrated()).toBe(false);
   });
 
-  it('refuses a ZERO total — every slice would read exactly 0, with nothing wrong on screen', () => {
+  it('refuses a ZERO total - every slice would read exactly 0, with nothing wrong on screen', () => {
     expect(calibrateWith(0).isCalibrated()).toBe(false);
   });
 
-  it('refuses a zero or NaN sweep — the divisor of every reading', () => {
+  it('refuses a zero or NaN sweep - the divisor of every reading', () => {
     expect(calibrateWith(100, 0).isCalibrated()).toBe(false);
     expect(calibrateWith(100, NaN).isCalibrated()).toBe(false);
   });

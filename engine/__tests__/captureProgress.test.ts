@@ -12,7 +12,7 @@ import { Dataset } from '../../core/dataset.js';
  * through either move -- the sentence-building logic stayed exactly as useful.
  */
 
-/** A dataset with `slots` named slots and the given tuples, built directly — the
+/** A dataset with `slots` named slots and the given tuples, built directly - the
  * function takes only what it reads, so no session walk is needed to exercise it. */
 function ds(slotNames: string[], tuples: (number | null)[][]): Dataset {
   const d = new Dataset(1);
@@ -39,7 +39,7 @@ describe('where the next click lands', () => {
       tupleNoun: 'profile',
       dataset: ds(SPIDER, []),
     });
-    expect(p.text).toBe('Next: Axis 1 — new profile (0 of 6 filled)');
+    expect(p.text).toBe('Next: Axis 1 - new profile (0 of 6 filled)');
   });
 
   it('numbers an existing tuple from 1, as the table does', () => {
@@ -49,7 +49,7 @@ describe('where the next click lands', () => {
       tupleNoun: 'box',
       dataset: ds(BOX, [[0, 1, 2, 3, 4], [5, 6, null, null, null]]),
     });
-    expect(p.text).toBe('Next: Median — box 2 (2 of 5 filled)');
+    expect(p.text).toBe('Next: Median - box 2 (2 of 5 filled)');
   });
 
   it('says nothing at all for a type with no slots', () => {
@@ -65,7 +65,7 @@ describe('where the next click lands', () => {
   });
 });
 
-describe('what was left unfinished — the part the figure cannot tell you', () => {
+describe('what was left unfinished - the part the figure cannot tell you', () => {
   it('counts a profile abandoned part-way', () => {
     // ⚑ The reason this line was worth keeping. A spider's slots are N×1D --
     // independently meaningful and independently EMPTY -- so a profile recorded on
@@ -78,7 +78,7 @@ describe('what was left unfinished — the part the figure cannot tell you', () 
       dataset: ds(SPIDER, [[0, 1, 2, 3, null, null]]),
     });
     expect(p.incompleteElsewhere).toBe(1);
-    expect(p.text).toBe('Next: Axis 1 — new profile (0 of 6 filled) · 1 profile incomplete');
+    expect(p.text).toBe('Next: Axis 1 - new profile (0 of 6 filled) · 1 profile incomplete');
   });
 
   it('pluralises by the count, not by the noun', () => {
@@ -103,7 +103,7 @@ describe('what was left unfinished — the part the figure cannot tell you', () 
       dataset: ds(SECTOR, [[0, 1], [2, 3], [4, null]]),
     });
     expect(p.incompleteElsewhere).toBe(0);
-    expect(p.text).toBe('Next: Sector end — sector 3 (1 of 2 filled)');
+    expect(p.text).toBe('Next: Sector end - sector 3 (1 of 2 filled)');
   });
 
   it('EXCLUDES a wholly empty tuple, which is unstarted rather than abandoned', () => {
@@ -118,14 +118,14 @@ describe('what was left unfinished — the part the figure cannot tell you', () 
   });
 
   it('says nothing when everything recorded is whole', () => {
-    // The clause appears only when it is true — no "0 profiles incomplete".
+    // The clause appears only when it is true - no "0 profiles incomplete".
     const p = describeCaptureProgress({
       slotLabel: 'Axis 1',
       tupleIndex: null,
       tupleNoun: 'profile',
       dataset: ds(SPIDER, [[0, 1, 2, 3, 4, 5]]),
     });
-    expect(p.text).toBe('Next: Axis 1 — new profile (0 of 6 filled)');
+    expect(p.text).toBe('Next: Axis 1 - new profile (0 of 6 filled)');
   });
 
   it('still counts a straggler while a LATER tuple is being worked on', () => {
@@ -141,6 +141,6 @@ describe('what was left unfinished — the part the figure cannot tell you', () 
       ]),
     });
     expect(p.incompleteElsewhere).toBe(1);
-    expect(p.text).toBe('Next: Axis 3 — profile 2 (2 of 6 filled) · 1 profile incomplete');
+    expect(p.text).toBe('Next: Axis 3 - profile 2 (2 of 6 filled) · 1 profile incomplete');
   });
 });

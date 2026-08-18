@@ -1,10 +1,10 @@
 /**
- * ⚑⚑ THE `Line` FIX — a CATEGORY that is MEASURED, not counted.
+ * ⚑⚑ THE `Line` FIX - a CATEGORY that is MEASURED, not counted.
  *
  * The one type of twelve that FAILED the tenet-11 generation audit
  * (CLAUDE.md, 2026-08-14): *"it stores a value and DERIVES its category from
  * left-to-right capture order, so a library handed our record could not place
- * the points."* Its own config says the same thing in the affirmative — X is
+ * the points."* Its own config says the same thing in the affirmative - X is
  * *"its ORDINAL position (derived from left-to-right pixel order at
  * export/display time, never stored)"*.
  *
@@ -17,11 +17,11 @@
  *
  * **The same category exports as Position 3 in one series and Position 2 in the
  * other.** Rank is computed per series, so a gap in one of them slides every
- * later reading one category to the left — silently, with every number
+ * later reading one category to the left - silently, with every number
  * plausible. A consumer overlays the two and gets the wrong points paired.
  *
  * ⚑⚑ THE FIX IS THE MECHANISM THE OTHER CATEGORICAL TYPES ALREADY HAVE. Bar and
- * Box Plot mark a category axis — two clicked edges plus a declared count — and
+ * Box Plot mark a category axis - two clicked edges plus a declared count - and
  * read each capture's category as the BAND it falls in (`core/bandedAxis.ts`,
  * shipped in v2.1/v2.2 and proven on two consumers). Line's own config predicted
  * this exact change and left the seed named rather than written:
@@ -29,7 +29,7 @@
  *     ⚑ NO `categoryTicks` yet, deliberately… When the per-point path moves to
  *       a category index, the seed step here is `v1`, not `p1`.
  *
- * ⚑ A BAND IS DERIVED, AND THAT IS RIGHT HERE — the same argument
+ * ⚑ A BAND IS DERIVED, AND THAT IS RIGHT HERE - the same argument
  * `categoriesFollowBands` already records: a stored index is a second copy of a
  * fact the geometry answers, and the two disagree the moment a divider moves. It
  * is not the error-bar cap↔datum case, because a band index is a pure function
@@ -76,7 +76,7 @@ describe('the type declares a category axis', () => {
 
   it("⚑⚑ seeded from `v1`, because a Line has no `p1` to seed from", () => {
     // Bar and Box Plot seed the axis from `p1`, the origin corner. A Line's
-    // calibration is TWO points on the VALUE axis and nothing else — `v1` is the
+    // calibration is TWO points on the VALUE axis and nothing else - `v1` is the
     // click on the Y axis, which IS the left edge of the category axis. The
     // config declared `originStep` as a name rather than a literal precisely so
     // this type could differ; this is that prediction coming true.
@@ -88,7 +88,7 @@ describe('the type declares a category axis', () => {
 describe('a category is the band the reading sits in', () => {
   it('⚑⚑ the same category reports the same position in EVERY series', () => {
     // The measured defect, as a test. Series 2 skips the middle category, and
-    // under click-order ranking its x=350 reading came out as Position 2 —
+    // under click-order ranking its x=350 reading came out as Position 2 -
     // the same coordinate as another category's reading in series 1.
     const s = withThreeCategories(lineSession());
     s.addDataPoint(150, 250);
@@ -103,7 +103,7 @@ describe('a category is the band the reading sits in', () => {
   });
 
   it('⚑ capture order stops mattering', () => {
-    // Clicked right, left, middle — and each reading still reports the category
+    // Clicked right, left, middle - and each reading still reports the category
     // the FIGURE puts it in. Under ranking this happened to come out right for a
     // single complete series, which is exactly why the defect stayed invisible
     // until a second series skipped a category.
@@ -129,14 +129,14 @@ describe('a category is the band the reading sits in', () => {
     ]);
   });
 
-  it('⚑ adjust a tick and the readings re-home — nothing is stored to go stale', () => {
+  it('⚑ adjust a tick and the readings re-home - nothing is stored to go stale', () => {
     // The same property `categoriesFollowBands` records for bars. A stored index
     // would still say 2 after the boundary moved past the point.
     const s = withThreeCategories(lineSession());
     s.addDataPoint(250, 200);
     expect(positions(s, 0)).toEqual([2]);
     // Slide the axis right so x=250 now falls in the FIRST band (250–400 split
-    // into three: 250–300, 300–350, 350–400 — 250 is band 0).
+    // into three: 250–300, 300–350, 350–400 - 250 is band 0).
     expect(s.markCategoryAxis({ x: 250, y: 300 }, { x: 400, y: 300 })).toBe(true);
     expect(positions(s, 0)).toEqual([1]);
   });
@@ -149,7 +149,7 @@ describe('a category is the band the reading sits in', () => {
     // line's marker, and the user's two edge clicks are hand-placed, so a few
     // pixels of slop must not cost the reading its category.
     //
-    // ⚠️ The heatmap deliberately takes the OPPOSITE policy (`'refuse'`) —
+    // ⚠️ The heatmap deliberately takes the OPPOSITE policy (`'refuse'`) -
     // *"a point outside a matrix has no row at all, and inventing one would put
     // a value in a cell the figure does not have."* Both are right for their own
     // type; what matters is that each says which it takes. This is Line saying
@@ -171,7 +171,7 @@ describe('a name belongs to the CATEGORY, not to each point that lands in it', (
 
   it('⚑⚑ every series reads the same name for the same band', () => {
     // The other half of the tenet-11 failure. A position that means the same
-    // thing everywhere is only useful if its NAME does too — with the name
+    // thing everywhere is only useful if its NAME does too - with the name
     // copied onto each point, two series could disagree about what category 2
     // is called, and a reader has nothing to say which is right. The band is the
     // category's identity, so the name lives with the band. This is exactly what
@@ -179,7 +179,7 @@ describe('a name belongs to the CATEGORY, not to each point that lands in it', (
     // counterpart.
     // ⚠️ NAMED *AFTER* BOTH POINTS EXIST, deliberately. The per-point PREFILL
     // copies a name onto a new point from the nearest already-named point in
-    // another series — so naming first and capturing second would make this pass
+    // another series - so naming first and capturing second would make this pass
     // by the very mechanism the shared axis exists to replace, and the test
     // would be green over the old model. Naming afterwards cannot propagate by
     // prefill; only a shared identity can carry it.
@@ -220,7 +220,7 @@ describe('a name belongs to the CATEGORY, not to each point that lands in it', (
 describe('what must NOT change', () => {
   it('⚑ with no axis marked, the ordinal is exactly what it was', () => {
     // The companion assertion. A Line that never marks an axis keeps today's
-    // left-to-right reading of its own pixels — a faithful view of one series,
+    // left-to-right reading of its own pixels - a faithful view of one series,
     // and the honest answer when nobody has said where the categories are.
     const s = lineSession();
     s.addDataPoint(350, 150);

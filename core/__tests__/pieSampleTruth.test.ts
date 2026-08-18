@@ -12,7 +12,7 @@ import { Calibration } from '../calibration.js';
  * invented its own geometry and then agreed with itself. A test that makes up its
  * numbers proves self-consistency, not truth.
  *
- * What makes this one different is that the two sides were computed INDEPENDENTLY —
+ * What makes this one different is that the two sides were computed INDEPENDENTLY -
  * `samples/generators/gen_samples.py` laid the figures out and wrote down where it
  * put every boundary; `core/axes/pie.ts` reads those pixels back with completely
  * separate arithmetic in a different language. Agreement between them is evidence.
@@ -41,7 +41,7 @@ function loadTruth(name: string): PieTruth {
   return JSON.parse(fs.readFileSync(path.join(SAMPLES, `${name}.truth.json`), 'utf8')) as PieTruth;
 }
 
-/** Calibrate exactly as the app does — from OUTLINE points only, with the centre and
+/** Calibrate exactly as the app does - from OUTLINE points only, with the centre and
  * radius fitted through them. Nothing here clicks a centre, because on a donut there
  * is none to click. */
 function axesFor(truth: PieTruth, tilted = truth.tilted ?? false): PieAxes {
@@ -60,7 +60,7 @@ function apexOf(a: Anchor): { x: number; y: number } {
   return { x: a.px, y: a.py };
 }
 
-/** Read every slice back, each about ITS OWN apex — which is the shared centre for
+/** Read every slice back, each about ITS OWN apex - which is the shared centre for
  * an ordinary slice and the slice's own tip for an exploded one. */
 function readValues(truth: PieTruth): number[] {
   const axes = axesFor(truth);
@@ -77,8 +77,8 @@ describe.each([
   ['pie-filler-composition', 'a perfectly circular pie'],
   ['pie-exploded-market-share', 'a pie with one slice pulled out'],
   ['donut-donut-flavours', 'a donut, in real units with the total in the hole'],
-  ['pie-tilted-market-segments', 'a TILTED pie — a 3D chart\'s top face'],
-])('%s — %s', (name) => {
+  ['pie-tilted-market-segments', 'a TILTED pie - a 3D chart\'s top face'],
+])('%s - %s', (name) => {
   it('reads every slice back to the value it was drawn from', () => {
     const truth = loadTruth(name);
     const expected = truth.series[0]!.points.map((p) => p.value);
@@ -202,7 +202,7 @@ describe('the donut', () => {
 
 describe('the tilted pie is why the affine inverse matters', () => {
   it('recovers the true values from a squashed, rotated figure', () => {
-    // ⚑ The figure is a circle under an affine map — squashed to 55% and rotated 18°.
+    // ⚑ The figure is a circle under an affine map - squashed to 55% and rotated 18°.
     // The fitted ellipse's semi-axes ARE the images of two orthogonal circle radii, so
     // reading the angle in that basis inverts the projection implicitly. No
     // un-rotating, no un-squashing, no second code path.
@@ -214,7 +214,7 @@ describe('the tilted pie is why the affine inverse matters', () => {
     });
   });
 
-  it('is BADLY wrong when read as a flat circle — and still sums to 100', () => {
+  it('is BADLY wrong when read as a flat circle - and still sums to 100', () => {
     // ⚑ The whole danger of this chart type. Every slice is wrong, no slice looks
     // wrong, and the total reassures you. This is the number that moved the ellipse
     // into v1.6 rather than leaving it as a nicety for photographed figures.
@@ -236,18 +236,18 @@ describe('the tilted pie is why the affine inverse matters', () => {
 });
 
 /**
- * ⚑⚑ A TILTED PIE READS ITS OWN TOTAL AND SWEEP — v2.0 audit, round 2.
+ * ⚑⚑ A TILTED PIE READS ITS OWN TOTAL AND SWEEP - v2.0 audit, round 2.
  *
  * `PieAxes.calibrate`'s tilted branch returned true BEFORE the two lines that
  * assign `defaultTotal` and `sweep`, so a tilted or 3D pie kept the field
- * initialisers (100 and 2π) and every sector was scaled by 100/total — a
+ * initialisers (100 and 2π) and every sector was scaled by 100/total - a
  * tilted half-pie halved every value. `derivedTupleValue` reads exactly those
  * two fields, so this was wrong at CAPTURE time, not only across a round trip,
  * and the slices still summed to the (wrong) total so nothing on screen looked
  * wrong. ~12% of real pie figures in the corpus are 3D.
  */
 describe('a tilted pie keeps the total and sweep it was given', () => {
-  /** Six points on an ellipse — enough for the five-parameter tilted fit. */
+  /** Six points on an ellipse - enough for the five-parameter tilted fit. */
   function tiltedPie(total: number, sweepDeg: number): PieAxes {
     const cal = new Calibration(2);
     for (const [x, y] of [

@@ -38,7 +38,7 @@ describe('segmentFill', () => {
 
     const result = floodFill(data, width, height, 0, 0, 10);
     // 4-connected flood fill on a strict diagonal only reaches the seed
-    // pixel itself (diagonal neighbors aren't 4-connected) — confirms the
+    // pixel itself (diagonal neighbors aren't 4-connected) - confirms the
     // connectivity rule is preserved faithfully from the original.
     expect(result.filled).toBe(1);
   });
@@ -98,7 +98,7 @@ describe('segmentFill', () => {
   });
 });
 
-describe('segmentFill — curves that double back (checkpoint 78)', () => {
+describe('segmentFill - curves that double back (checkpoint 78)', () => {
   /** Draws `on` pixels black on white and returns the buffer. */
   function shape(width: number, height: number, on: readonly [number, number][]): Uint8ClampedArray {
     const data = makeImage(width, height, [255, 255, 255]);
@@ -114,7 +114,7 @@ describe('segmentFill — curves that double back (checkpoint 78)', () => {
   }
   for (let y = 2; y <= 8; y++) cShape.push([8, y]);
 
-  it('recovers BOTH branches — the old median kept only one and looked immaculate', () => {
+  it('recovers BOTH branches - the old median kept only one and looked immaculate', () => {
     // THE bug this checkpoint exists for. orderByColumnMedian on this exact
     // shape, with a correct mask, gave upperKept=0 / lowerKept=6: the entire
     // upper branch silently deleted, and the surviving 7 points all genuinely
@@ -179,7 +179,7 @@ describe('segmentFill — curves that double back (checkpoint 78)', () => {
     expect(switches).toBeLessThanOrEqual(2); // upper -> turn -> lower
   });
 
-  it('collapses a VERTICAL run to one point per column — lossy, but never invented', () => {
+  it('collapses a VERTICAL run to one point per column - lossy, but never invented', () => {
     // Found by this checkpoint's own test failing (2026-07-16), and worth
     // pinning rather than hiding: column scanning takes one point per run, so
     // the C's vertical turn (x=8, y=2..8) becomes a single point at its centre.
@@ -295,21 +295,21 @@ describe('gridRemoval', () => {
  * Grid Removal on a SPIDER's web (David, 2026-07-29, by screenshot: "look, remove
  * grids worked here too").
  *
- * ⚑ It works because the algorithm carries NO chart model — it is squared RGB distance
+ * ⚑ It works because the algorithm carries NO chart model - it is squared RGB distance
  * from one pipetted colour, so a radar chart's web is just more ink of the same shade.
  * Anything that knew what a "horizontal or vertical gridline" was would have refused
  * this figure outright. Tenet 10 paying rent: least modelling, so it generalises to a
  * chart type nobody wrote it for.
  *
  * ⚑ WHAT IS ACTUALLY UNDER TEST IS THE COLOURS, not the layout. The operation is
- * per-pixel and blind to geometry, so where the ink sits cannot affect the outcome —
+ * per-pixel and blind to geometry, so where the ink sits cannot affect the outcome -
  * the only question is whether one tolerance separates the two greys the figure uses.
  * They are taken from `samples/generators/gen_samples.py`, which is the authority that
  * DRAWS the bundled spider (`gen_spider`: rings `#dcdcdc`, spokes `#9a9a9a`), and were
  * confirmed against the committed PNG's own colour histogram.
  *
  * ⚑ And the honest limit, which David has already accepted: this is a property of THIS
- * FIGURE, not of the tool. Most real radar charts — matplotlib's own `polar` included —
+ * FIGURE, not of the tool. Most real radar charts - matplotlib's own `polar` included -
  * draw web and spokes in ONE grey, and there both would go together, taking the rays
  * you aim along with them. That is fine: you would not normally reach for Grid Removal
  * on a spider at all.
@@ -319,7 +319,7 @@ describe('gridRemoval on a spider web', () => {
   const SPOKE = hexToRGB('#9a9a9a'); // the radial axes you aim along
   const WHITE: [number, number, number] = [255, 255, 255];
 
-  /** Two pixels: one of each grey. Geometry is irrelevant — see the header. */
+  /** Two pixels: one of each grey. Geometry is irrelevant - see the header. */
   function twoGreys(): { data: Uint8ClampedArray; width: number; height: number } {
     const data = new Uint8ClampedArray(2 * 1 * 4);
     [WEB, SPOKE].forEach((rgb, i) => {
@@ -355,7 +355,7 @@ describe('gridRemoval on a spider web', () => {
     }
   });
 
-  it('DOES take both once the tolerance spans them — the documented limit', () => {
+  it('DOES take both once the tolerance spans them - the documented limit', () => {
     // Not a defect, and worth pinning: it says out loud that the separation lives in
     // the FIGURE. A chart that drew both in one grey behaves like this at any
     // tolerance, which is why the manual tells you to check the rays survived.

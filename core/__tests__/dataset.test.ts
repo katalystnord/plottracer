@@ -21,7 +21,7 @@ describe('Dataset', () => {
     expect(ds.getPixel(0).metadata).toEqual({ overrides: { y: 99.5 } });
 
     // Clearing back to null (not an empty {}) is what the live-data-table
-    // editable-cell fix relied on — verify the count actually decrements.
+    // editable-cell fix relied on - verify the count actually decrements.
     ds.setMetadataAt(0, null);
     expect(ds.hasMetadata()).toBe(false);
     expect(ds.getPixel(0).metadata).toBeNull();
@@ -71,7 +71,7 @@ describe('Dataset', () => {
     expect(ds.getTuple(0)).toEqual([0, 1]);
   });
 
-  // reorderPixels — the model side of checkpoint 130's nearest-neighbour sort.
+  // reorderPixels - the model side of checkpoint 130's nearest-neighbour sort.
   // ⚑ It had NO unit test: the sort was exercised only through the e2e, on an
   // ungrouped series, which is why nothing noticed that the tuples did not move
   // with the pixels.

@@ -1,12 +1,12 @@
 /**
- * XLSX (Excel) export (v0.8) — PlotDigitizer export parity (David). Kept in its
+ * XLSX (Excel) export (v0.8) - PlotDigitizer export parity (David). Kept in its
  * own module, separate from engine/tableFormats.ts, because it pulls in `exceljs`
  * (MIT): tableFormats.ts must stay dependency-free so the pure text renderers and
  * their tests never load a spreadsheet library.
  *
  * Each SECTION becomes its own WORKSHEET, which is the natural Excel form of the
  * "keep derived data separated from the record" rule (David): the traced points
- * are one tab, the measurements another, and each curve fit its own — a reader
+ * are one tab, the measurements another, and each curve fit its own - a reader
  * clicks the tab they want. Numbers are written as real numbers (not text) so
  * Excel treats them numerically; a blank cell stays blank rather than becoming 0.
  */

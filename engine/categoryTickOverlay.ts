@@ -6,7 +6,7 @@
  * "Mark category ticks?" fold-out is asking for at any moment. Neither touches
  * React, so both are reachable by mutation testing, which `ui/` is not.
  *
- * ⚑ Ticks are an AID. Nothing here decides a measured value — a bar reads its
+ * ⚑ Ticks are an AID. Nothing here decides a measured value - a bar reads its
  * value from the calibrated value axis, and auto-extract finds bars from ink.
  * These functions decide what is DRAWN and what is ASKED, and nothing else.
  *
@@ -21,7 +21,7 @@ import type { GlyphSegment } from './histogramGlyph.js';
 
 /** How far a tick mark stands off the axis, in image pixels. Long enough to
  * read as a tick rather than a speck, short enough not to bury the bar above
- * it — the same judgement histogramGlyph.ts's own EDGE_TICK makes. */
+ * it - the same judgement histogramGlyph.ts's own EDGE_TICK makes. */
 const TICK_LENGTH = 14;
 
 /** The axis EDGES stand off further, and to both sides, so they read as the
@@ -30,7 +30,7 @@ const TICK_LENGTH = 14;
 const EDGE_LENGTH = 11;
 
 /**
- * ⚑⚑ THE STRUCTURE VIOLET — every mark the USER placed on the figure's frame.
+ * ⚑⚑ THE STRUCTURE VIOLET - every mark the USER placed on the figure's frame.
  * Category ticks and their axis ends, a heatmap's grid dividers, the bar
  * drag-box, and the picked highlight in both the canvas and the results matrix.
  *
@@ -38,8 +38,8 @@ const EDGE_LENGTH = 11;
  * on the very same pixel as P1, so borrowing P1's colour would put two different
  * kinds of thing in one place wearing one uniform.
  *
- * ⚠️ THE COMMENT ALREADY SAID IT WAS SHARED — *"the violet the bar drag-box
- * already uses"* — and the sharing was done by COPYING THE LITERAL. The v2.2
+ * ⚠️ THE COMMENT ALREADY SAID IT WAS SHARED - *"the violet the bar drag-box
+ * already uses"* - and the sharing was done by COPYING THE LITERAL. The v2.2
  * audit found the same colour at SEVEN sites in THREE spellings (`#7c3aed`,
  * `rgb(124, 58, 237)`, `rgba(…)`), with a second constant `GRID_OVERLAY_COLOR`
  * of its own, while this exported one had a single consumer: itself. Grepping
@@ -60,7 +60,7 @@ function outwardNormal(
   const len = Math.hypot(dx, dy);
   if (!Number.isFinite(len) || len === 0) return null;
   // (-dy, dx) sends a left-to-right axis to (0, +1), which is DOWN in image
-  // coordinates — where a chart prints its ticks.
+  // coordinates - where a chart prints its ticks.
   return { x: -dy / len, y: dx / len };
 }
 
@@ -72,7 +72,7 @@ export interface CategoryOverlayInput {
    *
    * ⚑⚑ TRUE FOR A BAR CHART, FALSE FOR A HEATMAP, and the difference is real
    * rather than cosmetic. A bar chart's axis edges are FROZEN: every tick is a
-   * function of them, so dragging one rescales the lot — they are a different
+   * function of them, so dragging one rescales the lot - they are a different
    * kind of thing and are marked as one. A heatmap's outer boundaries are
    * ORDINARY DIVIDERS that drag like any other (the two-layer model: the
    * CALIBRATION is the axis, the grid merely derives from it), so marking them
@@ -89,7 +89,7 @@ export interface CategoryOverlayInput {
 /**
  * The axis line, its two end marks and one mark per tick, as segment runs.
  *
- * Empty when no axis is marked — an unmarked session draws nothing, which is
+ * Empty when no axis is marked - an unmarked session draws nothing, which is
  * what makes the whole feature invisible until someone asks for it.
  */
 export function categoryAxisGlyphs({
@@ -105,7 +105,7 @@ export function categoryAxisGlyphs({
     from: { x: edges[0].x, y: edges[0].y },
     to: { x: edges[1].x, y: edges[1].y },
   };
-  // The edges are drawn across the axis, the ticks only outward from it — so an
+  // The edges are drawn across the axis, the ticks only outward from it - so an
   // end never reads as one more category divider.
   const ends: GlyphSegment[] = markEnds
     ? [edges[0], edges[1]].map((p) => ({
@@ -161,7 +161,7 @@ export function categoryTickMarkers({
       }));
   // ⚑⚑ THE HANDLE SITS AT THE OUTER END OF ITS TICK, not on the axis line.
   // Two reasons, and the second is a defect the first would have hidden:
-  //  · it stays visibly BOUND to the axis — the mark connects it — where the
+  //  · it stays visibly BOUND to the axis - the mark connects it - where the
   //    retired heatmap handles floated 16px away with nothing joining them;
   //  · and on a heatmap BOTH axes meet at the plot's corner, so an x boundary
   //    and a y boundary at the origin land on the SAME PIXEL. A click there
@@ -177,12 +177,12 @@ export function categoryTickMarkers({
     color,
     draggable: true,
     // ⚑⚑ AN AID, NOT A PRECISE REFERENCE. These used to be `calibration`, which
-    // draws the crosshair reticle that exists — in its own comment — "so an axis
+    // draws the crosshair reticle that exists - in its own comment - "so an axis
     // handle reads as a precise reference, not a data dot". A divider is the
     // opposite: something you drag onto the figure's own rule by eye. Drawing
     // both alike claimed a nudged boundary had a calibration point's authority,
     // and invited the calibration point to be dragged as casually as a divider.
-    // The two-layer model made visible — the axis is calibrated, the grid
+    // The two-layer model made visible - the axis is calibrated, the grid
     // DERIVES from it.
     // ⚑ It also separates the pair that COINCIDE under the `edge` convention
     // (B1/B2): a derived end sitting on its calibration point was two identical
@@ -209,16 +209,16 @@ export type CategoryTickPhase = 'unavailable' | 'closed' | 'mark-axis' | 'declar
 export interface CategoryPanelInput {
   /** The graph type has categories at all. */
   supported: boolean;
-  /** The value axis is calibrated — the fold-out appears after it, not during. */
+  /** The value axis is calibrated - the fold-out appears after it, not during. */
   isCalibrated: boolean;
   /** The user has opened the fold-out. */
   open: boolean;
   /** An axis has been marked. */
   hasGeometry: boolean;
-  /** The pixel of the seed calibration step, if placed — offered as the first edge. */
+  /** The pixel of the seed calibration step, if placed - offered as the first edge. */
   seedPixel: { px: number; py: number } | null;
   /**
-   * The LABEL of the calibration handle being reused as the axis' first edge —
+   * The LABEL of the calibration handle being reused as the axis' first edge -
    * 'P1' on a bar chart, 'V1' on a categorical Line.
    *
    * ⚠️ It was the literal string 'P1', and extending category ticks to Line
@@ -233,13 +233,13 @@ export interface CategoryPanelInput {
   /** A tick has been dragged since the last generation. */
   hasAdjustments: boolean;
   /**
-   * The user asked to place BOTH ends by hand — "Re-place axis".
+   * The user asked to place BOTH ends by hand - "Re-place axis".
    *
    * ⚑ Without this the seed always wins and the two-click walk is unreachable:
    * `seedPixel` is P1, which exists the moment the figure is calibrated, so
    * `canReuseSeed` was permanently true, `edgesPlaced` permanently 0, and the
    * two prompts below were dead strings. P1 is only the category axis's corner
-   * on a chart calibrated AT the corner — its own prompt is "a known bar value
+   * on a chart calibrated AT the corner - its own prompt is "a known bar value
    * (e.g. 0)", and clicking the 0 gridline mid-plot is perfectly ordinary
    * calibration, which anchored the category axis in the middle of the figure
    * with nothing on screen able to move it (v2.1 audit).
@@ -261,7 +261,7 @@ export type CategoryMarkError = 'too-close' | null;
  */
 export function categoryMarkMessage(error: CategoryMarkError): string | null {
   return error === 'too-close'
-    ? 'That is the same point as the start of the axis — click where the categories END, further along.'
+    ? 'That is the same point as the start of the axis - click where the categories END, further along.'
     : null;
 }
 
@@ -280,7 +280,7 @@ export interface CategoryPanelView {
  *
  * ⚑ The fold-out appears only once the value axis is CALIBRATED, and never
  * gates it. A bar chart still calibrates in two clicks and a single-series chart
- * never needs any of this — the whole feature is an offer made after the work
+ * never needs any of this - the whole feature is an offer made after the work
  * that matters is already done.
  */
 export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView {
@@ -296,10 +296,10 @@ export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView 
   }
   if (!hasGeometry) {
     // ⚑ The prompt says which click is expected, because "mark the category
-    // axis" alone leaves the user guessing whether one point or two is wanted —
+    // axis" alone leaves the user guessing whether one point or two is wanted -
     // and the answer differs depending on whether P1 can stand in for the first.
     const prompt = canReuseSeed
-      ? `Click where the categories end. ${seedLabel} (the amber handle) is being reused as the start — press Re-place axis if that is wrong.`
+      ? `Click where the categories end. ${seedLabel} (the amber handle) is being reused as the start - press Re-place axis if that is wrong.`
       : edgesPlaced === 0
         ? 'Click where the categories start, then where they end.'
         : 'Now click where the categories end.';
@@ -322,11 +322,11 @@ export function isMarkingCategoryAxis(view: CategoryPanelView): boolean {
   return view.phase === 'mark-axis';
 }
 
-/** The fold-out's own summary line — it has to say when this is worth opening,
+/** The fold-out's own summary line - it has to say when this is worth opening,
  * because nothing else on screen will. */
 export function categoryPanelSummary(hasGeometry: boolean, categoryCount: number): string {
   if (!hasGeometry) return 'Mark category ticks?';
-  return categoryCount === 1 ? 'Category ticks — 1 category' : `Category ticks — ${categoryCount} categories`;
+  return categoryCount === 1 ? 'Category ticks - 1 category' : `Category ticks - ${categoryCount} categories`;
 }
 
 /**
@@ -334,7 +334,7 @@ export function categoryPanelSummary(hasGeometry: boolean, categoryCount: number
  *
  * ⚑ The third sentence is the one a user looking at a MERGED RUN needs. Splitting
  * touching same-coloured bars at the marked boundaries is the biggest thing this
- * feature buys, and it was documented only in MANUAL — so someone staring at the
+ * feature buys, and it was documented only in MANUAL - so someone staring at the
  * exact figure it helps had nothing on screen telling them to open the fold-out
  * (v2.1 audit).
  */
@@ -348,12 +348,12 @@ export const CATEGORY_PANEL_HINT =
  *
  * ⚑ The ticks are 4px dots with no label and no tooltip. "Drag any of them if
  * the figure isn't evenly spaced" lived only in MANUAL, and the sole hint on
- * screen was the regenerate warning's "discarding the ones you moved" — legible
+ * screen was the regenerate warning's "discarding the ones you moved" - legible
  * only to someone who already knew. A capability whose only announcement is the
  * manual fails the keystone rule (v2.1 audit).
  */
 export const CATEGORY_TICK_DRAG_HINT =
-  'Ticks not lining up? Drag any of them along the axis — the figure may not be evenly spaced.';
+  'Ticks not lining up? Drag any of them along the axis - the figure may not be evenly spaced.';
 
 /** The convention labels, kept here so the two words the user reads are next to
  * the code that acts on them. */

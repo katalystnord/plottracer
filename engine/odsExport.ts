@@ -1,10 +1,10 @@
 /**
- * ODS (OpenDocument Spreadsheet) export — the open-standard sibling of
+ * ODS (OpenDocument Spreadsheet) export - the open-standard sibling of
  * engine/xlsxExport.ts, and written by hand rather than pulled from a library.
  *
  * ⚑ WHY BY HAND. An .ods is a ZIP of three parts, and we already write ZIPs with
  * `fflate` for the project container. Adding a spreadsheet library to emit ~40
- * lines of XML would cost a dependency for something the repo can already do —
+ * lines of XML would cost a dependency for something the repo can already do -
  * and this format is the one PlotTracer's own README argues for: ISO/IEC 26300,
  * readable without anybody's product. It is also far lighter than the XLSX path,
  * which lazily loads ~900 kB of exceljs.
@@ -70,7 +70,7 @@ function xml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Table names must be unique and carry none of ' " / \ : * ? [ ] — sanitise,
+/** Table names must be unique and carry none of ' " / \ : * ? [ ] - sanitise,
  * then de-duplicate with a suffix, mirroring the XLSX writer's rule so the same
  * export has the same tab names in both formats. */
 function uniqueTableName(raw: string, used: Set<string>): string {
@@ -95,12 +95,12 @@ function uniqueTableName(raw: string, used: Set<string>): string {
 
 /**
  * One cell. A number is written with `office:value-type="float"` and its numeric
- * `office:value`, so the spreadsheet treats it as a number rather than as text —
+ * `office:value`, so the spreadsheet treats it as a number rather than as text -
  * the same distinction the XLSX writer draws.
  *
  * ⚑ A BLANK STAYS BLANK. `''` becomes an empty cell, never a 0: a cell nobody
  * measured must not arrive as a measurement of zero (the export already refuses
- * that everywhere else — see exportValues' null handling).
+ * that everywhere else - see exportValues' null handling).
  */
 function cell(value: Cell): string {
   if (value === '' || value === null || value === undefined) return '<table:table-cell/>';
@@ -145,7 +145,7 @@ const MANIFEST_XML =
 /** Build an .ods workbook from the export sections. Returns the file bytes. */
 export function sectionsToOds(sections: readonly TableSection[]): Uint8Array {
   return zipSync({
-    // FIRST, and stored — see the header note.
+    // FIRST, and stored - see the header note.
     mimetype: [strToU8(MIMETYPE), { level: 0 }],
     'META-INF/manifest.xml': strToU8(MANIFEST_XML),
     'content.xml': strToU8(contentXml(sections)),

@@ -1,12 +1,12 @@
 /**
- * THE AXES-TYPE CONFIGURATION SYSTEM — the shape of a graph type's declaration,
+ * THE AXES-TYPE CONFIGURATION SYSTEM - the shape of a graph type's declaration,
  * and the eleven declarations themselves.
  *
  * Split out of calibrationSession.ts on 2026-08-03 (v2.0), which had reached
  * 5,873 lines. The boundary is a real one rather than a size cut: everything
- * here DECLARES what a graph type is — how many clicks it asks for, what values
+ * here DECLARES what a graph type is - how many clicks it asks for, what values
  * those clicks carry, which refusals those values must pass, and how to build
- * its axes — while calibrationSession.ts is the state machine that WALKS a
+ * its axes - while calibrationSession.ts is the state machine that WALKS a
  * declaration. Adding a graph type is now one file, and all of it is data.
  *
  * ⚑ Nothing here may import calibrationSession.ts. The dependency runs one way,
@@ -38,7 +38,7 @@ import { checkColorScaleValues } from '../algorithms/colorScale.js';
 export interface CalibratedAxes {
   pixelToData(px: number, py: number): number[];
   /** The axes' own export column headers. Declared here (checkpoint 76) because
-   * all 7 classes have always implemented it (core/axes/types.ts:25) — it was
+   * all 7 classes have always implemented it (core/axes/types.ts:25) - it was
    * just never named as a requirement, which is how `AxesTypeConfig.valueLabels`
    * grew beside it and diverged. See core/exportValues.ts. */
   getAxesLabels(): string[];
@@ -47,22 +47,22 @@ export interface CalibratedAxes {
    * grounds as getAxesLabels: all 7 classes have always implemented it, it was
    * simply never named.
    *
-   * **Implemented for real only on XY and Image — the other 5 are stubs
+   * **Implemented for real only on XY and Image - the other 5 are stubs
    * returning `{x: 0, y: 0}`** (`core/axes/bar.ts:93` and friends, "not
-   * implemented yet — matches the original exactly"). Declaring it does not
+   * implemented yet - matches the original exactly"). Declaring it does not
    * change that; callers must not assume it inverts. `algorithms/errorCapture.ts`
    * measures whether it does rather than trusting it, and degrades to "no
    * constraint" where it does not.
    */
   dataToPixel(x: number, y: number): { x: number; y: number };
   /**
-   * The axes' own metadata bag — declared here on exactly the grounds
+   * The axes' own metadata bag - declared here on exactly the grounds
    * `getAxesLabels` above was: all ten classes have always implemented it
    * (`core/axes/types.ts:17`), it was simply never named as a requirement.
    *
    * ⚑ Naming it matters because part of the RECORD lives here for types whose
-   * data has no pixel to ride on — a heatmap's grid, its axis names, and the
-   * cells a person read themselves — and `runCalibration` has to carry that
+   * data has no pixel to ride on - a heatmap's grid, its axis names, and the
+   * cells a person read themselves - and `runCalibration` has to carry that
    * across when `buildAxes` hands back a new axes object. Reaching it through a
    * cast would have hidden the requirement in the one place that must not lose
    * it.
@@ -80,16 +80,16 @@ export interface CalibValueField {
    *
    * `dz` is the third slot, which needs the config to declare
    * `calibrationDimensions: 3` for the Calibration to have one at all. Spider
-   * uses it for the axis's NAME — a string rather than a coordinate, which is why
+   * uses it for the axis's NAME - a string rather than a coordinate, which is why
    * it is worth saying plainly here: `dz` is a slot, not a Z axis. */
   field: 'dx' | 'dy' | 'dz';
   /** When true, the field may be left blank. For a value the calibration collects
-   * but never reads — e.g. Polar P2's θ, which mirrors WebPlotDigitizer's form but
+   * but never reads - e.g. Polar P2's θ, which mirrors WebPlotDigitizer's form but
    * is ignored by the math. */
   optional?: boolean;
   /** Prefilled into the input when the step becomes active, so the user walks
    * past it and can change it rather than typing it from scratch (v1.4: Spider's
-   * centre value, 0). ⚑ A default is not an invention — the distinction is whether
+   * centre value, 0). ⚑ A default is not an invention - the distinction is whether
    * the user is SHOWN the value and can overrule it. Contrast the mirrored error
    * cap, which was never presented as a value anyone chose. */
   defaultValue?: string;
@@ -98,7 +98,7 @@ export interface CalibValueField {
    *
    * ⚑ Declared rather than inferred, because "0" is a real answer in a slot that
    * holds text: Spider's axis NAME is optional, and defaulting it to "0" produced
-   * an axis called `0` — a name that looks transcribed off the figure and never
+   * an axis called `0` - a name that looks transcribed off the figure and never
    * was. A blank name has to stay blank so the axes class can fall back to the
    * positional "Axis N", which is true by construction. */
   blankValue?: string;
@@ -119,7 +119,7 @@ export interface CalibStepInfo {
    * ⚑ Declared per step because only the config knows its own crowding. A
    * heatmap's four colour-key clicks all land along one horizontal strip, so
    * four labels at the same fixed up-and-right offset print on top of each
-   * other — "Key value 2=120" and "Key end" overlapped into an unreadable smear
+   * other - "Key value 2=120" and "Key end" overlapped into an unreadable smear
    * on the shipped build, found on a screenshot because no test can see a label
    * collide. Staggering the two KINDS of key click also draws the distinction
    * the walk depends on: two clicks say what the ramp is WORTH (above, where the
@@ -132,8 +132,8 @@ export interface CalibStepInfo {
  * A calibration step group repeated once per unit the FIGURE has, not once per
  * entry in a fixed list (v1.4, Spider).
  *
- * ⚑ Every axes type until now declared a FIXED `steps` array — XY 4, Bar 2, Polar
- * 3, Ternary 3, CCR 5 — because every one of them calibrates a frame whose shape
+ * ⚑ Every axes type until now declared a FIXED `steps` array - XY 4, Bar 2, Polar
+ * 3, Ternary 3, CCR 5 - because every one of them calibrates a frame whose shape
  * the tool already knows. A spider chart does not have a knowable shape: it has as
  * many axes as the chart's author drew, and the user is the only one who can say
  * how many. So the step list becomes a property of the SESSION rather than of the
@@ -182,7 +182,7 @@ export interface GlobalFieldInfo {
 }
 
 /**
- * One per-axes-type calibration *setting* — log scales, orientations, units
+ * One per-axes-type calibration *setting* - log scales, orientations, units
  * (checkpoint 68).
  *
  * Distinct from GlobalFieldInfo, which collects a *measured value* (CCR's chart
@@ -191,9 +191,9 @@ export interface GlobalFieldInfo {
  * (`wpd-core/templates/_sidebars.html:251-527`).
  *
  * Every one of these was hardcoded to a literal in buildAxes until now, across
- * 6 of the 7 axes types — the single biggest finding of the 2026-07-15 parity
+ * 6 of the 7 axes types - the single biggest finding of the 2026-07-15 parity
  * re-audit (see CLAUDE.md). `core/` supported all of it the whole time; only
- * the UI was missing, so log axes — table stakes for scientific figures — were
+ * the UI was missing, so log axes - table stakes for scientific figures - were
  * unreachable and undiscoverable.
  *
  * Values are carried as strings throughout (a checkbox is 'true'/'false'), so
@@ -207,7 +207,7 @@ export interface GlobalFieldInfo {
  * heatmap's tick convention means nothing until the axis is declared
  * categorical, and offering it anyway is both clutter and an invitation to set
  * something with no effect. Same rule as disabling Grid Removal without an
- * image — do not present a control whose outcome is already decided.
+ * image - do not present a control whose outcome is already decided.
  */
 export interface AxesOptionVisibility {
   /** Shown only while this other option's checkbox is on. */
@@ -217,7 +217,7 @@ export interface AxesOptionVisibility {
    *
    * ⚑⚑ DECLARED BY THE TYPE, because which options belong together is a fact
    * about the FIGURE, not about the card. A heatmap has three axes and each has
-   * the same kind of properties, so one row per axis says so on screen — and
+   * the same kind of properties, so one row per axis says so on screen - and
    * `Log X` stops being a loose flag in a row of unrelated checkboxes and
    * becomes a property of the X axis, where it belongs.
    *
@@ -230,7 +230,7 @@ export interface AxesOptionVisibility {
    * ⚑ Declared rather than inferred from width, because it is a statement about
    * MEANING: the tick convention belongs to its axis but answers a different
    * question, so it reads as a continuation line under it rather than as more
-   * things on the same row. It is also what keeps the row inside the card —
+   * things on the same row. It is also what keeps the row inside the card -
    * David: *"we need to get this to fit on the calibration card width."*
    */
   newRow?: boolean;
@@ -248,8 +248,8 @@ export type AxesOption =
   | ({ key: string; label: string; kind: 'text'; default: string; placeholder?: string } & AxesOptionVisibility);
 
 /** Context handed to buildAxes. Grew from a bare `globalValues` argument at
- * checkpoint 68 so options — and MapAxes's image height, which only its
- * bottom-left origin needs and which the session can't otherwise know — reach
+ * checkpoint 68 so options - and MapAxes's image height, which only its
+ * bottom-left origin needs and which the session can't otherwise know - reach
  * the axes without every config growing its own argument. */
 export interface BuildAxesContext {
   globalValues: Readonly<Record<string, string>>;
@@ -281,13 +281,13 @@ export interface LogScaleGuard {
   /** How the axis is named to the user, e.g. "X", "radial". */
   label: string;
   /**
-   * An option that DISABLES this guard when set — the axis is not a scale at
+   * An option that DISABLES this guard when set - the axis is not a scale at
    * all under it.
    *
    * ⚑ Added for the heatmap's category axes, and a test is what demanded it: a
    * category axis types no coordinates, so the guard read two blank endpoints
    * and refused the whole calibration the moment "Log X" happened to be ticked.
-   * The refusal was correct about the values and wrong about the question —
+   * The refusal was correct about the values and wrong about the question -
    * there is no log to take of a counted position, so the guard has nothing to
    * check rather than something to complain about. `buildAxes` drops the log
    * flag for the same reason.
@@ -298,7 +298,7 @@ export interface LogScaleGuard {
 /**
  * Two pixel-space axis directions that must not be parallel. When a graph type
  * inverts a 2x2 pixel matrix (XY and its Histogram/Error-Bar variants), distinct
- * but COLLINEAR calibration points make that matrix singular — inv2x2 divides by
+ * but COLLINEAR calibration points make that matrix singular - inv2x2 divides by
  * zero and every value reads back NaN, while calibrate() still returns true. The
  * same-pixel guard (distinctPixelSteps) only catches the coincident sub-case; a
  * determinant/parallel check is what catches the rest. Each vector is the pixel
@@ -351,8 +351,8 @@ export function checkGuards(
    *
    * ⚑ REQUIRED, and deliberately so: this used to default to `config.fixedSteps`,
    * which is the one shape of stray `config.steps` read that getSteps()'s own
-   * comment warns about. It reads as harmless — the two lists ARE identical for
-   * all eight fixed-shape types — so an omitted argument would test clean
+   * comment warns about. It reads as harmless - the two lists ARE identical for
+   * all eight fixed-shape types - so an omitted argument would test clean
    * everywhere and, on a spider, silently guard the origin alone while every
    * spoke went unchecked. A default that is right eight times out of nine is a
    * trap, not a convenience; both callers already pass `this.getSteps()`. */
@@ -376,7 +376,7 @@ export function checkGuards(
     const anyZero = vals.some((v) => v === 0);
     const mixedSign = vals.some((v) => v > 0) && vals.some((v) => v < 0);
     if (anyZero || mixedSign) {
-      return `A log ${g.label} scale cannot pass through zero or change sign — enter non-zero values with the same sign (e.g. 1 and 100).`;
+      return `A log ${g.label} scale cannot pass through zero or change sign - enter non-zero values with the same sign (e.g. 1 and 100).`;
     }
   }
   // Distinct-pixel invariant. Two points of one axis on a single pixel make the
@@ -394,14 +394,14 @@ export function checkGuards(
         if (a && b && a.px === b.px && a.py === b.py) {
           const la = steps[ai]?.label ?? group[i];
           const lb = steps[bi]?.label ?? group[j];
-          return `${la} and ${lb} are on the same pixel — they must be different points, or the calibration has no scale.`;
+          return `${la} and ${lb} are on the same pixel - they must be different points, or the calibration has no scale.`;
         }
       }
     }
   }
   // Distinct-but-collinear invariant. Runs AFTER distinctPixelSteps so the
   // coincident sub-case keeps its own "same pixel" message; this catches the
-  // rest — two axes pointing the same way make the 2x2 pixel transform singular
+  // rest - two axes pointing the same way make the 2x2 pixel transform singular
   // (inv2x2 divides by zero -> every value NaN, calibrate() still true).
   const pag = config.parallelAxisGuard;
   if (pag) {
@@ -417,7 +417,7 @@ export function checkGuards(
     if (d1 && d2) {
       const cross = d1.x * d2.y - d1.y * d2.x;
       if (Math.abs(cross) < 1e-9) {
-        return `The ${pag.label} calibration axes are parallel — they must point in different directions, or the calibration has no scale.`;
+        return `The ${pag.label} calibration axes are parallel - they must point in different directions, or the calibration has no scale.`;
       }
     }
   }
@@ -437,7 +437,7 @@ export function checkGuards(
     const d1 = distFrom(rdg.origin, rdg.p1);
     const d2 = distFrom(rdg.origin, rdg.p2);
     if (d1 != null && d2 != null && Math.abs(d2 - d1) < 1e-6) {
-      return `The ${rdg.label} calibration points are the same distance from the origin — they must be at different radii, or the calibration has no radial scale.`;
+      return `The ${rdg.label} calibration points are the same distance from the origin - they must be at different radii, or the calibration has no radial scale.`;
     }
   }
   // ⚑ A type's own check on the VALUES that were typed, last because it is the most
@@ -485,7 +485,7 @@ export function defaultOptionValues(config: AxesTypeConfig<CalibratedAxes>): Rec
  * incompatible frames (Bar's two points cannot stand in for XY's four).
  *
  * Compares step KEYS, not the array identity, so a type that rebuilt an
- * identical step list rather than sharing the reference still counts — the
+ * identical step list rather than sharing the reference still counts - the
  * question is whether the placed handles mean the same thing, and they do iff
  * the keys line up.
  */
@@ -518,7 +518,7 @@ export interface CommonOriginPair {
   from: string;
   /** The step that reuses it, on arrival. */
   to: string;
-  /** Values prefilled into `to`'s fields, in order — the shared corner's value
+  /** Values prefilled into `to`'s fields, in order - the shared corner's value
    * is known precisely because it is shared. Omit for a step with no value
    * fields, and see `commonOriginReuse`: it is trimmed to the fields the step
    * actually has, because the walk can reshape them. */
@@ -537,7 +537,7 @@ export function commonOriginPairs(
 export function commonOriginReuse(
   config: Pick<AxesTypeConfig<CalibratedAxes>, 'commonOrigin' | 'commonOriginAlways'>,
   /** The checkbox. Ignored entirely by a type that declares
-   * `commonOriginAlways` — there is no checkbox on those, so there is no state
+   * `commonOriginAlways` - there is no checkbox on those, so there is no state
    * for a caller to have got wrong. */
   enabled: boolean,
   nextStepKey: string | undefined,
@@ -546,7 +546,7 @@ export function commonOriginReuse(
    * The step the pixel is being reused FOR, as the walk currently shapes it.
    *
    * ⚑⚑ THE PREFILL HAS TO FIT THE STEP IT LANDS ON. `commonOrigin` declares
-   * "and while you are there, this corner's value is 0" — true for an XY origin,
+   * "and while you are there, this corner's value is 0" - true for an XY origin,
    * meaningless on a heatmap's CATEGORY edge, which takes no typed value at all.
    * David: *"the common origin does not work when you have a categorial axis."*
    * It was feeding a value to a step with nowhere to put it. Trimmed to the
@@ -573,14 +573,14 @@ export function commonOriginReuse(
  * axes captured as bins (checkpoint 66), exactly as upstream WPD models it
  * (its "histogram" is BarExtractionAlgo run against XYAxes, relabelled in
  * the dropdown), and the already-flagged Box Plot promotion is the mirror
- * case — Bar axes captured as five-point tuples. So `id` below identifies
+ * case - Bar axes captured as five-point tuples. So `id` below identifies
  * the graph type, while the underlying class is whatever buildAxes returns.
  *
  * That distinction has to survive a save/load round-trip, and it must do so
  * *without* touching WPD's schema: core/plotData.ts serializes the axes as
  * a class-name string ('XYAxes'/'BarAxes'/...), and inventing a
  * 'HistogramAxes' string would write a project file neither upstream nor
- * this repo's own old wpd-core app could read — breaking CLAUDE.md's
+ * this repo's own old wpd-core app could read - breaking CLAUDE.md's
  * "preserve the JSON project file format exactly" constraint. Axes metadata
  * is the format's own extension point: plotData round-trips it verbatim
  * (serialize writes axData.metadata, deserialize calls setMetadata) and
@@ -595,9 +595,9 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   id: string;
   label: string;
   /** The FIXED steps, in order. For a type with a `repeatingStep` these are only
-   * the prefix — ask the SESSION (`getSteps()`) for the list a user is actually
+   * the prefix - ask the SESSION (`getSteps()`) for the list a user is actually
    * walking, never this array. */
-  /** ⚑ The FIXED steps only. Never read this directly — a session's real step
+  /** ⚑ The FIXED steps only. Never read this directly - a session's real step
    * list is `session.getSteps()`, which unrolls the repeating group. Named
    * `fixedSteps` rather than `steps` precisely so a stray read cannot compile:
    * for the eight fixed-shape types the two are identical, which is what made the
@@ -610,7 +610,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   /** How many value slots each Calibration point carries. Undefined = 2 (dx, dy),
    * which is every type that predates Spider. Spider declares 3 because it stores
    * the axis NAME in `dz`; a 2-slot Calibration would drop it on the floor while
-   * every number still read back correctly — a silent loss, not a visible one. */
+   * every number still read back correctly - a silent loss, not a visible one. */
   calibrationDimensions?: 2 | 3;
   /**
    * A type's own refusal based on the VALUES entered, returning the message or null.
@@ -645,19 +645,19 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * What a tuple's members ARE to each other (David's dimensional taxonomy,
    * 2026-07-27).
    *
-   * - `'object'` (default) — the members describe ONE thing, and only together:
+   * - `'object'` (default) - the members describe ONE thing, and only together:
    *   a box's Min/Q1/Median/Q3/Max is a single distribution, a histogram bin's
    *   two corners are a single interval. Half a box is not half the data, it is
    *   nonsense. David calls these **1.5D**: one axis carries arbitrary
    *   categories, only the other does mathematical work.
-   * - `'independent'` — the tuple is a ROW of separate readings, one per named
+   * - `'independent'` - the tuple is a ROW of separate readings, one per named
    *   slot, each meaningful on its own and each legitimately absent. A spider is
    *   **N × 1D**: N independent 1-D scales sharing an origin, and a datum is one
    *   number on one named axis. Nothing pairs slot 2 with slot 5.
    *
    * ⚑ WHY THIS IS A CAPABILITY AND NOT A `config.axesKind === 'spider'` CHECK. Spider
-   * REUSED the Box Plot slot machinery, which was the right call — the
-   * capture workflow is genuinely the same — but every rule keyed on
+   * REUSED the Box Plot slot machinery, which was the right call - the
+   * capture workflow is genuinely the same - but every rule keyed on
    * `hasSlots()` came along with it, including rules that only hold for an
    * indivisible object. That is how the Eraser came to delete a whole six-axis
    * profile when asked to remove one reading (David, driving the app). The
@@ -700,22 +700,22 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
     ): number | null;
   };
   /**
-   * What auto-extract MEANS on this graph type — a declared capability, because
+   * What auto-extract MEANS on this graph type - a declared capability, because
    * every caller was asking `config.axesKind === 'spider'` or `axesKind === 'bar'` and
    * getting the answer from the type's NAME rather than from what it can do.
    *
-   * - `'curve'` (default) — the mechanisms that follow a drawn line: flood fill,
+   * - `'curve'` (default) - the mechanisms that follow a drawn line: flood fill,
    *   colour trace by column, blob detection. Right wherever a series IS a curve.
-   * - `'along-axes'` — the reading is where the series crosses a calibrated ray,
+   * - `'along-axes'` - the reading is where the series crosses a calibrated ray,
    *   so the trace walks the rays instead of the columns (Spider).
-   * - `'bounding-box'` (v2.0 Phase 7) — the direct fix for the `'none'` case
+   * - `'bounding-box'` (v2.0 Phase 7) - the direct fix for the `'none'` case
    *   below, for the one bar-family type where it actually applies: a bar
    *   blob's OWN bounding box is its two measured ends (see
    *   engine/barDetectRun.ts), so nothing is averaged or centroided away.
-   *   Bar only — Box Plot/Histogram/categorical Line still have no bounding
+   *   Bar only - Box Plot/Histogram/categorical Line still have no bounding
    *   box that would mean their own record (a box's whiskers, a bin's
    *   height-only extent, a line's ordinal click), so they stay `'none'`.
-   * - `'none'` — refused, and this is a CORRECTNESS gate rather than a missing
+   * - `'none'` - refused, and this is a CORRECTNESS gate rather than a missing
    *   feature: every CURVE mechanism returns the MIDDLE of a filled shape, and
    *   a bar's value is its end, so the number produced was never the datum
    *   (`59f94a6`). Box Plot, categorical Line, Heatmap and Pie.
@@ -723,17 +723,17 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   all three parts were wrong: Histogram moved to `'bounding-box'` at v2.0
    *   Phase 7, and Heatmap and Pie were added afterwards without touching the
    *   sentence. A comment enumerating members is a second registry that nothing
-   *   checks — hence `autoExtractRefusal` below, which the type declares itself.
+   *   checks - hence `autoExtractRefusal` below, which the type declares itself.
    */
   autoExtractKind?: 'curve' | 'along-axes' | 'bounding-box' | 'none';
   /**
-   * WHY auto-extract is refused on this type, in the user's words — required
+   * WHY auto-extract is refused on this type, in the user's words - required
    * whenever `autoExtractKind` is `'none'`, and meaningless otherwise.
    *
    * ⚑⚑ REFUSE WITH THE REQUIREMENT (v2.3). Box Plot and categorical Line each
    * had a sentence explaining themselves; Heatmap and Pie fell through to
    * *"Not available for this graph type"*, which tells the reader nothing they
-   * could act on — it names the refusal and withholds the reason, on the two
+   * could act on - it names the refusal and withholds the reason, on the two
    * types where the reason is the most interesting thing about them. That
    * cascade lived in `Workspace.tsx` as `config.id === 'boxplot' ? … :
    * config.id === 'categorical' ? … : <generic>`, so a new type joined the
@@ -741,25 +741,25 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *
    * ⚑ Declared beside the refusal it explains, so the two cannot drift, and
    * enforced by a registry test: a type that refuses auto-extract must say why.
-   * The v2.2 lesson in one field — the missing half is never the half that
+   * The v2.2 lesson in one field - the missing half is never the half that
    * throws.
    */
   autoExtractRefusal?: string;
   /**
-   * The SHAPE this type's data takes in an export file — declared, because the
+   * The SHAPE this type's data takes in an export file - declared, because the
    * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
    * `id === 'histogram'`, then a grouped test. A type's export shape is a property
    * of the type, and the v1.4 audit's export defect was a wrong branch in exactly
    * that chain: a spider fell into the tuple-table case, which is active-series
    * only and reads values off the nearest ray.
    *
-   * - `'flat'` (default) — one row per point, honouring the Active/All scope.
-   * - `'tuples'` — the tuple table: one row per box/bin, columns for its members.
+   * - `'flat'` (default) - one row per point, honouring the Active/All scope.
+   * - `'tuples'` - the tuple table: one row per box/bin, columns for its members.
    *   For types whose tuple IS one object (see tupleMembers).
-   * - `'bins'` — histogram bins, as true edges.
-   * - `'heatmap'` (v2.2) — a MATRIX: one row per cell carrying its bounds, its
+   * - `'bins'` - histogram bins, as true edges.
+   * - `'heatmap'` (v2.2) - a MATRIX: one row per cell carrying its bounds, its
    *   centre and its value, plus the same cells pivoted as a convenience view.
-   *   Unlike every shape above it, the rows do not come from the datasets — a
+   *   Unlike every shape above it, the rows do not come from the datasets - a
    *   heatmap's cells are read from the image through the grid, so the caller
    *   supplies them (see `ExportAssemblyInput.heatmapCells`).
    *
@@ -771,42 +771,42 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   exportShape?: 'flat' | 'tuples' | 'bins' | 'heatmap';
 
   /**
-   * Which data panel this type shows below the figure (v2.3) — the READ side of
+   * Which data panel this type shows below the figure (v2.3) - the READ side of
    * `exportShape`, and declared for the same reason it is.
    *
-   * - `'heatmap'` — the Cells matrix, tinted with the figure's own colours.
-   * - `'bins'` — histogram bins, as true edges.
-   * - `'spider'` — one row per spoke, the N×1D record.
-   * - `'bar'` — category + value per bar, with the stack/group columns.
-   * - undefined — the generic choice: the tuple table when the SERIES has slots,
+   * - `'heatmap'` - the Cells matrix, tinted with the figure's own colours.
+   * - `'bins'` - histogram bins, as true edges.
+   * - `'spider'` - one row per spoke, the N×1D record.
+   * - `'bar'` - category + value per bar, with the stack/group columns.
+   * - undefined - the generic choice: the tuple table when the SERIES has slots,
    *   otherwise the flat spreadsheet.
    *
    * ⚑⚑ WHY DECLARED. The cascade asked FIVE different kinds of question to pick
    * between six panels: `heatmapActive` and `isHistogram` (id checks, each named
    * once), `config.axesKind === 'spider'` (a CLASS question), `config.id ===
    * 'bar'` (a TYPE question) and `hasSlots` (a SERIES question). Four of those
-   * are the same question — *which panel does this TYPE show?* — asked four ways,
+   * are the same question - *which panel does this TYPE show?* - asked four ways,
    * so a reader could not tell whether `config.id === 'bar'` was a legitimate
    * type question or the axesKind conflation the note above warns about. It was
    * legitimate; nothing in the code said so.
    *
    * ⚠️ `hasSlots` is deliberately NOT folded in. That one is genuinely a
-   * question about the SERIES, not the type — question 1 of the three above —
+   * question about the SERIES, not the type - question 1 of the three above -
    * and it varies at runtime. Declaring it would be exactly the conflation this
    * field exists to remove.
    */
   outputPanel?: 'heatmap' | 'bins' | 'spider' | 'bar';
 
   /**
-   * This type's datum is captured as a DRAG-BOX — two opposite corners of a
-   * rectangle — rather than as a click (v2.3).
+   * This type's datum is captured as a DRAG-BOX - two opposite corners of a
+   * rectangle - rather than as a click (v2.3).
    *
    * ⚑ BAR ONLY, AND THIS IS A MODEL DISTINCTION RATHER THAN A GESTURE
    * PREFERENCE. A bar's two points are OPPOSITE corners, because a bar's value
-   * is an EXTENT — base to top. A histogram bin's two points SHARE THE TOP EDGE,
+   * is an EXTENT - base to top. A histogram bin's two points SHARE THE TOP EDGE,
    * because *"a bin's height is one measurement, not an extent"* (the note on
    * `HISTOGRAM_AXES_CONFIG.autoExtractKind`). The drag-box exists to capture two
-   * opposite corners of a rectangle, so it does not model a bin at all — its
+   * opposite corners of a rectangle, so it does not model a bin at all - its
    * rubber band would be a degenerate flat strip, and the capture model was
    * settled with David on 2026-07-15 for reasons still recorded in
    * `algorithms/histogram.ts`: two top corners survive bins that do not tile,
@@ -816,7 +816,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   capturesAsBox?: boolean;
 
   /**
-   * Series in this type can be grouped into STACKS (v2.3) — the "Stack group"
+   * Series in this type can be grouped into STACKS (v2.3) - the "Stack group"
    * field on the series panel.
    *
    * ⚑ Bar only, and genuinely so: a stack is an ordered sequence of bar
@@ -834,7 +834,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   3. "Which AXES CLASS is this?" -> axesKind, NEVER id. Asked wherever the
    *      code narrows `this.axes` to call something only that class has
    *      (SpiderAxes.projectOnSpoke, BarAxes.calculateOrientation). `id` names the
-   *      GRAPH TYPE, and two types can share one class — Box Plot and Bar are both
+   *      GRAPH TYPE, and two types can share one class - Box Plot and Bar are both
    *      axesKind 'bar', which is the case that made this rule (checkpoint 107).
    *      An `id` check there silently excludes the second type on that class.
    * And what a graph type CAN DO belongs in a declared capability like the one
@@ -873,7 +873,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   categoryTicks?: { originStep: string };
   /**
-   * ⚑⚑ THE SECOND STAGE — what this type reads once its axes are calibrated.
+   * ⚑⚑ THE SECOND STAGE - what this type reads once its axes are calibrated.
    *
    * David, 2026-08-17: *"It is a two step process. First calibrate the axis,
    * then read the categorical marks based on these axis. The first one should
@@ -884,7 +884,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * its three instances diverged. `categoryTicks` was a declared capability read
    * in ONE place (`calibrationSession.ts`) and could not drift. The heatmap's
    * grid was `axesTypeId === HEATMAP_AXES_CONFIG.id` followed by **21**
-   * `heatmapActive` branches through `Workspace.tsx` — so the newest type became
+   * `heatmapActive` branches through `Workspace.tsx` - so the newest type became
    * the least declared one, and grew its own fold-out, its own ending and its own
    * folded line. That is the v2.2 audit's own finding (*"a graph type joined a
    * dropdown and joined nothing else"*) recurring one layer up: the registry was
@@ -902,16 +902,16 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * spider, pie, histogram all finish at Calibrate.
    */
   secondStage?: {
-    /** What the stage is called on the folded line — "Grid", "Categories". */
+    /** What the stage is called on the folded line - "Grid", "Categories". */
     label: string;
-    /** The button that ENDS it — "Read cells", "Read categories". */
+    /** The button that ENDS it - "Read cells", "Read categories". */
     ending: string;
   };
   /**
    * Rewrite the walk when an OPTION changes what a step is asking for.
    *
    * ⚑⚑ A heatmap's axes are each independently a CATEGORY or a VALUE, and the
-   * two need different questions — not different wording for the same question.
+   * two need different questions - not different wording for the same question.
    * A value axis asks "what number is this pixel worth?"; a category axis has no
    * number to give, so asking for one makes the tool demand a coordinate the
    * figure never printed. That is the tool inviting fabricated data, which is
@@ -929,7 +929,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *
    * ⚑ One pairing or several. An XY origin shares a single corner (X1 & Y1);
    * a heatmap shares BOTH corners of the plot box, because its two axes span
-   * exactly that box — David: *"it should allow both common X or Y"* — which
+   * exactly that box - David: *"it should allow both common X or Y"* - which
    * turns four calibration clicks into two on the commonest case there is.
    */
   commonOrigin?: CommonOriginPair | readonly CommonOriginPair[];
@@ -937,7 +937,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * The origin is ALWAYS shared for this type, so no checkbox offers it (B12).
    *
    * ⚑⚑ THREE POINTS ARE THE AFFINE MINIMUM. On a heatmap the two axes span
-   * exactly one rectangle, so its three corners carry the whole transform —
+   * exactly one rectangle, so its three corners carry the whole transform -
    * two points can never define one, and four can be placed INCONSISTENTLY,
    * which is what the parallel-axes guard exists for. The checkbox existed to
    * turn four clicks into three; when three is the only sensible walk, the
@@ -958,31 +958,31 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   defaultSlots?: readonly string[];
   /** Slot names DERIVED from the calibrated axes, for a type whose capture
    * shape only exists once the axes are known (v1.4, Spider: one slot per spoke,
-   * named after it). Applied on both entrances — a fresh calibration and a loaded
+   * named after it). Applied on both entrances - a fresh calibration and a loaded
    * project. See CalibrationSession.applyAxesDerivedSlots. */
   slotsFromAxes?(axes: A): readonly string[];
   /** Per-type calibration settings exposed to the user (checkpoint 68). WPD
    * has always offered these; we hardcoded them. Undefined = no settings. */
   options?: readonly AxesOption[];
-  /** Which axes CLASS this graph type builds — as distinct from `id`, which
+  /** Which axes CLASS this graph type builds - as distinct from `id`, which
    * names the graph *type* (checkpoint 73).
    *
    * Lets ui/ ask a **capability** question ("is this XY underneath?") instead of
    * an **identity** one ("is this the xy config?"). Histogram and Error Bars are
    * real XYAxes with identical steps and a working dataToPixel, but six sites
-   * tested `config.id === 'xy'` — so those charts silently lost Curve Fit, slope
+   * tested `config.id === 'xy'` - so those charts silently lost Curve Fit, slope
    * measurement, auto-straighten and click-to-edit, and were told "Calibrate an
    * XY chart first" on a chart the user had just calibrated as XY. */
   axesKind: 'xy' | 'bar' | 'polar' | 'ternary' | 'map' | 'ccr' | 'spider' | 'pie';
   /** True when fitting a polynomial through this type's points is meaningful
-   * (checkpoint 73). XY and Error Bars qualify — for the latter,
+   * (checkpoint 73). XY and Error Bars qualify - for the latter,
    * algorithms/curveFit.ts's getFitPoints already skips non-primary groups so a
    * fit runs through the Values, a branch written at checkpoint 27 that until
    * now could never execute. Histogram does NOT: its group 0 is "Bin start", so
    * a fit would run through bin corners, which means nothing. */
   supportsCurveFit?: boolean;
   /**
-   * True when the Geometry panel's readings — arc length, area, curvature —
+   * True when the Geometry panel's readings - arc length, area, curvature -
    * mean anything for this type's points (v2.3).
    *
    * ⚑⚑ THE TWIN OF `supportsCurveFit`, AND IT WAS THE ONE LEFT BEHIND. Curve Fit
@@ -992,15 +992,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * above, for the reason spelled out on `axesKind`: an IDENTITY question
    * ("is this the xy config?") silently excludes the next type on the same
    * class. Geometry kept `config.id === 'xy'` at both its sites. So the
-   * mechanism existed, one of the two siblings used it, and the other did not —
+   * mechanism existed, one of the two siblings used it, and the other did not -
    * the REUSE rule's exact shape, with the two halves of one feature sitting
    * four lines apart in the same file.
    *
-   * ⚑ XY ONLY, AND HISTOGRAM CANNOT JOIN IT — checked, not assumed. It looks
+   * ⚑ XY ONLY, AND HISTOGRAM CANNOT JOIN IT - checked, not assumed. It looks
    * like a candidate (a true `XYAxes` with a working `dataToPixel`, so the
    * overlay would draw), but `runGeometry` REFUSES any dataset with slots
-   * outright — *"tuples of independent measurements, not a single traced
-   * curve"* — and a histogram's dataset has slots (`HISTOGRAM_SLOTS`,
+   * outright - *"tuples of independent measurements, not a single traced
+   * curve"* - and a histogram's dataset has slots (`HISTOGRAM_SLOTS`,
    * `hasSlots() === true`). Declaring it here would show the panel and have it
    * report that refusal every time. The capability's value is that the question
    * became askable in ONE place instead of being buried in an `id` check at
@@ -1009,7 +1009,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   supportsGeometry?: boolean;
   /** Log scales this type offers, and which entered values may not be zero
    * (checkpoint 72). Required for any `options` entry that makes a scale
-   * logarithmic — see LogScaleGuard on why this is declared, not hardcoded. */
+   * logarithmic - see LogScaleGuard on why this is declared, not hardcoded. */
   logScaleGuards?: readonly LogScaleGuard[];
   /** Groups of steps whose pixels must all differ (checkpoint 72). Filters the
    * reuse-pixel buttons AND refuses a degenerate calibration reached by drag. */
@@ -1022,7 +1022,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * from the origin, else the radial scale is zero. See RadialDistinctGuard. */
   radialDistinctGuard?: RadialDistinctGuard;
   buildAxes(cal: Calibration, ctx: BuildAxesContext): BuildAxesResult<A>;
-  /** Inverse of buildAxes's `options` handling — reads a loaded axes instance's
+  /** Inverse of buildAxes's `options` handling - reads a loaded axes instance's
    * own state back into the option Record, so opening a project restores the
    * settings it was calibrated with rather than silently reverting to defaults.
    * The exact counterpart of extractGlobalValues; required for any config with
@@ -1105,11 +1105,11 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'skipRotation', label: 'Skip rotation', kind: 'checkbox', default: false },
   ],
   fixedSteps: [
-    // ⚑⚑ B12 — THE PROMPTS NAME THE FIGURE'S OWN STRUCTURE, not "the corner of
+    // ⚑⚑ B12 - THE PROMPTS NAME THE FIGURE'S OWN STRUCTURE, not "the corner of
     // the plot box" and never "where the axes meet". Two reasons, and both are
     // figures we have in hand:
     //   · under the CENTRED tick convention an axis's clicks land on band
-    //     CENTRES, inset from the box — so the first point is at the first
+    //     CENTRES, inset from the box - so the first point is at the first
     //     COLUMN's centre, not at any corner. Naming the two BANDS a point
     //     belongs to is true under either convention, and each axis's own
     //     clause (added by `stepsForOptions`) says whether that means an edge
@@ -1119,8 +1119,8 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     //     reader expects (B14).
     { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
-    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed —
-    // three-point calibration shares it — so this step asks only for the Y value
+    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed -
+    // three-point calibration shares it - so this step asks only for the Y value
     // that belongs to it. A step that arrived with no click and no explanation
     // would read as the walk having skipped something.
     { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
@@ -1141,7 +1141,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // than in core/ so the port stays faithful (see CLAUDE.md Step 1).
     const axes = new XYAxes();
     const ok = axes.calibrate(cal, isLogX, isLogY, optionBool(ctx.options, 'skipRotation'));
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
   },
   extractOptions(axes) {
@@ -1230,22 +1230,22 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
 /** A bar's two captured opposite corners, in drag order (v2.0). Order carries
  * no meaning for an anchored bar (derivedTupleValue compares each corner's
  * VALUE to the declared baseline, never the slot position) but IS the signal
- * for a floating/offset bar's direction — see derivedTupleValue below. */
+ * for a floating/offset bar's direction - see derivedTupleValue below. */
 /**
  * Which calibration points a heatmap's colour key occupies, after the four x/y
  * points. Named rather than written as literals because four of the eight
- * indices in this config mean nothing to `XYAxes` and everything to the key —
+ * indices in this config mean nothing to `XYAxes` and everything to the key -
  * an off-by-one here reads the wrong click as a labelled tick, and every value
  * in the figure would be wrong by a constant nobody could see.
  */
 export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7 } as const;
 
 /**
- * Heatmap (v2.2) — x and y on ordinary axes, and the VALUE on a colour key.
+ * Heatmap (v2.2) - x and y on ordinary axes, and the VALUE on a colour key.
  *
  * ⚑⚑ THE COLOUR BAR IS AN AXIS, WHICH IS WHY THIS TYPE IS MOSTLY DECLARATION.
  * A heatmap's x and y are read from pixel positions exactly as XY's are, so it
- * calibrates `XYAxes` and adds nothing to it — the same call Histogram makes,
+ * calibrates `XYAxes` and adds nothing to it - the same call Histogram makes,
  * for the same reason (`axesKind` is the class, `id` is the graph type). What is
  * genuinely new is the third axis: four more clicks that say where the coloured
  * strip runs and what two labelled positions on it are worth. See
@@ -1261,13 +1261,13 @@ export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7
  * the ramp IS, and two more say what it is WORTH.
  *
  * ⚑ WHY THE VALUE STEPS CARRY NO VALUE FIELDS ON THE STRIP ENDS. A click with
- * nothing to type is not a wasted step — it is the difference between recording
+ * nothing to type is not a wasted step - it is the difference between recording
  * where the ink is and inferring it. Polar's origin is the same shape.
  *
  * ⚑ IT IS IN THE GRAPH-TYPE LIST NOW, and the order it was done in is the point.
  * This config shipped one release UNLISTED on purpose, because a type that can
  * calibrate and then do nothing is the failure this project's keystone persona
- * exists to catch. It was listed only once capture existed behind it — a grid of
+ * exists to catch. It was listed only once capture existed behind it - a grid of
  * adjustable dividers, the 2D generalisation of v2.1's category ticks. A test
  * asserts the picker's contents, so the gate is a decision rather than a memory.
  */
@@ -1278,7 +1278,7 @@ export const HEATMAP_KEY_POINTS = { stripFrom: 4, stripTo: 5, tickA: 6, tickB: 7
  * ⚑⚑ THE USER TYPES A COUNT AND THE TOOL DERIVES THE FRAME. On a category axis
  * the two clicks say where the categories start and end, and the count says how
  * many there are; 0…N then follows. Nobody typed a coordinate, because the
- * figure printed none — which is the whole point. On a value axis nothing is
+ * figure printed none - which is the whole point. On a value axis nothing is
  * substituted and the calibration passes through untouched.
  *
  * ⚑ A SUBSTITUTED COPY, not a mutated original: the axes carries whatever
@@ -1302,17 +1302,17 @@ function heatmapIndexFrame(
   const columns = xCategory ? count(1, 'dz') : NaN;
   const rows = yCategory ? count(3, 'dz') : NaN;
   if (xCategory && !(Number.isInteger(columns) && columns >= 1)) {
-    return 'Enter how many COLUMNS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
+    return 'Enter how many COLUMNS the figure has - a whole number, counted off the figure (the categories themselves are named later).';
   }
   if (yCategory && !(Number.isInteger(rows) && rows >= 1)) {
-    return 'Enter how many ROWS the figure has — a whole number, counted off the figure (the categories themselves are named later).';
+    return 'Enter how many ROWS the figure has - a whole number, counted off the figure (the categories themselves are named later).';
   }
   // ⚑⚑ A CENTRED TICK IS HALF A BAND INSIDE THE EDGE, and that is the entire
   // difference between the two conventions. Clicking the first and last band
   // CENTRES of an N-band axis marks 0.5 and N-0.5 in ordinal space; clicking the
   // outer edges marks 0 and N. The axes is scaled from whichever pair was
   // actually clicked, so the figure's own edges still land on 0 and N either
-  // way — the user is never asked to point at something the figure does not
+  // way - the user is never asked to point at something the figure does not
   // print. Same relationship `core/categoryAxis.ts` encodes between a centred
   // tick and its band's dividers.
   const span = (count: number, centred: boolean): [string, string] =>
@@ -1330,7 +1330,7 @@ function heatmapIndexFrame(
     if (yCategory && i === 3) dy = yHi;
     // ⚑⚑ THE THIRD SLOT RIDES ALONG. This rebuild used to copy dx and dy only,
     // which silently dropped every axis's declared BAND COUNT on the way to the
-    // axes — bounds arrived intact and the grid came back as one cell, the same
+    // axes - bounds arrived intact and the grid came back as one cell, the same
     // symptom as having no count at all. A copy that omits a slot is a copy that
     // will be wrong the moment the model grows one.
     next.addPoint(p.px, p.py, dx, dy, (p as { dz?: number | string }).dz ?? '');
@@ -1350,7 +1350,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   dataDim: 2,
   // ⚑ THREE SLOTS, so each axis's second point can carry BOTH its coordinate
   // and its band count. `dz` is a slot, not a Z axis (Spider stores an axis
-  // NAME in it) — here it holds how many columns / rows the figure has, which
+  // NAME in it) - here it holds how many columns / rows the figure has, which
   // is the one number a person reads straight off a heatmap whichever way its
   // axes are indexed.
   calibrationDimensions: 3,
@@ -1365,22 +1365,22 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   options: [
     // ⚑⚑ THE QUESTION THE WHOLE TYPE TURNS ON, and it is asked FIRST because it
     // changes the walk. A heatmap's x and y are each independently a CATEGORY
-    // or a VALUE — gene × sample, treatment × time, field × field — and all
+    // or a VALUE - gene × sample, treatment × time, field × field - and all
     // four combinations are published. Without this the type could only be
     // calibrated as value × value, so a categorical figure forced the user to
     // invent numeric coordinates it never printed: the tool demanding
     // fabricated data, which is tenet 9 broken by the prompt itself.
-    // ⚑⚑ RADIOS, VIA THE EXISTING `choice` KIND — not a new option type, and not
+    // ⚑⚑ RADIOS, VIA THE EXISTING `choice` KIND - not a new option type, and not
     // a checkbox. A checkbox names ONE of two states: unchecked "X is
     // categories" never says the axis IS a value axis, you infer it from
     // absence. For a choice that changes what the walk ASKS YOU TO CLICK, the
-    // current state has to be readable rather than inferable — and the default
+    // current state has to be readable rather than inferable - and the default
     // becomes SHOWN and overrulable, which is the distinction tenet 9 already
     // draws between a default and an invention. David: *"radio buttons... so
     // that you can clearly see them, and select only one."*
     //
     // ⚑ The two are INDEPENDENT, one group each. An axis is Values or
-    // Categories; but BOTH axes may be Categories — gene × sample, confusion
+    // Categories; but BOTH axes may be Categories - gene × sample, confusion
     // matrices, correlation grids. A single group choosing WHICH axis is
     // categorical would look tidier and would silently delete half the type.
     { key: 'xIsCategory', label: '', group: 'X axis', kind: 'choice', default: 'false',
@@ -1395,23 +1395,23 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // and it is the same `TickConvention` v2.1's category ticks already carry:
     // matplotlib and ggplot print a tick under each category, Excel prints one
     // between them. Asking for the outer EDGE of the first band on a figure that
-    // marks only centres is asking the user to eyeball something unprinted —
+    // marks only centres is asking the user to eyeball something unprinted -
     // when the thing they can actually see is the tick itself.
     // ⚑⚑ ASKED OF BOTH AXIS KINDS. This was declared `onlyWhen: 'xIsCategory'`,
     // which is the SAME wrong branch that gave a measured axis no grid: a value
-    // axis has bands too (case A1), so it has the same question — were the two
+    // axis has bands too (case A1), so it has the same question - were the two
     // clicks band CENTRES or band BOUNDARIES? David: *"we want to make it
     // VISUALLY coherent for the user, when they are setting value tick markers
     // also?"*
     // ⚑ IT IS A WRONG READING, NOT A PREFERENCE. Clicking x=0 and x=12 on a
     // seven-column figure puts the boundaries at 0…12 under one convention and
     // at −1…13 under the other; every cell's recorded bounds move and nothing on
-    // screen looks wrong. Neither is rare — matplotlib's `imshow` labels cell
+    // screen looks wrong. Neither is rare - matplotlib's `imshow` labels cell
     // centres, `pcolormesh` labels boundaries.
     // ⚑ ORDER IS THE LAYOUT inside a group: everything before the first
     // `newRow` shares the axis's own line, so each axis reads "kind, then log"
     // with its tick convention hanging underneath.
-    // ⚑ The same shape, so the same control — and it is the question v2.1's
+    // ⚑ The same shape, so the same control - and it is the question v2.1's
     // category ticks already render as two radios, with the reason written on
     // that control: *"both readings have to be visible without a click, because
     // the user is being asked which one their figure prints."*
@@ -1419,14 +1419,14 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
     { key: 'yTicksCentred', label: 'ticks at', group: 'Y axis', newRow: true, kind: 'choice', default: 'false',
       choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
-    // ⚑⚑ THE THIRD AXIS GETS ITS OWN ROW, with the word COLOUR on it — David:
+    // ⚑⚑ THE THIRD AXIS GETS ITS OWN ROW, with the word COLOUR on it - David:
     // *"that also captures the word colour on that row, which was what I was
     // after."* A log colour scale is the ordinary log axis, so it reads exactly
     // as the other two do. The row is short today; it is where the key's own
     // Values/Categories goes when a discrete key stops being refused.
     // ⚑⚑ THE THIRD AXIS IS AN AXIS, so it is asked the same question as the
-    // other two. A discrete key — significance bands, cluster IDs, land cover,
-    // oncoprint mutation types — maps a colour to a LABEL rather than a number,
+    // other two. A discrete key - significance bands, cluster IDs, land cover,
+    // oncoprint mutation types - maps a colour to a LABEL rather than a number,
     // and those figures exist in quantity. v2.2 REFUSES them, but the refusal
     // now comes from a declared axis kind the user can see and choose, not from
     // a branch buried in the sampler. Nothing here is unreachable: picking
@@ -1440,14 +1440,14 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   /**
    * A category axis asks for its EDGES and a COUNT, never for coordinates.
    *
-   * ⚑ The first edge takes NO typed value at all — the same shape as the colour
+   * ⚑ The first edge takes NO typed value at all - the same shape as the colour
    * key's strip ends, and for the same reason: a click with nothing to type is
    * the difference between recording where the ink is and inferring it. The
    * second edge carries the one number a person can actually read off the
    * figure, which is HOW MANY categories there are. Everything else about the
    * axis follows from those two clicks, exactly as v2.1's category ticks do.
    *
-   * ⚑ The count is a DECLARATION, not a measurement — the user counts what the
+   * ⚑ The count is a DECLARATION, not a measurement - the user counts what the
    * figure prints. The index positions it implies (0…N) are ordinals, not
    * lengths, and the export says which axes are categorical so nobody reads
    * them as millimetres.
@@ -1458,7 +1458,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
      *
      * ⚑⚑ ONE CLAUSE PER AXIS, and the prompts are built by joining two of them.
      * The four frame steps are the three corners of the rectangle the two axes
-     * describe, so EVERY one of them is located by BOTH axes at once — and
+     * describe, so EVERY one of them is located by BOTH axes at once - and
      * three-point calibration shares the first pixel, which makes the vertical
      * position of the "x" click part of the Y calibration. A prompt that named
      * one axis only ("Click the outer edge of the FIRST column") left the other
@@ -1474,13 +1474,13 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       const which = end === 'first' ? 'FIRST' : 'LAST';
       const centred = optionBool(options, axis === 'x' ? 'xTicksCentred' : 'yTicksCentred');
       // ⚑ Asked of BOTH axis kinds. A value axis has bands too (case A1), so it
-      // has the same question — were the two clicks band CENTRES or band
+      // has the same question - were the two clicks band CENTRES or band
       // BOUNDARIES? Clicking x=0 and x=12 on a seven-column figure puts the
       // boundaries at 0…12 under one reading and −1…13 under the other; every
       // cell's bounds move and nothing on screen looks wrong.
       // ⚑ BOTH halves are emphasised, because both are reading-critical and they
       // are different questions: WHICH band (which corner am I at) and WHERE on
-      // it (edge or centre — a wrong answer moves every recorded boundary by
+      // it (edge or centre - a wrong answer moves every recorded boundary by
       // half a band, with nothing on screen looking wrong afterwards).
       return centred
         ? `the CENTRE of the ${which} ${noun}`
@@ -1492,7 +1492,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       const countNoun = axis === 'x' ? 'COLUMNS' : 'ROWS';
       const coord = axis.toUpperCase();
       if (end === 'first') {
-        // ⚑ A category edge takes NO typed value at all — the same shape as the
+        // ⚑ A category edge takes NO typed value at all - the same shape as the
         // colour key's strip ends, and for the same reason: a click with nothing
         // to type is the difference between recording where the ink is and
         // inferring it.
@@ -1514,7 +1514,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
         label: step.key === 'y1' ? `${label} (Y)` : label,
         prompt:
           step.key === 'y1'
-            ? `The same corner again — enter the Y value where ${clause('x', 'first')} meets ${clause('y', 'first')}`
+            ? `The same corner again - enter the Y value where ${clause('x', 'first')} meets ${clause('y', 'first')}`
             : `Click where ${clause('x', x)} meets ${clause('y', y)}${asks(axis, end)}`,
         valueFields: categorical
           ? end === 'first'
@@ -1525,8 +1525,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     };
     // ⚑⚑ A LOG KEY IS CALIBRATED FROM PRINTED TICKS, NOT FROM THE STRIP'S ENDS,
     // and the prompt has to say so before the click rather than after it. The
-    // ends of a colour ramp usually carry no printed number — on the weld
-    // sample the strip runs 60…780 while the ticks read 100…700 — so clicking
+    // ends of a colour ramp usually carry no printed number - on the weld
+    // sample the strip runs 60…780 while the ticks read 100…700 - so clicking
     // an end and typing what looks like the start of the scale is the natural
     // move. On a LINEAR key beginning at 0 it is often even right. On a log key
     // it can never be: the scale never reaches zero. David hit exactly that.
@@ -1534,7 +1534,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       ...step,
       prompt:
         step.key === 'kv1'
-          ? 'Click a LABELLED tick on the colour key — e.g. 10¹ — and enter the number printed there. A log key never reaches zero, so the strip’s ends usually carry no usable number.'
+          ? 'Click a LABELLED tick on the colour key - e.g. 10¹ - and enter the number printed there. A log key never reaches zero, so the strip’s ends usually carry no usable number.'
           : 'Click a SECOND labelled tick on the colour key and enter its number. Both must be positive: a log scale cannot pass through zero.',
     });
     // ⚑⚑ THE THREE CORNERS, NAMED ONCE. x1 and y1 are the SAME pixel (B12's
@@ -1554,19 +1554,19 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       return step;
     });
   },
-  // ⚑⚑ ONE SHARED CORNER, NOT TWO — AND THE SECOND ONE WAS GEOMETRICALLY
+  // ⚑⚑ ONE SHARED CORNER, NOT TWO - AND THE SECOND ONE WAS GEOMETRICALLY
   // IMPOSSIBLE. v2.2 declared `[XY_COMMON_ORIGIN, { from: 'x2', to: 'y2' }]` on
   // the reasoning that a heatmap's axes span exactly the plot box, so its two
   // opposite corners carry all four x/y points. They cannot. Sharing BOTH pairs
   // leaves the calibration with TWO distinct pixels, and two points cannot
   // define a 2-D transform: the Y axis vector becomes identical to the X axis
   // vector, so the axes are parallel by construction and `checkValues` refuses
-  // the whole calibration — at whatever corners the user clicks.
+  // the whole calibration - at whatever corners the user clicks.
   //
   // ⚑ David saw it from the other side on day one: *"the text for shared origin
   // is misleading or incorrect"* and *"we are missing a data point out."* A data
   // point IS missing. The diagnosis that the prompts merely failed to say
-  // "click the opposite corner" was wrong — the opposite corner fails too.
+  // "click the opposite corner" was wrong - the opposite corner fails too.
   //
   // ⚑⚑ AND BOTH TESTS THAT "VERIFIED" IT STOPPED AT 4/8 AND ASSERTED THE WALK
   // HAD MOVED ON. Neither ever called `runCalibration`, so they proved the walk
@@ -1576,14 +1576,14 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   // The ORIGIN pairing stays: x1 = y1 leaves three distinct pixels, which is the
   // long-standing shared-origin case every XY chart has had.
   commonOrigin: XY_COMMON_ORIGIN,
-  // ⚑⚑ B12 — AND IT IS NO LONGER A CHECKBOX. Three points are the affine
+  // ⚑⚑ B12 - AND IT IS NO LONGER A CHECKBOX. Three points are the affine
   // minimum, so on a heatmap they are simply THE WALK: the checkbox could only
   // ever be used to ask for a fourth click that adds nothing and can disagree
-  // with the other three. David: *"Why not?"* to doing this in v2.2 — and it is
+  // with the other three. David: *"Why not?"* to doing this in v2.2 - and it is
   // cheapest now, because after release every stored heatmap carries a walk that
   // no longer exists.
   // ⚠️ THE PARALLEL-AXES GUARD BELOW STAYS. Three points cannot be
-  // INCONSISTENT, but they CAN BE COLLINEAR — click the three "corners" along
+  // INCONSISTENT, but they CAN BE COLLINEAR - click the three "corners" along
   // one line and the x vector and the y vector point the same way, so there is
   // no 2-D transform. That is the last degeneracy three points still allow, and
   // the plan's claim that this trigger could be removed was wrong.
@@ -1595,13 +1595,13 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   distinctPixelSteps: [
     ['x1', 'x2'],
     ['y1', 'y2'],
-    // The key's two ends are a line, so they may not be the same pixel either —
+    // The key's two ends are a line, so they may not be the same pixel either -
     // and `checkValues` below adds the stronger requirement that they be far
     // enough apart to sample at all.
     ['k1', 'k2'],
   ],
   parallelAxisGuard: { v1: ['x1', 'x2'], v2: ['y1', 'y2'], label: 'X and Y' },
-  // ⚑⚑ SHORT LABELS, LONG PROMPTS — and they are two different jobs at two
+  // ⚑⚑ SHORT LABELS, LONG PROMPTS - and they are two different jobs at two
   // different sites. The LABEL is drawn on the canvas beside its marker; the
   // PROMPT is a line of text on the calibration card. B12 replaced `X1`/`Y1`
   // with `First column × first row`, and David's screenshot of the built app
@@ -1619,26 +1619,26 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     { key: 'x1', label: 'C1 × R1', color: '#e0a458', prompt: 'Click where the FIRST column meets the FIRST row, and enter the X value there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     // ⚑⚑ THE COORDINATE AND THE BAND COUNT, on the same click. A heatmap is a
     // MATRIX however its axes are indexed, so a MEASURED axis has columns
-    // exactly as a named one does — David: *"we need to have column and row
+    // exactly as a named one does - David: *"we need to have column and row
     // number markers even if they are not categories."* The count went in `dz`
     // for BOTH kinds rather than `dx` for one and nowhere for the other: `dx`
     // now always means the coordinate or nothing, and the two kinds answer
     // "how many bands" into one slot instead of two.
     { key: 'x2', label: 'Cn × R1', color: '#e0a458', prompt: 'Click where the LAST column meets the FIRST row, then enter its X value and how many COLUMNS the figure has', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }, { key: 'x2n', label: 'Columns', field: 'dz' }] },
-    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed —
-    // three-point calibration shares it — so this step asks only for the Y value
+    // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed -
+    // three-point calibration shares it - so this step asks only for the Y value
     // that belongs to it. A step arriving with no click and no explanation would
     // read as the walk having skipped something.
-    { key: 'y1', label: 'C1 × R1 (Y)', color: '#5fb4e0', prompt: 'The same corner again — enter the Y value where the FIRST column meets the FIRST row', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
+    { key: 'y1', label: 'C1 × R1 (Y)', color: '#5fb4e0', prompt: 'The same corner again - enter the Y value where the FIRST column meets the FIRST row', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
     { key: 'y2', label: 'C1 × Rn', color: '#5fb4e0', prompt: 'Click where the FIRST column meets the LAST row, then enter its Y value and how many ROWS the figure has', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }, { key: 'y2n', label: 'Rows', field: 'dz' }] },
-    { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Drag across the colour key from one corner to the opposite one — or click one corner now and the other next', valueFields: [], labelBelow: true },
+    { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Drag across the colour key from one corner to the opposite one - or click one corner now and the other next', valueFields: [], labelBelow: true },
     { key: 'k2', label: 'Opposite corner', color: '#a87fd4', prompt: 'Click the OPPOSITE corner of the colour key', valueFields: [], labelBelow: true },
     { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the number printed there', valueFields: [{ key: 'kv1', label: 'Value', field: 'dy' }] },
     { key: 'kv2', label: 'Key value 2', color: '#d47fa8', prompt: 'Click a second labelled tick on the colour key and enter its number', valueFields: [{ key: 'kv2', label: 'Value', field: 'dy' }] },
   ],
   /**
    * ⚑ The half of the colour key that can be checked WITHOUT the image, checked
-   * here so it fires on both entrances — the click path and a loaded file. The
+   * here so it fires on both entrances - the click path and a loaded file. The
    * other half (is there actually a ramp along that line?) needs pixels and is
    * refused by `sampleColorBar` when the strip is read, which the load path
    * reaches too because a project file stores the key's GEOMETRY and re-samples
@@ -1646,7 +1646,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
    */
   checkValues(cal, options) {
     // ⚑ The category COUNT, checked on the interactive path as well as in
-    // `buildAxes` — the same rule at both entrances. A count of 0, 2.5 or "many"
+    // `buildAxes` - the same rule at both entrances. A count of 0, 2.5 or "many"
     // would otherwise reach the axes as a frame width and produce a grid with a
     // fractional number of bands.
     const countProblem = (index: number, noun: string): string | null => {
@@ -1655,11 +1655,11 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       const n = parseFloat(raw);
       return Number.isInteger(n) && n >= 1
         ? null
-        : `The number of ${noun} must be a whole number, 1 or more — count them off the figure. Their names are typed later, in the Heatmap card.`;
+        : `The number of ${noun} must be a whole number, 1 or more - count them off the figure. Their names are typed later, in the Heatmap card.`;
     };
     // ⚑⚑ CHECKED FOR BOTH AXIS KINDS, from one slot. A measured axis declares
-    // how many columns the figure has exactly as a named one does — a heatmap
-    // is a matrix either way — so the rule cannot be gated on `xIsCategory`.
+    // how many columns the figure has exactly as a named one does - a heatmap
+    // is a matrix either way - so the rule cannot be gated on `xIsCategory`.
     // Gating it there is the same mistake that left a value axis with no grid.
     for (const [index, noun] of [[1, 'columns'], [3, 'rows']] as const) {
       const problem = countProblem(index, noun);
@@ -1667,7 +1667,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     }
     // ⚑ A CENTRED CLICK NEEDS A BAND TO BE THE CENTRE OF, and two of them need
     // two bands. With one band the two clicks are the same centre, so the half-
-    // band the grid extends by is (hi - lo) / 0 — an infinite plot box reported
+    // band the grid extends by is (hi - lo) / 0 - an infinite plot box reported
     // as a successful calibration.
     for (const [index, noun, option] of [
       [1, 'columns', 'xTicksCentred'],
@@ -1678,11 +1678,11 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       if (raw.trim() === '') continue;
       const n = parseFloat(raw);
       if (Number.isInteger(n) && n < 2) {
-        return `Ticks at band centres need at least two ${noun} — with one, both clicks would be the same centre. Click the outer edges instead, or say how many ${noun} the figure really has.`;
+        return `Ticks at band centres need at least two ${noun} - with one, both clicks would be the same centre. Click the outer edges instead, or say how many ${noun} the figure really has.`;
       }
     }
     if (optionBool(options, 'keyIsCategory')) {
-      return 'A colour key drawn as discrete bands identifies a BAND — a range — not a value, and PlotTracer will not report a number the figure does not contain. v2.2 reads continuous ramps only: read these cells against the key by eye, or set the colour key back to Values if its ramp is continuous.';
+      return 'A colour key drawn as discrete bands identifies a BAND - a range - not a value, and PlotTracer will not report a number the figure does not contain. v2.2 reads continuous ramps only: read these cells against the key by eye, or set the colour key back to Values if its ramp is continuous.';
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);
@@ -1691,7 +1691,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       to !== null &&
       checkStripGeometry({ x: from.px, y: from.py }, { x: to.px, y: to.py }) !== null
     ) {
-      return 'The colour key’s two ends are too close together to read a ramp between them — click where the coloured strip begins and where it ends, along its length, not across its width.';
+      return 'The colour key’s two ends are too close together to read a ramp between them - click where the coloured strip begins and where it ends, along its length, not across its width.';
     }
     // Only once BOTH numbers are in, matching every other config's value check:
     // a half-filled step is an unfinished calibration, and the walk already says
@@ -1701,19 +1701,19 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
     switch (checkColorScaleValues(a, b, optionBool(options, 'isLogValue'))) {
       case 'ticks-equal-value':
-        return 'The colour key’s two labelled ticks have the same value — they must differ, or the key has no scale and every cell in the figure reads the same number.';
+        return 'The colour key’s two labelled ticks have the same value - they must differ, or the key has no scale and every cell in the figure reads the same number.';
       case 'log-needs-positive':
-        return 'A log colour scale cannot pass through zero or go negative — enter positive values (e.g. 1 and 100).';
+        return 'A log colour scale cannot pass through zero or go negative - enter positive values (e.g. 1 and 100).';
       default:
         return null;
     }
   },
   buildAxes(cal, ctx) {
-    // The x/y frame is the FIRST FOUR points and only those — `XYAxes`'s own
+    // The x/y frame is the FIRST FOUR points and only those - `XYAxes`'s own
     // maths reads them by index and never looks further.
     for (let i = 0; i < 4; i++) {
       if (cal.getPoint(i) === null) {
-        return { error: 'Calibration is incomplete — place all four X and Y points.' };
+        return { error: 'Calibration is incomplete - place all four X and Y points.' };
       }
     }
     const xCategory = optionBool(ctx.options, 'xIsCategory');
@@ -1726,7 +1726,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // ⚑⚑ THE WHOLE EIGHT-POINT CALIBRATION GOES IN, not a four-point copy of
     // its frame, and that is what makes the colour key SURVIVE A SAVE. An axes
     // instance carries its own `calibration` into the project file, and
-    // `loadCalibrated` rebuilds the placed points from it BY STEP INDEX — so
+    // `loadCalibrated` rebuilds the placed points from it BY STEP INDEX - so
     // handing the axes only the frame means the key's four clicks are written
     // nowhere, and a reopened heatmap has a calibration it cannot read a single
     // cell through. The first version here did exactly that.
@@ -1738,8 +1738,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       !yCategory && optionBool(ctx.options, 'isLogY'),
       optionBool(ctx.options, 'skipRotation')
     );
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
-    // ⚑⚑ WITHOUT THE GRAPH-TYPE STAMP A SAVED HEATMAP REOPENS AS AN XY CHART —
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
+    // ⚑⚑ WITHOUT THE GRAPH-TYPE STAMP A SAVED HEATMAP REOPENS AS AN XY CHART -
     // its cells gone, its key clicks read as stray axis points. Every type that
     // shares an axes class with another must say which one it is (Histogram,
     // categorical Line, Box Plot and Spider all do); this one shares `XYAxes`
@@ -1754,8 +1754,8 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       [GRAPH_TYPE_METADATA_KEY]: 'heatmap',
       heatmapLogValue: String(optionBool(ctx.options, 'isLogValue')),
       // ⚑⚑ WHICH AXES ARE ORDINALS. Without this a reopened project cannot tell
-      // a category axis from a value axis — its coordinates are 0,1,2… either
-      // way — so the export would present counted positions as measured ones
+      // a category axis from a value axis - its coordinates are 0,1,2… either
+      // way - so the export would present counted positions as measured ones
       // and the walk would come back asking for coordinates again.
       heatmapXKind: xCategory ? 'category' : 'value',
       heatmapYKind: yCategory ? 'category' : 'value',
@@ -1769,7 +1769,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   },
   /**
    * ⚑ `isLogValue` comes back out of the axes METADATA, where `buildAxes` put
-   * it — the same round trip pie's tilt makes, and for the same reason. Without
+   * it - the same round trip pie's tilt makes, and for the same reason. Without
    * it a reopened project would silently revert to a linear colour key and
    * change every value in the figure.
    */
@@ -1808,10 +1808,10 @@ function barCalibrationValueCheck(
   const p2 = parseFloat(String(cal.getPoint(1)?.dy ?? ''));
   if (Number.isFinite(p1) && Number.isFinite(p2)) {
     if (p1 === p2) {
-      return 'The two calibration points have the same value — they must be different, or the calibration has no scale.';
+      return 'The two calibration points have the same value - they must be different, or the calibration has no scale.';
     }
     if (optionBool(options, 'isLog') && (!(p1 > 0) || !(p2 > 0))) {
-      return 'A log value scale cannot pass through zero or go negative — enter positive values (e.g. 1 and 100).';
+      return 'A log value scale cannot pass through zero or go negative - enter positive values (e.g. 1 and 100).';
     }
   }
   return null;
@@ -1851,7 +1851,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   defaultSlots: BAR_INTERVAL_SLOTS,
   categoryTicks: { originStep: 'p1' },
   // ⚑ Stage 2: the category ticks this type marks after its value axis
-  // is calibrated — the same shape the heatmap's grid has.
+  // is calibrated - the same shape the heatmap's grid has.
   secondStage: { label: 'Categories', ending: 'Read categories' },
   tupleNoun: 'bar',
   tupleMembers: 'object',
@@ -1927,7 +1927,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     axes.setBaseline(optionBool(ctx.options, 'hasBaseline'), parseFloat(ctx.options.baselineValue ?? '0'));
     return { axes };
   },
@@ -1953,7 +1953,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
 // (dots), not bars; each point's Y is read from the value calibration and its X
 // is the CATEGORY IT SITS IN, read off the marked category axis.
 //
-// ⚠️⚠️ IT USED TO BE AN ORDINAL, and that was this type's tenet-11 failure — the
+// ⚠️⚠️ IT USED TO BE AN ORDINAL, and that was this type's tenet-11 failure - the
 // only one of the twelve (CLAUDE.md, 2026-08-14): *"it stores a value and
 // DERIVES its category from left-to-right capture order, so a library handed our
 // record could not place the points."* Measured before the fix, two series whose
@@ -1979,7 +1979,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   axesKind: 'bar',
   autoExtractKind: 'none',
   autoExtractRefusal:
-    'Auto-extract has nothing to trace here — each category is one click, not a curve or a blob. Place points by hand.',
+    'Auto-extract has nothing to trace here - each category is one click, not a curve or a blob. Place points by hand.',
   dataDim: 1,
   valueLabels: ['Value'],
   globalFields: [],
@@ -1994,11 +1994,11 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   // read from.
   //
   // ⚑ `v1` rather than `p1` because a Line's calibration is TWO points on the
-  // VALUE axis and nothing else — there is no origin corner. `v1` is the click
+  // VALUE axis and nothing else - there is no origin corner. `v1` is the click
   // on the Y axis, which IS the left edge of the category axis on an ordinary
   // upright figure, so the first edge comes for free exactly as Bar's does.
   categoryTicks: { originStep: 'v1' },
-  // Stage 2: mark the categories once the value axis is calibrated — the same
+  // Stage 2: mark the categories once the value axis is calibrated - the same
   // shape Bar, Box Plot and the heatmap's grid have.
   secondStage: { label: 'Categories', ending: 'Read categories' },
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
@@ -2015,7 +2015,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
     // horizontal -- the opposite orientation to a "horizontal bars" chart.
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), false);
-    if (!ok) return { error: 'Calibration failed — check the entered values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered values are valid numbers.' };
     axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'categorical' });
     return { axes };
   },
@@ -2047,7 +2047,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   exportShape: 'tuples',
   autoExtractKind: 'none',
   autoExtractRefusal:
-    'Auto-extract can’t find a box’s five values from its colour — place its Min/Q1/Median/Q3/Max points by hand.',
+    'Auto-extract can’t find a box’s five values from its colour - place its Min/Q1/Median/Q3/Max points by hand.',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
@@ -2055,7 +2055,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // Shares Bar's fixedSteps (below), so the same seed step.
   categoryTicks: { originStep: 'p1' },
   // ⚑ Stage 2: the category ticks this type marks after its value axis
-  // is calibrated — the same shape the heatmap's grid has.
+  // is calibrated - the same shape the heatmap's grid has.
   secondStage: { label: 'Categories', ending: 'Read categories' },
   tupleNoun: 'box',
   // Shares Bar's calibration and guards -- reusing the arrays keeps them from
@@ -2089,7 +2089,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'boxplot' });
     return { axes };
   },
@@ -2170,7 +2170,7 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       optionBool(ctx.options, 'isClockwise'),
       optionBool(ctx.options, 'isLogR')
     );
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
   },
   extractOptions(axes) {
@@ -2208,7 +2208,7 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
   buildAxes(cal, ctx) {
     const axes = new TernaryAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isRange100'), optionBool(ctx.options, 'isNormal'));
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
   },
   extractOptions(axes) {
@@ -2267,10 +2267,10 @@ export const MAP_AXES_CONFIG: AxesTypeConfig<MapAxes> = {
     if (raw === '') return null; // an unfilled field is the step's own business
     const length = parseFloat(raw);
     if (!Number.isFinite(length)) {
-      return 'The reference length must be a number — enter the real-world length of the line you drew.';
+      return 'The reference length must be a number - enter the real-world length of the line you drew.';
     }
     if (length <= 0) {
-      return 'The reference length must be greater than zero — a scale of zero makes every measurement read 0.';
+      return 'The reference length must be greater than zero - a scale of zero makes every measurement read 0.';
     }
     return null;
   },
@@ -2287,7 +2287,7 @@ export const MAP_AXES_CONFIG: AxesTypeConfig<MapAxes> = {
       (ctx.options['origin'] ?? 'bottom-left') as 'top-left' | 'bottom-left',
       ctx.imageHeight
     );
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid numbers.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
   },
   extractOptions(axes) {
@@ -2396,7 +2396,7 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
       (ctx.options['rotationTime'] ?? 'week') as RotationTime,
       (ctx.options['rotationDirection'] ?? 'anticlockwise') as RotationDirection
     );
-    if (!ok) return { error: 'Calibration failed — check the entered data values are valid.' };
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid.' };
     return { axes };
   },
   extractOptions(axes) {
@@ -2411,18 +2411,18 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
 };
 
 /**
- * Spider / radar charts (v1.4) — the first calibration whose LENGTH the figure
+ * Spider / radar charts (v1.4) - the first calibration whose LENGTH the figure
  * decides. See core/axes/spider.ts for the model and why it is not Polar.
  *
  * One origin click, then per spoke one click on a known point (which supplies that
  * ray's direction AND its distance in a single measurement) plus that point's value
  * and the axis's printed name. Nothing infers a spoke from its neighbours, so
- * unequal angles and per-axis ranges work by construction — which is exactly what
+ * unequal angles and per-axis ranges work by construction - which is exactly what
  * the only prior art, ChartSense (CHI 2017), assumes away.
  *
  * ⚑ ORDER IS GUIDANCE, NOT A RULE. The prompt asks for the next axis CLOCKWISE so
  * the user doesn't lose their place going round, but nothing in the model depends
- * on the order and nothing enforces it — each spoke carries its own measured
+ * on the order and nothing enforces it - each spoke carries its own measured
  * direction. Enforcing it would be an invisible precondition; omitting the guidance
  * would leave a user counting spokes in their head.
  */
@@ -2447,14 +2447,14 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
   // so the FILE keeps one copy per axis and a later per-axis override is a UI
   // change with no migration. The simplification lives in the workflow, not in the
   // record.
-  // ⚑ NO globalFields. The centre's value used to be one — collected in a row of
+  // ⚑ NO globalFields. The centre's value used to be one - collected in a row of
   // its own that appears only once every point is placed. It is now asked exactly
   // where every other value is asked: inline beside the Centre chip, with the same
   // confirm button, at the moment the centre is clicked (David, 2026-07-27). The
-  // value still reaches the record per spoke — buildAxes fans it out below — so
+  // value still reaches the record per spoke - buildAxes fans it out below - so
   // this is a workflow change with no consequence for the file.
   globalFields: [],
-  // One tuple is one closed shape on the chart — the domain word for it. Declared
+  // One tuple is one closed shape on the chart - the domain word for it. Declared
   // rather than inherited: the shared tuple status line falls back to Box Plot's
   // "box", which is how Histogram's bins once announced themselves as "new box"
   // (checkpoint 66, caught only by driving the real app).
@@ -2523,14 +2523,14 @@ export const SPIDER_AXES_CONFIG: AxesTypeConfig<SpiderAxes> = {
     if (!ok) {
       return {
         error: optionBool(ctx.options, 'isLogRadial')
-          ? 'Calibration failed — on log axes every value, the centre included, must be a positive number, and each axis needs a value different from the centre.'
-          : 'Calibration failed — check each axis has a numeric value different from the centre value, and that no axis point sits on the centre.',
+          ? 'Calibration failed - on log axes every value, the centre included, must be a positive number, and each axis needs a value different from the centre.'
+          : 'Calibration failed - check each axis has a numeric value different from the centre value, and that no axis point sits on the centre.',
       };
     }
     axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'spider' });
     return { axes };
   },
-  // One capture slot per spoke, named after it — so a tuple reads
+  // One capture slot per spoke, named after it - so a tuple reads
   // "Strength, Weight, Cost" rather than "1, 2, 3", and the multi-series table's
   // row k really IS axis k for every series. That alignment is REAL here (every
   // series has exactly one value per axis), unlike the same side-by-side layout
@@ -2663,7 +2663,7 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
   repeatingStep: {
     noun: 'outline point',
     nounPlural: 'outline points',
-    hint: 'three fit a circle, five an ellipse — more the merrier',
+    hint: 'three fit a circle, five an ellipse - more the merrier',
     // ⚑ Three define a circle exactly, which is also why three can never disagree:
     // any three points fit perfectly, so a bad click is undetectable. A fourth is
     // genuine redundancy about the FIGURE and produces a residual that means
@@ -2675,7 +2675,7 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
       key: 'outline',
       label: 'Outline #',
       color: '#e0a458',
-      prompt: 'Click a point on the outer edge of the pie — three or more, spread around it',
+      prompt: 'Click a point on the outer edge of the pie - three or more, spread around it',
       valueFields: [],
     },
   },
@@ -2688,7 +2688,7 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
     // but "no answer at all". Refused here rather than in the fit so the message says
     // what to do, and so a LOADED file meets the same refusal a click does.
     if (optionBool(options, 'isTilted') && cal.getCount() < 5) {
-      return 'A tilted pie needs at least five outline points — an ellipse cannot be fixed by fewer.';
+      return 'A tilted pie needs at least five outline points - an ellipse cannot be fixed by fewer.';
     }
     const total = parseFloat(String(globalValues['total'] ?? ''));
     const sweep = parseFloat(String(globalValues['sweep'] ?? ''));
@@ -2713,8 +2713,8 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
     if (!axes.calibrate(cal, total, sweep, tilted)) {
       return {
         error: tilted
-          ? 'Calibration failed — the outline points must lie on an ellipse. Trace the TOP FACE of a 3D pie, not its outer silhouette.'
-          : 'Calibration failed — the outline points must lie on a circle; three collinear points describe none.',
+          ? 'Calibration failed - the outline points must lie on an ellipse. Trace the TOP FACE of a 3D pie, not its outer silhouette.'
+          : 'Calibration failed - the outline points must lie on a circle; three collinear points describe none.',
       };
     }
     // ⚑ The total and the sweep have no pixel to ride on, so the axes METADATA is
@@ -2753,12 +2753,12 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
 };
 
 /**
- * ⚑⚑ EVERY GRAPH TYPE THERE IS — the one place a new type joins the app.
+ * ⚑⚑ EVERY GRAPH TYPE THERE IS - the one place a new type joins the app.
  *
  * ⚠️⚠️ IT USED TO LIVE IN `ui/src/Workspace.tsx`, PRIVATE, as the Graph-type
  * dropdown's ordering. That is the reason the same defect kept arriving on every
  * new type: **a type joined a UI picker list and joined NOTHING ELSE.** No test
- * could iterate it, so every cross-type check hand-listed its types — and a
+ * could iterate it, so every cross-type check hand-listed its types - and a
  * hand-maintained list does not grow when you add a type. Even the Tenet-11
  * generation audit "across all twelve types" was a manual sweep; it would not
  * have noticed a thirteenth.
@@ -2766,18 +2766,18 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
  * David, 2026-08-16, after I re-derived "a heatmap always has a numeric scale"
  * in the very file whose header condemns it: *"I do NOT want to come back to
  * this problem for the next chart type, i.e. bubble graphs."* The way not to is
- * to make membership AUTOMATIC — so this is exported, and the invariants that
+ * to make membership AUTOMATIC - so this is exported, and the invariants that
  * must hold for every type iterate it.
  *
  * ▶ THE ACCEPTANCE TEST FOR THAT CLAIM: adding a new config here should turn the
  * board RED until its axis kinds and its export are handled. If a type can be
  * added and everything stays green, the class is still open.
  *
- * ⚑ The ORDER is the picker's, and the comments below are about that — what a
+ * ⚑ The ORDER is the picker's, and the comments below are about that - what a
  * reader scanning for "mine looks like this" expects to find next to what.
  * ⚑ `everyGraphType.test.ts` asserts this list against the module's OWN exports,
  * so a config that exists but is not registered is a failure rather than an
- * invisible omission — the same move `ADDS_POINT_ON_CLICK` makes for the click
+ * invisible omission - the same move `ADDS_POINT_ON_CLICK` makes for the click
  * router, one level up.
  */
 // ⚑ Typed explicitly as AxesTypeConfig<CalibratedAxes>[] (not inferred via

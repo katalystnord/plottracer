@@ -1,5 +1,5 @@
 /**
- * B4 — a datum's error caps become EXTENTS ON ITS OWN RECORD.
+ * B4 - a datum's error caps become EXTENTS ON ITS OWN RECORD.
  *
  * ⚑⚑ THESE TESTS ARE WRITTEN BEFORE THE MODULE THEY TEST, per CLAUDE.md gate 2:
  * *"the cases become named failing tests before the first line of
@@ -9,7 +9,7 @@
  * ⚑ THE DEFECT THIS RECORD MAKES INEXPRESSIBLE. Today a cap belongs to whichever
  * datum is NEAREST along one axis (`matchCapToDatum` → `nearestIndex`). On
  * David's own capture, all four caps sat at x ≈ 4.93, so every one of them was
- * handed to datum 1 — the table showed point 1's caps beside the datum at x=10,
+ * handed to datum 1 - the table showed point 1's caps beside the datum at x=10,
  * and a collapsed zero-height pair beside point 1. He could not verify or correct
  * his own capture, which is a tenet-1 failure. Storing the pairing in the tuple
  * does not FIX the arbitration; it removes the arbitration.
@@ -18,7 +18,7 @@
  * bar is a category coordinate plus a value with EXTENT, captured as a tuple of
  * two corner pixels. A datum with error bars is a 2-D coordinate plus an extent,
  * captured as a tuple of up to five pixels. Same primitive, same table, no new
- * concept — see BAR_INTERVAL_SLOTS / BOX_PLOT_SLOTS for the precedent.
+ * concept - see BAR_INTERVAL_SLOTS / BOX_PLOT_SLOTS for the precedent.
  */
 import { describe, it, expect } from 'vitest';
 import { ERROR_ROLES, matchCapToDatum, resolveErrorBars, type ErrorRole } from '../errorBar.js';
@@ -44,7 +44,7 @@ describe('the slot list is derived from the roles, so a role cannot be forgotten
   it('every declared ErrorRole has its own slot', () => {
     // ⚑ A SECOND REGISTRY IS THE THING TO AVOID. `ERROR_ROLES` already names the
     // taxonomy ("not four features; four roles in combination"), so a
-    // hand-written slot list beside it could omit one and nothing would say so —
+    // hand-written slot list beside it could omit one and nothing would say so -
     // exactly the shape that hid the missing category axis for a whole release.
     for (const role of ERROR_ROLES) {
       const slot = slotForRole(role);
@@ -92,8 +92,8 @@ describe("a point's caps come from its OWN tuple, never from whichever cap is ne
     expect(bars[1]).toMatchObject({ x: 10.02, y: 18.0, yUpper: 20.1, yLower: 15.9 });
 
     // ⚑⚑ AND HERE IS THE DEFECT THIS RECORD REMOVES, asserted against the REAL
-    // old rule rather than described in a comment. Ask `matchCapToDatum` — the
-    // function that used to decide this — where each of the four caps belongs:
+    // old rule rather than described in a comment. Ask `matchCapToDatum` - the
+    // function that used to decide this - where each of the four caps belongs:
     // it gives EVERY ONE of them to datum 0, because all four sit at x ≈ 4.93
     // and it matches on nearest-x. That is precisely the table David
     // photographed. If anyone ever reroutes the resolution back through it,
@@ -194,7 +194,7 @@ describe('all four roles land in their own field', () => {
   });
 });
 
-describe('recognising error slots — and NOT mistaking a box plot for them', () => {
+describe('recognising error slots - and NOT mistaking a box plot for them', () => {
   it('a BOX PLOT is not read as carrying error slots', () => {
     // ⚑⚑ THE TRAP THAT MADE THIS CHECK ASK THE NAMES. Counting was the obvious
     // test -- "more slots than the type needs means the extras are error slots"
@@ -219,7 +219,7 @@ describe('recognising error slots — and NOT mistaking a box plot for them', ()
     expect(hasErrorSlots(errorSlotNames(''))).toBe(true); // unnamed still recognisable
   });
 
-  it('a PARTIAL tail is not enough — all four roles or none', () => {
+  it('a PARTIAL tail is not enough - all four roles or none', () => {
     // Half a set would put the base in the wrong place and shift every role.
     expect(hasErrorSlots(['Value', 'SD upper', 'SD lower'])).toBe(false);
     expect(hasErrorSlots(['Value', 'SD upper', 'SD lower', 'SD left'])).toBe(false);
@@ -230,10 +230,10 @@ describe('recognising error slots — and NOT mistaking a box plot for them', ()
   });
 });
 
-describe('error bars on a series that ALREADY has slots — a bar chart', () => {
+describe('error bars on a series that ALREADY has slots - a bar chart', () => {
   it("an upper cap does not overwrite the bar's far corner", () => {
     // ⚑⚑ THE COLLISION THAT MADE THE MAPPING DERIVED. `captureErrorCap` works on
-    // all seven graph types, "including error on a bar plot" — and a bar series
+    // all seven graph types, "including error on a bar plot" - and a bar series
     // already owns slots 0 and 1 ('Bar start', 'Bar end'). A fixed role table of
     // 1..4 would have written the upper cap over 'Bar end', so the record would
     // have reported the BAR'S OWN far corner as its error bar: a wrong number
@@ -279,11 +279,11 @@ describe('a confidence band is the same record at higher density', () => {
    * ⚑⚑ DAVID, 2026-08-17: *"One day, we might have continuous error / uncertainty
    * lines for line graphs too. And that too needs to align with what we do here
    * now."* So this is the tenet-11 check on the record BEFORE the capture path
-   * hardens around it — asked now, while changing the answer is still cheap.
+   * hardens around it - asked now, while changing the answer is still cheap.
    *
    * The error design already committed to the shape: *"a confidence band is the
    * same relation at higher density"*. These tests ask whether that is true of
-   * the record we are building, and — more usefully — whether it was ever true
+   * the record we are building, and - more usefully - whether it was ever true
    * of the one we are replacing.
    */
   const BAND_POINTS = 200;
@@ -314,13 +314,13 @@ describe('a confidence band is the same record at higher density', () => {
 
   it('⚑ an independently-traced boundary SILENTLY LOSES readings under the old model', () => {
     // ⚠️ MY FIRST VERSION OF THIS TEST CLAIMED nearest-x would MIS-ASSIGN a
-    // traced band, and measured 0 mismatches — a nudge below half the sample
+    // traced band, and measured 0 mismatches - a nudge below half the sample
     // spacing still finds the right datum. The real failure is not assignment,
     // it is COLLAPSE, and it only shows when the boundary carries its own
     // sampling (which a traced curve does).
     //
     // `resolveErrorBars` emits one bar per DATUM and lets the nearest cap claim
-    // each field; every other cap for that datum is DROPPED — deliberately, since
+    // each field; every other cap for that datum is DROPPED - deliberately, since
     // averaging would fabricate a position no one clicked. So a boundary traced
     // at 500 samples over 200 data points reports 200 readings and discards 300,
     // with nothing saying so.
@@ -344,19 +344,19 @@ describe('a confidence band is the same record at higher density', () => {
     // density" holds only when the band is sampled AT the data points. What
     // changes is the failure mode. Under the old model a surplus cap is accepted
     // and then quietly discarded at read time. In the tuple record there is
-    // simply no slot to put it in — the reading cannot be entered at all, so the
+    // simply no slot to put it in - the reading cannot be entered at all, so the
     // limit is enforced at capture where the user can see it, instead of applied
     // silently at export.
     //
     // ⇒ An independently-traced uncertainty BOUNDARY is therefore a DIFFERENT
-    // KIND OF RECORD, BUT A RELATED ONE — David's correction, 2026-08-17, and it
+    // KIND OF RECORD, BUT A RELATED ONE - David's correction, 2026-08-17, and it
     // is load-bearing rather than a nicety. "A different record" licenses a
     // fresh apparatus built from scratch, which is the thing this whole theme is
     // an argument against. "Related" says what must stay SHARED:
     //
     //   · THE SAME QUANTITY, sampled differently. A per-datum extent is the
     //     DISCRETE case; a band is the CONTINUOUS case of the same uncertainty
-    //     about the same value on the same axis. Not inheritance — sampling.
+    //     about the same value on the same axis. Not inheritance - sampling.
     //   · THE SAME FOUR ROLES. A band has an upper and a lower boundary; those
     //     are `ERROR_ROLES`, not new vocabulary.
     //   · THE SAME USER WORD. "SD" / "CI95" means the same thing on both, so it
@@ -423,7 +423,7 @@ describe('an orphaned cap is inexpressible', () => {
 });
 
 
-describe('the DELTA projection — what Python takes, from what R takes', () => {
+describe('the DELTA projection - what Python takes, from what R takes', () => {
   it('signs by ROLE: upper/right positive, lower/left negative', () => {
     // So the two columns of an asymmetric bar can be told apart at a glance.
     const d = deltasFromBar({ x: 5, y: 10, yUpper: 12, yLower: 7, xLeft: 4, xRight: 5.5 });
@@ -433,7 +433,7 @@ describe('the DELTA projection — what Python takes, from what R takes', () => 
   it('⚠️ an absent side is OMITTED, never zero', () => {
     // ⚑⚑ THE MEASURED REASON THE ABSOLUTES ARE THE RECORD. In the delta form
     // "no lower bound" and "a lower bound of size zero" are the same number.
-    // matplotlib CRASHES on NaN in yerr and silently accepts 0 — drawing a cap
+    // matplotlib CRASHES on NaN in yerr and silently accepts 0 - drawing a cap
     // sitting exactly on the value. Emitting 0 here would turn a measurement we
     // never took into one that looks entirely plausible.
     const d = deltasFromBar({ x: 5, y: 10, yUpper: 12 });

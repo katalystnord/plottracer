@@ -42,7 +42,7 @@ import { colorAtPosition, positionOnStrip } from '../../algorithms/colorBar.js';
 /**
  * ⚠️⚠️ THE SHARED FIXTURE IS A VALUE × VALUE FIGURE, and saying so out loud is
  * the point. `readHeatmapCells` used to DEFAULT its `kinds` to exactly this, so
- * every test here asserted against a value axis without anyone choosing one —
+ * every test here asserted against a value axis without anyone choosing one -
  * and the day a function was written that could not survive a CATEGORY axis
  * (`heatmapAxisSpans`, which read the typed calibration values), the whole file
  * passed anyway. A fixture is blind to what it lacks; a NAMED constant at least
@@ -60,7 +60,7 @@ const VALUE_AXES = { x: 'value', y: 'value' } as const;
  * ⚑ This is the layer the UI calls, so it is tested with the UI's own inputs:
  * the placed calibration points as a session hands them over, and the image as
  * the canvas hands it over. What the UI is then left holding is a button and a
- * label — which matters because mutation testing cannot see `ui/` at all, and
+ * label - which matters because mutation testing cannot see `ui/` at all, and
  * its only other instrument is an 18-minute Electron run.
  */
 
@@ -136,7 +136,7 @@ describe('buildColorScale', () => {
     expect(buildColorScale(negative, image, true).error).toMatch(/positive values/i);
   });
 
-  // ⚑⚑ THE OTHER FOUR REFUSALS HAD NO TEST AT ALL — found by mutation, which
+  // ⚑⚑ THE OTHER FOUR REFUSALS HAD NO TEST AT ALL - found by mutation, which
   // reported the sentences as no-coverage. These are the words the user reads
   // when the tool declines to measure something, and this file's stated job is
   // translating a code into a sentence that names the requirement; an empty or
@@ -166,13 +166,13 @@ describe('buildColorScale', () => {
     expect(buildColorScale(typo, image, false).error).toMatch(/must both be numbers/i);
   });
 
-  it('REFUSES A BANDED KEY, naming why — and no real ramp trips it', () => {
+  it('REFUSES A BANDED KEY, naming why - and no real ramp trips it', () => {
     // ⚑⚑ THE THIRD AGREED CASE THAT WAS NEVER BUILT. The settled record says a
     // DISCRETE key (significance bands, cluster IDs, land cover) identifies a
     // LABEL, not a number, and must be refused naming why. Inverting a cell
     // against it lands on a plateau covering a whole range; reporting the middle
     // of that range is a number the figure does not contain, arriving with no
-    // symptom — the exact failure this module exists to prevent.
+    // symptom - the exact failure this module exists to prevent.
     const bands = 6;
     const width = 400;
     const height = 40;
@@ -201,7 +201,7 @@ describe('buildColorScale', () => {
     expect(refused.error).toMatch(/not contain|by eye/i);
 
     // ⚑ AND THE FIXTURES ARE THE OTHER HALF OF THIS TEST. A detector that
-    // refuses banded keys is worthless if it also refuses viridis — the real
+    // refuses banded keys is worthless if it also refuses viridis - the real
     // keys measure 108–260 levels against a threshold of 20, and this is what
     // keeps that margin honest as the sampler changes.
     const { image, placed } = scene();
@@ -241,7 +241,7 @@ describe('detectGrid', () => {
 
   it('KEEPS what it measured and NAMES what is missing, rather than proposing nothing', () => {
     // ⚑⚑ REWRITTEN 2026-08-14, premise and all. This asserted that a shortfall
-    // left the axis EXACTLY as it was — "the miss is reported, never filled in,
+    // left the axis EXACTLY as it was - "the miss is reported, never filled in,
     // because a grid with a boundary missing looks exactly like a grid". The
     // argument is right; the remedy was wrong. Discarding four correct
     // measurements to avoid an invisible error trades a measurement for a blank,
@@ -256,7 +256,7 @@ describe('detectGrid', () => {
     const result = detectGrid(image, axes, start, { columns: 9 });
     // The four boundaries the ink actually shows are placed…
     expect(result.grid!.xDividers).toHaveLength(6);
-    // …the missing four are NOT invented — six dividers is five cells, not nine…
+    // …the missing four are NOT invented - six dividers is five cells, not nine…
     expect(result.grid!.xDividers.length - 1).toBeLessThan(9);
     // …and nothing claims agreement.
     expect(result.agrees).toBe(false);
@@ -267,7 +267,7 @@ describe('detectGrid', () => {
   it('KEEPS the axis that succeeded when the other one misses', () => {
     // ⚑⚑ David typed a 6 where his figure has 5 rows. Detection found all four
     // COLUMN boundaries and then threw them away because the rows could not be
-    // met — leaving a 1 × 5 grid and five cells of nonsense at x = 12. The
+    // met - leaving a 1 × 5 grid and five cells of nonsense at x = 12. The
     // refusal was right about the rows and wrong about everything else.
     const { image, axes } = scene();
     const start = initialGrid({ xMin: 0, xMax: 9, yMin: 0, yMax: 8 });
@@ -275,8 +275,8 @@ describe('detectGrid', () => {
     // The columns are there…
     expect(result.grid).not.toBeNull();
     expect(result.grid!.xDividers).toHaveLength(6);
-    // …the rows keep the boundaries the ink DOES show — four of the eight the
-    // typo asked for — rather than being blanked or invented up to nine…
+    // …the rows keep the boundaries the ink DOES show - four of the eight the
+    // typo asked for - rather than being blanked or invented up to nine…
     expect(result.grid!.yDividers.length).toBeGreaterThan(2);
     expect(result.grid!.yDividers.length - 1).toBeLessThan(9);
     // …and the message still says which half failed, and that it did.
@@ -408,7 +408,7 @@ describe('readHeatmapCells', () => {
     const columns = fig.grid.x.length - 1;
     expect(result.rows[0]).toMatchObject({ col: 0, row: 0, xLabel: 'BRCA1', yLabel: 'tumour' });
     expect(result.rows[1]).toMatchObject({ col: 1, xLabel: 'TP53' });
-    // ⚑ A SHORT LIST IS NOT AN ERROR — the unnamed cells keep the coordinates
+    // ⚑ A SHORT LIST IS NOT AN ERROR - the unnamed cells keep the coordinates
     // they always had, rather than the user being pushed into inventing names.
     expect(result.rows[2]!.xLabel).toBe('');
     expect(result.rows[columns]!.yLabel).toBe('');
@@ -445,7 +445,7 @@ describe('dragging a divider', () => {
     const { x, y } = heatmapAxisOverlays(grid, upright);
     expect(x.tickPoints.map((p) => p.x)).toEqual([100, 220, 400]);
     expect(y.tickPoints.map((p) => p.y)).toEqual([300, 100]);
-    // On the axis, NOT offset — the overlay adds its own standoff, which is what
+    // On the axis, NOT offset - the overlay adds its own standoff, which is what
     // makes the mark read as a tick instead of a floating dot.
     expect(x.tickPoints[0]).toEqual({ x: 100, y: 300 });
   });
@@ -483,18 +483,18 @@ describe('dragging a divider', () => {
   });
 
   /**
-   * C1 — DRAGGING A DIVIDER MOVES THE GRID AND NEVER THE CALIBRATION.
+   * C1 - DRAGGING A DIVIDER MOVES THE GRID AND NEVER THE CALIBRATION.
    *
    * ⚑⚑ IT IS THE ROUTER THAT DECIDES THIS, and the router is one predicate. Every
-   * marker on the figure — data points, calibration handles, category ticks and
-   * grid handles — arrives at ONE `handleMarkerDragEnd`, which asks
+   * marker on the figure - data points, calibration handles, category ticks and
+   * grid handles - arrives at ONE `handleMarkerDragEnd`, which asks
    * `isDividerHandle` first and, if nothing else matches, falls through to
    * `updateCalibPointPixel`. So a divider id that failed this predicate would be
    * read as a calibration handle, and dragging a boundary would silently
    * recalibrate the whole figure: every value in the export wrong, nothing on
    * screen saying so.
    *
-   * ⚑ The two layers that make it safe are asserted rather than assumed — the
+   * ⚑ The two layers that make it safe are asserted rather than assumed - the
    * predicate never confuses the two id spaces (here), and the model refuses an
    * id it does not hold (`updateCalibPointPixel`'s own test).
    *
@@ -504,7 +504,7 @@ describe('dragging a divider', () => {
    */
   it('never mistakes a heatmap CALIBRATION step for a grid handle', () => {
     // Every key the walk actually uses, taken from the config rather than
-    // retyped — a step added later is covered without anyone remembering to.
+    // retyped - a step added later is covered without anyone remembering to.
     for (const step of HEATMAP_AXES_CONFIG.fixedSteps) {
       expect(isDividerHandle(step.key), `${step.key} must not read as a divider`).toBe(false);
     }
@@ -566,12 +566,12 @@ describe('which way the figure READS', () => {
   it('says ROWS run against the reading order on an ordinary figure', () => {
     // ⚑⚑ THE AUDIT'S FINDING. A person copying names off a published heatmap
     // reads them top-down; cell row 0 is yMin, at the bottom. Without the flip
-    // the first name lands on the last row — every value right, every name
+    // the first name lands on the last row - every value right, every name
     // filed against the wrong one, and nothing on screen saying so.
     expect(labelOrderReversed(grid, upright)).toEqual({ x: false, y: true });
   });
 
-  it('is MEASURED, not assumed — an upside-down calibration reads the other way', () => {
+  it('is MEASURED, not assumed - an upside-down calibration reads the other way', () => {
     // ⚑ The reason this is a function and not the constant `{x:false, y:true}`.
     expect(labelOrderReversed(grid, flipped)).toEqual({ x: false, y: false });
     expect(labelOrderReversed(grid, mirrored)).toEqual({ x: true, y: true });
@@ -606,7 +606,7 @@ describe('adding and removing a boundary', () => {
   it('drops the new boundary in the MIDDLE OF THE WIDEST CELL', () => {
     // ⚑⚑ Where a missing boundary actually is. Detection that found every rule
     // but one leaves that cell twice its neighbours' width, so the widest cell
-    // is the evidence — not a parking spot.
+    // is the evidence - not a parking spot.
     const added = addDivider(grid, 'x');
     expect(added!.grid.xDividers).toEqual([0, 4, 7, 10]);
     expect(added!.grid.yDividers).toBe(grid.yDividers);
@@ -640,7 +640,7 @@ describe('adding and removing a boundary', () => {
     });
   });
 
-  it('REFUSES to remove the last boundary of an axis — one cell is still a grid', () => {
+  it('REFUSES to remove the last boundary of an axis - one cell is still a grid', () => {
     expect(removeDividerHandle(grid, 'hmy:0')).toBeNull();
     expect(removeDividerHandle(grid, 'hmy:1')).toBeNull();
     expect(removeDividerHandle(grid, 'hmz:0')).toBeNull();
@@ -650,8 +650,8 @@ describe('adding and removing a boundary', () => {
   it('removes a ROW boundary too, not only a column one', () => {
     // ⚑ Found by mutation: every removal test used the x axis, because the
     // fixture's y axis had only its outer two dividers and every y case refused
-    // before reaching the branch. A transposition there — returning the x list
-    // for a y handle — would have survived silently.
+    // before reaching the branch. A transposition there - returning the x list
+    // for a y handle - would have survived silently.
     const twoWay = { xDividers: [0, 4, 10], yDividers: [0, 5, 20] };
     expect(removeDividerHandle(twoWay, 'hmy:1')).toEqual({
       xDividers: [0, 4, 10],
@@ -668,25 +668,25 @@ describe('adding and removing a boundary', () => {
 });
 
 /**
- * B7 / B16 — THE USER IS AN INSTRUMENT, and their reading is recorded the way
+ * B7 / B16 - THE USER IS AN INSTRUMENT, and their reading is recorded the way
  * ours is: as a POSITION ON THE THIRD AXIS.
  *
  * ⚑⚑ David, when I proposed an override carrying a declared-vs-measured flag:
  * *"NO. And seriously NO. Heatmaps are a 2.5D graph type. The values are STORED
  * ON THE THIRD AXIS. Changing a value in a cell MOVES THE VALUE on the third
  * axis that records the value, and nothing else!"* So there is no new field to
- * assert here — the whole design shows up as `moves when the key is
+ * assert here - the whole design shows up as `moves when the key is
  * recalibrated`, which a stored NUMBER cannot pass and a stored POSITION cannot
  * fail. That test is the design.
  *
  * ⚑ Why it exists at all (David, same day): *"there might be something in the
- * color/patern/shape that a user can see and we can't"* — a hatched cell, an
+ * color/patern/shape that a user can see and we can't"* - a hatched cell, an
  * asterisk over the fill, a label bleeding into the fill, a texture the modal
  * sampler averages away. Their eye is the better instrument for those, and
  * often the only one that can tell.
  */
 describe('a user’s own reading of a cell', () => {
-  /** The figure, its grid, and the key — the state a user is looking at when
+  /** The figure, its grid, and the key - the state a user is looking at when
    * they decide our number is wrong. */
   function readable(log = false) {
     const { fig, image, axes, placed } = scene();
@@ -717,10 +717,10 @@ describe('a user’s own reading of a cell', () => {
     );
   });
 
-  it('an edited cell MOVES when the key is recalibrated — a POSITION was stored, not a number', () => {
+  it('an edited cell MOVES when the key is recalibrated - a POSITION was stored, not a number', () => {
     // ⚑⚑ THE TEST THAT IS THE DESIGN. Every position on this key is worth twice
     // as much once both printed labels are read as twice what they were, so the
-    // user's cell must read 118 — exactly as a data point moves when its axes
+    // user's cell must read 118 - exactly as a data point moves when its axes
     // are recalibrated. A stored NUMBER would sit at 59 and quietly disagree
     // with every other cell in the matrix, with nothing on screen saying which
     // of them to trust.
@@ -745,7 +745,7 @@ describe('a user’s own reading of a cell', () => {
 
   it('refuses a value the LOG key cannot represent, at the gesture, keeping the reading it had', () => {
     const { image, placed } = readable();
-    // A positive-labelled key read as logarithmic — the ordinary older-paper case.
+    // A positive-labelled key read as logarithmic - the ordinary older-paper case.
     const logged = {
       ...placed,
       kv1: { ...placed.kv1!, values: ['1'] },
@@ -776,7 +776,7 @@ describe('a user’s own reading of a cell', () => {
   it('carries no COLOUR evidence for a value the colour did not produce', () => {
     // ⚑ The interval, the distance off the ramp, the rivals and the clipping
     // flag are all properties of inverting a COLOUR. A reading taken by eye has
-    // none of them, and inventing them — low = high = the typed number, say —
+    // none of them, and inventing them - low = high = the typed number, say -
     // would dress a bare assertion as a measured interval.
     const { image, axes, grid, scale } = readable();
     const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
@@ -832,32 +832,32 @@ describe('a user’s own reading of a cell', () => {
 });
 
 /** The user's readings are part of the record, so they save, reopen and undo
- * through the same axes metadata the grid and the names ride in — and the load
+ * through the same axes metadata the grid and the names ride in - and the load
  * path validates them, because a file is an entrance to the model like any
  * other. */
 
 /**
- * C3 / C4 — SAY WHAT A COUNT OR CONVENTION CHANGE WILL COST, BEFORE IT COSTS IT.
+ * C3 / C4 - SAY WHAT A COUNT OR CONVENTION CHANGE WILL COST, BEFORE IT COSTS IT.
  *
  * ⚑⚑ THE MIRROR ALREADY EXISTS. The bar chart's category ticks have carried this
- * since v2.1 — `categoryPanelView`'s `regenerateWarning`, shown only when there
+ * since v2.1 - `categoryPanelView`'s `regenerateWarning`, shown only when there
  * is something to lose, with the note *"a warning that appears when nothing
  * would be discarded teaches the user to ignore it."* Same sentence shape here,
  * for the same reason, rather than a second mechanism.
  *
  * ⚑ NO NEW STORED FLAG. `BandedAxis` keeps an `_adjusted` boolean because a
  * bar's ticks can only ever be GENERATED then dragged. A heatmap's grid can also
- * be DETECTED — read off the figure's own rules — and a detected grid is exactly
+ * be DETECTED - read off the figure's own rules - and a detected grid is exactly
  * as much of a loss as a dragged one. So the question is not "did you adjust
  * this?" but "is there a grid to lose?", which needs no state to answer.
  *
  * ⚑ And the DISAGREEMENT is reported rather than resolved: when the declared
  * count and the grid's own count differ, the card says so and leaves the choice
  * alone. Silently rebuilding would discard measured boundaries; silently keeping
- * would leave a grid describing a frame that no longer exists. Tenet 9 — record
+ * would leave a grid describing a frame that no longer exists. Tenet 9 - record
  * what is, do not choose for the reader.
  */
-describe('C3/C4 — the cost of a count or convention change, said first', () => {
+describe('C3/C4 - the cost of a count or convention change, said first', () => {
   it('warns only when there is a grid to lose', () => {
     expect(heatmapRegenerateWarning(null, { columns: 5, rows: 4 })).toBeNull();
     const warning = heatmapRegenerateWarning(
@@ -913,10 +913,10 @@ describe('C3/C4 — the cost of a count or convention change, said first', () =>
 });
 
 /**
- * P1 — THE THIRD AXIS IS AN AXIS, so a cell carries its coordinate ON IT.
+ * P1 - THE THIRD AXIS IS AN AXIS, so a cell carries its coordinate ON IT.
  *
- * ⚑⚑ A row has always carried `xCentre` and `yCentre` — where the cell sits on
- * the first two axes — and then reported the third as a NUMBER only. But a
+ * ⚑⚑ A row has always carried `xCentre` and `yCentre` - where the cell sits on
+ * the first two axes - and then reported the third as a NUMBER only. But a
  * heatmap is 2.5D: where the cell sits on the colour key is a coordinate exactly
  * as the other two are, and it is the one the whole figure exists to convey.
  * Without it nothing on screen can show a cell's value as a POSITION, which is
@@ -942,7 +942,7 @@ describe('a cell’s coordinate on the colour key', () => {
     const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     for (const row of rows) {
       expect(row.keyPosition).not.toBeNull();
-      // A position on the strip's own 0..1 frame — the same frame the key's
+      // A position on the strip's own 0..1 frame - the same frame the key's
       // marker is drawn in and the same one a drag reports back.
       expect(row.keyPosition!).toBeGreaterThan(-0.5);
       expect(row.keyPosition!).toBeLessThan(1.5);
@@ -977,7 +977,7 @@ describe('a cell’s coordinate on the colour key', () => {
 });
 
 /**
- * ⑧ — the second half. B6 asked to *"select a range of cells, or click cells on
+ * ⑧ - the second half. B6 asked to *"select a range of cells, or click cells on
  * the heatmap"*, and v2.2 shipped multi-select in the TABLE only.
  */
 describe('the marquee selects a RANGE of cells, the way it selects points', () => {
@@ -1026,7 +1026,7 @@ describe('the marquee selects a RANGE of cells, the way it selects points', () =
 });
 
 /**
- * ④ — the caliper's geometry. David saw two things wrong with it and they have
+ * ④ - the caliper's geometry. David saw two things wrong with it and they have
  * one cause: it was drawn along the key's DIAGONAL, because `k1`/`k2` are
  * opposite CORNERS.
  */
@@ -1054,7 +1054,7 @@ describe('the colour key’s caliper rides the strip, not the corners', () => {
     expect(keyCursorStrip(k1, { px: 400, py: 510 })!.thickness).toBe(6);
   });
 
-  it('⚑⚑ IS THE SAME GEOMETRY THE SAMPLER READS — drawn and stored cannot disagree', () => {
+  it('⚑⚑ IS THE SAME GEOMETRY THE SAMPLER READS - drawn and stored cannot disagree', () => {
     // The defect stated as a property. `buildColorScale` samples along
     // `stripFromCorners(k1, k2)`; if the caliper is drawn along anything else,
     // the position shown and the position recorded are measured on two
@@ -1077,17 +1077,17 @@ describe('the colour key’s caliper rides the strip, not the corners', () => {
     expect(strip.thickness).toBe(24);
   });
 
-  it('⚠️ is the SAME strip whichever corner was clicked FIRST — the mirrored-caliper bug', () => {
+  it('⚠️ is the SAME strip whichever corner was clicked FIRST - the mirrored-caliper bug', () => {
     // ⚑⚑ THIS WAS A VALUE DEFECT, not only a cosmetic one, and it took a second
     // look to see it. `stripFromCorners` always returns min→max, so the strip's
     // t=0 is the LEFT end however the user dragged. The old cursor was drawn and
-    // measured along the RAW `k1 → k2` line — so whenever k1 was not the min
+    // measured along the RAW `k1 → k2` line - so whenever k1 was not the min
     // corner (a right-to-left or bottom-to-top drag across the key, which
     // nothing in the walk discourages), the caliper was MIRRORED: drawn at the
     // wrong end, and a drag reported t in the opposite frame from the one
     // `valueAtPosition` reads it in. The cell would take the value from the far
     // end of the key.
-    // ⚑ Only the CALIPER was affected — cells read from colour go through
+    // ⚑ Only the CALIPER was affected - cells read from colour go through
     // `invertColor(strip, …)`, which is in the strip's frame throughout. That is
     // why the recorded values measured clean against ground truth.
     const leftToRight = keyCursorStrip({ px: 100, py: 500 }, { px: 400, py: 540 });
@@ -1106,7 +1106,7 @@ describe('the colour key’s caliper rides the strip, not the corners', () => {
 });
 
 /**
- * ⚑⚑ ABSOLUTE MIRRORING — David, 2026-08-15: *"We need to have absolute
+ * ⚑⚑ ABSOLUTE MIRRORING - David, 2026-08-15: *"We need to have absolute
  * MIRRORING of the colour between the heatmap, the draggable colour key, and the
  * output matrix. That is the ground truth."*
  *
@@ -1114,7 +1114,7 @@ describe('the colour key’s caliper rides the strip, not the corners', () => {
  * == a number… the colour we show is only its REPRESENTATION. Hence that is WHY
  * it is important that the colour follows the value, not the other way around."*
  *
- * So a row carries TWO colours and they mean opposite things — `rgb` is the ink
+ * So a row carries TWO colours and they mean opposite things - `rgb` is the ink
  * that was MEASURED (evidence), `keyRgb` is the ink the key gives that value
  * (representation). Only the second may be drawn.
  */
@@ -1138,7 +1138,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     }
   });
 
-  it('gives a USER-read cell a colour too — colour follows the value whichever instrument produced it', () => {
+  it('gives a USER-read cell a colour too - colour follows the value whichever instrument produced it', () => {
     // ⚠️ THIS SUPERSEDES the earlier provenance rule ("no colour if it is user
     // set"). Provenance moved to the `[brackets]` and the export's own column;
     // the tint became pure representation, and a cell with a value and no
@@ -1193,7 +1193,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     expect(rows[0]!.keyRgb).toBeUndefined();
   });
 
-  it('keeps `rgb` as EVIDENCE — the measured ink, still only where the colour was the reading', () => {
+  it('keeps `rgb` as EVIDENCE - the measured ink, still only where the colour was the reading', () => {
     // The two must not collapse into one field: `colour offset` and the
     // uniformity column report on the measurement, and they need the pixel that
     // was actually there. A user-read cell has no measured ink of its own.
@@ -1214,7 +1214,7 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
     const rows = readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES).rows;
     const cell = cellAt(rows, 0, 0);
     // A cell's position on the key does not move when the key's LABELS change,
-    // so its drawn colour must not either — the value it reports does.
+    // so its drawn colour must not either - the value it reports does.
     const relabelled = {
       ...scale,
       ticks: [
@@ -1231,12 +1231,12 @@ describe('the colour a cell is DRAWN in follows its value, never the sampled ink
 });
 
 /**
- * The DRAG half of B7 — setting a cell straight from a position on the key.
+ * The DRAG half of B7 - setting a cell straight from a position on the key.
  *
  * ⚑⚑ THIS IS THE PRIMITIVE GESTURE, and typing is the derived one. The record
  * stores a POSITION, so a drag writes it outright while a typed number has to be
  * converted first. Every other axis in this app has had both halves since v1.3
- * — drag the marker or type the value — and the third axis has had only the
+ * - drag the marker or type the value - and the third axis has had only the
  * typed one.
  */
 describe('setting a cell from a POSITION on the key', () => {
@@ -1254,7 +1254,7 @@ describe('setting a cell from a POSITION on the key', () => {
   it('lands in the SAME record a typed value would, from the same place', () => {
     // ⚑ The two halves must be one record, or the marker and the number would
     // describe different cells. Drag to a position, read what value that is,
-    // type that value into a fresh record — same stored position.
+    // type that value into a fresh record - same stored position.
     const scale = scaleFor();
     const dragged = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 2, 1, 0.625).readings;
     const valueThere = valueAtPosition(scale, 0.625)!;
@@ -1270,10 +1270,10 @@ describe('setting a cell from a POSITION on the key', () => {
     }
   });
 
-  it('⚠️ refuses a position past the END OF THE STRIP — the correction to this very test', () => {
+  it('⚠️ refuses a position past the END OF THE STRIP - the correction to this very test', () => {
     // ⚑⚑ THIS TEST'S COMMENT WAS RIGHT AND ITS NUMBERS WERE WRONG, which is the
-    // gate-3 pattern inside a test rather than a source comment. It said —
-    // correctly — *"the printed labels are almost never at the very ends of the
+    // gate-3 pattern inside a test rather than a source comment. It said -
+    // correctly - *"the printed labels are almost never at the very ends of the
     // ramp, so the top and bottom of most keys lie OUTSIDE them"*, and then
     // asserted with t = -0.2 and t = 1.2. Those are outside the STRIP, not
     // outside the TICKS. It conflated the calibration with the calibrated area.
@@ -1282,7 +1282,7 @@ describe('setting a cell from a POSITION on the key', () => {
     // doing is setting KNOWN VALUES at 100 and 700… Anything that wants to go
     // OUTSIDE of the calibrated area is out of bounds."*
     //
-    // ⚑ The requirement the old comment names is real and is kept — see
+    // ⚑ The requirement the old comment names is real and is kept - see
     // "ACCEPTS A VALUE BEYOND A LABELLED TICK" below, which tests it with
     // positions taken from the scale's own ticks rather than from two numbers
     // that happen to be greater than one.
@@ -1292,7 +1292,7 @@ describe('setting a cell from a POSITION on the key', () => {
 });
 
 /**
- * ⚑⚑ P2 AT THE ENGINE SEAM — the grid expressed against the axis POSITION.
+ * ⚑⚑ P2 AT THE ENGINE SEAM - the grid expressed against the axis POSITION.
  *
  * David's rule stated as outcomes: adjusting a calibration and changing the grid
  * are independent, and the grid does not depend on the calibration's NUMERICAL
@@ -1309,7 +1309,7 @@ describe('the grid sits ON the calibration, not IN it', () => {
 
   it('⚑⚑ RETYPING A CALIBRATION VALUE DOES NOT MOVE THE STORE', () => {
     // The user corrects what the axis is worth. The parameters are untouched, so
-    // the grid still describes the same places on the figure — and the data
+    // the grid still describes the same places on the figure - and the data
     // coordinates it resolves to change, which is the correct consequence.
     const params = heatmapGridToParams(grid, spans)!;
     const retyped = { x: [10, 200] as [number, number], y: spans.y };
@@ -1317,7 +1317,7 @@ describe('the grid sits ON the calibration, not IN it', () => {
     expect(after.xDividers).toEqual([10, 48, 124, 200]);
     // Unchanged on the axis nobody touched.
     expect(after.yDividers).toEqual(grid.yDividers);
-    // And the STORE is byte-identical — that is the property that matters.
+    // And the STORE is byte-identical - that is the property that matters.
     expect(heatmapGridToParams(after, retyped)).toEqual(params);
   });
 
@@ -1348,7 +1348,7 @@ describe('the grid sits ON the calibration, not IN it', () => {
     // on a value axis and returns '' on a CATEGORY axis, where the row edge
     // takes no coordinate and the far edge carries the COUNT. `Number('')` is 0
     // at both ends, so the span collapsed and a categorical heatmap silently had
-    // NO GRID — the "a heatmap always has a numeric scale" premise, again.
+    // NO GRID - the "a heatmap always has a numeric scale" premise, again.
     // ⚑ So the placed points here carry PIXELS and no values at all, which is
     // exactly the categorical case; the axes are the only source of meaning.
     const placed = {
@@ -1360,12 +1360,12 @@ describe('the grid sits ON the calibration, not IN it', () => {
     };
     expect(heatmapAxisSpans(placed, axes)).toEqual(spans);
 
-    // Half a walk has no span to measure against — and must say so rather than
+    // Half a walk has no span to measure against - and must say so rather than
     // producing a frame out of NaN.
     expect(heatmapAxisSpans({ x1: placed.x1, x2: placed.x2 }, axes)).toBeNull();
     // Two points the axes place at the SAME coordinate bound nothing.
     expect(heatmapAxisSpans({ ...placed, x2: { px: 100, py: 500 } }, axes)).toBeNull();
-    // No axes yet — no frame, and no guessing one.
+    // No axes yet - no frame, and no guessing one.
     expect(heatmapAxisSpans(placed, null)).toBeNull();
     // An axes that cannot place the point refuses rather than reading undefined
     // as a number.
@@ -1374,13 +1374,13 @@ describe('the grid sits ON the calibration, not IN it', () => {
 });
 
 /**
- * ⚑⚑ P2, rule 4 — David: *"Should the axis underneath it change so drastically
+ * ⚑⚑ P2, rule 4 - David: *"Should the axis underneath it change so drastically
  * that a new grid detection needs to take place, then we should warn the user of
  * that, and ask for a new grid detection to take place, and NOT MAKE ABSTRACT
  * MODELS AROUND IT."*
  *
- * So this answers exactly one question — HAS THE AXIS MOVED SINCE THIS GRID WAS
- * RECORDED — and deliberately does not answer "does the grid still fit". The
+ * So this answers exactly one question - HAS THE AXIS MOVED SINCE THIS GRID WAS
+ * RECORDED - and deliberately does not answer "does the grid still fit". The
  * second is the abstract model, and it is the one that would be wrong silently.
  */
 describe('saying the axis has moved under the grid', () => {
@@ -1401,7 +1401,7 @@ describe('saying the axis has moved under the grid', () => {
   it('⚑ stays quiet when only a calibration VALUE was retyped', () => {
     // The pixels did not move, so the grid is still exactly where it was put and
     // there is nothing to warn about. Warning here would train the user to
-    // ignore the message — the rule `heatmapRegenerateWarning` already follows.
+    // ignore the message - the rule `heatmapRegenerateWarning` already follows.
     const placed = at(10, 200, 300, 200);
     const stamp = heatmapAxisStamp(placed)!;
     // Same geometry, different numbers entirely: no stamp involvement at all.
@@ -1414,7 +1414,7 @@ describe('saying the axis has moved under the grid', () => {
   });
 
   it('has nothing to say when there is no stamp or no calibration', () => {
-    // An older grid, or a walk that is not finished — silence, not a warning
+    // An older grid, or a walk that is not finished - silence, not a warning
     // about a comparison that cannot be made.
     expect(heatmapAxisStamp({})).toBeNull();
     expect(heatmapAxisMoved(undefined, at(10, 200, 300, 200))).toBe(false);
@@ -1432,7 +1432,7 @@ describe('saying the axis has moved under the grid', () => {
  * out of bounds."*
  *
  * ⚠️ I HAD THE BOUNDARY IN THE WRONG PLACE and built a whole design question on
- * it — whether to hatch or flag a cell "past the end of the key", where "the
+ * it - whether to hatch or flag a cell "past the end of the key", where "the
  * key" meant the two LABELLED TICKS. They are not the edge. They are the
  * calibration, exactly as x1 and x2 are on an axis, and the plot area extends
  * past them.
@@ -1448,7 +1448,7 @@ describe('a reading is bounded by the STRIP, not by the labelled ticks', () => {
     return buildColorScale(placed, image, false).scale!;
   };
 
-  it('accepts the ends of the strip themselves — they are IN the calibrated area', () => {
+  it('accepts the ends of the strip themselves - they are IN the calibrated area', () => {
     for (const t of [0, 1]) {
       const { error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 1, 1, t);
       expect(error, `t=${t} is on the strip`).toBeNull();
@@ -1467,7 +1467,7 @@ describe('a reading is bounded by the STRIP, not by the labelled ticks', () => {
 
   it('⚑⚑ ACCEPTS A VALUE BEYOND A LABELLED TICK, because the ink is still there', () => {
     // THE CASE THE CORRECTION SAVES. The ticks are two known points on the
-    // strip, not its ends — so a figure whose key is labelled 100 and 700 with
+    // strip, not its ends - so a figure whose key is labelled 100 and 700 with
     // ink continuing past the 700 mark can legitimately read higher than 700,
     // and that colour was really sampled. Refusing it would refuse a real
     // reading off a real figure.
@@ -1480,14 +1480,14 @@ describe('a reading is bounded by the STRIP, not by the labelled ticks', () => {
     const beyond = (hi + 1) / 2;
     const { error } = setCellReadingAt(NO_HEATMAP_CELL_READINGS, 0, 0, beyond);
     expect(error).toBeNull();
-    // And it is worth MORE than the labelled tick — extrapolated, but off ink we
+    // And it is worth MORE than the labelled tick - extrapolated, but off ink we
     // actually measured.
     const outer = scale.ticks[tickPositions[0]! > tickPositions[1]! ? 0 : 1]!.value;
     expect(Math.abs(valueAtPosition(scale, beyond)!)).toBeGreaterThan(Math.abs(outer) * 0.999);
   });
 
   it('refuses a TYPED value whose position falls off the strip', () => {
-    // The typed twin of the drag, through the same bound — a guard on one
+    // The typed twin of the drag, through the same bound - a guard on one
     // entrance only is the shape this project keeps getting bitten by.
     const scale = scaleFor();
     const wild = valueAtPosition(scale, 5)!;

@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "bar-grouped-viability.png",
-    "note": "Synthetic ground truth \u2014 per-bar value, one series per group."
+    "note": "Synthetic ground truth - per-bar value, one series per group."
   },
   "graphType": "bar",
   "axes": {

@@ -5,11 +5,11 @@ import { computeBinGlyph } from '../histogramGlyph.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 
 /**
- * `getHistogramBinGlyphs()` — what the canvas draws so a captured bin reads as
+ * `getHistogramBinGlyphs()` - what the canvas draws so a captured bin reads as
  * an INTERVAL rather than two loose dots.
  *
  * ⚑ WHY THIS FILE EXISTS. `computeBinGlyph` (the geometry) has had its own
- * tests since it was written; the session method that CALLS it had none — a
+ * tests since it was written; the session method that CALLS it had none - a
  * mutation run scored it at 15 mutants with ZERO coverage, meaning no test in
  * the suite reached it at all. That is this project's recurring shape: the pure
  * algorithm is covered and the WIRING is not, even though the wiring is where
@@ -55,7 +55,7 @@ describe('getHistogramBinGlyphs', () => {
     expect(session.getHistogramBinGlyphs()).toEqual([]);
   });
 
-  it('⚑ draws NOTHING for a half-captured bin — the rule getBoxPlotGlyphs uses', () => {
+  it('⚑ draws NOTHING for a half-captured bin - the rule getBoxPlotGlyphs uses', () => {
     // One corner down is not an interval yet: which edge it is is unknown until
     // the second corner decides the ordering, so there is no honest span to draw.
     const session = histogramWithBins([[150, 200]]);
@@ -63,7 +63,7 @@ describe('getHistogramBinGlyphs', () => {
   });
 
   it('skips an incomplete bin without dropping the complete one after it', () => {
-    // A `continue`, not a `break` — the loop must keep going.
+    // A `continue`, not a `break` - the loop must keep going.
     const session = histogramWithBins([
       [150, 200],
       [250, 200], // complete
@@ -78,14 +78,14 @@ describe('getHistogramBinGlyphs', () => {
       [250, 210],
     ]);
     const [glyph] = session.getHistogramBinGlyphs();
-    // Delegates to the geometry rather than re-deriving it — same call, same
+    // Delegates to the geometry rather than re-deriving it - same call, same
     // pixels, so the canvas and the export cannot disagree about a bin's span.
     expect(glyph).toEqual(computeBinGlyph({ x: 150, y: 200 }, { x: 250, y: 210 }));
   });
 
-  it('⚑ refuses on every OTHER graph type — including one holding COMPLETE tuples', () => {
+  it('⚑ refuses on every OTHER graph type - including one holding COMPLETE tuples', () => {
     // ⚑ The interesting case is Bar, not XY. XY has no slots, so its tuple rows
-    // are empty and it would draw nothing even WITHOUT the graph-type guard —
+    // are empty and it would draw nothing even WITHOUT the graph-type guard -
     // testing only that proves nothing about the guard. Bar is tuple-shaped and
     // its captured bar IS a complete two-corner tuple, so without the guard this
     // renders bin glyphs over every bar on the chart.

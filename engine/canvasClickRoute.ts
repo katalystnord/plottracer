@@ -5,7 +5,7 @@ import type { ToolMode } from './toolMode.js';
  *
  * ⚑ WHY THIS IS WORTH ITS OWN MODULE, small as it is. `place-point` is this
  * router's FALLTHROUGH: every mode that does not claim the click ends up adding
- * a data point. That default has produced the same defect more than once — a
+ * a data point. That default has produced the same defect more than once - a
  * rail-wired mode with no branch of its own silently fabricating a raw point in
  * the active series while the user was aiming at something else. The v0.8
  * "By colour" bug is the case that named it: clicking the curve is exactly what
@@ -18,25 +18,25 @@ import type { ToolMode } from './toolMode.js';
  */
 
 export type CanvasClickRoute =
-  /** One sampler, routed by target (ckpt 90) — it intercepts before any tool. */
+  /** One sampler, routed by target (ckpt 90) - it intercepts before any tool. */
   | { kind: 'sample-colour'; target: 'grid' | 'series' | 'trace' }
   /** The click does nothing, deliberately. */
   | { kind: 'ignore' }
   /** Select never adds; a click on empty canvas clears instead. */
   | { kind: 'clear-selection' }
   | { kind: 'measure' }
-  /** Capture is mandatory step 1 (ckpt 103) — refuse, and say what to do. */
+  /** Capture is mandatory step 1 (ckpt 103) - refuse, and say what to do. */
   | { kind: 'capture-first'; message: string }
   | { kind: 'calibrate' }
   | { kind: 'segment-fill' }
   | { kind: 'interpolate' }
   /**
-   * Pick the CELL under the cursor — a heatmap's answer to "what did I just
+   * Pick the CELL under the cursor - a heatmap's answer to "what did I just
    * click on?".
    *
    * ⚑⚑ AND IT CLOSES THE FALLTHROUGH ON A TYPE THAT CANNOT USE IT. A heatmap's
-   * values come from its grid, never from clicking the figure — the tips bar
-   * says so — yet a bare click still reached `add-point` and dropped a raw datum
+   * values come from its grid, never from clicking the figure - the tips bar
+   * says so - yet a bare click still reached `add-point` and dropped a raw datum
    * into the active series, invisible until export. That is the v0.8 "By colour"
    * defect exactly: a gesture that feels natural on the figure, silently
    * poisoning the record. Here the natural gesture has an honest meaning, so it
@@ -60,7 +60,7 @@ export interface CanvasClickInput {
  * The one mode a bare canvas click may turn into a data point.
  *
  * Exported so the guard can be asserted against the router rather than restated
- * in a test — a list that agrees with itself proves nothing.
+ * in a test - a list that agrees with itself proves nothing.
  */
 export const ADDS_POINT_ON_CLICK: readonly ToolMode[] = ['place-point'];
 
@@ -78,7 +78,7 @@ export function routeCanvasClick({
   // active series while the user was aiming at a cap.
   if (mode === 'error-bars') return { kind: 'ignore' };
   // Auto-extract ▸ By colour traces via the Trace button, NOT a canvas click
-  // (v0.8) — the bug that named this whole guard family. The eyedropper path
+  // (v0.8) - the bug that named this whole guard family. The eyedropper path
   // above already returned, so this only guards a bare click.
   if (mode === 'color-trace') return { kind: 'ignore' };
   // Select (David 2026-07-21): NEVER adds. In practice a select-mode press is
@@ -89,7 +89,7 @@ export function routeCanvasClick({
   // ⚑⚑ EXCEPT ON A MATRIX TYPE, WHERE SELECT IS THE ONE TOOL THAT MUST SELECT.
   // David, on the built 2.2.0: *"Nothing happens at all when I click a cell.
   // With any selection tools."* `select-cell` lives at the bottom of this
-  // router, so it was reachable only through the FALLTHROUGH — and this branch
+  // router, so it was reachable only through the FALLTHROUGH - and this branch
   // returned first, clearing point state that a heatmap does not have while
   // never touching the picked cells. The capability was real and bound to the
   // control advertising the opposite: a hidden mode, and the tool that did work
@@ -112,7 +112,7 @@ export function routeCanvasClick({
       return {
         kind: 'capture-first',
         message:
-          'Capture the figure first — frame the whole figure in the window, then press “Capture figure”. What you see is what you capture.',
+          'Capture the figure first - frame the whole figure in the window, then press “Capture figure”. What you see is what you capture.',
       };
     }
     return { kind: 'calibrate' };

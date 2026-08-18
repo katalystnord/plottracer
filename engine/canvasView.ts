@@ -3,7 +3,7 @@
  * centered zoom, pan, screen<->image coordinate conversion, and click-vs-
  * drag disambiguation. Pulled out of ui/src/ImageCanvas.tsx (checkpoint 2
  * of the engine/ui spike, see CLAUDE.md) so it's plain, tested TypeScript
- * with no DOM/React dependency — the "framework-agnostic vanilla TS engine
+ * with no DOM/React dependency - the "framework-agnostic vanilla TS engine
  * module for canvas/interaction" from CLAUDE.md's Product #1 design, not
  * just a promise.
  */

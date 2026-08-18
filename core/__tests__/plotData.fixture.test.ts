@@ -9,13 +9,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /**
  * Real project JSON exported from the live wpd-core app (via a Playwright
  * driver calling wpd.appData.getPlotData().serialize() directly), not
- * hand-written — this is the "done criteria" #2 fixture from CLAUDE.md's
+ * hand-written - this is the "done criteria" #2 fixture from CLAUDE.md's
  * Step 1 scope: XY axes with a metadata override, Bar axes with point
  * groups (Error Bar Groups) and a custom label.
  */
 const fixture = JSON.parse(readFileSync(join(__dirname, 'fixtures/real-project.json'), 'utf8'));
 
-describe('PlotData — round-trip against a real exported project', () => {
+describe('PlotData - round-trip against a real exported project', () => {
   it('deserializes the fixture without error', () => {
     const pd = new PlotData();
     const result = pd.deserialize(fixture);

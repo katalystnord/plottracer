@@ -11,8 +11,8 @@ import type { RGB } from '../colorFilter.js';
  * `colorBar.test.ts` for the recipe). The survivors are two known classes, each
  * read and left deliberately: the sampling window's out-of-bounds guards, whose
  * off-by-ones let a single stray pixel into a 49-pixel medoid that is BUILT to
- * outvote one — the guard that matters, the one stopping a read from wrapping
- * onto the next row, is killed by the off-canvas test — and the layered
+ * outvote one - the guard that matters, the one stopping a read from wrapping
+ * onto the next row, is killed by the off-canvas test - and the layered
  * fallbacks in `midpointOnAxis`, where disabling any one of three leaves the
  * next one catching the same degenerate projector. Defence in depth reads as
  * surviving mutants; the alternative is a single guard and a NaN centre.
@@ -20,7 +20,7 @@ import type { RGB } from '../colorFilter.js';
  * ⚑ THE REAL RENDERS ARE THE OTHER INSTRUMENT (`engine/__tests__/
  * heatmapReadRealPng.test.ts`), and they answer the accuracy question. What they
  * cannot do is produce a LOG axis, a rotated scan, a cell with a printed number
- * in it or a cell half off the canvas on demand — so those are drawn here, where
+ * in it or a cell half off the canvas on demand - so those are drawn here, where
  * the geometry is known exactly and the expected answer is arithmetic rather
  * than a measurement.
  */
@@ -65,7 +65,7 @@ function greyScale(data: Uint8ClampedArray): ColorScale {
   const strip = sampleColorBar(data, W, H, { x: 0, y: 285 }, { x: 255, y: 285 }).strip!;
   return {
     strip,
-    // 0 grey is value 0, 255 grey is value 255 — so a cell's value IS its grey
+    // 0 grey is value 0, 255 grey is value 255 - so a cell's value IS its grey
     // level, and every expectation below can be read off the fill colour.
     ticks: [
       { point: { x: 0, y: 285 }, value: 0 },
@@ -102,7 +102,7 @@ describe('readHeatmap', () => {
 
   it('INSETS the sample, so an anti-aliased border is not read as data', () => {
     // ⚑ A border drawn ON the boundary blends the two neighbouring colours into
-    // one that is on NEITHER — a colour that inverts to a position between two
+    // one that is on NEITHER - a colour that inverts to a position between two
     // cells and reports itself as a confident reading of a value the figure
     // never printed. Here the border is 3px of white, the worst case.
     const data = greyKeyImage();
@@ -123,7 +123,7 @@ describe('readHeatmap', () => {
   it('reports HOW MUCH of a cell is the colour it read', () => {
     // ⚑ The evidence channel the colour itself cannot provide: a cell carrying a
     // printed number or a significance asterisk can have a colour that sits
-    // exactly on the ramp — distance 0, a tight band, total confidence — while a
+    // exactly on the ramp - distance 0, a tight band, total confidence - while a
     // chunk of it is ink that is not data. Uniformity is the only signal that
     // says so, and on a real quality-35 JPEG it caught the one cell the other
     // two measures could not.
@@ -137,8 +137,8 @@ describe('readHeatmap', () => {
     fill(data, 90, 100, 150, 140, [0, 0, 0]);
     const marked = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
     expect(marked[0]!.uniformity).toBeLessThan(1);
-    // The VALUE is still the cell's own colour — the ink is outvoted, not
-    // averaged in — so the reading survives and the warning travels with it.
+    // The VALUE is still the cell's own colour - the ink is outvoted, not
+    // averaged in - so the reading survives and the warning travels with it.
     expect(Math.round(marked[0]!.reading!.value)).toBe(90);
     expect(marked[0]!.reading!.distance).toBe(0);
   });
@@ -203,7 +203,7 @@ describe('readHeatmap', () => {
 
   it('reports a cell it could not sample as UNREAD, never as zero', () => {
     // ⚑ A cell off the edge of the canvas has no colour, and `0` is a value the
-    // figure might really contain — the difference between "no data" and "zero"
+    // figure might really contain - the difference between "no data" and "zero"
     // is the whole of tenet 9 in one field.
     const data = greyKeyImage();
     fill(data, 20, 20, 220, 220, [90, 90, 90]);
@@ -257,8 +257,8 @@ describe('readHeatmap', () => {
     const shifted = (dx: number, dy: number): PixelProjector => ({
       dataToPixel: (x, y) => ({ x: 20 + x * 50 + dx, y: 220 - y * 100 + dy }),
     });
-    // Each shift takes part of the SAMPLED region — not merely part of the cell
-    // — past one edge, which is the only arrangement that exercises the guard.
+    // Each shift takes part of the SAMPLED region - not merely part of the cell
+    // - past one edge, which is the only arrangement that exercises the guard.
     for (const [dx, dy] of [
       [-140, 0],
       [260, 0],
@@ -279,7 +279,7 @@ describe('readHeatmap', () => {
     const data = greyKeyImage();
     fill(data, 20, 20, 220, 220, [10, 120, 200]);
     // ⚑ And every ODD column a different blue, so that reading a NEIGHBOURING
-    // pixel's channel — an index slipped by one within the buffer — returns a
+    // pixel's channel - an index slipped by one within the buffer - returns a
     // different colour rather than the same one. A uniform fill cannot tell the
     // two apart, because the pixel beside it holds identical bytes.
     for (let x = 21; x < 220; x += 2) fill(data, x, 20, x + 1, 220, [10, 120, 60]);
@@ -330,7 +330,7 @@ describe('readHeatmap', () => {
   });
 
   it('falls back to the midpoint of the bounds when the axis cannot project', () => {
-    // A degenerate projector — non-finite pixels, or two bounds landing on the
+    // A degenerate projector - non-finite pixels, or two bounds landing on the
     // same one. There is no ink to find a centre in, so the arithmetic midpoint
     // is the only honest answer left, and it must not come back as NaN.
     const data = greyKeyImage();
@@ -348,7 +348,7 @@ describe('readHeatmap', () => {
     // data runs past its own colour key draws those cells in the key's extreme
     // colour: the colour matches the ramp exactly, fills the cell uniformly, and
     // reads back with total confidence as the key's limit. Nothing about the
-    // pixels is wrong — the figure simply no longer contains the number.
+    // pixels is wrong - the figure simply no longer contains the number.
     //
     // Found by BUILDING AN EXAMPLE: the first IC50 sample generated values up to
     // 1580 nM against a key stopping at 600, and five cells came back exact,

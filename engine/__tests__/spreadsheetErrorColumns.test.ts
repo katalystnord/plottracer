@@ -1,5 +1,5 @@
 /**
- * B4, the UI half — ⚑⚑ A DATUM'S CAPS ARE COLUMNS ON ITS OWN ROW.
+ * B4, the UI half - ⚑⚑ A DATUM'S CAPS ARE COLUMNS ON ITS OWN ROW.
  *
  * This is where the old model's worst symptom was visible, so it is where the
  * fix has to become visible. Three series stacked side by side implied a
@@ -11,16 +11,16 @@
  *
  * Every cap belonged to point 1; the layout showed point 1's caps beside the
  * datum at x = 10. David: *"The workflow is just not amenable to do that."* It
- * misled me three times in one session too — I told him his capture was wrong
+ * misled me three times in one session too - I told him his capture was wrong
  * when it was substantially right.
  *
  * ⚑ TWO THINGS MUST BE TRUE, and the second is the one that bites. The caps
- * must appear as columns on the datum's row — and they must STOP appearing as
+ * must appear as columns on the datum's row - and they must STOP appearing as
  * ROWS, because under B4 a cap is a pixel of the series it belongs to, so the
  * table that lists a series' pixels lists its caps as data points.
  *
  * ⚑ ABSOLUTES, not deltas, and that was measured rather than chosen:
- * `docs/generator-input-formats.md` — ggplot's `geom_errorbar` takes ymin/ymax
+ * `docs/generator-input-formats.md` - ggplot's `geom_errorbar` takes ymin/ymax
  * outright, and in the delta form "no lower bound" and "a bound of size zero"
  * are the same number, which is tenet 9's exact failure. The record holds
  * absolutes; the delta is a projection the EXPORT carries alongside.

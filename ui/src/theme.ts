@@ -2,10 +2,10 @@ import { parseHex } from './contrast.js';
 
 /**
  * Design tokens for ui/ (checkpoint 31's light theme, restructured into a
- * nested object at checkpoint 33 -- see CLAUDE.md's "engine/ui rebuild —
+ * nested object at checkpoint 33 -- see CLAUDE.md's "engine/ui rebuild -
  * staged checkpoints"). Colors are ported directly from Ketcher-Desktop's
  * real palette, the design-language lead named in CLAUDE.md's "Product #1
- * — rebuild design" — not guessed at.
+ * - rebuild design" - not guessed at.
  *
  * Shape matches Ketcher's own token-object pattern, specifically
  * `ketcher-react/src/components/styles/consts.ts` (a small, nested
@@ -24,16 +24,16 @@ import { parseHex } from './contrast.js';
  * Scope: app *chrome* only (buttons, panels, borders, page background,
  * status text). Deliberately NOT touched, and not covered by these tokens:
  * per-dataset series colors (engine/calibrationSession.ts's tab10 palette,
- * checkpoint 30) and the Curve Fit overlay's green fit line — both are
+ * checkpoint 30) and the Curve Fit overlay's green fit line - both are
  * data-identifying accent colors, not UI theme, and stay exactly as they
  * were. `color.overlay` below is the one exception: the default marker/
  * box-glyph outline used to be white, tuned for the old dark page chrome,
- * but that choice was never really about the *page* theme — the marker
+ * but that choice was never really about the *page* theme - the marker
  * overlay always renders directly on top of the loaded plot image, and
  * most scanned/photographed scientific charts have light paper
  * backgrounds, so a white outline already had poor contrast in the common
  * case. Switched to a dark near-black here as a small, real legibility
- * fix, not scope creep — see the checkpoint note in
+ * fix, not scope creep - see the checkpoint note in
  * docs/checkpoint-history.md.
  */
 export const theme = {
@@ -78,7 +78,7 @@ export const theme = {
     overlay: {
       stroke: '#262626',
       pendingMarkerFill: '#ffffff',
-      /** An error cap's tick — the whisker's END, which IS the cap (B1/B2).
+      /** An error cap's tick - the whisker's END, which IS the cap (B1/B2).
        * David: *"let's keep the end of the handles black, and the line that goes
        * to them a colour."* Darker than `stroke`, because a cap reads against
        * the figure's own ink and against the coloured bar it terminates. */
@@ -131,8 +131,8 @@ export const glassSurface = {
  *     Done          ends the category ticks      TEAL,  folds its card
  *     Read cells    ends the heatmap grid        PLAIN, folded nothing
  *
- * Calibrate is the most consequential action in the app — every extracted value
- * depends on it — and it looked like the least. So: **the action that ends a
+ * Calibrate is the most consequential action in the app - every extracted value
+ * depends on it - and it looked like the least. So: **the action that ends a
  * card is teal and folds it**, said once here rather than as a style literal
  * copied into a third call site.
  *
@@ -156,7 +156,7 @@ export function endsCardButton(enabled = true) {
     // button… I think it is smaller right now."*). Those set `fontSize: 12` and
     // take the UA's default padding on a 2px border; this one draws a 1px border,
     // so it needs the extra pixel back or it reads as a smaller pill among them.
-    // The COLOUR still says "this one ends the card" — only the box matches.
+    // The COLOUR still says "this one ends the card" - only the box matches.
     padding: '3px 12px',
     cursor: enabled ? 'pointer' : 'default',
   } as const;

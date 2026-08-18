@@ -3,12 +3,12 @@ import { SidebarSection, SidebarHeading } from '../layout.js';
 import { formatCurveFitEquation, type CurveFitState } from '../../../engine/curveFitPanel.js';
 
 /**
- * The Curve fit OUTPUT card (v1.1 step 2) — the result, moved here from the
+ * The Curve fit OUTPUT card (v1.1 step 2) - the result, moved here from the
  * Curve Fit fold-out so that card holds inputs only. Bound to the active
  * series; already stored on the dataset and exported as its own derived block.
  *
  * ⚑ Two of the three lines below exist because a number LOOKED like an answer
- * when it was not — see their own comments. Both are release-gate findings, and
+ * when it was not - see their own comments. Both are release-gate findings, and
  * both are prose the user reads instead of a bare figure.
  */
 
@@ -27,7 +27,7 @@ export function CurveFitCard({ state, seriesName }: CurveFitCardProps) {
         <span style={{ color: theme.color.text.secondary }}>{seriesName}</span>
         <code data-testid="curve-fit-equation" style={{ fontSize: theme.font.size.small, wordBreak: 'break-word' }}>{formatCurveFitEquation(state)}</code>
         <span style={{ fontVariantNumeric: 'tabular-nums', color: theme.color.text.secondary }}>
-          R² = {state.rSquared === undefined ? '—' : state.rSquared.toFixed(5)} · RMS = {state.rms.toPrecision(5)} · n = {state.n}
+          R² = {state.rSquared === undefined ? '-' : state.rSquared.toFixed(5)} · RMS = {state.rms.toPrecision(5)} · n = {state.n}
         </span>
         {/* ⚑ R² is undefined when the series is flat: it is the fraction of the
             data's variation that the model accounts for, and a flat series has
@@ -37,7 +37,7 @@ export function CurveFitCard({ state, seriesName }: CurveFitCardProps) {
             blank rather than leaving a dash to be puzzled over. */}
         {state.rSquared === undefined && (
           <span data-testid="curve-fit-no-r2" style={{ color: theme.color.text.secondary }}>
-            R² needs variation to measure against, and every value in this series is the same — so it has none here. Read the RMS instead: it is in the data's own units.
+            R² needs variation to measure against, and every value in this series is the same - so it has none here. Read the RMS instead: it is in the data's own units.
           </span>
         )}
         {/* ⚑ A nonlinear solver can run out of iterations and still leave a
@@ -47,7 +47,7 @@ export function CurveFitCard({ state, seriesName }: CurveFitCardProps) {
             directly and has nothing to converge. */}
         {state.converged === false && (
           <span data-testid="curve-fit-not-converged" style={{ color: theme.color.error }}>
-            This fit did not settle — the curve is where the solver stopped, not a result. Try another model or a restricted x-range.
+            This fit did not settle - the curve is where the solver stopped, not a result. Try another model or a restricted x-range.
           </span>
         )}
       </div>

@@ -1,14 +1,14 @@
 /**
- * Measure fold-out (v1.1 step 2 — single row). A COMPACT icon strip anchored to
+ * Measure fold-out (v1.1 step 2 - single row). A COMPACT icon strip anchored to
  * the ruler rail button: the four measurement tools + Set-scale, icon-only with
- * tooltips, no title (the pressed rail icon + tooltips identify it — same language
+ * tooltips, no title (the pressed rail icon + tooltips identify it - same language
  * as the Select strip). Transient sub-flows (typing a scale value; finishing an
  * Area polygon) drop in just BELOW the row while active, then disappear, so the
  * resting card is one line.
  *
  * The RECORDED measurements themselves are an OUTPUT: they live in the right
  * output panel's Measurements section (bound with the series data, copyable,
- * exportable), NOT here — a tool fold-out holds inputs/actions only.
+ * exportable), NOT here - a tool fold-out holds inputs/actions only.
  *
  * History: was a full labelled card with the list inline (2026-07-13, see
  * docs/competitor-data-panel-study.md §5); the list moved to the output panel in
@@ -178,7 +178,7 @@ export function MeasureCard({
             active={activeTool === t.id}
             onClick={() => onSelectTool(t.id)}
             data-testid={`measure-tool-${t.id}`}
-            title={`${t.label} — ${t.hint}`}
+            title={`${t.label} - ${t.hint}`}
           >
             {measureIcons[t.id]}
           </ToolButton>
@@ -188,7 +188,7 @@ export function MeasureCard({
           active={!!setScaleDraft}
           onClick={onStartSetScale}
           data-testid="measure-set-scale"
-          title="Set scale — click two points a known distance apart, then type the real distance + unit."
+          title="Set scale - click two points a known distance apart, then type the real distance + unit."
         >
           {scaleIcon}
         </ToolButton>

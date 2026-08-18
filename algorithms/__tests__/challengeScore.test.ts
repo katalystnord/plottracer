@@ -27,7 +27,7 @@ describe('interpY', () => {
   });
 });
 
-describe('scoreRound — curve family', () => {
+describe('scoreRound - curve family', () => {
   it('a perfect trace adds ~0 penalty', () => {
     const s = scoreRound('curve', [LINE], [LINE], R, 20);
     expect(s.penaltySeconds).toBeCloseTo(0, 6);
@@ -74,7 +74,7 @@ describe('scoreRound — curve family', () => {
   });
 });
 
-describe('scoreRound — scatter family', () => {
+describe('scoreRound - scatter family', () => {
   const truth: Pt[] = [
     { x: 1, y: 1 },
     { x: 2, y: 2 },
@@ -119,7 +119,7 @@ describe('scoreRound — scatter family', () => {
   });
 });
 
-describe('scoreOrderedRound — bar / box families', () => {
+describe('scoreOrderedRound - bar / box families', () => {
   const RANGE = 450;
 
   it('a perfect bar set adds ~0 penalty', () => {
@@ -153,7 +153,7 @@ describe('scoreOrderedRound — bar / box families', () => {
 describe('a curve must be traced, not merely spanned', () => {
   /**
    * ⚑⚑ THE UNDER-SAMPLING EXPLOIT. `fitCurveSeries` measured deviation in ONE
-   * direction — the truth interpolated at each USER x — so the error was only
+   * direction - the truth interpolated at each USER x - so the error was only
    * ever sampled where the player chose to click. Two clicks, one at each end,
    * put both of them exactly on the curve (error 0) and spanned the full x range
    * (coverage 0), scoring a flat zero penalty. The game ranks on TIME, so the

@@ -13,7 +13,7 @@ export interface TupleRow {
 
 export interface TupleTableProps {
   rows: readonly TupleRow[];
-  /** Slot names, one column each — unless the type declares a derived value. */
+  /** Slot names, one column each - unless the type declares a derived value. */
   slotNames: readonly string[];
   /** Present when the type's datum is the TUPLE rather than its members. */
   derivedColumn: { label: string } | null;
@@ -26,11 +26,11 @@ export interface TupleTableProps {
 }
 
 /**
- * The tuple table — one row per box / slice / bar, for every slotted type.
+ * The tuple table - one row per box / slice / bar, for every slotted type.
  *
  * ⚑ ONE DERIVED COLUMN where the type's datum is the tuple rather than its
  * members (pie): a slice's two boundaries are angles and neither is the number
- * anyone wants — the value is the DIFFERENCE between them. Every other tuple
+ * anyone wants - the value is the DIFFERENCE between them. Every other tuple
  * type keeps its per-slot columns, because a box plot's Min/Q1/Median really
  * are five separate readings.
  *
@@ -81,12 +81,12 @@ export function TupleTable({
                 are five separate readings. */}
             {derivedColumn ? (
               <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
-                {row.derived === null ? '—' : fmtValue(row.derived)}
+                {row.derived === null ? '-' : fmtValue(row.derived)}
               </td>
             ) : (
               row.points.map((point, gi) => (
                 <td key={gi} style={{ paddingRight: 16 }}>
-                  {point && point.data ? fmtValue(point.data[0]!) : '—'}
+                  {point && point.data ? fmtValue(point.data[0]!) : '-'}
                 </td>
               ))
             )}

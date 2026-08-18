@@ -3,7 +3,7 @@ import { CalibrationSession, SPIDER_AXES_CONFIG } from '../calibrationSession.js
 import type { SpiderAxes } from '../../core/axes/spider.js';
 
 /**
- * A tuple's category label — the one thing on a slotted series the user TYPES.
+ * A tuple's category label - the one thing on a slotted series the user TYPES.
  *
  * ⚑ It was stored on the tuple's slot-0 pixel and read back from there, so a tuple
  * whose slot 0 happened to be empty swallowed the name in silence. That is reachable

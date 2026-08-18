@@ -1,7 +1,7 @@
 import { theme } from './theme';
 
 /**
- * "Exploded slice" — the control that makes a pulled-out sector readable.
+ * "Exploded slice" - the control that makes a pulled-out sector readable.
  *
  * ⚑ WHY IT IS ON THE CANVAS AND NOT IN THE SIDEBAR (v1.6, David's call). It shipped
  * first as a small chip beside the capture status in the right-hand panel, and it
@@ -12,8 +12,8 @@ import { theme } from './theme';
  * clicking boundaries, sized and coloured like something you are meant to press.
  *
  * ⚑ AND WHY IT IS A BUTTON AND NOT A MODIFIER. Ctrl+click was the first idea and is
- * doubly unavailable — Ctrl+Left is the canvas pan on Windows/Linux and the system
- * context-menu gesture on macOS — but the deciding reason is the keystone rule: a
+ * doubly unavailable - Ctrl+Left is the canvas pan on Windows/Linux and the system
+ * context-menu gesture on macOS - but the deciding reason is the keystone rule: a
  * capability reachable only from a held key is a shortcut-only path, and the user
  * never sees that it exists.
  *
@@ -26,7 +26,7 @@ export type ExplodedStage = 'off' | 'apex' | 'edges';
 
 interface Props {
   stage: ExplodedStage;
-  /** How many of the armed slice's two edges are placed — ticks the checklist. */
+  /** How many of the armed slice's two edges are placed - ticks the checklist. */
   edgesPlaced: number;
   onToggle: () => void;
 }
@@ -104,7 +104,7 @@ export function ExplodedSliceControl({ stage, edgesPlaced, onToggle }: Props) {
           <div style={{ fontWeight: 600, fontSize: theme.font.size.regular, marginBottom: 6 }}>
             Exploded slice
           </div>
-          {/* The REASON, not just the recipe — it is what tells you whether this
+          {/* The REASON, not just the recipe - it is what tells you whether this
               button applies to the slice you are looking at. */}
           <p style={{ margin: '0 0 8px', color: theme.color.text.secondary }}>
             A slice pulled out of the pie has its own tip, so its edges no longer point
@@ -116,7 +116,7 @@ export function ExplodedSliceControl({ stage, edgesPlaced, onToggle }: Props) {
             <Step n={3} text="Click its second edge" state={stepState(3)} />
           </ol>
           <p style={{ margin: '8px 0 0', color: theme.color.text.secondary }}>
-            This slice only — the next sector goes back to the pie&apos;s centre.
+            This slice only - the next sector goes back to the pie&apos;s centre.
           </p>
         </div>
       )}
@@ -124,7 +124,7 @@ export function ExplodedSliceControl({ stage, edgesPlaced, onToggle }: Props) {
         type="button"
         data-testid="pie-exploded-slice"
         aria-pressed={armed}
-        title="This slice is pulled out of the pie — click its tip first, then its two edges"
+        title="This slice is pulled out of the pie - click its tip first, then its two edges"
         onClick={onToggle}
         style={{
           pointerEvents: 'auto',
@@ -140,7 +140,7 @@ export function ExplodedSliceControl({ stage, edgesPlaced, onToggle }: Props) {
           boxShadow: '0 2px 8px rgba(0,0,0,0.28)',
         }}
       >
-        {armed ? 'Exploded slice — cancel' : 'Exploded slice'}
+        {armed ? 'Exploded slice - cancel' : 'Exploded slice'}
       </button>
     </div>
   );

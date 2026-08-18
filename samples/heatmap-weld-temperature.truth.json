@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "heatmap-weld-temperature.png",
-    "note": "Synthetic ground truth \u2014 the value of every cell, and its bounds."
+    "note": "Synthetic ground truth - the value of every cell, and its bounds."
   },
   "graphType": "heatmap",
   "axes": {

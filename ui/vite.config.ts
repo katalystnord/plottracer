@@ -45,7 +45,7 @@ const appVersion = (
 ).version;
 
 // root: '.' (this file's directory, ui/) so ui/index.html is the entry.
-// base: './' so the built asset paths are relative — required for
+// base: './' so the built asset paths are relative - required for
 // loading via file:// in Electron (see electron-dev.cjs) rather than an
 // http server, matching how the production app already loads
 // electron/app/index.html.

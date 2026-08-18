@@ -1,7 +1,7 @@
 /**
  * Tests for the import registry and the StarryDigitizer reader.
  *
- * The fixtures are built here from each format's structure — no third-party
+ * The fixtures are built here from each format's structure - no third-party
  * project files are copied into this tree.
  */
 import { describe, it, expect } from 'vitest';
@@ -16,7 +16,7 @@ import { isStarryProject, importStarryProject } from '../starryImport.js';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
-/** A 1x1 PNG — enough for the image entry to be real bytes. */
+/** A 1x1 PNG - enough for the image entry to be real bytes. */
 const PNG = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
   0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
@@ -72,7 +72,7 @@ function makeStarry(o: StarryOpts = {}): Uint8Array {
  * One of OUR project archives: the same container shape and the same entry
  * names StarryDigitizer uses, which is the whole point of the collision test.
  * Built here rather than through the real writer because the only thing that
- * separates the two formats is the marker key — `plotTracerProject`, whose
+ * separates the two formats is the marker key - `plotTracerProject`, whose
  * presence in real files is asserted by projectFile's own tests.
  */
 function makeOurs(): Uint8Array {
@@ -120,7 +120,7 @@ describe('identifyProject', () => {
     expect(identifyProject(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBeNull(); // a JPEG
   });
 
-  it('does not decide anything from the filename — only the bytes', () => {
+  it('does not decide anything from the filename - only the bytes', () => {
     // A zip whose project.json is StarryDigitizer's stays StarryDigitizer's
     // however it might be named on disk; there is no name to pass in at all.
     expect(identifyProject(makeStarry())?.id).toBe('starry');
@@ -168,7 +168,7 @@ describe('importStarryProject', () => {
   it('⚑ does not read whole-number axis values as dates', () => {
     // Same trap as the Engauge reader: Calibration parses its values as text and
     // InputParser tries a DATE first, so a bare number 0..23 becomes an
-    // hour-of-day timestamp. Values here are 0, 10, 0 and 1 — all in the trap.
+    // hour-of-day timestamp. Values here are 0, 10, 0 and 1 - all in the trap.
     const r = importStarryProject(makeStarry());
     if ('error' in r) throw new Error(r.error);
     const px = r.datasets[0]!.getPixel(0);
@@ -195,7 +195,7 @@ describe('importStarryProject', () => {
     });
     const r = importStarryProject(bytes);
     if ('error' in r) throw new Error(r.error);
-    // Only the active set's datasets come across — points belonging to another
+    // Only the active set's datasets come across - points belonging to another
     // calibration must not be placed against this one.
     expect(r.datasets.map((d) => d.name)).toEqual(['On second']);
     expect(r.notes.join(' ')).toMatch(/2 axis sets/i);
@@ -277,7 +277,7 @@ describe('StarryDigitizer: an absent considerGraphTilt (v1.5 gate)', () => {
     expect(absent[1]).toBeCloseTo(explicitFalse[1]!, 9);
   });
 
-  it('and NOT as an explicit true — on a tilted figure the two really differ', () => {
+  it('and NOT as an explicit true - on a tilted figure the two really differ', () => {
     // Guards the test above from passing vacuously: if correction made no
     // difference here, the first assertion would prove nothing.
     const absent = readAt(tilted({}));
@@ -296,7 +296,7 @@ describe('StarryDigitizer: an absent considerGraphTilt (v1.5 gate)', () => {
  *
  * A foreign file is the one input we do not control the shape of. Tenet 6
  * puts all interoperability at the FILE level, which means this reader is
- * where another tool's model is translated into ours — and the translation
+ * where another tool's model is translated into ours - and the translation
  * must refuse loudly rather than produce a figure whose numbers are quietly
  * wrong. Each guard below is the difference between those two outcomes.
  */
@@ -362,7 +362,7 @@ describe('StarryDigitizer: which datasets come across', () => {
 
   it('⚑ takes only the datasets bound to the axis set it opened', () => {
     // Carrying the others would place their points against a calibration that
-    // is not theirs — the same numbers, silently read off the wrong scale.
+    // is not theirs - the same numbers, silently read off the wrong scale.
     const r = importStarryProject(
       makeStarry({
         axisSets: twoSets,
@@ -460,7 +460,7 @@ describe('StarryDigitizer: finding the image', () => {
 
   it('accepts the entry names their own reader accepts, with the right mime', () => {
     // Their writer emits image.png; their reader also takes jpg/jpeg, so we
-    // take exactly the set they do — no more, so an unexpected entry is
+    // take exactly the set they do - no more, so an unexpected entry is
     // reported rather than guessed at.
     for (const [name, mime] of [
       ['image.png', 'image/png'],
@@ -474,7 +474,7 @@ describe('StarryDigitizer: finding the image', () => {
   });
 
   it('⚑ treats a zero-length entry as no image, and says so', () => {
-    // An empty entry would otherwise become "data:image/png;base64," — a data
+    // An empty entry would otherwise become "data:image/png;base64," - a data
     // URL that resolves to nothing, giving a blank canvas with no note.
     const r = importStarryProject(starryWithImage('image.png', new Uint8Array(0)));
     if ('error' in r) throw new Error(r.error);

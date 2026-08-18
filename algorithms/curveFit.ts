@@ -2,7 +2,7 @@
  * Faithful TypeScript port of the pure functions from
  * ui-patches/engauge-algos.js's Curve Fitting section (built 2026-07,
  * clean-room reimplementation of the same "naive" normal-equations
- * approach Engauge itself uses — see that file's header for the original
+ * approach Engauge itself uses - see that file's header for the original
  * provenance note). Ported per CLAUDE.md's Step 1 scope.
  */
 
@@ -23,7 +23,7 @@ export const CURVE_FIT_MAX_DEGREE = 9;
  *
  * ⚑ The near-singular test is `Math.abs(pivot) < 1e-10`, and **every
  * comparison against NaN is false**, so that test alone cannot see a matrix
- * that has already overflowed to Infinity/NaN — it would wave the worst input
+ * that has already overflowed to Infinity/NaN - it would wave the worst input
  * through and return an all-NaN solution. The non-finite check below is
  * therefore separate from, not folded into, the singularity check: they are
  * different failures and they need different words. See the "overflowed fit"
@@ -41,11 +41,11 @@ export function solveLinearSystem(A: number[][], b: number[]): number[] {
     }
     if (!Number.isFinite(M[pivotRow]![col]!)) {
       throw new Error(
-        'The system holds values too large to solve — they overflowed to infinity, so no solution can be computed.',
+        'The system holds values too large to solve - they overflowed to infinity, so no solution can be computed.',
       );
     }
     if (Math.abs(M[pivotRow]![col]!) < 1e-10) {
-      throw new Error('Singular matrix — not enough distinct points for this degree.');
+      throw new Error('Singular matrix - not enough distinct points for this degree.');
     }
     if (pivotRow !== col) {
       const tmp = M[col]!;
@@ -66,7 +66,7 @@ export function solveLinearSystem(A: number[][], b: number[]): number[] {
   }
   if (!x.every((v) => Number.isFinite(v))) {
     throw new Error(
-      'The system holds values too large to solve — the solution overflowed and is not a number.',
+      'The system holds values too large to solve - the solution overflowed and is not a number.',
     );
   }
   return x;
@@ -94,8 +94,8 @@ export function fitPolynomial(points: Point2D[], degree: number): number[] {
   // degree overflow to Infinity long before anything else complains. Caught here
   // rather than in the solver because only this function knows the two things
   // the user can actually change: the degree, and how far x sits from zero.
-  // Naming the point count instead — which is what the singularity refusal below
-  // would say — would send them to fix something that is not broken.
+  // Naming the point count instead - which is what the singularity refusal below
+  // would say - would send them to fix something that is not broken.
   if (!XtX.every((row) => row.every((v) => Number.isFinite(v))) || !Xty.every((v) => Number.isFinite(v))) {
     throw new Error(
       `These x values are too large for a degree ${String(degree)} fit: raising them to the power ${String(2 * degree)} overflows to infinity, so no coefficients can be computed. Use a lower degree, or rescale the x values closer to zero.`,
@@ -137,7 +137,7 @@ export function computeFitStats(points: Point2D[], coefficients: number[]): FitS
 /**
  * Gathers {x, y} data-space points for fitting. For datasets with point
  * groups (Error Bar Groups), only the primary group (index 0, "Value") is
- * included — otherwise the Upper/Lower bound points would be fit as if
+ * included - otherwise the Upper/Lower bound points would be fit as if
  * they were independent curve samples.
  */
 export function getFitPoints(dataset: Dataset, axes: AnyAxes): Point2D[] {

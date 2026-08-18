@@ -4,8 +4,8 @@ import { isPdfBytes, isTiffBytes, pagedDocumentFormat } from '../pdfDetect.js';
 /**
  * Paged-document detection by CONTENT.
  *
- * ⚑ WHY THIS FILE GREW. `pdfDetect.ts` scored 52.24% — the worst in
- * `engine/` — while already having a test for every function. Nothing was
+ * ⚑ WHY THIS FILE GREW. `pdfDetect.ts` scored 52.24% - the worst in
+ * `engine/` - while already having a test for every function. Nothing was
  * uncovered; 32 mutants were simply not NOTICED, because a signature check is
  * a chain of independent byte comparisons and a test that passes one whole
  * correct header and one whole wrong one exercises the chain without
@@ -14,7 +14,7 @@ import { isPdfBytes, isTiffBytes, pagedDocumentFormat } from '../pdfDetect.js';
  *
  * That matters because this is the FIRST thing that happens to a dropped
  * file. Too permissive, and an ordinary PNG is handed to pdf.js; too strict,
- * and a scanned TIFF page goes to `<img>`, which cannot decode it — a blank
+ * and a scanned TIFF page goes to `<img>`, which cannot decode it - a blank
  * canvas with nothing on screen to explain it.
  *
  * The rule it serves is the one `isZipContainer` serves: **the file says what
@@ -91,7 +91,7 @@ describe('the TIFF signature, in both byte orders', () => {
 
   it('⚑ does not accept the two orders MIXED, which is not a TIFF', () => {
     // Two `&&`-chains joined by one `||`. Flattened into "any of these bytes
-    // matches", both "II\0*" and "MM*\0" would pass — and UTIF can read
+    // matches", both "II\0*" and "MM*\0" would pass - and UTIF can read
     // neither.
     expect(isTiffBytes(starting([0x49, 0x49, 0x00, 0x2a]))).toBe(false);
     expect(isTiffBytes(starting([0x4d, 0x4d, 0x2a, 0x00]))).toBe(false);
@@ -120,7 +120,7 @@ describe('the single dispatch point', () => {
   });
 
   it('⚑ returns null for a plain raster, which is what sends it to <img>', () => {
-    // null is not "unknown" here — it is the positive decision that the
+    // null is not "unknown" here - it is the positive decision that the
     // browser can decode this directly. A wrong null shows a blank canvas
     // with nothing on screen to explain it.
     expect(pagedDocumentFormat(starting(PNG))).toBeNull();

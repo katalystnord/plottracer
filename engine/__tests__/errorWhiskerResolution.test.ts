@@ -4,7 +4,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
 import { setErrorRelation } from '../errorRelation.js';
 
 /**
- * Checkpoint 85 — finding A6: the whisker and the record used DIFFERENT rules.
+ * Checkpoint 85 - finding A6: the whisker and the record used DIFFERENT rules.
  *
  * Checkpoint 79 resolved cap->datum in PIXEL space inside `getErrorWhiskers`
  * (to avoid needing an axes) while `resolveErrorBars` resolved in DATA space.
@@ -53,7 +53,7 @@ const DATUM_A = { x: 200, y: 150 };
 const DATUM_B = { x: 200, y: 350 };
 const CAP = { x: 240, y: 340 };
 
-describe('A6 — the whisker resolves the same way the record does', () => {
+describe('A6 - the whisker resolves the same way the record does', () => {
   it('pairs a cap with the datum the RECORD pairs it with, on a rotated chart', () => {
     const s = tiltedSession();
     s.renameDataset(0, 'Sample');
@@ -87,7 +87,7 @@ describe('A6 — the whisker resolves the same way the record does', () => {
     expect(whiskers[0]!.bar.to).toEqual({ x: CAP.x, y: CAP.y });
   });
 
-  it('agrees with resolveErrorBars — the record and the drawing name one datum', () => {
+  it('agrees with resolveErrorBars - the record and the drawing name one datum', () => {
     // The property that matters, stated directly: whatever the export reports as
     // the datum's yUpper must be the datum the whisker is drawn from.
     const s = tiltedSession();
@@ -113,7 +113,7 @@ describe('A6 — the whisker resolves the same way the record does', () => {
     expect(drawnData[0]!).toBeCloseTo(withError[0]!.x, 6);
   });
 
-  it('draws nothing before calibration — a cap has no data position yet', () => {
+  it('draws nothing before calibration - a cap has no data position yet', () => {
     const s = new CalibrationSession(XY_AXES_CONFIG);
     expect(s.getErrorWhiskers()).toEqual([]);
   });

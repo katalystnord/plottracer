@@ -1,7 +1,7 @@
 /**
  * Faithful TypeScript port of the pure functions from
  * ui-patches/engauge-algos.js's Geometry & Statistics section (built
- * 2026-07 — see that file's header for the original provenance note:
+ * 2026-07 - see that file's header for the original provenance note:
  * arc length/area follow Engauge's own approach, curvature is an
  * original addition since Engauge's Geometry Window doesn't actually
  * compute it). Ported per CLAUDE.md's Step 1 scope.
@@ -76,18 +76,18 @@ export function evalSpline(spline: NaturalSpline, t: number): SplineEval {
   return { value, d1, d2 };
 }
 
-/** Points in dataset order (no sorting, no filtering) — required for splines that must support closed/looping curves. */
+/** Points in dataset order (no sorting, no filtering) - required for splines that must support closed/looping curves. */
 export function getGeometryPoints(dataset: Dataset, axes: AnyAxes): Point2D[] {
   // ⚑⚑ THE SAME QUESTION CURVE FIT ALREADY ANSWERED, so it is the same
   // function. `getFitPoints` restricts a slotted dataset to slot 0 and its own
-  // doc names this exact case — *"otherwise the Upper/Lower bound points would
-  // be fit as if they were independent curve samples"* — written for the old
+  // doc names this exact case - *"otherwise the Upper/Lower bound points would
+  // be fit as if they were independent curve samples"* - written for the old
   // model, and true again now that a datum's caps live on its own tuple.
   //
   // ⚠️ This walked every pixel, which was safe only because `runGeometry`
   // refused any dataset with slots at all. That refusal is about tuple TYPES (a
   // box plot's five letter values are not a traced curve) and it fired on an XY
-  // scatter that had merely acquired extents — so the same series was refused
+  // scatter that had merely acquired extents - so the same series was refused
   // geometry AND, had it not been, would have measured its own error bars.
   // Two defects propping each other up; the reuse removes both.
   return getFitPoints(dataset, axes);

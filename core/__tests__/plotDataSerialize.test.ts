@@ -8,21 +8,21 @@ import { CategoryAxis } from '../categoryAxis.js';
 import { DistanceMeasurement, AngleMeasurement, AreaMeasurement } from '../connectedPoints.js';
 
 /**
- * `PlotData.serialize` — what actually gets WRITTEN into a project file.
+ * `PlotData.serialize` - what actually gets WRITTEN into a project file.
  *
  * ⚑ WHY THIS FILE EXISTS. The 2026-07-31 full mutation run scored
- * `core/plotData.ts` at **52.97%** with 372 mutants unnoticed — the largest
+ * `core/plotData.ts` at **52.97%** with 372 mutants unnoticed - the largest
  * unchecked surface in `core/`, and the highest-stakes one: this is the file
  * format. Wrong here means silently corrupt saved projects, discovered by a
  * user months later with no way to recover the original.
  *
  * The existing plotData tests are ROUND-TRIP tests (serialize, deserialize,
  * check the model came back) and real-fixture tests. Both are valuable and
- * stay — but a round trip is blind to a whole class of defect by
+ * stay - but a round trip is blind to a whole class of defect by
  * construction: any field that serialize omits AND deserialize defaults, or
  * that both mangle the same way, round-trips perfectly while the FILE is
- * wrong. Anyone else reading our format — the export pipeline, a future
- * migration, a third-party tool — sees the file, not the round trip.
+ * wrong. Anyone else reading our format - the export pipeline, a future
+ * migration, a third-party tool - sees the file, not the round trip.
  *
  * So these assert the WRITTEN SHAPE directly. The survivors they rule out
  * cluster in three places nothing had ever looked at:
@@ -58,7 +58,7 @@ function simpleProject(): { plot: PlotData; axes: XYAxes; ds: Dataset } {
   return { plot, axes, ds };
 }
 
-describe('serialize — the file s own envelope', () => {
+describe('serialize - the file s own envelope', () => {
   it('stamps the format version, which is how every reader routes the file', () => {
     // ⚑ The version array mutated to a garbage literal and survived. It is
     // the FIRST thing deserialize branches on (`data.version[0] === 4`), so a
@@ -75,7 +75,7 @@ describe('serialize — the file s own envelope', () => {
   });
 });
 
-describe('serialize — writing a key only when there is something to write', () => {
+describe('serialize - writing a key only when there is something to write', () => {
   /**
    * ⚑ EVERY ONE OF THESE GUARDS MUTATED `> 0` TO `>= 0` AND SURVIVED, because
    * nothing asserted the ABSENCE of a key. That matters beyond tidiness: the
@@ -152,7 +152,7 @@ describe('serialize — writing a key only when there is something to write', ()
   });
 });
 
-describe('serialize — the per-point record', () => {
+describe('serialize - the per-point record', () => {
   it('writes each pixel with its calibrated VALUE alongside the raw coordinates', () => {
     // The value is what makes a saved file readable without re-deriving the
     // calibration; the `axes != null` guard around it mutated and survived.
@@ -176,7 +176,7 @@ describe('serialize — the per-point record', () => {
     expect(plot.serialize().datasetColl[0]!.axesName).toBe('');
   });
 
-  it('⚑ writes the TUPLE and GROUP index of every grouped point — how a capture is reconstructed', () => {
+  it('⚑ writes the TUPLE and GROUP index of every grouped point - how a capture is reconstructed', () => {
     // The `tupleIdx > -1 && groupIdx > -1` guard had FIVE surviving mutants
     // (both comparisons, and the conditional collapsed either way). Without
     // these two numbers a reopened bar/box/pie is a bag of loose points: the
@@ -218,7 +218,7 @@ describe('serialize — the per-point record', () => {
   });
 });
 
-describe('serialize — measurements', () => {
+describe('serialize - measurements', () => {
   it('writes each measurement under its own type name, with its connections', () => {
     const plot = new PlotData();
     const axes = calibratedXY();
@@ -255,17 +255,17 @@ describe('serialize — measurements', () => {
 });
 
 /**
- * ⚑⚑ THE DOCUMENT-METADATA PATH, which had NO COVERAGE AT ALL — every mutant
+ * ⚑⚑ THE DOCUMENT-METADATA PATH, which had NO COVERAGE AT ALL - every mutant
  * in it (three blocks, six optional-chain steps, six `!== undefined` tests)
  * was unreached by any test.
  *
  * This is what binds each axes/dataset/measurement to the FILE and PAGE it
- * came from — the multi-figure record. If it silently stops being written, a
+ * came from - the multi-figure record. If it silently stops being written, a
  * multi-page project reopens with every figure's provenance gone, and nothing
  * in a round-trip notices because the model never held it in the first place:
  * it is passed IN to serialize and read straight back OUT of the file.
  */
-describe('serialize — the document metadata that binds a figure to its source', () => {
+describe('serialize - the document metadata that binds a figure to its source', () => {
   function projectWithEverything() {
     const plot = new PlotData();
     const axes = calibratedXY();
@@ -309,7 +309,7 @@ describe('serialize — the document metadata that binds a figure to its source'
     expect(projectWithEverything().serialize(metadata).misc).toEqual({ note: 'kept verbatim' });
   });
 
-  it('writes NOTHING when no metadata is supplied at all — the ordinary single-figure save', () => {
+  it('writes NOTHING when no metadata is supplied at all - the ordinary single-figure save', () => {
     const written = projectWithEverything().serialize();
     expect(written.axesColl[0]!).not.toHaveProperty('file');
     expect(written.axesColl[0]!).not.toHaveProperty('page');
@@ -343,7 +343,7 @@ describe('serialize — the document metadata that binds a figure to its source'
   });
 });
 
-describe('deserialize — routing a file by its version stamp', () => {
+describe('deserialize - routing a file by its version stamp', () => {
   it('accepts our own v4 file and refuses a version it does not know', () => {
     const { plot } = simpleProject();
     const written = JSON.parse(JSON.stringify(plot.serialize()));
@@ -397,7 +397,7 @@ describe('the category TICK geometry round-trips (v2.1)', () => {
     return ca!;
   }
 
-  it('⚑ writes NO geometry key for an axis nobody marked — old projects stay identical', () => {
+  it('⚑ writes NO geometry key for an axis nobody marked - old projects stay identical', () => {
     const { plot, ds } = simpleProject();
     const ca = new CategoryAxis();
     ca.name = 'Categories';
@@ -442,7 +442,7 @@ describe('the category TICK geometry round-trips (v2.1)', () => {
     expect(reopen(plot).hasDeclaredCount()).toBe(false);
   });
 
-  it('⚑ and a count the user DID declare survives — the fix must not over-reach', () => {
+  it('⚑ and a count the user DID declare survives - the fix must not over-reach', () => {
     const { plot } = withGeometry();
     expect(reopen(plot).hasDeclaredCount()).toBe(true);
   });
@@ -457,7 +457,7 @@ describe('the category TICK geometry round-trips (v2.1)', () => {
     expect(reopened.bandIndexAt({ x: 300, y: 200 })).toBe(ca.bandIndexAt({ x: 300, y: 200 }));
   });
 
-  it('⚑ preserves DRAGGED ticks — the whole point of storing them rather than regenerating', () => {
+  it('⚑ preserves DRAGGED ticks - the whole point of storing them rather than regenerating', () => {
     const { plot, ca } = withGeometry();
     ca.moveTick(1, { x: 300, y: 500 });
     const dragged = [...ca.getTickParams()];

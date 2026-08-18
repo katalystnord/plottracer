@@ -18,11 +18,11 @@ import type { RGB } from '../colorFilter.js';
  * elevated profile entries, and whether the crest is picked by comparing
  * neighbours or both entries are taken and merged, the boundary lands in the
  * same place. Belt and braces reads as surviving mutants. The rest are the two
- * families already documented for `colorBar.ts` — out-of-bounds reads that come
+ * families already documented for `colorBar.ts` - out-of-bounds reads that come
  * back as "nothing" either way, and thresholds mutated at a measure-zero point.
  *
  * ⚑ The real renders (`engine/__tests__/gridDetectRealPng.test.ts`) answer "does
- * it find a published figure's boundaries" — they draw NO cell borders, which is
+ * it find a published figure's boundaries" - they draw NO cell borders, which is
  * the harder case. What they cannot produce on demand is a printed white RULE, a
  * rotated scan, a boundary too faint to see, or a change that happens in only
  * part of a column. Those are drawn here.
@@ -81,7 +81,7 @@ describe('detectDividers', () => {
   });
 
   it('puts a DRAWN RULE’s boundary in the middle of the rule', () => {
-    // ⚑ A printed border changes colour twice — once entering it, once leaving —
+    // ⚑ A printed border changes colour twice - once entering it, once leaving -
     // and a naive peak finder calls a 4px rule two boundaries 4px apart, which
     // makes a cell with no interior between them. The merge puts one boundary at
     // the rule's centre, where the figure says it is.
@@ -108,7 +108,7 @@ describe('detectDividers', () => {
     // ⚑ The difference between a boundary and DATA. One cell of a column being a
     // different colour is exactly what a heatmap looks like; a boundary is a
     // change all the way across. Taking the median of the cross-section is what
-    // draws that line — a mean would call this a boundary.
+    // draws that line - a mean would call this a boundary.
     const data = blank();
     fill(data, 20, 20, 220, 140, [120, 120, 120]);
     fill(data, 120, 20, 220, 50, [220, 40, 40]); // one cell, top-right
@@ -133,7 +133,7 @@ describe('detectDividers', () => {
   it('still sees a boundary that is INTERRUPTED across part of the figure', () => {
     // ⚑ The other half of "all the way across". A rule broken by an overlaid
     // annotation, or a row of cells that happens to match its neighbour, changes
-    // over most of the column but not all of it — and that is still a boundary.
+    // over most of the column but not all of it - and that is still a boundary.
     // Taking the MEDIAN of the cross-section is what gets both this and the
     // one-cell case above right; a mean gets neither, and reading the middle
     // sample without sorting gets exactly this one wrong.
@@ -206,7 +206,7 @@ describe('detectDividers', () => {
 
   it('scans at the resolution of the axis it was asked about', () => {
     // ⚑ The box is 200px wide and 120px tall, so scanning x must take 200 steps
-    // and y 120 — not the other way round, and not the shorter of the two. A
+    // and y 120 - not the other way round, and not the shorter of the two. A
     // scan at the wrong resolution still finds wide boundaries and quietly loses
     // narrow ones, which is the kind of wrong that only shows up on the one
     // figure that mattered.
@@ -251,7 +251,7 @@ describe('detectDividers', () => {
     expect(detectDividers(data, W, H, offImage, 'x').candidates).toEqual([]);
     // ⚑ Every side separately. A guard that checks three of the four looks
     // exactly like one that checks all of them, until a box is dragged off the
-    // fourth — and then it reads whatever the buffer holds and calls the change
+    // fourth - and then it reads whatever the buffer holds and calls the change
     // a boundary.
     const outside = (dx: number, dy: number): PlotBox => [
       { x: 20 + dx, y: 140 + dy },
@@ -279,7 +279,7 @@ describe('detectDividers', () => {
     expect(profile.length).toBeGreaterThan(150);
     expect(Math.max(...profile)).toBeGreaterThan(100);
     // Flat inside the cells: the peaks are the whole story. Three of them, not
-    // two — the box's far edge is a change too, and the PROFILE keeps it. Only
+    // two - the box's far edge is a change too, and the PROFILE keeps it. Only
     // the candidate list drops the edges, because only the candidates are a
     // proposal; the profile is the evidence, and hiding part of the evidence
     // would defeat the point of returning it.
@@ -307,7 +307,7 @@ describe('proposeDividers', () => {
     expect(proposeDividers(candidates, 1)).toEqual([0, 1]);
   });
 
-  it('handles the smallest real split — two cells, one boundary', () => {
+  it('handles the smallest real split - two cells, one boundary', () => {
     expect(proposeDividers(candidates, 2)).toEqual([0, 0.25, 1]);
   });
 
@@ -339,7 +339,7 @@ describe('reconcileWithCount', () => {
       missing: 0,
     });
     expect(reconcileWithCount(three, 5).missing).toBe(2);
-    // More found than declared is also a disagreement worth reporting — the
+    // More found than declared is also a disagreement worth reporting - the
     // figure may have a boundary the user did not count.
     expect(reconcileWithCount(three, 2)).toEqual({
       agrees: false,

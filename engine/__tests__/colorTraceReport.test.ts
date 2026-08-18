@@ -24,8 +24,8 @@ const spider = (readings: ReportedReading[], placed: number, matched = 1000) =>
   spiderTraceReport({ readings, placed, matched, width: 1000, height: 1000 });
 
 describe('what the trace refuses, and in what order', () => {
-  it('asks for a calibration first — traced points need a coordinate system', () => {
-    expect(refusal({ isCalibrated: false })).toBe('Calibrate the axes first — traced points need a coordinate system.');
+  it('asks for a calibration first - traced points need a coordinate system', () => {
+    expect(refusal({ isCalibrated: false })).toBe('Calibrate the axes first - traced points need a coordinate system.');
   });
 
   it('outranks the other refusals with the calibration one', () => {
@@ -39,7 +39,7 @@ describe('what the trace refuses, and in what order', () => {
     );
   });
 
-  it('⚑ refuses a SLOTTED series on a curve type — the check is the series, not the graph type', () => {
+  it('⚑ refuses a SLOTTED series on a curve type - the check is the series, not the graph type', () => {
     // Box Plot is reachable as a toggle on a Bar session, so a bar-shaped type
     // can be carrying a slotted series that must not receive ordinary points.
     expect(refusal({ hasSlots: true, autoExtractKind: 'curve' })).toContain('does not apply to a Box Plot');
@@ -77,7 +77,7 @@ describe('the over-broad warning', () => {
   });
 });
 
-describe('the spider report — the refusals ARE the worklist', () => {
+describe('the spider report - the refusals ARE the worklist', () => {
   it('leads with how many of how many, agreeing with itself on plurals', () => {
     expect(spider([reading(0, 'A', true, null)], 1)).toContain('Read 1 of 1 axis.');
     expect(spider([reading(0, 'A', true, null), reading(1, 'B', true, null)], 2)).toContain('Read 2 of 2 axes.');
@@ -93,7 +93,7 @@ describe('the spider report — the refusals ARE the worklist', () => {
   });
 
   it('⚑ distinguishes CLIPPED from nothing-found, and says what to check', () => {
-    // Clipped means the colour was still there when the search stopped — the
+    // Clipped means the colour was still there when the search stopped - the
     // crossing is past the axis's labelled range, usually because the known
     // point was calibrated on an inner ring. Reporting it as "nothing found"
     // would send the user looking for missing ink that is plainly there.
@@ -114,7 +114,7 @@ describe('the spider report — the refusals ARE the worklist', () => {
     );
   });
 
-  it('pluralises each clause independently — both clauses, both ways', () => {
+  it('pluralises each clause independently - both clauses, both ways', () => {
     // ⚑ Ambiguous and clipped each carry their OWN "place it/them yourself",
     // so testing one plural proves nothing about the other.
     expect(spider([reading(0, 'A', false, 'ambiguous'), reading(1, 'B', false, 'ambiguous')], 0)).toContain(
@@ -127,7 +127,7 @@ describe('the spider report — the refusals ARE the worklist', () => {
     expect(spider([reading(0, 'A', false, 'clipped')], 0)).toContain('place it yourself');
   });
 
-  it('⚑ reports rays that were OFFERED but not taken — a filled axis is left alone', () => {
+  it('⚑ reports rays that were OFFERED but not taken - a filled axis is left alone', () => {
     // `placed` comes from the session, which refuses to overwrite an axis that
     // already has a point. Silently offering 3 and placing 1 would read as a
     // failed trace.

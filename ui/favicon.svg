@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- PlotTracer favicon — mirrors build/icon.svg (keep in sync). -->
+  <!-- PlotTracer favicon - mirrors build/icon.svg (keep in sync). -->
   <rect x="1" y="1" width="510" height="510" rx="113" fill="#f6f9fa" stroke="#e1e8ea" stroke-width="2"/>
   <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
     <path d="M5 48 C 19 46 30 31 59 15" fill="none" stroke="#a7b8bc" stroke-width="2.3"/>

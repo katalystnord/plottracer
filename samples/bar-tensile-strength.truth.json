@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "bar-tensile-strength.png",
-    "note": "Synthetic ground truth \u2014 per-bar value."
+    "note": "Synthetic ground truth - per-bar value."
   },
   "graphType": "bar",
   "axes": {

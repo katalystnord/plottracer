@@ -62,14 +62,14 @@ describe('mirrorCap', () => {
     expect(m).toEqual({ x: 70, y: 140 });
   });
 
-  it('is an involution — mirroring the mirror returns the original cap', () => {
+  it('is an involution - mirroring the mirror returns the original cap', () => {
     const datum = { x: 100, y: 100 };
     const cap = { x: 100, y: 60 };
     expect(mirrorCap(datum, mirrorCap(datum, cap))).toEqual(cap);
   });
 });
 
-describe('capFreeDirection / constrainCap — the one constraint', () => {
+describe('capFreeDirection / constrainCap - the one constraint', () => {
   /** A plain screen-aligned XY mapping: x = px/10, y = (300-py)/10. */
   const plainXY = {
     pixelToData: (px: number, py: number) => [px / 10, (300 - py) / 10],
@@ -94,7 +94,7 @@ describe('capFreeDirection / constrainCap — the one constraint', () => {
     expect(d.y).toBeCloseTo(-1, 6); // increasing y is toward a smaller pixel y
   });
 
-  it('finds a TILTED value axis — the reason "lock x" is wrong', () => {
+  it('finds a TILTED value axis - the reason "lock x" is wrong', () => {
     // Rotation correction has been on by default since checkpoint 68, so a
     // plain XY chart's y-direction need not run up the screen. Here it is
     // rotated 45 degrees.
@@ -108,7 +108,7 @@ describe('capFreeDirection / constrainCap — the one constraint', () => {
     expect(d.y).toBeCloseTo(-k, 6);
   });
 
-  it('returns null on a stubbed dataToPixel — no constraint, not a refusal', () => {
+  it('returns null on a stubbed dataToPixel - no constraint, not a refusal', () => {
     expect(capFreeDirection(stubbed, { x: 100, y: 200 }, 'upper')).toBeNull();
   });
 

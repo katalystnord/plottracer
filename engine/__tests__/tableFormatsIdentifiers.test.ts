@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { renderTable, type TableSection } from '../tableFormats.js';
 
 /**
- * The NAMES the script formats emit — variables, R column arguments — and the
+ * The NAMES the script formats emit - variables, R column arguments - and the
  * two MATLAB shapes.
  *
  * ⚑ WHY THIS FILE EXISTS. `tableFormats.ts` left 105 mutants unnoticed, and
  * they sit almost entirely in the identifier machinery rather than in the
  * table bodies the existing suite already checks: the R reserved-word list
- * (19 mutants — one per word, and no test names a single one), `varName`,
+ * (19 mutants - one per word, and no test names a single one), `varName`,
  * `isValidRName`'s regex, `rColumnName`'s positional fallback, and the
  * indent/separator strings of MATLAB's two branches.
  *
  * These are not cosmetic. A `.m`, `.py` or `.R` file we emit is RUN, not
  * read: a variable named from a section title that starts with a digit, or a
- * column called `NA`, is a syntax error or — worse for R — a silently
+ * column called `NA`, is a syntax error or - worse for R - a silently
  * different meaning. The existing tests assert on one syntactic and one
  * non-syntactic header; what follows pins the rules that decide which is
  * which.
@@ -260,7 +260,7 @@ describe('several sections in one document', () => {
 });
 
 /**
- * ⚑⚑ WHAT A LABEL CAN DO TO THE FILE IT LANDS IN — round-2 audit.
+ * ⚑⚑ WHAT A LABEL CAN DO TO THE FILE IT LANDS IN - round-2 audit.
  *
  * Series and category names are attacker-controlled: every importer takes them
  * verbatim from someone else's file, and `seriesNames.ts` only trims and
@@ -272,7 +272,7 @@ describe('several sections in one document', () => {
  *  - no format neutralised a leading `=`/`+`/`-`/`@`, so a name became an
  *    executable formula the moment the CSV was opened in a spreadsheet;
  *  - `Infinity`/`NaN` reached MATLAB, Python and LaTeX as bare identifiers,
- *    making the whole exported script unparseable — a case R's own writer had
+ *    making the whole exported script unparseable - a case R's own writer had
  *    recognised and the others had not.
  */
 describe('a hostile label cannot restructure the file', () => {
@@ -280,13 +280,13 @@ describe('a hostile label cannot restructure the file', () => {
     const evil = 'evil,name\nrow2,9,9';
     const out = renderTable([section(['x', 'y'], [[1, 2]], evil)], 'csv');
     const lines = out.split('\n');
-    // Title, header, one data row — four lines would mean the injection worked.
+    // Title, header, one data row - four lines would mean the injection worked.
     expect(lines).toHaveLength(3);
     expect(lines[1]).toBe('x,y');
     expect(lines[2]).toBe('1,2');
   });
 
-  it('carries a comma in a title through as-is — it labels a block, not a row', () => {
+  it('carries a comma in a title through as-is - it labels a block, not a row', () => {
     // Deliberately NOT quoted: the title line is a block label, and the defect
     // was row INJECTION via a newline, not field-splitting on a comma. Pinned
     // so the difference stays a decision rather than an accident.

@@ -2,7 +2,7 @@
  * The bundled example figures, and the manual's address.
  *
  * ⚑ Its own module because BOTH the Help dropdown and the Trace Challenge read
- * this list — the challenge joins its eligible ids back to these entries for
+ * this list - the challenge joins its eligible ids back to these entries for
  * the image source and the axes type. Left inside Workspace.tsx it would have
  * had to be threaded into the Help panel as a prop, which is how a data table
  * ends up owned by whichever component happened to render it first.
@@ -48,7 +48,7 @@ export const MANUAL_URL = 'https://github.com/katalystnord/plottracer/blob/maste
 
 export const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; icon?: string; pdf?: boolean }[] = [
   { id: 'xy', name: 'Stress–strain curve', src: xySample, axes: 'xy' },
-  { id: 'xy-multi', name: 'Multiseries — 4 curves', src: xyMultiSample, axes: 'xy' },
+  { id: 'xy-multi', name: 'Multiseries - 4 curves', src: xyMultiSample, axes: 'xy' },
   // A scatter of single-colour markers (checkpoint 123) -- the shape the Blob
   // Detector exists for: Auto-extract by colour ▸ Scattered points reduces each
   // marker to one centroid. XY axes underneath (scatter is plain XY). Which
@@ -56,14 +56,14 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // comment above) -- the name used to spell it out as "(Auto-extract ▸
   // Scattered points)" and had drifted to say "Auto-trace", a name that rail
   // tool has never actually used (fixed 2026-07-30, then dropped entirely).
-  { id: 'scatter', name: 'Scatter — modulus vs. crosslinker', src: scatterSample, axes: 'xy' },
+  { id: 'scatter', name: 'Scatter - modulus vs. crosslinker', src: scatterSample, axes: 'xy' },
   // A monochrome technical drawing whose 4 curves differ ONLY by dash style
   // (checkpoint: v0.8, David) -- the case Interpolation-assist exists for. All
   // black, so Auto-extract by colour can't separate them; dashed, so Segment Fill
   // has no unbroken path to flood -- you drop guide points on the dashed curve
   // you're following and let the spline fill between (Auto-extract's own
   // "Guide points" sub-mode). Plain XY axes.
-  { id: 'dashed', name: 'Dashed curves — dash-coded release', src: dashedReleaseSample, axes: 'xy' },
+  { id: 'dashed', name: 'Dashed curves - dash-coded release', src: dashedReleaseSample, axes: 'xy' },
   // Error bars sit with the XY family (all axes:'xy'), above Histogram (David).
   // Opens as XY, not as the retired 'errorbar' graph type (finding C3, fixed
   // ckpt 85): error is captured on an ordinary series via rail tool 6 now, so
@@ -72,24 +72,24 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // state was still set to a type it no longer lists -- so the Select rendered
   // BLANK. `icon: 'errorbars'` overrides the shared XY glyph so this row
   // doesn't look identical to every other XY example.
-  { id: 'errorbar', name: 'Error bars — tensile strength ± SD', src: errorBarSample, axes: 'xy', icon: 'errorbars' },
+  { id: 'errorbar', name: 'Error bars - tensile strength ± SD', src: errorBarSample, axes: 'xy', icon: 'errorbars' },
   // ⚑ The pair matters. The ± SD figure above is SYMMETRIC, so a mirrored
   // cap happens to land right and the workflow's one real trap stays
   // hidden. This one is asymmetric at every point (time-to-failure is
   // log-normal, so its CI genuinely is), which is the only way to see that
   // an untouched lower cap reports a symmetry the figure never drew.
-  { id: 'errorbar-asym', name: 'Error bars — asymmetric 95% CI', src: errorBarAsymSample, axes: 'xy', icon: 'errorbars' },
+  { id: 'errorbar-asym', name: 'Error bars - asymmetric 95% CI', src: errorBarAsymSample, axes: 'xy', icon: 'errorbars' },
   { id: 'histogram', name: 'Pore size distribution', src: histogramSample, axes: 'histogram' },
-  // THREE heatmaps (v2.2), one per case the record enumerates — because the axes
+  // THREE heatmaps (v2.2), one per case the record enumerates - because the axes
   // are each independently a CATEGORY or a VALUE, and a figure cannot show a
   // combination it does not have. The first two shipped as value × value only,
   // which David caught immediately: "Both examples heatmaps only use value axis.
   // That does not hold." An example drawn to fit the tool's limits hides the
-  // limit twice — once from the tests, once from every user who takes the
+  // limit twice - once from the tests, once from every user who takes the
   // bundled figures as what the tool is for.
   //
   //   weld ......... VALUE × VALUE. Unequal cells, no drawn borders, so every
-  //                  boundary is a bare colour discontinuity — the hard case for
+  //                  boundary is a bare colour discontinuity - the hard case for
   //                  detection, and the one a "rows × columns" count cannot say.
   //   IC50 ......... CATEGORY × CATEGORY. Named compounds against named cell
   //                  lines, the commonest published heatmap there is: no
@@ -101,8 +101,8 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   //                  real time with UNEQUAL bins, so the two axes are captured
   //                  by OPPOSITE means in one figure: one declared, one detected.
   { id: 'heatmap', name: 'Weld cross-section temperature', src: heatmapWeldSample, axes: 'heatmap' },
-  { id: 'heatmap-log', name: 'IC50 assay — named axes, log key', src: heatmapAssaySample, axes: 'heatmap' },
-  { id: 'heatmap-mixed', name: 'Time course — named rows, timed columns', src: heatmapTimecourseSample, axes: 'heatmap' },
+  { id: 'heatmap-log', name: 'IC50 assay - named axes, log key', src: heatmapAssaySample, axes: 'heatmap' },
+  { id: 'heatmap-mixed', name: 'Time course - named rows, timed columns', src: heatmapTimecourseSample, axes: 'heatmap' },
   { id: 'bar', name: 'Tensile strength', src: barSample, axes: 'bar' },
   // Three more bar examples (v2.0, David: "some more bar graph test cases"),
   // each isolating one shape the v2.0 model exists for -- the same
@@ -111,14 +111,14 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   //
   // Grouped: two series sharing one category axis, side by side per category
   // -- ordinary zero-baseline bars, just two of them per row.
-  { id: 'bar-grouped', name: 'Cell viability — control vs. treatment', src: barGroupedSample, axes: 'bar' },
+  { id: 'bar-grouped', name: 'Cell viability - control vs. treatment', src: barGroupedSample, axes: 'bar' },
   // ⚑ The figure category TICKS exist for (v2.1): the FIRST series has no
   // Lactose bar. Without declared categories the second series' Lactose bar
   // takes a neighbour's name -- a fabricated category, indistinguishable from a
   // transcribed one, and only when captured left-to-right. Absent from published
   // corpora (0 of 230) because journals do not print ragged grids; ordinary in
   // the draft data people actually bring.
-  { id: 'bar-grouped-missing', name: 'Enzyme activity — a series with a missing bar', src: barGroupedMissingSample, axes: 'bar' },
+  { id: 'bar-grouped-missing', name: 'Enzyme activity - a series with a missing bar', src: barGroupedMissingSample, axes: 'bar' },
   // Stacked: each segment its own drag-box (v2.0's capture model), not a
   // shared-baseline reading -- the case stackGroup/derivedTupleValue's
   // SPAN-not-cumulative rule exists for.
@@ -169,5 +169,5 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // A multi-page PDF (checkpoint 114) -- opens the PDF (not a single image), so
   // the page flipper appears on its own and you can capture a figure per page.
   // Demonstrates the whole multi-figure workflow end to end.
-  { id: 'multipage-pdf', name: 'Multi-page PDF — 3 figures', src: multipagePdfSample, axes: 'xy', pdf: true },
+  { id: 'multipage-pdf', name: 'Multi-page PDF - 3 figures', src: multipagePdfSample, axes: 'xy', pdf: true },
 ];

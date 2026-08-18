@@ -3,7 +3,7 @@
 //
 // Why this is needed: Chromium pre-spawns the zygote process during early
 // browser startup, before Node.js initialises. app.commandLine.appendSwitch
-// ('no-sandbox') runs in main.js and is therefore too late — the zygote has
+// ('no-sandbox') runs in main.js and is therefore too late - the zygote has
 // already done its setuid_sandbox_host check.  In an AppImage the squashfs
 // is mounted nosuid, so chrome-sandbox can never be setuid; the zygote aborts
 // silently and the renderer never starts, leaving a blank white window.

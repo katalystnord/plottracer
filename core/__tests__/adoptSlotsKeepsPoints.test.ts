@@ -1,5 +1,5 @@
 /**
- * Adding error bars to points that already exist — the LabPlot failure mode.
+ * Adding error bars to points that already exist - the LabPlot failure mode.
  *
  * ⚑⚑ DAVID SET THIS REQUIREMENT, 2026-08-17, from what is wrong with LabPlot's
  * implementation: *"points needed to be Errorplots from the beginning, and if
@@ -7,7 +7,7 @@
  * So you should be able to place points, and then ADD error bars to them (if
  * that means replacing internally that is fine)."*
  *
- * ⚠️ AND THE NAIVE ROUTE REALLY DOES LOSE THEM — measured before writing this,
+ * ⚠️ AND THE NAIVE ROUTE REALLY DOES LOSE THEM - measured before writing this,
  * not assumed. `setSlotNames(...)` on a dataset holding 7 plain points gives
  * `count = 7`, `hasSlots = true`, `tuples = 0`. The pixels are still in storage,
  * so nothing looks broken from the inside, but:
@@ -50,7 +50,7 @@ describe('adding error bars to a series that already has points', () => {
     });
   });
 
-  it('leaves every extent slot EMPTY — adopting is not measuring', () => {
+  it('leaves every extent slot EMPTY - adopting is not measuring', () => {
     // Tenet 9 at its plainest: turning on the capability must not invent a cap.
     // A zero-height error bar is a claim about the figure; an absent one is not.
     const ds = seriesOf(3);
@@ -69,7 +69,7 @@ describe('adding error bars to a series that already has points', () => {
     expect(ds.getAllTuples().length, 'a slotted series with no tuples exports nothing').toBe(ds.getCount());
   });
 
-  it('is safe to run twice — the second time changes nothing', () => {
+  it('is safe to run twice - the second time changes nothing', () => {
     // The UI cannot be trusted to ask only once (adding a second cap, reloading,
     // an undo/redo round trip), so this has to be idempotent rather than
     // guarded by its caller.

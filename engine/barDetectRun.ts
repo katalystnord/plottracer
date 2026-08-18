@@ -1,8 +1,8 @@
 /**
- * Bar-box detector by colour (v2.0, Phase 7) — the direct fix for the
+ * Bar-box detector by colour (v2.0, Phase 7) - the direct fix for the
  * original tenet-1 defect: every existing auto-extract reduction (Segment
  * Fill's column average, blob detection's centroid) reads the MIDDLE of a
- * filled shape, and a bar's datum is its END — a number that was never the
+ * filled shape, and a bar's datum is its END - a number that was never the
  * datum (`59f94a6`, which refused auto-extract for Bar entirely rather than
  * ship a wrong one).
  *
@@ -10,7 +10,7 @@
  * blob's bounding box (see algorithms/blobDetect.ts's Blob.bbox, added
  * alongside this), so no averaging or centroid step throws away the end
  * that matters. Manual and automatic capture become two ways of producing
- * the IDENTICAL record — opposite corners — never a separate "auto-extract
+ * the IDENTICAL record - opposite corners - never a separate "auto-extract
  * shape" concept for Bar (see engine/calibrationSession.ts's
  * addBarDetectBoxes, which files each box through the same two-corner path
  * a manual drag-box does).
@@ -32,7 +32,7 @@ import { bandIndexIn } from '../core/bandedAxis.js';
 
 export interface DetectedBarBox {
   /** The bbox's top-left corner, in the same continuous-pixel space
-   * addDataPoint/handleBoxRect already use — no assumption about which
+   * addDataPoint/handleBoxRect already use - no assumption about which
    * corner is the chart's baseline; the caller measures both. */
   start: Point2D;
   end: Point2D;
@@ -47,7 +47,7 @@ export interface BarDetectSuccess {
   /** Number of accepted blobs, for UI feedback. With declared categories this
    * can be fewer than `boxes.length`: one merged run yields several bars. */
   blobs: number;
-  /** How the answer compared with the declared structure — present only when
+  /** How the answer compared with the declared structure - present only when
    * categories were declared AND a count was given. Reports; never acts. */
   expectation?: ExpectationReport;
 }
@@ -78,7 +78,7 @@ const MIN_MATCHED_PIXELS = 3;
  *
  * ⚑ Bars of the IDENTICAL colour that touch (no gap, no outline between
  * them) flood into one blob and read as one oversized bar, same as any
- * flood-fill-based mechanism — not solved here, tracked for the Phase 9
+ * flood-fill-based mechanism - not solved here, tracked for the Phase 9
  * survey pass against real figures rather than papered over with a guess.
  */
 export function runBarDetect(
@@ -166,7 +166,7 @@ export function runBarDetect(
   // an inline loop nobody had to think about. It is also the reason a legend's
   // colour swatch lands in a real category instead of being reported as
   // unplaceable: a shape past the last divider is assigned the nearest band.
-  // Deliberately UNCHANGED here — the phantom-bar defect is parked to v2.4 — but
+  // Deliberately UNCHANGED here - the phantom-bar defect is parked to v2.4 - but
   // the fix is now a one-word decision instead of an archaeology exercise.
   const bandOf = (b: DetectedBarBox): number => {
     const lo = categoryAxis === 'x' ? b.start.x : b.start.y;

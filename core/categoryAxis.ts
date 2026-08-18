@@ -1,12 +1,12 @@
 /**
- * A category axis (v2.0 groundwork) — an ordered, named list of categories
+ * A category axis (v2.0 groundwork) - an ordered, named list of categories
  * that one or more datasets can share, so renaming or reordering a category
  * updates every bound series' table cell from one place instead of N copies
  * of a free-text string.
  *
  * ⚑ NOT a port, and NOT a `CalibratedAxes`. Every other axes class in
  * `core/axes/` traces back to wpd-core and satisfies the shared
- * `calibrate`/`pixelToData`/`dataToPixel` contract (`core/axes/types.ts`) —
+ * `calibrate`/`pixelToData`/`dataToPixel` contract (`core/axes/types.ts`) -
  * a category axis has no pixel transform at all: it is a plain ordered name
  * list, deliberately kept separate from the value axis it stands beside.
  * This is a genuinely new class for v2.0's bar model, unwired from any
@@ -14,13 +14,13 @@
  *
  * A tuple's category is recorded as an INDEX into this list (see
  * `Dataset`'s per-pixel `metadata.categoryIndex`, planned for the same
- * phase that wires this in) rather than a copied string — replacing today's
+ * phase that wires this in) rather than a copied string - replacing today's
  * `metadata.label` free-text mechanism
  * (`CalibrationSession.getTupleLabel`/`setTupleLabel`), where two series
  * naming "the same" category independently have no way to be told they
  * agree, and a rename means finding and editing every copy by hand.
  *
- * Always stores strings, never coerces — a numeric-looking category (e.g.
+ * Always stores strings, never coerces - a numeric-looking category (e.g.
  * "2019", "2020" as x-axis labels on an otherwise-categorical chart) stays
  * text here by construction, satisfying tenet 9 without a special case.
  */
@@ -37,7 +37,7 @@ import {
 } from './bandedAxis.js';
 
 // ⚑ RE-EXPORTED, not moved away. The band geometry now lives in
-// `core/bandedAxis.ts` because it is not a category axis's private business —
+// `core/bandedAxis.ts` because it is not a category axis's private business -
 // but eight modules already import these names from here, and churning their
 // import lines would say something changed for them when nothing did.
 export {
@@ -56,12 +56,12 @@ export class CategoryAxis {
   private _categories: string[] = [];
 
   /**
-   * The band mechanism — edges, convention, generated ticks, dividers, the
+   * The band mechanism - edges, convention, generated ticks, dividers, the
    * adjustment flag and the drag. COMPOSED, not inherited and not copied.
    *
    * ⚑⚑ This class is two things, and only one of them is bar-specific. The
    * NAME LIST below is: a bar chart's datasets bind to it, which is exactly why
-   * a heatmap must not share it — one axis would rename the other. The BANDS
+   * a heatmap must not share it - one axis would rename the other. The BANDS
    * are not, and reading the memo's "not `core/categoryAxis.ts`" as covering
    * both halves is what produced a second divider store, a second set of marker
    * graphics and a second count box in v2.2. See `core/bandedAxis.ts`.
@@ -69,7 +69,7 @@ export class CategoryAxis {
    * ⚑ The one fact that stays HERE is the count: for a category axis the number
    * of bands IS the name list's length, so it is synchronised on regeneration
    * rather than stored twice. `BandedAxis` keeps its own count because an axis
-   * with no names still has bands — which is the whole reason a heatmap's value
+   * with no names still has bands - which is the whole reason a heatmap's value
    * axis can have a grid at all.
    */
   private _bands = new BandedAxis();
@@ -81,7 +81,7 @@ export class CategoryAxis {
    * a real defect (code review, 2026-08-10). Categories also come into existence
    * one at a time as bars are captured on the un-ticked path, so a session with a
    * marked axis and no declared count would flip from the old path to the band
-   * path THE MOMENT THE FIRST BAR reserved a slot — the first bar filed one way
+   * path THE MOMENT THE FIRST BAR reserved a slot - the first bar filed one way
    * and every later bar the other. "How many exist" and "how many were declared"
    * are different facts and have to be stored as such.
    */
@@ -120,12 +120,12 @@ export class CategoryAxis {
    * True permutation-checked reorder, mirroring `Dataset.reorderPixels`
    * exactly: `order[newIndex] = oldIndex`. Refuses (returns false, leaves
    * the list untouched) unless `order` is a genuine permutation of
-   * `0..count-1` — out of range, wrong length, or the same index twice all
+   * `0..count-1` - out of range, wrong length, or the same index twice all
    * refuse rather than silently reinterpreting a bad list.
    *
    * ⚑ This class has no reference to any dataset bound to it, so it cannot
    * remap a bound tuple's `metadata.categoryIndex` through the same
-   * permutation itself — that remap is the wiring phase's responsibility
+   * permutation itself - that remap is the wiring phase's responsibility
    * (mirroring how `CalibrationSession`, not `Dataset`, currently owns
    * `prefillCategoryLabel`). Reordering the names here without also
    * remapping every bound reference would silently reassign categories;
@@ -146,14 +146,14 @@ export class CategoryAxis {
   /**
    * Removes a category by index, shifting every later index down by one.
    *
-   * ⚑ Deliberately NOT guarded against orphaning a bound tuple — this class
+   * ⚑ Deliberately NOT guarded against orphaning a bound tuple - this class
    * cannot see who is bound to it (see `reorderCategories`'s comment). The
-   * plan's own rule ("never silently orphans a bound tuple — refuse or
+   * plan's own rule ("never silently orphans a bound tuple - refuse or
    * flag, not reindex-and-forget") is the WIRING layer's job: it must check
    * every bound dataset for a tuple still referencing `index` before
    * calling this, and remap every later `categoryIndex` down by one
    * afterward, in the same operation. Calling this directly, unwired, WILL
-   * silently reassign every later category — that is intentional here and
+   * silently reassign every later category - that is intentional here and
    * dangerous everywhere else, which is exactly why it isn't wired to
    * anything yet.
    */
@@ -167,7 +167,7 @@ export class CategoryAxis {
   // Geometry (v2.1). An AID, not a calibration: no measured VALUE depends on any
   // of it. A bar reads its value from the calibrated value axis and auto-extract
   // finds bars from ink; ticks only DIVIDE and LABEL. A misplaced tick costs a
-  // mislabelled row, visible in the table and fixed by a drag — never a wrong
+  // mislabelled row, visible in the table and fixed by a drag - never a wrong
   // number. If a future reader finds an argument here that tick precision
   // threatens a value, the argument is wrong.
   // ---------------------------------------------------------------------------
@@ -175,14 +175,14 @@ export class CategoryAxis {
   /**
    * Place the two edges that ARE the category axis, and regenerate the ticks.
    *
-   * ⚑ Refuses a degenerate axis rather than reporting success on it — the
+   * ⚑ Refuses a degenerate axis rather than reporting success on it - the
    * `calibrate()`-that-cannot-fail shape this project has now found five times.
    * Two coincident edges make `paramAtPoint` divide by zero, so every tick, every
    * divider and every category assignment would read back NaN with nothing on
    * screen wrong.
    */
   setAxisEdges(a: CategoryAxisPoint, b: CategoryAxisPoint): boolean {
-    // ⚑ The degenerate-axis refusal lives in `BandedAxis.setEdges` now — tested
+    // ⚑ The degenerate-axis refusal lives in `BandedAxis.setEdges` now - tested
     // as a LENGTH rather than as coordinate equality, because two endpoints a
     // denormal distance apart are distinct points whose squared length
     // underflows to zero and divides to Infinity rather than NaN.
@@ -200,7 +200,7 @@ export class CategoryAxis {
     return this._bands.hasGeometry();
   }
 
-  /** Drops the geometry entirely, leaving the category NAMES untouched — the
+  /** Drops the geometry entirely, leaving the category NAMES untouched - the
    * un-ticked path is a supported way to work, not a broken state. */
   clearGeometry(): void {
     this._bands.clearGeometry();
@@ -224,7 +224,7 @@ export class CategoryAxis {
    * Declare how many categories the figure has, resizing the name list to match
    * and regenerating the ticks.
    *
-   * ⚑ The count is NOT stored separately — it IS `_categories.length`. Two
+   * ⚑ The count is NOT stored separately - it IS `_categories.length`. Two
    * fields holding one fact is how they come to disagree; see
    * `ticksAreStale()` for the one place that difference can still appear.
    * Growing adds unnamed categories (a dash at rest, never an invented name);
@@ -246,14 +246,14 @@ export class CategoryAxis {
    * Rebuild the evenly spaced ticks from the edges, the convention and the
    * category count, discarding any manual adjustment.
    *
-   * ⚑ Callers must warn BEFORE calling this when `hasAdjustments()` — silently
+   * ⚑ Callers must warn BEFORE calling this when `hasAdjustments()` - silently
    * reverting someone's corrections is the failure this flag exists to prevent.
    */
   regenerateTicks(): boolean {
     // ⚑ The count is synchronised HERE and only here, because for a category
     // axis it is not a separate fact: it IS the name list's length. An empty
     // list has no bands at all, which `BandedAxis.setCount` refuses to express
-    // on purpose — zero columns is not a figure — so the empty case takes the
+    // on purpose - zero columns is not a figure - so the empty case takes the
     // other door rather than passing a meaningless count through the one that
     // guards a heatmap's declaration.
     const declared = this._categories.length;
@@ -270,8 +270,8 @@ export class CategoryAxis {
    * ⚑ THE LOAD PATH IS THE MODEL'S OTHER ENTRANCE, and this project has been
    * bitten repeatedly by a guard that only the click path reaches. A stored tick
    * list must be finite, strictly inside the axis, strictly increasing, and the
-   * right LENGTH for the convention and category count — exactly the invariants
-   * `moveTick` maintains — or a hand-edited file would put the model in a state
+   * right LENGTH for the convention and category count - exactly the invariants
+   * `moveTick` maintains - or a hand-edited file would put the model in a state
    * no sequence of clicks can produce.
    *
    * ⚑ It REPAIRS rather than refusing, and that is a deliberate consequence of
@@ -283,7 +283,7 @@ export class CategoryAxis {
     // ⚑ Sync the count first: `BandedAxis` validates the stored list's LENGTH
     // against its own declared count, and for a category axis that count is the
     // name list's length. Without this the file door would measure against a
-    // stale number — the drift `ticksAreStale` exists to report, silently
+    // stale number - the drift `ticksAreStale` exists to report, silently
     // deciding a load instead.
     const declared = this._categories.length;
     if (declared >= 1) {
@@ -296,7 +296,7 @@ export class CategoryAxis {
 
   /** Whether the tick set still matches the declared category count. Only ever
    * true if a category was added or removed through the naming path without a
-   * regeneration — the one way the two can drift apart.
+   * regeneration - the one way the two can drift apart.
    *
    * ⚑ Measured against the NAME LIST, not against the band mechanism's own
    * count, because that drift is precisely what this reports: `addCategory`
@@ -315,7 +315,7 @@ export class CategoryAxis {
     return this._bands.getTickPoints();
   }
 
-  /** The N+1 dividers bounding the N bands — see `dividerParamsFrom`. */
+  /** The N+1 dividers bounding the N bands - see `dividerParamsFrom`. */
   getDividerParams(): number[] {
     return this._bands.getDividerParams();
   }
@@ -328,7 +328,7 @@ export class CategoryAxis {
     return this._bands.hasAdjustments();
   }
 
-  /** Whether a category COUNT has been declared — the thing that turns a marked
+  /** Whether a category COUNT has been declared - the thing that turns a marked
    * axis into usable bands. See `_countDeclared`. */
   hasDeclaredCount(): boolean {
     return this._countDeclared;
@@ -346,7 +346,7 @@ export class CategoryAxis {
    *
    * Clamped strictly between its neighbours (and inside the axis edges), so a
    * tick can never cross another or leave the span. That keeps tick *i* the
-   * divider for category *i* by construction — reordering under the drag would
+   * divider for category *i* by construction - reordering under the drag would
    * silently reassign categories, which is the defect this whole feature exists
    * to remove.
    */
@@ -355,7 +355,7 @@ export class CategoryAxis {
   }
 
   /**
-   * Which category `point` belongs to — the band it falls in, projected onto the
+   * Which category `point` belongs to - the band it falls in, projected onto the
    * axis. Null when there is no geometry to answer with.
    *
    * This is what replaces the nearest-donor name prefill: a declaration instead

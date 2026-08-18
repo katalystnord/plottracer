@@ -6,7 +6,7 @@
  * scale feeds its endpoints straight into `Math.log`. Unguarded, the poisoned
  * value is baked into the transform and `calibrate()` returns true anyway:
  * `isCalibrated()` says yes while every reading comes back NaN or null. That
- * is tenet 1's worst shape — nothing on screen looks wrong.
+ * is tenet 1's worst shape - nothing on screen looks wrong.
  *
  * The rule is NOT the same for every axis, which is exactly why it lives here
  * rather than being written out four times and drifting:
@@ -27,7 +27,7 @@
 /**
  * XY's rule: neither endpoint is zero, and the two share a sign.
  *
- * An all-negative pair is legitimate — that is a negative-decade axis, which
+ * An all-negative pair is legitimate - that is a negative-decade axis, which
  * the caller reflects before taking the logarithm. Writing this as "both must
  * be positive" would refuse a real figure.
  */
@@ -44,7 +44,7 @@ export function logEndpointsUsable(a: number | null | undefined, b: number | nul
 }
 
 /**
- * The rule for a scale with no negative branch — a polar radius, a bar's
+ * The rule for a scale with no negative branch - a polar radius, a bar's
  * value, a spider spoke: both endpoints strictly positive.
  */
 export function logPositiveEndpointsUsable(

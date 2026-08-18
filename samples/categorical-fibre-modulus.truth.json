@@ -1,7 +1,7 @@
 {
   "source": {
     "imagePath": "categorical-fibre-modulus.png",
-    "note": "Synthetic ground truth \u2014 per-category value; X is ordered, not numeric."
+    "note": "Synthetic ground truth - per-category value; X is ordered, not numeric."
   },
   "graphType": "categorical",
   "axes": {

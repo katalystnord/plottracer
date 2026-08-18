@@ -3,31 +3,31 @@
  * docs/project-container-design.md §3).
  *
  * Chromium's <img> decodes every raster/vector format PlotTracer opens (PNG,
- * JPG, GIF, BMP, WEBP, SVG) — so those load straight through
+ * JPG, GIF, BMP, WEBP, SVG) - so those load straight through
  * ImageCanvas.loadImageFromSrc. PDF is the exception: <img> cannot decode it,
  * so a PDF has to be *rendered* to a canvas first (pdf.js) and the resulting
  * raster fed in like any other image. That render needs a DOM canvas and a
  * worker, so this module is renderer-only (unlike engine/, which is Node-
- * testable) — it is exercised by the e2e suite driving the real app, not unit
+ * testable) - it is exercised by the e2e suite driving the real app, not unit
  * tests. This is the general shape for any browser-undecodable format (PDF now,
  * TIFF if it ever lands): render → rasterize → treat as an image.
  *
  * pdf.js needs its worker. Vite's `?worker` import bundles pdf.worker as a
  * classic (IIFE) worker, which is what loads correctly under Electron's file://
- * production build — a module-worker URL does not. GlobalWorkerOptions.workerPort
+ * production build - a module-worker URL does not. GlobalWorkerOptions.workerPort
  * takes the constructed worker directly, so there is no runtime path to guess.
  *
  * RESOLUTION (raised at checkpoint 99, after the post-v0.4 audit's T3). We
  * render the whole PAGE (we don't know where the figure is), targeting ~3000px
  * on the page's longest side. Be honest about what that buys: a figure occupies
- * only a FRACTION of a page, so it gets a fraction of that budget — a half-page
+ * only a FRACTION of a page, so it gets a fraction of that budget - a half-page
  * figure ~1500px, a quarter-page ~750px. This is a *digitizer*; under-resolving
  * the raster silently caps trace precision (the vector source could be
  * re-rasterized arbitrarily fine, the same concern SVG has, except here we
  * choose the resolution). Validated on a real Nature-paper figure 2026-07-18:
  * at the old 2000px target a half-page figure got ~730px and traced but softly;
  * ~1500px is visibly crisper for point placement. The target still leaves a
- * (higher) fixed ceiling for very small insets — a user-controllable quality, or
+ * (higher) fixed ceiling for very small insets - a user-controllable quality, or
  * re-rendering a cropped region from the vector source, is the fuller fix.
  */
 
@@ -44,7 +44,7 @@ pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
  *
  * ⚑ THE FLOOR USED TO BE 1.5x AND ITS COMMENT HAD THE EFFECT BACKWARDS
  * ("a huge page stays sane"). `Math.max` makes a floor bind only when the
- * target asks for LESS — i.e. only on pages longer than 2000pt — so it never
+ * target asks for LESS - i.e. only on pages longer than 2000pt - so it never
  * protected a huge page, it inflated one. An A0 poster (2384x3370pt, routine
  * for conference figures) asked for 0.89x and was forced to 1.5x: 3576x5055 =
  * 18 Mpx, held simultaneously as a canvas, a base64 PNG, a decoded image and
@@ -53,7 +53,7 @@ pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
  * target instead. (Round-2 audit.) For a standard ~800pt page this
  * gives ~3.7×, so the target governs and MAX rarely binds; MAX only caps small
  * pages that would otherwise scale past it. A 3000px-longest page is ~6–9M
- * pixels — a few MB as a PNG, which is what the baked image / project carries. */
+ * pixels - a few MB as a PNG, which is what the baked image / project carries. */
 const TARGET_LONGEST_PX = 3000;
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
@@ -62,7 +62,7 @@ const MAX_SCALE = 6;
 // module because importing this file constructs the pdf.js worker, and the
 // detection check runs on every dropped/pasted file before any render.
 
-/** A parsed PDF is a LoadedDocument (the shared paged-source shape — B7): its page
+/** A parsed PDF is a LoadedDocument (the shared paged-source shape - B7): its page
  * count, plus lazy per-page rendering. Kept open (in a ref by the caller) so
  * flipping pages doesn't re-parse the document. */
 export async function loadPdf(bytes: Uint8Array): Promise<LoadedDocument> {

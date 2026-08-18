@@ -20,7 +20,7 @@ const base = {
 const render = (props: Record<string, unknown>) =>
   renderToStaticMarkup(createElement(IconButton, { ...base, ...props }));
 
-describe('IconButton — disabled tools still show a hover hint (B3)', () => {
+describe('IconButton - disabled tools still show a hover hint (B3)', () => {
   it('enabled: the button itself carries the label+shortcut title, no wrapper span', () => {
     const html = render({});
     expect(html).toContain('title="Add points (3)"');

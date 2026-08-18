@@ -1,5 +1,5 @@
 /**
- * B4, the export half — ⚑⚑ A CAP IS NOT A DATA POINT IN THE FILE EITHER.
+ * B4, the export half - ⚑⚑ A CAP IS NOT A DATA POINT IN THE FILE EITHER.
  *
  * ⚠️ MEASURED on the branch before this was written. One datum at (5, 5) with a
  * mirrored SD bar, plus a second datum at (7.5, 2.5), exported as:
@@ -15,7 +15,7 @@
  * the caps at least sat in their own named series; folding them onto the datum
  * put them in the carrier's own row list, and the exporter had not been told.
  *
- * ⚑ ABSOLUTES AND DELTAS, BOTH — measured, in docs/generator-input-formats.md:
+ * ⚑ ABSOLUTES AND DELTAS, BOTH - measured, in docs/generator-input-formats.md:
  * ggplot's `geom_errorbar` takes `ymin`/`ymax` absolutes, matplotlib's
  * `errorbar` takes `yerr` deltas, and neither will do the other's arithmetic.
  * The record is absolutes (a delta cannot tell "no bound" from "a bound of size
@@ -73,7 +73,7 @@ const sectionsFor = (s: ReturnType<typeof session>, scope: 'active' | 'all') =>
   } as unknown as ExportAssemblyInput);
 
 describe('the flat export of a series carrying error', () => {
-  it('⚑⚑ one row per DATUM — a cap is not a point', () => {
+  it('⚑⚑ one row per DATUM - a cap is not a point', () => {
     const [data] = sectionsFor(withError(), 'active');
     expect(data!.rows).toHaveLength(2);
     expect(data!.rows.map((r) => r[3])).toEqual([5, 2.5]); // the Y column
@@ -182,7 +182,7 @@ describe('the JSON export', () => {
   });
 
   it('⚑ a datum with no error carries no error keys at all', () => {
-    // An absent field means "not measured" — the rule the whole error schema
+    // An absent field means "not measured" - the rule the whole error schema
     // follows. A null would be a claim that we looked.
     const doc = JSON.parse(
       buildExportJson({
@@ -198,7 +198,7 @@ describe('the JSON export', () => {
   });
 });
 
-describe('a TUPLE type carrying error — the bar chart', () => {
+describe('a TUPLE type carrying error - the bar chart', () => {
   /** One bar, floor to top, with an SD cap above its top. */
   function barWithError() {
     const s = new CalibrationSession(BAR_AXES_CONFIG);
@@ -227,7 +227,7 @@ describe('a TUPLE type carrying error — the bar chart', () => {
   it('⚑⚑ the header and the row are the same length', () => {
     // ⚠️ THE PLAINEST FORM OF THE BUG, AND IT ARRIVED WITH THE FIX. Routing
     // `getSlotNames()` to the type's OWN slots gave the header 'Bar start' and
-    // 'Bar end' — while `tupleDataSection` still mapped over ALL of a row's
+    // 'Bar end' - while `tupleDataSection` still mapped over ALL of a row's
     // members, error slots included. Three header cells against seven row cells:
     // every value under the wrong name, which is worse than dropping them.
     const [data] = sectionsFor(barWithError() as never, 'active');
@@ -253,7 +253,7 @@ describe('a TUPLE type carrying error — the bar chart', () => {
   it('⚑⚑ the cap VALUES actually reach the file', () => {
     // ⚠️ The column headers existing is not the test. Bar's `pixelToData`
     // returns `[value]`, so the 2-D projection left every cap on a bar chart
-    // resolving to nothing — `[{x: 0}]`, no roles at all. Before B4 that cost
+    // resolving to nothing - `[{x: 0}]`, no roles at all. Before B4 that cost
     // nothing visible, because a bar's caps were a separate SERIES whose rows
     // reached the file as ordinary readings; folding them onto the datum routed
     // them through the projection instead. Assert the numbers.

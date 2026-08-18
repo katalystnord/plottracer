@@ -1,7 +1,7 @@
 /**
  * The spreadsheet's rules.
  *
- * ⚑ Each block below covers a rule that has ALREADY produced a defect once —
+ * ⚑ Each block below covers a rule that has ALREADY produced a defect once -
  * column order, editability, derived rows, the Category column's real
  * condition. Inside Workspace.tsx each was an inline expression checkable only
  * by launching Electron.
@@ -132,11 +132,11 @@ describe('derived rows and editability', () => {
     expect(isCellEditable('xy', true, false)).toBe(true);
   });
 
-  it('refuses a DERIVED cell — an edit there is wiped by the next rebuild', () => {
+  it('refuses a DERIVED cell - an edit there is wiped by the next rebuild', () => {
     expect(isCellEditable('xy', true, true)).toBe(false);
   });
 
-  it('refuses an inactive series — you edit the series you are working on', () => {
+  it('refuses an inactive series - you edit the series you are working on', () => {
     expect(isCellEditable('xy', false, false)).toBe(false);
   });
 

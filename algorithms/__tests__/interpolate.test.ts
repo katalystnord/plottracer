@@ -76,13 +76,13 @@ describe('interpolateCurveOrdered (centripetal Catmull-Rom)', () => {
     }
   });
 
-  // ⚑ EVERY TEST ABOVE IS STRUCTURAL — anchors present, in order, tagged, finite.
+  // ⚑ EVERY TEST ABOVE IS STRUCTURAL - anchors present, in order, tagged, finite.
   // None of them reads a single INTERPOLATED coordinate, and the anchors are
   // emitted verbatim rather than sampled, so the spline arithmetic could be
   // arbitrarily wrong and the whole block above would still pass. That is what
   // "40% mutation score with zero uncovered mutants" was telling us: the suite ran
   // this file exhaustively and checked almost nothing in it. The derived samples
-  // are RECORD — they ride into the user's export beside the anchors — so the
+  // are RECORD - they ride into the user's export beside the anchors - so the
   // curve itself needs assertions. The three below are properties of the curve
   // rather than of this implementation, and each threshold was MEASURED before it
   // was written down, not guessed.
@@ -159,7 +159,7 @@ describe('interpolateCurveOrdered (centripetal Catmull-Rom)', () => {
     }
   });
 
-  it('is CENTRIPETAL, not uniform — the knot exponent this file is built on', () => {
+  it('is CENTRIPETAL, not uniform - the knot exponent this file is built on', () => {
     // ⚑ The three tests above kill a lot of arithmetic and cannot touch ALPHA:
     // collinear anchors stay on their line under ANY parameterization, and every
     // variant is symmetric, so alpha=0 passes all of them. Yet alpha=0.5 is the

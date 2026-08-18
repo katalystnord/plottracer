@@ -7,7 +7,7 @@
  * machinery can coalesce around the data again?"*
  *
  * The answer was yes-in-name-only. `ErrorBarPoint` is documented as *"the
- * model's one derived quantity"* and `getResolvedErrorBars` returns it — with
+ * model's one derived quantity"* and `getResolvedErrorBars` returns it - with
  * ZERO non-test callers. Meanwhile the drawing reached into
  * `dataset.getAllPixels()` and matched caps itself, and the CSV export worked off
  * series + `ErrorRelation` + deltas. Three consumers, three derivations, none of
@@ -19,7 +19,7 @@
  * computed differently from the thing it checks is not a check.
  *
  * ⇒ B4 adds a SECOND storage form, so without a convergence point the paths
- * multiply — 2 storage × 3 consumers = 6 that must agree. Through the primitive
+ * multiply - 2 storage × 3 consumers = 6 that must agree. Through the primitive
  * it is 2 producers + 3 consumers, and a continuous BAND later becomes a third
  * PRODUCER rather than a third thing every consumer has to learn.
  */
@@ -47,7 +47,7 @@ function session() {
 }
 
 describe('one accessor answers for every way an error is stored', () => {
-  it('reads the OLD shape — caps in their own related series', () => {
+  it('reads the OLD shape - caps in their own related series', () => {
     const s = session();
     s.addDataPoint(200, 200); // (5, 5)
     const capIndex = s.addDataset('SD upper');
@@ -63,7 +63,7 @@ describe('one accessor answers for every way an error is stored', () => {
     expect(bars[0]!.yUpper, 'the related series must still resolve').toBeCloseTo(7, 6);
   });
 
-  it('reads the NEW shape — caps as extents in the datum\'s own tuple', () => {
+  it('reads the NEW shape - caps as extents in the datum\'s own tuple', () => {
     // ⚑ The same call, the same return type, a different storage form. That is
     // the whole point: a consumer written against this cannot tell which shape
     // the figure was captured in, so it needs no branch and gains no bug when a
@@ -84,7 +84,7 @@ describe('one accessor answers for every way an error is stored', () => {
   });
 
   it('gives the SAME answer for the same figure captured either way', () => {
-    // The two storage forms are not merely both readable — they must agree, or
+    // The two storage forms are not merely both readable - they must agree, or
     // the migration silently changes recorded numbers.
     const oldWay = session();
     oldWay.addDataPoint(200, 200);

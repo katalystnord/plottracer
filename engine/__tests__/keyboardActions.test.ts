@@ -11,8 +11,8 @@ import {
 } from '../keyboardActions.js';
 
 /**
- * ORDER IS THE BEHAVIOUR here, so most of these assert PRECEDENCE — which
- * branch wins when two could claim the same key — and the mode gating that
+ * ORDER IS THE BEHAVIOUR here, so most of these assert PRECEDENCE - which
+ * branch wins when two could claim the same key - and the mode gating that
  * stops a stale selection acting from the wrong tool (the v0.6.0 finding).
  */
 
@@ -48,7 +48,7 @@ function state(over: Partial<KeyboardState> = {}): KeyboardState {
 const act = (e: KeyPress, s: KeyboardState): KeyAction | null => resolveKeyDown(e, s)?.action ?? null;
 
 describe('a text field owns its own keys', () => {
-  it('ignores EVERY binding while typing — including undo', () => {
+  it('ignores EVERY binding while typing - including undo', () => {
     // A rename field's own Ctrl+Z should undo typing, not roll back the whole
     // digitization; and a digit typed into a value box is not a tool switch.
     const typing = { targetIsTextField: true };
@@ -61,7 +61,7 @@ describe('a text field owns its own keys', () => {
 describe('the derived state is asked for only when a branch needs it', () => {
   // ⚑ Both suppliers walk the session. Calling them on every keydown would
   // rebuild a points-length array once per keystroke typed into a rename field
-  // — work the text-field bail throws away a moment later. The original handler
+  // - work the text-field bail throws away a moment later. The original handler
   // read them inside their own branches, and this is what keeps that true.
   function counted(over: Partial<KeyboardState> = {}) {
     const calls = { roles: 0, points: 0 };
@@ -115,7 +115,7 @@ describe('undo / redo, and why every other Ctrl key is left alone', () => {
   it('leaves every OTHER modified key to the native menu accelerators', () => {
     // ⚑ This is what makes KEYBOARD ZOOM work: the View menu already binds
     // CmdOrCtrl+Equal/-/0/1. A renderer copy would DOUBLE-fire, and worse, the
-    // modified digit would fall through to the bare-digit chain — Ctrl+1 would
+    // modified digit would fall through to the bare-digit chain - Ctrl+1 would
     // switch to Calibrate and Ctrl+3 would act on a data point.
     for (const key of ['1', '3', '0', '=', '-', 'a']) {
       expect(resolveKeyDown(press(key, { ctrlKey: true }), state()), key).toBeNull();
@@ -143,7 +143,7 @@ describe('Enter resolves innermost-first', () => {
     expect(r.preventDefault).toBe('if-present');
   });
 
-  it('does nothing — but still CONSUMES the key — with nothing to accept', () => {
+  it('does nothing - but still CONSUMES the key - with nothing to accept', () => {
     // 'consume' rather than null: the press belongs to this handler, so no
     // later branch may also claim it.
     expect(act(press('Enter'), state())).toEqual({ type: 'consume' });
@@ -165,7 +165,7 @@ describe('Escape walks back out one layer at a time', () => {
   });
 
   it('takes the layers in order, innermost first', () => {
-    // Peel one layer per press and check the NEXT one surfaces — the ladder's
+    // Peel one layer per press and check the NEXT one surfaces - the ladder's
     // order IS the contract, so assert the whole sequence rather than one rung.
     const order: Array<[Partial<KeyboardState>, KeyAction['type']]> = [
       [{}, 'close-context-menu'],
@@ -199,7 +199,7 @@ describe('Escape walks back out one layer at a time', () => {
   });
 });
 
-describe('arrow nudges — which selection the arrows act on', () => {
+describe('arrow nudges - which selection the arrows act on', () => {
   it('scales the step to zoom, and makes Shift the COARSE step', () => {
     // One press is ~0.5 SCREEN px at any magnification (WPD's 0.5/zoomRatio).
     expect(nudgeDelta('ArrowLeft', false, 1)).toEqual({ dx: -0.5, dy: 0 });
@@ -249,14 +249,14 @@ describe('arrow nudges — which selection the arrows act on', () => {
   it('⚑ IGNORES a stale point selection from a mode that does not edit points', () => {
     // The v0.6.0 finding: without this gate a selection lingering from Place
     // Point was silently nudged while the user was in Measure aiming at
-    // something else — an edit to the wrong target, with no visible cause.
+    // something else - an edit to the wrong target, with no visible cause.
     for (const mode of ['measure', 'calibrate', 'pan', 'eraser', 'color-trace', 'error-bars'] as const) {
       expect(resolveKeyDown(press('ArrowUp'), state({ mode, activePointIndex: 2 })), mode).toBeNull();
     }
   });
 });
 
-describe('Delete — only ever the thing you are actually pointing at', () => {
+describe('Delete - only ever the thing you are actually pointing at', () => {
   it('removes the whole marquee as one step, in Select', () => {
     expect(act(press('Delete'), state({ mode: 'select', selectedPointCount: 2 }))).toEqual({ type: 'delete-selection' });
     expect(act(press('Backspace'), state({ mode: 'select', selectedPointCount: 2 }))).toEqual({ type: 'delete-selection' });
@@ -298,7 +298,7 @@ describe('Q / W walk the selection', () => {
     expect(stepSelectablePoint(roles, null, -1)).toBe(2);
   });
 
-  it('SKIPS derived interpolation samples — you never nudge those', () => {
+  it('SKIPS derived interpolation samples - you never nudge those', () => {
     // On an interpolation-assist curve this steps anchor to anchor.
     const roles = ['anchor', 'interpolated', 'interpolated', 'anchor'] as const;
     expect(stepSelectablePoint(roles, 0, 1)).toBe(3);
@@ -323,7 +323,7 @@ describe('Q / W walk the selection', () => {
     expect(resolveKeyDown(press('w'), state({ isCalibrated: false, dataPointRoles: () => [null] }))).toBeNull();
   });
 
-  it('⚑ still works while a marquee selection is live — that branch falls THROUGH', () => {
+  it('⚑ still works while a marquee selection is live - that branch falls THROUGH', () => {
     // The Select branch returns only for arrows and Delete; anything else must
     // carry on down the ladder.
     const s = state({ mode: 'select', selectedPointCount: 2, dataPointRoles: () => [null, null] });
@@ -369,7 +369,7 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
     expect(resolveDigit('9', state())).toEqual({ type: 'click', selector: '[data-testid="geometry-trigger"]:not([disabled])' });
   });
 
-  it('leaves Pan always available — it can never be the wrong thing to do', () => {
+  it('leaves Pan always available - it can never be the wrong thing to do', () => {
     expect(resolveDigit('0', state({ figureCaptured: false, canvasHasImage: false, isCalibrated: false }))).toEqual({
       type: 'set-mode',
       mode: 'pan',
@@ -383,7 +383,7 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
     }
   });
 
-  it('does not suppress the browser default — these keys have none worth taking', () => {
+  it('does not suppress the browser default - these keys have none worth taking', () => {
     expect(resolveKeyDown(press('3'), state())!.preventDefault).toBe(false);
   });
 });
@@ -438,7 +438,7 @@ describe('the conjunctions that decide which branch claims a key', () => {
     expect(act(press('Enter'), state({ mode: 'place-point', measureTool: 'area' }))).toEqual({ type: 'consume' });
   });
 
-  it('acts on the marquee only in Select — a selection count elsewhere is stale', () => {
+  it('acts on the marquee only in Select - a selection count elsewhere is stale', () => {
     // In Place Point the arrows must reach the SINGLE selected point instead.
     const s = state({ mode: 'place-point', selectedPointCount: 3, activePointIndex: 1 });
     expect(act(press('ArrowUp'), s)?.type).toBe('nudge-point');
@@ -458,7 +458,7 @@ describe('the conjunctions that decide which branch claims a key', () => {
 
 describe('the nudge commits once, on release', () => {
   it('fires only for arrows, and only when a nudge is actually pending', () => {
-    // One undo step per gesture, not per event — a held key auto-repeating
+    // One undo step per gesture, not per event - a held key auto-repeating
     // must still collapse to one.
     expect(isNudgeRelease('ArrowUp', true)).toBe(true);
     expect(isNudgeRelease('ArrowUp', false)).toBe(false);

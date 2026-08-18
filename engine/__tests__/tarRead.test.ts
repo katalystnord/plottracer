@@ -7,14 +7,14 @@ import { readTar, entryText } from '../tarRead.js';
 import { isTarArchive, isZipContainer } from '../projectContainer.js';
 
 /**
- * Checkpoint 74 — the tar reader that lets us open a real WPD project.
+ * Checkpoint 74 - the tar reader that lets us open a real WPD project.
  *
  * The archive under test is built by the **system `tar`**, not hand-crafted to
  * match this reader. A fixture written by the same understanding it verifies
  * proves nothing; the whole risk here is misreading the format.
  *
  * It is shaped exactly like WPD's own output (`services/saveResume.js:78-85`):
- * `<project>/info.json` + `<project>/wpd.json` + image files — and `wpd.json`
+ * `<project>/info.json` + `<project>/wpd.json` + image files - and `wpd.json`
  * is a genuine upstream fixture (`engine/__tests__/fixtures/wpd/wpd4.json`).
  */
 describe('tarRead (checkpoint 74)', () => {
@@ -44,7 +44,7 @@ describe('tarRead (checkpoint 74)', () => {
     expect(entries.find((e) => e.name === 'myproject/wpd.json')!.type).toBe('file');
   });
 
-  it('recovers wpd.json byte-for-byte — it must still parse as WPD JSON', () => {
+  it('recovers wpd.json byte-for-byte - it must still parse as WPD JSON', () => {
     const entry = readTar(tarBytes).find((e) => e.name === 'myproject/wpd.json')!;
     const parsed = JSON.parse(entryText(entry));
     // The real test: the recovered text is a working WPD project.
@@ -53,7 +53,7 @@ describe('tarRead (checkpoint 74)', () => {
     expect(parsed.datasetColl.length).toBeGreaterThan(0);
   });
 
-  it('recovers a BINARY file exactly — PNG magic and byte length intact', () => {
+  it('recovers a BINARY file exactly - PNG magic and byte length intact', () => {
     // Binary is where an off-by-one in the 512-byte padding would show up.
     const entry = readTar(tarBytes).find((e) => e.name === 'myproject/figure.png')!;
     const original = fs.readFileSync(path.join(dir, 'myproject', 'figure.png'));
@@ -86,12 +86,12 @@ describe('tarRead (checkpoint 74)', () => {
 /**
  * Regression: names containing spaces.
  *
- * The first reader stopped a name at 0x20 — correct for tar's octal numeric
+ * The first reader stopped a name at 0x20 - correct for tar's octal numeric
  * fields, wrong for names, where a space is ordinary. "myproject" hid it;
  * "my paper fig3" truncated to "my" and the archive read as corrupt. Real
  * project folders have spaces, so this is the realistic case, not an edge one.
  */
-describe('tarRead — names with spaces', () => {
+describe('tarRead - names with spaces', () => {
   it('reads a path containing spaces without truncating at the space', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-space-'));
     fs.mkdirSync(path.join(dir, 'my paper fig3'));
@@ -109,12 +109,12 @@ describe('tarRead — names with spaces', () => {
  *
  * ⚑ A foreign digitizer's archive used to arrive through a dialog, an IPC channel,
  * a file filter and a menu item of its own, every one of them naming a single tool.
- * That is the first-class status tenet 5 rules out — and, as David put it, a
+ * That is the first-class status tenet 5 rules out - and, as David put it, a
  * functional link IN advertises a functional link OUT that cannot exist: a third of
  * what we now record (spider spokes and their per-axis scales, point roles, box
  * tuples) has nowhere to go in that format. One door, and the FILE says what it is.
  */
-describe('isTarArchive — the container sniff behind one Open Project', () => {
+describe('isTarArchive - the container sniff behind one Open Project', () => {
   /** A REAL tar, written by tar(1), so the magic under test is the genuine one. */
   function realTar(): Uint8Array {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-tar-sniff-'));

@@ -8,7 +8,7 @@ import { CircularChartRecorderAxes } from '../axes/circularChartRecorder.js';
 import { Calibration } from '../calibration.js';
 
 /**
- * Checkpoint 76 — the exported VALUE contract (port of dataExport.js's
+ * Checkpoint 76 - the exported VALUE contract (port of dataExport.js's
  * getValueAtPixel + generateCSV's header rule).
  *
  * These lock the bytes that reach a downstream consumer. Each of the three
@@ -26,12 +26,12 @@ function xyAxes(): XYAxes {
   return axes;
 }
 
-/** X calibrated with dates, Y numeric — the half-working date-axis case.
+/** X calibrated with dates, Y numeric - the half-working date-axis case.
  *
  * SLASHES, not ISO dashes, and that is not a stylistic choice: WPD's date
  * parser returns null for any string containing neither `/` nor `:`
  * (`dateConversion.js:30-32`, ported verbatim), so "2024-01-01" is not a date
- * to it — it falls through to parseFloat and silently becomes the NUMBER 2024.
+ * to it - it falls through to parseFloat and silently becomes the NUMBER 2024.
  * Verified by execution 2026-07-16. Inherited from upstream, not ours, and
  * logged separately; these fixtures use the format that actually builds a date
  * axis, because the point here is the export contract, not the parser. */
@@ -58,7 +58,7 @@ function barAxes(): BarAxes {
 /** The same 5-point walk the e2e drives, but with a date the parser accepts.
  *
  * The e2e's CCR block feeds "2024-01-01 00:00", which is NOT a date to WPD's
- * parser (see xyDateAxes above) — so our CCR e2e has been calibrating a chart
+ * parser (see xyDateAxes above) - so our CCR e2e has been calibrating a chart
  * whose "time" is the number 2024. It passes because those tests deliberately
  * assert plumbing, not math ("Not hand-verified for exact math here -- that's
  * crossCheck's job"). Worth knowing, and logged; using a real date here is what
@@ -75,7 +75,7 @@ function ccrAxes(): CircularChartRecorderAxes {
   return axes;
 }
 
-describe('exportLabelsFor — headers come from the axes, not a hardcoded list', () => {
+describe('exportLabelsFor - headers come from the axes, not a hardcoded list', () => {
   it('reads each type\'s own contract', () => {
     // These are the three that DIVERGED from AxesTypeConfig.valueLabels, which
     // is what made this a defect rather than a tidy-up: valueLabels said
@@ -89,8 +89,8 @@ describe('exportLabelsFor — headers come from the axes, not a hardcoded list',
   });
 });
 
-describe('valueAtPixel — Bar', () => {
-  it('emits [Label, Value] — the categorical axis a bar chart IS', () => {
+describe('valueAtPixel - Bar', () => {
+  it('emits [Label, Value] - the categorical axis a bar chart IS', () => {
     // The defect: a plain Bar chart exported bare numbers with nothing saying
     // which bar produced each. pixelToData returns ONE value; the label lives
     // in metadata, which is why getDimensions() is 2 while dataDim is 1.
@@ -119,7 +119,7 @@ describe('valueAtPixel — Bar', () => {
   });
 });
 
-describe('valueAtPixel — CCR', () => {
+describe('valueAtPixel - CCR', () => {
   it('formats its time column instead of emitting a julian float', () => {
     // The defect, and it hit 100% of CCR extractions: upstream formats this
     // column UNCONDITIONALLY (dataExport.js:36-37), so we read 2460123.45
@@ -139,7 +139,7 @@ describe('valueAtPixel — CCR', () => {
   });
 });
 
-describe('valueAtPixel — non-finite sanitation', () => {
+describe('valueAtPixel - non-finite sanitation', () => {
   it('maps NaN/Infinity to null so CSV and JSON agree ("not measured")', () => {
     // A degenerate calibration (singular pixel matrix, log through zero) or an
     // undefined geometric point can hand pixelToData a non-finite value. It must
@@ -179,7 +179,7 @@ describe('valueAtPixel — non-finite sanitation', () => {
   });
 });
 
-describe('valueAtPixel — XY', () => {
+describe('valueAtPixel - XY', () => {
   it('leaves a numeric XY chart entirely alone', () => {
     const ds = new Dataset(2);
     ds.addPixel(250, 150);
@@ -188,7 +188,7 @@ describe('valueAtPixel — XY', () => {
     expect(row[1]).toBeCloseTo(5, 6);
   });
 
-  it('formats a date-calibrated X but not a numeric Y — dates are opt-in here, unlike CCR', () => {
+  it('formats a date-calibrated X but not a numeric Y - dates are opt-in here, unlike CCR', () => {
     const ds = new Dataset(2);
     ds.addPixel(250, 150);
     const row = valueAtPixel(0, xyDateAxes(), ds.getPixel(0));
@@ -197,7 +197,7 @@ describe('valueAtPixel — XY', () => {
   });
 });
 
-/** A small-magnitude Y axis (0..0.01 over 300px) — the case the old fixed
+/** A small-magnitude Y axis (0..0.01 over 300px) - the case the old fixed
  * 2-decimal round ZEROED. Its resolution is ~3.3e-5/px, so values near 0.003
  * must survive to several decimals. */
 function smallYAxes(): XYAxes {
@@ -211,8 +211,8 @@ function smallYAxes(): XYAxes {
   return axes;
 }
 
-describe('valueAtPixel — principled precision (the v1.0 export blocker fix)', () => {
-  it('does NOT zero a small-magnitude value — it rounds to the axis resolution, not 2 decimals', () => {
+describe('valueAtPixel - principled precision (the v1.0 export blocker fix)', () => {
+  it('does NOT zero a small-magnitude value - it rounds to the axis resolution, not 2 decimals', () => {
     // Y = (300 - py)/300 * 0.01. At py=198, Y = 102/300*0.01 = 0.0034.
     const ds = new Dataset(2);
     ds.addPixel(250, 198);

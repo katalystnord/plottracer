@@ -101,7 +101,7 @@ export class TernaryAxes {
 
   // `_c` is optional to match MapAxes' identical stub (map.ts:78) and upstream's
   // own `function(a, b, c)`, which JS lets you call with two arguments. Our port
-  // had made this one required — a TypeScript artefact rather than a fact about
+  // had made this one required - a TypeScript artefact rather than a fact about
   // upstream, and one that stopped TernaryAxes satisfying the `dataToPixel`
   // requirement CalibratedAxes declares (checkpoint 79). Still the upstream stub:
   // it returns the origin, and callers must probe rather than trust it.

@@ -1,10 +1,10 @@
 /**
- * Bounded ZIP reading — the one door every archive we open goes through.
+ * Bounded ZIP reading - the one door every archive we open goes through.
  *
  * ⚑ WHY THIS EXISTS. `unzipSync` inflates EVERY entry into memory with no
  * ceiling, and the archives we open are handed to us: a project file emailed to
- * a user, or a foreign digitiser's project someone downloaded. A "zip bomb" — a
- * few tens of kilobytes declaring gigabytes of output — therefore freezes or
+ * a user, or a foreign digitiser's project someone downloaded. A "zip bomb" - a
+ * few tens of kilobytes declaring gigabytes of output - therefore freezes or
  * kills the app with nothing on screen to say why. The app is offline and local,
  * so nothing worse than that is at stake, which is exactly why the fix should be
  * the smallest one that works rather than a security apparatus (tenet 10).
@@ -18,7 +18,7 @@
  *
  * ⚑ AND THE SNIFFERS ONLY WANT ONE ENTRY. `isStarryProject` and
  * `isMultiFigureContainer` run on EVERY zip a user tries to open, purely to read
- * `project.json` — so they were inflating an entire archive to look at one small
+ * `project.json` - so they were inflating an entire archive to look at one small
  * file. `unzipEntry` reads just the one, which closes the most exposed path and
  * is faster on every legitimate open too.
  */
@@ -37,7 +37,7 @@ export const MAX_TOTAL_UNCOMPRESSED = 512 * 1024 * 1024;
 
 export class ZipTooLargeError extends Error {
   constructor() {
-    super('Could not open project — the archive expands to far more data than a project should contain.');
+    super('Could not open project - the archive expands to far more data than a project should contain.');
     this.name = 'ZipTooLargeError';
   }
 }
@@ -47,7 +47,7 @@ export class ZipTooLargeError extends Error {
  *
  * Throws `ZipTooLargeError` rather than returning a result type, because every
  * caller already sits inside a try/catch that turns an unreadable archive into a
- * user-facing message — and a bomb IS an unreadable archive, just an expensively
+ * user-facing message - and a bomb IS an unreadable archive, just an expensively
  * unreadable one.
  */
 export function unzipBounded(
@@ -75,7 +75,7 @@ export function unzipBounded(
 
 /**
  * Inflate exactly ONE named entry. Returns undefined when the archive has no
- * such entry — which is a normal answer for a sniffer, not an error.
+ * such entry - which is a normal answer for a sniffer, not an error.
  *
  * The size cap here is deliberately much smaller than the whole-archive budget:
  * every caller uses this for a small JSON manifest, so a `project.json`

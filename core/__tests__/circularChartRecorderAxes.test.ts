@@ -91,7 +91,7 @@ describe('CircularChartRecorderAxes.calibrate refuses invalid input instead of s
    * mutated to `&&` still refuses plain garbage (both halves true), so the
    * "abc" cases above cannot tell the two apart. An ARRAY separates them: it
    * parses VALIDLY (isValid true) to a number[], so only the second half is
-   * true — with `||` it is refused, with `&&` it sails through and the axes
+   * true - with `||` it is refused, with `&&` it sails through and the axes
    * calibrates around an array, reading back nonsense.
    */
   it('refuses an ARRAY value, which parses validly but is not a number', () => {
@@ -104,7 +104,7 @@ describe('CircularChartRecorderAxes.calibrate refuses invalid input instead of s
 });
 
 /**
- * The rotation period — how long one full turn of the chart paper is.
+ * The rotation period - how long one full turn of the chart paper is.
  *
  * ⚑ NOTHING HAD EVER CALIBRATED A 'day' CHART. The whole `rotationTime ===
  * 'day'` branch was NO-COVERAGE: its two `setHours(getHours() + 24)` calls
@@ -118,7 +118,7 @@ describe('CircularChartRecorderAxes.calibrate refuses invalid input instead of s
  * These assert the span in milliseconds against the fixture's own start date,
  * which is arithmetic anyone can check: 7 days and 24 hours.
  */
-describe('CircularChartRecorderAxes — the rotation period sets the time scale', () => {
+describe('CircularChartRecorderAxes - the rotation period sets the time scale', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
   function calibrateWithPeriod(rotationTime: 'week' | 'day') {
@@ -139,7 +139,7 @@ describe('CircularChartRecorderAxes — the rotation period sets the time scale'
     expect(axes.tEnd! - axes.tStart!).toBe(7 * DAY_MS);
   });
 
-  it('a DAY chart spans exactly twenty-four hours — a seventh of the week chart', () => {
+  it('a DAY chart spans exactly twenty-four hours - a seventh of the week chart', () => {
     const axes = calibrateWithPeriod('day');
     expect(axes.timeMax - axes.time0).toBe(DAY_MS);
     expect(axes.tEnd! - axes.tStart!).toBe(DAY_MS);
@@ -157,11 +157,11 @@ describe('CircularChartRecorderAxes — the rotation period sets the time scale'
 
 /**
  * What the axes tells the REST of the app about itself. Every method below was
- * NO-COVERAGE: each could have returned a constant, or nothing, unnoticed —
+ * NO-COVERAGE: each could have returned a constant, or nothing, unnoticed -
  * yet they decide how the time column is formatted on screen and in every
  * export, and how many clicks the calibration walk asks for.
  */
-describe('CircularChartRecorderAxes — the contract it exposes', () => {
+describe('CircularChartRecorderAxes - the contract it exposes', () => {
   function calibratedWithDate() {
     const cal = new Calibration(2);
     cal.addPoint(200, 150, '2024/01/01 00:00', '0');
@@ -176,7 +176,7 @@ describe('CircularChartRecorderAxes — the contract it exposes', () => {
 
   it('COLUMN 0 IS THE DATE COLUMN, and no other column is', () => {
     // ⚑ `col === 0` mutated to `col !== 0` in BOTH isDate and
-    // getInitialDateFormat and survived — nothing asked either question. They
+    // getInitialDateFormat and survived - nothing asked either question. They
     // are what makes the Time column render as a date rather than a raw
     // millisecond count, on screen and in the file alike.
     const axes = calibratedWithDate();
@@ -258,7 +258,7 @@ describe('CircularChartRecorderAxes — the contract it exposes', () => {
 });
 
 /**
- * ⚑⚑ THE READING ITSELF — the arithmetic that turns a click into (time,
+ * ⚑⚑ THE READING ITSELF - the arithmetic that turns a click into (time,
  * magnitude), and which NOTHING HAS EVER CHECKED.
  *
  * The 2026-07-31 mutation run left ~30 survivors concentrated in
@@ -267,13 +267,13 @@ describe('CircularChartRecorderAxes — the contract it exposes', () => {
  * clockwise/anticlockwise branch could each have an operator flipped with the
  * whole suite green. The existing tests only ever asserted
  * `Number.isFinite(time)`, and the e2e says outright that exact verification
- * is "core/__tests__/crossCheck.test.ts's job" — **a file that has never
+ * is "core/__tests__/crossCheck.test.ts's job" - **a file that has never
  * existed in this repo.** So the maths of a live, shipped graph type was
  * pinned by nothing at all.
  *
  * THE FIXTURE, chosen so every expected number is derivable by hand rather
  * than recorded from a run (the standing rule: derive or measure, never
- * invent — these were derived first, then confirmed against the
+ * invent - these were derived first, then confirmed against the
  * implementation before being written down):
  *
  *   (T0,R0) (200,150) value 0      (T0,R1) (150,100)      (T0,R2) (100,150) value 100
@@ -285,10 +285,10 @@ describe('CircularChartRecorderAxes — the contract it exposes', () => {
  *
  * The radial scale is therefore linear from r=0 at 200px to r=100 at 100px,
  * i.e. **r = 200 - rPx**. And because (T0,R0) and (T0,R2) sit on the SAME pen
- * arc, they are the same instant — which is the physical invariant the whole
+ * arc, they are the same instant - which is the physical invariant the whole
  * mechanism rests on, and the sharpest test available here.
  */
-describe('CircularChartRecorderAxes — the reading, against hand-derived ground truth', () => {
+describe('CircularChartRecorderAxes - the reading, against hand-derived ground truth', () => {
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   function chart(startTime = '2024/01/01 00:00', direction: 'anticlockwise' | 'clockwise' = 'anticlockwise') {
@@ -329,7 +329,7 @@ describe('CircularChartRecorderAxes — the reading, against hand-derived ground
     expect(axes.pixelToData(100, 150)[1]).toBeCloseTo(100, 9); // R2 as declared
   });
 
-  it('interpolates the radial scale LINEARLY between them — r = 200 - rPx', () => {
+  it('interpolates the radial scale LINEARLY between them - r = 200 - rPx', () => {
     // ⚑ Pins the radial arithmetic, whose every operator survived mutation.
     // 150px from the chart centre is halfway, so it must read 50.
     const axes = chart();
@@ -338,7 +338,7 @@ describe('CircularChartRecorderAxes — the reading, against hand-derived ground
     expect(axes.pixelToData(0, 250)[1]).toBeCloseTo(100, 9); // on the chart circle
   });
 
-  it('⚑ reads the two ends of ONE pen arc as the SAME instant — the mechanism s whole premise', () => {
+  it('⚑ reads the two ends of ONE pen arc as the SAME instant - the mechanism s whole premise', () => {
     // (T0,R0) and (T0,R2) are the same time by construction: a pen arc IS a
     // line of constant time. Any error in the law-of-cosines term or in
     // thetac0 makes them disagree, because their distances from the chart
@@ -400,7 +400,7 @@ describe('CircularChartRecorderAxes — the reading, against hand-derived ground
 });
 
 /**
- * ⚑ THREE COLLINEAR CLICKS DESCRIBE NO CIRCLE — round-2 audit.
+ * ⚑ THREE COLLINEAR CLICKS DESCRIBE NO CIRCLE - round-2 audit.
  *
  * Both arcs are fitted from exactly three points, and the prompts invite a
  * straight line: "a point on the pen's time axis", "a second point on the same
@@ -451,7 +451,7 @@ describe('a chart recorder needs two real ARCS, not two straight lines', () => {
     ).toBe(false);
   });
 
-  it('accepts two genuinely curved arcs — the guard must not refuse a real chart', () => {
+  it('accepts two genuinely curved arcs - the guard must not refuse a real chart', () => {
     expect(
       calibrateWith([
         [250, 300],

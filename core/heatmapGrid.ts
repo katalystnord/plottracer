@@ -1,33 +1,33 @@
 /**
- * The heatmap grid — an adjustable set of DIVIDERS per axis (v2.2, phase 3).
+ * The heatmap grid - an adjustable set of DIVIDERS per axis (v2.2, phase 3).
  *
  * ⚑⚑ ONE MECHANISM FOR BOTH KINDS OF FIGURE (David, 2026-08-11): *"Our grid can
  * be a virtual grid (for example continuous fields), it does not need to have a
  * thickness. For heatmaps with grids, we obviously overlay the grids. And the
  * grids need to be user adjustable (unequal cells)."* A divider is a POSITION,
- * never a drawn region — exactly what v2.1's category ticks already are — and
+ * never a drawn region - exactly what v2.1's category ticks already are - and
  * what varies between a figure with printed cell borders and a continuous field
  * is only how the position gets PLACED: snapped to measured ink in the first
  * case, laid down as a virtual lattice in the second. Same store either way.
  *
  * ⚑ ADJUSTABILITY IS LOAD-BEARING, AND IT KILLS ANY "rows × columns" COUNT.
- * Published heatmaps have rows of unequal height and columns of unequal width —
- * measured as a real case, not imagined — so every divider is stored on its own.
+ * Published heatmaps have rows of unequal height and columns of unequal width -
+ * measured as a real case, not imagined - so every divider is stored on its own.
  * That is precisely why the category-tick work stores each divider rather than a
  * count, and it is the reason a decision made for BAR CHARTS is what makes
  * heatmaps expressible at all.
  *
  * ⚠️⚠️ THIS HEADER USED TO SAY *"DIVIDERS ARE STORED IN DATA COORDINATES, not
  * pixels and not parameters"*, and argued it from *"a heatmap always has a
- * numeric scale"* — the same false premise that hid the missing category axis
+ * numeric scale"* - the same false premise that hid the missing category axis
  * for a whole release. It was wrong, and `core/bandedAxis.ts` had already
  * written the correct rule AND named this store as the violator: *"a bare number
  * cannot say whether it should follow the axis or stay where it was put."* Two
  * headers contradicting each other inside one release, with nothing grading
  * either. **A comment that restates a design you have not enforced is false
- * evidence of compliance** — gate 3, and this is the case study.
+ * evidence of compliance** - gate 3, and this is the case study.
  *
- * ⚑⚑ THE STORE IS PARAMETRIC — see `gridParamsFrom` below for the rule and what
+ * ⚑⚑ THE STORE IS PARAMETRIC - see `gridParamsFrom` below for the rule and what
  * each kind of calibration change does. Data coordinates are DERIVED on every
  * read from the calibration in force, never stored, so the two cannot drift.
  * ⚑ The image-edit case the old header was defending still works, and for a
@@ -45,12 +45,12 @@ import { bandIndexIn, paramOfSpan, valueOfSpan } from './bandedAxis.js';
 const DIVIDER_EPS = 1e-9;
 
 /**
- * Is `t` a position ON the colour key — that is, on the strip itself?
+ * Is `t` a position ON the colour key - that is, on the strip itself?
  *
  * ⚑⚑ THE THIRD AXIS'S BOUND, IN ONE PLACE, because the model has THREE
  * entrances and each one had to be told separately. A user drags the key's
  * marker (`setCellReadingAt`), types a number that is converted to a position
- * (`setCellReading`), or opens a project file — and until 2026-08-17 the file
+ * (`setCellReading`), or opens a project file - and until 2026-08-17 the file
  * checked only that the value was a finite number. A hand-edited or foreign
  * project could therefore land a cell anywhere along an infinite key, and
  * `valueAtPosition` extrapolates a position of 5 into a perfectly ordinary
@@ -65,7 +65,7 @@ const DIVIDER_EPS = 1e-9;
  *
  * ⚑ Lives in `core/` so `core/plotData.ts` (the load entrance) and
  * `engine/heatmapRun.ts` (the two interactive ones) can share it. `core/` never
- * imports `algorithms/` or `engine/`, and this keeps it that way — the
+ * imports `algorithms/` or `engine/`, and this keeps it that way - the
  * alternative was the same rule written out twice, which is finding A2 of this
  * release in miniature.
  */
@@ -84,7 +84,7 @@ export interface HeatmapCell {
 }
 
 /**
- * Why a divider list is unusable. Codes, not sentences — the sentence belongs
+ * Why a divider list is unusable. Codes, not sentences - the sentence belongs
  * where it is shown.
  */
 export type GridRefusal =
@@ -102,7 +102,7 @@ export type GridRefusal =
  * ⚑ SORTING IS DONE HERE AND NOWHERE ELSE, which is what lets `moveDivider`
  * REFUSE to drag a divider past its neighbour instead of quietly re-sorting.
  * Re-sorting would keep the geometry valid and renumber every cell beyond the
- * one being dragged — the values would still be right and they would be filed
+ * one being dragged - the values would still be right and they would be filed
  * under the wrong column, which is the silent kind of wrong.
  */
 export function checkDividers(
@@ -118,7 +118,7 @@ export function checkDividers(
 }
 
 /**
- * `count` equal cells spanning `from` to `to`, as `count + 1` dividers — the
+ * `count` equal cells spanning `from` to `to`, as `count + 1` dividers - the
  * VIRTUAL lattice, for a figure that draws no cell boundaries at all.
  *
  * ⚑ This is the only place a count appears, and it is a STARTING POINT rather
@@ -172,7 +172,7 @@ export function insertDivider(dividers: readonly number[], value: number): numbe
 
 /**
  * Remove the divider at `index`, merging the two cells it separated. Refuses to
- * go below two dividers, which is one cell — the smallest grid that is a grid.
+ * go below two dividers, which is one cell - the smallest grid that is a grid.
  */
 export function removeDivider(dividers: readonly number[], index: number): number[] | null {
   if (!Number.isInteger(index) || index < 0 || index >= dividers.length) return null;
@@ -217,7 +217,7 @@ export function cellsOf(
  * outermost bands as unbounded. The two are answering different questions: there,
  * a bar sitting just past the last divider still belongs to the category a
  * reader would say it belongs to. Here, a point outside the grid is outside the
- * MATRIX — there is no row for it, and inventing one would put a value in a cell
+ * MATRIX - there is no row for it, and inventing one would put a value in a cell
  * the figure does not have.
  */
 export function cellIndexAt(
@@ -236,7 +236,7 @@ export function cellIndexAt(
 }
 
 /**
- * ⚑⚑ THE STORE IS A PARAMETER, NOT A COORDINATE — 0 at the axis's first
+ * ⚑⚑ THE STORE IS A PARAMETER, NOT A COORDINATE - 0 at the axis's first
  * calibration point, 1 at its second.
  *
  * David, 2026-08-16, stating it as a rule for every graph type: *"Anything
@@ -250,12 +250,12 @@ export function cellIndexAt(
  *
  * ⚠️ THIS FILE'S HEADER USED TO ARGUE THE OPPOSITE, and it was wrong. It said a
  * boundary's data coordinate IS its identity because a heatmap always has a
- * numeric scale — which is the same false premise that hid the missing category
+ * numeric scale - which is the same false premise that hid the missing category
  * axis for a release. `core/bandedAxis.ts` had already written the correct rule
  * and NAMED this store as the thing that cannot express it: *"a bare number
  * cannot say whether it should follow the axis or stay where it was put."*
  * Two headers contradicting each other inside one release, with nothing grading
- * either — which is what gate 3 exists for.
+ * either - which is what gate 3 exists for.
  *
  * ⚑ WHAT EACH CHANGE DOES, now that the store is a parameter:
  *   · retype a calibration VALUE → the parameters do not move, so the grid stays
@@ -296,7 +296,7 @@ export function dividersFromParams(
  * Two calibration points with no span between them cannot define a parameter.
  *
  * ⚑ Refused rather than nudged: `bandedAxis`'s `paramAtPoint` guards the same
- * degeneracy, and for the sharper reason recorded there — a span that underflows
+ * degeneracy, and for the sharper reason recorded there - a span that underflows
  * to zero divides to Infinity, which sails through any caller that only checks
  * for NaN.
  */
@@ -308,7 +308,7 @@ function usableSpan(v1: number, v2: number): boolean {
  * Which band of a sorted divider list holds `v`, or null if it is outside.
  *
  * ⚑ `refuse`, and the word is the point: a point outside the grid is outside the
- * MATRIX — there is no row for it, and inventing one would put a value in a cell
+ * MATRIX - there is no row for it, and inventing one would put a value in a cell
  * the figure does not have. `bandedAxis` takes `clamp` for a bar just past the
  * last divider, which still belongs to the category a reader would name. The two
  * ANSWERS differ on purpose; the LOOP no longer does.

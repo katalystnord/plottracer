@@ -4,24 +4,24 @@ import { FloatingPanel } from './FloatingPanel.js';
 import { GRAPH_TYPE_ICONS } from './icons.js';
 
 /**
- * The graph-type picker (v2.0) — a grid of icon+label CARDS instead of a
+ * The graph-type picker (v2.0) - a grid of icon+label CARDS instead of a
  * plain text dropdown (replaces AxesTypeSelect.tsx).
  *
  * ⚑ WHY. David test-drove plotdigitizer.com directly and concluded it is
- * not ahead of PlotTracer in functionality or user-friendliness — except
+ * not ahead of PlotTracer in functionality or user-friendliness - except
  * for exactly this: its chart-type picker is a grid of small icon cards,
  * not a text list, and his own read was "more user friendly". A genuine
  * discoverability win (recognize a glyph at a glance vs. read an 11-line
  * list), the same pattern Excel/PowerPoint/Tableau's own chart pickers use
- * — not cosmetic. See project_chart_type_icons_backlog.md.
+ * - not cosmetic. See project_chart_type_icons_backlog.md.
  *
  * Built on FloatingPanel (the same primitive Grid Removal/Curve Fit/Help
- * already use) rather than MUI's Select — a card grid has nothing in
+ * already use) rather than MUI's Select - a card grid has nothing in
  * common with a native `<select>`'s single-column text list, and
  * FloatingPanel already solves anchoring/closing/the glass surface. The
  * trigger keeps the SAME "Graph type" caption AxesTypeSelect had (David:
  * "the target user can only use what is on screen, and a bare 'XY' chip
- * never told a first-time user that a graph TYPE exists to choose") —
+ * never told a first-time user that a graph TYPE exists to choose") -
  * only the fold-out's own CONTENTS change.
  */
 export interface GraphTypeOption {

@@ -33,7 +33,7 @@ import { fitPolynomial, computeFitStats, getFitPoints, evaluatePolynomial, forma
 import { findFitModel, fitModel, type FitModelId } from '../algorithms/nonlinearFit.js';
 
 /** Which shape was fitted. `'polynomial'` is the original and stays the
- * DEFAULT — an absent `model` on a stored fit means polynomial, so every
+ * DEFAULT - an absent `model` on a stored fit means polynomial, so every
  * project saved before nonlinear fitting existed keeps reading correctly.
  * Unlike some past compatibility questions, those files genuinely do exist. */
 export type CurveFitModelId = 'polynomial' | FitModelId;
@@ -47,10 +47,10 @@ export interface CurveFitState {
   restrict: boolean;
   xMin: number | null;
   xMax: number | null;
-  /** The fitted parameters — polynomial coefficients, or the model's own
+  /** The fitted parameters - polynomial coefficients, or the model's own
    * parameters in the order it names them. */
   coefficients: number[];
-  /** Absent for a flat series — R² is undefined when every y is the same. RMS
+  /** Absent for a flat series - R² is undefined when every y is the same. RMS
    * is the number to read there. */
   rSquared?: number;
   rms: number;
@@ -60,7 +60,7 @@ export interface CurveFitState {
   /**
    * Did the solver settle? Absent for a polynomial, which is solved directly and
    * has nothing to converge. ⚑ Recorded because a nonlinear fit that ran out of
-   * iterations must never be presented as a result — a drawn curve is read as an
+   * iterations must never be presented as a result - a drawn curve is read as an
    * answer whether or not it earned it.
    */
   converged?: boolean;
@@ -92,7 +92,7 @@ export function runCurveFit(dataset: Dataset, axes: AnyAxes, options: RunCurveFi
 
   if (modelId === 'polynomial' && points.length < options.degree + 1) {
     return {
-      error: `Not enough points for a degree ${options.degree} fit — need at least ${options.degree + 1}, have ${points.length}.`,
+      error: `Not enough points for a degree ${options.degree} fit - need at least ${options.degree + 1}, have ${points.length}.`,
     };
   }
 

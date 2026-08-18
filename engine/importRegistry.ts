@@ -1,28 +1,28 @@
 /**
- * The import registry — one Open Project, and the FILE says which format it is.
+ * The import registry - one Open Project, and the FILE says which format it is.
  *
  * ⚑⚑ WHY A REGISTRY RATHER THAN A DOOR PER TOOL. Naming one tool in the UI
  * makes it a first-class citizen and advertises a symmetry that cannot exist: a
  * functional link IN implies a functional link OUT, and a third of what we now
- * record — spider spokes and their per-axis scales, point roles, box-plot
- * tuples, measurement blocks — has nowhere to go in any of these formats. So
+ * record - spider spokes and their per-axis scales, point roles, box-plot
+ * tuples, measurement blocks - has nowhere to go in any of these formats. So
  * every format enters through the same door, none is named in a menu, and
  * **adding the next digitizer is a new entry here and no UI change at all**.
  * That last sentence is the test of whether this design is right.
  *
  * ⚑ Reading many formats is the point, not a convenience (David, 2026-07-28):
  * it positions PlotTracer downstream of the whole field, so data flows in and
- * stops here. That makes the one-way rule a strategy rather than a limitation —
+ * stops here. That makes the one-way rule a strategy rather than a limitation -
  * nothing in this file has, or may grow, a matching writer.
  *
  * SNIFFING LOOKS INSIDE CONTAINERS, NOT JUST AT MAGIC BYTES.
  * The rule everywhere in this codebase is "detect by CONTENT, never the
  * filename, since users rename files". Formats forced that rule further open:
- * a StarryDigitizer project is a zip holding `project.json` and `image.png` —
+ * a StarryDigitizer project is a zip holding `project.json` and `image.png` -
  * the same container shape and the same entry names as OURS. Four magic bytes
  * cannot separate them; only a key inside project.json can. So a sniffer is
  * free to unzip and read, and `extensions` below exists for dialog filters and
- * prose ONLY — never to decide what a file is.
+ * prose ONLY - never to decide what a file is.
  *
  * ORDER MATTERS: ours is tried first, so our own projects can never be claimed
  * by another format's sniffer.
@@ -53,7 +53,7 @@ export type ImportFormatId = 'plottracer' | 'wpd' | 'engauge' | 'starry';
 
 export interface ImportFormat {
   id: ImportFormatId;
-  /** What this format is called when we have to name it — in an error listing
+  /** What this format is called when we have to name it - in an error listing
    * what CAN be opened, never in a menu item of its own. */
   displayName: string;
   /** For the open dialog's filter and for prose. NEVER used to decide a type. */
@@ -65,7 +65,7 @@ export interface ImportFormat {
    *
    * `null` marks a format that needs a flow of its own rather than a one-shot
    * read: OUR OWN projects (which restore measurements, provenance, multiple
-   * figures and a bundled source document — far more than an ImportedFigure
+   * figures and a bundled source document - far more than an ImportedFigure
    * carries), and the archive format that can hold several figures on one image
    * and therefore has to ask the user which. Those two stay with the caller by
    * necessity, not by oversight.
@@ -73,7 +73,7 @@ export interface ImportFormat {
   open: ((bytes: Uint8Array) => ImportResult<ImportedFigure>) | null;
 }
 
-/** Every format Open Project accepts. Ours first — see the header. */
+/** Every format Open Project accepts. Ours first - see the header. */
 export const IMPORT_FORMATS: readonly ImportFormat[] = [
   {
     id: 'plottracer',
@@ -82,7 +82,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     // A zip is ours unless another format claims it (checked in order below);
     // a bare JSON project is the legacy single-file form.
     sniff: (bytes) => isZipContainer(bytes) || looksLikeJsonObject(bytes),
-    open: null, // restored by the caller — see the note on `open`
+    open: null, // restored by the caller - see the note on `open`
   },
   {
     id: 'wpd',
@@ -111,7 +111,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   },
 ];
 
-/** Does this look like a bare JSON object — the legacy single-file project? */
+/** Does this look like a bare JSON object - the legacy single-file project? */
 function looksLikeJsonObject(bytes: Uint8Array): boolean {
   for (let i = 0; i < Math.min(bytes.length, 64); i++) {
     const b = bytes[i]!;
@@ -126,8 +126,8 @@ function looksLikeJsonObject(bytes: Uint8Array): boolean {
  *
  * ⚑ The zip case is why this is not a plain `.find()`. Our container and a
  * StarryDigitizer project are BOTH "zip holding project.json and image.png", so
- * a zip has to be offered to the other formats' sniffers — which read inside it
- * — before we may claim it as ours. Getting this backwards is not a near miss:
+ * a zip has to be offered to the other formats' sniffers - which read inside it
+ * - before we may claim it as ours. Getting this backwards is not a near miss:
  * it produced "Project archive is missing its image reference" for a file we
  * can read perfectly well.
  */
@@ -144,7 +144,7 @@ export function identifyProject(bytes: Uint8Array): ImportFormat | null {
  * What to say about a file we cannot open.
  *
  * The importer ships openly incomplete and grows, so an unsupported file must be
- * refused WITH the list of formats that do work — never a generic failure. That
+ * refused WITH the list of formats that do work - never a generic failure. That
  * is the v1.3 lesson (grade prose and errors against what the app REFUSES, not
  * only against what it does) applied up front rather than in a later audit.
  */

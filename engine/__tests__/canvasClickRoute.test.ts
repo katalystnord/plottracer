@@ -19,7 +19,7 @@ const ALL_MODES: readonly ToolMode[] = [
 const at = (over: Partial<CanvasClickInput> = {}) =>
   routeCanvasClick({ eyedropper: null, mode: 'place-point', figureCaptured: true, ...over });
 
-describe('⚑ the no-add guard — the property this module exists for', () => {
+describe('⚑ the no-add guard - the property this module exists for', () => {
   it('turns a bare click into a data point in Place Point and NOWHERE else', () => {
     // The v0.8 defect: a rail-wired mode with no branch of its own fell through
     // to addDataPoint and fabricated a raw point in the active series. It is
@@ -38,13 +38,13 @@ describe('⚑ the no-add guard — the property this module exists for', () => {
     }
   });
 
-  it('⚑ gates capture at CALIBRATE only — the one door into the record', () => {
+  it('⚑ gates capture at CALIBRATE only - the one door into the record', () => {
     // Checked, because the obvious stronger claim ("nothing adds before
     // capture") is FALSE here and should stay false: `place-point` with
     // figureCaptured=false still routes to add-point.
     //
     // That is not a hole. Reaching Place Point needs axes; axes need a
-    // calibration; calibrating needs a capture — and `resetDocument` clears the
+    // calibration; calibrating needs a capture - and `resetDocument` clears the
     // capture flag, swaps in a FRESH (uncalibrated) session and forces
     // mode:'calibrate' in one step, so the two can never come apart. A second
     // gate here would be a refusal that cannot fire, which is this project's
@@ -73,7 +73,7 @@ describe('the modes that deliberately do nothing', () => {
     }
   });
 
-  it('⚑ ignores By colour specifically — clicking the curve is the NATURAL gesture there', () => {
+  it('⚑ ignores By colour specifically - clicking the curve is the NATURAL gesture there', () => {
     // The sibling Flood-fill mechanism DOES trace by clicking the curve, so the
     // user has every reason to try it. That is what made the fallthrough so
     // easy to hit.
@@ -100,7 +100,7 @@ describe('calibrate refuses until the figure is captured', () => {
     expect(at({ mode: 'calibrate', figureCaptured: true })).toEqual({ kind: 'calibrate' });
   });
 
-  it('⚑ gates ONLY calibrate on capture — the other tools have their own reasons', () => {
+  it('⚑ gates ONLY calibrate on capture - the other tools have their own reasons', () => {
     // Place Point is unreachable before calibration anyway, so a second capture
     // gate here would be a refusal that can never fire.
     expect(at({ mode: 'measure', figureCaptured: false })).toEqual({ kind: 'measure' });
@@ -126,7 +126,7 @@ describe('the tools that route to their own handler', () => {
 describe('a type whose record is a MATRIX', () => {
   it('turns the fallthrough into a CELL PICK, not a data point', () => {
     // ⚑⚑ The fallthrough was actively wrong here: a heatmap's values come from
-    // its grid — the tips bar says so — and a bare click still dropped a raw
+    // its grid - the tips bar says so - and a bare click still dropped a raw
     // datum into the active series, invisible until export. Same shape as the
     // v0.8 "By colour" defect that named this whole guard family.
     expect(
@@ -140,19 +140,19 @@ describe('a type whose record is a MATRIX', () => {
    * tools."*
    *
    * `select-cell` sat LAST in the router, so it was reachable only when every
-   * earlier check fell through — and the only mode that does is `place-point`.
+   * earlier check fell through - and the only mode that does is `place-point`.
    * `select` returned `clear-selection`, which clears POINT state and never
    * touches the picked cells, so a cell click under the Select tool was a
    * literal no-op. A HIDDEN MODE in CLAUDE.md's exact sense: the capability was
    * real but bound to the control advertising the opposite, while the tool that
-   * did work — Place Point — has a tips bar saying *"a heatmap's values come
+   * did work - Place Point - has a tips bar saying *"a heatmap's values come
    * from its grid, not from clicking the figure."*
    *
    * ⚑ AND IT IS WHY THE OLD e2e PASSED: `resetWorkspace` leaves the mode at
    * place-point and the test never picked up a tool, so it exercised the one
    * route a user is least likely to be in.
    */
-  it('🔴 SELECTS A CELL under the Select tool — the tool whose whole name is that', () => {
+  it('🔴 SELECTS A CELL under the Select tool - the tool whose whole name is that', () => {
     expect(
       routeCanvasClick({ eyedropper: null, mode: 'select', figureCaptured: true, readsCellsFromAGrid: true })
     ).toEqual({ kind: 'select-cell' });
@@ -166,7 +166,7 @@ describe('a type whose record is a MATRIX', () => {
     ).toEqual({ kind: 'clear-selection' });
   });
 
-  it('changes only the FALLTHROUGH and SELECT — every other mode keeps its meaning', () => {
+  it('changes only the FALLTHROUGH and SELECT - every other mode keeps its meaning', () => {
     const matrix = { eyedropper: null, figureCaptured: true, readsCellsFromAGrid: true } as const;
     expect(routeCanvasClick({ ...matrix, mode: 'pan' })).toEqual({ kind: 'ignore' });
     expect(routeCanvasClick({ ...matrix, mode: 'measure' })).toEqual({ kind: 'measure' });
