@@ -6431,7 +6431,28 @@ export function Workspace() {
     config,
     isCalibrating,
     hasPendingPixel: pendingPixel !== null,
-    currentStep: currentStep ? { label: currentStep.label, prompt: currentStep.prompt } : null,
+    // ⚑⚑ D2: whether this step's pending pixel arrived by `commonOrigin` REUSE
+    // rather than by a click, so the tip can stop telling the user to click a
+    // corner the app already placed for them.
+    //
+    // ⚑ DERIVED, not remembered. `confirmDataValue` knows `reuse.from` at the
+    // moment it applies it, but storing that is state which can go stale against
+    // the walk; asking the same pure function the same question cannot. A reuse
+    // is offered exactly while the `from` step is placed and the `to` step is
+    // not, which is precisely the window in which its pixel is pending.
+    ...(() => {
+      if (!currentStep || pendingPixel === null) return {};
+      const reuse = commonOriginReuse(config, commonOrigin, currentStep.key, session.getPlacedPoints(), currentStep);
+      if (!reuse) return {};
+      return { pixelReusedFrom: steps.find((st) => st.key === reuse.from)?.label ?? reuse.from };
+    })(),
+    currentStep: currentStep
+      ? {
+          label: currentStep.label,
+          prompt: currentStep.prompt,
+          ...(currentStep.reusedPrompt ? { reusedPrompt: currentStep.reusedPrompt } : {}),
+        }
+      : null,
     pendingValueFieldCount: pendingValueFields.length,
     stepIndex: session.getStepIndex(),
     stepCount: steps.length,

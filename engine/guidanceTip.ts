@@ -94,7 +94,16 @@ export interface GuidanceTipInput {
   isCalibrating: boolean;
   /** A calibration pixel is down and its value is awaited. */
   hasPendingPixel: boolean;
-  currentStep: { label: string; prompt: string } | null;
+  currentStep: { label: string; prompt: string; reusedPrompt?: string } | null;
+  /**
+   * The step whose pixel THIS step is reusing (`commonOrigin`), by label, or
+   * undefined when the user placed it themselves.
+   *
+   * ⚑ A UI-time fact, not a session one: the reuse happens in `confirmDataValue`
+   * calling `reuseStepPixel`, which is why no session-level test could see it
+   * and why D2 needed the built app to find.
+   */
+  pixelReusedFrom?: string;
   /** How many values the current step asks for (plural agreement only). */
   pendingValueFieldCount: number;
   /** 0-based index of the calibration step in hand. */
@@ -147,6 +156,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     config,
     isCalibrating,
     hasPendingPixel,
+    pixelReusedFrom,
     currentStep,
     pendingValueFieldCount,
     stepIndex,
@@ -247,16 +257,37 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     // instruction is APPENDED rather than substituted, which is the whole fix:
     // nothing the user still needs is taken away to make room for what they need
     // next.
-    const where = `Calibration step ${stepIndex + 1}/${stepCount} - ${currentStep!.label}: ${currentStep!.prompt}`;
-    // ⚑ A NEW SENTENCE, not a third dash clause. Several prompts already contain
-    // an em dash of their own ("The same corner again - enter the Y value
-    // where…"), so appending with another produced two dash clauses in one line.
-    // The precedent is the selected-point tip, which ends its first thought and
-    // starts a second: "…Del removes it. Or click to add another."
-    if (hasPendingPixel) {
-      return `${where}. Enter the value${pendingValueFieldCount > 1 ? 's' : ''}, then press Confirm.`;
+    const at = `Calibration step ${stepIndex + 1}/${stepCount} - ${currentStep!.label}`;
+    // ⚑ A NEW SENTENCE, not a third dash clause. Several prompts carry a dash of
+    // their own, and the precedent is the selected-point tip, which ends its
+    // first thought and starts a second: "…Del removes it. Or click to add
+    // another."
+    const confirm = ` Enter the value${pendingValueFieldCount > 1 ? 's' : ''}, then press Confirm.`;
+    // ⚑⚑ D2: A REUSED CORNER MUST NOT TELL THE USER TO CLICK IT. `commonOrigin`
+    // places this step's pixel from an earlier one, so the type's own prompt -
+    // written for someone about to click - describes something that already
+    // happened. On the built app, step 3 of an XY walk read *"Click the pixel
+    // position of a known Y value (e.g. Y=0). Enter the value, then press
+    // Confirm."*: an instruction and its own contradiction in one line.
+    //
+    // ⚑ AND IT IS WHY `calibrateXYStandard` CLICKS FOUR TIMES. That walk is
+    // faithful to what the screen says; the screen is what is wrong. Gate 4 read
+    // from the other end - a prompt describing a click the user never makes will
+    // produce a test that makes it, and that test then passes whatever the reuse
+    // actually does.
+    //
+    // ⚑ A type that authored a sentence FOR this state keeps it: a heatmap's
+    // shared corner says *"The same corner again, enter the Y value where the
+    // outer EDGE of the FIRST column meets the outer EDGE of the FIRST row"*,
+    // which is correct and more useful than anything generic. `reusedPrompt` is
+    // how a type says so; without one the generic line below is used, which is
+    // still true and merely less specific.
+    if (hasPendingPixel && pixelReusedFrom) {
+      const said = currentStep!.reusedPrompt ?? `the ${pixelReusedFrom} corner again, reused for you`;
+      return `${at}: ${said}.${confirm}`;
     }
-    return where;
+    if (hasPendingPixel) return `${at}: ${currentStep!.prompt}.${confirm}`;
+    return `${at}: ${currentStep!.prompt}`;
   }
   if (isCalibrated) {
     if (mode === 'select') {

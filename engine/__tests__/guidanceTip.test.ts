@@ -239,6 +239,57 @@ describe('guidanceTip - calibration', () => {
     expect(tip, 'and what to do with it').toContain('. Enter the value, then press Confirm.');
   });
 
+  it('⚑⚑ D2 - a REUSED corner stops telling the user to click it', () => {
+    // ⚠️ SEEN ON THE BUILT APP once D1 made the prompt visible. Step 3 of an XY
+    // walk reads:
+    //
+    //   "Calibration step 3/4 - Y1: Click the pixel position of a known Y value
+    //    (e.g. Y=0). Enter the value, then press Confirm."
+    //
+    // The pixel is ALREADY PLACED - `commonOrigin` reuses the X1 corner, which
+    // is why the confirm half appears at all - so the screen asks for a click
+    // that already happened, and asks for a value in the same breath.
+    //
+    // ⚑ IT IS ALSO WHY `calibrateXYStandard` CLICKS FOUR TIMES. That walk is
+    // faithful to what the screen says; the SCREEN is what is wrong. Gate 4 read
+    // from the other end: a prompt that describes a click the user does not make
+    // will produce a test that makes it.
+    //
+    // ⚑ Heatmap's shared corner authored its own sentence for this state ("The
+    // same corner again..."), which is exactly right and stays. The generic one
+    // below is for the types that never wrote one.
+    const tip = guidanceTip(
+      base({
+        isCalibrating: true,
+        hasPendingPixel: true,
+        pixelReusedFrom: 'X1',
+        stepIndex: 2,
+        stepCount: 4,
+        currentStep: { label: 'Y1', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)' },
+        pendingValueFieldCount: 1,
+      })
+    );
+    expect(tip, 'no instruction to click').not.toMatch(/[Cc]lick/);
+    expect(tip, 'says where the pixel came from').toContain('X1');
+    expect(tip).toContain('Enter the value, then press Confirm.');
+    expect(tip, 'and still says where you are').toContain('step 3/4');
+  });
+
+  it('⚑ a step the user really did click keeps its own prompt', () => {
+    // The companion assertion. Only a REUSED pixel suppresses the instruction;
+    // a pixel the user placed themselves is still described by the type's own
+    // sentence, which is D1's whole point.
+    const tip = guidanceTip(
+      base({
+        isCalibrating: true,
+        hasPendingPixel: true,
+        currentStep: { label: 'Y1', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)' },
+        pendingValueFieldCount: 1,
+      })
+    );
+    expect(tip).toContain('Click the pixel position of a known Y value');
+  });
+
   it('⚑ it still names the step and its place in the walk', () => {
     // The other half of what the generic line threw away: which step this is,
     // and how many are left. A user mid-walk should not have to reopen the card

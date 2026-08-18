@@ -451,12 +451,23 @@ async function expectRow(expected: number[], rowIndex = 0, digits = 2): Promise<
 // Shared XY calibration setup, verified exact throughout checkpoints 3-13:
 // X1=0 @ local (100,250), X2=10 @ (400,250), Y1=0 @ (100,250), Y2=10 @ (100,100).
 async function calibrateXYStandard() {
+  // ⚑⚑ THREE CLICKS, NOT FOUR (v2.3, D2). Y1 is the shared origin: with
+  // `commonOrigin` on, which is the default, the app places its pixel from X1
+  // and prefills '0', so the user confirms and never clicks. This walked it
+  // anyway, and passed because the click landed on the pixel already there.
+  //
+  // ⚑ THE TEST WAS FAITHFUL TO THE SCREEN; THE SCREEN WAS WRONG. Step 3 read
+  // *"Click the pixel position of a known Y value (e.g. Y=0)"* while the pixel
+  // was already placed, so the walk did what it was told. That is gate 4 read
+  // from the other end: a prompt describing a click the user never makes will
+  // produce a test that makes it, and the test then passes whatever the reuse
+  // does. Same correction the heatmap walk got in the v2.2 audit, for the same
+  // reason, on a type nobody had re-read since.
   await clickAt(100, 250);
   await confirmValue('0');
   await clickAt(400, 250);
   await confirmValue('10');
-  await clickAt(100, 250);
-  await confirmValue('0');
+  await confirmValue('0'); // Y1: shared corner, placed and prefilled already.
   await clickAt(100, 100);
   await confirmValue('10');
   await page.getByTestId('run-calibration').click();

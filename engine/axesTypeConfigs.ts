@@ -126,6 +126,21 @@ export interface CalibStepInfo {
    * longer labels have room), two say where it IS (below).
    */
   labelBelow?: boolean;
+  /**
+   * What to say when this step's pixel arrived by `commonOrigin` REUSE rather
+   * than by a click.
+   *
+   * ⚑⚑ Because `prompt` is written for someone about to CLICK, and on a reused
+   * step that click already happened. Without this the screen said *"Click the
+   * pixel position of a known Y value (e.g. Y=0). Enter the value, then press
+   * Confirm."* - an instruction and its own contradiction in one line, and the
+   * reason `calibrateXYStandard` clicked four times for a walk with three
+   * clicks in it.
+   *
+   * Optional: a type that says nothing gets a generic line naming the step the
+   * pixel came from, which is true and merely less specific.
+   */
+  reusedPrompt?: string;
 }
 
 /**
@@ -1516,6 +1531,15 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
           step.key === 'y1'
             ? `The same corner again - enter the Y value where ${clause('x', 'first')} meets ${clause('y', 'first')}`
             : `Click where ${clause('x', x)} meets ${clause('y', y)}${asks(axis, end)}`,
+        // ⚑ The shared corner already had the right sentence for the REUSED
+        // state, written before the state had a name: it describes the corner
+        // and asks only for a value. Declaring it here is what keeps it, now
+        // that a reused step otherwise takes the generic line.
+        ...(step.key === 'y1'
+          ? {
+              reusedPrompt: `the same corner again, where ${clause('x', 'first')} meets ${clause('y', 'first')}`,
+            }
+          : {}),
         valueFields: categorical
           ? end === 'first'
             ? []
