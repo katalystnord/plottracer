@@ -1834,36 +1834,63 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const r = pixels[i]?.metadata?.['role'];
       return r === 'anchor' || r === 'interpolated' ? r : undefined;
     };
-    // Categorical line (checkpoint 101): X is the point's ORDINAL position,
-    // DERIVED from left-to-right pixel order at export time -- never stored, so
-    // it is a view of the recorded pixels, not a fabricated coordinate (tenet 9).
-    // Value comes from the BarAxes value calibration.
+    // ⚑⚑ Categorical line: X is the CATEGORY THE READING SITS IN, read off the
+    // marked category axis — the same band mechanism Bar and Box Plot use
+    // (`core/bandedAxis.ts`). Value comes from the BarAxes value calibration.
+    //
+    // ⚠️⚠️ IT USED TO BE THE POINT'S ORDINAL, ranked left-to-right at export
+    // time, and that was this type's tenet-11 failure — the only one of twelve.
+    // Rank was computed PER SERIES, so a series missing one category slid every
+    // later reading a category to the left. Measured: two series, the second
+    // with no reading for the middle category, and the SAME category exported as
+    // Position 3 in one and Position 2 in the other. Every number plausible; a
+    // consumer overlaying them pairs the wrong points.
+    //
+    // ⚑ The ordinal survives as the FALLBACK for a session with no axis marked,
+    // where it is a faithful view of one series' own pixels and the honest
+    // answer when nobody has said where the categories are. `categoriesFollowBands`
+    // is the one place that chooses, exactly as it does for a bar.
     if (this.config.id === 'categorical') {
       // Must stay index-aligned with getExportFields() -- same condition, so the
       // Category cell exists exactly when the header does.
       const withCategory = this.anyPointLabels();
+      const banded = this.categoriesFollowBands();
+      // ⚑ ONE source for the name, shared with the on-screen table: with the
+      // axis marked it comes from the BAND, otherwise from the point. Reading
+      // the pixel's metadata directly here would have made the file disagree
+      // with the panel the moment the axis was marked.
+      const labels = this.getPointLabels(datasetIndex);
       const rank: number[] = [];
-      pixels
-        .map((p, i) => ({ i, x: p.x }))
-        .sort((a, b) => a.x - b.x)
-        .forEach((o, k) => { rank[o.i] = k + 1; });
+      if (!banded) {
+        pixels
+          .map((p, i) => ({ i, x: p.x }))
+          .sort((a, b) => a.x - b.x)
+          .forEach((o, k) => { rank[o.i] = k + 1; });
+      }
+      // ⚑ Null, never a nearest guess, for a reading outside every band. A point
+      // off the marked axis has no category, and inventing one is precisely the
+      // fabricated-category defect v2.1 already fixed once.
+      const positionOf = (p: { x: number; y: number }, i: number): number | null =>
+        banded ? (this.categoryAxis.bandIndexAt({ x: p.x, y: p.y }) ?? null) !== null
+            ? this.categoryAxis.bandIndexAt({ x: p.x, y: p.y })! + 1
+            : null
+          : rank[i]!;
       return pixels.map((p, i) => {
-        // Rank is an exact ordinal (never rounded); the value is a Bar reading,
-        // rounded to this pixel's resolution like every other exported value.
+        // The position is an exact ordinal (never rounded); the value is a Bar
+        // reading, rounded to this pixel's resolution like every other value.
         const raw = axes.pixelToData(p.x, p.y)[0] ?? null;
         const res = mode === 'full' ? null : halfPixelResolution(axes, p.x, p.y)[0];
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
         const role = roleAt(i);
-        const label = p.metadata?.['label'];
+        const label = labels[i] ?? '';
+        const position = positionOf(p, i);
         // Position, Category, Value -- independent first, dependent last, matching
         // getExportFields() and the on-screen table. An unnamed point in a figure
         // that HAS names exports a BLANK cell, so a reader can see which ticks were
         // actually transcribed. (Bar's own Label column carried WPD's inherited
         // `Bar<i>` fallback too, in core/exportValues.ts's valueAtPixel -- fixed
         // 2026-07-30, the same tenet-9 pass that found it via this exact comment.)
-        const values: ExportValue[] = withCategory
-          ? [rank[i]!, typeof label === 'string' ? label : '', value]
-          : [rank[i]!, value];
+        const values: ExportValue[] = withCategory ? [position, label, value] : [position, value];
         return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
       });
     }
@@ -2741,14 +2768,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
     if (anchorDerived) {
       dataset.addPixel(px, py);
-      this.prefillCategoryLabel(dataset, dataset.getAllPixels().length - 1);
+      if (!this.categoriesFollowBands()) {
+        this.prefillCategoryLabel(dataset, dataset.getAllPixels().length - 1);
+      }
     } else {
       const index = bestInsertionIndex(pixels, { x: px, y: py });
       dataset.insertPixel(index, px, py);
+      // ⚑ THE GUESS STANDS DOWN ONCE THE BANDS ANSWER — the same gate the tuple
+      // path already has (`!this.categoriesFollowBands() && !prefillTuple…`).
+      // Prefill exists to copy a name from the nearest already-named point in
+      // another series, i.e. to GUESS which category this reading means. A
+      // declared band says outright, so guessing could only disagree with it.
+      //
       // Prefill by ROW index -- the position the table shows and the user reasons
       // about -- not by the categorical export's x-sorted Position, which is a
       // separate derivation and would surprise anyone reading the panel.
-      this.prefillCategoryLabel(dataset, index);
+      if (!this.categoriesFollowBands()) this.prefillCategoryLabel(dataset, index);
     }
     return 'point-added';
   }
@@ -3171,7 +3206,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getPointLabels(datasetIndex: number): string[] {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry) return [];
+    // ⚑⚑ WITH THE AXIS MARKED, THE BAND IS THE CATEGORY'S IDENTITY — so the name
+    // lives with the BAND, and every series reads the same one. This is the
+    // point-level counterpart of what `getTupleLabel` already does for a bar,
+    // and its absence was the other half of Line's tenet-11 failure: a position
+    // that means the same thing everywhere is only useful if its NAME does too.
+    // With the name copied onto each point, two series could disagree about what
+    // category 2 is called and nothing could say which was right.
+    //
+    // ⚑ A category nobody has named reads BLANK, never `Category 2` — the
+    // fabricated-name defect v2.1 removed from Bar and Pie.
+    const banded = this.categoriesFollowBands();
     return entry.dataset.getAllPixels().map((p) => {
+      if (banded) {
+        const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+        return band === null ? '' : (this.categoryAxis.getCategories()[band] ?? '');
+      }
       const label = p.metadata?.['label'];
       return typeof label === 'string' ? label : '';
     });
@@ -3184,6 +3234,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
   setPointLabel(pointIndex: number, label: string): void {
     const dataset = this.activeEntry.dataset;
     if (pointIndex < 0 || pointIndex >= dataset.getAllPixels().length) return;
+    // ⚑⚑ RENAMING A POINT'S CATEGORY RENAMES THE BAND, for every series at once
+    // — which is correct, because one band IS one category. Word for word the
+    // rule `setTupleLabel` already states for a marked bar chart: *"with the
+    // axis marked, the BAND is the category's identity."* None of the
+    // reuse-or-create reasoning the unmarked path needs applies here; that
+    // exists to resolve WHICH category an unmarked reading means, and a declared
+    // band leaves nothing to resolve.
+    if (this.categoriesFollowBands()) {
+      const p = dataset.getPixel(pointIndex);
+      const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+      if (band !== null) this.categoryAxis.renameCategory(band, label);
+      return;
+    }
     const existing = dataset.getPixel(pointIndex).metadata ?? {};
     dataset.setMetadataAt(pointIndex, { ...existing, label });
     this.registerLabelMetadataKey(dataset);
@@ -3194,12 +3257,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * the signal" rule the interpolation role follows), so a figure whose
    * categories were never typed exports exactly as it did before. */
   private anyPointLabels(): boolean {
-    return this.datasetEntries.some((e) =>
-      e.dataset.getAllPixels().some((p) => {
-        const label = p.metadata?.['label'];
-        return typeof label === 'string' && label.length > 0;
-      })
-    );
+    // ⚑ Through `getPointLabels`, not the raw metadata, so it sees a name
+    // wherever the name actually LIVES. Once the category axis is marked the
+    // names belong to the bands, and reading the pixels' own metadata reported
+    // "nobody transcribed anything" for a fully-named figure — which silently
+    // dropped the Category column out of the export.
+    return this.datasetEntries.some((_e, i) => this.getPointLabels(i).some((l) => l.length > 0));
   }
 
   /** Copy a category name onto a newly added point from the NEAREST already-named
@@ -3549,6 +3612,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!ticks) return null;
     const seed = this.placed[ticks.originStep];
     return seed ? { px: seed.px, py: seed.py } : null;
+  }
+
+  /** The LABEL of that seed handle — 'P1' on a bar chart, 'V1' on a Line — so
+   * the prompt can name the handle this figure actually has. Blank when the type
+   * has no categories. See `CategoryPanelInput.seedLabel` for what naming the
+   * wrong one cost. */
+  categoryTickOriginLabel(): string {
+    const ticks = this.config.categoryTicks;
+    if (!ticks) return '';
+    return this.config.fixedSteps.find((s) => s.key === ticks.originStep)?.label ?? '';
   }
 
   /** Mark the two edges that ARE the category axis. Refuses for a type with no

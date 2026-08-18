@@ -33,6 +33,7 @@ function panel(over: Partial<CategoryPanelInput> = {}) {
     hasGeometry: false,
     placeBothEdges: false,
     seedPixel: null,
+    seedLabel: 'P1',
     edgesPlaced: 0,
     hasAdjustments: false,
     ...over,
@@ -252,6 +253,32 @@ describe('⚑⚑ "Re-place axis" can place BOTH ends — the walk that was unrea
     const v = panel({ seedPixel: seed });
     expect(v.canReuseSeed).toBe(true);
     expect(v.prompt).toContain('P1 (the amber handle) is being reused');
+  });
+
+  it('⚑⚑ it names the handle THIS TYPE actually has — a Line has no P1', () => {
+    // ⚠️ FOUND BY DRIVING THE BUILT APP, and it is gate 4's exact class: *"a
+    // walkthrough test may only click what a prompt on screen tells it to
+    // click."* Extending category ticks to categorical Line (v2.3) gave a chart
+    // whose seed handle is labelled **V1** a prompt telling the user to look for
+    // **P1**. The handle it names is not on the figure.
+    //
+    // ⚑ The label comes from the type's own seed step, so a thirteenth type
+    // cannot inherit somebody else's handle name. `categoryTicks.originStep` was
+    // always a NAME rather than a literal for this reason; this is the prompt
+    // catching up with it.
+    const v = categoryPanelView({
+      supported: true,
+      isCalibrated: true,
+      open: true,
+      hasGeometry: false,
+      seedPixel: { px: 10, py: 10 },
+      seedLabel: 'V1',
+      edgesPlaced: 0,
+      placeBothEdges: false,
+      hasAdjustments: false,
+    });
+    expect(v.prompt).toContain('V1 (the amber handle) is being reused');
+    expect(v.prompt).not.toContain('P1');
   });
 
   it('⚑ but asks for BOTH ends once the user says so', () => {

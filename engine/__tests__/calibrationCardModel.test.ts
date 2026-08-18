@@ -198,12 +198,16 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card — a thirteenth can
   it('⚑ the types that declare one are exactly those with a stage to declare', () => {
     // ⚑⚑ PINNED so that adding a declaration is a DECISION rather than a
     // side effect. Bar and Box Plot mark category ticks; the heatmap reads a
-    // grid. `categorical` (Line) wants one and deliberately has none yet — its
-    // points carry a per-point name rather than a band index, so a declared
-    // stage would have nothing to write to. That changes when v2.3 moves it onto
-    // a banded axis, and this assertion is what will say so.
+    // grid; `categorical` (Line) joined them in v2.3.
+    //
+    // ⚑ AND THIS ASSERTION DID ITS JOB. It used to read `['bar','boxplot',
+    // 'heatmap']` above a comment that said Line *"wants one and deliberately
+    // has none yet… that changes when v2.3 moves it onto a banded axis, and this
+    // assertion is what will say so."* It said so: moving Line onto the banded
+    // axis turned it red, which is what a pin is for — the fourth entry arrives
+    // with a reason attached rather than unnoticed.
     const withStage = ALL_AXES_TYPE_CONFIGS.filter((c) => c.secondStage).map((c) => c.id).sort();
-    expect(withStage).toEqual(['bar', 'boxplot', 'heatmap']);
+    expect(withStage).toEqual(['bar', 'boxplot', 'categorical', 'heatmap']);
   });
 
   it('⚑ every type that marks CATEGORY TICKS declares the stage that marks them', () => {

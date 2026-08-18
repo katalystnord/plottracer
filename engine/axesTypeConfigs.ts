@@ -1951,11 +1951,28 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
 // TWO points on the VALUE axis only, no X clicks (tenet 10, reuse the
 // categorical model bars already have). Points are captured like an XY series
 // (dots), not bars; each point's Y is read from the value calibration and its X
-// is its ORDINAL position (derived from left-to-right pixel order at
-// export/display time, never stored -- tenet 9). A per-point NAME is deliberately
-// left as reserved metadata (the same slot Bar's label uses), unwritten today so
-// a future OCR pass (or a manual rename) can fill in the real category names with
-// no migration -- the "window to the future" kept open on purpose (David).
+// is the CATEGORY IT SITS IN, read off the marked category axis.
+//
+// ⚠️⚠️ IT USED TO BE AN ORDINAL, and that was this type's tenet-11 failure — the
+// only one of the twelve (CLAUDE.md, 2026-08-14): *"it stores a value and
+// DERIVES its category from left-to-right capture order, so a library handed our
+// record could not place the points."* Measured before the fix, two series whose
+// second has no reading for the middle category:
+//
+//     Series 1   Position 1 (x=150) · Position 2 (x=250) · Position 3 (x=350)
+//     Series 2   Position 1 (x=150) ·                      Position 2 (x=350)
+//
+// The SAME category exported as Position 3 in one series and Position 2 in the
+// other, because rank was computed per series and a gap slid every later reading
+// one category left. Silently, with every number plausible.
+//
+// ⚑ The ordinal survives ONLY as the fallback for a session with no axis marked,
+// where it is a faithful view of one series' own pixels and the honest answer
+// when nobody has said where the categories are.
+//
+// A per-point NAME is still reserved metadata (the same slot Bar's label uses),
+// so a future OCR pass (or a manual rename) can fill in the real category names
+// with no migration -- the "window to the future" kept open on purpose (David).
 export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'categorical',
   label: 'Line',
@@ -1968,14 +1985,22 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
   distinctPixelSteps: [['v1', 'v2']],
-  // ⚑ NO `categoryTicks` yet, deliberately. This type's X genuinely is
-  // categorical, so it wants them -- but its points are captured ungrouped and
-  // carry a per-point NAME (`metadata.label`), not a `categoryIndex`, so a
-  // declared band has nothing to write to and nothing to read from. Declaring
-  // the capability now would put a control on screen that does nothing, which
-  // is worse than not having it. When the per-point path moves to a category
-  // index, the seed step here is `v1`, not `p1` -- which is exactly why
-  // `categoryTicks.originStep` is declared rather than written as a literal.
+  // ⚑⚑ CATEGORY TICKS, AND `v1` IS THE SEED (v2.3). The note this replaces said
+  // "NO categoryTicks yet, deliberately… when the per-point path moves to a
+  // category index, the seed step here is `v1`, not `p1` -- which is exactly why
+  // `categoryTicks.originStep` is declared rather than written as a literal."
+  // That is this change: the per-point path now reads its category from the
+  // marked axis, so the capability has something to write to and something to
+  // read from.
+  //
+  // ⚑ `v1` rather than `p1` because a Line's calibration is TWO points on the
+  // VALUE axis and nothing else — there is no origin corner. `v1` is the click
+  // on the Y axis, which IS the left edge of the category axis on an ordinary
+  // upright figure, so the first edge comes for free exactly as Bar's does.
+  categoryTicks: { originStep: 'v1' },
+  // Stage 2: mark the categories once the value axis is calibrated — the same
+  // shape Bar, Box Plot and the heatmap's grid have.
+  secondStage: { label: 'Categories', ending: 'Read categories' },
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
   fixedSteps: [
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },

@@ -67,12 +67,24 @@ describe('which graph types have categories at all', () => {
     }
   });
 
-  it('⚑ NOT categorical Line yet — its points carry a name, not a category index', () => {
-    // Its X really is categorical, so it wants ticks. But a declared band has
-    // nothing to write to until the per-point path stores an index, and a
-    // control that does nothing is worse than no control.
+  it('⚑⚑ categorical Line TOO, as of v2.3 — and its seed is `v1`, not `p1`', () => {
+    // ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, and correctly: *"a declared band
+    // has nothing to write to until the per-point path stores an index, and a
+    // control that does nothing is worse than no control."* The per-point path
+    // now reads its category from the marked axis, so the precondition is met
+    // and the capability is real.
+    //
+    // ⚑ It was the LAST type failing the tenet-11 generation audit: its category
+    // came from left-to-right click order, which is computed PER SERIES, so a
+    // series missing one category slid every later reading a category to the
+    // left. See `categoricalLineIsBanded.test.ts` for the measured numbers.
+    //
+    // ⚑ `v1` because a Line has no origin corner to seed from — its calibration
+    // is two points on the VALUE axis. That is exactly why `categoryTicks`
+    // declares `originStep` as a name rather than a literal, and this is the
+    // prediction the old comment made coming true.
     const s = new CalibrationSession(CATEGORICAL_LINE_CONFIG as never);
-    expect(s.supportsCategoryTicks()).toBe(false);
+    expect(s.supportsCategoryTicks()).toBe(true);
   });
 
   it('⚑ every mutator refuses on a type with no categories, leaving nothing behind', () => {

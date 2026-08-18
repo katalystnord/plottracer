@@ -217,6 +217,17 @@ export interface CategoryPanelInput {
   hasGeometry: boolean;
   /** The pixel of the seed calibration step, if placed — offered as the first edge. */
   seedPixel: { px: number; py: number } | null;
+  /**
+   * The LABEL of the calibration handle being reused as the axis' first edge —
+   * 'P1' on a bar chart, 'V1' on a categorical Line.
+   *
+   * ⚠️ It was the literal string 'P1', and extending category ticks to Line
+   * (v2.3) gave a chart whose handle is labelled V1 a prompt telling the user to
+   * look for a P1 that is not on the figure. Gate 4's exact class: a prompt may
+   * only name what is actually on screen. `categoryTicks.originStep` was always
+   * a NAME rather than a literal for this reason; this is the prompt catching up.
+   */
+  seedLabel: string;
   /** How many edges are down in the current marking gesture (0 or 1). */
   edgesPlaced: number;
   /** A tick has been dragged since the last generation. */
@@ -273,7 +284,7 @@ export interface CategoryPanelView {
  * that matters is already done.
  */
 export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView {
-  const { supported, isCalibrated, open, hasGeometry, seedPixel, edgesPlaced, hasAdjustments } =
+  const { supported, isCalibrated, open, hasGeometry, seedPixel, seedLabel, edgesPlaced, hasAdjustments } =
     input;
   const canReuseSeed = seedPixel !== null && edgesPlaced === 0 && !input.placeBothEdges;
 
@@ -288,7 +299,7 @@ export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView 
     // axis" alone leaves the user guessing whether one point or two is wanted —
     // and the answer differs depending on whether P1 can stand in for the first.
     const prompt = canReuseSeed
-      ? 'Click where the categories end. P1 (the amber handle) is being reused as the start — press Re-place axis if that is wrong.'
+      ? `Click where the categories end. ${seedLabel} (the amber handle) is being reused as the start — press Re-place axis if that is wrong.`
       : edgesPlaced === 0
         ? 'Click where the categories start, then where they end.'
         : 'Now click where the categories end.';

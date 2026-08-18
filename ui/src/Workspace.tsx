@@ -1380,6 +1380,7 @@ export function Workspace() {
         open: categoryPanelOpen,
         hasGeometry: session.getCategoryAxis().hasGeometry(),
         seedPixel: session.categoryTickOriginPixel(),
+        seedLabel: session.categoryTickOriginLabel(),
         edgesPlaced: categoryFirstEdge ? 1 : 0,
         placeBothEdges: categoryPlaceBothEdges,
         hasAdjustments: session.getCategoryAxis().hasAdjustments(),
