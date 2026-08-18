@@ -206,7 +206,14 @@ import {
   type ErrorCapSeries,
   type ErrorRole,
 } from '../algorithms/errorBar.js';
-import { hasErrorSlots, errorBarsFromTuples, slotForRole, errorSlotNames } from '../algorithms/errorExtent.js';
+import {
+  hasErrorSlots,
+  errorBarsFromTuples,
+  slotForRole,
+  errorSlotNames,
+  ownSlotNames,
+  errorTailNames,
+} from '../algorithms/errorExtent.js';
 
 /** How close a cap drag's start must be to a datum, in image pixels, to count as
  * having started ON it. The UI snaps within 14px in canvas space; this is the
@@ -795,9 +802,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
       index,
       name: entry.dataset.name,
       color: entry.dataset.colorRGB.getRGB(),
-      pointCount: entry.dataset.getCount(),
+      pointCount: this.datumCount(entry.dataset),
       active: index === this.activeDatasetIndex,
     }));
+  }
+
+  /**
+   * How many DATA POINTS a series holds — its pixels, minus the ones that are
+   * error caps.
+   *
+   * ⚑⚑ David's e2e read `Series 1 (3)` for one point with an error bar. The
+   * caps are pixels of the series now (B4), so a plain `getCount()` reports the
+   * reading's uncertainty as two more readings. A cap is part of a point, not
+   * another point — the Error-bars card says so in words: *"an error bar hangs
+   * off a data point."*
+   *
+   * ⚑ Subtractive rather than per-pixel classification: one pass over the
+   * tuples instead of `capRoleInTuples` per pixel, and it stays correct for a
+   * half-built tuple because a null member counts as nothing either way.
+   */
+  private datumCount(dataset: Dataset): number {
+    const slots = dataset.getSlotNames();
+    if (!hasErrorSlots(slots)) return dataset.getCount();
+    let caps = 0;
+    for (const tuple of dataset.getAllTuples()) {
+      for (const role of ERROR_ROLES) {
+        if (tuple[slotForRole(role, slots.length)] != null) caps++;
+      }
+    }
+    return dataset.getCount() - caps;
   }
 
   /** The relation a series declares, or null if it is an ordinary series. */
@@ -1568,7 +1601,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getExportShape(): 'flat' | 'tuples' | 'bins' | 'heatmap' {
     if (this.config.exportShape) return this.config.exportShape;
-    const grouped = this.activeEntry.dataset.hasSlots();
+    const grouped = this.hasSlots();
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';
   }
 
@@ -2244,9 +2277,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!dataset.hasSlots()) {
       return { tupleIndex: null, groupIndex: 0 };
     }
+    // ⚑⚑ ONLY THE TYPE'S OWN MEMBERS ARE CLICK DESTINATIONS. An error slot is
+    // filled by DRAGGING a cap off its datum, never by the click walk, so an
+    // empty one is not an unfinished tuple -- it is a bar the figure does not
+    // draw. Scanning the whole tuple aimed the next click at 'SD left' on every
+    // reopened project, because the mirrored pair leaves the horizontal roles
+    // empty by construction and this runs on every load.
+    //
+    // ⚑ A type with no slots of its own (an XY scatter that acquired error)
+    // therefore has NO destinations at all: `ownWidth` is 0, every tuple is
+    // "complete", and the cursor stays at "start a new tuple" -- which is
+    // exactly what a plain point click should do.
+    const ownWidth = this.ownSlots(dataset).length;
     const tuples = dataset.getAllTuples();
     for (let tupleIndex = 0; tupleIndex < tuples.length; tupleIndex++) {
-      const groupIndex = tuples[tupleIndex]!.indexOf(null);
+      const groupIndex = tuples[tupleIndex]!.slice(0, ownWidth).indexOf(null);
       if (groupIndex > -1) {
         return { tupleIndex, groupIndex };
       }
@@ -3025,7 +3070,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * captured like an XY series, not bars") and every non-bar-family type,
    * which keep the plain per-tuple string label (metadata.label). */
   private usesCategoryAxis(dataset: Dataset): boolean {
-    return this.config.axesKind === 'bar' && dataset.hasSlots();
+    return this.config.axesKind === 'bar' && this.ownSlots(dataset).length > 0;
   }
 
   /**
@@ -3091,7 +3136,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * prefill from, and Histogram bins aren't named at all (see
    * isHistogramBinShape below for the ONE thing they DO share with Bar). */
   private isBarIntervalShape(dataset: Dataset): boolean {
-    return this.config.id === 'bar' && dataset.getSlotNames().length === BAR_INTERVAL_SLOTS.length;
+    return this.config.id === 'bar' && this.ownSlots(dataset).length === BAR_INTERVAL_SLOTS.length;
   }
 
   /** True for a genuine 2-slot Histogram bin (HISTOGRAM_SLOTS). v2.0, 2026-07-30:
@@ -3101,7 +3146,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * but it DOES have a genuine bounding box a colour trace can find: see
    * addBarDetectBoxes, which is the one place this predicate is used. */
   private isHistogramBinShape(dataset: Dataset): boolean {
-    return this.config.id === 'histogram' && dataset.getSlotNames().length === HISTOGRAM_SLOTS.length;
+    return this.config.id === 'histogram' && this.ownSlots(dataset).length === HISTOGRAM_SLOTS.length;
   }
 
   /** Gates the auto-PREFILL convenience specifically (not category storage
@@ -3227,9 +3272,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.activeEntry.dataset.getMetadataKeys();
   }
 
-  /** Whether the active dataset has named slots configured (Box Plot etc.). */
+  /**
+   * Whether the active series' GRAPH TYPE is tuple-shaped (Box Plot, Bar, Pie,
+   * Histogram) — the question the panels and the exporter ask.
+   *
+   * ⚑⚑ NOT `Dataset.hasSlots()`, and the difference is B4's whole UI half.
+   * Adding error to an XY point files it into a tuple, so the STORAGE gains
+   * slots while the TYPE gains nothing: an XY scatter with caps is still an XY
+   * scatter. See `ownSlotNames` for what the two questions cost when they are
+   * answered by one call.
+   */
   hasSlots(): boolean {
-    return this.activeEntry.dataset.hasSlots();
+    return this.ownSlots(this.activeEntry.dataset).length > 0;
+  }
+
+  /** The type's own slots on a dataset, with any error tail removed — the
+   * SHAPE question. Every caller that asks what a series looks like goes
+   * through here; the capture path keeps asking `Dataset.hasSlots()`, which is
+   * the STORAGE question and stays true. */
+  private ownSlots(dataset: Dataset): string[] {
+    return ownSlotNames(dataset.getSlotNames());
   }
 
   /** The session's canonical category list (v2.0) -- see the field's own
@@ -3452,7 +3514,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   getSlotNames(): string[] {
-    return this.activeEntry.dataset.getSlotNames();
+    return this.ownSlots(this.activeEntry.dataset);
+  }
+
+  /** The active series' error columns, under the name the user gave the error
+   * ('SD upper', 'SD lower', …) — empty when it carries none. Separate from
+   * `getSlotNames` because they are separate ideas: those are what the type
+   * measures, these are what a reading's uncertainty is called. */
+  getErrorSlotNames(index?: number): string[] {
+    const entry = index === undefined ? this.activeEntry : this.datasetEntries[index];
+    return entry ? errorTailNames(entry.dataset.getSlotNames()) : [];
   }
 
   /** Configure named slots for tuple-based data entry on the active

@@ -116,6 +116,49 @@ export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS
 }
 
 /**
+ * ⚑⚑ THE SLOTS THAT BELONG TO THE GRAPH TYPE, with the error tail removed.
+ *
+ * Adding error to a series gives it tuples. That is a fact about the SERIES; it
+ * is not a change to what the series IS. An XY scatter with caps on its points
+ * is still an XY scatter, and every panel, table and exporter that asks "what
+ * shape is this?" must get the type's answer, not the storage's.
+ *
+ * ⚠️ THIS IS NOT A TIDYING FUNCTION — it is the fix for a silent data loss, and
+ * the loss is worth stating because the record was correct the whole time. With
+ * the shape question answered by `Dataset.hasSlots()`, an XY point at (5, 5)
+ * carrying caps at 7 and 3 met the TUPLE exporter, which prints one column per
+ * slot from `data[0]` — the x. It wrote `Value 5 · SD upper 5 · SD lower 5`: the
+ * y coordinate and both readings gone, every number in the row plausible.
+ *
+ * ⚑ CLAUDE.md pattern 1 second time round — *"does this belong to the TYPE, or
+ * to an AXIS?"* Here: to the TYPE, or to the SERIES. The heatmap collapsed a
+ * dimension into a property of a cell; this is the mirror, a property of a
+ * series inflating into a property of the type. Same cost: everything
+ * downstream forks.
+ *
+ * ⚑ THE SYNTHETIC 'Value'. On a type with no slots of its own, `errorSlotNames`
+ * invents one to stand for the datum, because a tuple needs a member 0. It is a
+ * placeholder rather than a member — an XY point's columns are X and Y — so it
+ * is stripped here and such a type reads back as having no slots at all.
+ * Recognising it BY NAME is safe only while no real type declares a single slot
+ * called 'Value', which is asserted as its own test rather than assumed: a
+ * future 1-slot type by that name then fails loudly instead of quietly losing
+ * its table.
+ */
+export function ownSlotNames(slotNames: readonly string[]): string[] {
+  if (!hasErrorSlots(slotNames)) return [...slotNames];
+  const own = slotNames.slice(0, errorSlotBase(slotNames.length));
+  return own.length === 1 && own[0] === ERROR_EXTENT_SLOTS[0] ? [] : own;
+}
+
+/** The error tail's slot names — what the user called the error, once per role
+ * ('SD upper', 'SD lower', …). Empty for a series carrying no error, so a
+ * caller can concatenate it unconditionally. */
+export function errorTailNames(slotNames: readonly string[]): string[] {
+  return hasErrorSlots(slotNames) ? slotNames.slice(errorSlotBase(slotNames.length)) : [];
+}
+
+/**
  * The slot names a series takes on when error bars are added to it: its own
  * members, then one per role.
  *
