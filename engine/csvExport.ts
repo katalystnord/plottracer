@@ -158,6 +158,30 @@ export interface ExportRow {
   role?: PointRole;
 }
 
+/**
+ * A series' own error columns and their per-row readings — B4's per-datum
+ * extents, where a cap lives on the datum's record instead of in a series of
+ * its own.
+ *
+ * ⚑ ABSOLUTES AND DELTAS BOTH, for the reason `SeriesForCSV.deltas` states one
+ * level down: ggplot's `geom_errorbar` takes ymin/ymax, matplotlib's `errorbar`
+ * takes yerr, and neither will do the other's arithmetic. The absolutes are the
+ * record (a delta cannot tell "no bound" from "a bound of size zero"); the
+ * deltas are the projection.
+ *
+ * ⚑ `labels` carries only the roles that were MEASURED — presence is the
+ * signal, the same rule `role` and `delta` follow here. Absent for a series
+ * with no error, which then exports byte-for-byte as it did before.
+ */
+export interface SeriesErrorColumns {
+  /** One per measured role, under the user's own word: 'SD upper'. */
+  labels: readonly string[];
+  /** Per row, one absolute per label. `null` where that side was never read. */
+  values: readonly (readonly (number | null)[])[];
+  /** The same rows as signed offsets from the datum. */
+  deltas: readonly (readonly (number | null)[])[];
+}
+
 /** Does any row of this series carry a role? Drives whether the `role` column
  * exists at all: a series with no interpolation exports exactly as it did
  * before, so the column's PRESENCE is itself the signal that some of these
@@ -181,14 +205,34 @@ function hasRoles(rows: readonly ExportRow[]): boolean {
  * (an interpolation-assist trace), and an ordinary point inside such a series
  * leaves it blank — we state the fact the record holds and invent nothing for
  * the points it doesn't apply to. */
-export function flatDataSection(rows: readonly ExportRow[], fields: readonly string[]): TableSection {
+export function flatDataSection(
+  rows: readonly ExportRow[],
+  fields: readonly string[],
+  /** The datum's own extents, when this series carries any (B4). Row-aligned
+   * with `rows`, which are one per DATUM — a cap is not a point. */
+  error?: SeriesErrorColumns
+): TableSection {
   const roles = hasRoles(rows);
+  const err = error?.labels.length ? error : null;
   return {
-    header: ['x_px', 'y_px', ...fields, ...(roles ? ['role'] : [])],
-    rows: rows.map((r) => [
+    header: [
+      'x_px',
+      'y_px',
+      ...fields,
+      ...(err ? err.labels : []),
+      ...(err ? err.labels.map((l) => `${l} delta`) : []),
+      ...(roles ? ['role'] : []),
+    ],
+    rows: rows.map((r, i) => [
       r.px,
       r.py,
-      ...fields.map((_f, i) => r.values[i] ?? ''),
+      ...fields.map((_f, d) => r.values[d] ?? ''),
+      // ⚑ Blank, never 0, where a side was never captured. A one-sided error
+      // bar is a real figure, and matplotlib ACCEPTS a yerr of 0 and draws a
+      // bound sitting exactly on the value — a measurement nobody took, wearing
+      // the record's clothes.
+      ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
+      ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
       ...(roles ? [r.role ?? ''] : []),
     ]),
   };
@@ -522,6 +566,10 @@ export interface SeriesForCSV {
    * record (David, 2026-08-03: "if I was going to MAKE these plots from
    * numerical values, what are the numbers that I need?"). */
   deltas?: readonly (number | null)[];
+  /** This series' OWN per-datum extents (B4) — distinct from `deltas` above,
+   * which belongs to the older shape where a cap was a series in its own right.
+   * Both survive: a WPD import really does arrive as separate cap series. */
+  error?: SeriesErrorColumns;
   /** A curve fit over this series (v0.8), if one was run. Exported SEPARATELY
    * from `points` -- its own JSON key / its own CSV block -- so the derived fit
    * never contaminates the record (David; tenet 9). */
@@ -609,9 +657,17 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
   // sign the on-screen table uses -- a CSV header lands in other people's
   // parsers, and an ASCII header cannot arrive mojibaked.
   const deltaCols = series.map((s) => (s.deltas?.length ?? 0) > 0);
+  // Same per-series rule again, for the extents a datum carries on its own
+  // record: only a series that recorded a side grows that side's column.
+  const errCols = series.map((s) => (s.error?.labels.length ? s.error : null));
   const header: (string | number)[] = ['#'];
   series.forEach((s, si) => {
     for (const label of fields) header.push(`${seriesColumnPrefix(s)} ${label}`);
+    const err = errCols[si];
+    if (err) {
+      for (const label of err.labels) header.push(`${seriesColumnPrefix(s)} ${label}`);
+      for (const label of err.labels) header.push(`${seriesColumnPrefix(s)} ${label} delta`);
+    }
     if (roleCols[si]) header.push(`${seriesColumnPrefix(s)} role`);
     if (deltaCols[si]) header.push(`${seriesColumnPrefix(s)} delta`);
   });
@@ -622,6 +678,12 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
     series.forEach((s, si) => {
       const r = s.rows[i];
       for (let d = 0; d < fields.length; d++) row.push(r?.values[d] ?? '');
+      const err = errCols[si];
+      if (err) {
+        // Blank, never 0 — see flatDataSection.
+        for (let c = 0; c < err.labels.length; c++) row.push(err.values[i]?.[c] ?? '');
+        for (let c = 0; c < err.labels.length; c++) row.push(err.deltas[i]?.[c] ?? '');
+      }
       if (roleCols[si]) row.push(r?.role ?? '');
       // Blank, never 0, for a cap that resolves to no datum -- 0 would read as
       // "measured, and equal to the datum".
@@ -653,8 +715,23 @@ export function buildSeriesJSON(
         // series), never nulled onto ordinary points -- the same "an absent field
         // means it doesn't apply" rule the error schema follows. A reader that
         // wants only what a human put on the figure keeps role != "interpolated".
-        points: s.rows.map((r) => ({
-          ...Object.fromEntries(fields.map((label, i) => [label, r.values[i] ?? null])),
+        points: s.rows.map((r, i) => ({
+          ...Object.fromEntries(fields.map((label, d) => [label, r.values[d] ?? null])),
+          // ⚑ The datum's own extents, under exactly the names the CSV headers
+          // use — mirror, not merely match: a reader who switches format meets
+          // the same words, so nothing has to be explained twice.
+          //
+          // ⚑ A side that was never read carries NO KEY, rather than a null.
+          // "An absent field means it was not measured" is the rule the whole
+          // error schema follows, and a null here would be a claim that we
+          // looked.
+          ...Object.fromEntries(
+            (s.error?.labels ?? []).flatMap((label, c) => {
+              const value = s.error!.values[i]?.[c];
+              const delta = s.error!.deltas[i]?.[c];
+              return value == null ? [] : [[label, value], [`${label} delta`, delta ?? null]];
+            })
+          ),
           ...(r.role ? { role: r.role } : {}),
         })),
       };

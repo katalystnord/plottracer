@@ -30,7 +30,7 @@
  * should have been — translating a foreign model into ours (tenet 6) — rather
  * than as the model itself.
  */
-import { ERROR_ROLES, type ErrorBarPoint, type ErrorRole } from './errorBar.js';
+import { ERROR_ROLES, ROLE_FIELD, type ErrorBarPoint, type ErrorRole } from './errorBar.js';
 
 /**
  * The tuple's members, in slot order: the datum first, then one slot per role.
@@ -177,15 +177,6 @@ export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Val
   const label = base.trim();
   return [...ownSlots, ...ERROR_ROLES.map((role) => (label ? `${label} ${role}` : role))];
 }
-
-/** The `ErrorBarPoint` field each role writes. Mirrors `errorBar.ts`'s ROLE_FIELD;
- * kept here too because this module writes the same record from the other end. */
-const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'> = {
-  upper: 'yUpper',
-  lower: 'yLower',
-  left: 'xLeft',
-  right: 'xRight',
-};
 
 /**
  * Read the stored tuples into one `ErrorBarPoint` per captured datum.

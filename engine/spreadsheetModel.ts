@@ -39,15 +39,7 @@ import type {
   DatasetPointsView,
   PointRole,
 } from './calibrationSession.js';
-import { ERROR_ROLES, type ErrorRole } from '../algorithms/errorBar.js';
-
-/** The `ErrorBarPoint` field each role reads back from. */
-const ROLE_FIELD = {
-  upper: 'yUpper',
-  lower: 'yLower',
-  left: 'xLeft',
-  right: 'xRight',
-} as const satisfies Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'>;
+import type { ErrorRole } from '../algorithms/errorBar.js';
 
 /** One series as the spreadsheet shows it: its identity, its values with the
  * pixel columns dropped, and the two per-point annotations that differ BETWEEN
@@ -104,15 +96,13 @@ export function buildSpreadsheetSeries(
 ): SpreadsheetSeries[] {
   return allDatasetsData.map((d) => {
     const pixelIndices = session.getDatumPixelIndices(d.index);
-    const tail = session.getErrorSlotNames(d.index);
-    // Row-aligned with `pixelIndices` by construction — both walk the tuples in
-    // order and skip a tuple with no datum. See getDatumPixelIndices.
-    const bars = tail.length > 0 ? session.getResolvedErrorBars(d.index) : [];
-    const errorColumns = ERROR_ROLES.flatMap((role, i) =>
-      bars.some((b) => b[ROLE_FIELD[role]] !== undefined)
-        ? [{ role, label: tail[i] ?? role }]
-        : []
-    );
+    // ⚑ The session's own answer, NOT a second computation here. The export
+    // asks the same two questions, and a column that exists on screen but not
+    // in the file is this project's own case study — see getErrorColumns.
+    // Row-aligned with `pixelIndices` by construction: both walk the tuples in
+    // order and skip a tuple with no datum.
+    const errorColumns = session.getErrorColumns(d.index);
+    const errorRows = session.getErrorRows(d.index);
     const roles = session.getDataPointRolesFor(d.index);
     const labels = session.getPointLabels(d.index);
     return {
@@ -133,10 +123,7 @@ export function buildSpreadsheetSeries(
     deltas: session.getErrorCapDeltas(d.index),
     pixelIndices,
     errorColumns,
-    errorValues: pixelIndices.map((_p, row) => {
-      const bar = bars[row];
-      return errorColumns.map((c) => (bar ? bar[ROLE_FIELD[c.role]] ?? null : null));
-    }),
+    errorValues: pixelIndices.map((_p, row) => errorRows[row] ?? errorColumns.map(() => null)),
     };
   });
 }

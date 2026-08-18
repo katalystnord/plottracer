@@ -201,6 +201,7 @@ import { calibrationPreview, type CalibrationPreview } from './calibrationPrevie
 import {
   matchCapToDatum,
   ERROR_ROLES,
+  ROLE_FIELD,
   resolveErrorBars,
   type ErrorBarPoint,
   type ErrorCapSeries,
@@ -213,6 +214,7 @@ import {
   errorSlotNames,
   ownSlotNames,
   errorTailNames,
+  deltasFromBar,
 } from '../algorithms/errorExtent.js';
 
 /** How close a cap drag's start must be to a datum, in image pixels, to count as
@@ -860,6 +862,67 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (datum != null) rows.push(datum);
     }
     return rows;
+  }
+
+  /**
+   * The error columns a series actually records — one per role that was
+   * MEASURED, under the user's own word for the error ('SD upper').
+   *
+   * ⚑⚑ ONE PLACE, READ BY BOTH THE PANEL AND THE EXPORT, so a column cannot
+   * exist on screen and be missing from the file. That divergence is this
+   * project's own case study: the screen led with Category while the
+   * categorical export appended it last, and `seriesColumns` — written in
+   * `spreadsheetModel` to prevent exactly that — was never wired, so it read
+   * as cover while the drift went on happening.
+   *
+   * ⚑ MEASURED, not merely possible. All four roles exist in every error
+   * record, but a vertical-error figure has nothing to say about left and
+   * right; four columns of blanks assert an emptiness nobody looked for
+   * (pattern 3). Same presence-is-the-signal rule as the `role` and `delta`
+   * columns beside it.
+   */
+  getErrorColumns(index: number): { role: ErrorRole; label: string }[] {
+    const tail = this.getErrorSlotNames(index);
+    if (tail.length === 0) return [];
+    const bars = this.getResolvedErrorBars(index);
+    return ERROR_ROLES.flatMap((role, i) =>
+      bars.some((b) => b[ROLE_FIELD[role]] !== undefined) ? [{ role, label: tail[i] ?? role }] : []
+    );
+  }
+
+  /**
+   * Per datum row, that series' error readings — ABSOLUTE positions on each
+   * role's axis, aligned with `getErrorColumns`, `null` where a side was never
+   * captured.
+   *
+   * ⚑ Absolutes because that is what the record holds, and the reason is
+   * measured (docs/generator-input-formats.md): in the delta form "no bound"
+   * and "a bound of size zero" are the same number, and matplotlib accepts a
+   * `yerr` of 0 and draws a cap sitting exactly on the value. The delta is a
+   * projection, emitted alongside by `getErrorDeltaRows`, never instead.
+   *
+   * Row-aligned with `getDatumPixelIndices` by construction — both walk the
+   * tuples in order and skip a tuple with no datum.
+   */
+  getErrorRows(index: number): (number | null)[][] {
+    const columns = this.getErrorColumns(index);
+    if (columns.length === 0) return [];
+    return this.getResolvedErrorBars(index).map((bar) =>
+      columns.map((c) => bar[ROLE_FIELD[c.role]] ?? null)
+    );
+  }
+
+  /** The same rows as `getErrorRows`, as SIGNED OFFSETS from the datum — what
+   * matplotlib's `yerr` and Excel's error bars take directly. A subtraction,
+   * not an inference: both ends were measured, so their difference assumes
+   * nothing. Absent stays absent. */
+  getErrorDeltaRows(index: number): (number | null)[][] {
+    const columns = this.getErrorColumns(index);
+    if (columns.length === 0) return [];
+    return this.getResolvedErrorBars(index).map((bar) => {
+      const d = deltasFromBar(bar);
+      return columns.map((c) => d[ROLE_FIELD[c.role]] ?? null);
+    });
   }
 
   /** The relation a series declares, or null if it is an ordinary series. */
@@ -1722,7 +1785,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
       });
     }
-    return pixels.map((p, i) => {
+    // ⚑⚑ ONE ROW PER DATUM, NOT PER PIXEL. A datum's error caps are pixels of
+    // its own series now (B4), and this used to hand every one of them out as a
+    // data point: two readings exported as four rows, with nothing in the file
+    // saying which two were caps. A curve fitted downstream would run through
+    // the error bars. `getDatumPixelIndices` is `0..n-1` for a series carrying
+    // no error, so an ordinary export is byte-for-byte what it was.
+    return this.getDatumPixelIndices(datasetIndex).map((i) => {
+      const p = pixels[i]!;
       const role = roleAt(i);
       return {
         px: p.x,

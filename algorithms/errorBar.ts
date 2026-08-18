@@ -64,7 +64,10 @@ export type ErrorRole = 'upper' | 'lower' | 'left' | 'right';
 export const ERROR_ROLES: readonly ErrorRole[] = ['upper', 'lower', 'left', 'right'];
 
 /** The `ErrorBarPoint` field each role writes. */
-const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'> = {
+/** The `ErrorBarPoint` field each role writes. ⚑ Exported because three modules
+ * need the same mapping and a private copy each is how they drift — the reuse
+ * rule, on eleven lines. */
+export const ROLE_FIELD: Record<ErrorRole, 'yUpper' | 'yLower' | 'xLeft' | 'xRight'> = {
   upper: 'yUpper',
   lower: 'yLower',
   left: 'xLeft',

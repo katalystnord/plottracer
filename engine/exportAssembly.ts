@@ -31,6 +31,7 @@ import {
   buildHeatmapJSON,
   buildTupleSeriesJSON,
   flatDataSection,
+  type SeriesErrorColumns,
   allSeriesSection,
   tupleDataSection,
   histogramSection,
@@ -159,6 +160,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       // (checkpoint 77) -- which is what it is. Omitted for everything else.
       ...(rel ? { relation: rel } : {}),
       ...(rel ? { deltas: session.getErrorCapDeltas(info.index) } : {}),
+      ...errorColumnsFor(session, info.index),
       ...(fit ? { fit } : {}),
       ...(geom ? { geometry: geom } : {}),
     };
@@ -218,6 +220,26 @@ export function buildExportJson(input: ExportAssemblyInput): string {
  * python/r as text, .ods and .xlsx as worksheets. Returning SECTIONS rather
  * than a rendered string is what lets one assembly serve all of them.
  */
+/**
+ * A series' own per-datum extents, in the shape the CSV layer takes — or
+ * nothing at all when it carries no error, so an ordinary series exports
+ * byte-for-byte as it did before.
+ *
+ * ⚑ Both export paths go through here, because they are the same question. The
+ * on-screen panel asks `getErrorColumns` too: one answer, so a column cannot
+ * exist on screen and be missing from the file.
+ */
+function errorColumnsFor(
+  session: ExportAssemblyInput['session'],
+  index: number
+): { error?: SeriesErrorColumns } {
+  const labels = session.getErrorColumns(index).map((c) => c.label);
+  if (labels.length === 0) return {};
+  return {
+    error: { labels, values: session.getErrorRows(index), deltas: session.getErrorDeltaRows(index) },
+  };
+}
+
 export function buildExportSections(input: ExportAssemblyInput): TableSection[] {
   const { session, axes, configId, scope, measures } = input;
   const rounder = makeRounder(axes, input.precision);
@@ -274,6 +296,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
         name: info.name,
         rows: seriesRows(info.index),
         ...(rel ? { relation: rel, deltas: session.getErrorCapDeltas(info.index) } : {}),
+        ...errorColumnsFor(session, info.index),
       };
     });
     sections.push(allSeriesSection(seriesList, exportFields));
@@ -285,7 +308,13 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     }
   } else {
     const info = session.getDatasetInfos().find((i) => i.index === activeIndex);
-    sections.push(flatDataSection(seriesRows(activeIndex), exportFields));
+    sections.push(
+      flatDataSection(
+        seriesRows(activeIndex),
+        exportFields,
+        errorColumnsFor(session, activeIndex).error
+      )
+    );
     // ⚑ Blank, not 'Series'. The v2.0 audit removed this fabricated fallback
     // from the JSON path and left it here, one function below -- and this is
     // the assembly every NON-JSON format renders through, so the invented name
