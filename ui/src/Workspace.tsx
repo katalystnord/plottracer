@@ -102,6 +102,7 @@ import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
+import { valueText, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
 import { fmtNum, fmtValue, rgbToHex } from './format.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
@@ -167,7 +168,6 @@ import {
   buildSpreadsheetSeries,
   spreadsheetMaxRows as spreadsheetMaxRowCount,
   showsCategoryColumn,
-  isDerivedAt,
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
@@ -3922,55 +3922,28 @@ export function Workspace() {
     if (session.setCalibrationValues(edit.key, next)) commit();
   };
 
+  /**
+   * Commit a typed value: the model moves the datum and records whose reading
+   * it is (v2.3, A4).
+   *
+   * ⚑⚑ THE INVERSE USED TO LIVE HERE, one axes-kind branch per type, and with
+   * it the rule that a spider reads against the spoke its point was captured
+   * on. `session.setDataPointValue` owns both now - the model has more than one
+   * entrance, and this one was passing the TABLE ROW where the model wanted a
+   * data dimension. They agree on a spider by construction and would not on the
+   * first type where a row is not an axis.
+   */
   const commitDataPointEdit = useCallback(() => {
     const cell = editingCell;
     if (!cell) return;
     setEditingCell(null);
-    const point = session.getDataPoints()[cell.index];
-    if (!point || !axes) return;
-    // The model-side rule, at the one point every edit entrance converges on: a
-    // spline-DERIVED sample is not writable, because rebuildInterpolation
-    // regenerates it from the anchors and the write would be silently undone the
-    // next time one moves. The UI above already declines to OFFER the edit (the
-    // cell renders read-only, the derived marker isn't in the hit graph), so this
-    // catches only a path that gets here another way -- which is exactly the
-    // "guards belong in the model, and the model has more than one entrance"
-    // lesson this codebase keeps relearning.
-    if (isDerivedAt(session.getDataPointRoles(), cell.index)) return;
     const parsed = Number(cell.value);
-    if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> revert to derived
-
-    let pixel: { x: number; y: number };
-    if (config.axesKind === 'spider') {
-      // ⚑ On a spider `cell.axis` is the SPOKE the point was CAPTURED against --
-      // its row in the table, i.e. its slot in the slot -- not a data
-      // dimension. That is the same rule the table's reading and the export
-      // follow, and for the same reason: the nearest ray agrees for a good click
-      // and diverges exactly when the user mis-clicked, so inverting against it
-      // would slide the point onto a DIFFERENT axis's scale while the row it sat
-      // in still named this one. dataToPixel here is a real inverse of the
-      // projection that produced the number being edited, so the round trip is
-      // exact; a value with no pixel (a log axis asked for <= 0) answers NaN and
-      // is refused below rather than landing at the image's top-left corner.
-      pixel = (axes as unknown as { dataToPixel(index: number, value: number): { x: number; y: number } }).dataToPixel(
-        cell.axis,
-        parsed
-      );
-    } else if (config.axesKind === 'xy') {
-      if (!point.data) return;
-      const nextData = [...point.data];
-      nextData[cell.axis] = parsed;
-      pixel = (axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } }).dataToPixel(
-        nextData[0]!,
-        nextData[1]!
-      );
-    } else {
-      return;
-    }
-    if (!Number.isFinite(pixel.x) || !Number.isFinite(pixel.y)) return; // e.g. log axis, non-positive input
-    session.updateDataPointPixel(cell.index, pixel.x, pixel.y);
-    commit();
-  }, [editingCell, session, axes, config.axesKind, commit]);
+    if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> leave the reading standing
+    // ⚑ A spider's one reading is dim 0; the SPOKE comes from the point's own
+    // slot inside the model. Everywhere else the table column IS the dimension.
+    const dim = config.axesKind === 'spider' ? 0 : cell.axis;
+    if (session.setDataPointValue(cell.index, dim, parsed)) commit();
+  }, [editingCell, session, config.axesKind, commit]);
 
   const setTupleLabel = useCallback(
     (tupleIndex: number, label: string) => {
@@ -6077,13 +6050,16 @@ export function Workspace() {
   // still reads "(x, y)"), swapping to a focused input while it's the cell
   // being edited (checkpoint 39). Committing repositions the point via
   // commitDataPointEdit.
-  const renderEditableValue = (index: number, axis: number, value: number) => {
+  const renderEditableValue = (index: number, axis: number, value: number, supplied: boolean) => {
     const suffix = axis === 0 ? 'x' : 'y';
     return (
       <EditableValue
         editing={editingCell?.index === index && editingCell.axis === axis}
         editValue={editingCell?.value ?? ''}
-        display={fmtValue(value)}
+        // ⚑ The brackets are on the DISPLAY only; the seed below is the bare
+        // number, so reopening your own value never means deleting punctuation
+        // the table added (the heatmap's own rule, now everyone's).
+        display={valueText(fmtValue(value), supplied)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
         title="Double-click to edit - moves the point on the canvas"
@@ -6109,11 +6085,17 @@ export function Workspace() {
   // (`seriesIndex` names the cell for the tests, matching the enclosing
   // `spider-cell-<series>-<axis>`; the EDIT itself is keyed by point index, which is
   // per-series, which is why only the active series renders this.)
-  const renderEditableSpiderValue = (seriesIndex: number, pointIndex: number, axisIndex: number, value: number) => (
+  const renderEditableSpiderValue = (
+    seriesIndex: number,
+    pointIndex: number,
+    axisIndex: number,
+    value: number,
+    supplied: boolean
+  ) => (
     <EditableValue
       editing={editingCell?.index === pointIndex && editingCell.axis === axisIndex}
       editValue={editingCell?.value ?? ''}
-      display={fmtValue(value)}
+      display={valueText(fmtValue(value), supplied)}
       testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
       testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
       title="Double-click to edit - moves the point along its own axis"
@@ -8757,6 +8739,22 @@ export function Workspace() {
               figure. Move an anchor to change it; exports mark these <code>interpolated</code>.
             </div>
           )}
+          {/* ⚑⚑ THE KEY TO THE `[BRACKETS]` (v2.3, A4), for whichever table is
+              showing - the heatmap's matrix, the spider's axes, the XY
+              spreadsheet. ONE line, in one place, because it is one fact: this
+              number did not come off the pixels.
+              ⚑ HERE rather than inside each table, and that placement is the
+              derived legend's own lesson above: an explanation that lives inside
+              the scrolling table sits below the fold in real use while the marks
+              it explains are on screen from the first row. It was learnt on a
+              screenshot bench, and it applies to every legend, not to that one. */}
+          <SuppliedLegend
+            shown={
+              heatmapCells.some((c) => suppliedBySource(c.source)) ||
+              spiderTable.columns.some((c) => c.supplied.some(Boolean)) ||
+              spreadsheetSeries.some((s) => s.supplied.some((dims) => dims.length > 0))
+            }
+          />
           {/* Wrong-axis notice (v1.4, Spider) - shown as the click happens, and
               deliberately NOT stored.
 

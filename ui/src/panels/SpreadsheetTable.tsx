@@ -3,6 +3,7 @@ import { CATEGORY_TICK_COLOR } from '../../../engine/categoryTickOverlay.js';
 import { fmtValue, rgbToHex } from '../format.js';
 import { isDerivedAt, isCellEditable, type SpreadsheetSeries } from '../../../engine/spreadsheetModel.js';
 import { formatDateNumber } from '../../../core/dateConversion.js';
+import { valueText } from './ValueMark.js';
 import type { ReactNode } from 'react';
 
 export interface SpreadsheetTableProps {
@@ -34,7 +35,10 @@ export interface SpreadsheetTableProps {
   onSelectMarquee: (indices: number[]) => void;
   onSetPointLabel: (index: number, label: string) => void;
   onCommitPendingEdit: () => void;
-  renderValue: (index: number, dim: number, value: number) => ReactNode;
+  /** ⚑ `supplied` rides with the value because the CELL decides how it reads,
+   * editable or not (A4): the same number wears the same brackets in every
+   * column of the table, not only in the series that happens to be active. */
+  renderValue: (index: number, dim: number, value: number, supplied: boolean) => ReactNode;
   noPointsHint: string;
 }
 
@@ -69,6 +73,13 @@ export interface SpreadsheetTableProps {
  */
 const PICKED_OUTLINE = `2px solid ${CATEGORY_TICK_COLOR}`;
 const PICKED_OUTLINE_OFFSET = -2;
+
+/** Did the user supply this cell's number, rather than us reading it off the
+ * pixel? Asked of the CELL - its own series, its own row, its own dimension -
+ * which is the A2 rule the selection had to learn the hard way. */
+function isSupplied(s: SpreadsheetSeries, row: number, dim: number): boolean {
+  return (s.supplied[row] ?? []).includes(dim);
+}
 
 export function SpreadsheetTable({
   series,
@@ -387,8 +398,8 @@ export function SpreadsheetTable({
                                 // export (not editable inline -- move the point on canvas).
                                 formatDateNumber(data[d]!, dateFmt)
                               : editable
-                              ? renderValue(rowPixel, d, data[d]!)
-                              : fmtValue(data[d]!)
+                              ? renderValue(rowPixel, d, data[d]!, isSupplied(s, i, d))
+                              : valueText(fmtValue(data[d]!), isSupplied(s, i, d))
                             : ''}
                         </td>
                       );

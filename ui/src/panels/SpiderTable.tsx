@@ -1,5 +1,6 @@
 import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
+import { valueText } from './ValueMark.js';
 import type { ReactNode } from 'react';
 
 /** One series' column of the spider table, index-aligned with the axes. */
@@ -11,6 +12,9 @@ export interface SpiderColumn {
   label: string;
   values: readonly (number | null)[];
   pointIndices: readonly (number | null)[];
+  /** Per axis: did the user SUPPLY this reading rather than us reading it off
+   * the pixel (A4)? A spider reading is one number, so a boolean says it all. */
+  supplied: readonly boolean[];
 }
 
 export interface SpiderProfileTable {
@@ -33,7 +37,13 @@ export interface SpiderTableProps {
   /** Aim the capture cursor at an empty slot. */
   onAimSlot: (tupleIndex: number | null, axisIndex: number) => void;
   renderAxisName: (axisIndex: number, rawName: string) => ReactNode;
-  renderValue: (seriesIndex: number, pointIndex: number, axisIndex: number, value: number) => ReactNode;
+  renderValue: (
+    seriesIndex: number,
+    pointIndex: number,
+    axisIndex: number,
+    value: number,
+    supplied: boolean
+  ) => ReactNode;
 }
 
 /**
@@ -167,9 +177,9 @@ export function SpiderTable({
                   {value == null || pointIndex == null ? (
                     <span style={{ color: theme.color.text.legend }}>-</span>
                   ) : col.seriesIndex === activeSeriesIndex ? (
-                    renderValue(col.seriesIndex, pointIndex, axisIndex, value)
+                    renderValue(col.seriesIndex, pointIndex, axisIndex, value, col.supplied[axisIndex] === true)
                   ) : (
-                    fmtValue(value)
+                    valueText(fmtValue(value), col.supplied[axisIndex] === true)
                   )}
                 </td>
               );

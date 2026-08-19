@@ -561,6 +561,18 @@ save a project to keep those - and individual formats name their own limits
 (MATLAB becomes a cell array once any cell holds text; the flat text formats put
 every block in one stream).
 
+**A value you typed reads in `[square brackets]`, on every graph type.** Double-click
+a number in the data panel to correct it and the point MOVES to where that reading
+really is - through the axis's own scale, so the marker on the figure, the table and
+the export can never disagree. The brackets say one thing, and it is the same thing
+on a heatmap cell, an XY point and a spider reading: *this number did not come off
+the pixels.* It is not a lesser number - your eye reads a printed label, a marker
+hidden under another series or a hatched cell better than any sampler does - it is a
+reading taken with a different instrument, and the record says which. Move the point
+afterwards and the brackets go: the number came off the pixels again. In the file
+the same fact rides in its own `<column> source` column (`user` or `pixel`), which
+appears only for a series you actually typed into.
+
 **Guide-point traces carry a `role` column.** If a series was traced with **Guide
 points**, its export gains a `role` telling you where each number came from:
 `anchor` for a point you placed by eye, `interpolated` for one the spline filled in

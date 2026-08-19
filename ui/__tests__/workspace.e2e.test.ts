@@ -439,8 +439,12 @@ async function rowCells(rowIndex = 0): Promise<string[]> {
     .map((c) => c.trim())
     .filter((c) => c !== '');
 }
+// ⚑ The A4 brackets come OFF before the parse, and only here: `[8.000]` is the
+// same reading as `8.000` wearing a mark that says who took it, so a test about
+// the NUMBER must not care. Whether the mark is present is its own assertion,
+// on the cell text - never a side effect of a value check reading NaN.
 async function rowValues(rowIndex = 0): Promise<number[]> {
-  return (await rowCells(rowIndex)).map(Number);
+  return (await rowCells(rowIndex)).map((c) => Number(c.replace(/^\[(.*)\]$/, '$1')));
 }
 async function expectRow(expected: number[], rowIndex = 0, digits = 2): Promise<void> {
   const actual = await rowValues(rowIndex);
@@ -4601,6 +4605,64 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     await expectRow([5, 5]);
   });
 
+  it('⚑ A4: a value you TYPED wears square brackets; the one beside it, read off the pixels, does not', async () => {
+    // The one fact the mark carries, on every type: THIS NUMBER DID NOT COME
+    // FROM THE PIXELS. A user's own reading is a measurement with a better
+    // instrument, so it is recorded through the same transform as ours - what
+    // the record keeps is WHICH INSTRUMENT, and the brackets are that, said in
+    // text so they survive a paste into a spreadsheet.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+    await expectRow([5, 5]);
+
+    // Before anything is typed: no brackets anywhere, and no key on screen for
+    // a mark that is not being used.
+    expect(await textOf('data-value-x-0')).not.toMatch(/[[\]]/);
+    expect(await page.getByTestId('supplied-legend').count()).toBe(0);
+
+    await page.getByTestId('data-value-x-0').dblclick();
+    const input = page.getByTestId('data-edit-x-0');
+    await input.fill('8');
+    await input.press('Enter');
+    await page.waitForTimeout(100);
+
+    // The X cell is marked; Y, which nobody typed, is not. The datum still
+    // MOVED - the reading is 8 through the axes' own inverse, not a number
+    // pasted over the old one.
+    expect(await textOf('data-value-x-0')).toMatch(/^\[.+\]$/);
+    expect(await textOf('data-value-y-0')).not.toMatch(/[[\]]/);
+    await expectRow([8, 5]);
+
+    // ⚑ AND THE KEY IS ON SCREEN. A mark nothing explains is tribal knowledge:
+    // the persona this project designs against can only use what he sees.
+    expect(await textOf('supplied-legend')).toContain('not read off the figure');
+  });
+
+  it('⚑ A4: moving the point takes the brackets off - it was read off the pixels again', async () => {
+    // The mark is not a sticky label on a number, it is a statement about the
+    // reading in front of you. An arrow nudge, a drag and a cap adjustment all
+    // converge on one method in the model, which is where the clearing lives -
+    // the same convergence the derived-sample guard uses.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+    await page.getByTestId('data-value-x-0').dblclick();
+    const input = page.getByTestId('data-edit-x-0');
+    await input.fill('8');
+    await input.press('Enter');
+    await page.waitForTimeout(100);
+    expect(await textOf('data-value-x-0')).toMatch(/^\[.+\]$/);
+
+    // Select the row and nudge it one pixel.
+    await page.getByTestId('point-row-0').click();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(100);
+
+    expect(await textOf('data-value-x-0')).not.toMatch(/[[\]]/);
+    expect(await page.getByTestId('supplied-legend').count()).toBe(0);
+  });
+
   it('leaves non-XY datapoint values read-only (no edit affordance)', async () => {
     // Bar axes: dataToPixel is an unimplemented stub, so the table is plain
     // text with no click-to-edit spans (data-value-*).
@@ -7522,7 +7584,13 @@ describe('spider charts', () => {
     // ⚑ The number read back is derived from the PIXEL, through the same projection
     // that produced the old one - so this passing means the marker actually moved
     // out along the ray, not that the cell is holding typed text.
-    expect(await textOf('spider-cell-0-0')).toMatch(/^75/);
+    // ⚑ IN BRACKETS SINCE v2.3 (A4): the reading is the user's, taken with a
+    // better instrument, and the record says which instrument took it. The
+    // number is unchanged; the mark travels beside it.
+    expect(await textOf('spider-cell-0-0')).toMatch(/^\[75/);
+    // ...and the key to the mark is on screen, in the same words every other
+    // type shows it in.
+    expect(await textOf('supplied-legend')).toContain('not read off the figure');
     // ...and only that point moved: the other two axes still read what was clicked.
     // (Matched loosely, like the off-axis test above: the canvas is fitted, so the
     // original clicks landed at the nearest device pixel rather than at exact

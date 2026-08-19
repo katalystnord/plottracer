@@ -3,6 +3,7 @@ import { theme, withAlpha } from '../theme.js';
 import { CATEGORY_TICK_COLOR } from '../../../engine/categoryTickOverlay.js';
 import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
 import { textOn } from '../contrast.js';
+import { valueText as sharedValueText, suppliedBySource } from './ValueMark.js';
 
 /**
  * A heatmap's cells, IN THE DATA POINTS PANEL - the same place every other
@@ -283,19 +284,16 @@ const FLAGGED_MARK = '†';
 
 
 /**
- * How a value reads, given where it came from.
+ * How a value reads, given which instrument read it.
  *
- * ⚑⚑ SQUARE brackets for a user-entered value - the convention from scholarly
- * editing, epigraphy and archaeology, where `[x]` means EDITORIALLY SUPPLIED,
- * which is exactly what this is. ⚠️ NOT round brackets: `(59)` is accounting
- * notation for NEGATIVE FIFTY-NINE, and pasting it into a spreadsheet silently
- * becomes −59 - the precise class of error this feature exists to prevent.
- * ⚑ The bracket is TEXT, so it survives a copy-paste into a spreadsheet where
- * the tint cannot. The channel carrying the most important fact is the one that
- * travels; machine-readable provenance rides in the export's own column.
+ * ⚑⚑ THE MARK IS THE APP'S, NOT THE HEATMAP'S (v2.3, A4). The convention was
+ * written here first, for the one type that had a second instrument; every
+ * other type acquired one the moment a value could be typed. It lives in
+ * `ValueMark.tsx` now, with its reasoning - a second panel reinventing the same
+ * bracket is exactly what the reuse rule exists to stop.
  */
 function valueText(display: string, source?: string): string {
-  return source === 'user' ? `[${display}]` : display;
+  return sharedValueText(display, suppliedBySource(source));
 }
 
 /**

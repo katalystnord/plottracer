@@ -1818,7 +1818,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getExportRows(
     datasetIndex: number,
     mode: PrecisionMode = 'auto'
-  ): { px: number; py: number; values: ExportValue[]; role?: PointRole }[] {
+  ): { px: number; py: number; values: ExportValue[]; role?: PointRole; supplied?: number[] }[] {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry || !this.axes) return [];
     const axes = this.axes;
@@ -1833,6 +1833,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const roleAt = (i: number): PointRole | undefined => {
       const r = pixels[i]?.metadata?.['role'];
       return r === 'anchor' || r === 'interpolated' ? r : undefined;
+    };
+    // ⚑⚑ TRANSLATED INTO THIS TYPE'S OWN COLUMNS (A4), because a data DIMENSION
+    // and an export FIELD are not the same index and only this method knows the
+    // mapping. XY writes `X, Y`, so dim 1 is column 1; a spider writes `Axis,
+    // Name, Value`, so its one reading is the LAST column and dim 1 does not
+    // exist. Handing the export raw dims would have put "the user read this" on
+    // a spider's axis NUMBER - a fact about the figure's layout, which no user
+    // ever typed.
+    const suppliedAt = (i: number, toField: (dim: number) => number | null): number[] | undefined => {
+      const raw = pixels[i]?.metadata?.['supplied'];
+      if (!Array.isArray(raw)) return undefined;
+      const fields = raw
+        .filter((d): d is number => typeof d === 'number')
+        .map(toField)
+        .filter((f): f is number => f !== null);
+      return fields.length > 0 ? fields : undefined;
     };
     // ⚑⚑ Categorical line: X is the CATEGORY THE READING SITS IN, read off the
     // marked category axis - the same band mechanism Bar and Box Plot use
@@ -1891,7 +1907,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // `Bar<i>` fallback too, in core/exportValues.ts's valueAtPixel -- fixed
         // 2026-07-30, the same tenet-9 pass that found it via this exact comment.)
         const values: ExportValue[] = withCategory ? [position, label, value] : [position, value];
-        return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
+        // The one value column is the last, whether or not the Category column
+        // exists; the position and the name are not this point's to type.
+        const supplied = suppliedAt(i, (d) => (d === 0 ? values.length - 1 : null));
+        return { px: p.x, py: p.y, values, ...(role ? { role } : {}), ...(supplied ? { supplied } : {}) };
       });
     }
     // Spider (v1.4): `Axis, Name, Value` -- the direct analogue of the categorical
@@ -1927,7 +1946,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const res = mode === 'full' ? null : halfPixelResolution(axes, p.x, p.y)[0];
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
         const values: ExportValue[] = [spokeIndex + 1, spider.getSpokeLabel(spokeIndex), value];
-        return { px: p.x, py: p.y, values, ...(role ? { role } : {}) };
+        const supplied = suppliedAt(i, (d) => (d === 0 ? 2 : null));
+        return { px: p.x, py: p.y, values, ...(role ? { role } : {}), ...(supplied ? { supplied } : {}) };
       });
     }
     // ⚑⚑ ONE ROW PER DATUM, NOT PER PIXEL. A datum's error caps are pixels of
@@ -1939,11 +1959,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.getDatumPixelIndices(datasetIndex).map((i) => {
       const p = pixels[i]!;
       const role = roleAt(i);
+      // ⚑ Dim is field here - `valueAtPixel` writes the axes' own value columns
+      // in dimension order, which is why XY's `X source` lands under `X`. The
+      // ONE exception is stated rather than assumed: a Bar prepends its Label
+      // column, so its value sits one to the right (`core/exportValues.ts`).
+      const labelColumn = axes instanceof BarAxes ? 1 : 0;
+      const supplied = suppliedAt(i, (d) => d + labelColumn);
       return {
         px: p.x,
         py: p.y,
         values: valueAtPixel(i, axes, p, mode),
         ...(role ? { role } : {}),
+        ...(supplied ? { supplied } : {}),
       };
     });
   }
@@ -4230,6 +4257,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
       values: (number | null)[];
       /** Which point fills each axis's slot, so clicking a cell can select it. */
       pointIndices: (number | null)[];
+      /** Whether each reading was SUPPLIED by the user rather than read off its
+       * pixel (A4) - the table prints those in `[brackets]`. A spider reading
+       * has exactly one value, so a boolean says all there is to say. */
+      supplied: boolean[];
     }[];
   } {
     if (this.config.axesKind !== 'spider' || !this.axes) return { axisNames: [], axisRawNames: [], columns: [] };
@@ -4245,6 +4276,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const profiles = tuples.length > 0 ? tuples : [[]];
       profiles.forEach((tuple, profileIndex) => {
         const pointIndices = axisNames.map((_, axisIndex) => tuple[axisIndex] ?? null);
+        const suppliedDims = this.getSuppliedDimsFor(seriesIndex);
         const values = axisNames.map((_, axisIndex) => {
           const pixelIndex = pointIndices[axisIndex];
           if (pixelIndex == null) return null;
@@ -4260,6 +4292,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
           label: profiles.length > 1 ? `${entry.dataset.name} · ${profileIndex + 1}` : entry.dataset.name,
           values,
           pointIndices,
+          supplied: pointIndices.map((p) => (p == null ? false : (suppliedDims[p]?.length ?? 0) > 0)),
         });
       });
     });
@@ -5291,7 +5324,109 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const onBar = capLine ? constrainCap(capLine.origin, { x: px, y: py }, capLine.direction) : { x: px, y: py };
     const snapped = this.snapToSpoke(onBar.x, onBar.y, this.spokeIndexOfPoint(index));
     dataset.setPixelAt(index, snapped.x, snapped.y);
+    // ⚑⚑ A MOVE RE-MEASURES EVERY ONE OF THIS POINT'S VALUES, so whatever the
+    // user once typed here is no longer what the record holds (A4). Drag,
+    // arrow-nudge and a cap adjustment all converge on this method, which is
+    // exactly why the clearing lives here and not in three handlers - the same
+    // reason the derived-sample guard above does.
+    this.setSuppliedDims(dataset, index, []);
     if (role === 'anchor') this.rebuildInterpolation();
+  }
+
+  /**
+   * The TYPED twin of moving a point: set one of its values and let the datum
+   * move to match (A4). Answers false when the edit is refused.
+   *
+   * ⚑⚑ IT MOVES THE DATUM, IT DOES NOT OVERWRITE A NUMBER. The value goes back
+   * through the axes' own inverse, so the point lands where that reading really
+   * is and every other view - the canvas marker, the export, a later
+   * re-calibration - follows it. An overridden number would sit still and
+   * quietly disagree with every other value on the figure, with nothing on
+   * screen to say which to trust.
+   *
+   * ⚑⚑ AND THE READING IS RECORDED AS THE USER'S, not disguised as ours. We are
+   * never the only instrument looking at the figure: a person can read a printed
+   * label, a marker hidden under another series, a cell whose texture our
+   * sampler averages away. That is a MEASUREMENT with a better instrument - so
+   * it is stored through the same transform as ours, and what the record keeps
+   * is WHICH INSTRUMENT took it. `getSuppliedDimsFor` is that answer; the table
+   * prints `[brackets]` and the export writes its own column.
+   *
+   * ⚑ `dim` is always a DATA DIMENSION, never a table row. On a spider that
+   * means dim 0 - the one value a reading has - and the SPOKE comes from the
+   * point's own tuple slot, the same source `snapToSpoke` and the export use.
+   * The UI used to pass its row index here, which happened to agree; two
+   * meanings for one argument is a defect waiting for the first type where they
+   * differ.
+   */
+  setDataPointValue(index: number, dim: number, value: number): boolean {
+    const dataset = this.activeEntry.dataset;
+    const point = dataset.getPixel(index);
+    if (!point || !this.axes || !Number.isFinite(value)) return false;
+    // The same rule updateDataPointPixel enforces, at the other entrance: a
+    // spline-DERIVED sample is regenerated from the anchors, so a write here is
+    // silently undone the next time one moves.
+    if (point.metadata?.['role'] === 'interpolated') return false;
+
+    let pixel: { x: number; y: number };
+    if (this.config.axesKind === 'spider') {
+      const spokeIndex = this.spokeIndexOfPoint(index);
+      if (spokeIndex < 0 || dim !== 0) return false;
+      pixel = (this.axes as unknown as { dataToPixel(index: number, value: number): { x: number; y: number } })
+        .dataToPixel(spokeIndex, value);
+    } else if (this.config.axesKind === 'xy') {
+      const data = this.axes.pixelToData(point.x, point.y);
+      if (!data || dim < 0 || dim >= data.length) return false;
+      const next = [...data];
+      next[dim] = value;
+      pixel = (this.axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } })
+        .dataToPixel(next[0]!, next[1]!);
+    } else {
+      // No other type offers a typed value yet. Refusing is the honest answer:
+      // a stubbed `dataToPixel` would land the point at the image's top-left
+      // corner and call it a reading.
+      return false;
+    }
+    // A log axis asked for a non-positive number has no pixel and says so with
+    // NaN rather than {0,0} - see SpiderAxes.dataToPixel.
+    if (!Number.isFinite(pixel.x) || !Number.isFinite(pixel.y)) return false;
+
+    const before = this.suppliedDimsAt(dataset, index);
+    this.updateDataPointPixel(index, pixel.x, pixel.y);
+    // ⚑ AFTER the move, because the move CLEARS the mark by design. The typed
+    // dim joins whatever was typed before: two edits on one point are two
+    // readings, and only a pixel move retires them both.
+    this.setSuppliedDims(dataset, index, [...new Set([...before, dim])].sort((a, b) => a - b));
+    return true;
+  }
+
+  /** Which of a point's values the user supplied rather than reading off its
+   * pixel, index-aligned with that dataset's points (A4). Empty for a point
+   * nobody has typed into, which is every point of an ordinary trace. */
+  getSuppliedDimsFor(datasetIndex: number): number[][] {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry) return [];
+    return entry.dataset.getAllPixels().map((_p, i) => [...this.suppliedDimsAt(entry.dataset, i)]);
+  }
+
+  private suppliedDimsAt(dataset: Dataset, index: number): number[] {
+    const raw = dataset.getPixel(index)?.metadata?.['supplied'];
+    return Array.isArray(raw) ? raw.filter((d): d is number => typeof d === 'number') : [];
+  }
+
+  /** ⚑ The metadata OBJECT is rewritten, never mutated in place, and the key is
+   * REMOVED when nothing is supplied - the same shape every other per-pixel
+   * metadata write in this file follows, so a point that carries no mark
+   * serializes byte-for-byte as it did before this existed. */
+  private setSuppliedDims(dataset: Dataset, index: number, dims: readonly number[]): void {
+    const existing = dataset.getPixel(index)?.metadata;
+    if (dims.length === 0) {
+      if (existing?.['supplied'] === undefined) return;
+      const { supplied: _drop, ...rest } = existing as Record<string, unknown>;
+      dataset.setMetadataAt(index, Object.keys(rest).length > 0 ? rest : null);
+      return;
+    }
+    dataset.setMetadataAt(index, { ...existing, supplied: [...dims] });
   }
 
   /** Carry every stored pixel -- calibration handles, the pending pixel, and all

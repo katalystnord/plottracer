@@ -53,6 +53,11 @@ export interface SpreadsheetSeries {
   /** Per row: the point's data values, or null where the series is shorter. */
   values: (number[] | null)[];
   roles: (PointRole | null)[];
+  /** Per row, which of that point's values the USER supplied rather than
+   * reading off its pixel (A4). The table prints those in `[brackets]`, on
+   * every series - a value a person read is still a reading, and which
+   * instrument took it is the fact the record keeps. */
+  supplied: number[][];
   labels: string[];
   /** For an ERROR-CAP series: each row's signed offset from the datum it
    * resolves to. Empty for every other series, which is what the table keys on
@@ -104,6 +109,7 @@ export function buildSpreadsheetSeries(
     const errorColumns = session.getErrorColumns(d.index);
     const errorRows = session.getErrorRows(d.index);
     const roles = session.getDataPointRolesFor(d.index);
+    const supplied = session.getSuppliedDimsFor(d.index);
     const labels = session.getPointLabels(d.index);
     return {
     index: d.index,
@@ -119,6 +125,7 @@ export function buildSpreadsheetSeries(
     active: d.active,
     values: pixelIndices.map((p) => d.points[p]?.data ?? null),
     roles: pixelIndices.map((p) => roles[p] ?? null),
+    supplied: pixelIndices.map((p) => supplied[p] ?? []),
     labels: pixelIndices.map((p) => labels[p] ?? ''),
     deltas: session.getErrorCapDeltas(d.index),
     pixelIndices,

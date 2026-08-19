@@ -156,6 +156,19 @@ export interface ExportRow {
    * point (`anchor`) or the spline DERIVED it (`interpolated`). Undefined for an
    * ordinary placed/traced point - the distinction doesn't apply to it (v1.3). */
   role?: PointRole;
+  /**
+   * Which COLUMNS of this row the user supplied rather than reading off the
+   * pixel (A4) - indices into `values`, translated from data dimensions by the
+   * session, which is the only place that knows a type's column order.
+   *
+   * ⚑⚑ THE MACHINE-READABLE HALF OF THE `[BRACKETS]`. The table's mark is text
+   * so it survives a paste into a spreadsheet; this is the half a program can
+   * read, and they say the same thing: WHICH INSTRUMENT took each reading. A
+   * user's own reading is a measurement with a better instrument - their eye -
+   * not an invented number, which is why it rides beside the value instead of
+   * disqualifying it.
+   */
+  supplied?: readonly number[];
 }
 
 /**
@@ -190,6 +203,28 @@ function hasRoles(rows: readonly ExportRow[]): boolean {
   return rows.some((r) => r.role != null);
 }
 
+/**
+ * Which FIELDS any row of this series carries a supplied value in, in column
+ * order (A4).
+ *
+ * ⚑ Same presence-is-the-signal rule as `role` above: a session where every
+ * number came off the pixels grows no source column at all, and exports
+ * byte-for-byte as it did before this existed. A column of "pixel" repeated
+ * down a file nobody typed into asserts a distinction nobody made.
+ */
+function suppliedFields(rows: readonly ExportRow[]): number[] {
+  const fields = new Set<number>();
+  for (const r of rows) for (const f of r.supplied ?? []) fields.add(f);
+  return [...fields].sort((a, b) => a - b);
+}
+
+/** The word for one cell's instrument. `user` where a person supplied the
+ * number, `pixel` where we read it off the image - said in full on every row of
+ * a column that exists at all, so no reader has to guess what a blank means. */
+function sourceWord(row: ExportRow | undefined, field: number): 'user' | 'pixel' {
+  return row?.supplied?.includes(field) ? 'user' : 'pixel';
+}
+
 /** One row per point: pixel coordinates plus the axes' own columns.
  *
  * Headers come from the axes (`session.getExportFields()`), not from a
@@ -214,11 +249,15 @@ export function flatDataSection(
 ): TableSection {
   const roles = hasRoles(rows);
   const err = error?.labels.length ? error : null;
+  // ⚑ Beside the values they qualify, before the error columns: a source column
+  // is a statement about ITS OWN column, and the two read together.
+  const sources = suppliedFields(rows);
   return {
     header: [
       'x_px',
       'y_px',
       ...fields,
+      ...sources.map((f) => `${fields[f] ?? f} source`),
       ...(err ? err.labels : []),
       ...(err ? err.labels.map((l) => `${l} delta`) : []),
       ...(roles ? ['role'] : []),
@@ -227,6 +266,7 @@ export function flatDataSection(
       r.px,
       r.py,
       ...fields.map((_f, d) => r.values[d] ?? ''),
+      ...sources.map((f) => sourceWord(r, f)),
       // ⚑ Blank, never 0, where a side was never captured. A one-sided error
       // bar is a real figure, and matplotlib ACCEPTS a yerr of 0 and draws a
       // bound sitting exactly on the value - a measurement nobody took, wearing
@@ -683,9 +723,13 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
   // Same per-series rule again, for the extents a datum carries on its own
   // record: only a series that recorded a side grows that side's column.
   const errCols = series.map((s) => (s.error?.labels.length ? s.error : null));
+  // Same per-series rule once more (A4): only a series someone typed into grows
+  // a source column, beside the very column that value sits in.
+  const sourceCols = series.map((s) => suppliedFields(s.rows));
   const header: (string | number)[] = ['#'];
   series.forEach((s, si) => {
     for (const label of fields) header.push(`${seriesColumnPrefix(s)} ${label}`);
+    for (const f of sourceCols[si]!) header.push(`${seriesColumnPrefix(s)} ${fields[f] ?? f} source`);
     const err = errCols[si];
     if (err) {
       for (const label of err.labels) header.push(`${seriesColumnPrefix(s)} ${label}`);
@@ -701,6 +745,9 @@ export function allSeriesSection(series: readonly SeriesForCSV[], fields: readon
     series.forEach((s, si) => {
       const r = s.rows[i];
       for (let d = 0; d < fields.length; d++) row.push(r?.values[d] ?? '');
+      // ⚑ Blank past the end of a shorter series - a row this series does not
+      // have took no reading, by any instrument.
+      for (const f of sourceCols[si]!) row.push(r ? sourceWord(r, f) : '');
       const err = errCols[si];
       if (err) {
         // Blank, never 0 - see flatDataSection.
@@ -756,6 +803,11 @@ export function buildSeriesJSON(
             })
           ),
           ...(r.role ? { role: r.role } : {}),
+          // ⚑ Attached only to the value it applies to, under the CSV's own
+          // words - mirror, not merely match, exactly as the error columns do.
+          // An absent key means the number came off the pixels, which is the
+          // rule this whole schema follows for "not measured, not applicable".
+          ...Object.fromEntries((r.supplied ?? []).map((f) => [`${fields[f] ?? f} source`, 'user'])),
         })),
       };
       if (s.relation) entry.relation = { role: s.relation.role, of: s.relation.of };
