@@ -2318,7 +2318,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return null;
   }
 
-  setDatasetColor(index: number, rgb: [number, number, number]): void {
+  // ⚑ `readonly`, because it does not mutate what it is given - and a caller
+  // holding an `RGB` (which is readonly by definition) should not have to copy
+  // a tuple to hand it over.
+  setDatasetColor(index: number, rgb: readonly [number, number, number]): void {
     const entry = this.datasetEntries[index];
     if (!entry) return;
     entry.dataset.colorRGB = new Color(rgb[0], rgb[1], rgb[2]);

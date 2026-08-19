@@ -125,3 +125,73 @@ export function routeCanvasClick({
   if (readsCellsFromAGrid === true) return { kind: 'select-cell' };
   return { kind: 'add-point' };
 }
+
+/** A point in the image's own pixel space. */
+export interface ClickPoint {
+  x: number;
+  y: number;
+}
+
+export interface CategoryEdgeClickInput {
+  /** Where the user just clicked. */
+  point: ClickPoint;
+  /** The first edge already placed by a previous click, if any. */
+  first: ClickPoint | null;
+  /** The calibration's own origin pixel, which can stand in for the first edge. */
+  seed: ClickPoint | null;
+  /** The panel's answer to whether the seed may stand in - never guessed here. */
+  canReuseSeed: boolean;
+}
+
+export type CategoryEdgeClick =
+  /** Only one end is known so far; hold it and wait for the second click. */
+  | { kind: 'hold-first'; point: ClickPoint }
+  /** Both ends are known - mark the axis between them. */
+  | { kind: 'mark'; from: ClickPoint; to: ClickPoint };
+
+/**
+ * Which pixel is the category axis's first edge, and is the axis now known?
+ *
+ * ⚑⚑ THE ONE-CLICK WALK LIVES HERE (v2.1's promise: *"P1 is already the first
+ * edge, so the prompt asks for one click, not two"*). Three inputs decide it -
+ * a stored first edge, the calibration seed, and whether the panel says the seed
+ * may be reused - and until v2.3 they were resolved inside a 163-line
+ * `useCallback`, where no unit test could reach the combination.
+ *
+ * ⚑ A STORED EDGE OUTRANKS THE SEED, because the user placed it deliberately;
+ * and a seed the panel refuses is not quietly promoted into an edge the user was
+ * never told about.
+ */
+export function resolveCategoryEdgeClick({
+  point,
+  first,
+  seed,
+  canReuseSeed,
+}: CategoryEdgeClickInput): CategoryEdgeClick {
+  const from = first ?? (canReuseSeed && seed ? seed : null);
+  if (!from) return { kind: 'hold-first', point };
+  return { kind: 'mark', from, to: point };
+}
+
+/**
+ * Which index is the point that was just placed at this pixel?
+ *
+ * ⚑⚑ NOT "THE LAST ONE", and that is the whole reason this exists. Insert-in-place
+ * (v1.1 #1) can splice a new point into the MIDDLE of a curve, so the newest is
+ * not the last index and selecting the last one selects a stranger.
+ *
+ * ⚑ `fallbackLast` is the SNAPPED case: a spider capture lands on its ray rather
+ * than under the cursor, so the clicked pixel is not in the list - and that path
+ * always appends, so the last index is right. The interpolation-anchor path has
+ * no such guarantee and passes false, answering null rather than guessing.
+ */
+export function indexOfPlacedPoint(
+  points: readonly { px: number; py: number }[],
+  px: number,
+  py: number,
+  fallbackLast: boolean
+): number | null {
+  const found = points.findIndex((p) => p.px === px && p.py === py);
+  if (found >= 0) return found;
+  return fallbackLast ? points.length - 1 : null;
+}

@@ -35,7 +35,8 @@ import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js
 import { colourMeasureReading } from '../../engine/colourMeasure.js';
 import type { MeasurementCsvRow } from '../../engine/csvExport.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
-import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
+import { routeCanvasClick, resolveCategoryEdgeClick, indexOfPlacedPoint } from '../../engine/canvasClickRoute.js';
+import { samplePixelRgb } from '../../algorithms/samplePixel.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
 import { exportBaseName as baseNameForExport, EXPORT_FILTER_NAMES } from '../../engine/exportNaming.js';
 import {
@@ -43,6 +44,7 @@ import {
   spiderTraceReport,
   barTraceReport,
   categoryMissReport,
+  emptyCategoryNames,
   blobTraceReport,
   curveTraceReport,
 } from '../../engine/colorTraceReport.js';
@@ -172,6 +174,7 @@ import {
   showsCategoryColumn,
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
+import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
@@ -3357,13 +3360,8 @@ export function Workspace() {
           let rgb: readonly [number, number, number] | undefined;
           if (result.tool === 'colour') {
             const img = imageCanvasRef.current?.getImageData();
-            if (img) {
-              const p = result.points[0]!;
-              const cx = Math.max(0, Math.min(img.width - 1, Math.round(p.x)));
-              const cy = Math.max(0, Math.min(img.height - 1, Math.round(p.y)));
-              const o = (cy * img.width + cx) * 4;
-              rgb = [img.data[o]!, img.data[o + 1]!, img.data[o + 2]!];
-            }
+            const p = result.points[0]!;
+            if (img) rgb = samplePixelRgb(img, p.x, p.y);
           }
           // `label` is a placeholder: the canvas label is DERIVED at render (see
           // the measureOverlays memo), so a later re-calibration updates it.
@@ -3490,13 +3488,21 @@ export function Workspace() {
       // marking click cannot also drop a data point.
       if (isMarkingCategoryAxis(categoryPanel)) {
         const seed = session.categoryTickOriginPixel();
-        const first =
-          categoryFirstEdge ?? (categoryPanel.canReuseSeed && seed ? { x: seed.px, y: seed.py } : null);
-        if (!first) {
-          setCategoryFirstEdge({ x: px, y: py });
+        // ⚑ The three-input decision (stored edge, calibration seed, whether the
+        // panel allows the seed) is `resolveCategoryEdgeClick` in engine/, where
+        // a unit test can reach every combination - v2.3 theme G. What stays
+        // here is the effect: which state to set, and what to say on a refusal.
+        const edge = resolveCategoryEdgeClick({
+          point: { x: px, y: py },
+          first: categoryFirstEdge,
+          seed: seed ? { x: seed.px, y: seed.py } : null,
+          canReuseSeed: categoryPanel.canReuseSeed,
+        });
+        if (edge.kind === 'hold-first') {
+          setCategoryFirstEdge(edge.point);
           return;
         }
-        if (session.markCategoryAxis(first, { x: px, y: py })) {
+        if (session.markCategoryAxis(edge.from, edge.to)) {
           setCategoryFirstEdge(null);
           setCategoryMarkError(null);
           setCategoryPlaceBothEdges(false);
@@ -3518,10 +3524,10 @@ export function Workspace() {
           // so they index straight into getImageData().
           const imageData = imageCanvasRef.current?.getImageData();
           if (imageData) {
-            const x = Math.max(0, Math.min(imageData.width - 1, Math.round(px)));
-            const y = Math.max(0, Math.min(imageData.height - 1, Math.round(py)));
-            const o = (y * imageData.width + x) * 4;
-            const rgb = [imageData.data[o]!, imageData.data[o + 1]!, imageData.data[o + 2]!] as [number, number, number];
+            // ⚑ One sampler, three callers (v2.3, theme G): this, the Colour
+            // measurement, and whatever comes next. The CLAMP is the part that
+            // must not be forgotten, and it was written out by hand each time.
+            const rgb = samplePixelRgb(imageData, px, py);
             if (route.target === 'grid') {
               setGridRemovalColor(rgbToHex(rgb));
             } else if (route.target === 'trace') {
@@ -3593,8 +3599,7 @@ export function Workspace() {
           // (anchors interleaved with the fill), so the newest anchor is no longer the
           // "last anchor" index -- find it by its exact clicked pixel instead.
           const pts = session.getDataPoints();
-          const idx = pts.findIndex((p) => p.px === px && p.py === py);
-          setActivePointIndex(idx >= 0 ? idx : null);
+          setActivePointIndex(indexOfPlacedPoint(pts, px, py, false));
           commit();
           return;
         }
@@ -3631,8 +3636,7 @@ export function Workspace() {
           // spider point is NOT at the clicked pixel, and falls through to the
           // last-index fallback, which is correct: the grouped path always appends.
           const placed = session.getDataPoints();
-          const newIdx = placed.findIndex((p) => p.px === px && p.py === py);
-          setActivePointIndex(newIdx >= 0 ? newIdx : placed.length - 1);
+          setActivePointIndex(indexOfPlacedPoint(placed, px, py, true));
           // Placing a point selects it, but the user did not PICK it to look at -- they
           // are stepping round the chart, and the guidance they need is the next slot.
           // Cleared explicitly rather than left alone: with points deleted, the new
@@ -4261,35 +4265,43 @@ export function Workspace() {
     // the record's session object either way, so no stash is needed here.
     const figs = figuresRef.current;
     if (figs.length >= 2) {
+      // ⚑ WHICH COPY of each figure gets written is `figureSaveInput` in engine/
+      // now (v2.3, theme G), where audit H1's rule - the active figure's SESSION
+      // is read live, because a page flip swaps it without re-stashing - is a
+      // named test rather than a comment beside a ternary.
+      // ⚑ WHICH COPY of each figure gets written is `figureSaveInput` in engine/
+      // now (v2.3, theme G), where audit H1's rule - the active figure's SESSION
+      // is read live, because a page flip swaps it without re-stashing - is a
+      // named test rather than a comment beside a ternary.
+      // ⚑ Built ONCE: the live state is the same for every figure in the loop,
+      // and a FigureRecord already IS the record shape, so neither side needs
+      // constructing per iteration.
+      const liveNow = {
+        session: sessionRef.current,
+        imageDataURL: imageCanvasRef.current?.getImageDataURL() ?? undefined,
+        imageFileName: imageCanvasRef.current?.getImageFileName() ?? undefined,
+        measurements: measurementsRef.current,
+        measureScale: measureScaleRef.current,
+        provenance: provenanceRef.current,
+      };
       const inputs = figs.map((f, i) => {
-        const active = i === activeFigureIndex;
+        const chosen = figureSaveInput({ name: f.name, active: i === activeFigureIndex, record: f, live: liveNow });
         return {
-          name: f.name,
-          // The active figure's live session is sessionRef.current, which a page
-          // flip (goToPdfPage) can swap WITHOUT re-stashing into the record -- so
-          // read it live, never the record's possibly-stale copy (audit H1). Only
-          // the active figure can desync this way; inactive ones were stashed on
-          // switch.
-          session: active ? sessionRef.current : f.session,
-          imageDataURL: active ? imageCanvasRef.current?.getImageDataURL() ?? f.imageDataURL : f.imageDataURL,
-          imageFileName: active ? imageCanvasRef.current?.getImageFileName() ?? f.imageFileName : f.imageFileName,
-          measures: {
-            measurements: toSerializedMeasurements(active ? measurementsRef.current : f.measurements),
-            scale: active ? measureScaleRef.current : f.measureScale,
-          },
-          provenance: active ? provenanceRef.current : f.provenance,
+          name: chosen.name,
+          session: chosen.session,
+          imageDataURL: chosen.imageDataURL,
+          imageFileName: chosen.imageFileName,
+          measures: { measurements: toSerializedMeasurements(chosen.measurements), scale: chosen.measureScale },
+          provenance: chosen.provenance,
         };
       });
-      // The shared source: the active figure's live source, or ANY figure's if the
-      // active one has none (audit A3 -- a project-wide document threaded through a
-      // single figure's ref would otherwise drop on re-save).
-      const sharedSource = sourcePdfRef.current ?? figs.map((f) => f.sourcePdf).find((s) => s != null) ?? null;
+      // ⚑ Audit A3's rule, also in engine/ now: the document belongs to the
+      // PROJECT, so ANY figure's counts when the active one has none.
+      const sharedSource = sharedProjectSource(figs, sourcePdfRef.current);
       const multi = serializeMultiFigureProject(
         inputs,
         activeFigureIndex,
-        sharedSource
-          ? { name: sharedSource.name, mime: pagedDocumentFormat(sharedSource.bytes) === 'tiff' ? 'image/tiff' : 'application/pdf', bytes: sharedSource.bytes }
-          : undefined,
+        sourceDescriptor(sharedSource, pagedDocumentFormat),
         stamp
       );
       if ('error' in multi) {
@@ -4319,9 +4331,7 @@ export function Workspace() {
       imageCanvasRef.current?.getImageFileName() ?? undefined,
       { measurements: toSerializedMeasurements(measurementsRef.current), scale: measureScaleRef.current },
       provenanceRef.current,
-      sourcePdfRef.current
-        ? { name: sourcePdfRef.current.name, mime: pagedDocumentFormat(sourcePdfRef.current.bytes) === 'tiff' ? 'image/tiff' : 'application/pdf', bytes: sourcePdfRef.current.bytes }
-        : undefined,
+      sourceDescriptor(sourcePdfRef.current, pagedDocumentFormat),
       stamp
     );
     if ('error' in result) {
@@ -4868,20 +4878,19 @@ export function Workspace() {
           : null;
         const records = multi.figures.map((f) => buildFigureRecordFromDeserialized(f, shared));
         setProjectError(null);
-        if (records.length === 1) {
-          // A 1-figure container (only reachable via a hand-edited file -- Save
-          // never writes one) is a SINGLE-figure session: keep figuresRef empty so
-          // the jumper stays hidden and the design-§0 invariant holds (audit B-F6).
-          figuresRef.current = [];
-          setActiveFigureIndex(0);
-          restoreFigure(records[0]!, true); // opened from a file -> matches its source
-        } else {
-          figuresRef.current = records;
-          setActiveFigureIndex(multi.activeFigure);
-          // restoreFigure installs the active figure's session, image, measurements,
-          // provenance and (retained) source, and resets undo/dirty (loaded == clean).
-          restoreFigure(records[multi.activeFigure]!, true); // opened from a file
-        }
+        // ⚑ Audit B-F6's invariant is `figuresForOpenedProject` in engine/ now
+        // (v2.3, theme G): a ONE-figure container is a single-figure session, so
+        // `figures` stays empty and the jumper stays hidden. Only a hand-edited
+        // file reaches it, which is why nothing could test it here.
+        // ⚑ It also refuses an out-of-range active index by restoring the FIRST
+        // figure - this used to index past the end and hand `restoreFigure`
+        // undefined. A behaviour change, and a deliberate one.
+        const install = figuresForOpenedProject(records, multi.activeFigure);
+        figuresRef.current = install.figures;
+        setActiveFigureIndex(install.active);
+        // restoreFigure installs the active figure's session, image, measurements,
+        // provenance and (retained) source, and resets undo/dirty (loaded == clean).
+        if (install.restore) restoreFigure(install.restore, true); // opened from a file
         return;
       }
       result = deserializeProjectZip(bytes);
@@ -5398,11 +5407,11 @@ export function Workspace() {
       // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
       // category the user declared, which is the axis's own order and runs the
       // other way whenever the axis was marked right-to-left or bottom-to-top.
-      const missing = (result.expectation?.emptyBands ?? []).map((band) => {
-        const idx = session.categoryIndexOfBand(band, declared?.reversed ?? false);
-        const name = session.getCategoryAxis().getCategories()[idx];
-        return name && name.length > 0 ? name : `Category ${idx + 1}`;
-      });
+      const missing = emptyCategoryNames(
+        result.expectation?.emptyBands ?? [],
+        (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
+        session.getCategoryAxis().getCategories()
+      );
       setColorTraceInfo(
         barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
       );

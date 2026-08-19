@@ -163,3 +163,30 @@ export function blobTraceReport(blobs: number, matched: number, width: number, h
 export function curveTraceReport(points: number, matched: number, width: number, height: number): string {
   return `Traced ${points} points from ${matchedTail(matched, width, height)}`;
 }
+
+/**
+ * The names of the categories a bar detect found nothing in.
+ *
+ * ⚑⚑ A BAND IS NOT A CATEGORY. The split reports empty slots by BAND - image
+ * order, left to right - while the categories are in the AXIS's order, which
+ * runs the other way whenever the axis was marked right-to-left or
+ * bottom-to-top. Reporting the band index as though it were the category names
+ * a REAL category that was not empty, and nothing about the sentence looks
+ * wrong. The mapping is the caller's (`categoryIndexOfBand` knows the axis's
+ * direction); what lives here is that it must be applied at all, and what to
+ * say when the category has no name.
+ *
+ * ⚑ An unnamed category is reported BY POSITION, never as a blank: a blank in a
+ * list of what is missing reads as nothing being missing there.
+ */
+export function emptyCategoryNames(
+  bands: readonly number[],
+  categoryIndexOfBand: (band: number) => number,
+  categories: readonly string[]
+): string[] {
+  return bands.map((band) => {
+    const idx = categoryIndexOfBand(band);
+    const name = categories[idx];
+    return name && name.length > 0 ? name : `Category ${idx + 1}`;
+  });
+}
