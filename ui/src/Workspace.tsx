@@ -32,13 +32,13 @@ import type { TickConvention } from '../../core/categoryAxis.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
 import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
-import { measureDisplay, type RecordedMeasurement, type MeasureScaleState } from './tools/measureDisplay.js';
+import { type RecordedMeasurement, type MeasureScaleState } from './tools/measureDisplay.js';
+import { useMeasure } from './tools/useMeasure.js';
 import { colourMeasureReading } from '../../engine/colourMeasure.js';
 import type { MeasurementCsvRow } from '../../engine/csvExport.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick, resolveCategoryEdgeClick, indexOfPlacedPoint } from '../../engine/canvasClickRoute.js';
 import { samplePixelRgb } from '../../algorithms/samplePixel.js';
-import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
 import { exportBaseName as baseNameForExport, EXPORT_FILTER_NAMES } from '../../engine/exportNaming.js';
 import {
   colorTraceRefusal,
@@ -94,7 +94,7 @@ import {
   ImageEditIcon,
   ErrorBarsIcon,
 } from './icons.js';
-import { MeasureCard, type MeasureRef, type MeasureToolId, type Measurement, type SetScaleDraft } from './MeasureCard.js';
+import { MeasureCard, type MeasureToolId } from './MeasureCard.js';
 import { ImageEditCard } from './ImageEditCard.js';
 import { ErrorBarsCard } from './ErrorBarsCard.js';
 import { ChallengeOverlay } from './ChallengeOverlay.js';
@@ -108,7 +108,7 @@ import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
 import { valueText, valueTitle, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
-import { fmtNum, fmtValue, rgbToHex } from './format.js';
+import { fmtValue, rgbToHex } from './format.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
 import { BarTable } from './panels/BarTable.js';
@@ -865,7 +865,6 @@ export function Workspace() {
   // and which of its points, so the arrow keys can nudge it in Measure mode. The
   // measurement's value is DERIVED from the pixels (ckpt 82), so moving a vertex
   // re-derives it live. Mutually exclusive with the point/handle selections.
-  const [activeMeasure, setActiveMeasure] = useState<{ id: string; vertex: number } | null>(null);
   // Figure capture (checkpoint 102, docs/figure-capture-design.md): whether THIS
   // document's figure-of-record has been established -- the user framed the whole
   // figure and captured it as the working image. Reset with the document.
@@ -1356,7 +1355,6 @@ export function Workspace() {
   // it), the recorded measurements, and the in-progress click(s). pendingMeasure
   // is mirrored into a ref so handleMeasureClick reads the latest without a stale
   // closure / extra dep churn.
-  const [measureTool, setMeasureTool] = useState<MeasureToolId | null>('slope');
   // Measurements + scale are mirrored into refs so commit()/captureDoc() (undo,
   // checkpoint 56) read the latest value synchronously right after an update,
   // without a stale closure. Always mutate through applyMeasurements/
@@ -1412,14 +1410,6 @@ export function Workspace() {
     pdfStateRef.current = next;
     setPdfState(next);
   }, []);
-  const [pendingMeasure, setPendingMeasure] = useState<{ x: number; y: number }[]>([]);
-  const pendingMeasureRef = useRef<{ x: number; y: number }[]>([]);
-  const setPending = useCallback((pts: { x: number; y: number }[]) => {
-    pendingMeasureRef.current = pts;
-    setPendingMeasure(pts);
-  }, []);
-  const [measureError, setMeasureError] = useState<string | null>(null);
-  const measureIdRef = useRef(0);
   // Set-scale: a px->real-world-unit reference independent of the chart axes, so
   // Distance/Area measure real lengths on any image (drawings, micrographs). null
   // until defined. `settingScale` arms the next two clicks; once placed, their
@@ -1430,10 +1420,87 @@ export function Workspace() {
     measureScaleRef.current = next;
     setMeasureScale(next);
   }, []);
-  const [settingScale, setSettingScale] = useState(false);
-  const [scaleDraftPx, setScaleDraftPx] = useState<number | null>(null);
-  const [scaleValueInput, setScaleValueInput] = useState('');
-  const [scaleUnitInput, setScaleUnitInput] = useState('mm');
+  /**
+   * THE MEASURE INSTRUMENT (v2.3, theme G) - its state machine and handlers.
+   *
+   * ⚑⚑ THE HOST IS ALL GETTERS. Passing values would capture them in the hook's
+   * closures, and a stale one means the snap radius uses yesterday's zoom or a
+   * click routes against the previous axes - a failure no test can see and only
+   * a hand can find. Reading through a function means nothing is captured.
+   *
+   * ⚑ DESTRUCTURED BACK INTO THE SAME NAMES, so not one call site or JSX
+   * reference below had to change. The move is behaviour-preserving at every
+   * point of use, which is the only way to make a 180-line extraction reviewable.
+   *
+   * ⚑ The COLLECTION stays out here: measurements and the px->unit scale are
+   * DOCUMENT state - the project file carries them, every figure record stashes
+   * them, every undo snapshot captures them.
+   */
+  // ⚑⚑ THE HOST MUST BE STABLE, and finding out why cost a regression. Built as
+  // a fresh object literal, it changed identity every render - so every callback
+  // in the hook did too, so the keydown effect (which depends on `finishArea`)
+  // REMOVED AND RE-ADDED its window listener on every render. A keypress
+  // dispatched in that gap is simply lost, which is what the Alt-then-1 key-tip
+  // test caught: pressing two keys fast enough landed one of them in the window
+  // where nothing was listening.
+  //
+  // ⚑ So every getter reads a REF, and the object is memoised once. Stable
+  // identity AND live values - the two properties the getter design was for, one
+  // of which I had quietly given up by rebuilding the object each render.
+  const canvasScaleRef = useRef(canvasScale);
+  canvasScaleRef.current = canvasScale;
+  const versionRef = useRef(version);
+  versionRef.current = version;
+  const commitRef = useRef<() => void>(() => {});
+  const measureHost = useMemo(
+    () => ({
+      session: () => sessionRef.current,
+      axes: () => sessionRef.current.getAxes(),
+      axesKind: () => sessionRef.current.getConfig().axesKind,
+      canvasScale: () => canvasScaleRef.current,
+      imageData: () => imageCanvasRef.current?.getImageData(),
+      measurements: () => measurementsRef.current,
+      applyMeasurements,
+      measureScale: () => measureScaleRef.current,
+      applyMeasureScale,
+      keyInputs: () => ({
+        placed: sessionRef.current.getPlacedPoints(),
+        isLog: sessionRef.current.getOptions()['isLogValue'] === 'true',
+      }),
+      calibrationVersion: () => versionRef.current,
+      // ⚑ Through a ref, because `commit` is declared below this call AND its
+      // identity changes - either alone would be enough to need one.
+      commit: () => commitRef.current(),
+    }),
+    [applyMeasurements, applyMeasureScale]
+  );
+  const measure = useMeasure(measureHost);
+  const {
+    measureTool,
+    pendingMeasure,
+    setPending,
+    measureError,
+    setMeasureError,
+    measureIdRef,
+    settingScale,
+    setSettingScale,
+    scaleDraftPx,
+    setScaleDraftPx,
+    activeMeasure,
+    setActiveMeasure,
+    handleMeasureClick,
+    selectMeasureTool,
+    finishArea,
+    measurementViews,
+    copyMeasurement,
+    deleteMeasurement,
+    copyAllMeasurements,
+    startSetScale,
+    measureReference,
+    setScaleDraft,
+    colourScale,
+  } = measure;
+
   const clearMeasurements = useCallback(() => {
     applyMeasurements([]);
     setPending([]);
@@ -1441,7 +1508,7 @@ export function Workspace() {
     applyMeasureScale(null);
     setSettingScale(false);
     setScaleDraftPx(null);
-  }, [setPending, applyMeasurements, applyMeasureScale]);
+  }, [setPending, applyMeasurements, applyMeasureScale, setMeasureError, setScaleDraftPx, setSettingScale]);
   // Toggle the ruler tool: entering measure remembers the prior tool (so a second
   // press restores it) and abandons any stale in-progress measurement; leaving
   // returns to that prior tool. Measure is only ever entered through here, so
@@ -1456,7 +1523,7 @@ export function Workspace() {
       preMeasureModeRef.current = m;
       return 'measure';
     });
-  }, [setPending]);
+  }, [setPending, setMeasureError, setScaleDraftPx, setSettingScale]);
 
   // Toggle the error-bars tool (checkpoint 79) -- same press-again-to-close
   // shape as Measure/Image Edit. Abandons any half-made drag on the way in or
@@ -1578,6 +1645,7 @@ export function Workspace() {
     dirtyRef.current = true;
     bump();
   }, [history, captureDoc, bump]);
+  commitRef.current = commit;
 
   // The OS window-close button / Cmd+Q is the one destructive door that used to
   // bypass the unsaved-work guard (v1.0.1 audit B1) -- it hit app.quit()
@@ -2667,36 +2735,10 @@ export function Workspace() {
     if (snapshot) restoreDoc(snapshot);
   }, [history, restoreDoc]);
 
-  // Close the in-progress Area polygon (via the card's Finish button or Enter):
-  // shoelace pixel area, scaled to unit² if a Set-scale exists, recorded as one
-  // undoable action. Defined after commit so it can push an undo entry, but
-  // before the keydown effect that binds Enter to it.
-  const finishArea = useCallback(() => {
-    const pts = pendingMeasureRef.current;
-    if (pts.length < 3) {
-      setMeasureError('Place at least 3 points to close an area.');
-      return;
-    }
-    let cx = 0;
-    let cy = 0;
-    for (const p of pts) {
-      cx += p.x;
-      cy += p.y;
-    }
-    // The AREA is derived (core/measurementValues.ts) -- only the centroid is
-    // still computed here, because that is geometry (where the label hangs),
-    // not a value.
-    const id = `meas-${(measureIdRef.current += 1)}`;
-    const overlay: MeasureOverlay = { id, points: pts, closed: true, label: '', labelAt: { x: cx / pts.length, y: cy / pts.length } };
-    applyMeasurements([{ id, tool: 'area', overlay }, ...measurementsRef.current]);
-    setPending([]);
-    setMeasureError(null);
-    commit();
-  }, [setPending, applyMeasurements, commit]);
   const cancelArea = useCallback(() => {
     setPending([]);
     setMeasureError(null);
-  }, [setPending]);
+  }, [setPending, setMeasureError]);
 
   // Delete the active point (or, if none is selected, the last one -- so the
   // trash button still behaves like the old "remove last"). The newest remaining
@@ -2929,7 +2971,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -3225,76 +3267,6 @@ export function Workspace() {
   // `roundStartMs`, so it re-renders only the HUD -- not the whole Workspace every
   // 100ms, which made canvas clicks feel laggy mid-round.
 
-  // Route a measure-mode canvas click. Set-scale intercepts first (arming a
-  // px->unit reference); then the active tool. Slope reports Δy/Δx in the chart's
-  // data units (via pixelToData, log-correct if axes are ever set to log); Distance
-  // reports a real length via the Set-scale reference (or pixels if none is set).
-  const handleMeasureClick = useCallback(
-    (px: number, py: number) => {
-      const snapped = snapToNearestPoint(px, py, session.getDataPoints(), canvasScale);
-      const result = resolveMeasureClick({
-        point: snapped,
-        pending: pendingMeasureRef.current,
-        settingScale,
-        tool: measureTool,
-        slopeReady: !!axes && config.axesKind === 'xy',
-        toData: axes ? (x, y) => axes.pixelToData(x, y) : null,
-      });
-      switch (result.kind) {
-        case 'refuse':
-          setMeasureError(result.message);
-          return;
-        case 'collect':
-          if (!settingScale) setMeasureError(null);
-          setPending(result.points);
-          return;
-        case 'scale-draft':
-          setPending(result.points);
-          setScaleDraftPx(result.distancePx);
-          return;
-        case 'record': {
-          setMeasureError(null);
-          const id = `meas-${(measureIdRef.current += 1)}`;
-          // ⚑ Sampled HERE, at the click, from the same native-resolution pixels
-          // the other eyedroppers read - `px/py` are image coordinates, so they
-          // index straight into `getImageData()`. A colour read later would be a
-          // colour from a later image.
-          let rgb: readonly [number, number, number] | undefined;
-          if (result.tool === 'colour') {
-            const img = imageCanvasRef.current?.getImageData();
-            const p = result.points[0]!;
-            if (img) rgb = samplePixelRgb(img, p.x, p.y);
-          }
-          // `label` is a placeholder: the canvas label is DERIVED at render (see
-          // the measureOverlays memo), so a later re-calibration updates it.
-          // ⚑ fmtNum already returns '∞' for a non-finite number, so the old
-          // `finite ? fmtNum(slope) : '∞'` ternary was a second copy of that rule.
-          const overlay: MeasureOverlay = {
-            id,
-            points: result.points,
-            label: result.slope !== undefined ? fmtNum(result.slope) : '',
-            labelAt: result.labelAt,
-          };
-          applyMeasurements([{ id, tool: result.tool, overlay, ...(rgb ? { rgb } : {}) }, ...measurementsRef.current]);
-          setPending([]);
-          commit();
-          return;
-        }
-      }
-    },
-    [axes, config.axesKind, measureTool, settingScale, setPending, applyMeasurements, commit, canvasScale, session]
-  );
-
-  const selectMeasureTool = useCallback(
-    (t: MeasureToolId) => {
-      setMeasureTool(t);
-      setPending([]); // abandon a half-placed measurement when switching tools
-      setMeasureError(null);
-      setSettingScale(false); // and any in-progress Set-scale
-      setScaleDraftPx(null);
-    },
-    [setPending]
-  );
   /** Every measurement's DERIVED display form (checkpoint 82) - the single
    * source the card, the clipboard and the canvas labels all read. Recomputed
    * when the scale or the calibration changes, which is what makes Set-scale
@@ -3308,80 +3280,12 @@ export function Workspace() {
    * measurement is taken or the calibration moves (which is what makes a
    * re-calibrated key re-read every colour reading, the Set-scale rule again).
    */
-  const colourScale = useMemo<ColorScale | null>(() => {
-    // ⚑ ARMED COUNTS, not just recorded. Gating on existing measurements alone
-    // made the tips line deny the key until the first click had already been
-    // taken - the answer to "will this give me a value?" arriving one gesture
-    // after the question.
-    if (measureTool !== 'colour' && !measurements.some((m) => m.tool === 'colour')) return null;
-    const img = imageCanvasRef.current?.getImageData();
-    if (!img) return null;
-    const { scale } = buildColorScale(
-      sessionRef.current.getPlacedPoints(),
-      { data: img.data, width: img.width, height: img.height },
-      sessionRef.current.getOptions()['isLogValue'] === 'true'
-    );
-    return scale ?? null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measurements, measureTool, version]);
-
   // ⚑ The export handler is a callback that must not re-create on every scale
   // change, so it reads the key through a ref - the same shape `measureScaleRef`
   // already uses one line up, for the same reason.
   const colourScaleRef = useRef<ColorScale | null>(null);
   colourScaleRef.current = colourScale;
 
-  const measurementViews = useMemo(
-    () =>
-      measurements.map((m) => ({
-        id: m.id,
-        tool: m.tool,
-        ...measureDisplay(m, { scale: measureScale, axes, colourScale }),
-      })),
-    [measurements, measureScale, axes, colourScale]
-  );
-
-  const copyMeasurement = useCallback((m: Measurement) => {
-    void navigator.clipboard?.writeText(m.note ? `${m.value} (${m.note})` : m.value).catch(() => {});
-  }, []);
-  const deleteMeasurement = useCallback(
-    (id: string) => {
-      applyMeasurements(measurementsRef.current.filter((x) => x.id !== id));
-      commit();
-    },
-    [applyMeasurements, commit]
-  );
-  const copyAllMeasurements = useCallback(() => {
-    const text = measurementViews.map((m) => (m.note ? `${m.value} (${m.note})` : m.value)).join('\n');
-    void navigator.clipboard?.writeText(text).catch(() => {});
-  }, [measurementViews]);
-
-  // Set-scale flow: arm two clicks (startSetScale), then confirm turns their pixel
-  // separation + the typed known distance into a px->unit ratio.
-  const startSetScale = useCallback(() => {
-    setSettingScale(true);
-    setScaleDraftPx(null);
-    setPending([]);
-    setMeasureError(null);
-  }, [setPending]);
-  const cancelSetScale = useCallback(() => {
-    setSettingScale(false);
-    setScaleDraftPx(null);
-    setPending([]);
-  }, [setPending]);
-  const confirmSetScale = useCallback(() => {
-    const known = parseFloat(scaleValueInput);
-    if (scaleDraftPx == null || !Number.isFinite(known) || known <= 0) {
-      setMeasureError('Enter a positive known distance to set the scale.');
-      return;
-    }
-    applyMeasureScale({ unitPerPx: known / scaleDraftPx, unit: scaleUnitInput.trim() || 'unit' });
-    setSettingScale(false);
-    setScaleDraftPx(null);
-    setPending([]);
-    setMeasureError(null);
-    commit();
-  }, [scaleValueInput, scaleUnitInput, scaleDraftPx, setPending, applyMeasureScale, commit]);
 
   const handleImageClick = useCallback(
     (px: number, py: number) => {
@@ -3721,7 +3625,7 @@ export function Workspace() {
     setActiveMeasure({ id, vertex });
     setActivePointIndex(null);
     setActiveHandleKey(null);
-  }, []);
+  }, [setActiveMeasure]);
 
   // --- Error-bar capture (checkpoint 79) -------------------------------------
   // The drag IS the link: press a datum of the target series, drag out to the
@@ -4333,7 +4237,7 @@ export function Workspace() {
       bump();
       return true;
     },
-    [history, bump, markClean, applyMeasurements, applyMeasureScale, restoreHeatmapGrid, setPending, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle]
+    [history, bump, markClean, applyMeasurements, applyMeasureScale, restoreHeatmapGrid, setPending, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle, measureIdRef, setScaleDraftPx, setSettingScale]
   );
 
   // === Multi-figure session (checkpoint 110, design §1/§8) ===
@@ -4394,7 +4298,7 @@ export function Workspace() {
       if (fromPersistedSource) markClean();
       bump();
     },
-    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setPending, setSourcePdf, applyPdfState]
+    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setPending, setSourcePdf, applyPdfState, setScaleDraftPx, setSettingScale]
   );
 
   /** Switch the active figure. Stashes the live state back into the current slot
@@ -6086,7 +5990,7 @@ export function Workspace() {
     const m = measurements.find((x) => x.id === activeMeasure.id);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (mode !== 'measure' || !m || activeMeasure.vertex >= m.overlay.points.length) setActiveMeasure(null);
-  }, [activeMeasure, mode, measurements]);
+  }, [activeMeasure, mode, measurements, setActiveMeasure]);
 
   // Drop a stale marquee selection (Select tool): its indices are only meaningful
   // in Select mode, against the CURRENT active series. Leaving Select mode is the
@@ -6516,38 +6420,6 @@ export function Workspace() {
 
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
-  const measureReference: MeasureRef =
-    measureTool === 'slope'
-      ? axes && config.axesKind === 'xy'
-        ? { kind: 'chart' }
-        : { kind: 'none' }
-      : measureTool === 'distance' || measureTool === 'area'
-        ? measureScale
-          ? { kind: 'scale', perPx: `1 px = ${fmtNum(measureScale.unitPerPx)} ${measureScale.unit}` }
-          : { kind: 'none' }
-        : measureTool === 'colour'
-          // ⚑⚑ A COLOUR IS NOT MEASURED IN DEGREES. This branch was the ANGLE
-          // fallback and it caught every tool that was not one of the three
-          // named above - so the new instrument inherited "Measured in degrees",
-          // which is the shape of defect a fallback branch always has: it is
-          // right until someone adds a case, and then it is confidently wrong.
-          // The reference for a colour is the KEY, or the absence of one.
-          ? colourScale
-            ? { kind: 'colour-key' }
-            : { kind: 'colour-only' }
-          : { kind: 'degrees' }; // angle
-  const setScaleDraft: SetScaleDraft | null =
-    settingScale && scaleDraftPx != null
-      ? {
-          px: scaleDraftPx,
-          value: scaleValueInput,
-          unit: scaleUnitInput,
-          onValueChange: setScaleValueInput,
-          onUnitChange: setScaleUnitInput,
-          onConfirm: confirmSetScale,
-          onCancel: cancelSetScale,
-        }
-      : null;
 
   // Curve Fit + Geometry rail fly-outs (v0.8), moved off the overflowing top
   // bar. Extracted to consts so their rail placement is a one-liner -- Curve Fit
