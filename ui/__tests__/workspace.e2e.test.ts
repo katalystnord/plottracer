@@ -4636,7 +4636,7 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
 
     // ⚑ AND THE KEY IS ON SCREEN. A mark nothing explains is tribal knowledge:
     // the persona this project designs against can only use what he sees.
-    expect(await textOf('supplied-legend')).toContain('not read off the figure');
+    expect(await textOf('supplied-legend')).toContain('user edited value');
   });
 
   it('⚑ A4: moving the point takes the brackets off - it was read off the pixels again', async () => {
@@ -7590,7 +7590,7 @@ describe('spider charts', () => {
     expect(await textOf('spider-cell-0-0')).toMatch(/^\[75/);
     // ...and the key to the mark is on screen, in the same words every other
     // type shows it in.
-    expect(await textOf('supplied-legend')).toContain('not read off the figure');
+    expect(await textOf('supplied-legend')).toContain('user edited value');
     // ...and only that point moved: the other two axes still read what was clicked.
     // (Matched loosely, like the off-axis test above: the canvas is fitted, so the
     // original clicks landed at the nearest device pixel rather than at exact

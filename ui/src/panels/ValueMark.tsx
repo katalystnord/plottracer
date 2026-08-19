@@ -47,6 +47,16 @@ export function suppliedBySource(source?: string): boolean {
  * the panel says what the brackets mean, and nothing else on screen does. It
  * appears with the first bracketed value and disappears with the last, so it
  * costs a panel that has none of them nothing at all.
+ *
+ * ⚑⚑ FOUR WORDS, David's call (2026-08-19), shown three candidate lengths at
+ * the panel's real width: *"shortest possible"*, then the wording itself -
+ * *"user edited value"*. The two clauses that came off were
+ * a HOW ("move the point to re-read it") and a WHERE ("exports name the source
+ * in their own column") - the first is discoverable by doing it, the second is
+ * in MANUAL.md and belongs to a file the reader is not looking at yet. Only the
+ * definition has to be here, because only the definition cannot be found any
+ * other way. ▶ A legend earns one line by defining a mark, not by teaching the
+ * feature behind it.
  */
 export function SuppliedLegend({ shown }: { shown: boolean }) {
   if (!shown) return null;
@@ -59,8 +69,7 @@ export function SuppliedLegend({ shown }: { shown: boolean }) {
       data-testid="supplied-legend"
       style={{ padding: '4px 2px 0', color: theme.color.text.legend, fontSize: 12 }}
     >
-      <code>[ ]</code> = a value you entered, not read off the figure. Move the point to
-      re-read it; exports name the source in their own column.
+      <code>[ ]</code> = user edited value
     </div>
   );
 }
