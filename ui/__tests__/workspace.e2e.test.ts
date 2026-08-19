@@ -8690,7 +8690,11 @@ describe('heatmap capture (v2.2)', () => {
     await openHeatmapGrid();
     await page.getByTestId('heatmap-add-column').click();
     await page.waitForTimeout(400);
-    expect(await textOf('heatmap-declared-grid')).toMatch(/6 columns/);
+    // ⚑ The GRID's own count is on the summary; the line beneath it now states
+    // the DECLARATION, because a grid the user has added to did not come from
+    // the calibration and must stop saying it did (E6).
+    expect(await textOf('heatmap-grid-summary')).toMatch(/6 × 4 cells/);
+    expect(await textOf('heatmap-declared-grid')).toBe('Calibration declares 5 columns × 4 rows');
     expect(await textOf('heatmap-cells-summary')).toMatch(/24 cells read/);
 
     // …and DETECT is a grid change too. Before this fix the table stayed at 24
@@ -8936,7 +8940,10 @@ describe('heatmap capture (v2.2)', () => {
 
     await page.getByTestId('heatmap-add-column').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-declared-grid')).toMatch(/6 columns × 4 rows/);
+    // Same rule as the sibling above: 6 placed against 5 declared, so the line
+    // says what was DECLARED and the summary carries what is there.
+    expect(await textOf('heatmap-grid-summary')).toMatch(/6 × 4 cells/);
+    expect(await textOf('heatmap-declared-grid')).toBe('Calibration declares 5 columns × 4 rows');
     // The new boundary announces WHERE it went, in the figure's own units - a
     // cell that silently split somewhere in a six-column grid is a change the
     // user has to hunt for.
@@ -8958,7 +8965,11 @@ describe('heatmap capture (v2.2)', () => {
     // A row boundary is the same gesture on the other axis, and the card says so.
     await page.getByTestId('heatmap-add-row').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 5 rows/);
+    // ⚑ The grid is 5 × 5 now and the calibration still declares 4 rows, so the
+    // summary carries what is there and the line beneath states the
+    // declaration - the same split as the column case above (E6).
+    expect(await textOf('heatmap-grid-summary')).toMatch(/5 × 5 cells/);
+    expect(await textOf('heatmap-declared-grid')).toBe('Calibration declares 5 columns × 4 rows');
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Row boundary at y = /);
   });
 

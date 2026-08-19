@@ -7652,7 +7652,8 @@ export function Workspace() {
                   applyHeatmapLabels(x, y);
                 }}
                 onCommitPendingEdit={commitPendingEdit}
-                regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid, heatmapCounts())}
+                regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid)}
+                declared={heatmapCounts()}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
                 yLabelCoverage={labelCoverage(heatmapLabels.y, Math.max(0, (heatmapShownGrid?.yDividers.length ?? 1) - 1))}
                 error={heatmapError}

@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { heatmapGridLine } from '../../../engine/heatmapRun.js';
 
 /**
  * The heatmap's GRID DEFINITION - a fold-down on the calibration card (v2.2).
@@ -76,6 +77,9 @@ export interface HeatmapCardProps {
    * ignore it.
    */
   regenerateWarning: string | null;
+  /** What the CALIBRATION declared, so the line under the summary can say
+   * whether the grid actually came from it (v2.3, E6). */
+  declared: { columns: number; rows: number };
   /** Detection's own report - agreement, a miss, or why nothing could be read.
    *
    * ⚑ THERE IS NO `summary` PROP. The read's own summary - "20 cells read; 3
@@ -105,6 +109,7 @@ export function HeatmapCard({
   xLabelCoverage,
   yLabelCoverage,
   regenerateWarning,
+  declared,
   error,
   canRead,
 }: HeatmapCardProps) {
@@ -119,9 +124,7 @@ export function HeatmapCard({
             never asked - so the panel asked again, and the two answers could
             disagree. The declaration is shown here, never re-collected. */}
         <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
-          {gridSize
-            ? `${gridSize.columns} columns × ${gridSize.rows} rows, from the calibration - drag a boundary to adjust`
-            : 'Calibrate the axes to see the grid.'}
+          {heatmapGridLine(gridSize, declared)}
         </span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>

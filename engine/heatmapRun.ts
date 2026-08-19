@@ -872,30 +872,50 @@ export function labelOrderReversed(
  * with nothing on screen saying so. Tenet 9: say what is, and let the user
  * choose. Null when there is nothing to warn about.
  */
-export function heatmapRegenerateWarning(
-  grid: HeatmapState | null,
+/**
+ * The line under the grid summary: where the grid stands against what was
+ * declared.
+ *
+ * ⚑⚑ IT USED TO CLAIM A PROVENANCE IT DID NOT HAVE. The card printed the GRID's
+ * own counts with the words *"from the calibration"* - true while the two
+ * agree, and a false statement exactly when they do not, which is when the user
+ * is reading it. David, on the built app: *"Should all of this text still be
+ * there?"* - looking at `3 columns × 2 rows, from the calibration` sitting one
+ * line above `The grid has 3 columns but the calibration declares 5`.
+ *
+ * ⚑ SO IT CARRIES THE HALF THAT IS MISSING, never the half already on screen.
+ * The grid's own counts are in the summary above it (`Grid - 3 × 2 cells`), so
+ * when the two disagree this line states the DECLARATION and stops. Same
+ * sentence whichever way they disagree: a boundary added by hand puts the grid
+ * ahead of the declaration, and `6 of 5 columns` would be nonsense.
+ *
+ * ⚑ A count nobody has declared yet is not a disagreement - a value axis
+ * mid-walk has NaN, and the line must not read "declares NaN".
+ */
+export function heatmapGridLine(
+  grid: { columns: number; rows: number } | null,
   declared: { columns: number; rows: number }
-): string | null {
+): string {
+  if (grid === null) return 'Calibrate the axes to see the grid.';
+  const known = Number.isFinite(declared.columns) && Number.isFinite(declared.rows);
+  const agrees = !known || (grid.columns === declared.columns && grid.rows === declared.rows);
+  return agrees
+    ? `${grid.columns} columns × ${grid.rows} rows, from the calibration`
+    : `Calibration declares ${declared.columns} columns × ${declared.rows} rows`;
+}
+
+export function heatmapRegenerateWarning(grid: HeatmapState | null): string | null {
   if (grid === null) return null;
-  const columns = Math.max(0, grid.xDividers.length - 1);
-  const rows = Math.max(0, grid.yDividers.length - 1);
-  const parts = [
-    'Changing the number of columns or rows, or the tick convention, rebuilds this grid and discards the boundaries it has.',
-  ];
-  // ⚑ A count nobody has declared yet is not a disagreement. Mid-walk a value
-  // axis has no number at all, and NaN formatted into a sentence would read as
-  // "the calibration declares NaN".
-  const mismatch = (found: number, want: number, noun: string): string | null =>
-    Number.isFinite(want) && want !== found
-      ? `The grid has ${found} ${noun} but the calibration declares ${want}.`
-      : null;
-  const disagreements = [
-    mismatch(columns, declared.columns, 'columns'),
-    mismatch(rows, declared.rows, 'rows'),
-  ].filter((s): s is string => s !== null);
-  // The disagreement comes FIRST: it describes what is wrong now, where the
-  // caution describes what a future action would cost.
-  return [...disagreements, ...parts].join(' ');
+  // ⚑⚑ THE COST, AND ONLY THE COST (v2.3, E6). This used to prepend the
+  // disagreement - "The grid has 3 columns but the calibration declares 5" -
+  // and that is how the card came to state one fact three times: detection's
+  // report, a declaration line claiming a provenance it did not have, and this.
+  // The disagreement belongs to `heatmapGridLine`, beside the grid's own
+  // counts; what a FUTURE action would cost is a different claim and stays.
+  // ⚑ AND THE COUNTS LEFT THE SIGNATURE WITH THE SENTENCES THAT USED THEM. A
+  // parameter nothing reads is a claim that this still depends on the
+  // declaration, which the next reader would have to disprove.
+  return 'Changing the number of columns or rows, or the tick convention, rebuilds this grid and discards the boundaries it has.';
 }
 
 /**
@@ -1244,8 +1264,11 @@ export function detectGrid(
       // unconstrained path and proposed everything it found. Making the count
       // universal sent every axis down the checked path, where one faint rule
       // turned a good proposal into nothing at all.
+      // ⚑ *"the 1 are placed"* - the old wording restated the found count in a
+      // clause that does not survive the singular, and said nothing the first
+      // half had not. What the reader needs is what was found and what to do.
       notes.push(
-        `Found ${report.found} of the ${report.expected} boundaries needed for ${count} ${label} - the ${report.found} are placed, add the missing ${report.missing} by hand.`
+        `Found ${report.found} of the ${report.expected} boundaries for ${count} ${label}; add the missing ${report.missing} by hand.`
       );
       return toData(proposeAllDividers(candidates), lo, hi);
     }

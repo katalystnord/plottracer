@@ -26,6 +26,7 @@ import {
   labelsForCells,
   readHeatmapCells,
   heatmapRegenerateWarning,
+  heatmapGridLine,
   removeDividerHandle,
   setCellReading,
   setCellReadingAt,
@@ -858,58 +859,74 @@ describe('a user’s own reading of a cell', () => {
  * would leave a grid describing a frame that no longer exists. Tenet 9 - record
  * what is, do not choose for the reader.
  */
+describe('E6 - the line under the grid says where the grid stands, and nothing twice', () => {
+  const grid = (columns: number, rows: number) => ({ columns, rows });
+
+  it('names the calibration as the source only when the grid actually came from it', () => {
+    expect(heatmapGridLine(grid(5, 4), { columns: 5, rows: 4 })).toBe(
+      '5 columns × 4 rows, from the calibration'
+    );
+  });
+
+  it('⚑⚑ stops claiming "from the calibration" when the grid does NOT match it', () => {
+    // David, on the built app, looking at a card that said "3 columns × 2 rows,
+    // from the calibration" one line above "the calibration declares 5": the
+    // words were false exactly when the user was reading them.
+    // ⚑ The grid's OWN counts are on the summary line above ("Grid - 3 × 2
+    // cells"), so this line carries the half that was missing rather than
+    // repeating the half that was not.
+    expect(heatmapGridLine(grid(3, 2), { columns: 5, rows: 4 })).toBe(
+      'Calibration declares 5 columns × 4 rows'
+    );
+  });
+
+  it('reports a ROW disagreement too, not only a column one', () => {
+    expect(heatmapGridLine(grid(5, 2), { columns: 5, rows: 4 })).toBe(
+      'Calibration declares 5 columns × 4 rows'
+    );
+  });
+
+  it('says it the same way when the user has added MORE than the calibration declares', () => {
+    // A boundary added by hand puts the grid ahead of the declaration - the
+    // same disagreement from the other side, and the line must not read "6 of 5".
+    expect(heatmapGridLine(grid(6, 4), { columns: 5, rows: 4 })).toBe(
+      'Calibration declares 5 columns × 4 rows'
+    );
+  });
+
+  it('is quiet about a count nobody has declared yet', () => {
+    // A value axis mid-walk has NaN counts; a line built from those would read
+    // "the calibration declares NaN".
+    expect(heatmapGridLine(grid(5, 4), { columns: NaN, rows: NaN })).toBe(
+      '5 columns × 4 rows, from the calibration'
+    );
+  });
+
+  it('asks for a calibration when there is no grid at all', () => {
+    expect(heatmapGridLine(null, { columns: 5, rows: 4 })).toBe('Calibrate the axes to see the grid.');
+  });
+});
+
 describe('C3/C4 - the cost of a count or convention change, said first', () => {
   it('warns only when there is a grid to lose', () => {
-    expect(heatmapRegenerateWarning(null, { columns: 5, rows: 4 })).toBeNull();
-    const warning = heatmapRegenerateWarning(
-      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
-      { columns: 5, rows: 4 }
-    );
+    expect(heatmapRegenerateWarning(null)).toBeNull();
+    const warning = heatmapRegenerateWarning({ xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] });
     expect(warning).toMatch(/count|number of columns/i);
     expect(warning).toMatch(/tick|convention|centre/i);
     // It names the LOSS, not merely the event.
     expect(warning).toMatch(/discard|lose|rebuild/i);
   });
 
-  it('REPORTS a grid that disagrees with the declared count, naming both numbers', () => {
-    // ⚑ The state a count change leaves behind: the calibration now says six
-    // columns, the grid still describes five, and nothing on screen said so.
-    const warning = heatmapRegenerateWarning(
-      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
-      { columns: 6, rows: 4 }
-    );
-    expect(warning).toMatch(/5/);
-    expect(warning).toMatch(/6/);
-    expect(warning).toMatch(/column/i);
-  });
-
-  it('reports a ROW disagreement too, not only a column one', () => {
-    // ⚑ Found by mutation elsewhere in this file: every count test used x,
-    // because the y branch was never exercised. A transposition would survive.
-    const warning = heatmapRegenerateWarning(
-      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
-      { columns: 5, rows: 7 }
-    );
-    expect(warning).toMatch(/row/i);
-    expect(warning).toMatch(/7/);
-  });
-
-  it('says nothing about a disagreement when the counts agree', () => {
-    const warning = heatmapRegenerateWarning(
-      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
-      { columns: 5, rows: 4 }
-    )!;
-    expect(warning).not.toMatch(/does not match|disagree/i);
-  });
-
-  it('is quiet about a count nobody has declared yet', () => {
-    // A value axis mid-walk has NaN counts; a warning built from those would
-    // read "the grid has 5 columns but the calibration declares NaN".
-    const warning = heatmapRegenerateWarning(
-      { xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] },
-      { columns: NaN, rows: NaN }
-    )!;
-    expect(warning).not.toMatch(/NaN/);
+  it('⚑⚑ states the COST and leaves the disagreement to the line that owns it', () => {
+    // ⚠️ IT USED TO SAY BOTH, and that is how the card came to state one
+    // disagreement three times over: detection's report, a declaration line
+    // claiming a provenance it did not have, and this warning repeating them.
+    // The disagreement moved to `heatmapGridLine`, where the grid's own counts
+    // already are; a caution about what a FUTURE action costs is a different
+    // claim and stays here.
+    const warning = heatmapRegenerateWarning({ xDividers: [0, 1, 2, 3, 4, 5], yDividers: [0, 1, 2, 3, 4] })!;
+    expect(warning).toMatch(/discard|lose|rebuild/i);
+    expect(warning).not.toMatch(/declares/i);
   });
 });
 
