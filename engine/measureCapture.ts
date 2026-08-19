@@ -19,8 +19,11 @@ export interface MeasureClickInput {
   pending: readonly Point2D[];
   /** Set-scale is armed: two clicks a known real distance apart. */
   settingScale: boolean;
-  /** Null behaves as Area - accumulate until the user closes it. */
-  tool: MeasureTool | null;
+  /** Null behaves as Area - accumulate until the user closes it.
+   * ⚑ `colour` is an instrument in the same panel rather than a geometric
+   * measurement, so it is NOT in `core/measurementValues.ts`'s union: that
+   * module computes numbers out of geometry, and a colour has none. */
+  tool: MeasureTool | 'colour' | null;
   /** A slope needs a calibrated XY chart; nothing else does. */
   slopeReady: boolean;
   /** Pixel → data, for the slope only. */
@@ -34,7 +37,7 @@ export type MeasureClickResult =
   | { kind: 'scale-draft'; points: Point2D[]; distancePx: number }
   | { kind: 'refuse'; message: string }
   /** Close the measurement. `slope` is the raw quotient, for the slope tool only. */
-  | { kind: 'record'; tool: MeasureTool; points: Point2D[]; labelAt: Point2D; slope?: number };
+  | { kind: 'record'; tool: MeasureTool | 'colour'; points: Point2D[]; labelAt: Point2D; slope?: number };
 
 const mid = (a: Point2D, b: Point2D): Point2D => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
@@ -83,6 +86,15 @@ export function resolveMeasureClick({
     const [a, b] = points as [Point2D, Point2D];
     // Both dots stay visible beneath the form.
     return { kind: 'scale-draft', points, distancePx: Math.hypot(b.x - a.x, b.y - a.y) };
+  }
+
+  // ⚑⚑ ONE CLICK IS THE WHOLE MEASUREMENT. Every other tool here collects a
+  // geometry - two ends, a vertex and two arms, a polygon - and a colour has
+  // none: the pixel you pointed at IS the reading, so there is no second point
+  // to wait for and nothing to close. Placed above the geometric tools because
+  // it shares none of their accumulation.
+  if (tool === 'colour') {
+    return { kind: 'record', tool: 'colour', points: [point], labelAt: point };
   }
 
   if (tool === 'slope') {

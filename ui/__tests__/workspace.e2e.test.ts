@@ -8855,6 +8855,55 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-grid-summary')).toMatch(/cells/i);
   }, 30000);
 
+  it('⚑⚑ theme C: the Colour instrument reads a heatmap cell, and gives its VALUE too', async () => {
+    // ⚑ It is an INSTRUMENT, not a heatmap feature - it sits with the ruler and
+    // works on every type. What the heatmap adds is a calibrated key, which is
+    // what turns a colour into a value: the ruler's own rule (pixels until a
+    // scale exists, units after) one dimension over.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await enterMeasureMode();
+    await page.getByTestId('measure-tool-colour').click();
+    await page.waitForTimeout(150);
+
+    // A pixel well inside the plot, so the reading is a cell's fill.
+    await clickAt(300, 300);
+    await page.waitForTimeout(300);
+
+    const row = page.getByTestId('measurements-panel');
+    // The colour is always there, and it is a real hex rather than a name.
+    expect(await row.textContent()).toMatch(/#[0-9a-f]{6}/i);
+    // ...and the swatch beside it, because a hex is not a colour to the eye -
+    // which is the whole point of a second opinion you can check by looking.
+    expect(await page.locator('[data-testid^="measure-swatch-"]').count()).toBe(1);
+    // The key is calibrated here, so the row carries a value after the panel's
+    // own middle dot - the same idiom the ruler's "· set a scale" row uses.
+    expect(await row.textContent()).toMatch(/#[0-9a-f]{6}\s*·\s*-?[\d.]/i);
+    // ⚑ AND THE PANEL SAYS WHAT THE READING IS AGAINST. This line is shared with
+    // the ruler, and its fallback branch was ANGLE - so a colour measurement
+    // arrived announcing "Measured in degrees", which is what a catch-all branch
+    // always does the first time a case is added past it.
+    expect(await textOf('measure-ref')).toContain('colour key');
+  }, 30000);
+
+  it('⚑⚑ theme C: the same instrument on a chart with NO key reports the colour, and says so', async () => {
+    // The half that makes it a general tool rather than a heatmap feature: an XY
+    // figure has no colour key, so there is no value to give - and the panel
+    // says which of the two readings you are getting instead of leaving the
+    // missing number to be noticed.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await enterMeasureMode();
+    await page.getByTestId('measure-tool-colour').click();
+    await clickAt(250, 175);
+    await page.waitForTimeout(300);
+
+    const panel = await textOf('measurements-panel');
+    expect(panel).toMatch(/#[0-9a-f]{6}/i);
+    expect(panel).not.toMatch(/#[0-9a-f]{6}\s*·/i);
+    expect(await textOf('measure-ref')).toContain('no colour key');
+  }, 30000);
+
   it('⚑⚑ picking a cell does not MOVE the cell you picked', async () => {
     // David, driving the built app: *"The cell jumps around when you try to
     // select it."* The picked-cell line renders nothing until something is

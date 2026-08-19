@@ -20,7 +20,15 @@ import { type ReactNode } from 'react';
 import styled from '@emotion/styled';
 import { theme, glassSurface } from './theme.js';
 
-export type MeasureToolId = 'distance' | 'angle' | 'area' | 'slope';
+/**
+ * ⚑⚑ `colour` IS AN INSTRUMENT, NOT A GEOMETRY (v2.3, theme C). It sits with
+ * the ruler because David corrected the scope: *"a general measurement tool… a
+ * reliable second opinion on pure colour measurements, that is useful in ALL
+ * types of graphs"* - not a heatmap eyedropper. It is deliberately absent from
+ * `core/measurementValues.ts`'s union, which computes numbers out of geometry
+ * and has none to compute here.
+ */
+export type MeasureToolId = 'distance' | 'angle' | 'area' | 'slope' | 'colour';
 
 export interface Measurement {
   id: string;
@@ -36,6 +44,10 @@ export type MeasureRef =
   | { kind: 'chart'; units?: string } // reuse the plot's axis calibration (data units)
   | { kind: 'scale'; perPx: string } // a dedicated px->real-world scale
   | { kind: 'degrees' } // angle needs no reference -- always degrees
+  /** A colour reading with a calibrated key behind it: colour AND value. */
+  | { kind: 'colour-key' }
+  /** A colour reading on a figure with no key: the colour, and only that. */
+  | { kind: 'colour-only' }
   | { kind: 'none' }; // pixels only, until a reference is chosen
 
 const Card = styled('div')({
@@ -114,6 +126,10 @@ export const measureIcons: Record<MeasureToolId, ReactNode> = {
   angle: S(<>{<path d="M3 3 L3 13 L13 13" />}<path d="M3 9 A6 6 0 0 0 9 13" /></>),
   area: S(<polygon points="3,6 8,3 13,7 11,13 5,12" />),
   slope: S(<>{<path d="M3 13 L3 3" />}<path d="M3 13 L13 13" />{<line x1="4" y1="12" x2="12" y2="4" />}</>),
+  // A pipette: the barrel angled like the other glyphs' strokes, with a filled
+  // tip - the drop it takes. Same 16x16 frame and 1.5 stroke as its siblings, so
+  // the row reads as one set of instruments rather than four plus a guest.
+  colour: S(<>{<path d="M12.5 3.5 L8 8" />}<path d="M10.5 1.5 L14.5 5.5" /><path d="M8 8 L4 12 L3 13.5 L2.5 13 L4 12" /><circle cx="4.6" cy="11.4" r="1.6" fill="currentColor" stroke="none" /></>),
 };
 const scaleIcon = S(<>{<line x1="2" y1="8" x2="14" y2="8" />}<line x1="2" y1="5" x2="2" y2="11" /><line x1="14" y1="5" x2="14" y2="11" /><line x1="6" y1="6.5" x2="6" y2="9.5" /><line x1="10" y1="6.5" x2="10" y2="9.5" /></>);
 const XIcon = () => (
@@ -127,6 +143,10 @@ const TOOLS: { id: MeasureToolId; label: string; hint: string }[] = [
   { id: 'angle', label: 'Angle', hint: 'Click the vertex, then the two arms.' },
   { id: 'area', label: 'Area', hint: 'Click the polygon corners, then Finish (or Enter) to close.' },
   { id: 'slope', label: 'Slope', hint: "Click two points → slope of the line in the axes' units." },
+  // ⚑ The hint states BOTH halves, because which one you get depends on the
+  // figure rather than on anything you did - the ruler's own "set a scale for
+  // real units" shape, one dimension over.
+  { id: 'colour', label: 'Colour', hint: 'Click a pixel to read its colour - and its value, where a colour key is calibrated.' },
 ];
 
 /** The in-progress Set-scale form: after clicking two points a known distance

@@ -29,7 +29,7 @@ export type GuidanceConfig = Pick<AxesTypeConfig<CalibratedAxes>, 'id' | 'axesKi
  * measure tool without teaching this file about it fails to compile at the call
  * site rather than silently falling through to the Area branch.
  */
-export type GuidanceMeasureTool = 'distance' | 'angle' | 'area' | 'slope';
+export type GuidanceMeasureTool = 'distance' | 'angle' | 'area' | 'slope' | 'colour';
 
 export interface GuidanceTipInput {
   canvasHasImage: boolean;
@@ -86,6 +86,8 @@ export interface GuidanceTipInput {
   hasScaleDraft: boolean;
   measureError: string | null;
   measureTool: GuidanceMeasureTool | null;
+  /** A calibrated colour key exists, so a colour reading can also give a value. */
+  hasColourKey?: boolean;
   /** The measure scale's unit, or null when nothing has set one. */
   measureScaleUnit: string | null;
   /** The axes are built - `session.getAxes()` is non-null. */
@@ -151,6 +153,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     hasScaleDraft,
     measureError,
     measureTool,
+    hasColourKey,
     measureScaleUnit,
     isCalibrated,
     config,
@@ -214,6 +217,17 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       return pendingMeasureCount === 1
         ? 'Slope - click the second point on the line.'
         : 'Slope - click the first point on the line.';
+    }
+    // ⚑ COLOUR SAYS WHICH HALF IT CAN GIVE YOU, before you click. The reading
+    // is a colour on every graph type and a VALUE only where a key exists, and
+    // which one you get depends on the figure rather than on anything the user
+    // did - so the line names the condition instead of leaving them to notice
+    // the missing number. The ruler's own "use Set scale for real units", one
+    // dimension over.
+    if (measureTool === 'colour') {
+      return hasColourKey
+        ? 'Colour - click a pixel to read its colour and its value on the key.'
+        : 'Colour - click a pixel to read its colour (no colour key calibrated, so there is no value to give).';
     }
     if (measureTool === 'distance') {
       const where = measureScaleUnit ?? 'pixels - use Set scale for real units';

@@ -586,6 +586,20 @@ reason - its ink never moves, so it can always be handed back to the colour key.
 the same fact rides in its own `<column> source` column (`user` or `pixel`), which
 appears only for a series you actually typed into.
 
+**The Colour tool is a second opinion, on every graph type.** It sits with the
+ruler under **Measure**: click any pixel and the Measurements panel records what
+that ink actually is - a swatch and its hex code - independently of whatever the
+active graph type derived from it. Use it to check a bar's colour against a
+legend, to tell two series apart where a trace merged them, or to read a point a
+heatmap's grid does not cover.
+Where the figure has a **calibrated colour key**, the row also carries the value
+that key gives: `#440154 · 12.57`. That is the ruler's own rule one dimension
+over - a distance reads in pixels until you set a scale, a colour reads as a
+colour until a key exists. If the key answers one colour in two places, which a
+diverging key genuinely does, the row says so instead of picking one: an
+ambiguous reading is not a number until you resolve it. Colour measurements copy
+and export like any other, with the colour in its own column.
+
 **Guide-point traces carry a `role` column.** If a series was traced with **Guide
 points**, its export gains a `role` telling you where each number came from:
 `anchor` for a point you placed by eye, `interpolated` for one the spline filled in

@@ -18,6 +18,11 @@ export interface MeasurementView {
   tool: MeasureToolId;
   value: string;
   note?: string;
+  /** A Colour measurement's own reading, drawn as a box beside its hex.
+   * ⚑ The row David settled is `🔬 ▉ #440154 · 12.57`: the swatch is there
+   * because a hex code is not a colour to anyone reading quickly, and the point
+   * of a SECOND OPINION is that you can check it against the figure by eye. */
+  swatch?: readonly [number, number, number];
 }
 
 export interface MeasurementsCardProps {
@@ -42,6 +47,10 @@ export function MeasurementsCard({ visible, views, reference, onCopyAll, onCopy,
             {reference.kind === 'chart' && <>Ref: <b>chart axes</b>{reference.units ? ` (${reference.units})` : ''}</>}
             {reference.kind === 'scale' && <>Scale: <b>{reference.perPx}</b></>}
             {reference.kind === 'degrees' && <>Measured in <b>degrees</b></>}
+            {reference.kind === 'colour-key' && <>Read against the <b>colour key</b></>}
+            {reference.kind === 'colour-only' && (
+              <span style={{ color: theme.color.text.legend }}>Colour only (no colour key calibrated)</span>
+            )}
             {reference.kind === 'none' && <span style={{ color: theme.color.text.legend }}>Pixels (set a scale or calibrate)</span>}
           </span>
           {views.length > 0 && (
@@ -66,6 +75,23 @@ export function MeasurementsCard({ visible, views, reference, onCopyAll, onCopy,
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: `1px solid ${theme.color.background.canvas}` }}
             >
               <span style={{ display: 'inline-flex', flex: '0 0 auto', color: theme.color.icon.active }}>{measureIcons[m.tool]}</span>
+              {m.swatch && (
+                <span
+                  data-testid={`measure-swatch-${m.id}`}
+                  title={`rgb(${m.swatch.join(', ')})`}
+                  style={{
+                    flex: '0 0 auto',
+                    width: 12,
+                    height: 12,
+                    borderRadius: 2,
+                    // ⚑ A border, because the measured colour can be the panel's
+                    // own background - white ink on a white figure would
+                    // otherwise read as no swatch at all rather than as white.
+                    border: `1px solid ${theme.color.border.regular}`,
+                    background: `rgb(${m.swatch.join(',')})`,
+                  }}
+                />
+              )}
               <span style={{ flex: 1, minWidth: 0 }}>
                 <b>{m.value}</b>
                 {m.note && <span style={{ color: theme.color.text.legend }}> · {m.note}</span>}

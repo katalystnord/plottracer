@@ -72,6 +72,17 @@ export interface SerializedMeasurement {
   closed?: boolean;
   label: string;
   labelAt: { x: number; y: number };
+  /**
+   * The colour a Colour measurement read (v2.3, theme C) - absent for every
+   * other tool, and for any file written before the instrument existed.
+   *
+   * ⚑ STORED, unlike every other measured quantity here, and for a reason the
+   * record cares about: a colour is the READING itself rather than a value
+   * derived from geometry, and re-sampling it on load would hand back whatever
+   * the image says NOW - after a grid removal, an enhancement, or a crop that
+   * moved the ink. The value it implies is still derived, through the key.
+   */
+  rgb?: readonly [number, number, number];
 }
 export interface SerializedMeasureScale {
   unitPerPx: number;

@@ -31,7 +31,9 @@ import {
 import type { TickConvention } from '../../core/categoryAxis.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
-import { valueAtPosition } from '../../algorithms/colorScale.js';
+import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
+import { colourMeasureReading } from '../../engine/colourMeasure.js';
+import type { MeasurementCsvRow } from '../../engine/csvExport.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick } from '../../engine/canvasClickRoute.js';
 import { resolveMeasureClick, snapToNearestPoint } from '../../engine/measureCapture.js';
@@ -458,6 +460,20 @@ interface RecordedMeasurement {
   id: string;
   tool: MeasureToolId;
   overlay: MeasureOverlay;
+  /**
+   * The colour this measurement read, for the Colour instrument only.
+   *
+   * ⚑⚑ THE ONE THING HERE THAT IS STORED RATHER THAN DERIVED, and deliberately.
+   * Everything else on this record is pixels, because a value frozen at capture
+   * is what made Set-scale one-way once. A COLOUR is not a derived value - it is
+   * the reading itself, at full fidelity, and re-sampling it at render would
+   * mean a later Grid removal or image enhancement silently rewrote a
+   * measurement taken before it. We RECORD what the instrument saw.
+   * ⚑ Its VALUE stays derived, through the colour key, so a re-calibrated key
+   * re-reads every colour measurement exactly as Set-scale re-reads every
+   * distance.
+   */
+  rgb?: readonly [number, number, number];
 }
 
 /**
@@ -478,8 +494,36 @@ interface RecordedMeasurement {
  */
 function measureDisplay(
   m: RecordedMeasurement,
-  ctx: { scale?: MeasureScaleState | null; axes?: { pixelToData(px: number, py: number): number[] } | null }
-): { value: string; note?: string } {
+  ctx: {
+    scale?: MeasureScaleState | null;
+    axes?: { pixelToData(px: number, py: number): number[] } | null;
+    /** The calibrated colour key, where the figure has one. */
+    colourScale?: ColorScale | null;
+  }
+): { value: string; note?: string; swatch?: readonly [number, number, number] } {
+  // ⚑⚑ COLOUR FIRST, because it is not a geometry and the functions below
+  // compute numbers out of geometry. The type checker said so before this
+  // branch existed, which is the split working as intended.
+  if (m.tool === 'colour') {
+    if (!m.rgb) return { value: '-' };
+    const reading = colourMeasureReading(m.rgb, ctx.colourScale ?? null);
+    return {
+      value: rgbToHex(m.rgb),
+      swatch: m.rgb,
+      // ⚑ The panel's own `·` idiom, which is why this rides as the NOTE: the
+      // eyedropper row and the ruler row then read as one list rather than two
+      // conventions (`684.5 px · set a scale for real units`).
+      // ⚠️ AMBIGUITY IS NOT A NUMBER. A colour a diverging key answers twice
+      // gets the fact instead of one of the two answers - a second opinion that
+      // guesses is worse than none, because it is trusted exactly where the
+      // first opinion was unsure.
+      note: reading.ambiguous
+        ? 'the key gives this colour more than one value'
+        : reading.value !== null
+          ? fmtNum(reading.value)
+          : undefined,
+    };
+  }
   const raw = measurementValue(m.tool, m.overlay.points, ctx);
   if (!raw) return { value: '-' };
   const n = raw.values[0]!;
@@ -588,6 +632,7 @@ function toSerializedMeasurements(recorded: readonly RecordedMeasurement[]): Ser
     closed: m.overlay.closed,
     label: m.overlay.label,
     labelAt: m.overlay.labelAt,
+    ...(m.rgb ? { rgb: m.rgb } : {}),
   }));
 }
 function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): RecordedMeasurement[] {
@@ -595,6 +640,7 @@ function toRecordedMeasurements(serialized: readonly SerializedMeasurement[]): R
     id: m.id,
     tool: m.tool as MeasureToolId,
     overlay: { id: m.id, points: m.points, closed: m.closed, label: m.label, labelAt: m.labelAt },
+    ...(m.rgb ? { rgb: m.rgb } : {}),
   }));
 }
 
@@ -3304,6 +3350,21 @@ export function Workspace() {
         case 'record': {
           setMeasureError(null);
           const id = `meas-${(measureIdRef.current += 1)}`;
+          // ⚑ Sampled HERE, at the click, from the same native-resolution pixels
+          // the other eyedroppers read - `px/py` are image coordinates, so they
+          // index straight into `getImageData()`. A colour read later would be a
+          // colour from a later image.
+          let rgb: readonly [number, number, number] | undefined;
+          if (result.tool === 'colour') {
+            const img = imageCanvasRef.current?.getImageData();
+            if (img) {
+              const p = result.points[0]!;
+              const cx = Math.max(0, Math.min(img.width - 1, Math.round(p.x)));
+              const cy = Math.max(0, Math.min(img.height - 1, Math.round(p.y)));
+              const o = (cy * img.width + cx) * 4;
+              rgb = [img.data[o]!, img.data[o + 1]!, img.data[o + 2]!];
+            }
+          }
           // `label` is a placeholder: the canvas label is DERIVED at render (see
           // the measureOverlays memo), so a later re-calibration updates it.
           // ⚑ fmtNum already returns '∞' for a non-finite number, so the old
@@ -3314,7 +3375,7 @@ export function Workspace() {
             label: result.slope !== undefined ? fmtNum(result.slope) : '',
             labelAt: result.labelAt,
           };
-          applyMeasurements([{ id, tool: result.tool, overlay }, ...measurementsRef.current]);
+          applyMeasurements([{ id, tool: result.tool, overlay, ...(rgb ? { rgb } : {}) }, ...measurementsRef.current]);
           setPending([]);
           commit();
           return;
@@ -3338,14 +3399,46 @@ export function Workspace() {
    * source the card, the clipboard and the canvas labels all read. Recomputed
    * when the scale or the calibration changes, which is what makes Set-scale
    * retroactive instead of one-way. */
+  /**
+   * The calibrated colour key, for colour measurements to be read against.
+   *
+   * ⚑ BUILT ONLY WHEN SOMETHING NEEDS IT. `buildColorScale` re-samples the key
+   * out of the image, which is a full-canvas readback - so a figure with no
+   * colour measurement never pays for one, and the memo re-runs when a
+   * measurement is taken or the calibration moves (which is what makes a
+   * re-calibrated key re-read every colour reading, the Set-scale rule again).
+   */
+  const colourScale = useMemo<ColorScale | null>(() => {
+    // ⚑ ARMED COUNTS, not just recorded. Gating on existing measurements alone
+    // made the tips line deny the key until the first click had already been
+    // taken - the answer to "will this give me a value?" arriving one gesture
+    // after the question.
+    if (measureTool !== 'colour' && !measurements.some((m) => m.tool === 'colour')) return null;
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return null;
+    const { scale } = buildColorScale(
+      sessionRef.current.getPlacedPoints(),
+      { data: img.data, width: img.width, height: img.height },
+      sessionRef.current.getOptions()['isLogValue'] === 'true'
+    );
+    return scale ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measurements, measureTool, version]);
+
+  // ⚑ The export handler is a callback that must not re-create on every scale
+  // change, so it reads the key through a ref - the same shape `measureScaleRef`
+  // already uses one line up, for the same reason.
+  const colourScaleRef = useRef<ColorScale | null>(null);
+  colourScaleRef.current = colourScale;
+
   const measurementViews = useMemo(
     () =>
       measurements.map((m) => ({
         id: m.id,
         tool: m.tool,
-        ...measureDisplay(m, { scale: measureScale, axes }),
+        ...measureDisplay(m, { scale: measureScale, axes, colourScale }),
       })),
-    [measurements, measureScale, axes]
+    [measurements, measureScale, axes, colourScale]
   );
 
   const copyMeasurement = useCallback((m: Measurement) => {
@@ -4819,6 +4912,7 @@ export function Workspace() {
         id: m.id,
         tool: m.tool as MeasureToolId,
         overlay: { id: m.id, points: m.points, closed: m.closed, label: m.label, labelAt: m.labelAt },
+        ...(m.rgb ? { rgb: m.rgb } : {}),
       })),
       measureScale: result.measureScale,
       provenance: result.provenance, // where this figure came from (checkpoint 95)
@@ -4862,7 +4956,17 @@ export function Workspace() {
       // string -- core/measurementValues.ts is the one place a value is decided.
       // Resolved HERE because only the component holds the recorded overlays
       // and the measure scale; everything downstream of this is plain data.
-      const measures = measurementsRef.current.flatMap((m) => {
+      const measures = measurementsRef.current.flatMap<MeasurementCsvRow>((m) => {
+        // ⚑ A COLOUR reading is not geometry, so it does not go through
+        // `measurementValue` - it carries the colour it measured and, where a
+        // key could read it, the value that key gives. Ambiguous or keyless,
+        // the value is null and the cell is blank: what left the app is exactly
+        // what the instrument could say.
+        if (m.tool === 'colour') {
+          if (!m.rgb) return [];
+          const reading = colourMeasureReading(m.rgb, colourScaleRef.current);
+          return [{ tool: m.tool, value: reading.value, unit: '', colour: rgbToHex(m.rgb) }];
+        }
         const raw = measurementValue(m.tool, m.overlay.points, { scale: measureScaleRef.current, axes });
         return raw ? [{ tool: m.tool, value: raw.values[0]!, unit: raw.unit }] : [];
       });
@@ -6447,6 +6551,10 @@ export function Workspace() {
     hasScaleDraft: scaleDraftPx != null,
     measureError,
     measureTool,
+    // ⚑ Whether a colour reading can give a VALUE as well as a colour. Asked of
+    // the CALIBRATION rather than of the graph type: a key is a key, and the
+    // tool refuses to belong to one type (theme C).
+    hasColourKey: colourScale !== null,
     measureScaleUnit: measureScale ? measureScale.unit : null,
     isCalibrated: axes !== null,
     config,
@@ -6506,7 +6614,17 @@ export function Workspace() {
         ? measureScale
           ? { kind: 'scale', perPx: `1 px = ${fmtNum(measureScale.unitPerPx)} ${measureScale.unit}` }
           : { kind: 'none' }
-        : { kind: 'degrees' }; // angle
+        : measureTool === 'colour'
+          // ⚑⚑ A COLOUR IS NOT MEASURED IN DEGREES. This branch was the ANGLE
+          // fallback and it caught every tool that was not one of the three
+          // named above - so the new instrument inherited "Measured in degrees",
+          // which is the shape of defect a fallback branch always has: it is
+          // right until someone adds a case, and then it is confidently wrong.
+          // The reference for a colour is the KEY, or the absence of one.
+          ? colourScale
+            ? { kind: 'colour-key' }
+            : { kind: 'colour-only' }
+          : { kind: 'degrees' }; // angle
   const setScaleDraft: SetScaleDraft | null =
     settingScale && scaleDraftPx != null
       ? {

@@ -601,13 +601,36 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
  * column means writing the arithmetic, not wiring up something dormant.) */
 export interface MeasurementCsvRow {
   tool: string;
-  value: number;
+  /**
+   * Null where the instrument took a reading that is not a number.
+   *
+   * ⚑ A COLOUR measurement on a figure with no calibrated key has a reading and
+   * no value, and so does one whose colour the key answers twice. Blank, never
+   * 0 - the same rule the error columns follow, for the same reason: a zero is
+   * a number somebody could believe.
+   */
+  value: number | null;
   unit: string;
+  /** The colour a Colour measurement read, as `#rrggbb` - what the instrument
+   * actually measured, where every other tool's reading IS its value. */
+  colour?: string;
 }
 /** The recorded measurements as their own titled section, so they stay a
  * SEPARATE block from the series data in every format (David). */
 export function measurementsSection(rows: readonly MeasurementCsvRow[]): TableSection {
-  return { title: 'Measurements', header: ['tool', 'value', 'unit'], rows: rows.map((r) => [r.tool, r.value, r.unit]) };
+  // ⚑ Presence is the signal, as everywhere else in this file: a session that
+  // never used the Colour instrument exports exactly the block it did before.
+  const colours = rows.some((r) => r.colour !== undefined);
+  return {
+    title: 'Measurements',
+    header: colours ? ['tool', 'value', 'unit', 'colour'] : ['tool', 'value', 'unit'],
+    rows: rows.map((r) => [
+      r.tool,
+      r.value ?? '',
+      r.unit,
+      ...(colours ? [r.colour ?? ''] : []),
+    ]),
+  };
 }
 /** All series side by side, mirroring the on-screen spreadsheet (checkpoint 60):
  * a `#` column then, per series, one column per value dimension headed
