@@ -577,7 +577,12 @@ on a heatmap cell, an XY point and a spider reading: *this number did not come o
 the pixels.* It is not a lesser number - your eye reads a printed label, a marker
 hidden under another series or a hatched cell better than any sampler does - it is a
 reading taken with a different instrument, and the record says which. Move the point
-afterwards and the brackets go: the number came off the pixels again. In the file
+afterwards and the brackets go: the number came off the pixels again.
+**The way back to our reading is undo** (Ctrl+Z), and the value says so when you hover
+it. There is no "re-read this point", because a point's position is a reading the
+figure never held: your click, or the tracer's, and once a typed value moves the datum
+the pixels cannot say where it used to be. A heatmap cell is the exception, and for a
+reason - its ink never moves, so it can always be handed back to the colour key. In the file
 the same fact rides in its own `<column> source` column (`user` or `pixel`), which
 appears only for a series you actually typed into.
 

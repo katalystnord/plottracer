@@ -102,7 +102,7 @@ import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
-import { valueText, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
+import { valueText, valueTitle, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
 import { fmtNum, fmtValue, rgbToHex } from './format.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
@@ -6101,7 +6101,7 @@ export function Workspace() {
         display={valueText(fmtValue(value), supplied)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
-        title="Double-click to edit - moves the point on the canvas"
+        title={valueTitle('Double-click to edit - moves the point on the canvas', supplied)}
         width={56}
         onStartEdit={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
         onChange={(v) => setEditingCell({ index, axis, value: v })}
@@ -6137,7 +6137,7 @@ export function Workspace() {
       display={valueText(fmtValue(value), supplied)}
       testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
       testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
-      title="Double-click to edit - moves the point along its own axis"
+      title={valueTitle('Double-click to edit - moves the point along its own axis', supplied)}
       width={64}
       align="right"
       onStartEdit={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}

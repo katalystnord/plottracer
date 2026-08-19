@@ -40,6 +40,32 @@ export function suppliedBySource(source?: string): boolean {
 }
 
 /**
+ * What a marked value says when you hover it.
+ *
+ * ⚑⚑ A FACT, NOT A CONTROL, AND THE DIFFERENCE IS THE WHOLE POINT (v2.3). The
+ * heatmap can offer *"discard this reading and take the number the colour key
+ * gives"* because THE IMAGE CAN STILL ANSWER: the cell sits at fixed grid
+ * coordinates, its ink never moved, and the sampler can be re-run over the same
+ * pixels. A DATA POINT has no such instrument. The point IS a position - yours,
+ * or the tracer's - and the figure was never asked to remember it, so once a
+ * typed value moves the datum there is nothing left to re-read.
+ *
+ * ⚠️ SO THE WAY BACK IS UNDO, AND ONLY UNDO. Storing the pre-edit pixel was
+ * proposed and rejected: it would not be a re-read, it would be a SECOND undo
+ * mechanism beside the one every other action in this app already uses, bought
+ * with a new field in the record. David: *"if you make a mistake and move on, we
+ * have to remove a series and retrace it. Not a huge loss with autotrace"* - the
+ * cost is real, named, and smaller than a parallel mechanism.
+ *
+ * ▶ The asymmetry with the heatmap is a property of the two RECORDS, not an
+ * oversight: colour is a reading OF the figure; a point's position is a reading
+ * the figure never held.
+ */
+export function valueTitle(base: string, supplied: boolean): string {
+  return supplied ? `You entered this value - Ctrl+Z takes it back. ${base}` : base;
+}
+
+/**
  * The key to the mark, shown only when a marked value is on screen.
  *
  * ⚑⚑ A MARK WITH NO KEY IS TRIBAL KNOWLEDGE. The persona this project designs

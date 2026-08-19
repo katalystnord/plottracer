@@ -4711,6 +4711,12 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // ⚑ AND THE KEY IS ON SCREEN. A mark nothing explains is tribal knowledge:
     // the persona this project designs against can only use what he sees.
     expect(await textOf('supplied-legend')).toContain('user edited value');
+
+    // ⚑ AND THE WAY BACK IS NAMED ON THE VALUE ITSELF. There is no re-read for a
+    // point - the figure never held its position - so undo is the mechanism, and
+    // the cell says so instead of offering a control that cannot exist.
+    expect(await page.getByTestId('data-value-x-0').getAttribute('title')).toContain('Ctrl+Z');
+    expect(await page.getByTestId('data-value-y-0').getAttribute('title')).not.toContain('Ctrl+Z');
   });
 
   it('⚑ A4: moving the point takes the brackets off - it was read off the pixels again', async () => {

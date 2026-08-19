@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { valueText, suppliedBySource } from '../panels/ValueMark.js';
+import { valueText, valueTitle, suppliedBySource } from '../panels/ValueMark.js';
 
 /**
  * The mark itself: what wears brackets, and what does not.
@@ -26,5 +26,20 @@ describe('the [ ] mark', () => {
     expect(suppliedBySource('colour')).toBe(false);
     expect(suppliedBySource(undefined)).toBe(false);
     expect(suppliedBySource('user')).toBe(true);
+  });
+});
+
+describe('what a marked value says on hover', () => {
+  it('⚑ names the way back, because there is only one', () => {
+    // Not "reset to the reading": a point's position is a reading the figure
+    // never held, so there is nothing to re-read. Undo is the mechanism, and
+    // the tooltip states it rather than offering a control that cannot exist.
+    expect(valueTitle('Double-click to edit', true)).toBe(
+      'You entered this value - Ctrl+Z takes it back. Double-click to edit'
+    );
+  });
+
+  it('says nothing extra about a value we read ourselves', () => {
+    expect(valueTitle('Double-click to edit', false)).toBe('Double-click to edit');
   });
 });
