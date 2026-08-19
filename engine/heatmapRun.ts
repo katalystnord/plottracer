@@ -898,6 +898,34 @@ export function heatmapRegenerateWarning(
   return [...disagreements, ...parts].join(' ');
 }
 
+/**
+ * What KIND of claim the line under the grid is making.
+ *
+ * ⚑⚑ ONE LINE, TWO CLAIMS, AND ONLY ONE OF THEM RETIRES (v2.3, E1). Detection
+ * reports an EVENT - *"5 columns, matching the 4 boundaries found"* - which is
+ * true of the moment it ran and says nothing about the grid once the cells are
+ * read; the header already carries the result. The even-grid overlay states a
+ * STANDING FACT about the grid itself - *"these boundaries are CHOSEN, not
+ * measured"* - which stays true for as long as that grid exists, and it is the
+ * one thing stopping a generated grid from reading exactly like a measured one.
+ * Retiring both would delete the provenance to tidy away the report.
+ */
+export type GridNoteKind = 'detection' | 'provenance';
+
+/**
+ * Does a read retire this note?
+ *
+ * ⚠️ THE RETIRING ITSELF ALREADY EXISTED (`3337dde`, E1) - the shared read
+ * clears the note, and this only decides WHICH notes that applies to. A second
+ * display-time rule was written beside it first, which is the parallel-mechanism
+ * defect the reuse rule exists to stop: it hid a report the user had just
+ * refreshed by pressing Detect again, and an e2e that re-detects on purpose
+ * caught it. One mechanism, asked a sharper question.
+ */
+export function noteRetiresOnRead(kind: GridNoteKind): boolean {
+  return kind === 'detection';
+}
+
 export function heatmapGridSummary(grid: HeatmapState | null): string {
   // ⚑⚑ B14 - THE PRECONDITION, SAID BEFORE THE WORK IS DONE. A radial heatmap
   // (`holoviews` RadialHeatMap: concentric rings and angular bands, and per its

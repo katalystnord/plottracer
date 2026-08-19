@@ -921,6 +921,80 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
   });
 
+  it('⚑ C: one series is offered the ticks QUIETLY - the ordinal is true within a series', async () => {
+    // David: *"Are there instances where we would not want to mark their
+    // categories now?"* Yes - a single series with every bar present. Its
+    // unmarked Position is a left-to-right ordinal computed from its own pixels,
+    // which is a faithful statement about it, so the offer stays one quiet line.
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await dragMarker(300, 400, 300, 250);
+    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
+  });
+
+  it('⚑⚑ C: a SECOND series carrying readings promotes the offer, and says what it saw', async () => {
+    // From here the two series are being paired by a number they do not share:
+    // a series missing one category numbers every later reading one lower, so
+    // `Position 3` means a different category in each. The card says so, in the
+    // terms it measured - and it still does not block anything (tenet 1).
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await dragMarker(300, 400, 300, 250);
+    await page.getByTestId('add-series').click();
+    await dragMarker(400, 400, 400, 300);
+    await page.waitForTimeout(150);
+    expect(await textOf('category-ticks-summary')).toBe('2 series - mark category ticks to pair them');
+  });
+
+  it('⚑ C: and marking them puts the offer to rest', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await dragMarker(300, 400, 300, 250);
+    await page.getByTestId('add-series').click();
+    await dragMarker(400, 400, 400, 300);
+    await page.getByTestId('category-ticks-toggle').click();
+    await clickAt(600, 400);
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(150);
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
+  });
+
+  it('⚑⚑ E2: the stage ends in the TYPE\'s own word, and the finished card is one row', async () => {
+    // The categorical types kept a second triangle, their own open/close state
+    // and a `Done` of their own, while `axesTypeConfigs` had declared their
+    // ending as "Read categories" and nothing rendered it. One card, one
+    // triangle, one ending - the shape the heatmap already had.
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('category-ticks-toggle').click();
+    // Disabled before there is anything to end, never absent: a greyed control
+    // says "this is what comes next", a missing one says nothing at all.
+    expect(await page.getByTestId('category-read').isDisabled()).toBe(true);
+    await clickAt(600, 400);
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(150);
+
+    expect(await page.getByTestId('category-read').textContent()).toBe('Read categories');
+    await page.getByTestId('category-read').click();
+    await page.waitForTimeout(150);
+
+    // ⚑ ONE ROW. The stage is over, the card is folded, and what it recorded is
+    // on the folded line - not in a second fold-out the user has to open.
+    expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
+    expect(await textOf('second-stage-status')).toBe('4 categories ✓');
+  });
+
+  it('⚑ E6: the drag fact survives as the count field\'s tooltip, not as a line of prose', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('category-ticks-toggle').click();
+    await clickAt(600, 400);
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('category-drag-hint').count()).toBe(0);
+    expect(await page.getByTestId('category-count').getAttribute('title')).toContain('Drag');
+  });
+
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
@@ -8770,6 +8844,31 @@ describe('heatmap capture (v2.2)', () => {
     // And the grid itself survived, which is the half the user actually sees.
     expect(await textOf('heatmap-grid-summary')).toMatch(/cells/i);
   }, 30000);
+
+  it('⚑⚑ a grid you LAID does not stop saying so when you read it', async () => {
+    // ⚠️ E1's retire-on-read cleared the line whatever it said. An even grid's
+    // own sentence - "these boundaries are CHOSEN, not measured from the figure"
+    // - went with detection's report, so a generated grid became
+    // indistinguishable from a measured one at the exact moment its numbers
+    // entered the record. A report describes the RUN and is over; provenance
+    // describes the GRID and is not.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await openHeatmapGrid();
+    await page.getByTestId('heatmap-overlay-even').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('heatmap-detect-message')).toContain('CHOSEN');
+
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(500);
+    // ⚑ REOPENED, because Read cells is the card's ENDING and folds it - the
+    // same step this file's sibling test spells out. Everything stage 2 holds
+    // goes behind that fold, so the question here is whether the sentence
+    // SURVIVED the read, not whether it is still on screen beside the button.
+    await openHeatmapGrid();
+    expect(await textOf('heatmap-detect-message')).toContain('CHOSEN');
+    // ⚑ The heatmap walk is long - its siblings carry the same explicit budget.
+  }, 60000);
 
   it('ADDS a boundary the detector missed, and removes one it invented', async () => {
     // ⚑⚑ THE GESTURE THE APP HAS BEEN TELLING USERS TO USE. `detectGrid` refuses

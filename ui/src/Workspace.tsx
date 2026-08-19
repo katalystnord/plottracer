@@ -20,7 +20,7 @@ import {
   CATEGORY_TICK_DRAG_HINT,
   CONVENTION_LABELS,
   categoryAxisGlyphs,
-  categoryPanelSummary,
+  categoryOffer,
   categoryPanelView,
   categoryTickIndexFromId,
   categoryTickMarkers,
@@ -193,6 +193,8 @@ import {
   heatmapBandCounts,
   heatmapGridSummary,
   heatmapRegenerateWarning,
+  noteRetiresOnRead,
+  type GridNoteKind,
   heatmapBounds as heatmapBounds_,
   initialGridFor,
   isDividerHandle,
@@ -1269,7 +1271,14 @@ export function Workspace() {
   useEffect(() => {
     heatmapCellsRef.current = heatmapCells;
   }, [heatmapCells]);
-  const [heatmapDetectMessage, setHeatmapDetectMessage] = useState('');
+  /**
+   * The line under the grid, and WHICH KIND of claim it makes (v2.3, E1).
+   *
+   * ⚑ Detection reports an event; the even-grid overlay states a standing fact
+   * about the grid. `showsGridNote` decides which of them survives the read, in
+   * `engine/` where the case is a unit test rather than a JSX condition.
+   */
+  const [heatmapGridNote, setHeatmapGridNote] = useState<{ text: string; kind: GridNoteKind } | null>(null);
   const [heatmapSummary, setHeatmapSummary] = useState('');
   const [heatmapError, setHeatmapError] = useState<string | null>(null);
   // Default tuned to the light grey most plotting libraries (matplotlib et al.)
@@ -2141,7 +2150,7 @@ export function Workspace() {
     const reread = restoredGrid ? readCellsFor(restoredGrid, restoredReadings) : null;
     setHeatmapCells(reread?.rows ?? []);
     setHeatmapSummary(reread?.summary ?? '');
-    setHeatmapDetectMessage('');
+    setHeatmapGridNote(null);
     setHeatmapError(null);
   }, [readCellsFor]);
 
@@ -2176,7 +2185,7 @@ export function Workspace() {
     (next: HeatmapState) => {
       const axesNow = sessionRef.current.getAxes();
       if (!axesNow) return;
-      setHeatmapDetectMessage('');
+      setHeatmapGridNote(null);
       applyHeatmapGrid(next);
       // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
       // they drifted - this one re-read, the other emptied the table - so the
@@ -2299,7 +2308,7 @@ export function Workspace() {
       // it is a wrong statement."* One rule, two callers, one not using it.
       applyHeatmapGridEdit(result.grid);
     }
-    setHeatmapDetectMessage(message);
+    setHeatmapGridNote({ text: message, kind: 'detection' });
   }, [applyHeatmapGridEdit, heatmapBounds, heatmapCounts, heatmapShownGrid]);
 
   /**
@@ -2324,9 +2333,10 @@ export function Workspace() {
     // ⚑ Its own undo step, for the same reason detection is one: laying a
     // lattice is a change to the record, so taking it back must not cost more.
     commit();
-    setHeatmapDetectMessage(
-      `Even ${counts.columns} × ${counts.rows} grid laid over the plot - these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`
-    );
+    setHeatmapGridNote({
+      text: `Even ${counts.columns} × ${counts.rows} grid laid over the plot - these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`,
+      kind: 'provenance',
+    });
   }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts]);
 
   /**
@@ -2412,7 +2422,14 @@ export function Workspace() {
     //
     // ⚑ In the SHARED read rather than in the button, so the boundary-drag and
     // undo paths retire it too - the same reasoning that put the re-read here.
-    setHeatmapDetectMessage('');
+    //
+    // ⚑⚑ AND ONLY WHAT A READ ACTUALLY RETIRES (v2.3). This cleared the line
+    // whatever it said, so laying an EVEN grid and then reading it wiped *"these
+    // boundaries are CHOSEN, not measured from the figure"* - the one sentence
+    // keeping a generated grid from reading exactly like a measured one, deleted
+    // to tidy away a report about something else. A report describes the run; the
+    // provenance describes the grid, and only the first is over.
+    setHeatmapGridNote((note) => (note && noteRetiresOnRead(note.kind) ? null : note));
     return result.error === null && result.rows.length > 0;
   }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid]);
 
@@ -2988,7 +3005,7 @@ export function Workspace() {
       // this clearing belongs in the SHARED swap rather than in one caller.
       setHeatmapGridParams(null);
       setHeatmapCells([]);
-      setHeatmapDetectMessage('');
+      setHeatmapGridNote(null);
       setHeatmapSummary('');
       setHeatmapError(null);
       setDataValueInputs([]);
@@ -5633,14 +5650,36 @@ export function Workspace() {
    * stage has produced anything. A heatmap has cells; a categorical type has tick
    * geometry. Same question, asked of whichever the type declares.
    */
+  /**
+   * ⚑⚑ THE STAGE'S PRODUCT, NOT ITS FIRST STEP. A marked axis is not the
+   * categorical stage's output - the CATEGORIES are, and there are none until a
+   * count is declared. Reading `hasGeometry()` alone declared the stage finished
+   * the instant the axis was marked, which folded the card away from under the
+   * user at the exact moment they were about to type the count: the "flow has no
+   * visible NEXT STEP" defect the heatmap's own ending fixed once, arriving
+   * through the other door. Caught by an e2e that timed out waiting for a field
+   * the card had just hidden.
+   */
   const secondStageComplete = heatmapActive
     ? heatmapCells.length > 0
     : session.supportsCategoryTicks()
-      ? session.getCategoryAxis().hasGeometry()
+      ? session.getCategoryAxis().hasGeometry() && session.getCategoryAxis().getCategoryCount() > 0
       : false;
   const secondStageSummary = heatmapActive
     ? `${heatmapCells.length} cells read`
     : `${session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0} categories`;
+  /**
+   * The category stage's own line (v2.3, theme E / C).
+   *
+   * ⚑ Computed from the session's own count of series CARRYING READINGS, so the
+   * card and the export cannot disagree about whether the ordinal is shared -
+   * `getExportFields` asks the same question of the same method.
+   */
+  const categoryOfferLine = categoryOffer(
+    session.supportsCategoryTicks() && session.getCategoryAxis().hasGeometry(),
+    session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0,
+    session.seriesWithReadings()
+  );
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -7088,53 +7127,87 @@ export function Workspace() {
           {/* ⚑ Not during a Challenge round: opening it mid-round turns the
               player's bar clicks into category-axis edges while the clock runs
               (v2.1 audit). */}
-          {gamePhase === null && categoryPanel.phase !== 'unavailable' && (
+          {/* ⚑⚑ THE CARD'S OWN FOLD GOVERNS IT (v2.3, E2). `showsSecondStageHeader`
+              keeps the offer visible while you are IN the stage - folded card or
+              not, because that is the step you are on - and lets it go once the
+              categories exist and the card is shut, where the folded line
+              already says "4 categories ✓". One card, one triangle, one row when
+              finished. The heatmap's grid is gated on the same field.
+              ⚑⚑ `|| categoryPanelOpen` IS LOAD-BEARING, and its absence was a
+              defect for about ten minutes: a stage the user has OPENED stays on
+              screen until they end it, whatever the model thinks of its
+              progress. Without it the section vanished the moment the axis was
+              marked - the model called the stage done, the card folded, and the
+              count field the user was reaching for went with it. */}
+          {gamePhase === null &&
+            categoryPanel.phase !== 'unavailable' &&
+            (cardModel.showsSecondStageHeader || categoryPanelOpen) && (
             <div
               data-testid="category-ticks-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
             >
-              {/* ⚑ A DISCLOSURE, with the same rotating chevron the calibration
-                  card itself uses. Underlined text alone said "I am a link" and
-                  nothing said "I am how you close this again" -- so the only
-                  exits a reader could see were the two that destroy work. */}
-              <button
-                type="button"
-                data-testid="category-ticks-toggle"
-                onClick={() => setCategoryPanelOpen((open) => !open)}
-                title={categoryPanelOpen ? 'Close category ticks' : 'Open category ticks'}
-                style={{
-                  alignSelf: 'flex-start',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  font: 'inherit',
-                  color: theme.color.text.secondary,
-                  cursor: 'pointer',
-                }}
-              >
-                <span
+              {/* ⚑⚑ THE STAGE'S OWN HEADER ROW, and it is the heatmap's (v2.3,
+                  theme E). One card, ONE triangle: this used to carry a second
+                  rotating chevron of its own, so a finished chart asked the user
+                  to open two things to see what one card had recorded. The
+                  summary states the stage; the ending button closes it. The
+                  chevron's other job - "this is how you close it again" - is the
+                  ENDING's job, which is what E2 gave every stage.
+                  ⚑⚑ AND THE LINE SPEAKS UP WHEN IT MATTERS (C). Quiet on a
+                  one-series chart, where the unmarked ordinal is a faithful
+                  statement about that series' own pixels; promoted the moment a
+                  SECOND series carries readings, because from then on the two
+                  are being paired by a number they do not share. Evidence, not
+                  prediction - and it never blocks (tenet 1). */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  data-testid="category-ticks-toggle"
+                  onClick={() => setCategoryPanelOpen((open) => !open)}
+                  title={categoryPanelOpen ? 'Close category ticks' : 'Open category ticks'}
                   style={{
-                    display: 'inline-flex',
-                    // Grey, matching its own label rather than the card's teal
-                    // chevron above it: this is a sub-disclosure, and it should
-                    // read as quieter than the card it sits inside.
-                    color: theme.color.text.secondary,
-                    transform: categoryPanelOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                    transition: 'transform 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    font: 'inherit',
+                    // ⚑ The promoted line is the app saying what it SAW, so it
+                    // reads as text the user is meant to act on rather than as
+                    // the hint-grey this app uses for inert prose (E3's lesson,
+                    // one panel over).
+                    color: categoryOfferLine.promoted ? theme.color.text.primary : theme.color.text.secondary,
+                    fontWeight: categoryOfferLine.promoted ? 600 : 400,
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  <ChevronDownIcon />
-                </span>
-                <span data-testid="category-ticks-summary">
-                  {categoryPanelSummary(
-                    session.getCategoryAxis().hasGeometry(),
-                    session.getCategoryAxis().getCategoryCount()
-                  )}
-                </span>
-              </button>
+                  <span data-testid="category-ticks-summary">{categoryOfferLine.text}</span>
+                </button>
+                {/* ⚑⚑ DISABLED, NEVER ABSENT - the heatmap's own rule, in the
+                    same words its comment gives: "A greyed control says 'this is
+                    what comes next'; a missing one says nothing at all." Its
+                    label comes from the TYPE (`secondStage.ending`), which was
+                    declared for these three types and, until now, rendered for
+                    none of them. */}
+                {config.secondStage && (
+                  <button
+                    type="button"
+                    data-testid="category-read"
+                    onClick={() => setCategoryPanelOpen(false)}
+                    disabled={!session.getCategoryAxis().hasGeometry()}
+                    title={
+                      session.getCategoryAxis().hasGeometry()
+                        ? 'Finish marking the categories'
+                        : 'Mark the category axis first - then this ends the step'
+                    }
+                    style={endsCardButton()}
+                  >
+                    {config.secondStage.ending}
+                  </button>
+                )}
+              </div>
               {categoryPanelOpen && (
                 // Its own bounded section, not more rows in the calibration list.
                 // Unbounded, it read as three extra calibration settings -- the
@@ -7203,12 +7276,14 @@ export function Workspace() {
                   )}
                   {categoryPanel.phase === 'declaring' && (
                     <>
-                      <div
-                        data-testid="category-drag-hint"
-                        style={{ gridColumn: '1 / -1', color: theme.color.text.legend, fontSize: 12 }}
-                      >
-                        {CATEGORY_TICK_DRAG_HINT}
-                      </div>
+                      {/* ⚑ THE DRAG SENTENCE IS NOW THE COUNT FIELD'S TOOLTIP
+                          (E6), exactly as the heatmap's moved onto its boundary
+                          buttons. The count is what GENERATES evenly spaced
+                          ticks, so "they may not be evenly spaced - drag them"
+                          belongs on the control that made them. The FACT
+                          survives; the permanent line under it does not, and
+                          dragging a marker is conventional everywhere else in
+                          this app. */}
                       <label htmlFor="category-count-input">Categories</label>
                       <span>
                         <input
@@ -7216,6 +7291,7 @@ export function Workspace() {
                           type="number"
                           min={1}
                           data-testid="category-count"
+                          title={CATEGORY_TICK_DRAG_HINT}
                           value={categoryCountInput}
                           // ⚑ GROWING COMMITS AS YOU TYPE; SHRINKING WAITS FOR
                           // BLUR OR ENTER.
@@ -7293,18 +7369,13 @@ export function Workspace() {
                         </div>
                       )}
                       <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
-                        {/* ⚑ FIRST, and safe. Without it the only exits on screen
-                            were "Re-place axis" and "Remove ticks" -- both
-                            destructive. The way out must never be the way to lose
-                            your work (David, reading the screenshot). */}
-                        <button
-                          type="button"
-                          data-testid="category-done"
-                          onClick={() => setCategoryPanelOpen(false)}
-                          style={endsCardButton()}
-                        >
-                          Done
-                        </button>
+                        {/* ⚑ THE SAFE EXIT MOVED UP, it did not go. It was added
+                            here because the only exits on screen were "Re-place
+                            axis" and "Remove ticks", both destructive - "the way
+                            out must never be the way to lose your work" (David).
+                            That exit is now the stage's ENDING on the header row,
+                            in the type's own word, beside the line it ends; two
+                            buttons doing one job is what E2 came to remove. */}
                         <button
                           type="button"
                           data-testid="category-replace-axis"
@@ -7514,12 +7585,12 @@ export function Workspace() {
                   overlaid one looked identical unless you went looking. Same
                   rule as drawing nothing until something is measured: the
                   provenance travels with the thing, or it is not provenance. */}
-              {heatmapDetectMessage && (
+              {heatmapGridNote && (
                 <span
                   data-testid="heatmap-detect-message"
                   style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
                 >
-                  {heatmapDetectMessage}
+                  {heatmapGridNote.text}
                 </span>
               )}
               {/* ⚑⚑ THE AXIS MOVED UNDER THE GRID - David's rule 4: *"should the

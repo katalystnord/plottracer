@@ -188,15 +188,23 @@ next. A reading you placed by hand is never overwritten.
   and watch the marks move to see which matches.
   If P1 isn't where the categories start - you calibrated on a gridline part-way
   up the value axis, say - press **Re-place axis** and click *both* ends yourself.
-  **Done** closes the panel and keeps everything; **Remove ticks** drops the marks
-  and the empty categories they created, keeping any you named or captured a bar
-  for.
-  It is entirely optional. A single-series chart is one bar per category and needs
-  none of it. Where it earns its place is a chart with **more than one series**, or
-  one where **a series is missing a bar** - with the categories declared, every bar
-  is filed by the band it sits in rather than by guessing from position, the table
-  shows a row for every category before you capture anything, and a run of touching
-  same-coloured bars can be split at the boundaries you marked.
+  **Read categories** ends the step and keeps everything, folding the card to a
+  single line that says how many categories you declared; **Remove ticks** drops
+  the marks and the empty categories they created, keeping any you named or
+  captured a bar for.
+  It is entirely optional, and the app only asks when it has a reason to. A
+  single-series chart is one bar per category and needs none of it, so the offer
+  stays one quiet line. **The moment a second series carries readings the line
+  speaks up** - `2 series - mark category ticks to pair them` - because from then
+  on the two series are being lined up by a number they do not share: each numbers
+  its own bars left to right, so a series missing one category numbers every later
+  bar one lower. Nothing is blocked either way; the export says which it has, and
+  writes `Position (in series)` instead of `Position` when the ordinal is a
+  per-series count rather than a shared category.
+  With the categories declared, every bar is filed by the band it sits in rather
+  than by guessing from position, the table shows a row for every category before
+  you capture anything, and a run of touching same-coloured bars can be split at
+  the boundaries you marked.
   If two bars of one series land in the same category - a miscounted figure, or a
   bar sitting outside the axis you marked - the table says so underneath rather
   than quietly showing one of them.

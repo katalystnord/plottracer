@@ -1727,8 +1727,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // could name a point, and an unnamed export is still exactly `Position, Value`.
     // There was no consumer to protect, only an incoherent order to inherit
     // (David, 2026-07-26). Absent until something is typed.
-    if (this.config.id === 'categorical')
-      return this.anyPointLabels() ? ['Position', 'Category', 'Value'] : ['Position', 'Value'];
+    if (this.config.id === 'categorical') {
+      // ⚑⚑ THE ORDINAL IS REAL; THE SHARING IS NOT (v2.3, theme E / C). Unmarked,
+      // `Position` is each series' own left-to-right rank - a faithful statement
+      // about that series' pixels, and the honest answer when nobody has said
+      // where the categories are. With TWO series it is read as a coordinate they
+      // share, and it is not: a series missing one category numbers every later
+      // reading one lower, so `Position 3` means a different category in each.
+      // ⚑ The heading changes rather than the value going blank. The rank IS
+      // something we measured; blanking it would throw a fact away to correct a
+      // claim, when correcting the claim is what was needed. Marking the axis
+      // makes it shared again and the word comes back.
+      const position = this.categoriesFollowBands() || this.seriesWithReadings() <= 1
+        ? 'Position'
+        : 'Position (in series)';
+      return this.anyPointLabels() ? [position, 'Category', 'Value'] : [position, 'Value'];
+    }
     // Spider (v1.4): `Axis, Name, Value`, the same independent-variables-first
     // shape. Unconditional, unlike Categorical's Name column - a spoke's name is
     // asked for as part of CALIBRATING the axis, so the column always exists even
@@ -2171,6 +2185,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Switches which dataset new points/slot actions apply to.
    * No-op for an out-of-range index. */
+  /**
+   * How many series carry at least one reading (v2.3, theme E / C).
+   *
+   * ⚑⚑ THE EVIDENCE THE CATEGORY OFFER TURNS ON, and it counts READINGS rather
+   * than series: an empty second series is a series nobody has read yet, not a
+   * pairing problem. The moment two series both hold readings, an unmarked
+   * category axis has each of them numbering its own points left-to-right and
+   * nothing making those numbers the same coordinate.
+   *
+   * ⚑ One source, two consumers - the card's line and `getExportFields`. They
+   * were the two places that could have disagreed about whether the ordinal is
+   * shared, which is exactly the kind of split this file keeps closing.
+   */
+  seriesWithReadings(): number {
+    return this.datasetEntries.filter((e) => e.dataset.getCount() > 0).length;
+  }
+
   setActiveDataset(index: number): void {
     if (index < 0 || index >= this.datasetEntries.length) return;
     this.switchActiveDataset(index);

@@ -322,11 +322,68 @@ export function isMarkingCategoryAxis(view: CategoryPanelView): boolean {
   return view.phase === 'mark-axis';
 }
 
-/** The fold-out's own summary line - it has to say when this is worth opening,
- * because nothing else on screen will. */
-export function categoryPanelSummary(hasGeometry: boolean, categoryCount: number): string {
-  if (!hasGeometry) return 'Mark category ticks?';
-  return categoryCount === 1 ? 'Category ticks - 1 category' : `Category ticks - ${categoryCount} categories`;
+/** What the stage's own line says, and whether it is asking for attention. */
+export interface CategoryOffer {
+  text: string;
+  /**
+   * The app has EVIDENCE that leaving the categories unmarked will cost
+   * something, so the line stops being a quiet offer and becomes the next step.
+   */
+  promoted: boolean;
+}
+
+/**
+ * The stage's own line - it has to say when this is worth opening, because
+ * nothing else on screen will.
+ *
+ * ⚑⚑ IT SPEAKS UP ONLY WHEN THE APP HAS EVIDENCE (v2.3, theme E / C). David:
+ * *"Are there instances where we would not want to mark their categories now?
+ * Or would it in fact always happen?"* Both halves have an answer, and they
+ * differ:
+ *
+ *   ONE series, unmarked - the export's `Position` is a left-to-right ordinal
+ *   computed from that series' own pixels, which is a faithful statement about
+ *   it. Marking adds nothing, and asking would spend the user's attention on a
+ *   chart that never needed it.
+ *
+ *   TWO series, unmarked - the same ordinal is now being read as a coordinate
+ *   the two SHARE, which it is not. A series missing one category slides every
+ *   later reading one place: every number plausible, nothing on screen wrong.
+ *   That is the tenet-11 failure `Line` was fixed for, arriving through the
+ *   other door.
+ *
+ * ⚠️ EVIDENCE, NEVER PREDICTION (tenet 9's habit applied to a prompt). It fires
+ * on series that CARRY READINGS - what was captured - not on series that exist,
+ * and not on what the user might do next.
+ *
+ * ⛔ AND IT DOES NOT BLOCK. Tenet 1: nothing may put constraints on graph in ->
+ * reliable data out. What changes is what the card SAYS, and what the FILE
+ * claims (`getExportFields` stops calling an unshared ordinal `Position`), never
+ * what the user is allowed to do. A prompt that cannot be ignored is a refusal
+ * wearing a prompt's clothes.
+ */
+export function categoryOffer(
+  hasGeometry: boolean,
+  categoryCount: number,
+  seriesWithReadings: number
+): CategoryOffer {
+  if (hasGeometry) {
+    return {
+      text:
+        categoryCount === 1
+          ? 'Category ticks - 1 category'
+          : `Category ticks - ${categoryCount} categories`,
+      promoted: false,
+    };
+  }
+  // ⚑ It states WHAT IT SAW and what that costs, in the vocabulary the panel
+  // hint already uses ("which bar belongs to which, instead of it guessing from
+  // position"). A prompt that gives its reason can be judged; one that only
+  // insists has to be obeyed or ignored.
+  if (seriesWithReadings > 1) {
+    return { text: `${seriesWithReadings} series - mark category ticks to pair them`, promoted: true };
+  }
+  return { text: 'Mark category ticks?', promoted: false };
 }
 
 /**

@@ -3,7 +3,7 @@ import {
   CATEGORY_TICK_COLOR,
   CONVENTION_LABELS,
   categoryAxisGlyphs,
-  categoryPanelSummary,
+  categoryOffer,
   categoryPanelView,
   categoryTickIndexFromId,
   categoryTickMarkers,
@@ -213,9 +213,9 @@ describe('the regenerate warning', () => {
 
 describe('the words on screen', () => {
   it('the summary invites the user in, then reports what is declared', () => {
-    expect(categoryPanelSummary(false, 0)).toBe('Mark category ticks?');
-    expect(categoryPanelSummary(true, 1)).toBe('Category ticks - 1 category');
-    expect(categoryPanelSummary(true, 5)).toBe('Category ticks - 5 categories');
+    expect(categoryOffer(false, 0, 1).text).toBe('Mark category ticks?');
+    expect(categoryOffer(true, 1, 1).text).toBe('Category ticks - 1 category');
+    expect(categoryOffer(true, 5, 1).text).toBe('Category ticks - 5 categories');
   });
 
   it('names both conventions in the figure’s terms, not ours', () => {

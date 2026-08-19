@@ -31,6 +31,7 @@ import {
   setCellReadingAt,
   NO_HEATMAP_CELL_READINGS,
   NO_HEATMAP_LABELS,
+  noteRetiresOnRead,
   type HeatmapRow,
   type HeatmapState,
   type SourceImage,
@@ -1494,5 +1495,18 @@ describe('a reading is bounded by the STRIP, not by the labelled ticks', () => {
     const { readings, error } = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, String(wild));
     expect(error).toMatch(/colour key/i);
     expect(readings).toEqual(NO_HEATMAP_CELL_READINGS);
+  });
+});
+
+describe('E1 - a read retires the report, and only the report', () => {
+  it('⚑ detection describes the step BEFORE the read, so the read retires it', () => {
+    expect(noteRetiresOnRead('detection')).toBe(true);
+  });
+
+  it('⚑⚑ but "these boundaries were CHOSEN, not measured" survives every read', () => {
+    // It describes the GRID, not the run that made it, and it is the only thing
+    // on screen keeping a generated grid from reading exactly like a measured
+    // one. Clearing it with the report deleted provenance to tidy away a report.
+    expect(noteRetiresOnRead('provenance')).toBe(false);
   });
 });
