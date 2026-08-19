@@ -8851,6 +8851,32 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-grid-summary')).toMatch(/cells/i);
   }, 30000);
 
+  it('⚑⚑ picking a cell does not MOVE the cell you picked', async () => {
+    // David, driving the built app: *"The cell jumps around when you try to
+    // select it."* The picked-cell line renders nothing until something is
+    // picked, and it sat ABOVE the matrix - so the first click inserted a row
+    // and pushed the grid down 27px. The second click of a double-click then
+    // landed on the row below, which is the gesture that opens the editor.
+    //
+    // ⚑ MEASURED, not eyeballed: the matrix's own box before and after the
+    // click. An assertion about "does it look stable" would have passed all
+    // release, because nothing about it looks wrong in a still.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+
+    const matrix = page.getByTestId('heatmap-matrix');
+    const before = await matrix.boundingBox();
+    await page.getByTestId('heatmap-matrix-cell-0-0').click();
+    await page.waitForTimeout(250);
+    const after = await matrix.boundingBox();
+    expect(await page.getByTestId('heatmap-picked-cell').count()).toBe(1);
+    expect(after!.y).toBeCloseTo(before!.y, 0);
+    expect(after!.x).toBeCloseTo(before!.x, 0);
+  }, 30000);
+
   it('⚑⚑ a grid you LAID does not stop saying so when you read it', async () => {
     // ⚠️ E1's retire-on-read cleared the line whatever it said. An even grid's
     // own sentence - "these boundaries are CHOSEN, not measured from the figure"

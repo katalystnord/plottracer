@@ -171,7 +171,6 @@ export function HeatmapCellsTable({
           </button>
         ))}
       </div>
-      <PickedCell cells={cells} selectedCell={selectedCell} renderValue={renderValue} onResetCell={onResetCell} />
       {view === 'matrix' ? (
         <MatrixView
           cells={cells}
@@ -197,6 +196,19 @@ export function HeatmapCellsTable({
           dragTint={dragTint}
         />
       )}
+      {/* ⚑⚑ BELOW THE GRID, AND THAT IS THE WHOLE POINT (v2.3). It sat ABOVE,
+          and it renders nothing until a cell is picked - so the first click
+          INSERTED a row and pushed the matrix down 27px, moving the cell out
+          from under the cursor. David, driving the built app: *"The cell jumps
+          around when you try to select it."* Worse than untidy: the second click
+          of a double-click then lands on the row below, so the gesture that
+          opens the editor could open the wrong cell.
+          ⚑ A5's rule, one panel over: entering a state must not move anything
+          the user is not interacting with - and here it moved the very thing
+          they were. Reserving space above was the other candidate and is worse:
+          the line wraps at a narrow panel width, so its height is not a constant
+          to reserve. Below the grid, nothing above it can move at all. */}
+      <PickedCell cells={cells} selectedCell={selectedCell} renderValue={renderValue} onResetCell={onResetCell} />
     </div>
   );
 }
@@ -325,7 +337,7 @@ function PickedCell({
     <p
       data-testid="heatmap-picked-cell"
       style={{
-        margin: '0 0 6px',
+        margin: '6px 0 0',
         fontSize: theme.font.size.small,
         color: theme.color.text.secondary,
         display: 'flex',
