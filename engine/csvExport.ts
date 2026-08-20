@@ -632,6 +632,29 @@ export interface MeasurementCsvRow {
    * actually measured, where every other tool's reading IS its value. */
   colour?: string;
 }
+/**
+ * The measurements as JSON, for whichever builder the type routes to.
+ *
+ * ⚑⚑ ONE READER, and F22 is what made it one. Three of the four JSON builders
+ * had written `{ tool, value, unit }` out by hand, so a Colour measurement -
+ * whose ONLY reading is its colour, `value` being null on any figure with no
+ * calibrated key - exported as `{"tool":"colour","value":null,"unit":""}` on
+ * every type except heatmap. The table formats had carried it since the column
+ * was added; three copies of one object literal are how the fourth format got
+ * left behind.
+ *
+ * ⚑ Same presence rule as `measurementsSection` above: `colour` appears for the
+ * rows that have one, so a session that never used the instrument exports what
+ * it always did.
+ */
+export function measurementsJson(rows: readonly MeasurementCsvRow[]): Record<string, unknown>[] {
+  return rows.map((m) => ({
+    tool: m.tool,
+    value: m.value,
+    unit: m.unit,
+    ...(m.colour !== undefined ? { colour: m.colour } : {}),
+  }));
+}
 /** The recorded measurements as their own titled section, so they stay a
  * SEPARATE block from the series data in every format (David). */
 export function measurementsSection(rows: readonly MeasurementCsvRow[]): TableSection {
@@ -896,7 +919,7 @@ export function buildSeriesJSON(
     }),
   };
   if (measurements.length > 0) {
-    doc.measurements = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
+    doc.measurements = measurementsJson(measurements);
   }
   return JSON.stringify(doc, null, 2);
 }
@@ -1061,7 +1084,7 @@ export function buildHeatmapJSON(
       values: ys.map((y) => xs.map((x) => byKey.get(`${x},${y}`)?.value ?? null)),
     },
   };
-  if (measurements.length > 0) doc['measurements'] = measurements;
+  if (measurements.length > 0) doc['measurements'] = measurementsJson(measurements);
   return JSON.stringify(doc, null, 2);
 }
 
@@ -1091,7 +1114,7 @@ export function buildHistogramJSON(
     ],
   };
   if (measurements.length > 0) {
-    doc.measurements = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
+    doc.measurements = measurementsJson(measurements);
   }
   return JSON.stringify(doc, null, 2);
 }
@@ -1155,7 +1178,7 @@ export function buildTupleSeriesJSON(
     )),
   };
   if (measurements.length > 0) {
-    doc.measurements = measurements.map((m) => ({ tool: m.tool, value: m.value, unit: m.unit }));
+    doc.measurements = measurementsJson(measurements);
   }
   return JSON.stringify(doc, null, 2);
 }
