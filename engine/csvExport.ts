@@ -327,16 +327,35 @@ export function tupleDataSection(
   // Box Plot's axes is Bar (dataDim 1): each group's single value is dimension 0.
   const hasDerived = derivedLabel != null && tupleRows.some((r) => r.derived != null);
   const err = error?.labels.length ? error : null;
+  // ⚑⚑ F21 - THE CATEGORY COORDINATE, and the bar's extent along it. `category`
+  // alone is the NAME, which is empty unless someone transcribed the tick labels
+  // (autoLabelTuple's documented default), so a bar chart captured the ordinary
+  // way exported no category at all while `bandIndexAt` had measured one. The
+  // column order mirrors the heatmap's cells: identity, then the name, then the
+  // bounds, then the values.
+  // ⚑ Presence is the signal, as for `role` and the error columns above: no
+  // column where nothing was measured, so a session with no marked axis and no
+  // typed name exports exactly what it did before.
+  const hasPosition = tupleRows.some((r) => r.position != null);
+  const hasSpan = tupleRows.some((r) => r.positionSpan != null);
+  const positionLabel = tupleRows.some((r) => r.positionIsBand) ? 'Position' : 'Category index';
   return {
     header: [
+      ...(hasPosition ? [positionLabel] : []),
       'category',
+      ...(hasSpan ? ['Position min', 'Position max'] : []),
       ...pointGroupNames,
       ...(hasDerived ? [derivedLabel] : []),
       ...(err ? err.labels : []),
       ...(err ? err.labels.map((l) => `${l} delta`) : []),
     ],
     rows: tupleRows.map((row, i) => [
+      // Blank, never 0, where no category coordinate was measured - the same
+      // rule the error columns follow, and 0 is a category index a file may
+      // really carry.
+      ...(hasPosition ? [row.position ?? ''] : []),
       row.label,
+      ...(hasSpan ? [row.positionSpan?.[0] ?? '', row.positionSpan?.[1] ?? ''] : []),
       // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY. A row carries every tuple slot, and once
       // a series gains error that includes the four cap slots - while the header
       // is the type's own names. Mapping the whole row put four values under no
@@ -1110,7 +1129,16 @@ export function buildTupleSeriesJSON(
         name,
         tuples: tupleRows.map((row) => {
           const entry: Record<string, unknown> = {
+            // F21: the same coordinate the tables carry - `tupleDataSection`'s
+            // comment has the why. Absent, never null, where nothing measured
+            // it: a key that is there says a reading was taken.
+            ...(row.position != null
+              ? { [row.positionIsBand ? 'position' : 'categoryIndex']: row.position }
+              : {}),
             category: row.label,
+            ...(row.positionSpan
+              ? { positionMin: row.positionSpan[0], positionMax: row.positionSpan[1] }
+              : {}),
             ...Object.fromEntries(
               pointGroupNames.map((label, i) => {
                 const p = row.points[i];

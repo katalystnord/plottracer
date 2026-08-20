@@ -239,6 +239,9 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     // ⚑ The error follows the DERIVED value, because that is the number it
     // qualifies: a bar's height is what has an SD, not either of its corners.
     expect(data!.header).toEqual([
+      // F21: a captured bar owns a category from the moment it exists - the
+      // shared name list's entry - so its identity leads the row.
+      'Category index',
       'category',
       'Bar start',
       'Bar end',
@@ -277,6 +280,6 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     s.addDataPoint(200, 300);
     s.addDataPoint(200, 200);
     const [data] = sectionsFor(s as never, 'active');
-    expect(data!.header).toEqual(['category', 'Bar start', 'Bar end', 'Value']);
+    expect(data!.header).toEqual(['Category index', 'category', 'Bar start', 'Bar end', 'Value']);
   });
 });

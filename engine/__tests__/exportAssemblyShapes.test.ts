@@ -89,7 +89,7 @@ describe('a Bar export takes the TUPLE shape, not the flat one', () => {
     // A category column, the slot columns, and the derived value.
     expect(table.header).toContain('Value');
     expect(table.rows).toHaveLength(2);
-    expect(table.rows[0]![0]).toBe('Flax');
+    expect(table.rows[0]![table.header.indexOf('category')]).toBe('Flax');
     expect(Number(table.rows[0]![table.header.indexOf('Value')])).toBeCloseTo(5, 6);
     expect(Number(table.rows[1]![table.header.indexOf('Value')])).toBeCloseTo(10, 6);
   });
@@ -207,7 +207,7 @@ describe('the shape switch is driven by the SESSION, not by configId', () => {
     captureBar(s, 150, 300, 'Flax');
     const asXy = buildExportSections(inputFor(s, 'xy'));
     expect(asXy[0]!.header).toContain('Value');
-    expect(asXy[0]!.rows[0]![0]).toBe('Flax');
+    expect(asXy[0]!.rows[0]![asXy[0]!.header.indexOf('category')]).toBe('Flax');
   });
 });
 

@@ -130,6 +130,36 @@ export function bandIndexForParam(t: number, dividers: readonly number[]): numbe
 }
 
 /**
+ * WHERE in the bands `t` sits, as a continuous coordinate: band *k*'s centre is
+ * exactly *k*, and its two dividers are half a band either side of that.
+ *
+ * ⚑⚑ THE BAND INDEX IS THE COARSE CASE OF THIS ONE. `bandIndexForParam` answers
+ * WHICH category a pixel is in, which is what a Line reading or a bar's identity
+ * needs. An EXTENT needs the fine answer: a bar is two opposite corners, and its
+ * width along the category axis is a measurement that has nowhere to live in an
+ * integer. Same dividers, same clamp policy at the outer bands, so the two
+ * cannot disagree about which band a coordinate belongs to.
+ *
+ * ⚑ THE FRAME IS THE ONE A GENERATOR TAKES, which is why the centre is the
+ * integer rather than the first divider: `matplotlib.bar(x, height, width)`
+ * places a bar of width 0.8 centred on x, and `x` is the category index. A bar
+ * filling the middle 80% of band 1 (0-based) therefore comes out as 0.6 to 1.4
+ * here - readable as "0.8 wide, centred" without arithmetic on the record.
+ *
+ * ⚑ Bands may be UNEQUAL (every divider is draggable), so the position inside
+ * the band is a parameter of that band's own width, never a fraction of the
+ * axis. Outside the outermost dividers the coordinate simply continues past
+ * -0.5 or N-0.5, which is the same unbounded-outer-band rule the index uses.
+ */
+export function bandCoordinateForParam(t: number, dividers: readonly number[]): number | null {
+  const band = bandIndexIn(dividers, t, 'clamp');
+  if (band === null) return null;
+  const within = paramOfSpan(t, dividers[band]!, dividers[band + 1]!);
+  if (!Number.isFinite(within)) return null;
+  return band - 0.5 + within;
+}
+
+/**
  * ⚑⚑ THE ONE BAND LOOKUP, with its out-of-range policy NAMED at the call site.
  *
  * The v2.2 audit's reuse pass found this loop written out THREE times - here,
@@ -505,5 +535,14 @@ export class BandedAxis {
     const edges = this._edges;
     if (!edges || !isUsablePoint(point)) return null;
     return bandIndexForParam(paramAtPoint(edges, point), this.getDividerParams());
+  }
+
+  /** Where `point` sits among the bands as a continuous coordinate - band k's
+   * centre is k - so a MEASURED extent (a bar's two corners) has a frame to be
+   * expressed in. See `bandCoordinateForParam`. */
+  bandCoordinateAt(point: CategoryAxisPoint): number | null {
+    const edges = this._edges;
+    if (!edges || !isUsablePoint(point)) return null;
+    return bandCoordinateForParam(paramAtPoint(edges, point), this.getDividerParams());
   }
 }

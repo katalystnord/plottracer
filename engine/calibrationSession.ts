@@ -371,6 +371,41 @@ export interface TupleRow {
    * a slice worth 42.
    */
   derived: number | null;
+  /**
+   * The tuple's CATEGORY COORDINATE, 1-based - the band it sits in while the
+   * category axis is marked, its shared name-list index otherwise, and null when
+   * neither can answer (F21). The same number, by the same mechanism, that a
+   * categorical Line reading exports as `Position`.
+   *
+   * ⚑ Null is a reading nobody took, never 0: an unmarked axis and an unnamed
+   * bar means the figure was never asked where its categories are, and a rank
+   * over capture order would be the invention the Line audit finding is about -
+   * two series do not agree on one.
+   */
+  position: number | null;
+  /**
+   * Whether `position` is the BAND the tuple was measured in, or the index of
+   * its entry in the shared category name list.
+   *
+   * ⚑⚑ THE COLUMN IS NAMED FOR WHICH ONE IT IS, exactly as Line's header says
+   * `Position (in series)` when its ordinal is not shared, and for the same
+   * reason: a name-list index identifies a category two series can be JOINED on,
+   * but it says nothing about where that category sits on the axis - bars
+   * captured right to left number the rightmost 1. Calling that "Position" would
+   * be a claim nobody measured. Mark the axis and it becomes one.
+   */
+  positionIsBand: boolean;
+  /**
+   * The tuple's measured EXTENT along the category axis, in the same 1-based
+   * band frame - a bar's two opposite corners, projected. Null for every type
+   * that does not capture a box, and while no axis is marked to measure against.
+   *
+   * ⚑ A bar filling the middle 80% of category 2 reads `[1.6, 2.4]`, which is
+   * `bar(x=2, width=0.8)` in any generator. Tenet 11's failure mode (a) is a
+   * CENTRE where the consumer needs an EXTENT, and a bar's width is measured in
+   * the same two clicks that measured its height.
+   */
+  positionSpan: readonly [number, number] | null;
 }
 
 /** 'point-placed': a value-less step (e.g. Polar's origin) was placed and the
@@ -3494,6 +3529,40 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return null;
   }
 
+  /**
+   * A tuple's measured extent along the category axis, in the 1-based band frame
+   * (F21) - or null where there is nothing measured to report.
+   *
+   * ⚑ TWO CONDITIONS, and each one is "was this measured?". `capturesAsBox` is
+   * the type saying its two points are OPPOSITE CORNERS, so the distance between
+   * them along the category axis is a reading rather than an artefact of where
+   * two separate clicks landed - a Box Plot's five clicks are five values on one
+   * category, and the spread between them says nothing about the box's width.
+   * `categoriesFollowBands` is the axis saying it has a frame to measure in.
+   *
+   * ⚑ Projected through the SAME dividers the band index uses, so a bar's span
+   * can never straddle a category its own `position` denies.
+   */
+  private tuplePositionSpan(
+    dataset: Dataset,
+    tuple: readonly (number | null | undefined)[]
+  ): readonly [number, number] | null {
+    if (!this.config.capturesAsBox || !this.categoriesFollowBands()) return null;
+    const coordinates: number[] = [];
+    for (const pixelIndex of tuple) {
+      if (pixelIndex === null || pixelIndex === undefined) continue;
+      const p = dataset.getPixel(pixelIndex);
+      const at = this.categoryAxis.bandCoordinateAt({ x: p.x, y: p.y });
+      if (at !== null) coordinates.push(at);
+    }
+    // A half-dragged bar has one corner: an extent needs both, and a single
+    // point's "span" of zero would export as a bar of no width.
+    if (coordinates.length < 2) return null;
+    // +1 for the same reason `position` carries it: one frame for the coordinate
+    // and its extent, or a bar would report a span that does not contain it.
+    return [Math.min(...coordinates) + 1, Math.max(...coordinates) + 1];
+  }
+
   /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never a
    * 5-slot Box Plot (its own config, or the legacy toggle on a Bar session).
    * Gates the auto-category-PREFILL convenience (wantsAutoCategoryPrefill
@@ -4263,10 +4332,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const p = dataset.getPixel(pixelIndex);
         return { px: p.x, py: p.y, data: this.axes ? this.axes.pixelToData(p.x, p.y) : null };
       });
+      const categoryIndex = this.categoryIndexOfTuple(dataset, tupleIndex);
       return {
         tupleIndex,
         label: this.getTupleLabel(tupleIndex, datasetIndex),
         points,
+        // ⚑ 1-based, because that is what a category coordinate reads as
+        // everywhere else it is shown or exported: Line's `Position`, the
+        // heatmap's `column`/`row`.
+        position: categoryIndex === null ? null : categoryIndex + 1,
+        positionIsBand: this.categoriesFollowBands(),
+        positionSpan: this.tuplePositionSpan(dataset, tuple),
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
         // tuple's own apex, and the whole the values are read against.

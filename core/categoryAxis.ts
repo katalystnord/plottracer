@@ -364,4 +364,16 @@ export class CategoryAxis {
   bandIndexAt(point: CategoryAxisPoint): number | null {
     return this._bands.bandIndexAt(point);
   }
+
+  /**
+   * Where `point` sits among the categories as a continuous coordinate - a
+   * category's centre is its own index, its dividers half a band either side.
+   *
+   * What `bandIndexAt` is for identity, this is for EXTENT: a bar is captured as
+   * two opposite corners, and the width between them is a measurement no integer
+   * index can carry (F21).
+   */
+  bandCoordinateAt(point: CategoryAxisPoint): number | null {
+    return this._bands.bandCoordinateAt(point);
+  }
 }
