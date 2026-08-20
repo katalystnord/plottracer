@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { flatDataSection } from '../csvExport.js';
 import {
   serializeProject,
   deserializeProject,
@@ -650,6 +651,28 @@ describe('a project file carrying values the app could never have written', () =
     const reopened = new CalibrationSession(XY_AXES_CONFIG);
     reopened.loadCalibrated(back.axes as XYAxes, back.datasets, back.categoryAxis, back.heatmapLayer);
     expect(reopened.getSuppliedDimsFor(0)).toEqual([[]]);
+  });
+
+  it('⚑⚑ and the EXPORT reader is bounded too, which F4 claimed and did not do', () => {
+    // ⚠️ F4's own comment said *"Filtering HERE covers every reader at once,
+    // since they all come through this method."* They do not: `getExportRows`
+    // has its own `suppliedAt`, reading the metadata directly, and it is the one
+    // that reaches the FILE. So the screen was clean and the export still wrote
+    // a column literally headed `99 source` - the exact symptom the fix's own
+    // commit message quotes as the defect.
+    const file = xyFileWithOnePoint();
+    (file.plotData.datasetColl![0]!.data[0] as unknown as Record<string, unknown>).metadata = {
+      supplied: [99],
+    };
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    const reopened = new CalibrationSession(XY_AXES_CONFIG);
+    reopened.loadCalibrated(back.axes as XYAxes, back.datasets, back.categoryAxis, back.heatmapLayer);
+
+    const fields = reopened.getExportFields();
+    const rows = reopened.getExportRows(0);
+    const section = flatDataSection(rows, fields);
+    expect(section.header.filter((h) => /source/.test(String(h)))).toEqual([]);
   });
 
   it('⚑ a real supplied dimension still survives - the guard must not over-reach', () => {

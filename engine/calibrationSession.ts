@@ -1855,11 +1855,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // exist. Handing the export raw dims would have put "the user read this" on
     // a spider's axis NUMBER - a fact about the figure's layout, which no user
     // ever typed.
+    // ⚑⚑ THROUGH `suppliedDimsAt`, NOT A SECOND READ OF THE METADATA. This used
+    // to parse `metadata['supplied']` itself and filter only `typeof === number`
+    // - so when F4 bounded the dims by the type's own `dataDim` it bounded the
+    // SCREEN and not the FILE, while its comment claimed *"Filtering HERE covers
+    // every reader at once, since they all come through this method."* They did
+    // not, and this is the reader that reaches the export: a project carrying
+    // `"supplied": [99]` on an XY point wrote a column literally headed
+    // `99 source`, which is the symptom F4's own message quotes as the defect.
+    // ▶ Now there IS one method, so the claim is true rather than asserted.
     const suppliedAt = (i: number, toField: (dim: number) => number | null): number[] | undefined => {
-      const raw = pixels[i]?.metadata?.['supplied'];
-      if (!Array.isArray(raw)) return undefined;
-      const fields = raw
-        .filter((d): d is number => typeof d === 'number')
+      const fields = this.suppliedDimsAt(entry.dataset, i)
         .map(toField)
         .filter((f): f is number => f !== null);
       return fields.length > 0 ? fields : undefined;
