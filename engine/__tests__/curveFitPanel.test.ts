@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
 import { runCurveFit, getCurveFitState, setCurveFitState, sampleCurveFitLine, type CurveFitState } from '../curveFitPanel.js';
 import type { XYAxes } from '../../core/axes/xy.js';
+import { Dataset } from '../../core/dataset.js';
 
 // Same fixture shape as calibrationSession.test.ts's calibrateStandardXY:
 // X1=0 @ (100,250), X2=10 @ (400,250) -- x_data = (px-100)/30.
@@ -119,6 +120,8 @@ describe('getCurveFitState / setCurveFitState', () => {
   // This test characterises the storage layer, so if the clone is ever
   // replaced (structuredClone preserves NaN) the reasoning behind
   // curveFit.ts's overflow refusal is still on record and still checked.
+  // ⚑ It also now pins the READ's refusal, which is the half that protects a
+  // file already written by an affected build.
   it('the metadata clone rewrites a non-finite coefficient as null', () => {
     const session = buildCalibratedSessionWithLine();
     const dataset = session.getDataset();
@@ -136,14 +139,20 @@ describe('getCurveFitState / setCurveFitState', () => {
     };
     setCurveFitState(dataset, broken);
 
-    const readBack = getCurveFitState(dataset);
-    expect(readBack).not.toBeNull();
-    // NaN went in; null comes out -- not a number, and not NaN either.
-    expect(readBack!.coefficients).toEqual([null, null]);
-    // And null arithmetic turns it into a clean, entirely fictional zero.
-    const asNumbers = readBack!.coefficients;
-    expect(asNumbers[0]! * 5).toBe(0);
-    expect(Number.isNaN(asNumbers[0]!)).toBe(false);
+    // The LAUNDERING still happens in the store, and that is the fact this test
+    // exists to keep on record: NaN went in, and null - not a number, and not
+    // NaN either - is what the clone left behind.
+    const raw = dataset.getMetadata()['curveFit'] as { coefficients: unknown[] };
+    expect(raw.coefficients).toEqual([null, null]);
+    // ...and null arithmetic would turn that into a clean, entirely fictional
+    // zero, which is exactly how a flat line at y=0 once reached the figure.
+    expect((raw.coefficients[0] as number)! * 5).toBe(0);
+
+    // ⚑⚑ WHAT CHANGED (v2.3 audit, F14): the READ now refuses it. The producer
+    // was fixed long ago and this door was not, so every project saved by an
+    // affected build reopened straight back into the original defect. The fit
+    // retires; the series it was fitted to is untouched.
+    expect(getCurveFitState(dataset)).toBeNull();
   });
 });
 
@@ -275,5 +284,57 @@ describe('curve fit models', () => {
     const back = getCurveFitState(session.getDataset())!;
     expect(back.model).toBe('exponential');
     expect(back.converged).toBe(true);
+  });
+});
+
+/**
+ * ⚑⚑ A FIT WHOSE COEFFICIENTS ARE NOT NUMBERS (v2.3 audit, F14).
+ *
+ * The overflowed-fit defect was closed at the PRODUCER: `fitPolynomial` refuses
+ * a non-finite result rather than returning one. The LOAD DOOR was never closed,
+ * so every project already saved by an affected build still reopens carrying the
+ * broken fit - and `getCurveFitState` cast the stored object straight through
+ * with no check at all.
+ *
+ * ⚠️ `null` IS WHAT ARRIVES, not NaN: `setMetadata`'s JSON round trip rewrites
+ * NaN as null on the way out. `evaluatePolynomial` computes `y = y * x + c[i]`,
+ * and `null` multiplies as 0 - which is how a laundered NaN became a flat line
+ * at y=0 in the first place. Reopening the file reproduces the original defect
+ * exactly, one build after it was fixed.
+ *
+ * ⚑ AND THE SAME FILE CRASHES INSTEAD, depending on WHICH coefficient went bad:
+ * `formatPolynomial` calls `c.toPrecision(5)`, which throws on null. Silent lie
+ * or hard throw, decided by position.
+ */
+describe('a stored curve fit that is not a fit', () => {
+  const withFit = (fit: unknown): Dataset => {
+    const d = new Dataset();
+    d.setMetadata({ curveFit: fit as never });
+    return d;
+  };
+
+  it('⚑⚑ a coefficient that is not a finite number retires the whole fit', () => {
+    // `null` is the JSON round trip of NaN; the others are what a hand-edited or
+    // truncated file carries.
+    for (const bad of [[1, null, 3], [1, 'x', 3], [Number.NaN, 2], [1, Number.POSITIVE_INFINITY]]) {
+      expect(
+        getCurveFitState(withFit({ degree: 2, restrict: false, xMin: null, xMax: null, coefficients: bad })),
+        JSON.stringify(bad)
+      ).toBeNull();
+    }
+  });
+
+  it('⚑ a fit with no coefficients at all is not a fit either', () => {
+    expect(getCurveFitState(withFit({ degree: 2, restrict: false, xMin: null, xMax: null, coefficients: [] }))).toBeNull();
+    expect(getCurveFitState(withFit({ degree: 2, restrict: false, xMin: null, xMax: null }))).toBeNull();
+  });
+
+  it('⚑ a healthy fit still loads - the guard must not over-reach', () => {
+    const good = { degree: 2, restrict: false, xMin: null, xMax: null, coefficients: [1, -2, 0.5], rSquared: 0.99 };
+    expect(getCurveFitState(withFit(good))).toEqual(good);
+  });
+
+  it('⚑ and a dataset with no fit is still simply null, not an error', () => {
+    expect(getCurveFitState(new Dataset())).toBeNull();
   });
 });

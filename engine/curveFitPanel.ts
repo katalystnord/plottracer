@@ -173,9 +173,38 @@ export function formatCurveFitEquation(curveFit: CurveFitState): string {
 
 const CURVE_FIT_METADATA_KEY = 'curveFit';
 
+/**
+ * The stored fit, or null when what is stored is not one.
+ *
+ * ⚑⚑ THE PRODUCER WAS FIXED AND THIS DOOR WAS NOT. `fitPolynomial` refuses a
+ * non-finite result rather than returning one - that is where the overflowed-fit
+ * defect was closed. But every project already saved by an affected build still
+ * carries the broken fit, and this read cast the stored object straight through
+ * with no check, so reopening the file reproduced the original defect one build
+ * after it was fixed.
+ *
+ * ⚠️ `null` IS WHAT ARRIVES, NOT NaN. `setMetadata` round-trips through JSON,
+ * which rewrites NaN as null on the way out. `evaluatePolynomial` computes
+ * `y = y * x + c[i]` and `null` multiplies as 0 - which is precisely how a
+ * laundered NaN became a flat line at y=0 to begin with. And the same file
+ * CRASHES instead if the bad coefficient happens to sit where
+ * `formatPolynomial` calls `c.toPrecision(5)`: silent lie or hard throw,
+ * decided by position.
+ *
+ * ⚑ THE WHOLE FIT RETIRES, rather than the bad coefficient being repaired. A
+ * polynomial with one term missing is not a worse fit, it is a different curve;
+ * dropping the fit leaves the SERIES intact and the user free to fit it again,
+ * which is the honest outcome. Same rule as the measurement colour and the
+ * px->unit scale: keep the measurement, drop the claim that cannot be true.
+ */
 export function getCurveFitState(dataset: Dataset): CurveFitState | null {
   const meta = dataset.getMetadata();
-  return (meta[CURVE_FIT_METADATA_KEY] as CurveFitState | undefined) ?? null;
+  const stored = meta[CURVE_FIT_METADATA_KEY] as CurveFitState | undefined;
+  if (!stored) return null;
+  const coefficients = stored.coefficients;
+  if (!Array.isArray(coefficients) || coefficients.length === 0) return null;
+  if (!coefficients.every((c) => typeof c === 'number' && Number.isFinite(c))) return null;
+  return stored;
 }
 
 export function setCurveFitState(dataset: Dataset, curveFit: CurveFitState | null): void {
