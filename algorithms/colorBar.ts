@@ -193,6 +193,51 @@ export interface SampleColorBarOptions {
   thickness?: number;
 }
 
+/**
+ * A percentile of an ASCENDING list, interpolated - and it never degenerates to
+ * the maximum, which is the whole reason it exists.
+ *
+ * ⚑⚑ THE DEFECT IT REPLACES. Both callers used
+ * `list[Math.min(len - 1, Math.floor(p * len))]`, and for every window of TEN OR
+ * FEWER samples `floor(0.9 * len) === len - 1` - the maximum, exactly what the
+ * comment claimed it was not. Production thickness is `round(0.6 x short side)`,
+ * so a key bar 17px across or narrower fell in that range, which is most
+ * published figures. Measured on a 7-thick band with ONE white border pixel:
+ * noise 441.7, which then became the admission tolerance for an eighth of the
+ * key. It failed both ways - colours nowhere near the ramp admitted, and
+ * readable cells refused because the widened chunk matched in two places.
+ *
+ * ⚑ INDEXED ON `n - 1`, not `n`, so `p` addresses positions rather than counts
+ * and the top element is only ever reached at `p = 1`. Interpolated between the
+ * two neighbouring ranks so a small window still expresses a fraction instead of
+ * snapping to whichever sample happens to sit at the rounded index.
+ *
+ * ⚠️ The measurement that justified the old formula was taken at thickness 31 -
+ * the one width where it happened to work. A statistic has to be checked at the
+ * sizes it will actually see.
+ */
+export function percentileOfSorted(sorted: readonly number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0]!;
+  const at = p * (sorted.length - 1);
+  const lo = Math.floor(at);
+  const hi = Math.ceil(at);
+  const frac = at - lo;
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * frac;
+}
+
+/**
+ * How much of a sampled window is allowed to be something other than the thing
+ * being measured, before it stops being contamination and becomes the reading.
+ *
+ * ⚑ A QUARTER, and it is a statement about the SUBJECT rather than a tuning
+ * knob: a border line, a tick crossing the bar, an anti-aliased frame edge are
+ * each a pixel or two of a band that is at least seven across. A window a third
+ * of which disagrees with itself is not a clean band with a flaw in it - it is a
+ * bad sample, and the strip must say so rather than hide it behind a percentile.
+ */
+export const CONTAMINATION_ALLOWANCE = 0.25;
+
 /** Euclidean distance between two colours in RGB. */
 export function colorDistance(a: RGB, b: RGB): number {
   const dr = a[0] - b[0];
@@ -440,17 +485,16 @@ export function sampleColorBar(
     // ⚑ Free, in the loop that already gathered the window: the widest departure
     // from the colour we settled on, across the band's thickness, right here.
     if (rgb !== null) {
-      // ⚑⚑ ROBUST, NOT THE MAXIMUM, and for the reason David named: the two
-      // clicks that set the key are made by hand, so a BORDER LINE - or part of
-      // one - lands inside the band often. The COLOUR already survives that,
-      // because a medoid ignores a minority; the noise did not, because one
-      // border pixel is the maximum. Measured: sampling a CLEAN key at thickness
-      // 31 spilled onto the paper and reported noise 315.
-      // ⚑ The same shape the cells already use: the band is the majority of the
-      // window, so a high percentile of it describes the band and drops whatever
-      // was never part of it.
+      // ⚑⚑ ROBUST, AND NOW ACTUALLY SO. The two clicks that set the key are made
+      // by hand, so a BORDER LINE - or the anti-aliased edge of one - lands
+      // inside the band often. The COLOUR survives that because a medoid ignores
+      // a minority; the noise must survive it for the same reason, because this
+      // number becomes the admission tolerance for an eighth of the key.
+      // ⚠️ The first attempt at this claimed to be robust and was not: its index
+      // collapsed onto the MAXIMUM for any window of ten or fewer samples, which
+      // is the ordinary case at production thickness. See `percentileOfSorted`.
       const spread = window.map((c) => colorDistance(c, rgb)).sort((a, b) => a - b);
-      const noise = spread[Math.min(spread.length - 1, Math.floor(0.9 * spread.length))]!;
+      const noise = percentileOfSorted(spread, 1 - CONTAMINATION_ALLOWANCE);
       samples.push({ t, rgb, noise });
     }
   }

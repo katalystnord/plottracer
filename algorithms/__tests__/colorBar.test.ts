@@ -1041,3 +1041,70 @@ describe('invertColor', () => {
     ).toBeNull();
   });
 });
+
+/**
+ * ⚑⚑ THE BAND'S NOISE MUST SURVIVE A BORDER PIXEL (v2.3 re-audit, F16).
+ *
+ * The two clicks that set a colour key are made by hand, so a frame line - or an
+ * anti-aliased edge of one - lands inside the sampled band often. The COLOUR
+ * already survives that, because a medoid ignores a minority. The NOISE was
+ * meant to as well, and did not:
+ *
+ *     spread[Math.min(len - 1, Math.floor(0.9 * len))]
+ *
+ * For every window of TEN OR FEWER samples, `floor(0.9 * len) === len - 1` - the
+ * maximum. Production thickness is `round(0.6 x short side)`, so a key bar 17px
+ * across or narrower gets max-based noise, which is most published figures. The
+ * measurement that justified the formula was taken at thickness 31, the one
+ * width where it happens to work.
+ *
+ * ⚠️ IT FAILS BOTH WAYS. That sample's noise becomes the tolerance for a whole
+ * eighth of the key (`keyTolerance` chunks into 8), so colours nowhere near the
+ * ramp are admitted AND readable cells come back unreadable, because the widened
+ * chunk matches in two separate places and the two-runs refusal fires.
+ */
+describe('the band noise a strip reports about itself', () => {
+  /** A flat band with one contaminating pixel per column, as a border gives. */
+  function bandWithBorder(thickness: number, contaminated: number): ColorBarStrip {
+    const W = 120;
+    const data = new Uint8ClampedArray(W * thickness * 4);
+    for (let y = 0; y < thickness; y++)
+      for (let x = 0; x < W; x++) {
+        const onBorder = y < contaminated;
+        const v = onBorder ? 255 : Math.round((x / (W - 1)) * 200);
+        const i = (y * W + x) * 4;
+        data[i] = v;
+        data[i + 1] = onBorder ? 255 : v;
+        data[i + 2] = onBorder ? 255 : v;
+        data[i + 3] = 255;
+      }
+    const mid = Math.floor(thickness / 2);
+    const r = sampleColorBar(data, W, thickness, { x: 0, y: mid }, { x: W - 1, y: mid }, { thickness });
+    expect(r.reason).toBeNull();
+    return r.strip!;
+  }
+
+  it('⚑⚑ one border pixel does not set the noise, at the thicknesses production uses', () => {
+    // 7 and 9 are what a 12px and a 15px key bar give after the 0.6 inset - the
+    // ordinary case, and precisely where the old formula returned the maximum.
+    for (const thickness of [7, 9, 11, 15, 21]) {
+      const strip = bandWithBorder(thickness, 1);
+      const worst = Math.max(...strip.samples.map((s) => s.noise));
+      expect(worst, `thickness ${thickness}: one white pixel must not set the noise`).toBeLessThan(60);
+    }
+  });
+
+  it('⚑ a genuinely noisy band still reports its noise - the guard must not over-reach', () => {
+    // A third of the band contaminated is not a border, it is a bad sample, and
+    // the strip must say so rather than hide it behind a percentile.
+    const strip = bandWithBorder(9, 3);
+    expect(Math.max(...strip.samples.map((s) => s.noise))).toBeGreaterThan(60);
+  });
+
+  it('⚑ a clean band reports no noise at all, at every thickness', () => {
+    for (const thickness of [7, 9, 15, 21]) {
+      const strip = bandWithBorder(thickness, 0);
+      expect(Math.max(...strip.samples.map((s) => s.noise)), `thickness ${thickness}`).toBe(0);
+    }
+  });
+});

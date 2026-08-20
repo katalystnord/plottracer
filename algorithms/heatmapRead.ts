@@ -32,7 +32,14 @@
  */
 
 import { cellsOf, type HeatmapCell } from '../core/heatmapGrid.js';
-import { COLOR_NOISE_FLOOR, colorDistance, lookupColor, medoidColor } from './colorBar.js';
+import {
+  COLOR_NOISE_FLOOR,
+  CONTAMINATION_ALLOWANCE,
+  colorDistance,
+  lookupColor,
+  medoidColor,
+  percentileOfSorted,
+} from './colorBar.js';
 import { valueAtPosition, type ColorScale } from './colorScale.js';
 import type { RGB } from './colorFilter.js';
 
@@ -243,8 +250,13 @@ function readCell(
   // ⚑ The cell's OWN spread, measured exactly as the key measures its band: a
   // high percentile of how far its pixels sit from the colour we settled on.
   // Robust to a printed label or a hatch, which are a minority of the sample.
+  // ⚑ The same statistic the key uses on itself, through the same helper - a
+  // printed label or a hatch is a minority of the lattice, exactly as a border
+  // is a minority of the band. It carried the same degeneracy before that helper
+  // existed: for a window of ten or fewer samples it returned the MAXIMUM, which
+  // a cell largely off-image or mostly transparent reaches easily.
   const cellSpread = window.map((c) => colorDistance(c, rgb)).sort((a, b) => a - b);
-  const cellNoise = cellSpread[Math.min(cellSpread.length - 1, Math.floor(0.9 * cellSpread.length))]!;
+  const cellNoise = percentileOfSorted(cellSpread, 1 - CONTAMINATION_ALLOWANCE);
   // ⚑⚑ A LOOKUP, THEN THE AXIS. `lookupColor` answers WHERE on the range this
   // colour sits, or null if it is not on the range; `valueAtPosition` turns that
   // position into a number through the two known values, exactly as an X axis

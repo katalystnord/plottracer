@@ -186,7 +186,17 @@ describe('reading a whole heatmap off a real render', () => {
     // cell that is not the cell.
     const degraded = read('heatmap-jet-jpeg.png').cells;
     expect(degraded.filter((c) => c.uniformity < 1)).toHaveLength(8);
-    expect(degraded.every((c) => c.value !== null)).toBe(true);
+    // ⚑⚑ 16 OF 20 READ, AND FOUR HONESTLY REFUSED. This said "all twenty" until
+    // the re-audit found that the key's own noise measurement was collapsing to
+    // the MAXIMUM at production thicknesses, which inflated the tolerance and
+    // admitted cells on a threshold set by one stray pixel. With the statistic
+    // corrected the tolerance is what the band actually varies by, and on a q35
+    // JPEG that is not enough for four of the cells.
+    // ▶ THE TRADE IS THE RIGHT WAY ROUND: the four are REFUSED, not guessed at,
+    // and the sixteen that do read are MORE accurate than all twenty were -
+    // worst error 0.87% of the key's span against 1.34% before. A tolerance
+    // inflated by a bug is not a capability.
+    expect(degraded.filter((c) => c.value !== null)).toHaveLength(16);
 
     // ...and a clean render has nothing to report at all.
     for (const name of ['heatmap-viridis.png', 'heatmap-jet.png']) {
