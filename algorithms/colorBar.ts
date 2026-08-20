@@ -797,12 +797,29 @@ export function lookupColor(strip: ColorBarStrip, rgb: RGB, sampleNoise = 0): nu
   // measures how much it varies across its own band; `sampleNoise` is the same
   // measurement taken on the thing being looked up - the cell's own spread. The
   // same scan degraded them INDEPENDENTLY, so admitting on the key's noise alone
-  // under-admits: measured on the q35 JPEG, 3 of 20 cells that the published
-  // values say are readable failed to look up. Nothing is chosen here; the two
-  // measurements are simply both allowed for.
+  // under-admits: measured on the q35 JPEG, cells the published values say are
+  // readable failed to look up.
+  //
+  // ⚠️⚠️ BUT THE SAMPLE'S HALF IS BOUNDED BY THE KEY'S, and without that bound it
+  // ran exactly backwards: the more contaminated a cell, the WIDER its own
+  // admission test became. A grey "n/a" cell with a cross through it, a stippled
+  // significance cell, a cell carrying a printed label - each has a large spread,
+  // and the tolerance grew until some colour on the ramp fell inside it and a
+  // confident number came out for a cell that carries no value. Measured: pure
+  // red, ~205 from a grey ramp, admitted at `sampleNoise` 400.
+  //
+  // ⚑ THE BOUND IS MEASURED, NOT CHOSEN. The same scan degraded both sides, so
+  // what the KEY varies by is what a legitimately-perturbed colour can be off
+  // by. A sample varying far more than the key does is not noisy - it is
+  // carrying something that is not the colour, which is the fact `uniformity`
+  // exists to report. Contamination is evidence, never allowance.
+  //
+  // ⚠️ AND IT IS THE ONLY REFUSAL LEFT: `d[best] > tol[best]` is the whole
+  // off-key test now that the estimator's `distance` evidence is gone, so the
+  // one thing that widened it silently disarmed everything.
   const key = keyTolerance(s);
   const tol = new Float64Array(s.length);
-  for (let i = 0; i < s.length; i++) tol[i] = key[i]! + sampleNoise;
+  for (let i = 0; i < s.length; i++) tol[i] = key[i]! + Math.min(sampleNoise, key[i]!);
 
   const d = new Float64Array(s.length);
   let best = 0;

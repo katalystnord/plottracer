@@ -192,11 +192,15 @@ describe('reading a whole heatmap off a real render', () => {
     // admitted cells on a threshold set by one stray pixel. With the statistic
     // corrected the tolerance is what the band actually varies by, and on a q35
     // JPEG that is not enough for four of the cells.
-    // ▶ THE TRADE IS THE RIGHT WAY ROUND: the four are REFUSED, not guessed at,
-    // and the sixteen that do read are MORE accurate than all twenty were -
-    // worst error 0.87% of the key's span against 1.34% before. A tolerance
+    // ▶ THE TRADE IS THE RIGHT WAY ROUND: the rest are REFUSED, not guessed at,
+    // and the ones that do read are MORE accurate than all twenty were - worst
+    // error under 1.1% of the key's span against 1.34% before. A tolerance
     // inflated by a bug is not a capability.
-    expect(degraded.filter((c) => c.value !== null)).toHaveLength(16);
+    // ⚑ 15 rather than 16 since F17 bounded the SAMPLE's half of the tolerance by
+    // the KEY's own noise. Without that bound a contaminated cell widened its own
+    // admission test until something on the ramp fell inside it - the more
+    // damaged the cell, the more readily it was given a number.
+    expect(degraded.filter((c) => c.value !== null)).toHaveLength(15);
 
     // ...and a clean render has nothing to report at all.
     for (const name of ['heatmap-viridis.png', 'heatmap-jet.png']) {

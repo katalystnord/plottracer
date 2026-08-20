@@ -12,6 +12,7 @@ import {
   medoidColor,
   positionOnStrip,
   sampleColorBar,
+  lookupColor,
   type ColorBarStrip,
 } from '../colorBar.js';
 import type { RGB } from '../colorFilter.js';
@@ -1106,5 +1107,62 @@ describe('the band noise a strip reports about itself', () => {
       const strip = bandWithBorder(thickness, 0);
       expect(Math.max(...strip.samples.map((s) => s.noise)), `thickness ${thickness}`).toBe(0);
     }
+  });
+});
+
+/**
+ * ⚑⚑ CONTAMINATION MUST NOT BUY TOLERANCE (v2.3 re-audit, F17).
+ *
+ * `lookupColor` admits a colour when its distance to the ramp is within the
+ * key's own measured noise PLUS the sample's. The sample's half was unbounded,
+ * so the more contaminated a cell was, the wider its own admission test became -
+ * exactly backwards. A grey "n/a" cell with a cross through it, a stippled
+ * significance cell, a cell with a printed label: each has a large spread, and
+ * the tolerance grew until some colour on the ramp fell inside it and a
+ * confident number came out for a cell that carries no value.
+ *
+ * ⚠️ AND IT IS THE ONLY REFUSAL LEFT. `d[best] > tol[best]` is now the whole
+ * off-key test - the `distance`-off-the-ramp evidence that used to catch this
+ * was removed with the estimator - so the one thing that disarmed it disarmed
+ * everything.
+ *
+ * ⚑ THE BOUND IS MEASURED, NOT CHOSEN: the same scan degraded both sides, so the
+ * key's own variation is what a legitimately-perturbed colour can be off by. A
+ * sample that varies far MORE than the key does is not noisy, it is carrying
+ * something that is not the colour - which is what `uniformity` reports.
+ */
+describe('a contaminated sample does not widen its own admission test', () => {
+  /** A clean grey ramp, sampled with real thickness. */
+  function greyKey(): ColorBarStrip {
+    const W = 200;
+    const H = 9;
+    const data = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const v = Math.round((x / (W - 1)) * 255);
+        const i = (y * W + x) * 4;
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
+        data[i + 3] = 255;
+      }
+    const r = sampleColorBar(data, W, H, { x: 0, y: 4 }, { x: W - 1, y: 4 }, { thickness: H });
+    expect(r.reason).toBeNull();
+    return r.strip!;
+  }
+
+  it('⚑⚑ a colour off the key stays off it however noisy the sample was', () => {
+    const strip = greyKey();
+    // Pure red is nowhere on a grey ramp - measured ~205 away.
+    expect(lookupColor(strip, [255, 0, 0], 0)).toBeNull();
+    // A wildly contaminated sample must not talk its way in.
+    expect(lookupColor(strip, [255, 0, 0], 400)).toBeNull();
+  });
+
+  it('⚑ a colour ON the key still reads, with or without sample noise', () => {
+    const strip = greyKey();
+    const onRamp = strip.samples[Math.floor(strip.samples.length / 2)]!.rgb;
+    expect(lookupColor(strip, onRamp, 0)).not.toBeNull();
+    expect(lookupColor(strip, onRamp, 30)).not.toBeNull();
   });
 });
