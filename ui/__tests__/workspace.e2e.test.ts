@@ -8756,6 +8756,63 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
   });
 
+  it('⚚⚚ a saved heatmap REOPENS with its grid and its cells (audit F7)', async () => {
+    // ⚠️⚠️ THE WHOLE RECORD WAS DISCARDED ON REOPEN. `loadCalibratedFigure`
+    // takes a `heatmapLayer` and hands it to `loadCalibrated`; the MULTI-figure
+    // open passed it and the SINGLE-figure open - the default path - did not, so
+    // `heatmapLayer ?? null` set it to null. The grid, the axis labels and every
+    // cell a person had read by eye were dropped, while the file on disk still
+    // held all of them.
+    //
+    // ⚚ `calibrationSession.ts` says above that door: *"it rides the same door
+    // so SAVE, LOAD and UNDO are one mechanism."* Undo and multi-figure did.
+    //
+    // ⚚⚚ AND NO TEST COULD SEE IT. The engine test hands `opened.heatmapLayer`
+    // to `loadCalibrated` itself - it makes the very call the UI omits - and this
+    // suite had no heatmap save-and-reopen walk at all. The gap in the FIXTURE
+    // and the gap in the CODE were the same gap.
+    const projectPath = path.join(os.tmpdir(), `plottracer-heatmap-reopen-${process.pid}.zip`);
+    // ⚑ The save dialog only. `openImage` and `openProject` SHARE
+    // `showOpenDialog`, so pointing it at the project up front makes
+    // `resetWorkspace` load the .zip as an image - it is re-stubbed below, at
+    // the moment the project is actually opened.
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, projectPath);
+
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(250);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
+    await openHeatmapGrid();
+    const gridBefore = await textOf('heatmap-grid-summary');
+
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(800);
+    expect(fs.existsSync(projectPath)).toBe(true);
+
+    // A fresh, uncalibrated heatmap workspace: no grid, no cells, nothing
+    // left over for the assertions below to pass on.
+    await resetWorkspace('heatmap');
+    expect(await page.getByTestId('heatmap-cells-summary').count()).toBe(0);
+
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, projectPath);
+    await page.getByTestId('open-project').click();
+    await page.waitForTimeout(1200);
+
+    // ⚚ The GRID comes back...
+    await openHeatmapGrid();
+    expect(await textOf('heatmap-grid-summary')).toBe(gridBefore);
+    // ...and so do the CELLS. Before the fix the matrix was empty and the user
+    // had to detect and read again, on a project that had already been read.
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
+  }, 60000);
+
   it('detects the grid and reads the matrix, matching the figure’s own values', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();

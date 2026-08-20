@@ -4720,6 +4720,15 @@ export function Workspace() {
       axes: result.axes as CalibratedAxes,
       datasets: result.datasets,
       categoryAxis: result.categoryAxis,
+      // ⚑⚑ THE HEATMAP'S WHOLE RECORD, and it was missing from this door alone.
+      // `loadCalibratedFigure` has always taken it and handed it to
+      // `loadCalibrated`; the MULTI-figure open supplied it and this one, the
+      // default path, did not - so `heatmapLayer ?? null` nulled the layer and
+      // the grid, the axis labels and every cell a person had read by eye were
+      // discarded on reopen, while the file on disk still held all of them.
+      // One object literal short, under a session comment promising that save,
+      // load and undo are one mechanism.
+      heatmapLayer: result.heatmapLayer,
       imageDataURL: result.imageDataURL,
       imageFileName: result.imageFileName,
       // Our own file carries measurements (checkpoint 56); no value/note --
