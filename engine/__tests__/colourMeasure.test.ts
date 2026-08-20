@@ -94,7 +94,7 @@ const rampColourAt = (t: number) => {
 describe('C - what a colour measurement reports', () => {
   it('⚑ reports the COLOUR alone when no key is calibrated - every graph type, from day one', () => {
     const reading = colourMeasureReading([192, 57, 43], null);
-    expect(reading).toEqual({ rgb: [192, 57, 43], value: null, ambiguous: false });
+    expect(reading).toEqual({ rgb: [192, 57, 43], value: null, ambiguous: false, offKey: false });
   });
 
   it('⚑ reports a VALUE as well wherever a colour key exists', () => {
@@ -103,6 +103,52 @@ describe('C - what a colour measurement reports', () => {
     expect(reading.rgb).toEqual(mid);
     expect(reading.ambiguous).toBe(false);
     expect(reading.value).toBeCloseTo(50, 0);
+  });
+
+  it('⚑⚑ reports that a colour is OUTSIDE the key, rather than a number for it', () => {
+    // David, 2026-08-20: *"IF there is a key calibrated. It should report that
+    // too. And if it is outside of the key, then just report that."*
+    //
+    // ⚑ THE SAME RULE THE AMBIGUOUS CASE ALREADY FOLLOWS, one case wider. Pure
+    // red is nowhere on a black-to-white ramp, and `readColor` says so plainly:
+    // it sat 208 away from the ramp and its interval spans 0..80. Answering
+    // `33.5` there is the exact failure this module's header warns about - a
+    // second opinion trusted precisely where the first one was unsure.
+    //
+    // ⚑ `COLOR_NOISE_FLOOR` is the threshold, REUSED rather than invented: it is
+    // already this codebase's answer to "are these the same colour", the test
+    // `heatmapRead` applies to every pixel it counts.
+    const reading = colourMeasureReading([255, 0, 0], RAMP);
+    expect(reading.offKey).toBe(true);
+    expect(reading.value).toBeNull();
+    // The COLOUR still stands - taking the sample is the tool's whole job.
+    expect(reading.rgb).toEqual([255, 0, 0]);
+  });
+
+  it('⚑ a colour that IS on the key still gets its number - the guard must not over-reach', () => {
+    // The companion assertion a disabling guard needs: the ordinary reading,
+    // and the antialiased near-miss just inside the floor, both still answer.
+    const on = rampColourAt(0.25);
+    expect(colourMeasureReading(on, RAMP).offKey).toBe(false);
+    expect(colourMeasureReading(on, RAMP).value).toBeCloseTo(25, 0);
+    const nearMiss: [number, number, number] = [on[0] + 2, on[1] + 2, on[2] + 2];
+    expect(colourMeasureReading(nearMiss, RAMP).offKey).toBe(false);
+    expect(colourMeasureReading(nearMiss, RAMP).value).not.toBeNull();
+  });
+
+  it('⚑ a key that cannot be read at all is the same as having none', () => {
+    // The branch no test reached: `readColor` answers null for an unusable
+    // scale, and from the reader's side that is "no key", not "outside" one.
+    const unusable: ColorScale = {
+      strip: RAMP.strip,
+      ticks: [
+        { point: { x: 0, y: KEY_Y }, value: 7 },
+        { point: { x: KEY_W - 1, y: KEY_Y }, value: 7 },
+      ],
+      log: false,
+    };
+    const reading = colourMeasureReading([128, 128, 128], unusable);
+    expect(reading).toEqual({ rgb: [128, 128, 128], value: null, ambiguous: false, offKey: false });
   });
 
   it('⚑⚑ refuses a NUMBER for a colour the key answers twice', () => {
