@@ -1,5 +1,4 @@
 import { readColor, type ColorScale } from '../algorithms/colorScale.js';
-import { COLOR_NOISE_FLOOR } from '../algorithms/colorBar.js';
 import type { RGB } from '../algorithms/colorFilter.js';
 
 /**
@@ -38,43 +37,15 @@ export interface ColourMeasureReading {
    * tool, because it is trusted precisely where the first opinion was unsure.
    */
   ambiguous: boolean;
-  /**
-   * This colour is not on the key at all.
-   *
-   * ⚑⚑ THE SAME RULE AS `ambiguous`, ONE CASE WIDER, and it is the SAMPLER's
-   * rule rather than the heatmap's. David, 2026-08-20: *"IF there is a key
-   * calibrated. It should report that too. And if it is outside of the key,
-   * then just report that."* A key inverts a colour by finding the nearest
-   * point on its ramp, so it answers for EVERY colour it is handed - including
-   * one that is nowhere near it. Pure red on a black-to-white ramp came back as
-   * `33.5`, 208 away from the ramp, with an interval spanning 0 to 80.
-   *
-   * ⚑ SO THE FACT REPLACES THE NUMBER, rather than qualifying it. Reporting
-   * "outside the key" is a measurement; reporting `33.5` with a caveat beside it
-   * is a number the reader has to be talked out of, and this tool exists to be
-   * the opinion that is checked against, not the one that has to be discounted.
-   *
-   * ⚑ Only meaningful where a key exists: with no key there is no outside, and
-   * the colour simply stands alone.
-   */
-  offKey: boolean;
 }
 
 export function colourMeasureReading(rgb: RGB, scale: ColorScale | null): ColourMeasureReading {
-  if (scale === null) return { rgb, value: null, ambiguous: false, offKey: false };
+  if (scale === null) return { rgb, value: null, ambiguous: false };
   const reading = readColor(scale, rgb);
   // ⚑ A scale that cannot be used answers null, and the colour stands alone -
   // the same shape as having no key at all, because from the reader's side it
   // is the same fact: nothing here can turn this colour into a number.
-  if (reading === null) return { rgb, value: null, ambiguous: false, offKey: false };
-  // ⚑ BEFORE the rivals check: a colour that is not on the key is not made a
-  // better reading by the key answering it twice, and "outside" is the plainer
-  // fact of the two.
-  // ⚑ `COLOR_NOISE_FLOOR` REUSED, not a new threshold: it is already this
-  // codebase's answer to "are these the same colour" - the test `heatmapRead`
-  // applies to every pixel it counts - so an inversion that lands further than
-  // that from the ramp did not match the key's ink at all.
-  if (reading.distance > COLOR_NOISE_FLOOR) return { rgb, value: null, ambiguous: false, offKey: true };
-  if (reading.rivals.length > 0) return { rgb, value: null, ambiguous: true, offKey: false };
-  return { rgb, value: reading.value, ambiguous: false, offKey: false };
+  if (reading === null) return { rgb, value: null, ambiguous: false };
+  if (reading.rivals.length > 0) return { rgb, value: null, ambiguous: true };
+  return { rgb, value: reading.value, ambiguous: false };
 }

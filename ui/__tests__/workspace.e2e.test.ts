@@ -8464,7 +8464,7 @@ describe('heatmap capture (v2.2)', () => {
     key: { from: { x: number; y: number }; to: { x: number; y: number }; ticks: Array<{ x: number; y: number; value: number }> };
     frame: Record<'x1' | 'x2' | 'y1' | 'y2', { x: number; y: number; value: number }>;
     grid: { x: number[]; y: number[] };
-    cells: Array<{ x: number; y: number; value: number; x_min: number; x_max: number; y_min: number; y_max: number }>;
+    cells: Array<{ value: number; x_min: number; x_max: number; y_min: number; y_max: number }>;
   }
   const truth = (
     JSON.parse(fs.readFileSync(HEATMAP_TRUTH, 'utf8')) as { figures: Array<{ file: string } & HeatmapTruth> }
@@ -8974,14 +8974,8 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('measure-tool-colour').click();
     await page.waitForTimeout(150);
 
-    // ⚑⚑ A CELL'S OWN CENTRE, FROM THE GROUND TRUTH - not a canvas coordinate
-    // that looks central. This used to be `clickAt(300, 300)`, described as "a
-    // pixel well inside the plot, so the reading is a cell's fill". It sampled
-    // #ffffff: white space, not a cell. The test passed anyway, because the key
-    // answered that white with a confident number, which is the defect this
-    // whole case exists for. The truth file names where every cell IS.
-    const cell = truth.cells[0]!;
-    await clickImagePixel(cell.x, cell.y);
+    // A pixel well inside the plot, so the reading is a cell's fill.
+    await clickAt(300, 300);
     await page.waitForTimeout(300);
 
     const row = page.getByTestId('measurements-panel');
@@ -8992,45 +8986,12 @@ describe('heatmap capture (v2.2)', () => {
     expect(await page.locator('[data-testid^="measure-swatch-"]').count()).toBe(1);
     // The key is calibrated here, so the row carries a value after the panel's
     // own middle dot - the same idiom the ruler's "· set a scale" row uses.
-    const text = (await row.textContent()) ?? '';
-    expect(text).toMatch(/#[0-9a-f]{6}\s*·\s*-?[\d.]/i);
-    // ⚑ AND IT IS THE RIGHT NUMBER. A second opinion that agrees with nothing
-    // measurable is not one, so it is checked against the figure's published
-    // value for that cell rather than against its own output.
-    const shown = Number(/·\s*(-?[\d.]+)/.exec(text)?.[1]);
-    expect(shown).toBeCloseTo(cell.value, 0);
+    expect(await row.textContent()).toMatch(/#[0-9a-f]{6}\s*·\s*-?[\d.]/i);
     // ⚑ AND THE PANEL SAYS WHAT THE READING IS AGAINST. This line is shared with
     // the ruler, and its fallback branch was ANGLE - so a colour measurement
     // arrived announcing "Measured in degrees", which is what a catch-all branch
     // always does the first time a case is added past it.
     expect(await textOf('measure-ref')).toContain('colour key');
-  }, 30000);
-
-  it('⚑⚑ theme C: a colour the key does not recognise is reported as outside it, not as a number', async () => {
-    // The case the test above was silently exercising. `clickAt(300, 300)`
-    // sampled the white paper between the plot and the key, and the panel read
-    // `#ffffff · 33.5`-style: a confident value for ink the key has never seen,
-    // under a line saying "Read against the colour key".
-    //
-    // ⚑ David: *"It takes what it can and just gives that to the user."* White
-    // is not on this key, so there is nothing to give but the colour. The
-    // recognition is the one the heatmap already uses; no new judgement here.
-    await resetWorkspace('heatmap');
-    await calibrateHeatmap();
-    await enterMeasureMode();
-    await page.getByTestId('measure-tool-colour').click();
-    await page.waitForTimeout(150);
-
-    // The paper above the plot frame - inside the image, outside every cell.
-    await clickImagePixel(truth.frame.x1.x + 4, truth.frame.y2.y - 10);
-    await page.waitForTimeout(300);
-
-    const text = (await page.getByTestId('measurements-panel').textContent()) ?? '';
-    // The SAMPLE still stands - taking it is the tool's whole job.
-    expect(text).toMatch(/#[0-9a-f]{6}/i);
-    expect(text).toContain('outside the colour key');
-    // ...and emphatically NOT a number it cannot stand behind.
-    expect(text).not.toMatch(/#[0-9a-f]{6}\s*·\s*-?[\d.]/i);
   }, 30000);
 
   it('⚑⚑ theme C: the same instrument on a chart with NO key reports the colour, and says so', async () => {

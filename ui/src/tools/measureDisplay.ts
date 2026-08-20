@@ -88,20 +88,11 @@ export function measureDisplay(
       // gets the fact instead of one of the two answers - a second opinion that
       // guesses is worse than none, because it is trusted exactly where the
       // first opinion was unsure.
-      // ⚠️ AND A COLOUR THAT IS NOT ON THE AXIS HAS NO VALUE EITHER. The key is
-      // a curve through colour space, not a map of all of it, so it answers for
-      // any colour handed to it - including one nowhere near its ink. The fact
-      // REPLACES the number rather than qualifying it, and it is stated in this
-      // panel's own `·` slot with nothing else attached: no distance, no
-      // clipping note, none of the heatmap's vocabulary. David: *"if it is
-      // outside of the key, then just report that."*
-      note: reading.offKey
-        ? 'outside the colour key'
-        : reading.ambiguous
-          ? 'the key gives this colour more than one value'
-          : reading.value !== null
-            ? fmtNum(reading.value)
-            : undefined,
+      note: reading.ambiguous
+        ? 'the key gives this colour more than one value'
+        : reading.value !== null
+          ? fmtNum(reading.value)
+          : undefined,
     };
   }
   const raw = measurementValue(m.tool, m.overlay.points, ctx);
