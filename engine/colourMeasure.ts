@@ -1,4 +1,5 @@
-import { readColor, type ColorScale } from '../algorithms/colorScale.js';
+import { checkColorScale, valueAtPosition, type ColorScale } from '../algorithms/colorScale.js';
+import { lookupColor } from '../algorithms/colorBar.js';
 import type { RGB } from '../algorithms/colorFilter.js';
 
 /**
@@ -23,29 +24,41 @@ import type { RGB } from '../algorithms/colorFilter.js';
 export interface ColourMeasureReading {
   /** What was measured. Never in doubt, and never absent. */
   rgb: RGB;
-  /** The value the calibrated key gives this colour, or null when there is no
-   * key, no usable scale, or no single answer. */
+  /**
+   * What the calibrated colour axis says this colour is worth.
+   *
+   * Null in both cases where there is no value to give: no axis is calibrated on
+   * this figure, or one is and this colour is not on it. `calibrated` separates
+   * them, because they must not read the same on screen.
+   */
   value: number | null;
   /**
-   * The key answers this colour in more than one place.
+   * A colour axis is calibrated on this figure.
    *
-   * ⚑⚑ AND THAT IS NOT A VALUE WITH A WIDER ERROR BAR. `readColor`'s own note:
-   * *"an imprecise value is a number with an error bar, an ambiguous one is not
-   * a number at all until the user resolves it."* A diverging key revisits its
-   * pale colours, so this is the ordinary case rather than a corner one - and a
-   * SECOND OPINION that confidently picks one of two answers is worse than no
-   * tool, because it is trusted precisely where the first opinion was unsure.
+   * ⚑ WITHOUT THIS THE TWO SILENCES LOOK IDENTICAL. "There is nothing to read
+   * against" and "there is, and your colour is not on it" are different facts,
+   * and only the second is a statement about the pixel the user clicked.
    */
-  ambiguous: boolean;
+  calibrated: boolean;
 }
 
+/**
+ * ⚑⚑ THE SAME LOOKUP THE HEATMAP USES, and that is the entire point of the tool.
+ * It is an INDEPENDENT second opinion, so it has to answer the way the first
+ * opinion answered - against the same calibrated range, by the same rule, with
+ * the same tolerance measured off the same key. A second instrument that used a
+ * different method would not be a check, it would be a second guess.
+ *
+ * ⚑ Nothing more than that. It takes what it can and gives that to the user:
+ * the colour always, the value where the axis is calibrated and the colour is on
+ * it, and otherwise the plain fact that it is not.
+ */
 export function colourMeasureReading(rgb: RGB, scale: ColorScale | null): ColourMeasureReading {
-  if (scale === null) return { rgb, value: null, ambiguous: false };
-  const reading = readColor(scale, rgb);
-  // ⚑ A scale that cannot be used answers null, and the colour stands alone -
-  // the same shape as having no key at all, because from the reader's side it
-  // is the same fact: nothing here can turn this colour into a number.
-  if (reading === null) return { rgb, value: null, ambiguous: false };
-  if (reading.rivals.length > 0) return { rgb, value: null, ambiguous: true };
-  return { rgb, value: reading.value, ambiguous: false };
+  // ⚑ A key that cannot be read is not a calibrated axis. From the reader's side
+  // that is the same fact as having none: there is nothing to be in range OF.
+  if (scale === null || checkColorScale(scale) !== null) {
+    return { rgb, value: null, calibrated: false };
+  }
+  const t = lookupColor(scale.strip, rgb);
+  return { rgb, value: t === null ? null : valueAtPosition(scale, t), calibrated: true };
 }

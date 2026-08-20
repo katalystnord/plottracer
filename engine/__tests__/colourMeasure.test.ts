@@ -91,32 +91,57 @@ const rampColourAt = (t: number) => {
   return s[Math.round(t * (s.length - 1))]!.rgb as [number, number, number];
 };
 
-describe('C - what a colour measurement reports', () => {
-  it('⚑ reports the COLOUR alone when no key is calibrated - every graph type, from day one', () => {
+describe('what the colour tool reports', () => {
+  it('the COLOUR, always - that is the measurement it always has', () => {
     const reading = colourMeasureReading([192, 57, 43], null);
-    expect(reading).toEqual({ rgb: [192, 57, 43], value: null, ambiguous: false });
+    expect(reading.rgb).toEqual([192, 57, 43]);
   });
 
-  it('⚑ reports a VALUE as well wherever a colour key exists', () => {
+  it('⚑ no calibrated colour axis means no value, and nothing is claimed', () => {
+    // ⚑ `calibrated` is what separates "there is no axis to read against" from
+    // "there is one and this colour is not on it". They look the same in the
+    // value and must not look the same on screen.
+    const reading = colourMeasureReading([192, 57, 43], null);
+    expect(reading.calibrated).toBe(false);
+    expect(reading.value).toBeNull();
+  });
+
+  it('⚑⚑ a colour ON the calibrated range reports its VALUE', () => {
     const mid = rampColourAt(0.5);
     const reading = colourMeasureReading(mid, RAMP);
-    expect(reading.rgb).toEqual(mid);
-    expect(reading.ambiguous).toBe(false);
+    expect(reading.calibrated).toBe(true);
     expect(reading.value).toBeCloseTo(50, 0);
   });
 
-  it('⚑⚑ refuses a NUMBER for a colour the key answers twice', () => {
-    // ⚠️ Tenet 9, and `readColor`'s own words: *"an imprecise value is a number
-    // with an error bar, an ambiguous one is not a number at all until the user
-    // resolves it."* A diverging key revisits a pale colour, so this is the
-    // ordinary case rather than a corner one - and a second opinion that
-    // confidently reports one of two possible values is worse than no tool.
+  it('⚑⚑ a colour that is NOT on the range reports no value, and says the axis exists', () => {
+    // Pure red is nowhere on a black-to-white key. It used to come back as 33.5.
+    const reading = colourMeasureReading([255, 0, 0], RAMP);
+    expect(reading.calibrated).toBe(true);
+    expect(reading.value).toBeNull();
+    // The SAMPLE still stands - taking it is the tool's whole job.
+    expect(reading.rgb).toEqual([255, 0, 0]);
+  });
+
+  it('⚑ a colour the range holds in TWO places has no single value either', () => {
     const diverging = scaleOf(divergingStrip());
     const reading = colourMeasureReading([128, 128, 128], diverging);
-    expect(reading.ambiguous).toBe(true);
+    expect(reading.calibrated).toBe(true);
     expect(reading.value).toBeNull();
-    // The COLOUR still stands - it is what was measured, and it is never in doubt.
     expect(reading.rgb).toEqual([128, 128, 128]);
+  });
+
+  it('⚑ a key that cannot be read at all counts as no axis, not as out of range', () => {
+    const unusable: ColorScale = {
+      strip: RAMP.strip,
+      ticks: [
+        { point: { x: 0, y: KEY_Y }, value: 7 },
+        { point: { x: KEY_W - 1, y: KEY_Y }, value: 7 },
+      ],
+      log: false,
+    };
+    const reading = colourMeasureReading([128, 128, 128], unusable);
+    expect(reading.calibrated).toBe(false);
+    expect(reading.value).toBeNull();
   });
 });
 

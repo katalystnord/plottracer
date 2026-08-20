@@ -8464,7 +8464,7 @@ describe('heatmap capture (v2.2)', () => {
     key: { from: { x: number; y: number }; to: { x: number; y: number }; ticks: Array<{ x: number; y: number; value: number }> };
     frame: Record<'x1' | 'x2' | 'y1' | 'y2', { x: number; y: number; value: number }>;
     grid: { x: number[]; y: number[] };
-    cells: Array<{ value: number; x_min: number; x_max: number; y_min: number; y_max: number }>;
+    cells: Array<{ x: number; y: number; value: number; x_min: number; x_max: number; y_min: number; y_max: number }>;
   }
   const truth = (
     JSON.parse(fs.readFileSync(HEATMAP_TRUTH, 'utf8')) as { figures: Array<{ file: string } & HeatmapTruth> }
@@ -8867,9 +8867,12 @@ describe('heatmap capture (v2.2)', () => {
     expect(Number(cells[2])).toBeCloseTo(0.5, 2); // x centre of a 0..1 column
     expect(Number(cells[3])).toBeCloseTo(1, 2); // y centre of a 0..2 row
     // ⚑ The VALUE column, which is index 4 now that identity leads:
-    // column, row, x, y, value, range, note.
+    // column, row, x, y, value, note.
+    // ⚠️ The `range` column that used to sit between value and note is GONE with
+    // the estimator - a lookup reports a value or none, so there is no interval
+    // to print. The note moved from 6 to 5 with it.
     expect(Math.abs(Number(cells[4]) - first.value)).toBeLessThan(1.5);
-    expect(cells[6]).toBe(''); // the NOTE column: no warning, the cell vouches for itself
+    expect(cells[5]).toBe(''); // the NOTE column: no warning, the cell vouches for itself
   });
 
   it('lets a divider be DRAGGED, and re-reads the cells it moved', async () => {
@@ -8974,8 +8977,14 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('measure-tool-colour').click();
     await page.waitForTimeout(150);
 
-    // A pixel well inside the plot, so the reading is a cell's fill.
-    await clickAt(300, 300);
+    // ⚑⚑ A CELL'S OWN CENTRE, FROM THE GROUND TRUTH. This used to be
+    // `clickAt(300, 300)`, described as "a pixel well inside the plot, so the
+    // reading is a cell's fill". It sampled #ffffff - the white paper between
+    // the plot and the key - and the test passed anyway, because the old
+    // estimator answered that white with a confident number. The truth file
+    // names where every cell IS.
+    const cell = truth.cells[0]!;
+    await clickImagePixel(cell.x, cell.y);
     await page.waitForTimeout(300);
 
     const row = page.getByTestId('measurements-panel');
@@ -8984,9 +8993,15 @@ describe('heatmap capture (v2.2)', () => {
     // ...and the swatch beside it, because a hex is not a colour to the eye -
     // which is the whole point of a second opinion you can check by looking.
     expect(await page.locator('[data-testid^="measure-swatch-"]').count()).toBe(1);
-    // The key is calibrated here, so the row carries a value after the panel's
-    // own middle dot - the same idiom the ruler's "· set a scale" row uses.
-    expect(await row.textContent()).toMatch(/#[0-9a-f]{6}\s*·\s*-?[\d.]/i);
+    // ⚑ The colour axis IS calibrated here, and the colour is on it, so the row
+    // carries the VALUE IN BRACKETS. The brackets mark the number that came
+    // through a calibration; the colour beside them is the raw sample.
+    const text = (await row.textContent()) ?? '';
+    expect(text).toMatch(/#[0-9a-f]{6}\s*·\s*\[-?[\d.]+\]/i);
+    // ⚑ AND IT IS THE RIGHT NUMBER - checked against the figure's own published
+    // value for that cell, not against our own output.
+    const shown = Number(/\[(-?[\d.]+)\]/.exec(text)?.[1]);
+    expect(shown).toBeCloseTo(cell.value, 0);
     // ⚑ AND THE PANEL SAYS WHAT THE READING IS AGAINST. This line is shared with
     // the ruler, and its fallback branch was ANGLE - so a colour measurement
     // arrived announcing "Measured in degrees", which is what a catch-all branch
@@ -9008,7 +9023,10 @@ describe('heatmap capture (v2.2)', () => {
 
     const panel = await textOf('measurements-panel');
     expect(panel).toMatch(/#[0-9a-f]{6}/i);
-    expect(panel).not.toMatch(/#[0-9a-f]{6}\s*·/i);
+    // ⚑ No calibrated colour axis, so there is no value and nothing is claimed -
+    // not even that the colour is "out of range", which would be a statement
+    // about an axis that does not exist.
+    expect(panel).not.toMatch(/\[/);
     expect(await textOf('measure-ref')).toContain('no colour key');
   }, 30000);
 

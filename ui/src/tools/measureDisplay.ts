@@ -81,18 +81,26 @@ export function measureDisplay(
     return {
       value: rgbToHex(m.rgb),
       swatch: m.rgb,
-      // ⚑ The panel's own `·` idiom, which is why this rides as the NOTE: the
-      // eyedropper row and the ruler row then read as one list rather than two
-      // conventions (`684.5 px · set a scale for real units`).
-      // ⚠️ AMBIGUITY IS NOT A NUMBER. A colour a diverging key answers twice
-      // gets the fact instead of one of the two answers - a second opinion that
-      // guesses is worse than none, because it is trusted exactly where the
-      // first opinion was unsure.
-      note: reading.ambiguous
-        ? 'the key gives this colour more than one value'
+      // ⚑⚑ THE SAME TOOL AS THE RULER, ONE DIMENSION OVER. David: *"The colour
+      // tool works EXACTLY the same as the other measurement tools do. The only
+      // difference: the calibration that it can be calibrated against IS the
+      // colour key."* So the colour is the raw measurement, always present, the
+      // way a distance is always present in pixels - and the VALUE is what the
+      // calibrated axis makes of it, the way a distance becomes millimetres.
+      //
+      // ⚑ The value rides in BRACKETS and the colour does not: the brackets mark
+      // the number that came through a calibration, not the sample itself.
+      //
+      // ⚑ Three outcomes, and the third is a measurement rather than a silence:
+      // no axis calibrated - the colour alone; the colour is on the axis - its
+      // value; the colour is NOT on the axis - say exactly that, because "there
+      // is nothing to read against" and "your colour is not on it" are different
+      // facts about the pixel the user clicked.
+      note: !reading.calibrated
+        ? undefined
         : reading.value !== null
-          ? fmtNum(reading.value)
-          : undefined,
+          ? `[${fmtNum(reading.value)}]`
+          : '[not in range]',
     };
   }
   const raw = measurementValue(m.tool, m.overlay.points, ctx);
