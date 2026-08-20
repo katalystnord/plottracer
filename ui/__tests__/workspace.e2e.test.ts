@@ -2245,6 +2245,32 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(fullPath);
   });
 
+  it('⚑⚑ the rule above the figure-snapshot heading is actually DRAWN (audit F2)', async () => {
+    // The v1.5 audit separated the PNG button from the data formats because the
+    // note above them says those formats "do not carry the figure image", and
+    // with no boundary the two contradicted each other on one screen. Its own
+    // words: *"The rule gets a visible edge."*
+    //
+    // ⚠️ THE EDGE HAS NEVER EXISTED. The style read `${theme.color.border}`, and
+    // that token is an OBJECT (`{regular, hover}`), so the declaration resolved
+    // to `1px solid [object Object]`, which the engine discards whole.
+    //
+    // ⚑ COMPUTED, not present. The element was always in the DOM and its inline
+    // style always looked right in the source, so any assertion about the
+    // heading's existence or text passed all release. Only the rendered border
+    // width can tell the difference - the same lesson as the picked-cell test,
+    // which measures the matrix box rather than asking whether it looks stable.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('export-csv').click();
+    await page.waitForTimeout(200);
+
+    const width = await page
+      .getByTestId('export-figure-heading')
+      .evaluate((el) => getComputedStyle(el).borderTopWidth);
+    expect(width).not.toBe('0px');
+  }, 30000);
+
   it('saves a PNG snapshot as real binary bytes (checkpoint 93)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

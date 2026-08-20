@@ -189,8 +189,13 @@ export function ExportMenu({
               contradicted each other on one screen. The rule gets a visible
               edge, and the heading says which side this is. */}
           <div
+            data-testid="export-figure-heading"
             style={{
-              borderTop: `1px solid ${theme.color.border}`,
+              // ⚑ `.regular`. The bare token is an OBJECT, and interpolating it
+              // gives `1px solid [object Object]`, which the engine drops whole:
+              // the rule this element exists for was never drawn. Every other
+              // border in the app already reads through a leaf.
+              borderTop: `1px solid ${theme.color.border.regular}`,
               margin: '6px 0 2px',
               paddingTop: 6,
               fontSize: 11,
