@@ -2245,6 +2245,31 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(fullPath);
   });
 
+  it('⚑⚑ a save that FAILS says so, instead of looking like it worked (audit F6)', async () => {
+    // ⚠️⚠️ SILENT DATA LOSS. `dialog:saveFile` calls `fs.writeFileSync` with no
+    // try/catch, so a write that throws - read-only path, no permission, full
+    // disk - rejects the IPC. `saveProject` awaits it with no catch and is
+    // wired straight to onClick, so the rejection is unhandled: no dialog, no
+    // banner, nothing in the panel. The user believes the project is on disk.
+    //
+    // ⚑ The dialog is stubbed to SUCCEED and the write itself made to fail,
+    // because that is the real shape of the failure: the user picked a path and
+    // everything looked normal right up to the point where nothing happened.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+
+    await app.evaluate(({ dialog }) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: '/proc/definitely-not-writable/p.zip' });
+    });
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(600);
+
+    // Something on screen has to say the save did not happen.
+    const banner = await page.getByTestId('project-error').textContent().catch(() => null);
+    expect(banner ?? '').not.toBe('');
+  }, 30000);
+
   it('⚑⚑ the rule above the figure-snapshot heading is actually DRAWN (audit F2)', async () => {
     // The v1.5 audit separated the PNG button from the data formats because the
     // note above them says those formats "do not carry the figure image", and

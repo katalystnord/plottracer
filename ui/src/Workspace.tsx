@@ -109,6 +109,7 @@ import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
 import { valueText, valueTitle, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
 import { fmtValue, rgbToHex } from './format.js';
+import { reporting } from './asyncAction.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
 import { BarTable } from './panels/BarTable.js';
@@ -6534,7 +6535,13 @@ export function Workspace() {
 
         {/* Project file I/O group. */}
         <TopBarGroup>
-          <TopBarButton type="button" data-testid="open-project" title="Open a saved project" onClick={openProject}>
+          <TopBarButton
+            type="button"
+            data-testid="open-project"
+            title="Open a saved project"
+            // ⚑ A rejected IPC returned to onClick goes nowhere (audit F6).
+            onClick={reporting('Could not open the project', openProject, setProjectError)}
+          >
             <OpenIcon /> Open Project
             {keyTips && <KeyTip>{keyTipLabel('O', true)}</KeyTip>}
           </TopBarButton>
@@ -6542,7 +6549,9 @@ export function Workspace() {
             type="button"
             data-testid="save-project"
             title="Save the whole project - image, calibration and points - as a PlotTracer project file you can reopen later"
-            onClick={saveProject}
+            // ⚑⚑ THE SILENT-DATA-LOSS ONE (audit F6): the write throws in main,
+            // the IPC rejects, and without this the screen says the save worked.
+            onClick={reporting('Could not save the project', saveProject, setProjectError)}
           >
             <SaveIcon /> Save Project
             {keyTips && <KeyTip>{keyTipLabel('S')}</KeyTip>}
@@ -8118,7 +8127,9 @@ export function Workspace() {
           onStatusChange={handleCanvasStatus}
           beforeOpenImage={confirmDiscardIfDirty}
           onImageOpened={handleImageOpened}
-          onPdfBytes={openPdf}
+          onPdfBytes={(bytes, name) =>
+            reporting('Could not open that document', () => openPdf(bytes, name), setProjectError)()
+          }
           crosshairCursor={mode !== 'pan' || eyedropper !== null}
           avoidRect={avoidRect}
           loupeHideRect={cardRect}

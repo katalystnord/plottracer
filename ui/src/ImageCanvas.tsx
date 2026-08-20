@@ -27,6 +27,7 @@ import { CATEGORY_TICK_COLOR } from '../../engine/categoryTickOverlay.js';
 import { fmtValue, rgbToHex } from './format.js';
 import { roundToResolution } from '../../core/exportPrecision.js';
 import { theme, withAlpha } from './theme.js';
+import { reporting } from './asyncAction.js';
 
 // The formats PlotTracer can open, as a human-readable list for tooltips/hints.
 // The raster/vector types decode straight through Chromium's <img> (what
@@ -1574,7 +1575,9 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             <button
               type="button"
               data-testid="empty-state-open"
-              onClick={openImage}
+              // ⚑ audit F6: a read that throws in main rejects the IPC, and an
+              // unhandled rejection here left the empty state simply sitting there.
+              onClick={reporting('Could not open the image', openImage, setOpenError)}
               style={{
                 pointerEvents: 'auto',
                 cursor: 'pointer',
