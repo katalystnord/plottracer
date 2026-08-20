@@ -5,6 +5,7 @@ import {
   readColor,
   positionAtValue,
   valueAtPosition,
+  valueAtParam,
   type ColorScale,
 } from '../colorScale.js';
 import { sampleColorBar, type ColorBarStrip } from '../colorBar.js';
@@ -396,5 +397,52 @@ describe('positionAtValue - the third axis inverts like the other two', () => {
     expect(positionAtValue(scale, 0)).toBeNull();
     expect(positionAtValue(scale, -5)).toBeNull();
     expect(positionAtValue(scale, NaN)).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ A LOG KEY WHOSE TICKS ARE CLOSE TOGETHER (v2.3 audit, F12).
+ *
+ * `valueAtParam` guards its INPUTS - both positions finite, not coincident, both
+ * labelled values positive on a log key - and then returns `Math.exp(...)`
+ * without looking at what came out. `MIN_TICK_SEPARATION_PX` is 1, so two ticks
+ * a couple of pixels apart on a long key give a huge `u`, and the exponent runs
+ * off the end of a double: exactly `0` at one end, `Infinity` at the other.
+ *
+ * ⚠️ AND ZERO IS THE DANGEROUS ONE. `Infinity` is visibly wrong wherever it
+ * surfaces; a flat `0` is a number somebody could believe, and on a heatmap it
+ * reaches the matrix, the project file and every export as a confident reading.
+ * This is the same laundering shape the curve fit shipped once - see
+ * `algorithms/curveFit.ts` - reached by a different route.
+ *
+ * ⚑ THE REFUSAL IS NOT NEW. `positionAtValue`, the INVERSE of this same axis,
+ * already answers null for a value a log key cannot represent. This is that rule
+ * applied in the other direction, which is where it was missing.
+ */
+describe('a log key that cannot answer', () => {
+  it('⚑⚑ refuses rather than underflowing to a flat zero', () => {
+    // Two labelled ticks 0.004 of the strip apart, worth 1000 and 1: an
+    // ordinary-looking pair of clicks a couple of pixels apart on a 500px key.
+    // Measured: u = 125, the exponent runs off the end of a double, and the far
+    // end of the key comes back as exactly 0 - a number somebody could believe.
+    expect(valueAtParam(1, 0.5, 0.504, 1000, 1, true)).toBeNull();
+  });
+
+  it('⚑ and refuses the overflow at the other end for the same reason', () => {
+    // The same pair from the other side gives Infinity.
+    expect(valueAtParam(0, 0.5, 0.504, 1000, 1, true)).toBeNull();
+  });
+
+  it('⚑ an ordinary log key still answers - the guard must not over-reach', () => {
+    // Decade ticks at a quarter and three quarters of the strip.
+    const mid = valueAtParam(0.5, 0.25, 0.75, 1, 100, true);
+    expect(mid).toBeCloseTo(10, 6);
+    // ...including out beyond the ticks, which is deliberate: the printed labels
+    // are almost never at the ramp's ends.
+    expect(valueAtParam(1, 0.25, 0.75, 1, 100, true)).toBeCloseTo(1000, 6);
+  });
+
+  it('⚑ a LINEAR key is unaffected, having no exponential to overflow', () => {
+    expect(valueAtParam(0, 0.5, 0.504, 1000, 1, false)).toBeCloseTo(125875, 0);
   });
 });

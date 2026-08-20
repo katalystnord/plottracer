@@ -258,7 +258,26 @@ export function valueAtParam(
     if (!(va > 0) || !(vb > 0)) return null;
     const la = Math.log(va);
     const lb = Math.log(vb);
-    return Math.exp(la + u * (lb - la));
+    // ⚑⚑ THE RESULT IS CHECKED, NOT ONLY THE INPUTS. Every guard above asks
+    // whether the arguments are usable and none asked what came out.
+    // `MIN_TICK_SEPARATION_PX` is 1, so two labelled ticks a couple of pixels
+    // apart on a long key are accepted - and then `u` is enormous and the
+    // exponent runs off the end of a double. Measured on ticks 0.004 of the
+    // strip apart worth 1000 and 1: one end returns `Infinity`, the other
+    // returns exactly `0`.
+    //
+    // ⚠️ ZERO IS THE DANGEROUS ONE. `Infinity` is visibly wrong wherever it
+    // lands; a flat 0 is a number somebody could believe, and on a heatmap it
+    // reaches the matrix, the project file and every export as a confident
+    // reading of a cell nobody could read. Same laundering the curve fit shipped
+    // once, by a different route.
+    //
+    // ⚑ AND THE REFUSAL IS NOT NEW: `positionAtValue`, the INVERSE of this same
+    // axis, already answers null for a value a log key cannot represent. This is
+    // that rule in the other direction, where it was missing. A log scale has no
+    // zero, so a zero here is not a small value - it is no answer at all.
+    const value = Math.exp(la + u * (lb - la));
+    return Number.isFinite(value) && value > 0 ? value : null;
   }
   return va + u * (vb - va);
 }
