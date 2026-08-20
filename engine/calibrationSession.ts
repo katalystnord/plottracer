@@ -1911,7 +1911,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
             ? this.categoryAxis.bandIndexAt({ x: p.x, y: p.y })! + 1
             : null
           : rank[i]!;
-      return pixels.map((p, i) => {
+      // ⚑⚑ ONE ROW PER DATUM, exactly as the general branch below. B4 made a
+      // datum's error caps pixels of its own series, and its fix landed in ONE
+      // of the three branches - so this one still handed every cap out as a
+      // reading of its own.
+      // ⚠️ The extra rows were the visible half. `flatDataSection` zips the error
+      // columns against the row list BY INDEX while `getErrorRows` is aligned
+      // with `getDatumPixelIndices` - one entry per DATUM - so once a cap held a
+      // row, every later datum's error landed on the wrong row and the last
+      // one's went blank. Silent, and every number individually plausible.
+      return this.getDatumPixelIndices(datasetIndex).map((i) => {
+        const p = pixels[i]!;
         // The position is an exact ordinal (never rounded); the value is a Bar
         // reading, rounded to this pixel's resolution like every other value.
         const raw = axes.pixelToData(p.x, p.y)[0] ?? null;
@@ -1952,7 +1962,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
           if (pixelIndex != null) spokeOf[pixelIndex] = groupIndex;
         });
       });
-      return pixels.map((p, i) => {
+      // ⚑⚑ ONE ROW PER DATUM, exactly as the general branch below. B4 made a
+      // datum's error caps pixels of its own series, and its fix landed in ONE
+      // of the three branches - so this one still handed every cap out as a
+      // reading of its own.
+      // ⚠️ The extra rows were the visible half. `flatDataSection` zips the error
+      // columns against the row list BY INDEX while `getErrorRows` is aligned
+      // with `getDatumPixelIndices` - one entry per DATUM - so once a cap held a
+      // row, every later datum's error landed on the wrong row and the last
+      // one's went blank. Silent, and every number individually plausible.
+      return this.getDatumPixelIndices(datasetIndex).map((i) => {
+        const p = pixels[i]!;
         const spokeIndex = spokeOf[i];
         const role = roleAt(i);
         // A point outside every tuple has no axis to be read against. Export it as
