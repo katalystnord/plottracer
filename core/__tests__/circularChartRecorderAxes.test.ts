@@ -34,6 +34,53 @@ function calibrateCcr(
   return { ok, axes };
 }
 
+/**
+ * ⚑⚑ A ROTATION PERIOD THIS AXIS DOES NOT KNOW (v2.3 audit, F13).
+ *
+ * `calibrate` sets `timeMax` and `tEnd` inside `if (week) ... else if (day)` and
+ * there is no `else`. An unrecognised period leaves `timeMax` at its declared 0
+ * and `tEnd` at its declared null - and then `pixelToData` computes
+ * `(tEnd - tStart) * ... + tStart`, where `null - tStart` coerces to `-tStart`.
+ * Every reading is a finite, plausible, WRONG timestamp, and `calibrate()`
+ * reports success.
+ *
+ * ⚠️ NOTHING IS NON-FINITE, so no sanitiser anywhere can catch it. And it is
+ * SELF-SUSTAINING: serialize writes `getRotationTime()` straight back out, so a
+ * bad value survives re-calibrating and re-saving.
+ *
+ * ⚑ REACHABLE FROM A FILE. `core/plotData.ts` passes `axData.rotationTime`
+ * through with a cast and no whitelist, and DISCARDS `calibrate()`'s verdict -
+ * so the refusal has to live in the model, where `loadCalibrated`'s own
+ * `isCalibrated()` check will still see it.
+ */
+function calibrateWithPeriod(rotationTime: string): { ok: boolean; axes: CircularChartRecorderAxes } {
+  const cal = new Calibration(2);
+  cal.addPoint(200, 150, '0', '0');
+  cal.addPoint(150, 100, '', '');
+  cal.addPoint(100, 150, '', '100');
+  cal.addPoint(0, 250, '', '');
+  cal.addPoint(0, 50, '', '');
+  const axes = new CircularChartRecorderAxes();
+  const ok = axes.calibrate(cal, '0', rotationTime as 'week' | 'day', 'anticlockwise');
+  return { ok, axes };
+}
+
+describe('a rotation period this axis does not know', () => {
+  it('⚑⚑ is refused, rather than calibrating into wrong timestamps', () => {
+    for (const period of ['month', 'hour', '', 'WEEK']) {
+      const { ok, axes } = calibrateWithPeriod(period);
+      expect(ok, `"${period}" must be refused`).toBe(false);
+      expect(axes.isCalibrated(), `"${period}" must not report calibrated`).toBe(false);
+    }
+  });
+
+  it('⚑ both periods this axis DOES know still calibrate - no over-reach', () => {
+    for (const period of ['week', 'day']) {
+      expect(calibrateWithPeriod(period).ok, period).toBe(true);
+    }
+  });
+});
+
 describe('CircularChartRecorderAxes.calibrate refuses invalid input instead of succeeding silently', () => {
   it('refuses a non-numeric R0', () => {
     const { ok, axes } = calibrateCcr('abc', '100', '0');

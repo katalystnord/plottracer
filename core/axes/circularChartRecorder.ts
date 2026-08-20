@@ -83,12 +83,31 @@ export class CircularChartRecorderAxes {
     this.startTimeInput = startTimeInput;
     const dateEnd = new Date(this.tStart);
 
+    // ⚑⚑ AN UNRECOGNISED PERIOD IS REFUSED, and it used to fall through this
+    // chain in silence. There was no `else`: `timeMax` kept its declared 0 and
+    // `tEnd` its declared null, and `pixelToData` then computed
+    // `(tEnd - tStart) * … + tStart`, where `null - tStart` coerces to
+    // `-tStart`. Every reading came back a finite, plausible, WRONG timestamp
+    // with `calibrate()` reporting success.
+    //
+    // ⚠️ NOTHING IS NON-FINITE ANYWHERE IN THAT, so no sanitiser can catch it
+    // downstream - and it is self-sustaining, because serialize writes
+    // `getRotationTime()` straight back out, so a bad value survives a
+    // re-calibrate and a re-save.
+    //
+    // ⚑ REACHABLE FROM A FILE, which is why the guard belongs HERE rather than
+    // at the reader: `core/plotData.ts` passes `axData.rotationTime` through
+    // with a cast and no whitelist, and discards this method's verdict. The
+    // model refusing is what `loadCalibrated`'s own `isCalibrated()` check can
+    // still see.
     if (rotationTime === 'week') {
       this.timeMax = parseFloat(String(date0.setDate(date0.getDate() + 7)));
       this.tEnd = parseFloat(String(dateEnd.setDate(dateEnd.getDate() + 7)));
     } else if (rotationTime === 'day') {
       this.timeMax = parseFloat(String(date0.setHours(date0.getHours() + 24)));
       this.tEnd = parseFloat(String(dateEnd.setHours(dateEnd.getHours() + 24)));
+    } else {
+      return false;
     }
 
     const r0Parsed = ip.parse(cp0.dy);
