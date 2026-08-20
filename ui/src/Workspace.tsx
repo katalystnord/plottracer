@@ -4837,7 +4837,7 @@ export function Workspace() {
         // parts and this repo already writes ZIPs with fflate for project files.
         if (format === 'ods') {
           const { sectionsToOds } = await import('../../engine/odsExport.js');
-          await window.electronAPI.saveFile(
+          const savedOds = await window.electronAPI.saveFile(
             bytesToBase64(sectionsToOds(sections)),
             `${exportBaseName()}.ods`,
             [
@@ -4846,7 +4846,11 @@ export function Workspace() {
             ],
             'base64'
           );
-          markClean();
+          // ⚑ ONLY A REAL WRITE clears the unsaved flag - `saveFile` answers null
+          // when the user cancels the dialog. `saveProject` has gated this since the
+          // v2.0 round-2 audit and the export path beside it did not, so cancelling
+          // an export marked the work saved with nothing written (audit F8).
+          if (savedOds) markClean();
           return;
         }
         if (format === 'xlsx') {
@@ -4854,7 +4858,7 @@ export function Workspace() {
           // it stays out of the main bundle (Vite splits it into its own chunk).
           const { sectionsToXlsx } = await import('../../engine/xlsxExport.js');
           const bytes = await sectionsToXlsx(sections);
-          await window.electronAPI.saveFile(
+          const savedXlsx = await window.electronAPI.saveFile(
             bytesToBase64(bytes),
             `${exportBaseName()}.xlsx`,
             [
@@ -4863,7 +4867,7 @@ export function Workspace() {
             ],
             'base64'
           );
-          markClean();
+          if (savedXlsx) markClean(); // a cancel is not a save (audit F8)
           return;
         }
         ext = TABLE_FORMAT_EXTENSION[format];
@@ -4885,11 +4889,11 @@ export function Workspace() {
         return;
       }
 
-      await window.electronAPI.saveFile(content, `${exportBaseName()}.${ext}`, [
+      const savedText = await window.electronAPI.saveFile(content, `${exportBaseName()}.${ext}`, [
         { name: EXPORT_FILTER_NAMES[format], extensions: [ext] },
         { name: 'All Files', extensions: ['*'] },
       ]);
-      markClean(); // data exported -> treat as no longer unsaved
+      if (savedText) markClean(); // a cancel is not a save (audit F8)
     },
     // `axes` is a real dependency since ckpt 82: a slope's value is derived
     // from it at export time rather than read off a frozen string, so an export

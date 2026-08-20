@@ -5397,6 +5397,38 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
     await expectRow([0, 0]);
   });
 
+  it('⚑⚑ CANCELLING an export does not mark the work saved (audit F8)', async () => {
+    // ⚠️⚠️ SILENT WORK LOSS. `exportData` called `markClean()` unconditionally
+    // after `saveFile`, which returns null when the user presses Escape in the
+    // OS dialog. So: Export, change your mind, and the document is marked clean
+    // with nothing written anywhere. Close the app and the unsaved-work guard
+    // stays quiet, because it has been told there is nothing to lose.
+    //
+    // ⚑ `saveProject` has gated this correctly since the v2.0 round-2 audit -
+    // *"only a real write clears the unsaved flag"* - and the export path beside
+    // it never got the same fix. One rule, two callers, one of them not using it.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-place-point').click();
+    await clickAt(250, 175); // definitely unsaved work
+
+    // The user opens Export, picks CSV, and then CANCELS the save dialog.
+    await app.evaluate(({ dialog }) => {
+      // ⚑ `filePath: ''` rather than undefined: Electron types it as a string,
+      // and `canceled` is what the main process actually branches on.
+      dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' });
+    });
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await page.waitForTimeout(500);
+
+    // The work is still unsaved, so a destructive action must still warn.
+    dialogMessages = [];
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    expect(dialogMessages.some((m) => /unsaved work/i.test(m))).toBe(true);
+  }, 30000);
+
   it('warns before discarding unsaved work when the axes type is changed', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard(); // now dirty (calibration committed)
