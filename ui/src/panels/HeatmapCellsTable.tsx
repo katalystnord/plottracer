@@ -659,7 +659,6 @@ function LongView({
             {/* ⚑ The interval travels WITH the value, in the same row and the
                 same units. A number whose uncertainty lives somewhere else is
                 read as exact. */}
-            <th style={{ paddingRight: 8 }}>range</th>
             <th>note</th>
           </tr>
         </thead>
@@ -710,15 +709,6 @@ function LongView({
                 }}
               >
                 {valueCell(cell, renderValue)}
-              </td>
-              {/* ⚑ A DASH, not a bracketed pair, for a value a person read: the
-                  interval is what the COLOUR could not be told apart from, and a
-                  reading by eye has none. Printing `59 – 59` would dress a bare
-                  number as a measured interval. */}
-              <td style={{ paddingRight: 8, color: theme.color.text.legend }}>
-                {cell.low === null || cell.high === null
-                  ? '-'
-                  : `${num(cell.low, 4)} – ${num(cell.high, 4)}`}
               </td>
               <td style={{ color: cell.warning ? theme.color.error : undefined }}>{cell.warning}</td>
             </tr>

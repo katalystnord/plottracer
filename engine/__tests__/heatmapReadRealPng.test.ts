@@ -61,8 +61,17 @@ function frameAxes(fig: TruthFigure): XYAxes {
 function read(file: string): { cells: HeatmapCellReading[]; fig: TruthFigure } {
   const fig = figure(file);
   const img = readPng(fileURLToPath(new URL(`./fixtures/colorbars/${file}`, import.meta.url)));
+  // ⚑ 15, not 5, and the difference is load-bearing now that the key measures
+  // its own tolerance from how much it varies ACROSS its thickness. Measured p90
+  // noise on the q35 JPEG by sampled thickness: t1:0 t3:8 t5:13 t9:29 t15:30
+  // t21:32 - a thin sample simply does not see the scan's noise, and reports a
+  // tolerance too tight to read the figure with. Production never has this
+  // problem: `stripFromCorners` takes 60% of the short side of the box the user
+  // clicked, so it is inside the band by construction.
+  // ⚠️ And not much more, either: at t31 the window spills off the band onto the
+  // paper and the measurement jumps to 315 on a CLEAN key.
   const strip = sampleColorBar(img.data, img.width, img.height, fig.key.from, fig.key.to, {
-    thickness: 5,
+    thickness: 15,
   }).strip!;
   const scale: ColorScale = {
     strip,
@@ -123,69 +132,68 @@ describe('reading a whole heatmap off a real render', () => {
     // - half a lookup-table entry, the floor any inversion through this key can
     // reach.
     const { cells, fig } = read('heatmap-viridis.png');
-    const errors = cells.map((c) => Math.abs(c.reading!.value - truthFor(fig, c).value));
+    const errors = cells.map((c) => Math.abs(c.value! - truthFor(fig, c).value));
     expect(max(errors)).toBeLessThan(1.0);
     expect(mean(errors)).toBeLessThan(0.4);
   });
 
-  it('covers every truth value with the band it reports', () => {
-    for (const name of ['heatmap-viridis.png', 'heatmap-jet.png']) {
-      const { cells, fig } = read(name);
-      for (const cell of cells) {
-        const t = truthFor(fig, cell);
-        expect(cell.reading!.low).toBeLessThanOrEqual(t.value);
-        expect(cell.reading!.high).toBeGreaterThanOrEqual(t.value);
-      }
-    }
-  });
+  // ⚠️ REMOVED WITH THE BAND. This asserted that `low..high` bracketed the truth
+  // value - a property of the old error model, which no other axis in this
+  // product has. What it was really protecting is accuracy, and the test above
+  // measures that directly against the published values: max 0.64, mean 0.26.
 
-  it('a cell that reports itself CLEAN is right - 42 of 42, across three figures', () => {
-    // ⚑⚑ THE PRODUCT'S CLAIM, at the level a user actually sees it. A cell says
-    // it is clean when its colour sits exactly on the key's ramp (distance 0) AND
-    // the whole cell is that colour (uniformity 1). Measured across all three
-    // figures: 42 cells said so and 42 were correct. Nine cells were wrong, all
-    // on the quality-35 JPEG, and every one of them said something was off.
+  it('a cell that reports itself CLEAN is right, on every figure', () => {
+    // ⚑⚑ THE CLAIM THE WHOLE TYPE RESTS ON: in a heatmap the colour IS the
+    // value, so a wrong cell has no other symptom - no gap in a trace, no
+    // refusal, nothing odd on screen. If a cell can look clean and be wrong,
+    // nothing else will catch it.
     //
-    // ⚑ AND IT TOOK BOTH MEASURES TO GET THERE. Eight of the nine had a non-zero
-    // distance. The ninth did not: JPEG happened to land that cell on a colour
-    // the key really does print, so distance was 0 and the reading was wrong by
-    // 0.3 °C with nothing in the colour to show it. What caught it was
-    // UNIFORMITY - only 43% of the cell was the colour we read. The third
-    // evidence channel earned its place on its first outing against a real
-    // figure, on the one case the other two could not see.
-    let looksClean = 0;
-    let cleanAndCorrect = 0;
-    let missed = 0;
-    let missedButFlagged = 0;
-    for (const name of ['heatmap-viridis.png', 'heatmap-jet.png', 'heatmap-jet-jpeg.png']) {
+    // ⚑ RE-EXPRESSED FOR THE LOOKUP, and deliberately not weakened. It used to
+    // read "the reported BAND brackets the truth", which a lookup cannot say
+    // because it reports no band. So it says the harder, plainer thing instead:
+    // the number is right, to a stated fraction of the key's own span, measured
+    // against the figure's published values.
+    //
+    // ⚠️ NOT VACUOUS - the bounds are TIGHT. Loosen the lookup and these fail.
+    // MEASURED, then pinned just above: 0.64, 0.64 and 1.60 respectively -
+    // 0.53%, 0.53% and 1.34% of each key's own span.
+    const WORST_CLEAN = { 'heatmap-viridis.png': 0.65, 'heatmap-jet.png': 0.65, 'heatmap-jet-jpeg.png': 1.65 };
+    for (const [name, bound] of Object.entries(WORST_CLEAN)) {
       const { cells, fig } = read(name);
-      for (const cell of cells) {
+      // ⚑ At THIS level a cell has no `warning` string - that sentence is built
+      // one layer up. Clean here is what the reading itself says: it was
+      // measurable, and the whole sample was the colour we read.
+      const clean = cells.filter((c) => c.value !== null && c.uniformity === 1);
+      expect(clean.length, `${name} has clean cells to judge`).toBeGreaterThan(0);
+      for (const cell of clean) {
         const t = truthFor(fig, cell);
-        const covered = cell.reading!.low <= t.value && cell.reading!.high >= t.value;
-        if (cell.reading!.distance === 0 && cell.uniformity === 1) {
-          looksClean++;
-          if (covered) cleanAndCorrect++;
-        }
-        if (!covered) {
-          missed++;
-          if (cell.reading!.distance > 0 || cell.uniformity < 1) missedButFlagged++;
-        }
+        expect(cell.value, `${name} clean cell has a value`).not.toBeNull();
+        expect(Math.abs(cell.value! - t.value), `${name} R${cell.row + 1}C${cell.col + 1}`).toBeLessThanOrEqual(bound);
       }
     }
-    expect(cleanAndCorrect).toBe(looksClean);
-    expect(looksClean).toBe(42);
-    expect(missedButFlagged).toBe(missed);
-    expect(missed).toBeGreaterThan(0);
   });
 
-  it('says a degraded figure is degraded - 2 clean cells out of 20', () => {
-    // The counterpart to the claim above, and what stops it being vacuous: the
-    // verdict has to be able to say NO. On the same 20 cells, quality-35 JPEG
-    // leaves only two that can vouch for themselves.
-    const { cells } = read('heatmap-jet-jpeg.png');
-    const clean = cells.filter((c) => c.reading!.distance === 0 && c.uniformity === 1);
-    expect(clean).toHaveLength(2);
-    expect(read('heatmap-jet.png').cells.every((c) => c.reading!.distance === 0)).toBe(true);
+  it('says a degraded figure is degraded, and a clean one clean', () => {
+    // The counterpart, and what stops the claim above being vacuous: the verdict
+    // has to be able to say NO. On the q35 JPEG, 8 of the 20 cells carry
+    // something that is not the cell's own colour and say so.
+    //
+    // ⚑ IT USED TO BE 18 OF 20, and the difference is the point of this whole
+    // rework rather than a regression: the estimator flagged a cell whenever its
+    // colour sat off the ramp, which on a JPEG is nearly every cell. The lookup
+    // READS those cells - all twenty come back within 1.34% of the key's span -
+    // so the only thing left to report is what UNIFORMITY sees: something in the
+    // cell that is not the cell.
+    const degraded = read('heatmap-jet-jpeg.png').cells;
+    expect(degraded.filter((c) => c.uniformity < 1)).toHaveLength(8);
+    expect(degraded.every((c) => c.value !== null)).toBe(true);
+
+    // ...and a clean render has nothing to report at all.
+    for (const name of ['heatmap-viridis.png', 'heatmap-jet.png']) {
+      const cells = read(name).cells;
+      expect(cells.every((c) => c.value !== null), name).toBe(true);
+      expect(cells.filter((c) => c.uniformity < 1), name).toHaveLength(0);
+    }
   });
 
   it('reports a flat printed cell as UNIFORM, and says so per cell', () => {
@@ -237,7 +245,7 @@ describe('reading a whole heatmap off a real render', () => {
     const narrow = cells.filter((c) => c.xMax - c.xMin === 0.5);
     expect(narrow).toHaveLength(4);
     for (const cell of narrow) {
-      expect(Math.abs(cell.reading!.value - truthFor(fig, cell).value)).toBeLessThan(1.0);
+      expect(Math.abs(cell.value! - truthFor(fig, cell).value)).toBeLessThan(1.0);
     }
   });
 });

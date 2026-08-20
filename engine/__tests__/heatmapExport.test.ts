@@ -41,9 +41,6 @@ const cell = (over: Partial<HeatmapExportCell>): HeatmapExportCell => ({
   xCentre: 0.5,
   yCentre: 1,
   value: 42.5,
-  low: 41,
-  high: 44,
-  distance: 0,
   uniformity: 1,
   ...over,
 });
@@ -89,27 +86,22 @@ describe('heatmapCellsSection', () => {
     expect(section.rows[1]!.slice(2, 11)).toEqual([1, 4, 0, 2, 2.5, 1, 3, 2, 20]);
   });
 
-  it('carries the interval, the colour offset and the uniformity into the file', () => {
+  it('carries the value, which instrument read it, and the uniformity into the file', () => {
+    // ⚑ `value low`, `value high`, `colour offset` and `at key limit` used to sit
+    // in this row. They were the old error model's output, and reading a colour
+    // is a lookup against the calibrated range now - it is on the range or it is
+    // not, so there is no interval to carry. Uniformity stays because it is not
+    // about the axis: it says how much of the cell held the colour WE chose to
+    // sample.
     const section = heatmapCellsSection(
-      [cell({ value: 42.5, low: 41, high: 44, distance: 2.5, uniformity: 0.75 })],
+      [cell({ value: 42.5, uniformity: 0.75 })],
       makeRounder(axes(), 'auto')
     );
     expect(section.header.slice(section.header.indexOf('value') + 1)).toEqual([
       'value source',
-      'value low',
-      'value high',
-      'colour offset',
       'uniformity',
-      'at key limit',
     ]);
-    expect(section.rows[0]!.slice(section.header.indexOf('value') + 1)).toEqual([
-      'colour',
-      41,
-      44,
-      2.5,
-      0.75,
-      '',
-    ]);
+    expect(section.rows[0]!.slice(section.header.indexOf('value') + 1)).toEqual(['colour', 0.75]);
   });
 
   it('writes an unread cell EMPTY, never as zero', () => {
@@ -117,21 +109,13 @@ describe('heatmapCellsSection', () => {
     // for "no reading". The bounds are still written: the cell exists, and its
     // absence of a value is the measurement.
     const section = heatmapCellsSection(
-      [cell({ value: null, low: null, high: null, distance: null, uniformity: 0 })],
+      [cell({ value: null, uniformity: 0 })],
       makeRounder(axes(), 'auto')
     );
     // ⚑ The SOURCE still says `colour`: the colour is what was looked at, and
     // finding no value there is the measurement. An empty source would say
     // nothing was read, which is a different claim.
-    expect(section.rows[0]!.slice(section.header.indexOf('value'))).toEqual([
-      '',
-      'colour',
-      '',
-      '',
-      '',
-      0,
-      '',
-    ]);
+    expect(section.rows[0]!.slice(section.header.indexOf('value'))).toEqual(['', 'colour', 0]);
     // ⚑ Identity is written even for a cell with NO VALUE: the cell exists, and
     // saying which one it is costs nothing. Bounds follow it.
     expect(section.rows[0]!.slice(0, 2)).toEqual(['C1', 'R1']);
@@ -147,15 +131,7 @@ describe('heatmapCellsSection', () => {
     expect(section.rows[0]![section.header.indexOf('value')]).toBe(42.123456789);
   });
 
-  it('carries the CLIPPING flag, which no number in the row could imply', () => {
-    // ⚑ A cell at the key's extreme is exact, uniform and possibly wrong - the
-    // figure stopped containing the value. A file that dropped this would hand
-    // on a confident number with its one caveat removed.
-    const section = heatmapCellsSection([cell({ atKeyLimit: true })], makeRounder(axes(), 'auto'));
-    expect(section.rows[0]![section.header.indexOf('at key limit')]).toBe('yes');
-    expect(JSON.parse(buildHeatmapJSON([cell({ atKeyLimit: true })])).cells[0].atKeyLimit).toBe(true);
-  });
-
+  // ⚠️ REMOVED WITH `atKeyLimit` - see heatmapRead.test.ts for the argument.
   it('says WHICH INSTRUMENT read every value, in every file', () => {
     // ⚑⚑ B16. The three instruments fail in OPPOSITE ways - OCR reads ink as
     // GLYPHS and fails discretely (right, or badly wrong); the colour reads it
@@ -306,11 +282,7 @@ describe('buildHeatmapJSON', () => {
       yCentre: 1,
       value: 10,
       valueSource: 'colour',
-      valueLow: 41,
-      valueHigh: 44,
-      colourOffset: 0,
       uniformity: 1,
-      atKeyLimit: false,
     });
     expect(doc.matrix).toEqual({ x: [0.5, 2.5], y: [1, 2.5], values: [[10, 20], [30, 40]] });
   });
@@ -319,7 +291,7 @@ describe('buildHeatmapJSON', () => {
     // ⚑ NaN would not: JSON rewrites it as null anyway, and `null * x === 0` is
     // how a laundered NaN once became a flat line at zero. Writing null on
     // purpose means the reader gets the same thing we meant.
-    const doc = JSON.parse(buildHeatmapJSON([cell({ value: null, low: null, high: null, distance: null })])) as {
+    const doc = JSON.parse(buildHeatmapJSON([cell({ value: null })])) as {
       cells: Array<Record<string, unknown>>;
       matrix: { values: (number | null)[][] };
     };

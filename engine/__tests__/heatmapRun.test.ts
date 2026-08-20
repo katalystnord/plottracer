@@ -338,13 +338,20 @@ describe('readHeatmapCells', () => {
       VALUE_AXES
     );
     expect(summary).toMatch(/^20 cells read; \d+ need a look\.$/);
-    expect(rows.filter((r) => r.warning !== '').length).toBeGreaterThan(10);
+    // ⚑ 8, not 18. The estimator flagged a cell whenever its colour sat off the
+    // ramp, which on a q35 JPEG is nearly all of them. The lookup READS those
+    // cells - every one within 1.34% of the key's span - so what is left to
+    // report is only what uniformity sees: something in the cell that is not
+    // the cell's own colour.
+    expect(rows.filter((r) => r.warning !== '').length).toBe(8);
     // The warnings name what is wrong, in the figure's own terms.
-    expect(rows.some((r) => /off the key/.test(r.warning))).toBe(true);
+    // ⚑ `off the key` is gone with the estimator - a colour is on the range or
+    // it is not, and every cell of this figure IS on it. What remains to report
+    // is what uniformity saw.
     expect(rows.some((r) => /% of the cell/.test(r.warning))).toBe(true);
   });
 
-  it('carries the bounds, the centre and the interval into the row', () => {
+  it('carries the bounds and the centre into the row', () => {
     const { image, axes, placed } = scene();
     const { scale } = buildColorScale(placed, image, false);
     const { rows } = readHeatmapCells(
@@ -358,9 +365,6 @@ describe('readHeatmapCells', () => {
     const first = rows[0]!;
     expect(first).toMatchObject({ col: 0, row: 0, xMin: 0, xMax: 1, yMin: 0, yMax: 2 });
     expect(first.xCentre).toBeCloseTo(0.5, 6);
-    expect(first.low).toBeLessThan(first.value!);
-    expect(first.high).toBeGreaterThan(first.value!);
-    expect(first.rivalValues).toEqual([]);
   });
 
   it('reports a cell it could not read as EMPTY, never as zero', () => {
@@ -379,19 +383,7 @@ describe('readHeatmapCells', () => {
     expect(rows[0]!.warning).toBe('Not on the image');
   });
 
-  it('says so in the ROW when a cell sits at the key’s limit', () => {
-    // The warning has to reach the user, not just the object: a clipped cell is
-    // the one wrong value with nothing else to give it away.
-    const { image, axes, placed } = scene();
-    const { scale } = buildColorScale(placed, image, false);
-    // The bottom-left cell of this figure is its coldest; widen the grid to a
-    // single cell so the read covers the key's extremes.
-    const { rows } = readHeatmapCells(image, axes, { xDividers: [0, 9], yDividers: [0, 8] }, scale!, NO_HEATMAP_LABELS, VALUE_AXES);
-    expect(rows).toHaveLength(1);
-    if (rows[0]!.atKeyLimit) expect(rows[0]!.warning).toMatch(/key’s limit/);
-    // And whatever this particular cell does, the flag and the sentence agree.
-    expect(rows[0]!.atKeyLimit).toBe(/key’s limit/.test(rows[0]!.warning));
-  });
+  // ⚠️ REMOVED WITH `atKeyLimit` - see heatmapRead.test.ts for the argument.
 
   it('attaches the axis NAME to every cell in that column or row', () => {
     // ⚑⚑ "The label is the coordinate." A category axis's cells are identified
@@ -775,21 +767,9 @@ describe('a user’s own reading of a cell', () => {
     expect(back.rgb).toEqual(never.rgb);
   });
 
-  it('carries no COLOUR evidence for a value the colour did not produce', () => {
-    // ⚑ The interval, the distance off the ramp, the rivals and the clipping
-    // flag are all properties of inverting a COLOUR. A reading taken by eye has
-    // none of them, and inventing them - low = high = the typed number, say -
-    // would dress a bare assertion as a measured interval.
-    const { image, axes, grid, scale } = readable();
-    const readings = setCellReading(NO_HEATMAP_CELL_READINGS, scale, 1, 1, '59').readings;
-    const mine = cellAt(readHeatmapCells(image, axes, grid, scale, NO_HEATMAP_LABELS, VALUE_AXES, readings).rows, 1, 1);
-    expect(mine.low).toBeNull();
-    expect(mine.high).toBeNull();
-    expect(mine.distance).toBeNull();
-    expect(mine.rivalValues).toEqual([]);
-    expect(mine.atKeyLimit).toBe(false);
-  });
-
+  // ⚠️ REMOVED: this asserted that a cell read BY EYE carries no interval,
+  // distance, rivals or clipping flag. Nothing carries them now, on any cell,
+  // so there is nothing left for it to distinguish.
   it('keeps what was measured of the PIXELS, which is why the user looked twice', () => {
     // ⚑ Uniformity is a fact about the cell's ink, not about who read it: a
     // hatched cell is still hatched after a person types the number they can see

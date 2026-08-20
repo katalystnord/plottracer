@@ -90,7 +90,7 @@ describe('readHeatmap', () => {
     fill(data, 120, 20, 170, 220, [120, 120, 120]);
     fill(data, 170, 20, 220, 220, [160, 160, 160]);
     const cells = readHeatmap(data, W, H, linearAxes, [0, 1, 2, 3, 4], [0, 2], greyScale(data))!;
-    expect(cells.map((c) => Math.round(c.reading!.value))).toEqual([40, 80, 120, 160]);
+    expect(cells.map((c) => Math.round(c.value!))).toEqual([40, 80, 120, 160]);
     expect(cells.every((c) => c.uniformity === 1)).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe('readHeatmap', () => {
     fill(data, 120, 20, 220, 220, [200, 200, 200]);
     for (const x of [20, 21, 22, 119, 120, 121, 218, 219]) fill(data, x, 20, x + 1, 220, [255, 255, 255]);
     const cells = readHeatmap(data, W, H, linearAxes, [0, 2, 4], [0, 2], greyScale(data))!;
-    expect(cells.map((c) => Math.round(c.reading!.value))).toEqual([60, 200]);
+    expect(cells.map((c) => Math.round(c.value!))).toEqual([60, 200]);
 
     // …and with the inset turned off the border gets in, which is what makes the
     // default load-bearing rather than decorative.
@@ -131,7 +131,6 @@ describe('readHeatmap', () => {
     fill(data, 20, 20, 220, 220, [90, 90, 90]);
     const clean = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
     expect(clean[0]!.uniformity).toBe(1);
-    expect(clean[0]!.reading!.distance).toBe(0);
 
     // A printed "42" across the middle of the same cell.
     fill(data, 90, 100, 150, 140, [0, 0, 0]);
@@ -139,8 +138,7 @@ describe('readHeatmap', () => {
     expect(marked[0]!.uniformity).toBeLessThan(1);
     // The VALUE is still the cell's own colour - the ink is outvoted, not
     // averaged in - so the reading survives and the warning travels with it.
-    expect(Math.round(marked[0]!.reading!.value)).toBe(90);
-    expect(marked[0]!.reading!.distance).toBe(0);
+    expect(Math.round(marked[0]!.value!)).toBe(90);
   });
 
   it('samples across a ROTATED cell, not across a screen rectangle', () => {
@@ -176,11 +174,11 @@ describe('readHeatmap', () => {
         data[i + 3] = 255;
       }
     const cells = readHeatmap(data, W, H, rotated, [0, 2, 4], [0, 2], greyScale(data))!;
-    expect(cells.map((c) => Math.round(c.reading!.value))).toEqual([70, 180]);
+    expect(cells.map((c) => Math.round(c.value!))).toEqual([70, 180]);
     // ⚑ And every sample landed INSIDE its own rotated cell: a lattice built the
     // wrong way round would stray onto the neighbour or off the figure entirely,
     // which shows up as a colour off the ramp or a cell that is not one colour.
-    expect(cells.every((c) => c.reading!.distance === 0)).toBe(true);
+    expect(cells.every((c) => c.value !== null)).toBe(true);
     expect(cells.every((c) => c.uniformity === 1)).toBe(true);
   });
 
@@ -211,10 +209,9 @@ describe('readHeatmap', () => {
       dataToPixel: (x, y) => ({ x: 5000 + x, y: 5000 + y }),
     };
     const cells = readHeatmap(data, W, H, offImage, [0, 4], [0, 2], greyScale(data))!;
-    expect(cells[0]!.reading).toBeNull();
+    expect(cells[0]!.value).toBeNull();
     expect(cells[0]!.samples).toBe(0);
     expect(cells[0]!.uniformity).toBe(0);
-    expect(cells[0]!.rivals).toEqual([]);
     expect(cells[0]!.rgb).toEqual([0, 0, 0]);
   });
 
@@ -225,14 +222,19 @@ describe('readHeatmap', () => {
     for (let y = 20; y < 220; y++)
       for (let x = 20; x < 120; x++) data[(y * W + x) * 4 + 3] = 0;
     const cells = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
-    expect(Math.round(cells[0]!.reading!.value)).toBe(90);
+    expect(Math.round(cells[0]!.value!)).toBe(90);
     expect(cells[0]!.samples).toBeGreaterThan(0);
     expect(cells[0]!.samples).toBeLessThan(49);
   });
 
-  it('carries a cell’s rival values through, so ambiguity reaches the record', () => {
-    // A key that returns to the same grey: the cell has two honest answers and
-    // the record has to hold both.
+  it('a colour the range holds in TWO places is not measurable', () => {
+    // ⚑ A key that returns to the same grey, so this colour has no single
+    // position on the range. It used to record one of the two answers and list
+    // the other as a "rival" beside it; a lookup that finds the colour twice has
+    // not found it, so there is no value.
+    // ⚠️ A published colormap is injective, so this cannot happen on a clean
+    // read - it means the scan, the compression or the sampling degraded the
+    // colour until it stopped identifying one value.
     const data = greyKeyImage();
     for (let x = 0; x < 256; x++)
       for (let y = 280; y < 290; y++) {
@@ -244,8 +246,9 @@ describe('readHeatmap', () => {
       }
     fill(data, 20, 20, 220, 220, [128, 128, 128]);
     const cells = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
-    expect(cells[0]!.rivals.length).toBeGreaterThanOrEqual(1);
-    expect(cells[0]!.reading).not.toBeNull();
+    expect(cells[0]!.value).toBeNull();
+    // The COLOUR is never in doubt - only its position on the range.
+    expect(cells[0]!.rgb).toEqual([128, 128, 128]);
   });
 
   it('reads the pixels that EXIST when a cell hangs off the canvas', () => {
@@ -268,7 +271,7 @@ describe('readHeatmap', () => {
       const cells = readHeatmap(data, W, H, shifted(dx, dy), [0, 4], [0, 2], greyScale(data))!;
       expect(cells[0]!.samples).toBeGreaterThan(0);
       expect(cells[0]!.samples).toBeLessThan(49);
-      expect(Math.round(cells[0]!.reading!.value)).toBe(90);
+      expect(Math.round(cells[0]!.value!)).toBe(90);
     }
   });
 
@@ -285,9 +288,10 @@ describe('readHeatmap', () => {
     for (let x = 21; x < 220; x += 2) fill(data, x, 20, x + 1, 220, [10, 120, 60]);
     const cells = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
     expect(cells[0]!.rgb).toEqual([10, 120, 200]);
-    // …and being nowhere near this grey key, it is reported as far off the ramp
-    // rather than as a value.
-    expect(cells[0]!.reading!.distance).toBeGreaterThan(50);
+    // …and being nowhere near this grey key, it is not on the range at all, so
+    // there is no value. It used to come back with a number and a `distance`
+    // caveat attached.
+    expect(cells[0]!.value).toBeNull();
   });
 
   it('counts a pixel EXACTLY at the noise floor as matching', () => {
@@ -323,8 +327,7 @@ describe('readHeatmap', () => {
     const scale = greyScale(data);
     const broken: ColorScale = { ...scale, ticks: [scale.ticks[0], scale.ticks[0]] };
     const cells = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], broken)!;
-    expect(cells[0]!.reading).toBeNull();
-    expect(cells[0]!.rivals).toEqual([]);
+    expect(cells[0]!.value).toBeNull();
     expect(cells[0]!.samples).toBeGreaterThan(0);
     expect(cells[0]!.rgb).toEqual([90, 90, 90]);
   });
@@ -343,33 +346,15 @@ describe('readHeatmap', () => {
     }
   });
 
-  it('flags a cell sitting at the KEY’S LIMIT, where a clipped value hides', () => {
-    // ⚑⚑ THE ONE WRONG VALUE THE OTHER TWO MEASURES CANNOT SEE. A figure whose
-    // data runs past its own colour key draws those cells in the key's extreme
-    // colour: the colour matches the ramp exactly, fills the cell uniformly, and
-    // reads back with total confidence as the key's limit. Nothing about the
-    // pixels is wrong - the figure simply no longer contains the number.
-    //
-    // Found by BUILDING AN EXAMPLE: the first IC50 sample generated values up to
-    // 1580 nM against a key stopping at 600, and five cells came back exact,
-    // uniform and up to 62% wrong.
-    const data = greyKeyImage();
-    fill(data, 20, 20, 220, 220, [255, 255, 255]); // the key's top colour
-    const clipped = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
-    expect(clipped[0]!.reading!.distance).toBe(0);
-    expect(clipped[0]!.uniformity).toBe(1);
-    expect(clipped[0]!.atKeyLimit).toBe(true);
-
-    // …and a cell comfortably inside the key is not flagged, or the warning
-    // would be permanently on and mean nothing.
-    fill(data, 20, 20, 220, 220, [120, 120, 120]);
-    const inside = readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))!;
-    expect(inside[0]!.atKeyLimit).toBe(false);
-
-    // The other end of the key counts too.
-    fill(data, 20, 20, 220, 220, [0, 0, 0]);
-    expect(readHeatmap(data, W, H, linearAxes, [0, 4], [0, 2], greyScale(data))![0]!.atKeyLimit).toBe(true);
-  });
+  // ⚠️⚠️ REMOVED WITH THE ESTIMATOR, AND IT IS THE ONE REMOVAL WITH AN ARGUMENT
+  // AGAINST IT. `atKeyLimit` flagged a cell drawn in the key's extreme colour,
+  // where a figure whose data runs past its own key draws cells that are exact,
+  // uniform and silently wrong - found by building an example, five cells up to
+  // 62% out. It was computed from the old band (does the interval touch an end),
+  // which is gone. The FACT is still measurable without a band - the cell's
+  // colour is the key's first or last entry - so this is a decision about scope,
+  // not a capability we lost. Raised with David; restore this test if it comes
+  // back.
 
   it('clamps an absurd inset instead of sampling nothing', () => {
     const data = greyKeyImage();
@@ -379,7 +364,7 @@ describe('readHeatmap', () => {
         inset,
       })!;
       expect(cells[0]!.samples).toBeGreaterThan(0);
-      expect(Math.round(cells[0]!.reading!.value)).toBe(90);
+      expect(Math.round(cells[0]!.value!)).toBe(90);
     }
   });
 
@@ -394,6 +379,6 @@ describe('readHeatmap', () => {
       maxSamplesPerAxis: 1,
     })!;
     expect(cells[0]!.samples).toBe(1);
-    expect(Math.round(cells[0]!.reading!.value)).toBe(90);
+    expect(Math.round(cells[0]!.value!)).toBe(90);
   });
 });

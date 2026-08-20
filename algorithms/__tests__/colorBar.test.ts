@@ -153,6 +153,7 @@ function rawStripOf(ramp: RGBRamp, width = KEY_W): ColorBarStrip {
     samples: Array.from({ length: width }, (_, i) => ({
       t: i / (width - 1),
       rgb: ramp(i / (width - 1)),
+      noise: 0, // a hand-built strip has no scan behind it to vary
     })),
     from: { x: 0, y: 10 },
     to: { x: width - 1, y: 10 },
@@ -371,17 +372,17 @@ describe('sampleColorBar', () => {
     it('applies the identical check to samples arriving from elsewhere', () => {
       // The load path's entrance to the same model.
       expect(checkStripSamples([])).toBe('no-pixels');
-      expect(checkStripSamples([{ t: 0, rgb: [1, 2, 3] }])).toBe('no-pixels');
+      expect(checkStripSamples([{ t: 0, rgb: [1, 2, 3], noise: 0 }])).toBe('no-pixels');
       expect(
         checkStripSamples([
-          { t: 0, rgb: [10, 10, 10] },
-          { t: 1, rgb: [15, 15, 15] },
+          { t: 0, rgb: [10, 10, 10], noise: 0 },
+          { t: 1, rgb: [15, 15, 15], noise: 0 },
         ])
       ).toBe('no-ramp');
       expect(
         checkStripSamples([
-          { t: 0, rgb: [0, 0, 0] },
-          { t: 1, rgb: [255, 255, 255] },
+          { t: 0, rgb: [0, 0, 0], noise: 0 },
+          { t: 1, rgb: [255, 255, 255], noise: 0 },
         ])
       ).toBeNull();
     });
@@ -409,14 +410,14 @@ describe('sampleColorBar', () => {
       expect(colorDistance([0, 0, 0], [MIN_RAMP_SPREAD, 0, 0])).toBe(MIN_RAMP_SPREAD);
       expect(
         checkStripSamples([
-          { t: 0, rgb: [0, 0, 0] },
-          { t: 1, rgb: [MIN_RAMP_SPREAD, 0, 0] },
+          { t: 0, rgb: [0, 0, 0], noise: 0 },
+          { t: 1, rgb: [MIN_RAMP_SPREAD, 0, 0], noise: 0 },
         ])
       ).toBeNull();
       expect(
         checkStripSamples([
-          { t: 0, rgb: [0, 0, 0] },
-          { t: 1, rgb: [MIN_RAMP_SPREAD - 1, 0, 0] },
+          { t: 0, rgb: [0, 0, 0], noise: 0 },
+          { t: 1, rgb: [MIN_RAMP_SPREAD - 1, 0, 0], noise: 0 },
         ])
       ).toBe('no-ramp');
     });
@@ -428,14 +429,14 @@ describe('sampleColorBar', () => {
       expect(colorDistance([0, 0, 0], [over, over, over])).toBeGreaterThan(MIN_RAMP_SPREAD);
       expect(
         checkStripSamples([
-          { t: 0, rgb: [0, 0, 0] },
-          { t: 1, rgb: [under, under, under] },
+          { t: 0, rgb: [0, 0, 0], noise: 0 },
+          { t: 1, rgb: [under, under, under], noise: 0 },
         ])
       ).toBe('no-ramp');
       expect(
         checkStripSamples([
-          { t: 0, rgb: [0, 0, 0] },
-          { t: 1, rgb: [over, over, over] },
+          { t: 0, rgb: [0, 0, 0], noise: 0 },
+          { t: 1, rgb: [over, over, over], noise: 0 },
         ])
       ).toBeNull();
     });
@@ -580,8 +581,8 @@ describe('positionOnStrip', () => {
     // vertical as often as horizontal, and a rotated scan makes them diagonal.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 1, rgb: [255, 255, 255] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 1, rgb: [255, 255, 255], noise: 0 },
       ],
       from: { x: 10, y: 20 },
       to: { x: 110, y: 220 },
@@ -637,8 +638,8 @@ describe('colorAtPosition - the key read FORWARDS', () => {
     // which is the very confusion the mirroring is supposed to remove.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 1, rgb: [100, 200, 40] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 1, rgb: [100, 200, 40], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -654,9 +655,9 @@ describe('colorAtPosition - the key read FORWARDS', () => {
     // index would place every colour wrong after the first gap.
     const gappy: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 0.9, rgb: [90, 90, 90] },
-        { t: 1, rgb: [100, 100, 100] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 0.9, rgb: [90, 90, 90], noise: 0 },
+        { t: 1, rgb: [100, 100, 100], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -876,9 +877,9 @@ describe('invertColor', () => {
     // bottom of every key read a step coarser than the rest of it.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 0.5, rgb: [100, 100, 100] },
-        { t: 1, rgb: [220, 220, 220] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 0.5, rgb: [100, 100, 100], noise: 0 },
+        { t: 1, rgb: [220, 220, 220], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -908,8 +909,8 @@ describe('invertColor', () => {
     // produce a two-sample strip.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 1, rgb: [100, 100, 100] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 1, rgb: [100, 100, 100], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -927,9 +928,9 @@ describe('invertColor', () => {
     // that was never measured, so the reading is reported as the point it is.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [0, 0, 0] },
-        { t: 0.5, rgb: [1, 1, 1] },
-        { t: 1, rgb: [201, 201, 201] },
+        { t: 0, rgb: [0, 0, 0], noise: 0 },
+        { t: 0.5, rgb: [1, 1, 1], noise: 0 },
+        { t: 1, rgb: [201, 201, 201], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -950,9 +951,9 @@ describe('invertColor', () => {
     // divide by a step of zero or hand back a NaN position.
     const strip: ColorBarStrip = {
       samples: [
-        { t: 0, rgb: [7, 7, 7] },
-        { t: 0.5, rgb: [7, 7, 7] },
-        { t: 1, rgb: [7, 7, 7] },
+        { t: 0, rgb: [7, 7, 7], noise: 0 },
+        { t: 0.5, rgb: [7, 7, 7], noise: 0 },
+        { t: 1, rgb: [7, 7, 7], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -1011,9 +1012,9 @@ describe('invertColor', () => {
     // one.
     const asymmetric = (leftStep: number, rightStep: number): ColorBarStrip => ({
       samples: [
-        { t: 0, rgb: [100 - leftStep, 100 - leftStep, 100 - leftStep] },
-        { t: 0.5, rgb: [100, 100, 100] },
-        { t: 1, rgb: [100 + rightStep, 100 + rightStep, 100 + rightStep] },
+        { t: 0, rgb: [100 - leftStep, 100 - leftStep, 100 - leftStep], noise: 0 },
+        { t: 0.5, rgb: [100, 100, 100], noise: 0 },
+        { t: 1, rgb: [100 + rightStep, 100 + rightStep, 100 + rightStep], noise: 0 },
       ],
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
@@ -1034,7 +1035,7 @@ describe('invertColor', () => {
     expect(invertColor({ samples: [], from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, thickness: 1 }, [0, 0, 0])).toBeNull();
     expect(
       invertColor(
-        { samples: [{ t: 0, rgb: [1, 2, 3] }], from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, thickness: 1 },
+        { samples: [{ t: 0, rgb: [1, 2, 3], noise: 0 }], from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, thickness: 1 },
         [0, 0, 0]
       )
     ).toBeNull();

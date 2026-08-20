@@ -32,8 +32,8 @@
  */
 
 import { cellsOf, type HeatmapCell } from '../core/heatmapGrid.js';
-import { COLOR_NOISE_FLOOR, colorDistance, medoidColor } from './colorBar.js';
-import { readColor, type ColorScale, type ColorValueBand } from './colorScale.js';
+import { COLOR_NOISE_FLOOR, colorDistance, lookupColor, medoidColor } from './colorBar.js';
+import { valueAtPosition, type ColorScale } from './colorScale.js';
 import type { RGB } from './colorFilter.js';
 
 /** The one thing this needs from a calibrated axes: where a data coordinate
@@ -56,10 +56,20 @@ export interface ReadHeatmapOptions {
   /** At most this many samples per axis inside a cell. A cap, not a target:
    * a 300px cell does not need 90,000 reads to find its own colour. */
   maxSamplesPerAxis?: number;
+  /**
+   * Override how close a colour must be to count as on the key.
+   *
+   * ⚑ NORMALLY ABSENT, and that is the point: the key measures its own tolerance
+   * from how much it varies across its own thickness (`lookupColor`). Supplying
+   * one here overrides that measurement, which the tests do to pin behaviour and
+   * production does not.
+   */
+  tolerance?: number;
 }
 
 const DEFAULT_INSET = 0.2;
 const DEFAULT_MAX_SAMPLES = 7;
+
 
 /** One cell's reading: where it is, what it is worth, and how much to trust it. */
 export interface HeatmapCellReading {
@@ -85,17 +95,24 @@ export interface HeatmapCellReading {
   /** The colour actually sampled - kept so a caller can show the user what was
    * read, which is the only way to check a colour reading by eye. */
   rgb: RGB;
-  /** Null when the cell could not be sampled at all (entirely off-image, or
-   * fully transparent) or when the key cannot produce a value. A cell that could
-   * not be read is reported as unread, never as zero. */
-  reading: ColorValueBand | null;
-  /** Other values this cell's colour is equally consistent with (a cyclic key, a
-   * key that revisits a colour). Non-empty means AMBIGUOUS, not imprecise. */
-  rivals: readonly ColorValueBand[];
-  /** The reading sits against an END of the key, so the cell may be CLIPPED -
-   * see `ColorValueReading.atKeyLimit`. The one wrong value distance and
-   * uniformity cannot see. */
-  atKeyLimit: boolean;
+  /**
+   * What this cell is worth on the colour axis, or null when it is not
+   * measurable.
+   *
+   * ⚑⚑ ONE NUMBER, LIKE EVERY OTHER AXIS. David, 2026-08-20: *"Heatmaps are
+   * JUST LIKE EVERY OTHER TYPE OF GRAPH. They only happen to have a third
+   * dimension, that is visualised and measured in COLOUR SPACE, that we
+   * calibrate just like any other axis."* An X reading is a number; so is this.
+   * There used to be a `low..high` band, a `distance` off the ramp, an
+   * `atKeyLimit` flag and a list of rival values beside it - an error model no
+   * other axis in this product has, and none of it survived the question "would
+   * we accept that on X?".
+   *
+   * Null in both of the cases where the colour is not measurable: it is not on
+   * the range at all, or the range holds it in more than one place. Reported as
+   * unread, never as zero.
+   */
+  value: number | null;
   /**
    * The fraction of the cell's sampled pixels that match the colour we read, to
    * within the noise floor. 1 for a flat printed cell; lower for a cell carrying
@@ -127,8 +144,13 @@ export function readHeatmap(
   if (cells === null) return null;
   const inset = clampInset(options.inset ?? DEFAULT_INSET);
   const maxPerAxis = Math.max(1, Math.round(options.maxSamplesPerAxis ?? DEFAULT_MAX_SAMPLES));
+  // ⚑⚑ UNDEFINED MEANS "ASK THE KEY". `lookupColor` measures how much the band
+  // varies across its own thickness and admits a colour on that, per stretch of
+  // the key - so there is no tolerance constant in this product any more. An
+  // explicit one is still accepted, which is how the tests pin behaviour.
+  const tolerance = options.tolerance;
 
-  return cells.map((cell) => readCell(src, width, height, axes, cell, scale, inset, maxPerAxis));
+  return cells.map((cell) => readCell(src, width, height, axes, cell, scale, inset, maxPerAxis, tolerance));
 }
 
 /** Half the cell at most: an inset of 0.5 or more leaves nothing to sample. */
@@ -145,7 +167,8 @@ function readCell(
   cell: HeatmapCell,
   scale: ColorScale,
   inset: number,
-  maxPerAxis: number
+  maxPerAxis: number,
+  tolerance: number | undefined
 ): HeatmapCellReading {
   // The cell's four corners in pixels. Taken from the axes rather than assumed
   // axis-aligned: a scanned figure is rotated, and its rows are not image rows.
@@ -209,20 +232,28 @@ function readCell(
     samples: window.length,
   };
   if (rgb === null) {
-    return { ...base, rgb: [0, 0, 0], reading: null, rivals: [], uniformity: 0, atKeyLimit: false };
+    return { ...base, rgb: [0, 0, 0], value: null, uniformity: 0 };
   }
 
+  // ⚑ UNIFORMITY IS COUNTED AGAINST THE COLOUR WE READ, within the SAME
+  // tolerance the lookup uses. One number decides both "is this the cell's
+  // colour" and "is this colour on the key", so the reading and its
+  // trustworthiness cannot come from two different notions of "the same colour".
   const matching = window.filter((c) => colorDistance(c, rgb) <= COLOR_NOISE_FLOOR).length;
-  const value = readColor(scale, rgb);
+  // ⚑ The cell's OWN spread, measured exactly as the key measures its band: a
+  // high percentile of how far its pixels sit from the colour we settled on.
+  // Robust to a printed label or a hatch, which are a minority of the sample.
+  const cellSpread = window.map((c) => colorDistance(c, rgb)).sort((a, b) => a - b);
+  const cellNoise = cellSpread[Math.min(cellSpread.length - 1, Math.floor(0.9 * cellSpread.length))]!;
+  // ⚑⚑ A LOOKUP, THEN THE AXIS. `lookupColor` answers WHERE on the range this
+  // colour sits, or null if it is not on the range; `valueAtPosition` turns that
+  // position into a number through the two known values, exactly as an X axis
+  // turns a pixel into a number. Nothing in between estimates anything.
+  const t = lookupColor(scale.strip, rgb, tolerance ?? cellNoise);
   return {
     ...base,
     rgb,
-    reading:
-      value === null
-        ? null
-        : { value: value.value, low: value.low, high: value.high, distance: value.distance },
-    rivals: value?.rivals ?? [],
-    atKeyLimit: value?.atKeyLimit ?? false,
+    value: t === null ? null : valueAtPosition(scale, t),
     uniformity: matching / window.length,
   };
 }

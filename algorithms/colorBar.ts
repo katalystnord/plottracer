@@ -102,6 +102,24 @@ export interface ColorBarSample {
   /** Position along the strip, 0 at `from` and 1 at `to`. */
   t: number;
   rgb: RGB;
+  /**
+   * HOW MUCH THE BAND VARIES ACROSS ITS THICKNESS AT THIS POSITION - the scan's
+   * own noise, measured off the figure rather than assumed.
+   *
+   * ⚑⚑ DAVID'S PROPOSAL, 2026-08-20: *"We can always get an estimate for the
+   * tolerance needed from every colour key. The colour value is given as a band,
+   * not a single pixel... do a measurement across the band and look at the
+   * variations in that."* A printed key is one colour all the way across its
+   * width at any point along it, so anything that varies across it is the scan,
+   * the compression or the rendering - never the data.
+   *
+   * Measured: 0.0 on every clean fixture, at median, p90 and max. On the q35
+   * JPEG, p90 = 33.4 - which is inside the 12..48 plateau found INDEPENDENTLY by
+   * sweeping tolerances against the figures' published values. The key's own
+   * measurement of itself and the ground truth agree, which is what let the
+   * hand-set constant go.
+   */
+  noise: number;
 }
 
 /**
@@ -419,7 +437,22 @@ export function sampleColorBar(
       window.push([src[idx]!, src[idx + 1]!, src[idx + 2]!]);
     }
     const rgb = medoidColor(window);
-    if (rgb !== null) samples.push({ t, rgb });
+    // ⚑ Free, in the loop that already gathered the window: the widest departure
+    // from the colour we settled on, across the band's thickness, right here.
+    if (rgb !== null) {
+      // ⚑⚑ ROBUST, NOT THE MAXIMUM, and for the reason David named: the two
+      // clicks that set the key are made by hand, so a BORDER LINE - or part of
+      // one - lands inside the band often. The COLOUR already survives that,
+      // because a medoid ignores a minority; the noise did not, because one
+      // border pixel is the maximum. Measured: sampling a CLEAN key at thickness
+      // 31 spilled onto the paper and reported noise 315.
+      // ⚑ The same shape the cells already use: the band is the majority of the
+      // window, so a high percentile of it describes the band and drops whatever
+      // was never part of it.
+      const spread = window.map((c) => colorDistance(c, rgb)).sort((a, b) => a - b);
+      const noise = spread[Math.min(spread.length - 1, Math.floor(0.9 * spread.length))]!;
+      samples.push({ t, rgb, noise });
+    }
   }
 
   const reason = checkStripSamples(samples);
@@ -669,6 +702,126 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
     .map((b) => b.band)
     .sort((a, b) => a.distance - b.distance);
   return { t, tLow: winner.tLow, tHigh: winner.tHigh, distance, rivals };
+}
+
+/**
+ * WHERE ON THE KEY THIS COLOUR IS. A LOOKUP, NOT AN ESTIMATE.
+ *
+ * ⚑⚑ THE COLOUR AXIS IS AN AXIS LIKE ANY OTHER. David, 2026-08-20: *"Heatmaps
+ * are JUST LIKE EVERY OTHER TYPE OF GRAPH. They only happen to have a third
+ * dimension, that is visualised and measured in COLOUR SPACE, that we calibrate
+ * just like any other axis."* An X axis does not report how far off it you were,
+ * does not return a confidence band, and does not offer rival positions. Neither
+ * does this one. The only thing that differs is the lookup itself: on X the
+ * position is a projection onto a line, and here the range is a curve through
+ * three dimensions, so finding the position is a search.
+ *
+ * ⚑ A FIGURE IS DRAWN FROM A COLORMAP - a lookup table of N discrete entries -
+ * and the key beside it is that same table, printed. Measured on this repo's
+ * fixtures before this was written: **every cell colour of both clean figures is
+ * EXACTLY present in its own key**, 40 of 40, and each key holds ~254 distinct
+ * colours, which is the 256-entry table showing through. There is nothing to
+ * estimate. On the q35 JPEG only 2 of 20 match, and the key itself carries 490
+ * distinct colours where a colormap has 256 - the scan smeared both.
+ *
+ * ⚑ THE TOLERANCE IS SET, NOT DERIVED, and it is the same test every other type
+ * uses to decide "is this pixel this colour" (`colorFilter.ts`: `dr² + dg² +
+ * db² <= tolerance²`). David: *"With some specific and set degree of tolerance.
+ * Else everything real breaks down, because of fuzziness."*
+ *
+ * ⚑⚑ TOLERANCE DECIDES IN OR OUT; THE PLATEAU DECIDES WHERE. A key drawn 550px
+ * long repeats each colormap entry over about two pixels, so a matched colour
+ * occupies a RUN. Its reading is the run's middle: taking the first tied
+ * position was measured on the jet fixture as a systematic 0.6-0.8 degree
+ * under-read across a 160 degree range, in the same direction for every cell,
+ * from colours that matched the key exactly. A constant signed bias is the worst
+ * kind, because averaging cells does not remove it. Widening the tolerance never
+ * moves the reading - it only admits or rejects.
+ *
+ * Null means NOT MEASURABLE, and it is the honest answer in both its cases:
+ *   · nothing on the range is within tolerance - the colour is not on this key;
+ *   · the range holds it in more than one separate place - so there is no single
+ *     position. A published colormap is injective, so this cannot arise from a
+ *     clean read; it means the scan, the compression or the sampling has
+ *     degraded the colour until it no longer identifies one value.
+ */
+export function lookupColor(strip: ColorBarStrip, rgb: RGB, sampleNoise = 0): number | null {
+  const s = strip.samples;
+  if (s.length < 2) return null;
+
+  // ⚑⚑ BOTH SIDES OF THE COMPARISON ARE NOISY, AND BOTH ARE MEASURED. The key
+  // measures how much it varies across its own band; `sampleNoise` is the same
+  // measurement taken on the thing being looked up - the cell's own spread. The
+  // same scan degraded them INDEPENDENTLY, so admitting on the key's noise alone
+  // under-admits: measured on the q35 JPEG, 3 of 20 cells that the published
+  // values say are readable failed to look up. Nothing is chosen here; the two
+  // measurements are simply both allowed for.
+  const key = keyTolerance(s);
+  const tol = new Float64Array(s.length);
+  for (let i = 0; i < s.length; i++) tol[i] = key[i]! + sampleNoise;
+
+  const d = new Float64Array(s.length);
+  let best = 0;
+  for (let i = 0; i < s.length; i++) {
+    d[i] = colorDistance(rgb, s[i]!.rgb);
+    if (d[i]! < d[best]!) best = i;
+  }
+  // Not on the range at all.
+  if (d[best]! > tol[best]!) return null;
+
+  // More than one separate stretch of the range holds it: no single position.
+  let runs = 0;
+  for (let i = 0; i < s.length; i++) {
+    const within = d[i]! <= tol[i]!;
+    const prev = i > 0 && d[i - 1]! <= tol[i - 1]!;
+    if (within && !prev) runs++;
+  }
+  if (runs !== 1) return null;
+
+  // The colormap entry's own plateau, read at its middle.
+  const plateau = tiedRun(d, best);
+  return (s[plateau.lo]!.t + s[plateau.hi]!.t) / 2;
+}
+
+/**
+ * How far a colour may sit from THIS key and still be a colour on it, measured
+ * from the key itself, per stretch of it.
+ *
+ * ⚑⚑ NO CONSTANT TO PICK. A printed key is one colour all the way across its
+ * width at any point along its length, so whatever varies ACROSS it is the scan,
+ * the compression or the rendering - never the data. `sampleColorBar` measures
+ * that at every position while it is already gathering the window; this turns it
+ * into the admission test.
+ *
+ * ⚑ CHUNKED, because the noise is not the same everywhere. Measured on the q35
+ * JPEG fixture, p90 per eighth of the key: 38 33 32 33 36 32 27 31 - a 27..38
+ * swing around a global 33. A single figure is wrong at both ends of a key whose
+ * compression tracks local contrast. Clean keys are flat 0 throughout.
+ *
+ * ⚑ p90 RATHER THAN THE MAXIMUM, so one stray pixel - a tick mark crossing the
+ * bar, a border caught by a generous thickness - cannot open the tolerance up for
+ * the whole chunk.
+ *
+ * ⚑ `COLOR_NOISE_FLOOR` IS THE FLOOR, and it is the one this file already
+ * defines for exactly this: the smallest colour difference worth treating as
+ * real off an 8-bit image. On a clean key the measured noise is 0, and matching
+ * would otherwise be bit-exact - which these fixtures survive (40 of 40 cells
+ * match exactly) but a figure whose cells and key were rendered in separate
+ * passes would not.
+ */
+function keyTolerance(samples: readonly ColorBarSample[]): Float64Array {
+  const CHUNKS = 8;
+  const out = new Float64Array(samples.length);
+  for (let c = 0; c < CHUNKS; c++) {
+    const lo = Math.floor((c * samples.length) / CHUNKS);
+    const hi = Math.floor(((c + 1) * samples.length) / CHUNKS);
+    if (hi <= lo) continue;
+    const noises = samples.slice(lo, hi).map((x) => x.noise).sort((a, b) => a - b);
+    const p90 = noises[Math.min(noises.length - 1, Math.floor(0.9 * noises.length))]!;
+    const tol = Math.max(p90, COLOR_NOISE_FLOOR);
+    for (let i = lo; i < hi; i++) out[i] = tol;
+  }
+  return out;
 }
 
 /**

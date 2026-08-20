@@ -75,14 +75,20 @@ export interface HeatmapExportCell {
   yCentre: number;
   /** Null for a cell that could not be read - written as empty, never 0. */
   value: number | null;
-  low: number | null;
-  high: number | null;
-  distance: number | null;
+  /**
+   * What fraction of the cell's sampled pixels were the colour we read.
+   *
+   * ⚑ `value low`, `value high`, `colour offset` and `at key limit` used to ride
+   * here too. They were the old error model's output - how uncertain our
+   * inversion of the colour was - and no other axis in this product exports
+   * anything of the sort. Reading a colour is a lookup against the calibrated
+   * range now: it is on the range or it is not, so there is no band to carry.
+   *
+   * This one stays because it is not about the axis: WE chose where to sample
+   * inside the cell, so how much of the cell actually held that colour is a fact
+   * a consumer needs and cannot re-derive from the image alone.
+   */
   uniformity: number;
-  /** The colour is the key's extreme, so the figure may have CLIPPED the value.
-   * Exported because it is the one warning the numbers cannot carry: a clipped
-   * cell is exact, uniform, and wrong. */
-  atKeyLimit?: boolean;
   /**
    * WHICH INSTRUMENT read this value (v2.2, B16).
    *
@@ -484,11 +490,7 @@ export function heatmapCellsSection(
       // say nothing at all and leave a reader assuming a default nobody told
       // them. Evidence columns are always written here.
       'value source',
-      'value low',
-      'value high',
-      'colour offset',
       'uniformity',
-      'at key limit',
     ],
     rows: cells.map((c) => [
       // ⚑ 1-BASED, matching every place these appear on screen - the matrix
@@ -516,11 +518,7 @@ export function heatmapCellsSection(
       // instrument, so it is written as measured.
       c.value === null ? '' : c.value,
       c.source ?? 'colour',
-      c.low === null ? '' : c.low,
-      c.high === null ? '' : c.high,
-      c.distance === null ? '' : c.distance,
       c.uniformity,
-      c.atKeyLimit === true ? 'yes' : '',
     ]),
   };
 }
@@ -1015,14 +1013,12 @@ export function buildHeatmapJSON(
       // this is the half a program can read. Both channels, because they reach
       // different readers.
       valueSource: c.source ?? 'colour',
-      // The evidence travels with the value, in the same object: the interval it
-      // could not be told apart from, how far off the key its colour sat, and
-      // how much of the cell actually was that colour.
-      valueLow: c.low,
-      valueHigh: c.high,
-      colourOffset: c.distance,
+      // ⚑ The evidence travels with the value, in the same object. It used to be
+      // four numbers - the interval, the colour offset, the clipping flag and
+      // this one; the first three were the old error model's output and went
+      // with it. What remains is the fact a consumer cannot re-derive from the
+      // image alone: how much of the cell actually was the colour WE sampled.
       uniformity: c.uniformity,
-      atKeyLimit: c.atKeyLimit === true,
       // Written only where the figure prints a name, so a value x value heatmap's
       // JSON is byte-for-byte what it was before names existed.
       ...(c.xLabel ? { xLabel: c.xLabel } : {}),

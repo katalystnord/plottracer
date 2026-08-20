@@ -1381,17 +1381,23 @@ export interface HeatmapRow {
    * the user put it. Null when the cell has no reading to place.
    */
   keyPosition: number | null;
-  low: number | null;
-  high: number | null;
-  /** How far the cell's colour sat off the key's ramp, in RGB units. */
-  distance: number | null;
+  /**
+   * What fraction of the cell's sampled pixels were the colour we read.
+   *
+   * ⚑⚑ THE ONE CAVEAT THAT SURVIVED THE AXIS RULE, and it survived because it
+   * is not about the axis at all. `low`/`high`, `distance` and `atKeyLimit` all
+   * described how uncertain our INVERSION was, and no other axis in this product
+   * reports anything of the kind - we do not tell the user how far off the X
+   * axis their point sat. They are gone.
+   *
+   * This one is a statement about OUR SAMPLE. On every other type the user
+   * clicks the datum: they aimed, they saw what they hit. Here the tool chooses
+   * where to read inside twenty cells and the user aimed at none of them, so
+   * whether we read the cell or read a hatch, an asterisk, a printed label or a
+   * border is a real question that only this type has to answer. Auto-extract
+   * already reports the same fact about its own automatic sampling.
+   */
   uniformity: number;
-  /** Other values this colour is equally consistent with. Non-empty means the
-   * reading is AMBIGUOUS and must not be treated as a number. */
-  rivalValues: number[];
-  /** The cell's colour is the key's extreme, so the figure may have CLIPPED it -
-   * the value could be this or anything beyond it. */
-  atKeyLimit: boolean;
   /** The one-line verdict the table shows: what, if anything, is wrong with
    * this cell. Empty for a cell with nothing to report. */
   warning: string;
@@ -1428,15 +1434,20 @@ const UNIFORMITY_WORTH_REPORTING = 0.999;
 function warningFor(cell: HeatmapCellReading, mine: boolean): string {
   if (cell.samples === 0) return 'Not on the image';
   const parts: string[] = [];
-  if (!mine) {
-    if (cell.reading === null) return 'No value - the colour key cannot be read';
-    if (cell.rivals.length > 0) parts.push(`${cell.rivals.length + 1} possible values`);
-    // ⚑ First among the soft warnings, because it is the one nothing else
-    // catches: a clipped cell is exact, uniform and wrong.
-    if (cell.atKeyLimit) parts.push('at the key’s limit - may be clipped');
-    if (cell.reading.distance > 0) parts.push(`colour ${cell.reading.distance.toFixed(1)} off the key`);
+  // ⚑⚑ TWO FACTS, WHERE THERE USED TO BE FOUR CAVEATS. `colour N off the key`,
+  // `at the key's limit - may be clipped` and `N possible values` were readings
+  // of the old error model, and no other axis in this product reports anything
+  // of the sort. What is left is what a lookup can actually say: the colour was
+  // not on the range, and how much of the cell was the colour we read.
+  if (!mine && cell.value === null) {
+    parts.push('No value - this colour is not on the calibrated range');
   }
   if (cell.uniformity < UNIFORMITY_WORTH_REPORTING) {
+    // ⚑ NOT a confidence score for the axis - a statement about OUR SAMPLE. We
+    // chose where to read inside this cell and the user never aimed at it, so
+    // whether we read the cell or read a hatch, an asterisk or a printed label
+    // is a real caveat. The same report auto-extract already gives for its own
+    // automatic sampling.
     parts.push(`${Math.round(cell.uniformity * 100)}% of the cell`);
   }
   return parts.join('; ');
@@ -1506,9 +1517,9 @@ export function readHeatmapCells(
     // come from two different places.
     const keyPosition = mine
       ? t!
-      : cell.reading === null
+      : cell.value === null
         ? null
-        : positionAtValue(scale, cell.reading.value);
+        : positionAtValue(scale, cell.value);
     const keyRgb = keyPosition === null ? null : colorAtPosition(scale.strip, keyPosition);
     return {
       col: cell.col,
@@ -1519,7 +1530,7 @@ export function readHeatmapCells(
       yMax: cell.yMax,
       xCentre: cell.xCentre,
       yCentre: cell.yCentre,
-      value: mine ? mineValue : cell.reading?.value ?? null,
+      value: mine ? mineValue : cell.value,
       // ⚑ The stored position exactly where there is one; otherwise back through
       // the same inverse the value came out of, so the two always agree.
       keyPosition,
@@ -1532,14 +1543,7 @@ export function readHeatmapCells(
       // instrument produced it.
       ...(keyRgb ? { keyRgb: [keyRgb[0], keyRgb[1], keyRgb[2]] as const } : {}),
       source: mine ? ('user' as const) : ('colour' as const),
-      // Null, not the typed number twice: a reading by eye has no measured
-      // interval, and `low = high = value` would dress a bare number as one.
-      low: mine ? null : cell.reading?.low ?? null,
-      high: mine ? null : cell.reading?.high ?? null,
-      distance: mine ? null : cell.reading?.distance ?? null,
       uniformity: cell.uniformity,
-      rivalValues: mine ? [] : cell.rivals.map((r) => r.value),
-      atKeyLimit: mine ? false : cell.atKeyLimit,
       warning: warningFor(cell, mine),
       xLabel: labelAt(labels.x, cell.col),
       yLabel: labelAt(labels.y, cell.row),
