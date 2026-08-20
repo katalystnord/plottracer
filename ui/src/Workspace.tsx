@@ -8155,9 +8155,17 @@ export function Workspace() {
           onStatusChange={handleCanvasStatus}
           beforeOpenImage={confirmDiscardIfDirty}
           onImageOpened={handleImageOpened}
-          onPdfBytes={(bytes, name) =>
-            reporting('Could not open that document', () => openPdf(bytes, name), setProjectError)()
-          }
+          // ⚑⚑ NOT WRAPPED, AND NOT AN INLINE ARROW (v2.3 re-audit). F6 wrapped
+          // this and both halves of that were wrong. `openPdf` already wraps its
+          // entire body in try/catch and reports its own sentence, so the
+          // wrapper could never fire - and being an inline arrow it was a new
+          // function identity on EVERY Workspace render, which invalidated
+          // `loadImageFile` in ImageCanvas and made the window `paste` listener
+          // unsubscribe and resubscribe on every render of a 9,000-line
+          // component. A Ctrl+V dispatched in that gap is lost. That is exactly
+          // the churn `feedback_live_and_stable_are_separate` was written about,
+          // reintroduced by the commit that cited it.
+          onPdfBytes={openPdf}
           crosshairCursor={mode !== 'pan' || eyedropper !== null}
           avoidRect={avoidRect}
           loupeHideRect={cardRect}

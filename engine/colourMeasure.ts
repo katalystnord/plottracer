@@ -44,10 +44,23 @@ export interface ColourMeasureReading {
 
 /**
  * ⚑⚑ THE SAME LOOKUP THE HEATMAP USES, and that is the entire point of the tool.
- * It is an INDEPENDENT second opinion, so it has to answer the way the first
- * opinion answered - against the same calibrated range, by the same rule, with
- * the same tolerance measured off the same key. A second instrument that used a
- * different method would not be a check, it would be a second guess.
+ * It is an INDEPENDENT second opinion, so it answers against the same calibrated
+ * range, by the same rule, with the same tolerance measured off the same key. A
+ * second instrument using a different method would not be a check, it would be a
+ * second guess.
+ *
+ * ⚠️ WHERE THE TWO CAN STILL DIFFER, stated plainly because this comment
+ * previously claimed they could not (v2.3 re-audit). The KEY-side tolerance is
+ * shared; the SAMPLE-side is not. A heatmap cell is a medoid over a lattice and
+ * passes its own measured spread to `lookupColor`; this tool reports the ONE
+ * pixel the user clicked, and a single pixel has no spread to measure - so it
+ * offers none and is held to the key's noise alone.
+ *
+ * ▶ That makes it STRICTER on a degraded figure, and strict is the honest
+ * direction for a single pixel: on a q35 JPEG it will answer `[not in range]`
+ * for a cell whose medoid the Cells table places without trouble. The two are
+ * not contradicting each other - they measured different things, one pixel
+ * against a lattice - but a reader comparing them deserves to know which.
  *
  * ⚑ Nothing more than that. It takes what it can and gives that to the user:
  * the colour always, the value where the axis is calibrated and the colour is on
