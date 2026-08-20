@@ -379,7 +379,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // the writer at `image:` above -- a file with no remembered name has no
     // key, it does not have a key holding nothing.
     ...(data.image.fileName === undefined ? {} : { imageFileName: data.image.fileName }),
-    measurements: Array.isArray(data.measurements) ? data.measurements : [],
+    measurements: Array.isArray(data.measurements) ? data.measurements.map(readMeasurement) : [],
     measureScale: data.measureScale ?? null,
     // Accept only well-formed parts; a hand-edited or pre-95 file with missing
     // or malformed provenance reads back as `{}` (or a partial), never throws.
@@ -403,6 +403,37 @@ function readStamp(raw: { appVersion?: unknown; savedAt?: unknown }): ProjectSta
 /** Validate a file's `provenance` into a Provenance, dropping anything
  * malformed. Missing/garbage -> `{}`. Keeps deserializeProject tolerant of
  * hand-edited or foreign files, same posture as the rest of that function. */
+/**
+ * A measurement as it comes off disk, with any colour it claims CHECKED.
+ *
+ * ⚑⚑ THE ONE STORED READING HERE IS THE ONE THAT NEEDS A DOOR GUARD. Every
+ * other field on a measurement is geometry that gets re-derived through the
+ * axes on the way to the screen, so a bad number shows up as a bad number.
+ * `rgb` is different: it is kept verbatim, on purpose, and then INVERTED
+ * through the colour key to produce a value. A channel that is not a channel
+ * therefore comes back as a confident reading rather than as nonsense.
+ *
+ * ⚠️ `null` is the case that arrives by itself, with nobody editing anything:
+ * `NaN` serializes to `null` through JSON, and `null` behaves as `0` in the
+ * arithmetic on the other side. That laundering has cost this project a
+ * released defect once already (the curve fit that came back as a flat line at
+ * y=0), so it is worth refusing at the door rather than meeting again downstream.
+ *
+ * ⚑ The MEASUREMENT survives; only the unusable colour is dropped. Its geometry
+ * was never in doubt, and a row that reads as a dash is honest, where a
+ * fabricated swatch is not.
+ */
+function readMeasurement(raw: SerializedMeasurement): SerializedMeasurement {
+  const rgb = raw.rgb;
+  const usable =
+    Array.isArray(rgb) &&
+    rgb.length === 3 &&
+    rgb.every((c) => typeof c === 'number' && Number.isFinite(c) && c >= 0 && c <= 255);
+  if (usable) return raw;
+  const { rgb: _drop, ...rest } = raw;
+  return rest;
+}
+
 function readProvenance(raw: unknown): Provenance {
   if (!raw || typeof raw !== 'object') return {};
   const p = raw as { source?: unknown; crops?: unknown };

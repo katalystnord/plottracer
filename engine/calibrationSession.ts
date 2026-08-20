@@ -5443,9 +5443,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return entry.dataset.getAllPixels().map((_p, i) => [...this.suppliedDimsAt(entry.dataset, i)]);
   }
 
+  /**
+   * ⚑ BOUNDED BY THE TYPE'S OWN DIMENSION COUNT, because this is a LOAD DOOR.
+   * The interactive path can only produce a dim a table column exists for, but
+   * `setDataPointValue` is not the only entrance: a file supplies these
+   * straight from disk, and `csvExport` turns each one into a
+   * `${fields[f] ?? f} source` column - so a stray `99` left a project writing
+   * a column literally named "99 source". Filtering HERE covers every reader at
+   * once, since they all come through this method.
+   */
   private suppliedDimsAt(dataset: Dataset, index: number): number[] {
     const raw = dataset.getPixel(index)?.metadata?.['supplied'];
-    return Array.isArray(raw) ? raw.filter((d): d is number => typeof d === 'number') : [];
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (d): d is number =>
+        typeof d === 'number' && Number.isInteger(d) && d >= 0 && d < this.config.dataDim
+    );
   }
 
   /** ⚑ The metadata OBJECT is rewritten, never mutated in place, and the key is

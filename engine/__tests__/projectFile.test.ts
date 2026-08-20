@@ -614,3 +614,130 @@ describe('project stamp', () => {
     expect(read.figures[0]!.appVersion).toBeUndefined();
   });
 });
+
+/**
+ * ⚑⚑ WHAT THE LOAD DOOR ACCEPTS (v2.3 audit, F4).
+ *
+ * The interactive path cannot produce either of these: a dimension index comes
+ * from a table column, and a colour comes from `samplePixelRgb` on real image
+ * bytes. A FILE can produce both, and the file is the model's other entrance -
+ * the standing rule this project keeps rediscovering. Neither is exotic damage;
+ * `NaN` in particular arrives by itself, because JSON rewrites it as `null` on
+ * the way out and `null` then behaves as `0` in the arithmetic downstream.
+ */
+describe('a project file carrying values the app could never have written', () => {
+  const FORGED_IMAGE = FAKE_IMAGE_DATA_URL;
+
+  function xyFileWithOnePoint() {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    session.addDataPoint(200, 200);
+    const file = serializeProject(session, FORGED_IMAGE);
+    if ('error' in file) throw new Error(file.error);
+    return file;
+  }
+
+  it('⚑ a supplied-dimension index the type does not have is dropped, not carried into the export', () => {
+    // An XY point has two values. A file claiming dimension 99 was user-typed
+    // reached `csvExport`'s `${fields[f] ?? f} source`, which wrote a column
+    // literally named "99 source".
+    const file = xyFileWithOnePoint();
+    (file.plotData.datasetColl![0]!.data[0] as unknown as Record<string, unknown>).metadata = { supplied: [99] };
+
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    const reopened = new CalibrationSession(XY_AXES_CONFIG);
+    reopened.loadCalibrated(back.axes as XYAxes, back.datasets, back.categoryAxis, back.heatmapLayer);
+    expect(reopened.getSuppliedDimsFor(0)).toEqual([[]]);
+  });
+
+  it('⚑ a real supplied dimension still survives - the guard must not over-reach', () => {
+    const file = xyFileWithOnePoint();
+    (file.plotData.datasetColl![0]!.data[0] as unknown as Record<string, unknown>).metadata = { supplied: [1] };
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    const reopened = new CalibrationSession(XY_AXES_CONFIG);
+    reopened.loadCalibrated(back.axes as XYAxes, back.datasets, back.categoryAxis, back.heatmapLayer);
+    expect(reopened.getSuppliedDimsFor(0)).toEqual([[1]]);
+  });
+
+  it('⚑⚑ a measurement colour that is not a colour is dropped, so nothing reads a value off it', () => {
+    // `null` here is what `NaN` becomes on its way through JSON. Left in place
+    // it flows into the key inversion as 0 and comes back as a confident number
+    // for a channel that was never measured.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FORGED_IMAGE, undefined, {
+      measurements: [
+        {
+          id: 'm',
+          tool: 'colour',
+          points: [{ x: 1, y: 1 }],
+          closed: false,
+          label: '',
+          labelAt: { x: 1, y: 1 },
+          rgb: [999, -12, null] as unknown as readonly [number, number, number],
+        },
+      ],
+      scale: null,
+    });
+    if ('error' in file) throw new Error(file.error);
+
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    // The measurement itself survives - its geometry was never in doubt.
+    expect(back.measurements).toHaveLength(1);
+    expect(back.measurements![0]!.points).toEqual([{ x: 1, y: 1 }]);
+    // The colour does not.
+    expect(back.measurements![0]!.rgb).toBeUndefined();
+  });
+
+  it('⚑⚑ the MULTI-FIGURE door refuses it too, because both doors are one door', () => {
+    // The container claims to be "N single-figure projects with one shared
+    // source, no second data model". This is that claim asserted rather than
+    // trusted: a guard added to the single-figure reader is only a guard if the
+    // other entrance really does come through it.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const multi = serializeMultiFigureProject(
+      [{ name: 'Fig 1', session, imageDataURL: FORGED_IMAGE }],
+      0
+    );
+    if ('error' in multi) throw new Error(multi.error);
+    multi.figures[0]!.measurements = [
+      {
+        id: 'm',
+        tool: 'colour',
+        points: [{ x: 1, y: 1 }],
+        closed: false,
+        label: '',
+        labelAt: { x: 1, y: 1 },
+        rgb: [Number.NaN, 0, 0] as unknown as readonly [number, number, number],
+      },
+    ];
+
+    const back = deserializeMultiFigureProject(multi);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.figures[0]!.measurements).toHaveLength(1);
+    expect(back.figures[0]!.measurements[0]!.rgb).toBeUndefined();
+  });
+
+  it('⚑ a real measurement colour still loads - the guard must not over-reach', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FORGED_IMAGE, undefined, {
+      measurements: [
+        { id: 'm', tool: 'colour', points: [{ x: 1, y: 1 }], closed: false, label: '', labelAt: { x: 1, y: 1 }, rgb: [68, 1, 84] },
+      ],
+      scale: null,
+    });
+    if ('error' in file) throw new Error(file.error);
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.measurements![0]!.rgb).toEqual([68, 1, 84]);
+  });
+});
