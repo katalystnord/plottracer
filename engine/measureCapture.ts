@@ -129,3 +129,48 @@ export function resolveMeasureClick({
   // Finish button / Enter closes it.
   return { kind: 'collect', points };
 }
+
+/** A px -> real-world-unit reference. Structurally the same shape the UI holds
+ * and the project file writes; declared here because this is where it is
+ * DECIDED, and the decision is what a test needs to reach. */
+export interface MeasureScaleValue {
+  unitPerPx: number;
+  unit: string;
+}
+
+/**
+ * Turn a finished Set-scale draft into a reference, or say why it cannot be one.
+ *
+ * ⚑⚑ THE PIXEL SPAN IS CHECKED, NOT ONLY THE TYPED NUMBER. The typed value has
+ * been guarded since Set-scale existed; the DRAFT never was. Two clicks in the
+ * same place is an ordinary mis-click - a double-click lands exactly there - and
+ * `known / 0` is `Infinity`.
+ *
+ * ⚠️⚠️ WHICH DOES NOT SHOW UP AS INFINITY. The display refuses a non-finite
+ * reading, so every distance reads as a dash and looks merely broken. The damage
+ * lands on the way back: `Infinity` serializes to `null` through JSON, `null`
+ * behaves as `0` in the arithmetic, and a REOPENED project reports every
+ * distance and area as a confident **0**, in the panel and in the exports alike.
+ * That is a wrong number in the record, which is the one thing tenet 1 does not
+ * allow. Third sighting of this laundering, after the overflowed curve fit that
+ * became a flat line at y=0 and the measurement colour at the load door.
+ *
+ * ⚑ EACH REFUSAL NAMES ITS OWN CAUSE AND THE FIX. A single "check your input"
+ * would leave the user re-typing a number that was never the problem.
+ */
+export function scaleFromDraft(
+  distancePx: number | null,
+  valueInput: string,
+  unitInput: string
+): { scale: MeasureScaleValue } | { error: string } {
+  if (distancePx === null || !Number.isFinite(distancePx) || distancePx <= 0) {
+    return { error: 'Those two clicks are in the same place - put them at each end of a known distance.' };
+  }
+  const known = parseFloat(valueInput);
+  if (!Number.isFinite(known) || known <= 0) {
+    return { error: 'Enter a positive known distance to set the scale.' };
+  }
+  // ⚑ The unit is a LABEL, not a measurement, so an empty one falls back rather
+  // than refusing - the only field here that is allowed to be missing.
+  return { scale: { unitPerPx: known / distancePx, unit: unitInput.trim() || 'unit' } };
+}

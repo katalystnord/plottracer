@@ -380,7 +380,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // key, it does not have a key holding nothing.
     ...(data.image.fileName === undefined ? {} : { imageFileName: data.image.fileName }),
     measurements: Array.isArray(data.measurements) ? data.measurements.map(readMeasurement) : [],
-    measureScale: data.measureScale ?? null,
+    measureScale: readMeasureScale(data.measureScale),
     // Accept only well-formed parts; a hand-edited or pre-95 file with missing
     // or malformed provenance reads back as `{}` (or a partial), never throws.
     provenance: readProvenance(data.provenance),
@@ -432,6 +432,26 @@ function readMeasurement(raw: SerializedMeasurement): SerializedMeasurement {
   if (usable) return raw;
   const { rgb: _drop, ...rest } = raw;
   return rest;
+}
+
+/**
+ * The px->unit reference, accepted only when it is a usable RATIO.
+ *
+ * ⚑⚑ A SCALE OF ZERO IS NOT A SCALE, AND IT DOES NOT LOOK LIKE ONE GOING IN.
+ * `scaleFromDraft` now refuses two Set-scale clicks in the same place, but the
+ * value that reached this door was `Infinity`, and `Infinity` is `null` by the
+ * time JSON has carried it - after which `null` multiplies as `0` and every
+ * distance and area in the panel and the exports reads a confident zero.
+ *
+ * ⚑ Dropping it back to NULL is the honest fallback, not an approximation: with
+ * no scale the ruler reports pixels and says `set a scale for real units`, which
+ * is a true statement about a figure whose scale was never usable.
+ */
+function readMeasureScale(raw: unknown): SerializedMeasureScale | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { unitPerPx, unit } = raw as { unitPerPx?: unknown; unit?: unknown };
+  if (typeof unitPerPx !== 'number' || !Number.isFinite(unitPerPx) || unitPerPx <= 0) return null;
+  return { unitPerPx, unit: typeof unit === 'string' ? unit : 'unit' };
 }
 
 function readProvenance(raw: unknown): Provenance {

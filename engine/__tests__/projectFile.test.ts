@@ -725,6 +725,40 @@ describe('a project file carrying values the app could never have written', () =
     expect(back.figures[0]!.measurements[0]!.rgb).toBeUndefined();
   });
 
+  it('⚑⚑ a px->unit scale that is not a usable ratio is dropped, not read as zero', () => {
+    // The other end of F5. A Set-scale built from two clicks in one place was
+    // `Infinity`, and `Infinity` is `null` by the time it comes back through
+    // JSON - at which point every distance and area reads a confident 0. The
+    // gesture refuses it now; a file written before that, or by hand, arrives
+    // here instead.
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FORGED_IMAGE, undefined, { measurements: [], scale: null });
+    if ('error' in file) throw new Error(file.error);
+    (file as { measureScale?: unknown }).measureScale = { unitPerPx: null, unit: 'mm' };
+
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    // No scale at all, so distances read in PIXELS and say so - the honest
+    // fallback the ruler already has, rather than a silent zero.
+    expect(back.measureScale).toBeNull();
+  });
+
+  it('⚑ a real px->unit scale still loads - the guard must not over-reach', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FORGED_IMAGE, undefined, {
+      measurements: [],
+      scale: { unitPerPx: 0.25, unit: 'mm' },
+    });
+    if ('error' in file) throw new Error(file.error);
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.measureScale).toEqual({ unitPerPx: 0.25, unit: 'mm' });
+  });
+
   it('⚑ a real measurement colour still loads - the guard must not over-reach', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);

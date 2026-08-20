@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { resolveMeasureClick, snapToNearestPoint } from '../../../engine/measureCapture.js';
+import { resolveMeasureClick, scaleFromDraft, snapToNearestPoint } from '../../../engine/measureCapture.js';
 import { samplePixelRgb } from '../../../algorithms/samplePixel.js';
 import type { ColorScale } from '../../../algorithms/colorScale.js';
 import { buildColorScale } from '../../../engine/heatmapRun.js';
@@ -258,12 +258,14 @@ export function useMeasure(host: MeasureHost) {
   }, [setPending]);
 
   const confirmSetScale = useCallback(() => {
-    const known = parseFloat(scaleValueInput);
-    if (scaleDraftPx == null || !Number.isFinite(known) || known <= 0) {
-      setMeasureError('Enter a positive known distance to set the scale.');
+    // ⚑ The DECISION lives in `engine/measureCapture.ts`, where a millisecond
+    // test can reach it - this handler only carries the answer to the screen.
+    const result = scaleFromDraft(scaleDraftPx, scaleValueInput, scaleUnitInput);
+    if ('error' in result) {
+      setMeasureError(result.error);
       return;
     }
-    host.applyMeasureScale({ unitPerPx: known / scaleDraftPx, unit: scaleUnitInput.trim() || 'unit' });
+    host.applyMeasureScale(result.scale);
     setSettingScale(false);
     setScaleDraftPx(null);
     setPending([]);

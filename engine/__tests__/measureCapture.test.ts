@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMeasureClick, snapToNearestPoint, type MeasureClickInput } from '../measureCapture.js';
+import { resolveMeasureClick, snapToNearestPoint, type MeasureClickInput, scaleFromDraft } from '../measureCapture.js';
 
 const P = (x: number, y: number) => ({ x, y });
 /** A plain linear pixel→data map, so a slope is arithmetic rather than a fixture. */
@@ -186,5 +186,62 @@ describe('the pending list is never mutated', () => {
     const r = resolveMeasureClick(click({ tool: 'area', pending, point: P(1, 1) }));
     expect(pending).toHaveLength(1);
     expect((r as { points: unknown[] }).points).toHaveLength(2);
+  });
+});
+
+/**
+ * ⚑⚑ A SET-SCALE THAT SPANS NO PIXELS (v2.3 audit, F5).
+ *
+ * Two clicks in one place is an ordinary mis-click - a double-click lands
+ * exactly here. The draft happily reports `distancePx: 0`, and `known / 0` is
+ * `Infinity`, which the display then refuses so every distance shows a dash.
+ *
+ * ⚠️⚠️ THE DASH IS NOT THE DEFECT; THE SAVE IS. `Infinity` serializes to `null`
+ * through JSON, and `null` behaves as `0` in the arithmetic on the way back, so
+ * a reopened project reports every distance and area as a confident **0** in the
+ * panel AND in the exports. Third sighting of that laundering, after the curve
+ * fit that came back as a flat line at y=0 and the measurement colour at the
+ * load door.
+ *
+ * ⚑ Refused AT THE GESTURE, which is where it can still be explained.
+ */
+describe('a Set-scale reference that spans no distance', () => {
+  it('⚑ the draft still reports the degenerate span rather than hiding it', () => {
+    const result = resolveMeasureClick({
+      point: { x: 100, y: 100 },
+      pending: [{ x: 100, y: 100 }],
+      settingScale: true,
+      tool: 'distance',
+      slopeReady: false,
+      toData: null,
+    });
+    expect(result).toEqual({
+      kind: 'scale-draft',
+      points: [{ x: 100, y: 100 }, { x: 100, y: 100 }],
+      distancePx: 0,
+    });
+  });
+
+  it('⚑⚑ a scale cannot be built from it, and says which of the two clicks to move', () => {
+    expect(scaleFromDraft(0, '50', 'mm')).toEqual({
+      error: 'Those two clicks are in the same place - put them at each end of a known distance.',
+    });
+  });
+
+  it('⚑ a real span still builds one - the guard must not over-reach', () => {
+    expect(scaleFromDraft(200, '50', 'mm')).toEqual({ scale: { unitPerPx: 0.25, unit: 'mm' } });
+  });
+
+  it('⚑ the typed distance is still checked, and each refusal names its own cause', () => {
+    expect(scaleFromDraft(200, '', 'mm')).toEqual({
+      error: 'Enter a positive known distance to set the scale.',
+    });
+    expect(scaleFromDraft(200, '-3', 'mm')).toEqual({
+      error: 'Enter a positive known distance to set the scale.',
+    });
+  });
+
+  it('⚑ an empty unit falls back rather than refusing - it is a label, not a measurement', () => {
+    expect(scaleFromDraft(100, '10', '   ')).toEqual({ scale: { unitPerPx: 0.1, unit: 'unit' } });
   });
 });
