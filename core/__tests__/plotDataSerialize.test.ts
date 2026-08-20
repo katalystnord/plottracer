@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PlotData } from '../plotData.js';
+import { PlotData, type SerializedPlotData } from '../plotData.js';
 import { Dataset } from '../dataset.js';
 import { Calibration } from '../calibration.js';
 import { XYAxes } from '../axes/xy.js';
@@ -554,5 +554,60 @@ describe('a hand-edited file cannot put the tick geometry in an impossible state
     const ca = read({ edges: EDGES, convention: 'edge' });
     expect(ca.hasGeometry()).toBe(true);
     expect(ca.getTickParams()).toEqual([1 / 3, 2 / 3]);
+  });
+});
+
+/**
+ * ⚑⚑ A PIXEL THAT IS NOT A PIXEL (v2.3 audit, F15).
+ *
+ * Both foreign importers check this - `digImport` refuses rather than importing
+ * a NaN coordinate, `starryImport` skips a point whose pixel is not finite - and
+ * OUR OWN load door did not. `ds.addPixel(pt.x, pt.y, …)` took whatever the file
+ * said.
+ *
+ * ⚠️ `null` IS NOT AN EXOTIC HAND EDIT. It is what NaN becomes on the way through
+ * JSON, with nobody editing anything, and `null` behaves as 0 in the arithmetic
+ * on the other side - so the point lands at the image origin and reads back a
+ * confident value for a place nothing was measured. `"abc"` gives NaN instead: a
+ * point `findNearestPixel` can never select or delete, because every comparison
+ * against NaN is false.
+ *
+ * ⚑ THE COORDINATE IS THE MEASUREMENT HERE, so there is nothing to keep. F4, F5,
+ * F11 and F14 all kept the reading and dropped an untrue claim ABOUT it; a pixel
+ * with no position is not a reading at all.
+ */
+describe('a file carrying a point with no position', () => {
+  /** A real serialized document, with its ONE dataset's points replaced. Built
+   * through `serialize()` rather than hand-written, so the shape cannot drift
+   * from what the reader actually expects. */
+  const withPoints = (points: unknown[]): SerializedPlotData => {
+    const { plot } = simpleProject();
+    const written = JSON.parse(JSON.stringify(plot.serialize())) as SerializedPlotData;
+    written.datasetColl![0]!.data = points as never;
+    return written;
+  };
+
+  it('⚑⚑ drops the point rather than landing it at the origin', () => {
+    const pd = new PlotData();
+    expect(pd.deserialize(withPoints([
+      { x: 150, y: 150 },
+      { x: null, y: null },
+      { x: 200, y: 200 },
+    ]))).not.toBe(false);
+    const pixels = pd.getDatasets()[0]!.getAllPixels();
+    expect(pixels).toHaveLength(2);
+    expect(pixels.map((p) => [p.x, p.y])).toEqual([[150, 150], [200, 200]]);
+  });
+
+  it('⚑ a NaN-producing string goes the same way', () => {
+    const pd = new PlotData();
+    expect(pd.deserialize(withPoints([{ x: 'abc', y: 5 }, { x: 1, y: 2 }]))).not.toBe(false);
+    expect(pd.getDatasets()[0]!.getAllPixels()).toHaveLength(1);
+  });
+
+  it('⚑ ordinary points are untouched - the guard must not over-reach', () => {
+    const pd = new PlotData();
+    expect(pd.deserialize(withPoints([{ x: 0, y: 0 }, { x: -3.5, y: 12 }]))).not.toBe(false);
+    expect(pd.getDatasets()[0]!.getAllPixels()).toHaveLength(2);
   });
 });

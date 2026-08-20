@@ -742,8 +742,30 @@ export class PlotData {
           ds.setMetadataKeys(dsData.metadataKeys);
         }
 
+        // ⚑ The dataset's OWN index, which is no longer the file's once a point
+        // can be skipped. `addToTupleAt` files a pixel by its index in the
+        // DATASET, so using the loop counter after a skip would file every later
+        // point into the wrong slot.
+        let added = 0;
         for (let pxIdx = 0; pxIdx < dsData.data.length; pxIdx++) {
           const pt = dsData.data[pxIdx]!;
+          // ⚑⚑ A PIXEL WITH NO POSITION IS NOT A PIXEL. Both foreign importers
+          // already refuse this - `digImport` will not import a NaN coordinate,
+          // `starryImport` skips a point whose pixel is not finite - and our own
+          // door took whatever the file said.
+          //
+          // ⚠️ `null` IS NOT AN EXOTIC HAND EDIT: it is what NaN becomes on the
+          // way through JSON, with nobody editing anything, and `null` behaves
+          // as 0 in the arithmetic on the other side. The point lands at the
+          // image origin and reads back a confident value for a place nothing
+          // was measured. `"abc"` gives NaN instead - a point `findNearestPixel`
+          // can never select or delete, because every comparison against NaN is
+          // false.
+          //
+          // ⚑ DROPPED, not repaired, and that is not the same call as F4/F11/F14.
+          // Those kept a reading and discarded an untrue claim ABOUT it; here the
+          // coordinate IS the reading, so there is nothing left to keep.
+          if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) continue;
           let metadata: PixelMetadata = pt.metadata as PixelMetadata;
           if (pt.metadata != null && Array.isArray(pt.metadata)) {
             const arr = pt.metadata as unknown[];
@@ -754,9 +776,10 @@ export class PlotData {
           }
           if (ds.hasSlots() && pt.tuple !== undefined && pt.group !== undefined) {
             ds.addEmptyTupleAt(pt.tuple);
-            ds.addToTupleAt(pt.tuple, pt.group, pxIdx);
+            ds.addToTupleAt(pt.tuple, pt.group, added);
           }
           ds.addPixel(pt.x, pt.y, metadata);
+          added++;
         }
         this._datasetColl.push(ds);
 
