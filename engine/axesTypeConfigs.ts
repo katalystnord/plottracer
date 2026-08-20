@@ -1520,13 +1520,21 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     const corner = (step: CalibStepInfo, x: 'first' | 'last', y: 'first' | 'last'): CalibStepInfo => {
       const axis: 'x' | 'y' = step.key.startsWith('x') ? 'x' : 'y';
       const end: 'first' | 'last' = step.key.endsWith('2') ? 'last' : 'first';
-      const label = `${x === 'first' ? 'First' : 'Last'} column × ${y === 'first' ? 'first' : 'last'} row`;
       const categorical = optionBool(options, axis === 'x' ? 'xIsCategory' : 'yIsCategory');
       return {
+        // ⚑⚑ THE STEP'S OWN LABEL SURVIVES, and that is the whole fix. This used
+        // to rebuild `First column × first row` here and overwrite the short
+        // `C1 × R1` the step declares - so the header's rule two screens down,
+        // *"SHORT LABELS, LONG PROMPTS... two different jobs at two different
+        // sites"*, was stated and then undone by this line. The long form ran
+        // across the plot, collided with the figure, hid the top-left corner
+        // behind the calibration card and clipped the bottom-right to
+        // `Last column × fi…`. Shortened in 5379aa0; never reached the screen;
+        // caught again by David on 2026-08-20 reading `First column × last row=6`.
+        // ⚑ The PROMPT is still built long below - it is a sentence on a card
+        // with room for it, and it has to name BOTH bands because a click on a
+        // matrix is located by both axes.
         ...step,
-        // ⚑ The shared corner keeps its own label so the walk does not appear to
-        // ask for the same place twice without saying why.
-        label: step.key === 'y1' ? `${label} (Y)` : label,
         prompt:
           step.key === 'y1'
             ? `The same corner again - enter the Y value where ${clause('x', 'first')} meets ${clause('y', 'first')}`
