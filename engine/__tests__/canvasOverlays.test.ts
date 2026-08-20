@@ -28,6 +28,69 @@ const step = (key: string, label = key.toUpperCase(), color = '#111'): CalibStep
   valueFields: [],
 });
 
+/**
+ * ⚑⚑ A DECLARED COUNT IS NOT A COORDINATE. A heatmap's second corner takes the
+ * X value AND how many COLUMNS the figure has, into `dx` and `dz`. The marker
+ * drawn on the figure joined every value it held, so that corner printed
+ * `=24, 5` - which reads as a coordinate pair, and on a heatmap whose other axis
+ * is numeric a reader takes it as x=24, y=5. Worse on a CATEGORY axis, where the
+ * corner takes only the count and the label read `First column x last row=5`:
+ * a bare 5 presented as the place that corner sits.
+ *
+ * `dz` is documented in `CalibValueField` as *"a slot, not a Z axis"* - spider
+ * puts an axis NAME there, a heatmap puts a band COUNT. Neither is a position,
+ * so neither belongs in a label that says where a point is.
+ *
+ * ⚠️ Caught by David on the built app, on a figure with a category axis. No test
+ * could see it: the label is a string nobody was asserting on.
+ */
+const cornerStep = (key: string, label: string, fields: Array<'dx' | 'dy' | 'dz'>): CalibStepInfo => ({
+  key,
+  label,
+  color: '#111',
+  prompt: `click ${key}`,
+  valueFields: fields.map((field, i) => ({ key: `${key}${i}`, label: field, field })),
+});
+
+describe('what a calibration marker says its point is', () => {
+  const at = { px: 10, py: 20 };
+
+  it('⚑⚑ a declared COUNT is left out - it is not where the point is', () => {
+    const steps = [cornerStep('x2', 'Cn × R1', ['dx', 'dz'])];
+    const m = buildCanvasMarkers(
+      base({ steps, placedPoints: { x2: { ...at, values: ['24', '5'] } } })
+    );
+    const marker = m.find((x) => x.id === 'x2')!;
+    expect(marker.label).toBe('Cn × R1=24');
+  });
+
+  it('⚑ a corner that takes ONLY a count says nothing about where it is', () => {
+    // The category case: the step collects the row count and no coordinate, so
+    // there is no value to report for this point at all.
+    const steps = [cornerStep('y2', 'C1 × Rn', ['dz'])];
+    const m = buildCanvasMarkers(
+      base({ steps, placedPoints: { y2: { ...at, values: ['5'] } } })
+    );
+    expect(m.find((x) => x.id === 'y2')!.label).toBe('C1 × Rn');
+  });
+
+  it('⚑ an ordinary coordinate still shows - the guard must not over-reach', () => {
+    const steps = [cornerStep('x1', 'C1 × R1', ['dx'])];
+    const m = buildCanvasMarkers(
+      base({ steps, placedPoints: { x1: { ...at, values: ['0'] } } })
+    );
+    expect(m.find((x) => x.id === 'x1')!.label).toBe('C1 × R1=0');
+  });
+
+  it('⚑ and a two-COORDINATE point still shows both', () => {
+    const steps = [cornerStep('p1', 'P1', ['dx', 'dy'])];
+    const m = buildCanvasMarkers(
+      base({ steps, placedPoints: { p1: { ...at, values: ['3', '4'] } } })
+    );
+    expect(m.find((x) => x.id === 'p1')!.label).toBe('P1=3, 4');
+  });
+});
+
 /** A scatter: markers far apart, so polylineRuns yields no runs. */
 const sparse = (n: number, x0 = 0) =>
   Array.from({ length: n }, (_, i) => ({ px: x0 + i * 40, py: 100 + i * 40 }));

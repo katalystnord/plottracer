@@ -164,6 +164,37 @@ export function dataPointMarkerId(pixelIndex: number): string {
   return `point-${pixelIndex}`;
 }
 
+/**
+ * What a placed calibration handle says about itself.
+ *
+ * ⚑⚑ A DECLARED COUNT IS NOT A COORDINATE, and this used to print it as one. A
+ * heatmap's second corner collects the X value AND how many COLUMNS the figure
+ * has, so the handle read `Cn × R1=24, 5` - which is exactly the shape of a
+ * coordinate pair, and on a figure whose other axis is numeric a reader takes it
+ * as x=24, y=5. On a CATEGORY axis it was starker: that corner collects only the
+ * count, so the label read `C1 × Rn=5`, a bare number presented as the place the
+ * corner sits.
+ *
+ * ⚑ `dz` IS THE TELL, and its own docs say so: *"a slot, not a Z axis"* - spider
+ * puts an axis NAME in it, a heatmap puts a band COUNT. Neither is a position,
+ * so neither belongs on a mark whose whole job is to say where a point is. The
+ * count is not lost: it is declared in the calibration card, next to the field
+ * the user typed it into.
+ *
+ * ⚑ Spider keeps its VALUE-ALONE form for the reason recorded when it was made:
+ * six handles each repeating an axis name the figure already prints buried the
+ * one thing the handle asserts.
+ *
+ * ⚠️ Caught by David driving the built app. No test could have seen it - the
+ * label is a string nobody was asserting on, which is why the cases above are
+ * now pinned by name.
+ */
+function markerLabel(step: CalibStepInfo, values: readonly string[], axesKind: string): string {
+  if (axesKind === 'spider' && values.length > 0) return String(values[0]);
+  const coordinates = values.filter((_v, i) => step.valueFields[i]?.field !== 'dz');
+  return coordinates.length > 0 ? `${step.label}=${coordinates.join(', ')}` : step.label;
+}
+
 function rgb(c: readonly [number, number, number]): string {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
@@ -276,12 +307,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // those sprawled across the plot, repeating axis names the FIGURE already
         // prints and burying the one thing the handle asserts, which is where that
         // value sits. Caught on screen; no test can see a label being cluttered.
-        label:
-          axesKind === 'spider' && point.values.length > 0
-            ? String(point.values[0])
-            : point.values.length > 0
-              ? `${step.label}=${point.values.join(', ')}`
-              : step.label,
+        label: markerLabel(step, point.values, axesKind),
         color: step.color,
         kind: 'calibration',
         // ⚑ Spread rather than `labelAway,`: under exactOptionalPropertyTypes an
