@@ -363,6 +363,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   if (!axes || datasets.length === 0) {
     return { error: 'Project file has no calibrated axes or dataset.' };
   }
+  for (const dataset of datasets) dropOrphanedDerivedRole(dataset);
 
   return {
     configId,
@@ -403,6 +404,37 @@ function readStamp(raw: { appVersion?: unknown; savedAt?: unknown }): ProjectSta
 /** Validate a file's `provenance` into a Provenance, dropping anything
  * malformed. Missing/garbage -> `{}`. Keeps deserializeProject tolerant of
  * hand-edited or foreign files, same posture as the rest of that function. */
+/**
+ * A point may only claim to be DERIVED if there is a curve it could derive from.
+ *
+ * ⚑⚑ A FILE CAN DESCRIBE A STATE NO CLICK CAN BUILD: points roled
+ * `interpolated` with no anchors anywhere in the series. Nothing on screen says
+ * so - they draw and export like any other point - and then
+ * `rebuildInterpolation` runs on the next click in Interpolate mode. It snapshots
+ * the ANCHORS, deletes every point roled `anchor` OR `interpolated`, finds fewer
+ * than two anchors and re-adds only those. Five hundred points, one click, gone.
+ *
+ * ⚑ THE POINT IS KEPT AND THE CLAIM IS DROPPED, not the other way round. A pixel
+ * is a measurement; `role` is provenance about it. A provenance that cannot be
+ * true is the half with nothing behind it, so the reading survives as an ordinary
+ * recorded point and the story about where it came from does not.
+ *
+ * ⚑ TWO ANCHORS, matching `rebuildInterpolation`'s own threshold - a curve needs
+ * two guide points to exist at all, so below that there is nothing any derived
+ * sample could have come from. A genuine interpolation, anchors and all, is
+ * untouched.
+ */
+function dropOrphanedDerivedRole(dataset: Dataset): void {
+  const pixels = dataset.getAllPixels();
+  const anchors = pixels.filter((p) => p.metadata?.['role'] === 'anchor').length;
+  if (anchors >= 2) return;
+  pixels.forEach((p, i) => {
+    if (p.metadata?.['role'] !== 'interpolated') return;
+    const { role: _drop, ...rest } = p.metadata as Record<string, unknown>;
+    dataset.setMetadataAt(i, Object.keys(rest).length > 0 ? rest : null);
+  });
+}
+
 /**
  * A measurement as it comes off disk, with any colour it claims CHECKED.
  *

@@ -775,3 +775,65 @@ describe('a project file carrying values the app could never have written', () =
     expect(back.measurements![0]!.rgb).toEqual([68, 1, 84]);
   });
 });
+
+/**
+ * ⚑⚑ A DERIVED POINT WITH NOTHING TO DERIVE FROM (v2.3 audit, F11).
+ *
+ * `rebuildInterpolation` snapshots the ANCHORS, deletes every point roled
+ * `anchor` or `interpolated`, and re-adds only the anchors when there are fewer
+ * than two. That is right for the state it was written for - a user deleting
+ * guide points until the curve can no longer exist, where the derived samples
+ * are stale remnants of a curve we made.
+ *
+ * ⚠️ A FILE CAN ARRIVE IN A STATE NO CLICK CAN BUILD: points marked
+ * `interpolated` with no anchors at all. They are not remnants of anything we
+ * made, and the next click in Interpolate mode deletes every one of them.
+ * Measured on the shape: 500 points, one click, all gone.
+ *
+ * ⚑ The POINTS are kept and the false claim is dropped, rather than the reverse.
+ * A pixel is a measurement; `role: interpolated` is provenance, and provenance
+ * that cannot be true is the part with nothing behind it.
+ */
+describe('a file whose points claim to be derived from anchors that are not there', () => {
+  it('⚑⚑ keeps the points and drops the impossible claim', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    for (const [x, y] of [[150, 200], [200, 210], [250, 220]] as [number, number][]) {
+      session.addDataPoint(x, y);
+    }
+    const file = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    // Forge: every point derived, nothing to derive from.
+    for (const p of file.plotData.datasetColl![0]!.data) {
+      (p as unknown as Record<string, unknown>).metadata = { role: 'interpolated' };
+    }
+
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    const pixels = back.datasets[0]!.getAllPixels();
+    expect(pixels).toHaveLength(3); // nothing thrown away
+    expect(pixels.map((p) => p.metadata?.['role'])).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('⚑ a REAL interpolation is untouched - the guard must not over-reach', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FAKE_IMAGE_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    file.plotData.datasetColl![0]!.data = [
+      { x: 100, y: 100, metadata: { role: 'anchor' } },
+      { x: 150, y: 150, metadata: { role: 'interpolated' } },
+      { x: 200, y: 200, metadata: { role: 'anchor' } },
+    ] as never;
+
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.datasets[0]!.getAllPixels().map((p) => p.metadata?.['role'])).toEqual([
+      'anchor',
+      'interpolated',
+      'anchor',
+    ]);
+  });
+});
