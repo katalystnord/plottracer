@@ -2531,8 +2531,11 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('category,Min,Q1,Median,Q3,Max');
-    const [category, ...values] = lines[1]!.split(',');
+    // F21: the box's own category identity leads the row - the shared name-list
+    // index, named `Category index` because no axis was marked to measure a
+    // position against.
+    expect(lines[0]).toBe('Category index,category,Min,Q1,Median,Q3,Max');
+    const [, category, ...values] = lines[1]!.split(',');
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- an
     // unnamed category exports as an empty cell, not a fake transcription.
     expect(category).toBe('');
@@ -2577,8 +2580,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('category,Bar start,Bar end,Value');
-    const cells = lines[1]!.split(',');
+    // F21: the bar's category identity leads the row.
+    expect(lines[0]).toBe('Category index,category,Bar start,Bar end,Value');
+    const cells = lines[1]!.split(',').slice(1);
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
     // category column is still present and exported (proven by lines[0]'s
     // header above), just empty until the user actually types a name.
@@ -2828,8 +2832,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('category,Bar start,Bar end,Value');
-    expect(lines[1]!.split(',')[0]).toBe('Flax');
+    expect(lines[0]).toBe('Category index,category,Bar start,Bar end,Value');
+    expect(lines[1]!.split(',')[1]).toBe('Flax');
     fs.unlinkSync(csvPath);
   });
 
@@ -4751,6 +4755,39 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     await expectRow([5, 5]);
   });
 
+  it('⚑⚑ F23: opening a value editor and clicking away leaves the reading exactly as it was', async () => {
+    // ⚠️ MEASURED before the fix, on this walk: the editor seeded
+    // `value.toFixed(3)`, `EditableValue` commits on BLUR, and
+    // `commitDataPointEdit` accepted any finite parse - so double-clicking a
+    // number and clicking away moved the point to the rounded seed AND marked it
+    // as a user reading. A glance recorded as a measurement, with the datum
+    // shifted to pay for it. On a log axis a y of 0.00042 seeded `0.000` and the
+    // point went to zero.
+    //
+    // ⚑ The heatmap already had the rule and the mechanism (`seed`, compared at
+    // the commit). This asserts the same two facts for a data point: the editor
+    // opens with the WHOLE number, and an untouched editor records nothing.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(251, 176); // x = 5.03333..., y = 4.93333... - not round numbers
+    await expectRow([5.033333, 4.933333], 0, 4);
+    const shown = await textOf('data-value-x-0');
+
+    await page.getByTestId('data-value-x-0').dblclick();
+    const seeded = await page.getByTestId('data-edit-x-0').inputValue();
+    expect(Number(seeded)).toBeCloseTo(5.0333333, 6);
+    expect(seeded).not.toBe('5.033'); // the seed that used to be there
+
+    // Click away: this is the blur that commits.
+    await page.mouse.click(4, 4);
+    await page.waitForTimeout(100);
+    await expectRow([5.033333, 4.933333], 0, 4);
+    expect(await textOf('data-value-x-0')).toBe(shown);
+    // ⚑ And it is not wearing the mark of a value somebody typed.
+    expect(await textOf('data-value-x-0')).not.toMatch(/[[\]]/);
+    expect(await page.getByTestId('supplied-legend').count()).toBe(0);
+  });
+
   it('⚑ A4: a value you TYPED wears square brackets; the one beside it, read off the pixels, does not', async () => {
     // The one fact the mark carries, on every type: THIS NUMBER DID NOT COME
     // FROM THE PIXELS. A user's own reading is a measurement with a better
@@ -5104,7 +5141,9 @@ describe('Workspace: mouse model + context menu', () => {
     // The sidebar X cell for point 0 is now an editable input (checkpoint 39) and
     // keeps focus (the menu's focus-restore is disabled so it isn't blurred shut).
     await page.getByTestId('data-edit-x-0').waitFor({ state: 'visible' });
-    expect(await page.getByTestId('data-edit-x-0').inputValue()).toMatch(/^5\.0/);
+    // ⚑ F23: the editor opens with the WHOLE value, not `5.000` - a seed rounded
+    // for display is a different number to commit than the one double-clicked.
+    expect(Number(await page.getByTestId('data-edit-x-0').inputValue())).toBeCloseTo(5, 6);
   });
 
   it('right-clicking a measurement offers Delete measurement', async () => {

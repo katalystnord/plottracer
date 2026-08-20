@@ -108,7 +108,7 @@ import { HelpMenu } from './panels/HelpMenu.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
 import { valueText, valueTitle, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
-import { fmtValue, rgbToHex } from './format.js';
+import { editSeed, fmtValue, rgbToHex } from './format.js';
 import { reporting } from './asyncAction.js';
 import { HistogramBinsTable } from './panels/HistogramBinsTable.js';
 import { TupleTable } from './panels/TupleTable.js';
@@ -1289,7 +1289,20 @@ export function Workspace() {
   // point is repositioned via the axes' inverse transform. Kept as the raw
   // in-progress string so typing doesn't move the point on every keystroke --
   // it applies once, on blur/Enter.
-  const [editingCell, setEditingCell] = useState<{ index: number; axis: number; value: string } | null>(null);
+  /**
+   * The data value being typed into. Null unless one is.
+   *
+   * ⚑⚑ `seed` IS WHAT THE EDITOR OPENED WITH - the heatmap's own invariant
+   * (`editingHeatmapValue` above), now this table's too, because the job is the
+   * same one: an editor that opens and closes without a keystroke must record
+   * NOTHING. Without it, blurring committed the seeded number back through
+   * `setDataPointValue`, which MOVES the point and marks it as a user reading -
+   * so merely looking at a value stamped it as typed, and a seed rounded to
+   * three decimals moved the point while doing it (F23).
+   */
+  const [editingCell, setEditingCell] = useState<
+    { index: number; axis: number; value: string; seed: string } | null
+  >(null);
   // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
   // state, never part of the record. Every capture click overwrites it (with null
   // when the click was fine), and the effect below clears it whenever the tool or
@@ -3858,6 +3871,11 @@ export function Workspace() {
     const cell = editingCell;
     if (!cell) return;
     setEditingCell(null);
+    // ⚑ AN EDITOR THAT WAS OPENED AND CLOSED IS NOT A READING - the heatmap's
+    // rule, word for word, because it is one rule. Committing an untouched seed
+    // moves the point (through the axes' inverse, so it lands on the rounded
+    // number) and marks it as user-supplied: a glance recorded as a measurement.
+    if (cell.value === cell.seed) return;
     const parsed = Number(cell.value);
     if (cell.value.trim() === '' || !Number.isFinite(parsed)) return; // invalid -> leave the reading standing
     // ⚑ A spider's one reading is dim 0; the SPOKE comes from the point's own
@@ -6033,16 +6051,22 @@ export function Workspace() {
       <EditableValue
         editing={editingCell?.index === index && editingCell.axis === axis}
         editValue={editingCell?.value ?? ''}
-        // ⚑ The brackets are on the DISPLAY only; the seed below is the bare
-        // number, so reopening your own value never means deleting punctuation
-        // the table added (the heatmap's own rule, now everyone's).
+        // ⚑ The brackets are on the DISPLAY only; the seed is the bare number,
+        // so reopening your own value never means deleting punctuation the table
+        // added (the heatmap's own rule, now literally shared with it).
+        // ⚠️ This comment said "now everyone's" above a `value.toFixed(3)` that
+        // was neither the shown number nor the bare one, and that is how a
+        // silent value-destroying seed survived review: gate 3 exactly.
         display={valueText(fmtValue(value), supplied)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
         title={valueTitle('Double-click to edit - moves the point on the canvas', supplied)}
         width={56}
-        onStartEdit={() => setEditingCell({ index, axis, value: value.toFixed(3) })}
-        onChange={(v) => setEditingCell({ index, axis, value: v })}
+        onStartEdit={() => setEditingCell({ index, axis, value: editSeed(value), seed: editSeed(value) })}
+        // ⚑ Typing changes the VALUE and never the seed - the seed is what the
+        // editor opened with, and rewriting it would make every keystroke look
+        // like no change at all.
+        onChange={(v) => setEditingCell((c) => (c ? { ...c, value: v } : c))}
         onCommit={commitDataPointEdit}
         onCancel={() => setEditingCell(null)}
       />
@@ -6078,8 +6102,10 @@ export function Workspace() {
       title={valueTitle('Double-click to edit - moves the point along its own axis', supplied)}
       width={64}
       align="right"
-      onStartEdit={() => setEditingCell({ index: pointIndex, axis: axisIndex, value: value.toFixed(3) })}
-      onChange={(v) => setEditingCell({ index: pointIndex, axis: axisIndex, value: v })}
+      onStartEdit={() =>
+        setEditingCell({ index: pointIndex, axis: axisIndex, value: editSeed(value), seed: editSeed(value) })
+      }
+      onChange={(v) => setEditingCell((c) => (c ? { ...c, value: v } : c))}
       onCommit={commitDataPointEdit}
       onCancel={() => setEditingCell(null)}
     />
@@ -6333,7 +6359,7 @@ export function Workspace() {
   const renderHeatmapValue = (cell: HeatmapRow, display: string) => {
     const editing =
       editingHeatmapValue?.col === cell.col && editingHeatmapValue.row === cell.row;
-    const seed = cell.value === null ? '' : String(cell.value);
+    const seed = editSeed(cell.value);
     return (
       <EditableValue
         editing={editing}
@@ -8216,7 +8242,13 @@ export function Workspace() {
                     onClick={() => {
                       const p = session.getDataPoints()[ctxMenu.index];
                       setActivePointIndex(ctxMenu.index);
-                      if (p?.data) setEditingCell({ index: ctxMenu.index, axis: 0, value: p.data[0]!.toFixed(3) });
+                      if (p?.data)
+                        setEditingCell({
+                          index: ctxMenu.index,
+                          axis: 0,
+                          value: editSeed(p.data[0]!),
+                          seed: editSeed(p.data[0]!),
+                        });
                       setCtxMenu(null);
                     }}
                   >
@@ -8297,7 +8329,7 @@ export function Workspace() {
                 // on the table and wrong here: the menu names this cell, so
                 // choosing an entry from it can only ever mean "this one".
                 setSelectedCells(new Set([cellKey(ctxMenu.col, ctxMenu.row)]));
-                const seed = cell?.value == null ? '' : String(cell.value);
+                const seed = editSeed(cell?.value);
                 setEditingHeatmapValue({ col: ctxMenu.col, row: ctxMenu.row, value: seed, seed });
                 setCtxMenu(null);
               }}
