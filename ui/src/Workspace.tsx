@@ -4995,13 +4995,18 @@ export function Workspace() {
       const canvas = imageCanvasRef.current;
       let handled = true;
       switch (e.key.toLowerCase()) {
+        // ⚑⚑ THE KEYBOARD IS AN ENTRANCE TOO (audit F6b). These four are the same
+        // file actions the top bar offers, and F6 wrapped only the buttons - so
+        // Ctrl+S, the shortcut printed as a KeyTip on the very button that WAS
+        // fixed, still dropped a failed save on the floor. `no-misused-promises`
+        // cannot see `void fn()`, so the rule's blind spot became the sweep's.
         case 'o':
-          if (e.shiftKey) void openProject();
-          else canvas?.openImage();
+          if (e.shiftKey) reporting('Could not open the project', openProject, setProjectError)();
+          else reporting('Could not open the image', () => canvas?.openImage() ?? Promise.resolve(), setProjectError)();
           break;
         case 's':
-          if (e.shiftKey) void exportData('csv');
-          else void saveProject();
+          if (e.shiftKey) reporting('Could not export the data', () => exportData('csv'), setProjectError)();
+          else reporting('Could not save the project', saveProject, setProjectError)();
           break;
         // Electron's `CmdOrCtrl+Equal` is the '=' key; '+' is the same key held
         // with Shift, which is what a user reaching for "zoom in" actually presses.
@@ -6519,7 +6524,13 @@ export function Workspace() {
             type="button"
             data-testid="open-image-button"
             title="Open an image or PDF to digitize - PNG, JPG, GIF, BMP, WEBP, SVG, PDF (or drag-and-drop / paste one)"
-            onClick={() => imageCanvasRef.current?.openImage()}
+            // ⚑ audit F6b: the empty-state Open Image was wrapped and this one,
+            // the top-bar twin of the same action, was not.
+            onClick={reporting(
+              'Could not open the image',
+              () => imageCanvasRef.current?.openImage() ?? Promise.resolve(),
+              setProjectError
+            )}
           >
             <ImageIcon /> Open Image
             {keyTips && <KeyTip>{keyTipLabel('O')}</KeyTip>}
@@ -6587,8 +6598,12 @@ export function Workspace() {
             fullPrecision={exportFullPrecision}
             onFullPrecisionChange={setExportFullPrecision}
             content={exportContent}
-            onExport={(fmt, target) => void exportData(fmt, target)}
-            onSaveImage={() => void saveImage()}
+            // ⚑ audit F6b: both write files through the same IPC that F6 showed
+            // can reject, and both dropped it.
+            onExport={(fmt, target) =>
+              reporting('Could not export the data', () => exportData(fmt, target), setProjectError)()
+            }
+            onSaveImage={reporting('Could not save the image', saveImage, setProjectError)}
           />
         </TopBarGroup>
 

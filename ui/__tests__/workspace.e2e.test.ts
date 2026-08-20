@@ -2245,6 +2245,27 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(fullPath);
   });
 
+  it('⚑⚑ Ctrl+S reports a failed save too, not just the button (audit F6b)', async () => {
+    // ⚠️ THE FIX LANDED ON THE MOUSE AND MISSED THE KEYBOARD. F6 wrapped the
+    // Save Project BUTTON, and the shortcut printed as a KeyTip on that very
+    // button still called `void saveProject()` - a rejected promise handed to
+    // nothing. The lint rule that found F6 cannot see this shape: `() => void
+    // fn()` is not "a promise-returning function passed where void is expected",
+    // so the rule's blind spot became the sweep's blind spot.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+
+    await app.evaluate(({ dialog }) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: '/proc/definitely-not-writable/p.zip' });
+    });
+    await page.keyboard.press('Control+s');
+    await page.waitForTimeout(800);
+
+    const banner = await page.getByTestId('project-error').textContent().catch(() => null);
+    expect(banner ?? '').not.toBe('');
+  }, 30000);
+
   it('⚑⚑ a save that FAILS says so, instead of looking like it worked (audit F6)', async () => {
     // ⚠️⚠️ SILENT DATA LOSS. `dialog:saveFile` calls `fs.writeFileSync` with no
     // try/catch, so a write that throws - read-only path, no permission, full
