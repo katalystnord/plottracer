@@ -64,12 +64,22 @@ export function HistogramBinsTable({
   noPointsHint,
 }: HistogramBinsTableProps) {
   const err = error?.labels.length ? error : null;
+  // Bins, not the corner clicks that produced them -- the same call
+  // buildHistogramCSV makes for export, so what's on screen is what
+  // lands in the file. No Category column: a bin is identified by its
+  // interval, unlike a Box Plot tuple which needs a name.
+  //
+  // ⚠️⚑⚑ THIS BLOCK USED TO SIT INSIDE THE `return (`, WHERE IT WAS A JS COMMENT
+  // - and F31 wrapped the return in a `<>` fragment, which turned it into four
+  // lines of TEXT CHILDREN rendered at the user above every histogram's table.
+  // Typecheck accepts JSX text, lint accepts JSX text, no unit test renders
+  // React, and the e2e asserts testids rather than the panel's text content - so
+  // every instrument stayed green while the app printed developer prose on
+  // screen. ▶ Nobody opened a histogram in the BUILT APP after the change, which
+  // is the instrument CLAUDE.md names as the only one pointing outward.
+  // (v2.3 audit fleet, found by two agents independently.)
   return (
     <>
-      // Bins, not the corner clicks that produced them -- the same call
-      // buildHistogramCSV makes for export, so what's on screen is what
-      // lands in the file. No Category column: a bin is identified by its
-      // interval, unlike a Box Plot tuple which needs a name.
       <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr>

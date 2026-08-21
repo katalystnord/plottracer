@@ -130,7 +130,23 @@ export function TupleTable({
                 {row.derived === null ? '-' : fmtValue(row.derived)}
               </td>
             ) : (
-              row.points.map((point, gi) => (
+              // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY, sliced to the HEADER's length.
+              // A row carries every tuple slot, and once a series gains error
+              // that includes the four cap slots - while the header is
+              // `slotNames`, which strips them. So a box plot with one SD cap
+              // rendered TWELVE body cells under TEN header cells: the cap value
+              // appeared twice, once under a heading belonging to another
+              // column, and the delete button sat two columns adrift.
+              //
+              // ⚠️ THE EXPORTER ALREADY FOUND AND FIXED THIS EXACT SHAPE -
+              // `tupleDataSection` slices identically, under a comment reading
+              // *"three header cells against seven row cells, every number under
+              // the wrong word, which is worse than dropping them"* - and the fix
+              // was never mirrored into the panel. Adding the error columns (F43)
+              // then stacked new columns on an alignment that was already wrong.
+              // Pie escaped only because `derivedColumn` short-circuits this map.
+              // (v2.3 audit fleet.)
+              row.points.slice(0, slotNames.length).map((point, gi) => (
                 <td key={gi} style={{ paddingRight: 16 }}>
                   {point && point.data ? fmtValue(point.data[0]!) : '-'}
                 </td>

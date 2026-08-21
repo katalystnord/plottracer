@@ -307,6 +307,28 @@ describe('a label is never handed to a spreadsheet as a formula', () => {
     expect(out).toContain("'=cmd|calc");
   });
 
+  /**
+   * ⚑⚑ AND IN A SECTION TITLE, WHICH IS A SERIES NAME (v2.3 audit fleet, S3-1).
+   *
+   * In latex/matlab/python/r the title sits behind a `%` or `#` and is inert. In
+   * csv/tsv it is a LIVE FIRST-COLUMN CELL. Section titles come from series
+   * names, which importers take verbatim from someone else's file, so this was
+   * the one remaining route from a foreign file to an executable cell.
+   *
+   * ⚠️ It survived because `sectionToDelimited`'s own comment named the title as
+   * the one string that had been missed AND FIXED - so every reader checked the
+   * header, saw the sweep declared complete, and stopped looking. Gate 3
+   * protecting the thing it exists to expose.
+   */
+  it('⚑ neutralises it in a SECTION TITLE, the last route from a foreign file', () => {
+    const out = renderTable([section(['x'], [[1]], '=cmd|\'/C calc\'!A0')], 'csv');
+    expect(out.split('\n')[0]).toBe("'=cmd|'/C calc'!A0");
+  });
+
+  it('⚑ and still leaves an ordinary title alone, unquoted, as pinned above', () => {
+    expect(renderTable([section(['x'], [[1]], 'Series 1')], 'csv').split('\n')[0]).toBe('Series 1');
+  });
+
   it('⚑ leaves NUMBERS alone, including negative ones', () => {
     // The prefix must not touch a number: -5 is data, not a formula, and
     // quoting it would corrupt every negative value in the file.

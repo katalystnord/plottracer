@@ -2272,7 +2272,20 @@ export function Workspace() {
     const grid = heatmapShownGrid;
     if (!grid) return;
     const result = readCellsFor(grid, heatmapCellReadings);
-    if (!result) return;
+    // ⚑⚑ A REFUSED RE-READ CLEARS THE TABLE, it does not leave the old one up
+    // (v2.3 audit fleet, A5). Returning silently here was F25's OWN failure
+    // surviving in its residual case: if the incoming figure cannot yield a
+    // colour key - its key points fall outside a smaller image, say - the
+    // numbers `restoreHeatmapGrid` sampled from the OUTGOING figure's ink stayed
+    // on screen, filed under the incoming figure's grid and labels. Colour is
+    // the value, so there is no eye-check that would catch it.
+    // ⚑ Empty is what the restore path already does when a read is impossible;
+    // this is the same answer at the same moment, not a new rule.
+    if (!result) {
+      setHeatmapCells([]);
+      setHeatmapSummary('');
+      return;
+    }
     setHeatmapCells(result.rows);
     setHeatmapSummary(result.summary);
   };
@@ -2741,6 +2754,16 @@ export function Workspace() {
     pendingEditRef.current = false;
     commit();
   }, [commit]);
+  /** Put the pending flag down WITHOUT an undo entry - what Escape needs.
+   *
+   * ⚑ Escape restores the value the editor opened with, so by the time it ends
+   * nothing has changed and there is nothing to undo. But the restore itself
+   * goes through `onChange`, which RAISES the flag, so simply not committing
+   * left it set and the next unrelated blur pushed an empty undo step.
+   * (v2.3 audit fleet, A7.) */
+  const cancelPendingEdit = useCallback(() => {
+    pendingEditRef.current = false;
+  }, []);
   /** Mark a text edit in progress from a handler declared ABOVE the ref.
    *
    * ⚑ The React Compiler refuses a ref mutation that appears earlier in the
@@ -5568,6 +5591,20 @@ export function Workspace() {
         return;
       }
       session.renameDataset(index, value);
+      // ⚑⚑ THE LIVE ERROR TARGET IS HELD BY NAME, SO IT MOVES WITH THE RENAME
+      // (v2.3 audit fleet, A3). `renameDataset` already carries the STORED
+      // relations across - "or the link silently goes stale" - and the Error
+      // bars card's chosen target is the same kind of by-name reference, one
+      // layer up. Without this it stopped matching, `resolveErrorTarget` fell
+      // back to the ACTIVE series, and the next cap drag was captured against
+      // the wrong one with nothing on screen saying the target had changed.
+      //
+      // ⚠️ F39 replaced an index with a name because "a name survives the delete
+      // of an earlier series where an index does not". True, and incomplete: a
+      // name does not survive a RENAME. Fixing the delete case and not this one
+      // would have traded a silent mis-target on the rarer gesture for a silent
+      // mis-target on the commoner one.
+      setErrorTargetName((n) => (n === current ? value.trim() : n));
       setNameDraft(null);
       setNameNotice(null);
       commit();
@@ -6447,6 +6484,14 @@ export function Workspace() {
           // ⚑ No `commitPendingEdit`: nothing was decided, so nothing goes on
           // the undo stack. The seed write is the same value the store already
           // held when the editor opened.
+          // ⚑⚑ BUT THE PENDING FLAG MUST BE PUT BACK DOWN (audit fleet, A7).
+          // `onChange` raises `pendingEditRef` on its way through - that is what
+          // makes a text edit ONE undo step on blur - so backing out and skipping
+          // the commit left it stuck true, and the next unrelated blur (another
+          // cell, a colour picker closing) fired a commit for a change nobody
+          // made. The original comment reasoned about the undo stack and stopped
+          // one line short of the flag that drives it.
+          cancelPendingEdit();
         }}
       />
     );
@@ -6502,13 +6547,28 @@ export function Workspace() {
     },
     []
   );
-  /** Which tuple row the current selection is standing on, so the table can show
-   *  it - the inverse of `selectTuple`, and the reason a canvas click highlights
-   *  the row as well as the other way round. */
+  /**
+   * Which tuple row the current selection is standing on, so the table can show
+   * it - the inverse of `selectTuple`, and the reason a canvas click highlights
+   * the row as well as the other way round.
+   *
+   * ⚑⚑ IT HAS TO ASK THE MODE, exactly as `selectTuple` does. Select mode's
+   * selection IS `selectedPointIndices`; Place Point's is `activePointIndex`.
+   * `selectTuple` learned that branch and this did not, so in Select mode a row
+   * click lit the FIGURE and left the ROW unhighlighted - the panel and the
+   * canvas disagreeing about what is selected, which is the precise thing the
+   * mirroring was added to prevent. `SpreadsheetTable` has always asked the mode
+   * here; the three panels that just joined it were reading a value that only
+   * answered for one of the two modes. (Found by the v2.3 audit fleet, G5 - a
+   * same-cycle companion to the fix that created it.)
+   */
   const activeTupleIndex = useMemo(
-    () => session.tupleIndexOfPixel(activePointIndex),
+    () =>
+      mode === 'select'
+        ? session.tupleIndexOfPixel(selectedPointIndices[0] ?? null)
+        : session.tupleIndexOfPixel(activePointIndex),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, version, activePointIndex]
+    [session, version, activePointIndex, selectedPointIndices, mode]
   );
 
   const renderEditableAxisName = (axisIndex: number, rawName: string) =>
@@ -8974,6 +9034,9 @@ export function Workspace() {
               }}
               renderAxisName={renderEditableAxisName}
               renderValue={renderEditableSpiderValue}
+              // ⚑ The empty state every other calibrated panel has. Spider was
+              // the one without it (audit fleet, G9).
+              noPointsHint={noPointsHint}
             />
           ) : config.outputPanel === 'bar' && axes ? (
             <BarTable

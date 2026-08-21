@@ -35,6 +35,26 @@ import type { ColorBarRefusal } from '../algorithms/colorBar.js';
 export const DISCRETE_KEY_REFUSAL =
   'This colour key is drawn as a few discrete bands rather than a continuous ramp, so a cell’s colour identifies a BAND - a range - and not a value. PlotTracer will not report a number the figure does not contain: read these cells against the key by eye, or trace a figure whose key is a continuous ramp.';
 
+/**
+ * The same fact, refused at the OTHER door - where the user DECLARED the key is
+ * banded by ticking the option, rather than the sampler having measured banding.
+ *
+ * ⚠️⚑⚑ ONE SENTENCE WAS WRONG FOR ONE OF THE TWO DOORS, and F34 introduced that
+ * by de-duplicating them (v2.3 audit fleet, A6). The stale "v2.2" string was the
+ * visible problem and merging fixed it - but the two doors fire for DIFFERENT
+ * CAUSES with DIFFERENT REMEDIES. Someone who mis-ticked "Categories" on a
+ * perfectly continuous ramp was told their figure was unusable, when the one
+ * action that fixes it is to untick the box.
+ *
+ * ▶ F32, in the same commit, split ONE sentence into TWO for exactly this
+ * reason: *"each was told one remedy that works and one that cannot."* F34 ran
+ * it backwards. What must be shared is the FACT (a band is a range, and we will
+ * not invent a number inside it); what must not is the remedy, which belongs to
+ * the door.
+ */
+export const DECLARED_CATEGORY_KEY_REFUSAL =
+  'The colour key is set to Categories, so a cell’s colour identifies a BAND - a range - and not a value, and PlotTracer will not report a number the figure does not contain. If this key really is a continuous ramp, set it back to Values; if it genuinely is banded, read these cells against the key by eye.';
+
 /** The key's two ends too close together to read a ramp between them. */
 export const STRIP_NOT_A_LINE_REFUSAL =
   'The colour key’s two ends are too close together to read a ramp between them - click where the coloured strip begins and where it ends, along its length, not across its width.';

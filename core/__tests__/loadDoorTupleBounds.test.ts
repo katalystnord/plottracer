@@ -24,7 +24,7 @@ import { PlotData } from '../plotData.js';
  */
 
 /** A minimal v4 document with one two-slot dataset and `points` pixels. */
-function docWith(points: Array<{ x: number; y: number; tuple?: unknown; group?: unknown }>) {
+function docWith(points: Array<{ x: unknown; y: unknown; tuple?: unknown; group?: unknown }>) {
   return {
     version: [4, 2],
     axesColl: [],
@@ -118,5 +118,46 @@ describe('the load door will not let a file choose an array size', () => {
     const ds = load([{ x: 10, y: 20, tuple: 'abc', group: null }]);
     expect(ds.getCount()).toBe(1);
     expect(ds.getAllTuples()).toEqual([]);
+  });
+});
+
+/**
+ * ⚑⚑ A HOLE IS NOT A TUPLE, AND IT USED TO THROW (v2.3 audit fleet, A4).
+ *
+ * F35 caps the tuple array's SIZE, and that is not the same as making it dense:
+ * a renumbered position whose only point is DROPPED - a non-finite coordinate,
+ * or a group index outside the declared slots - is never created, leaving a
+ * literal hole in the middle of `_tuples`.
+ *
+ * `getAllTuples()` hands that array to everything, and `.entries()` yields the
+ * hole as `undefined`. `tupleIndexOfPixel` walks it on EVERY RENDER for every
+ * graph type (it feeds `activeTupleIndex`), so one damaged file turned the whole
+ * Workspace render into a TypeError.
+ *
+ * ⚠️ The existing group-bound test above could not catch this: its dataset has a
+ * SINGLE point, so `_tuples` stays `[]` and the `for...of` body never runs. A
+ * fixture blind to what it lacks.
+ */
+describe('a dropped point leaves no hole behind', () => {
+  it('⚑ a point whose GROUP is out of range does not leave an undefined tuple', () => {
+    const ds = load([
+      { x: 10, y: 20, tuple: 0, group: 50 }, // dropped: no such slot
+      { x: 30, y: 20, tuple: 1, group: 0 },
+    ]);
+    const tuples = ds.getAllTuples();
+    for (const [i, tuple] of tuples.entries()) {
+      expect(tuple, `tuple ${i} is a hole`).toBeDefined();
+      expect(Array.isArray(tuple)).toBe(true);
+    }
+  });
+
+  it('⚑ nor does a point with no position', () => {
+    const ds = load([
+      { x: null, y: null, tuple: 0, group: 0 },
+      { x: 30, y: 20, tuple: 1, group: 0 },
+    ]);
+    for (const [i, tuple] of ds.getAllTuples().entries()) {
+      expect(tuple, `tuple ${i} is a hole`).toBeDefined();
+    }
   });
 });

@@ -203,9 +203,16 @@ export function errorBarsFromTuples(
 ): ErrorBarPoint[] {
   const bars: ErrorBarPoint[] = [];
   for (const [tupleIndex, tuple] of tuples.entries()) {
+    // ⚑⚑ ONE GATE, NOT TWO (v2.3 re-audit, found by mutation). This used to test
+    // the INDEX for null and then test the POINT it resolved to, and the second
+    // test subsumed the first: a null index looks up `undefined`, which the
+    // `!datum` check already rejects. So neither gate could be shown to matter -
+    // Stryker replaced the first with `if (false)` and all 82 tests still
+    // passed, because the second one caught the case anyway. That is the exact
+    // mutual masking `exportAssembly`'s `geometries` note records: "a second
+    // gate behind the first, so neither could be shown to matter".
     const datumIndex = tuple[0];
-    if (datumIndex === null || datumIndex === undefined) continue;
-    const datum = pointAt(datumIndex);
+    const datum = datumIndex == null ? null : pointAt(datumIndex);
     if (!datum) continue;
 
     // ⚑⚑ WHICH TUPLE THIS CAME FROM, recorded HERE because this is the loop that
@@ -220,10 +227,10 @@ export function errorBarsFromTuples(
     // so the two cannot disagree about which tuples were dropped.
     const bar: ErrorBarPoint = { x: datum.x, y: datum.y, tupleIndex };
     for (const role of ERROR_ROLES) {
+      // The same one gate, for the same reason as the datum above.
       const member = tuple[slotForRole(role, slotCount)];
-      if (member === null || member === undefined) continue;
-      const cap = pointAt(member);
-      if (!cap) continue; // a slot pointing at a pixel that is gone records nothing
+      const cap = member == null ? null : pointAt(member);
+      if (!cap) continue; // an empty slot, or one pointing at a pixel that is gone
       bar[ROLE_FIELD[role]] = role === 'upper' || role === 'lower' ? cap.y : cap.x;
     }
     bars.push(bar);

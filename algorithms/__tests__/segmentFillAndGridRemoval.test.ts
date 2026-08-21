@@ -292,6 +292,40 @@ describe('gridRemoval', () => {
     expect(hexToRGB('#ccc')).toEqual([204, 204, 204]);
     expect(hexToRGB(' c8c8c8 ')).toEqual([200, 200, 200]);
   });
+
+  /**
+   * ⚑⚑ THE REFUSAL, AND A MUTATION RUN IS WHAT SAID IT WAS MISSING (v2.3
+   * re-audit). `hexToRGB` was changed to return null for anything that is not a
+   * hex colour, because the grid-removal and colour-trace boxes are FREE TEXT
+   * and a typo used to become BLACK - so "remove gridlines" erased the curve,
+   * the axis lines and the tick labels in one press.
+   *
+   * ⚠️ THE TEST ABOVE ONLY EXERCISED THE VALID CASES. Stryker replaced the whole
+   * guard with `if (false) return null` and every test still passed, and so did
+   * mutants that deleted the `^` anchor, the `$` anchor and the `#` anchor. The
+   * suite proved the function still parses good input; nothing at all asserted
+   * that it REFUSES bad input, which is the entire point of the change.
+   *
+   * ▶ CLAUDE.md: a green test proves nothing until it has been shown to fail
+   * without the fix - and here the fix was the refusal, which nothing tested.
+   */
+  it('⚑ hexToRGB REFUSES anything that is not a hex colour', () => {
+    // The one that motivated the change: one keystroke short.
+    expect(hexToRGB('#e6e6e')).toBeNull();
+    expect(hexToRGB('')).toBeNull();
+    expect(hexToRGB('#')).toBeNull();
+    expect(hexToRGB('nonsense')).toBeNull();
+    // ⚑ Kills the "delete the ^ anchor" mutant: junk BEFORE the digits.
+    expect(hexToRGB('zz112233')).toBeNull();
+    // ⚑ Kills the "delete the $ anchor" mutant: junk AFTER the digits.
+    expect(hexToRGB('#112233ff')).toBeNull();
+    // ⚑ Kills the "/^#/ -> /#/" mutant: a hash that is not at the front is not
+    // a prefix to strip, and what is left is not six hex digits.
+    expect(hexToRGB('11#2233')).toBeNull();
+    // Neither 3 nor 6 digits.
+    expect(hexToRGB('#12345')).toBeNull();
+    expect(hexToRGB('#1234')).toBeNull();
+  });
 });
 
 /**

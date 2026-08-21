@@ -223,10 +223,15 @@ export function BarTable({
                   // series only. An ACTIVE cell with a half-filled bar aims
                   // the next capture at its missing corner.
                   onClick={() => {
-                    if (!isActive) {
-                      onSelectSeries(col.seriesIndex);
-                      return;
-                    }
+                    // ⚑⚑ SWITCH **AND** SELECT, in one click. This used to
+                    // switch series and stop, so clicking a cell of a non-active
+                    // series appeared to do nothing to the figure and you had to
+                    // click it twice - with nothing on screen saying so. Spider's
+                    // identical matrix has always done both, and the spreadsheet
+                    // learned it as A2 (*"switch first, then select"*); this was
+                    // the third copy of the mechanism, still holding the defect.
+                    // (v2.3 audit fleet, G6.)
+                    if (!isActive) onSelectSeries(col.seriesIndex);
                     if (aimable && aimTupleIndex != null) {
                       onAimSlot(aimTupleIndex, missingGroupIndex);
                       return;

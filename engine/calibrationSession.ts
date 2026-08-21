@@ -923,13 +923,33 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getDatumPixelIndices(index: number): number[] {
     const entry = this.datasetEntries[index];
     if (!entry) return [];
-    if (!hasErrorSlots(entry.dataset.getSlotNames())) {
+    const slots = entry.dataset.getSlotNames();
+    if (!hasErrorSlots(slots)) {
       return Array.from({ length: entry.dataset.getCount() }, (_, i) => i);
     }
+    // ⚑⚑ A DATUM PIXEL IS ONE THAT IS NOT A CAP - EVERY own slot, not slot 0
+    // (v2.3 audit fleet, R2 - CRITICAL, and it was DATA LOSS).
+    //
+    // This took `tuple[0]` alone, on the assumption that a tuple holds one
+    // reading plus its caps. That is true of XY ('Value' + 4) and it is FALSE of
+    // a SPIDER, whose tuple is a whole PROFILE with one slot per spoke: slots
+    // 1..N-1 are readings on the other spokes, not caps. So capturing a single
+    // error cap on a radar chart deleted every reading but the first spoke's
+    // from all nine export formats - measured, 3 rows to 1 - while the spider
+    // table went on showing all three. Nothing on screen said the file was short.
+    //
+    // ⚑ `ownSlotNames` is the model's own answer to "which slots belong to the
+    // TYPE", and it is derived from the slot NAMES rather than from a count -
+    // the same inverse `hasErrorSlots` relies on, for the same reason (a box
+    // plot has five own slots and a count-based guess reads four of them as
+    // roles).
+    const ownCount = slots.length - ERROR_ROLES.length;
     const rows: number[] = [];
     for (const tuple of entry.dataset.getAllTuples()) {
-      const datum = tuple[0];
-      if (datum != null) rows.push(datum);
+      for (let slot = 0; slot < ownCount; slot += 1) {
+        const datum = tuple[slot];
+        if (datum != null) rows.push(datum);
+      }
     }
     return rows;
   }
@@ -4443,7 +4463,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
           derive && this.axes
             ? derive.compute(points, this.axes, {
                 apex: this.getSectorApex(tupleIndex, datasetIndex),
-                stackGroup: this.getDatasetStackGroup(this.activeDatasetIndex),
+                // ⚑⚑ THIS SERIES' STACK GROUP, NOT THE ACTIVE ONE (v2.3 audit
+                // fleet, R1 - CRITICAL). It read `this.activeDatasetIndex` while
+                // `apex` one line above correctly threaded `datasetIndex`, so on
+                // a stacked or grouped bar chart - v2.0's headline - EVERY series
+                // but one was valued by the wrong rule, and which one was right
+                // depended on what happened to be selected when Export was
+                // pressed. Exporting the same figure twice, after clicking a
+                // different series in the rail, produced two different files.
+                // The SCREEN was correct throughout (`getBarCategoryTable` passes
+                // `seriesIndex`), so nothing on it could ever have shown this.
+                // ⚑ Resolved exactly as `datasetAt` resolves it, so an
+                // out-of-range index falls back to the active series here too
+                // rather than reading `null` and silently unstacking the value.
+                stackGroup: this.getDatasetStackGroup(
+                  datasetIndex !== undefined && this.datasetEntries[datasetIndex]
+                    ? datasetIndex
+                    : this.activeDatasetIndex
+                ),
               })
             : null,
       };

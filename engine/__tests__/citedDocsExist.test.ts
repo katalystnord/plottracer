@@ -24,18 +24,34 @@ import path from 'node:path';
  */
 
 const ROOT = path.join(import.meta.dirname, '..', '..');
-const SEARCH_DIRS = ['core', 'algorithms', 'engine', 'ui/src', 'ui/__tests__', 'build', 'tools'];
+/**
+ * ⚑ THE REPO ROOT IS IN THE LIST, and it was the miss (v2.3 audit fleet). The
+ * first version of this guard swept the source directories and not the root - so
+ * `CLAUDE.md`, the project's own constitution and the most-read file here, was
+ * the one file it could not see, and it carried a dangling citation of its own.
+ * A guard with one entrance, in a repo whose standing rule is that the model has
+ * more than one.
+ */
+const SEARCH_DIRS = ['.', 'core', 'algorithms', 'engine', 'ui/src', 'ui/__tests__', 'build', 'tools', 'docs'];
 
 /** Every .ts/.tsx/.md file under the searched directories. */
 function sourceFiles(dir: string): string[] {
   const abs = path.join(ROOT, dir);
   if (!existsSync(abs)) return [];
   const out: string[] = [];
-  const walk = (d: string) => {
+  const walk = (d: string, depth = 0) => {
     for (const entry of readdirSync(d)) {
-      if (entry === 'node_modules' || entry.startsWith('.')) continue;
+      // ⚑ `dist-ui` and `reports` hold BUILT copies of the source; a citation
+      // there is a duplicate of one already checked, and `node_modules` is
+      // someone else's prose entirely.
+      if (['node_modules', 'dist-ui', 'reports', 'release-notes'].includes(entry)) continue;
+      if (entry.startsWith('.')) continue;
       const full = path.join(d, entry);
-      if (statSync(full).isDirectory()) walk(full);
+      // ⚑ The root is swept for its own FILES only; its subdirectories are
+      // listed explicitly above, so recursing here would sweep the whole repo.
+      if (statSync(full).isDirectory()) {
+        if (dir !== '.' || depth > 0) walk(full, depth + 1);
+      }
       else if (/\.(ts|tsx|md)$/.test(entry)) out.push(full);
     }
   };

@@ -32,7 +32,7 @@ import { PieAxes } from '../core/axes/pie.js';
 
 import { binFromCorners } from '../algorithms/histogram.js';
 import { checkStripGeometry } from '../algorithms/colorBar.js';
-import { DISCRETE_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
+import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
@@ -1715,10 +1715,10 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       }
     }
     if (optionBool(options, 'keyIsCategory')) {
-      // ⚑ THE SAME SENTENCE THE SAMPLER GIVES (F34). This door had its own
-      // wording, and it had gone stale where only a user would see it: it named
-      // "v2.2" in the middle of a refusal, still shipping in v2.3.
-      return DISCRETE_KEY_REFUSAL;
+      // ⚑ The same FACT the sampler gives, with THIS door's own remedy (A6):
+      // here the user DECLARED the key is banded, so the fix may be to untick
+      // the box - which is an action the sampler's refusal cannot offer.
+      return DECLARED_CATEGORY_KEY_REFUSAL;
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);

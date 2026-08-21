@@ -44,6 +44,21 @@ export interface SpiderTableProps {
     value: number,
     supplied: boolean
   ) => ReactNode;
+  /**
+   * Shown when no reading has been captured yet.
+   *
+   * ⚑⚑ SPIDER WAS THE ONLY CALIBRATED TYPE WITHOUT ONE (v2.3 audit fleet, G9).
+   * `noPointsHint` reaches the spreadsheet, tuple, bar, bins and heatmap panels;
+   * this table never took it, so a freshly calibrated radar showed N rows of
+   * dashes and one shaded cell with no sentence naming the gesture - on the type
+   * with the least conventional capture (click along a ray).
+   *
+   * ⚠️ IT SURVIVED F31's SWEEP because that sweep keyed on "the panel renders
+   * NOTHING", and this panel is never literally empty: its rows come from the
+   * CALIBRATION, not from the data. A table full of dashes looks like a table
+   * that is working. That is the more dangerous shape of the same defect.
+   */
+  noPointsHint: string;
 }
 
 /**
@@ -72,8 +87,14 @@ export function SpiderTable({
   onAimSlot,
   renderAxisName,
   renderValue,
+  noPointsHint,
 }: SpiderTableProps) {
+  // ⚑ "No readings yet" is not "no rows": the rows come from the CALIBRATION, so
+  // this table is never literally empty. It is empty of DATA when no column
+  // holds a single value.
+  const hasReadings = table.columns.some((col) => col.values.some((v) => v != null));
   return (
+    <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr>
@@ -148,7 +169,16 @@ export function SpiderTable({
                       pointIndex != null &&
                       pointIndex === activePointIndex &&
                       col.seriesIndex === activeSeriesIndex
-                        ? theme.color.background.canvas
+                        // ⚑⚑ THE TOKEN EVERY OTHER PANEL'S SELECTION USES (v2.3
+                        // audit fleet, G2). This was `background.canvas` - and
+                        // so was the CURSOR cell below it, so one grey meant BOTH
+                        // "the reading you selected" and "the slot the next click
+                        // fills", on the same table, with nothing to tell them
+                        // apart. `selectedRow`'s own header says a selected row
+                        // has to LOOK the same in every panel; spider was the
+                        // table the others were told to mirror, and it was the
+                        // one not using it.
+                        ? theme.color.background.selectedRow
                         // ⚑ The slot the NEXT click fills is marked here too,
                         // not only in the "Next point fills" line: this is the
                         // table you are reading when you notice a gap, so it is
@@ -187,5 +217,12 @@ export function SpiderTable({
           </tr>
         ))}
       </tbody>
-    </table>  );
+    </table>
+    {!hasReadings && (
+      <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
+        {noPointsHint}
+      </div>
+    )}
+    </>
+  );
 }

@@ -766,9 +766,28 @@ export class PlotData {
          * a hand edit, a foreign model translated at the boundary - is renumbered
          * at all, and a gap is not something any reader could have used.
          */
+        // ⚑⚑ ONLY A POSITION THAT ACTUALLY RECEIVES A POINT EARNS A SLOT. Capping
+        // the array's SIZE is not the same as making it DENSE: a position whose
+        // every point is DROPPED - a non-finite coordinate, or a group index
+        // outside the declared slots - would otherwise be counted here and never
+        // created below, leaving a literal HOLE in `_tuples`. `getAllTuples()`
+        // hands that array to everything, and a hole reads as `undefined`:
+        // `tupleIndexOfPixel` walks it on every render, so one damaged file
+        // turned the whole workspace into a TypeError. (v2.3 audit fleet, A4.)
+        //
+        // ⚑ The two passes share ONE predicate, so "was this point kept?" cannot
+        // be answered differently by the counting pass and the filling pass.
+        const slotCount = ds.getSlotNames().length;
+        const keeps = (p: { x: unknown; y: unknown; tuple?: unknown; group?: unknown }): boolean =>
+          Number.isFinite(p.x) &&
+          Number.isFinite(p.y) &&
+          Number.isInteger(p.tuple) &&
+          (p.tuple as number) >= 0 &&
+          Number.isInteger(p.group) &&
+          (p.group as number) >= 0 &&
+          (p.group as number) < slotCount;
         const tupleSlot = new Map<number, number>();
-        [...new Set(dsData.data.map((p) => p.tuple))]
-          .filter((t): t is number => Number.isInteger(t) && (t as number) >= 0)
+        [...new Set(dsData.data.filter(keeps).map((p) => p.tuple as number))]
           .sort((a, b) => a - b)
           .forEach((t, i) => tupleSlot.set(t, i));
 
@@ -831,17 +850,12 @@ export class PlotData {
           // about which row it belongs to is not. Same call as F4/F11/F14. A
           // pixel with no tuple is a state this door already produces
           // (`pt.tuple === undefined`).
+          // ⚑ The SAME predicate the counting pass used, so a position that was
+          // counted is always filled and one that was not is never referenced.
           const tupleIndex = tupleSlot.get(pt.tuple as number);
-          const groupIndex = pt.group;
-          if (
-            ds.hasSlots() &&
-            tupleIndex !== undefined &&
-            Number.isInteger(groupIndex) &&
-            groupIndex! >= 0 &&
-            groupIndex! < ds.getSlotNames().length
-          ) {
+          if (ds.hasSlots() && tupleIndex !== undefined && keeps(pt)) {
             ds.addEmptyTupleAt(tupleIndex);
-            ds.addToTupleAt(tupleIndex, groupIndex!, added);
+            ds.addToTupleAt(tupleIndex, pt.group as number, added);
           }
           ds.addPixel(pt.x, pt.y, metadata);
           added++;

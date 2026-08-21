@@ -93,7 +93,27 @@ function sectionToDelimited(section: TableSection, delimiter: string): string {
   // newline and comma (reachable verbatim from a foreign importer's dataset
   // name, which nothing strips control characters from) injected a fabricated
   // data row into the middle of the document. (Round-2 audit.)
-  if (section.title) lines.push(commentSafe(section.title));
+  //
+  // ⚠️⚑⚑ AND `commentSafe` ALONE WAS NOT ENOUGH (v2.3 audit fleet, S3-1). In
+  // latex/matlab/python/r the title sits behind a `%` or `#` and is inert; here
+  // it is a LIVE FIRST-COLUMN CELL, so it needs exactly what every other cell in
+  // this format gets - formula neutralisation and delimiter quoting. Section
+  // titles are series names (`exportAssembly`'s scope handling), which importers
+  // take verbatim from someone else's file, so `=cmd|'/C calc'!A0` reached Excel
+  // as a formula.
+  //
+  // ▶ The comment above this one is why it survived: it named the title as the
+  // one string that had been missed AND FIXED, so every later reader - including
+  // the author - checked the header, saw the sweep declared complete and stopped
+  // looking. That is CLAUDE.md's third gate protecting the very thing it was
+  // written to expose.
+  //
+  // ⚑ NEUTRALISED, NOT FULLY ESCAPED. Not quoting the title is a RECORDED
+  // DECISION - "the title line is a block label, and the defect was row
+  // INJECTION via a newline, not field-splitting on a comma", pinned by a named
+  // test - and formula execution is a third thing that decision never weighed.
+  // So the formula guard is added and the quoting decision is left standing.
+  if (section.title) lines.push(neutralizeFormula(commentSafe(section.title)));
   for (const row of [section.header, ...section.rows]) {
     lines.push(row.map((c) => escapeDelimited(c, delimiter)).join(delimiter));
   }
