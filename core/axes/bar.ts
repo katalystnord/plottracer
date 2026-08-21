@@ -19,13 +19,26 @@
  * and the stub's old sentinel, so returning it here would be silently
  * indistinguishable from "cannot invert."
  *
- * ⚠ This does NOT newly activate algorithms/errorCapture.ts's
- * `capFreeDirection` probe for Bar error caps: that function reads BOTH
- * elements of `pixelToData`'s return and early-returns null when the second
- * is `undefined` (`dx === undefined || dy === undefined`) - and Bar's
- * `pixelToData` returns a length-1 array, `[value]`, unchanged by this fix.
- * Bar error caps stay "unconstrained" (the documented safe default) until a
- * later v2.0 phase gives Bar a second, category-axis coordinate to return.
+ * ⚠️⚑⚑ THE PARAGRAPH THAT USED TO SIT HERE IS NOW FALSE, AND IT IS KEPT AS A
+ * CORRECTION RATHER THAN DELETED. It said this change *"does NOT newly activate
+ * algorithms/errorCapture.ts's `capFreeDirection` probe for Bar error caps"* and
+ * that *"Bar error caps stay unconstrained"*, because that function read BOTH
+ * elements of `pixelToData`'s return and Bar's is length-1, `[value]`.
+ *
+ * **True when written in v2.0. False since v2.3.** `capFreeDirection` grew a
+ * 1-D branch: an axes with one value can still say which way that value runs,
+ * by stepping it through this very method - so Bar answers `(0, -1)` on a
+ * screen-aligned chart and follows the tilt on a rotated one, and its caps ARE
+ * constrained. It was measured at the time: 5 of 12 types could otherwise
+ * record a DIAGONAL cap, against David's *"there cannot be one in between."*
+ *
+ * ⚑ Left here deliberately, because a comment that merely disappears teaches
+ * nobody: this is gate 3's shape, a comment read as evidence of a design while
+ * the design moved underneath it. What is still true is the narrow fact it was
+ * built on - `pixelToData` returns `[value]`, and this method inverts ONTO THE
+ * CALIBRATION LINE, so a caller wanting to move an existing point to a new
+ * value must step ALONG that direction from where the point is, never jump to
+ * the pixel this returns. See the v2.4 typed-value work (B1).
  */
 
 import { taninverse } from '../mathFunctions.js';
