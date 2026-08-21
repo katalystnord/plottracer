@@ -338,7 +338,15 @@ export function tupleDataSection(
   // typed name exports exactly what it did before.
   const hasPosition = tupleRows.some((r) => r.position != null);
   const hasSpan = tupleRows.some((r) => r.positionSpan != null);
-  const positionLabel = tupleRows.some((r) => r.positionIsBand) ? 'Position' : 'Category index';
+  // ⚑⚑ A2 - THREE FRAMES, THREE HONEST NAMES. `Position` is claimed when the
+  // coordinate is one: the axis was marked, or it was measured off the bars
+  // themselves. `Position (in series)` is Line's own wording for a rank that is
+  // real but NOT shared - several series unmarked, where a grouped chart's
+  // side-by-side bars and two adjacent categories are the same ink. `Category
+  // index` survives for the case where nothing framed it at all.
+  const frame = tupleRows.find((r) => r.position != null)?.positionFrame ?? 'index';
+  const positionLabel =
+    frame === 'in-series' ? 'Position (in series)' : frame === 'index' ? 'Category index' : 'Position';
   return {
     header: [
       ...(hasPosition ? [positionLabel] : []),
@@ -1188,7 +1196,7 @@ export function buildTupleSeriesJSON(
             // comment has the why. Absent, never null, where nothing measured
             // it: a key that is there says a reading was taken.
             ...(row.position != null
-              ? { [row.positionIsBand ? 'position' : 'categoryIndex']: row.position }
+              ? { [row.positionFrame === 'index' ? 'categoryIndex' : 'position']: row.position }
               : {}),
             category: row.label,
             ...(row.positionSpan

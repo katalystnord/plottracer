@@ -37,9 +37,22 @@
  * over that section is unconditional: *"Whatever we export (for all types of
  * graphs) needs to be usable as a basis for reconstructing the same graph."*
  *
- * ⚑ PRESENCE IS THE SIGNAL, as everywhere else in this exporter: no marked axis
- * and no named category means no coordinate was measured, so no column appears.
- * A rank over capture order would be the invention this whole finding is about.
+ * ⚑ PRESENCE IS THE SIGNAL, as everywhere else in this exporter: no column
+ * appears where nothing was measured.
+ *
+ * ⚠️⚑⚑ ONE OF F21's CONCLUSIONS WAS OVERTURNED BY A2 - read
+ * `barCategoryFrameDerived.test.ts` beside this file. This header used to end
+ * *"a rank over capture order would be the invention this whole finding is
+ * about"*, and that sentence was right about capture order and wrong about what
+ * follows from it. F21 read "no marked axis" as "nothing measured the frame", so
+ * the unmarked case kept a name-list index under the header `Category index`.
+ * David, 2026-08-21: *"Everything should work on the principles that are there
+ * for the case Bar - Axis marked and it should be reused for the Axis unmarked
+ * case."* The bars themselves measure the frame - their centres give the pitch
+ * and the dividers - so the coordinate is a Position in both cases and the
+ * invention F21 feared is avoided by MEASURING rather than by abstaining.
+ * What stays genuinely unmeasurable is narrower: a single bar's pitch, and the
+ * existence of a category that has no bar at all.
  */
 import { describe, it, expect } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../calibrationSession.js';
@@ -180,36 +193,46 @@ describe('a Box Plot carries its category too', () => {
 });
 
 describe('nothing is invented where nothing was measured', () => {
-  it('⚑⚑ an unmarked axis exports an IDENTITY, and the header says so', () => {
-    // ⚑ The distinction Line's `Position (in series)` header already draws. The
-    // name-list index is real and it is SHARED - it is what joins one series' bar
-    // to another's - but nothing measured where that category sits on the axis,
-    // and bars captured right to left number the rightmost 1. So the column is
-    // named for what it is and the word `Position` is not claimed.
+  // ⚠️⚑⚑ SUPERSEDED BY A2, AND DELIBERATELY SO. F21 concluded that an unmarked
+  // bar chart should export a name-list IDENTITY under the header `Category
+  // index`, on the reasoning that nothing had measured where the categories sit.
+  // David, 2026-08-21: *"Everything should work on the principles that are there
+  // for the case Bar - Axis marked and it should be reused for the Axis unmarked
+  // case."* The frame IS measurable off the bars - see
+  // `barCategoryFrameDerived.test.ts` - so the coordinate is a Position in both
+  // cases, and what remains genuinely unmeasured is narrower than F21 thought:
+  // one bar's PITCH, and an empty category's existence.
+  it('⚑⚑ one bar has a position but no pitch, so no extent is claimed', () => {
     const s = barSession();
     bar(s, 210, 290, 200);
     const [data] = sectionsFor(s, 'bar');
-    expect(data!.header).toEqual(['Category index', 'category', 'Bar start', 'Bar end', 'Value']);
+    expect(data!.header).toEqual(['Position', 'category', 'Bar start', 'Bar end', 'Value']);
     expect(data!.rows[0]![0]).toBe(1);
   });
 
-  it('⚑⚑ marking the axis turns that identity INTO a position', () => {
-    // Same figure, same clicks, one more declaration - and the header changes
-    // rather than a second column appearing beside the first.
+  it('⚑⚑ marking the axis states the count the ink cannot carry', () => {
+    // Same figure, same clicks, one more declaration. A2 made the coordinate
+    // measured either way, so what marking adds is no longer the Position
+    // column - it is that the bands are DECLARED, which is the only way an
+    // empty category can be in the record at all.
     const s = withThreeCategories(barSession());
     bar(s, 210, 290, 200);
     const [data] = sectionsFor(s, 'bar');
     expect(data!.header).toContain('Position');
-    expect(data!.header).not.toContain('Category index');
+    expect(data!.rows[0]![0]).toBe(2); // band 2, not "the first bar I clicked"
   });
 
-  it('⚑ no extent is exported where no axis was marked to measure it against', () => {
+  it('⚑ the NAME still comes from the shared category list, not from the frame', () => {
+    // ⚑⚑ The identity and the position are two questions, and A2 is what
+    // happens when one number is asked to be both. `getTupleLabel` reads the
+    // name-list slot, so a typed name survives a coordinate that is derived
+    // from geometry the name knows nothing about.
     const s = barSession();
     bar(s, 210, 290, 200);
     expect(s.setTupleLabel(0, 'Control')).toBe(true);
     const [data] = sectionsFor(s, 'bar');
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
-    expect(at('Category index')).toBe(1);
+    expect(at('Position')).toBe(1);
     expect(at('category')).toBe('Control');
     expect(data!.header).not.toContain('Position min');
   });

@@ -2531,10 +2531,12 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    // F21: the box's own category identity leads the row - the shared name-list
-    // index, named `Category index` because no axis was marked to measure a
-    // position against.
-    expect(lines[0]).toBe('Category index,category,Min,Q1,Median,Q3,Max');
+    // F21: the box's own category coordinate leads the row. ⚑ A2 renamed it to
+    // `Position`: with no axis marked the frame is derived from the boxes' own
+    // spacing, so the coordinate is measured rather than being the name-list
+    // index in capture order. No extent columns, because a box's five clicks
+    // are five values on ONE category and say nothing about a width.
+    expect(lines[0]).toBe('Position,category,Min,Q1,Median,Q3,Max');
     const [, category, ...values] = lines[1]!.split(',');
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- an
     // unnamed category exports as an empty cell, not a fake transcription.
@@ -2580,8 +2582,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    // F21: the bar's category identity leads the row.
-    expect(lines[0]).toBe('Category index,category,Bar start,Bar end,Value');
+    // F21: the bar's category coordinate leads the row, renamed by A2 - see the
+    // Box Plot case above. One bar, so there is no measurable pitch and no
+    // extent columns follow it.
+    expect(lines[0]).toBe('Position,category,Bar start,Bar end,Value');
     const cells = lines[1]!.split(',').slice(1);
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
     // category column is still present and exported (proven by lines[0]'s
@@ -2832,7 +2836,14 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    expect(lines[0]).toBe('Category index,category,Bar start,Bar end,Value');
+    // ⚑⚑ A2, AND THIS WALK IS WHERE IT SHOWS. Two series, no axis marked - so
+    // the frame is each series' own bars and the coordinate is NOT shared
+    // between them. The header says so in Line's own words rather than printing
+    // `Position` and letting a reader assume the two series line up. The extent
+    // columns appear too: two bars give a measurable pitch, which one does not.
+    expect(lines[0]).toBe(
+      'Position (in series),category,Position min,Position max,Bar start,Bar end,Value'
+    );
     expect(lines[1]!.split(',')[1]).toBe('Flax');
     fs.unlinkSync(csvPath);
   });

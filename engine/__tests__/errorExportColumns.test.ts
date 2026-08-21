@@ -239,9 +239,11 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     // ⚑ The error follows the DERIVED value, because that is the number it
     // qualifies: a bar's height is what has an SD, not either of its corners.
     expect(data!.header).toEqual([
-      // F21: a captured bar owns a category from the moment it exists - the
-      // shared name list's entry - so its identity leads the row.
-      'Category index',
+      // F21: a captured bar owns a category from the moment it exists, so its
+      // coordinate leads the row. ⚑ A2 renamed it: with the axis unmarked the
+      // frame is derived from the bars themselves, so this is a measured
+      // Position rather than a name-list index in capture order.
+      'Position',
       'category',
       'Bar start',
       'Bar end',
@@ -280,6 +282,9 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     s.addDataPoint(200, 300);
     s.addDataPoint(200, 200);
     const [data] = sectionsFor(s as never, 'active');
-    expect(data!.header).toEqual(['Category index', 'category', 'Bar start', 'Bar end', 'Value']);
+    // ⚑ A2: `Position`, not `Category index`. A single bar with no axis marked
+    // still has a position, and it is 1 - what it does not have is a measurable
+    // PITCH, which is why no extent columns appear beside it.
+    expect(data!.header).toEqual(['Position', 'category', 'Bar start', 'Bar end', 'Value']);
   });
 });

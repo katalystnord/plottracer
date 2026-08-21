@@ -222,6 +222,7 @@ import {
  * having started ON it. The UI snaps within 14px in canvas space; this is the
  * model's own bound, so the guard does not depend on the UI having snapped. */
 const CAP_DATUM_MATCH_PX = 20;
+import { BandedAxis } from '../core/bandedAxis.js';
 import {
   capFreeDirection,
   constrainCap,
@@ -354,6 +355,18 @@ export interface SlotCursor {
 
 /** One row of a tuple-based (Box Plot / Point Groups) table: one entry per
  * configured group, in group order, `null` for a slot not yet filled. */
+/**
+ * ⚑⚑ THE TWO QUESTIONS A CATEGORY FRAME ANSWERS (A2). `CategoryAxis` satisfies
+ * this when the user marked the axis; a `BandedAxis` derived from the bars
+ * satisfies it when nobody did. Naming the pair is what stops the unmarked case
+ * growing a second model - the reuse rule's positive form, MIRROR rather than
+ * merely match.
+ */
+interface CategoryFrame {
+  bandIndexAt(point: { x: number; y: number }): number | null;
+  bandCoordinateAt(point: { x: number; y: number }): number | null;
+}
+
 export interface TupleRow {
   tupleIndex: number;
   /** Category name (e.g. "Sample A"), stored on the tuple's primary-group
@@ -394,7 +407,23 @@ export interface TupleRow {
    * captured right to left number the rightmost 1. Calling that "Position" would
    * be a claim nobody measured. Mark the axis and it becomes one.
    */
-  positionIsBand: boolean;
+  /**
+   * ⚑⚑ WHERE THE POSITION'S FRAME CAME FROM (A2). Not a boolean any more,
+   * because there are three answers and the file has to be able to say which
+   * one it is holding:
+   *
+   *   `declared`   the user marked the category axis and declared its count,
+   *                so the bands are stated and the coordinate is shared.
+   *   `measured`   nobody marked it, so the frame was derived from the bars'
+   *                own geometry. Still a coordinate, still shared - there is
+   *                one series to share it with.
+   *   `in-series`  derived, but SEVERAL series hold readings, and a grouped
+   *                chart's side-by-side bars are the same ink as two adjacent
+   *                categories. The rank is real; the claim that it is shared
+   *                is what gets dropped. Line already says exactly this.
+   *   `index`      no frame at all - the name-list index, in capture order.
+   */
+  positionFrame: 'declared' | 'measured' | 'in-series' | 'index';
   /**
    * The tuple's measured EXTENT along the category axis, in the same 1-based
    * band frame - a bar's two opposite corners, projected. Null for every type
@@ -3575,6 +3604,161 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
   }
 
+  /**
+   * ⚑⚑ A2 - THE FRAME A CATEGORY COORDINATE IS READ IN, whatever its
+   * provenance. David, 2026-08-21: *"Everything should work on the principles
+   * that are there for the case Bar - Axis marked and it should be reused for
+   * the Axis unmarked case."*
+   *
+   * The marked case's principle is that a category is a BAND: a bar's position
+   * is which band it falls in, and its width is its two corners projected into
+   * that same band frame. Both answers come from ONE frame, which is why they
+   * agree with each other and across series.
+   *
+   * ⚑ The unmarked case never disagreed with that principle - it had no frame
+   * to apply it in. `bandIndexAt` and `bandCoordinateAt` both open
+   * `if (!edges) return null`, so the session fell back to the name-list index
+   * in CAPTURE order for the coordinate and to nothing at all for the extent.
+   * Two models where the type has one.
+   *
+   * ⚑⚑ SO THE FRAME IS THE ONLY THING THAT VARIES. `CategoryAxis` answers when
+   * the axis is marked; a `BandedAxis` derived from the bars answers when it is
+   * not. Same two methods, same arithmetic, different provenance - which is the
+   * heatmap grid's P2 decision (measured dividers pinned to the ink, generated
+   * ones parametric to the box) applied one level out.
+   */
+  private categoryFrameFor(dataset: Dataset): CategoryFrame | null {
+    if (this.categoriesFollowBands()) return this.categoryAxis;
+    return this.derivedCategoryFrame(dataset);
+  }
+
+  /**
+   * The CATEGORY direction: whichever way the value axis does not run.
+   *
+   * ⚑ Taken from `capFreeDirection`, which already answers this for a 1-D axes
+   * and follows a rotated chart's tilt - the same probe A1 leaned on, and the
+   * reason there is no per-orientation rule here. On a vertical bar chart the
+   * value axis runs up, so this returns the horizontal; on a horizontal one it
+   * returns the vertical; on a rotated one it returns the perpendicular of
+   * whatever tilt was calibrated.
+   */
+  private categoryDirection(dataset: Dataset): { x: number; y: number } | null {
+    if (!this.axes) return null;
+    const first = dataset.getAllPixels()[0];
+    if (!first) return null;
+    const along = capFreeDirection(this.axes, { x: first.x, y: first.y }, 'upper');
+    if (!along) return null;
+    return { x: -along.y, y: along.x };
+  }
+
+  /**
+   * A frame measured off the bars themselves, for a session where nobody marked
+   * the axis.
+   *
+   * Each tuple projects onto the category direction as an interval; its centre
+   * is that interval's midpoint. The dividers are the midpoints BETWEEN adjacent
+   * centres and the two outer edges continue half a pitch past the end bars - so
+   * three bars at 150, 250 and 350 produce edges at 100 and 400 with dividers at
+   * 200 and 300, which is exactly what marking that axis and declaring three
+   * categories would have produced. The same figure, the same numbers.
+   *
+   * ⚑ NULL BELOW TWO TUPLES, and that is a measurement statement rather than a
+   * guard. One bar's own width is measured; the PITCH it sits on is not, because
+   * a spacing needs two bars to be seen. Reporting a lone bar as filling its
+   * band would assert a spacing nobody measured - tenet 9, and pattern 3's
+   * "assert only what was measured".
+   *
+   * ⚠️ A CATEGORY WITH NO BAR IN ANY SERIES LEAVES NO INK, so this under-counts
+   * on that figure and reports a wider band than the chart has. David:
+   * *"that is the outlier that proves the others right."* It is why the derived
+   * frame is OFFERED and why marking the axis stays the way to state what the
+   * ink cannot show. `barCategoryFrameDerived.test.ts` pins both halves.
+   */
+  private derivedCategoryFrame(dataset: Dataset): BandedAxis | null {
+    const direction = this.categoryDirection(dataset);
+    if (!direction) return null;
+    const centres = this.tupleCentresAlong(dataset, direction);
+    if (centres.length < 2) return null;
+    const sorted = [...centres].sort((a, b) => a - b);
+    const n = sorted.length;
+    const lead = (sorted[1]! - sorted[0]!) / 2;
+    const tail = (sorted[n - 1]! - sorted[n - 2]!) / 2;
+    const a = sorted[0]! - lead;
+    const b = sorted[n - 1]! + tail;
+    const span = b - a;
+    if (!Number.isFinite(span) || span <= 0) return null;
+    const interior = sorted.slice(0, -1).map((c, i) => (c + sorted[i + 1]!) / 2).map((m) => (m - a) / span);
+    const frame = new BandedAxis();
+    frame.setConvention('edge');
+    if (!frame.setCount(n)) return null;
+    const at = (t: number) => ({ x: t * direction.x, y: t * direction.y });
+    if (!frame.setEdges(at(a), at(b))) return null;
+    // ⚑ REFUSED rather than repaired. `restoreTickParams` regenerates an EVEN
+    // set when it rejects one, which is the right answer for a loaded file (a
+    // tick is an aid) and the wrong one here: an even frame we did not measure
+    // is precisely the drawn-not-measured failure pattern 3 names.
+    if (!frame.restoreTickParams(interior, true)) return null;
+    return frame;
+  }
+
+  /** Each tuple's midpoint along `direction`, for the tuples that have a pixel. */
+  private tupleCentresAlong(dataset: Dataset, direction: { x: number; y: number }): number[] {
+    const centres: number[] = [];
+    for (const tuple of dataset.getAllTuples()) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const pixelIndex of tuple) {
+        if (pixelIndex === null || pixelIndex === undefined) continue;
+        const p = dataset.getPixel(pixelIndex);
+        const t = p.x * direction.x + p.y * direction.y;
+        if (!Number.isFinite(t)) continue;
+        lo = Math.min(lo, t);
+        hi = Math.max(hi, t);
+      }
+      if (lo <= hi) centres.push((lo + hi) / 2);
+    }
+    return centres;
+  }
+
+  /**
+   * A tuple's POSITION on the category axis, in the 1-based band frame - the
+   * number `Position` exports.
+   *
+   * ⚑⚑ DELIBERATELY NOT `categoryIndexOfTuple`, which is the tuple's IDENTITY:
+   * that one indexes the shared category NAME list, so `getTupleLabel` reads a
+   * name with it, and re-ordering it by pixel would hand every unmarked bar
+   * somebody else's label. The identity joins series; the position says where
+   * on the axis the bar is. They coincide when the axis is marked, and A2 is
+   * what happens when a single number is asked to be both.
+   */
+  private categoryPositionOfTuple(dataset: Dataset, tupleIndex: number): number | null {
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return null;
+    const primary = tuple.find((v): v is number => v !== null && v !== undefined);
+    if (primary === undefined) return null;
+    const p = dataset.getPixel(primary);
+    const frame = this.categoryFrameFor(dataset);
+    if (frame) {
+      const band = frame.bandIndexAt({ x: p.x, y: p.y });
+      return band === null ? null : band + 1;
+    }
+    // ⚑ One tuple has no pitch, so it has no frame - but it still has a
+    // position, and it is 1. Below that, nothing measured the direction either
+    // and the name-list index is the only answer left.
+    const direction = this.categoryDirection(dataset);
+    if (direction) return this.tupleCentresAlong(dataset, direction).length === 1 ? 1 : null;
+    const idx = this.categoryIndexOfTuple(dataset, tupleIndex);
+    return idx === null ? null : idx + 1;
+  }
+
+  /** Which of the three frames answered, so the column can be named for what it
+   * actually is. See `TupleRow.positionFrame`. */
+  private positionFrameKind(dataset: Dataset): 'declared' | 'measured' | 'in-series' | 'index' {
+    if (this.categoriesFollowBands()) return 'declared';
+    if (!this.categoryDirection(dataset)) return 'index';
+    return this.seriesWithReadings() > 1 ? 'in-series' : 'measured';
+  }
+
   /** The category a tuple belongs to: its BAND while the axis is marked, the
    * stored `metadata.categoryIndex` otherwise. Null when neither can answer. */
   private categoryIndexOfTuple(dataset: Dataset, tupleIndex: number): number | null {
@@ -3612,12 +3796,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     dataset: Dataset,
     tuple: readonly (number | null | undefined)[]
   ): readonly [number, number] | null {
-    if (!this.config.capturesAsBox || !this.categoriesFollowBands()) return null;
+    if (!this.config.capturesAsBox) return null;
+    // ⚑⚑ A2 - THE FRAME, not the marking. This used to demand
+    // `categoriesFollowBands()`, so a bar chart captured without marking the
+    // axis had its width measured in two clicks and then dropped on the floor.
+    // The extent needs a frame to be stated in, and it does not care which
+    // provenance that frame has.
+    const frame = this.categoryFrameFor(dataset);
+    if (!frame) return null;
     const coordinates: number[] = [];
     for (const pixelIndex of tuple) {
       if (pixelIndex === null || pixelIndex === undefined) continue;
       const p = dataset.getPixel(pixelIndex);
-      const at = this.categoryAxis.bandCoordinateAt({ x: p.x, y: p.y });
+      const at = frame.bandCoordinateAt({ x: p.x, y: p.y });
       if (at !== null) coordinates.push(at);
     }
     // A half-dragged bar has one corner: an extent needs both, and a single
@@ -4445,7 +4636,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const p = dataset.getPixel(pixelIndex);
         return { px: p.x, py: p.y, data: this.axes ? this.axes.pixelToData(p.x, p.y) : null };
       });
-      const categoryIndex = this.categoryIndexOfTuple(dataset, tupleIndex);
       return {
         tupleIndex,
         label: this.getTupleLabel(tupleIndex, datasetIndex),
@@ -4453,8 +4643,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // ⚑ 1-based, because that is what a category coordinate reads as
         // everywhere else it is shown or exported: Line's `Position`, the
         // heatmap's `column`/`row`.
-        position: categoryIndex === null ? null : categoryIndex + 1,
-        positionIsBand: this.categoriesFollowBands(),
+        // ⚑⚑ A2 - THE POSITION IS ITS OWN QUESTION. `categoryIndexOfTuple` is
+        // the tuple's IDENTITY, the shared name-list slot that joins one
+        // series' bar to another's; it stays exactly as it was, because
+        // `getTupleLabel` reads a name with it. What changed is that the
+        // coordinate no longer borrows it: an unmarked chart's bars used to
+        // export in CAPTURE order, so clicking right to left numbered the
+        // rightmost bar 1 and the record described the operator's hand.
+        position: this.categoryPositionOfTuple(dataset, tupleIndex),
+        positionFrame: this.positionFrameKind(dataset),
         positionSpan: this.tuplePositionSpan(dataset, tuple),
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
