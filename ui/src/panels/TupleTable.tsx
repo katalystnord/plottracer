@@ -32,6 +32,22 @@ export interface TupleTableProps {
   onSelectTuple: (tupleIndex: number) => void;
   /** Which row the current selection is standing on, or null. */
   activeTupleIndex: number | null;
+  /**
+   * The caps someone placed on these tuples, from `errorColumnsByTuple` - the
+   * SAME accessor the export asks.
+   *
+   * ⚑⚑ THE DIVERGENCE RAN THE OTHER WAY HERE (v2.3 re-audit, F43).
+   * `errorColumnsFor`'s standing claim is *"one answer, so a column cannot exist
+   * on screen and be missing from the file"* - and on a pie or a box plot the
+   * column was in the FILE and missing from the SCREEN. The caps are captured,
+   * they are drawn on the canvas, they are in all nine formats, and the panel
+   * that is meant to be what the file says showed the slots alone. A user could
+   * not read back a measurement they had just taken.
+   *
+   * ⚑ Absent for a series with no caps, so an ordinary pie's table is exactly
+   * what it was.
+   */
+  error?: { labels: readonly string[]; values: readonly (readonly (number | null)[])[] };
   /** Shown when nothing has been captured yet. */
   noPointsHint: string;
 }
@@ -60,8 +76,10 @@ export function TupleTable({
   renderLabel,
   onSelectTuple,
   activeTupleIndex,
+  error,
   noPointsHint,
 }: TupleTableProps) {
+  const err = error?.labels.length ? error : null;
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -78,6 +96,11 @@ export function TupleTable({
               </th>
             ))
           )}
+          {err?.labels.map((label) => (
+            <th key={label} style={{ textAlign: 'left', paddingRight: 16 }}>
+              {label}
+            </th>
+          ))}
           <th aria-hidden />
         </tr>
       </thead>
@@ -113,6 +136,16 @@ export function TupleTable({
                 </td>
               ))
             )}
+            {/* Blank, never 0, where that side was never captured - the rule
+                the export follows in the same columns. */}
+            {err?.labels.map((label, c) => {
+              const v = err.values[row.tupleIndex]?.[c];
+              return (
+                <td key={label} style={{ paddingRight: 16 }}>
+                  {v == null ? '' : fmtValue(v)}
+                </td>
+              );
+            })}
             <td>
               <TupleDeleteButton tupleIndex={row.tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
             </td>

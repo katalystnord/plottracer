@@ -202,13 +202,23 @@ export function errorBarsFromTuples(
   slotCount: number = ERROR_EXTENT_SLOTS.length
 ): ErrorBarPoint[] {
   const bars: ErrorBarPoint[] = [];
-  for (const tuple of tuples) {
+  for (const [tupleIndex, tuple] of tuples.entries()) {
     const datumIndex = tuple[0];
     if (datumIndex === null || datumIndex === undefined) continue;
     const datum = pointAt(datumIndex);
     if (!datum) continue;
 
-    const bar: ErrorBarPoint = { x: datum.x, y: datum.y };
+    // ⚑⚑ WHICH TUPLE THIS CAME FROM, recorded HERE because this is the loop that
+    // decides to skip one (v2.3 re-audit, F41). The result is COMPACTED - a
+    // tuple whose first slot is empty produces no bar - which is right for the
+    // XY table, whose rows are `getDatumPixelIndices` and skip identically. It
+    // is wrong for every TUPLE table, whose rows are the tuples themselves: zip
+    // the compacted list against them and the first gap shifts every later
+    // series' error onto the wrong row and blanks the last. That is exactly
+    // F20's defect, still live on the other half of the app.
+    // ⚑ Written by the skipping loop rather than re-derived by a second walk,
+    // so the two cannot disagree about which tuples were dropped.
+    const bar: ErrorBarPoint = { x: datum.x, y: datum.y, tupleIndex };
     for (const role of ERROR_ROLES) {
       const member = tuple[slotForRole(role, slotCount)];
       if (member === null || member === undefined) continue;

@@ -544,6 +544,14 @@ export class PlotData {
           ds.setMetadataKeys(dsData.metadataKeys.map((k) => k.toLowerCase()));
         }
         for (const pt of dsData.data) {
+          // ⚑⚑ THE SAME GUARD THE v4 LOOP BELOW APPLIES, and it was in one door
+          // of two (v2.3 re-audit, F42). A pixel with no position is not a
+          // pixel: `null` is what NaN becomes through JSON with nobody editing
+          // anything, and it behaves as 0 on the other side - so the point lands
+          // at the image origin and reads back a confident value for a place
+          // nothing was measured. v3 is the LEGACY format, which is exactly the
+          // door most likely to be handed a damaged file.
+          if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) continue;
           if (dsData.metadataKeys.length > 0) {
             const metadataKey = dsData.metadataKeys[0]!.toLowerCase();
             const metadataValue = pt.metadata?.[0];
@@ -742,6 +750,28 @@ export class PlotData {
           ds.setMetadataKeys(dsData.metadataKeys);
         }
 
+        /**
+         * The file's tuple positions, mapped onto dense 0..n-1 in the file's own
+         * ascending order (F35).
+         *
+         * ⚑⚑ A POSITION, NOT A SIZE. The file says which tuple each point sits
+         * in and never says how many tuples there are, so the index cannot be
+         * range-checked - only its ORDER is meaningful, and the order is all any
+         * consumer uses. Renumbering keeps every membership and every ordering,
+         * and caps the array at the number of tuples the file actually mentions,
+         * which cannot exceed its own point count.
+         *
+         * ⚑ IDENTITY FOR EVERY FILE WE WRITE, provably: our tuples are dense and
+         * ascending, so `0,1,2...` maps to `0,1,2...`. Only a file with a gap -
+         * a hand edit, a foreign model translated at the boundary - is renumbered
+         * at all, and a gap is not something any reader could have used.
+         */
+        const tupleSlot = new Map<number, number>();
+        [...new Set(dsData.data.map((p) => p.tuple))]
+          .filter((t): t is number => Number.isInteger(t) && (t as number) >= 0)
+          .sort((a, b) => a - b)
+          .forEach((t, i) => tupleSlot.set(t, i));
+
         // ⚑ The dataset's OWN index, which is no longer the file's once a point
         // can be skipped. `addToTupleAt` files a pixel by its index in the
         // DATASET, so using the loop counter after a skip would file every later
@@ -784,32 +814,34 @@ export class PlotData {
           // slot names, so every consumer that walks `points[i]` against the
           // header reads members that no column exists for.
           //
-          // ⚑ BOUNDED BY THE FILE ITSELF, not by a constant. There cannot be
-          // more tuples than pixels - a tuple needs a member - and there cannot
-          // be more slots than the dataset declared names for. Both bounds come
-          // out of the same file, so nothing here is a policy about how big a
-          // real figure may be.
+          // ⚑ THE INDEX IS TRANSLATED, NOT TESTED - see `tupleSlot` above. A
+          // bound of "fewer tuples than points" was the first attempt and it is
+          // WRONG: it holds for every file we write, and a file with an unfilled
+          // tuple in the middle would have had a real bar's membership silently
+          // dropped. Positions cannot be range-checked against a count the file
+          // does not state; they can be renumbered, which is exact for any file
+          // whose tuples are dense (identity) and bounded for any that is not.
           //
-          // ⚑ THE MEMBERSHIP IS DROPPED AND THE READING IS KEPT, which is the
-          // opposite call to the coordinate check above and for the stated
-          // reason: there, the coordinate WAS the reading; here the coordinate
-          // is sound and only the claim about which row it belongs to is not.
-          // Same call as F4/F11/F14. A pixel with no tuple is a state this door
-          // already produces (`pt.tuple === undefined`), so nothing new can be
-          // reached by taking it.
-          const tupleIndex = pt.tuple;
+          // ⚑ The GROUP is a plain bound, because the dataset DOES state how
+          // many slots it has.
+          //
+          // ⚑ WHERE A CLAIM IS DROPPED, THE READING IS KEPT - the opposite call
+          // to the coordinate check above, for the stated reason: there, the
+          // coordinate WAS the reading; here it is sound and only the claim
+          // about which row it belongs to is not. Same call as F4/F11/F14. A
+          // pixel with no tuple is a state this door already produces
+          // (`pt.tuple === undefined`).
+          const tupleIndex = tupleSlot.get(pt.tuple as number);
           const groupIndex = pt.group;
           if (
             ds.hasSlots() &&
-            Number.isInteger(tupleIndex) &&
+            tupleIndex !== undefined &&
             Number.isInteger(groupIndex) &&
-            tupleIndex! >= 0 &&
-            tupleIndex! < dsData.data.length &&
             groupIndex! >= 0 &&
             groupIndex! < ds.getSlotNames().length
           ) {
-            ds.addEmptyTupleAt(tupleIndex!);
-            ds.addToTupleAt(tupleIndex!, groupIndex!, added);
+            ds.addEmptyTupleAt(tupleIndex);
+            ds.addToTupleAt(tupleIndex, groupIndex!, added);
           }
           ds.addPixel(pt.x, pt.y, metadata);
           added++;

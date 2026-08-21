@@ -195,7 +195,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       session.getHistogramBins(),
       rounder,
       measures,
-      errorColumnsFor(session, activeIndex).error
+      errorColumnsByTuple(session, activeIndex).error
     );
   }
   if (exportShape === 'tuples') {
@@ -206,17 +206,19 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     // tuple shapes so nothing offered a way to get the rest. That is the
     // same active-series-only defect `AxesTypeConfig.exportShape`'s own doc
     // records as the v1.4 spider export bug. (Round-2 audit.)
-    // ⚑ `errorColumnsFor` on BOTH branches, exactly as the CSV path does - its
-    // own doc says "one answer, so a column cannot exist on screen and be
-    // missing from the file", and this was the caller that did not ask (F26).
+    // ⚑ The error columns on BOTH branches, exactly as the CSV path does - the
+    // shared accessor's own doc says "one answer, so a column cannot exist on
+    // screen and be missing from the file", and this was the caller that did not
+    // ask (F26). ⚑ The BY-TUPLE variant, because a tuple series' rows ARE its
+    // tuples (F41).
     const tupleSeries =
       scope === 'all'
         ? infos.map((info) => ({
             name: info.name,
             rows: session.getTupleRows(info.index),
-            ...errorColumnsFor(session, info.index),
+            ...errorColumnsByTuple(session, info.index),
           }))
-        : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsFor(session, activeIndex) }];
+        : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsByTuple(session, activeIndex) }];
     return buildTupleSeriesJSON(
       tupleSeries,
       session.getSlotNames(),
@@ -261,6 +263,36 @@ export function errorColumnsFor(
   };
 }
 
+/**
+ * The same columns, indexed BY TUPLE - for every table whose rows are tuples
+ * (bar, box plot, pie, histogram bins) rather than datum rows (F41).
+ *
+ * ⚑⚑ NOT A SECOND SOURCE OF TRUTH: the labels and the readings come from the
+ * same three session accessors, and the ONLY difference is which index the rows
+ * are filed under. It is a separate function rather than a flag because a caller
+ * must state which alignment its rows have - a boolean would be answered wrong
+ * exactly once, silently, and the wrongness is a number under the wrong row.
+ */
+export function errorColumnsByTuple(
+  session: ExportAssemblyInput['session'],
+  index: number
+): { error?: SeriesErrorColumns } {
+  const labels = session.getErrorColumns(index).map((c) => c.label);
+  if (labels.length === 0) return {};
+  const blank = labels.map(() => null);
+  return {
+    error: {
+      labels,
+      // ⚑ A hole becomes a row of nulls at the boundary, because
+      // `SeriesErrorColumns` is what the renderers take and they read "no value"
+      // per cell. The distinction the session keeps (a tuple that recorded
+      // NOTHING) has no column to live in once the table is drawn.
+      values: session.getErrorRowsByTuple(index).map((r) => r ?? blank),
+      deltas: session.getErrorDeltaRowsByTuple(index).map((r) => r ?? blank),
+    },
+  };
+}
+
 export function buildExportSections(input: ExportAssemblyInput): TableSection[] {
   const { session, axes, configId, scope, measures } = input;
   const rounder = makeRounder(axes, input.precision);
@@ -294,7 +326,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     // scanning for values meets those first.
     if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
   } else if (exportShape === 'bins') {
-    sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsFor(session, activeIndex).error));
+    sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsByTuple(session, activeIndex).error));
   } else if (exportShape === 'tuples') {
     // One titled block per series when the scope says all -- see buildExportJson's
     // note. A single series keeps its untitled block, so existing files are
@@ -309,7 +341,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(info.index),
           rounder,
           derivedLabel,
-          errorColumnsFor(session, info.index).error
+          errorColumnsByTuple(session, info.index).error
         );
         sections.push({ ...block, title: info.name });
       }
@@ -320,7 +352,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(),
           rounder,
           derivedLabel,
-          errorColumnsFor(session, activeIndex).error
+          errorColumnsByTuple(session, activeIndex).error
         )
       );
     }

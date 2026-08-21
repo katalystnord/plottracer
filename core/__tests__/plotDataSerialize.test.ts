@@ -610,4 +610,51 @@ describe('a file carrying a point with no position', () => {
     expect(pd.deserialize(withPoints([{ x: 0, y: 0 }, { x: -3.5, y: 12 }]))).not.toBe(false);
     expect(pd.getDatasets()[0]!.getAllPixels()).toHaveLength(2);
   });
+
+  /**
+   * ⚑⚑ AND THE OTHER DOOR (v2.3 re-audit, F42).
+   *
+   * F15 put the guard in the v4 reader. There are TWO readers - `data.version`
+   * picks between them - and the v3 branch (`data.dataSeries`, the legacy
+   * upstream format) called `ds.addPixel(pt.x, pt.y)` with no check at all. It
+   * is the door most likely to be handed a damaged file, because it is the one
+   * that reads other people's old projects.
+   *
+   * ▶ A found bug is a search query, not a ticket closed - CLAUDE.md's own rule,
+   * and this is the same defect, unfixed, one branch away from the fix.
+   */
+  const v3WithPoints = (points: unknown[]): SerializedPlotData =>
+    // ⚑ A v3 document arrives WRAPPED in `wpd` - that is how `deserialize`
+    // recognises it, and the version inside the wrapper is what it dispatches on.
+    ({
+      wpd: {
+      version: [3, 1],
+      axesType: 'XYAxes',
+      axesParameters: { isLogX: false, isLogY: false },
+      calibration: [
+        { px: 100, py: 250, dx: '0', dy: '0' },
+        { px: 400, py: 250, dx: '10', dy: '0' },
+        { px: 100, py: 100, dx: '0', dy: '10' },
+      ],
+      dataSeries: [{ name: 'Series 1', metadataKeys: [], data: points }],
+      },
+    }) as unknown as SerializedPlotData;
+
+  it('⚑⚑ the LEGACY v3 reader drops it too', () => {
+    const pd = new PlotData();
+    expect(pd.deserialize(v3WithPoints([
+      { x: 150, y: 150 },
+      { x: null, y: null },
+      { x: 'abc', y: 5 },
+      { x: 200, y: 200 },
+    ]))).not.toBe(false);
+    const pixels = pd.getDatasets()[0]!.getAllPixels();
+    expect(pixels.map((p) => [p.x, p.y])).toEqual([[150, 150], [200, 200]]);
+  });
+
+  it('⚑ and a v3 file of ordinary points still loads every one', () => {
+    const pd = new PlotData();
+    expect(pd.deserialize(v3WithPoints([{ x: 0, y: 0 }, { x: -3.5, y: 12 }]))).not.toBe(false);
+    expect(pd.getDatasets()[0]!.getAllPixels()).toHaveLength(2);
+  });
 });

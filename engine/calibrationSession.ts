@@ -982,6 +982,51 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
   }
 
+  /**
+   * The same readings as `getErrorRows`, but indexed BY TUPLE rather than by
+   * datum row - what every TUPLE table and its export needs.
+   *
+   * ⚑⚑ THE TWO ALIGNMENTS ARE BOTH RIGHT AND THEY ARE NOT THE SAME (v2.3
+   * re-audit, F41). `getResolvedErrorBars` is compacted: a tuple whose first
+   * slot is empty yields no bar. The XY spreadsheet wants that, because its rows
+   * are `getDatumPixelIndices`, which skips identically. A bar / box plot / pie /
+   * histogram table does NOT: its rows ARE the tuples, gaps included, so zipping
+   * the compacted list against them puts one series' error on another's row from
+   * the first gap onwards and blanks the last. Every number individually
+   * plausible, nothing on screen saying which are misfiled - F20's defect,
+   * surviving on the other half of the app.
+   *
+   * ⚑ A hole is `null`, not an empty array: "this tuple recorded nothing" and
+   * "this tuple recorded a blank in every role" are different facts.
+   */
+  getErrorRowsByTuple(index: number): ((number | null)[] | null)[] {
+    return this.errorRowsByTuple(index, (bar, role) => bar[ROLE_FIELD[role]] ?? null);
+  }
+
+  /** `getErrorDeltaRows`, indexed by tuple - see `getErrorRowsByTuple`. */
+  getErrorDeltaRowsByTuple(index: number): ((number | null)[] | null)[] {
+    return this.errorRowsByTuple(index, (bar, role) => deltasFromBar(bar)[ROLE_FIELD[role]] ?? null);
+  }
+
+  /** ⚑ ONE walk for both, so the absolutes and their deltas cannot land on
+   *  different rows - which is the very failure this method exists to stop. */
+  private errorRowsByTuple(
+    index: number,
+    read: (bar: ErrorBarPoint, role: ErrorRole) => number | null
+  ): ((number | null)[] | null)[] {
+    const columns = this.getErrorColumns(index);
+    const tupleCount = this.datasetEntries[index]?.dataset.getAllTuples().length ?? 0;
+    if (columns.length === 0 || tupleCount === 0) return [];
+    const rows: ((number | null)[] | null)[] = Array.from({ length: tupleCount }, () => null);
+    for (const bar of this.getResolvedErrorBars(index)) {
+      // ⚑ A bar with no tuple came from the import-boundary path, which resolves
+      // caps geometrically and has no tuple to name. It cannot be filed.
+      if (bar.tupleIndex === undefined) continue;
+      rows[bar.tupleIndex] = columns.map((c) => read(bar, c.role));
+    }
+    return rows;
+  }
+
   /** The same rows as `getErrorRows`, as SIGNED OFFSETS from the datum - what
    * matplotlib's `yerr` and Excel's error bars take directly. A subtraction,
    * not an inference: both ends were measured, so their difference assumes
@@ -4028,10 +4073,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * corner and not its first, and a row you can see must be a row you can select.
    */
   firstPixelOfTuple(tupleIndex: number, index: number = this.activeDatasetIndex): number | null {
+    return this.pixelsOfTuple(tupleIndex, index)[0] ?? null;
+  }
+
+  /**
+   * EVERY pixel a tuple holds, in slot order - what the Select tool highlights
+   * when a tuple row is clicked.
+   *
+   * ⚑ The single-select paths want the first one and Select mode wants them all,
+   * which is the same distinction the XY spreadsheet already makes between
+   * `onSelectPoint` and `onSelectMarquee`. One accessor, two readings of it -
+   * `firstPixelOfTuple` is this list's head, so the two can never name different
+   * tuples.
+   */
+  pixelsOfTuple(tupleIndex: number, index: number = this.activeDatasetIndex): number[] {
     const tuple = this.datasetEntries[index]?.dataset.getAllTuples()[tupleIndex];
-    if (!tuple) return null;
-    for (const pixel of tuple) if (pixel != null) return pixel;
-    return null;
+    if (!tuple) return [];
+    return tuple.filter((pixel): pixel is number => pixel != null);
   }
 
   /**

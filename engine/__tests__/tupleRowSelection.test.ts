@@ -56,6 +56,19 @@ describe('a tuple row and its pixel find each other', () => {
     expect(s.tupleIndexOfPixel(pixel)).toBe(1);
   });
 
+  it('⚑ Select mode wants EVERY pixel of the row, and the head is the same tuple', () => {
+    const s = calibratedBar();
+    s.addDataPoint(150, 200);
+    s.addDataPoint(170, 200); // bar 0: two corners
+    s.addDataPoint(200, 180);
+    s.addDataPoint(220, 180); // bar 1
+    const pixels = s.pixelsOfTuple(1);
+    expect(pixels).toHaveLength(2);
+    // ⚑ The two accessors cannot name different tuples: one is the other's head.
+    expect(pixels[0]).toBe(s.firstPixelOfTuple(1));
+    for (const p of pixels) expect(s.tupleIndexOfPixel(p)).toBe(1);
+  });
+
   it('an empty selection, and a tuple that does not exist, are null - never row 0', () => {
     const s = calibratedBar();
     s.addDataPoint(150, 200);
@@ -63,6 +76,7 @@ describe('a tuple row and its pixel find each other', () => {
     // first row of every table the moment nothing was picked.
     expect(s.tupleIndexOfPixel(null)).toBeNull();
     expect(s.firstPixelOfTuple(9)).toBeNull();
+    expect(s.pixelsOfTuple(9)).toEqual([]);
     expect(s.tupleIndexOfPixel(999)).toBeNull();
   });
 

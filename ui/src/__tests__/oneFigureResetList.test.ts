@@ -87,6 +87,8 @@ const PER_FIGURE_RESETS = [
   'setCurveFitXMinInput',
   'setCurveFitXMaxInput',
   'setCurveFitError',
+  'setErrorTargetName',
+  'setErrorNotice',
   'setFigureNameDraft',
   'setFigureNameNotice',
   'setProjectNotice',

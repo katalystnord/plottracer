@@ -1,7 +1,7 @@
 import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 /**
  * What to say when a category holds more than one of a series' readings.
@@ -69,7 +69,32 @@ export interface BarTableProps {
   onAimSlot: (tupleIndex: number, slotIndex: number) => void;
   onRemoveTuple: (tupleIndex: number) => void;
   renderCategoryName: (categoryIndex: number, rawName: string) => ReactNode;
+  /**
+   * That series' error columns, from `errorColumnsByTuple` - the SAME accessor
+   * the export asks (v2.3 re-audit, F44).
+   *
+   * ⚑⚑ A BAR CHART IS THE TYPE THAT MOST OFTEN CARRIES ERROR BARS, and this
+   * table was the one that would not show them. The capture works, the drag is
+   * constrained to the value axis exactly as on an XY chart, the whiskers are
+   * drawn by the same code, and all nine export formats carry the columns - and
+   * the panel that is meant to BE what the file says showed the value alone. A
+   * user could not read back a cap they had just measured.
+   *
+   * ⚑ PER SERIES, because this table is a MATRIX: rows are categories, columns
+   * are series, and each series has its own error base name and its own measured
+   * roles. One series may carry SD and its neighbour nothing at all.
+   *
+   * ⚑ Row-aligned by TUPLE, which is what `col.tupleIndices` already carries -
+   * so the same index answers "which bar is this cell" and "which cap is its".
+   */
+  errorForSeries: (seriesIndex: number) => ErrorColumns | undefined;
   noPointsHint: string;
+}
+
+/** One series' measured error roles, and their readings per tuple. */
+export interface ErrorColumns {
+  labels: readonly string[];
+  values: readonly (readonly (number | null)[])[];
 }
 
 /**
@@ -91,19 +116,36 @@ export function BarTable({
   onAimSlot,
   onRemoveTuple,
   renderCategoryName,
+  errorForSeries,
   noPointsHint,
 }: BarTableProps) {
+  // ⚑ Asked ONCE per render, not once per cell: the accessor walks the series'
+  // tuples, and a table of twenty categories would otherwise walk them twenty
+  // times over.
+  const errors = table.columns.map((col) => {
+    const e = errorForSeries(col.seriesIndex);
+    return e && e.labels.length > 0 ? e : null;
+  });
+  // ⚑ The second header row exists only when some series actually carries error,
+  // so an ordinary bar chart's table is exactly what it was.
+  const anyError = errors.some((e) => e !== null);
+  const headRowSpan = anyError ? 2 : 1;
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr>
-          <th style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
-          <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-          {table.columns.map((col) => (
+          <th rowSpan={headRowSpan} style={{ textAlign: 'right', paddingRight: 10, color: theme.color.text.legend }}>#</th>
+          <th rowSpan={headRowSpan} style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
+          {table.columns.map((col, i) => (
             <th
               key={col.seriesIndex}
               data-testid={`bar-col-${col.seriesIndex}`}
+              // ⚑ The series name spans its OWN columns - the value and every
+              // error role beside it - the same fix the spreadsheet's header
+              // needed when a series grew a Δ column and the name stayed one
+              // cell wide, skewing every column to its right.
+              colSpan={1 + (errors[i]?.labels.length ?? 0)}
               style={{
                 textAlign: 'right',
                 paddingRight: 16,
@@ -117,6 +159,34 @@ export function BarTable({
             </th>
           ))}
         </tr>
+        {anyError && (
+          <tr>
+            {table.columns.map((col, i) => (
+              <Fragment key={col.seriesIndex}>
+                <th
+                  style={{
+                    textAlign: 'right',
+                    paddingRight: 16,
+                    paddingLeft: 10,
+                    borderLeft: `1px solid ${theme.color.border.regular}`,
+                    color: theme.color.text.legend,
+                    fontWeight: 400,
+                  }}
+                >
+                  Value
+                </th>
+                {errors[i]?.labels.map((label) => (
+                  <th
+                    key={label}
+                    style={{ textAlign: 'right', paddingRight: 16, color: theme.color.text.legend, fontWeight: 400 }}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </Fragment>
+            ))}
+          </tr>
+        )}
       </thead>
       <tbody>
         {table.categoryNames.map((categoryName, categoryIndex) => (
@@ -125,9 +195,10 @@ export function BarTable({
             <td style={{ paddingRight: 16 }}>
               {renderCategoryName(categoryIndex, table.categoryRawNames[categoryIndex] ?? '')}
             </td>
-            {table.columns.map((col) => {
+            {table.columns.map((col, colIndex) => {
               const value = col.values[categoryIndex];
               const tupleIndex = col.tupleIndices[categoryIndex];
+              const err = errors[colIndex];
               const isActive = col.seriesIndex === activeSeriesIndex;
               // v2.0 pre-launch audit: a half-dragged bar (one corner
               // clicked, not dragged) has a tupleIndex but no computed
@@ -143,8 +214,8 @@ export function BarTable({
                 aimTupleIndex != null ? missingSlotIndexOf(aimTupleIndex) : -1;
               const aimable = aimTupleIndex != null && missingGroupIndex > -1;
               return (
+                <Fragment key={col.seriesIndex}>
                 <td
-                  key={col.seriesIndex}
                   data-testid={`bar-cell-${col.seriesIndex}-${categoryIndex}`}
                   // Clicking a cell of an INACTIVE series switches to it --
                   // the same reachability rule Spider's own cells follow,
@@ -206,6 +277,28 @@ export function BarTable({
                     </>
                   )}
                 </td>
+                {/* Blank, never 0, where that side was never captured - the rule
+                    the export follows in the same columns. */}
+                {err?.labels.map((label, c) => {
+                  const v = tupleIndex == null ? null : err.values[tupleIndex]?.[c] ?? null;
+                  return (
+                    <td
+                      key={label}
+                      data-testid={`bar-error-${col.seriesIndex}-${categoryIndex}-${c}`}
+                      style={{
+                        textAlign: 'right',
+                        paddingRight: 16,
+                        color: theme.color.text.secondary,
+                        ...(isActive && tupleIndex != null && tupleIndex === activeTupleIndex
+                          ? { background: theme.color.background.selectedRow }
+                          : {}),
+                      }}
+                    >
+                      {v == null ? '' : fmtValue(v)}
+                    </td>
+                  );
+                })}
+                </Fragment>
               );
             })}
           </tr>

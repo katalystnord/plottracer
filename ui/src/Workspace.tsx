@@ -169,7 +169,7 @@ import { identifyProject, unsupportedFileMessage } from '../../engine/importRegi
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
 import type { CategoryAxis } from '../../core/categoryAxis.js';
-import { buildExportJson, buildExportSections, errorColumnsFor } from '../../engine/exportAssembly.js';
+import { buildExportJson, buildExportSections, errorColumnsByTuple } from '../../engine/exportAssembly.js';
 import { resolveErrorTarget } from '../../engine/errorRelation.js';
 import {
   buildSpreadsheetSeries,
@@ -725,6 +725,10 @@ export function Workspace() {
   const keyTips = useKeyTips();
 
   const [mode, setMode] = useState<ToolMode>('calibrate');
+  /** ⚑ LIVE, not captured: read by callbacks that are declared once and must see
+   *  the mode the user is in NOW, not the one they were in at mount. */
+  const modeRef = useRef<ToolMode>('calibrate');
+  modeRef.current = mode;
 
   // Keep the loupe/readout avoid-rect in sync: observers catch card mount and
   // rail growth (size) and region resize (which moves the centered rail); the
@@ -2864,6 +2868,12 @@ export function Workspace() {
       setCategoryMarkError(null);
       setCategoryPlaceBothEdges(false);
       setCategoryPanelOpen(false);
+      // ⚑ WHICH SERIES GETS THE CAPS is a fact about the figure, and a refusal
+      // about the figure you just left must not sit in red over the new one.
+      // The base NAME deliberately survives: it is the user's own convention for
+      // this session ("SD"), not a property of one figure.
+      setErrorTargetName(null);
+      setErrorNotice(null);
       // The measure instrument's in-progress state is the outgoing figure's too.
       setSettingScale(false);
       setScaleDraftPx(null);
@@ -6474,7 +6484,19 @@ export function Workspace() {
    */
   const selectTuple = useCallback(
     (tupleIndex: number) => {
-      const pixel = sessionRef.current.firstPixelOfTuple(tupleIndex);
+      // ⚑⚑ IN SELECT MODE THE WHOLE TUPLE LIGHTS UP, because that is what Select
+      // mode's highlight IS - `selectedPointIndices`, which the canvas draws
+      // instead of the active point there. The XY spreadsheet's own row click
+      // has always made this distinction (`onSelectMarquee` vs `onSelectPoint`);
+      // without it a row click in Select mode set a selection the renderer was
+      // not looking at, and nothing happened on the figure at all. Mirroring
+      // means mirroring the branch too, not only the happy path.
+      const pixels = sessionRef.current.pixelsOfTuple(tupleIndex);
+      if (modeRef.current === 'select') {
+        setSelectedPointIndices(pixels);
+        return;
+      }
+      const pixel = pixels[0] ?? null;
       setActivePointIndex(pixel);
       if (pixel !== null) setPickedPointIndex(pixel);
     },
@@ -8927,8 +8949,9 @@ export function Workspace() {
               activeTupleIndex={activeTupleIndex}
               noPointsHint={noPointsHint}
               // ⚑ The SAME function the export asks, so the table and the file
-              // cannot report different columns (F27).
-              error={errorColumnsFor(session, activeDatasetIndex).error}
+              // cannot report different columns (F27) - and the BY-TUPLE
+              // alignment, because a bins row IS a tuple (F41).
+              error={errorColumnsByTuple(session, activeDatasetIndex).error}
             />
           ) : config.outputPanel === 'spider' && axes ? (
             <SpiderTable
@@ -8967,6 +8990,10 @@ export function Workspace() {
               onSelectTuple={selectTuple}
               activeTupleIndex={activeTupleIndex}
               renderCategoryName={renderEditableCategoryName}
+              // ⚑ PER SERIES, from the SAME accessor the export asks - a bar
+              // chart is the type that most often carries error bars, and this
+              // was the panel that would not show them (F44).
+              errorForSeries={(seriesIndex) => errorColumnsByTuple(session, seriesIndex).error}
               noPointsHint={noPointsHint}
             />
           ) : hasSlots ? (
@@ -8978,6 +9005,9 @@ export function Workspace() {
               onRemoveTuple={removeTuple}
               onSelectTuple={selectTuple}
               activeTupleIndex={activeTupleIndex}
+              // ⚑ The SAME accessor the export asks, so a cap cannot be in the
+              // file and missing from the panel (F43).
+              error={errorColumnsByTuple(session, activeDatasetIndex).error}
               renderLabel={renderEditableTupleLabel}
               noPointsHint={noPointsHint}
             />

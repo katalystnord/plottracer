@@ -57,15 +57,44 @@ describe('the load door will not let a file choose an array size', () => {
     expect(ds.getAllTuples()).toEqual([[0, 1]]);
   });
 
-  it('⚑ a tuple index far past the pixel count allocates nothing', () => {
+  it('⚑ a huge tuple index allocates a tuple, not a million of them', () => {
     const ds = load([
       { x: 10, y: 20, tuple: 0, group: 0 },
       { x: 30, y: 20, tuple: 1_000_000, group: 1 },
     ]);
-    // The READING survives - the coordinate was sound, only the claim about
-    // which row it belongs to was not.
     expect(ds.getCount()).toBe(2);
-    expect(ds.getAllTuples().length).toBe(1);
+    // Two positions were named, so there are two tuples - not 1,000,001.
+    expect(ds.getAllTuples()).toEqual([[0, null], [null, 1]]);
+  });
+
+  /**
+   * ⚠️⚑⚑ THE FIRST ATTEMPT AT THIS GUARD WAS A RANGE CHECK - "there cannot be
+   * more tuples than points" - and it was WRONG in the one direction that
+   * matters: it holds for every file we write, so nothing would have caught it,
+   * while a file with an unfilled tuple in the middle would have had a real
+   * bar's membership silently dropped on load. A position cannot be
+   * range-checked against a count the file never states. It can be renumbered.
+   */
+  it('⚑⚑ a GAP in the tuple positions keeps every membership, in order', () => {
+    const ds = load([
+      { x: 10, y: 20, tuple: 3, group: 0 },
+      { x: 30, y: 20, tuple: 3, group: 1 },
+      { x: 50, y: 20, tuple: 9, group: 0 },
+      { x: 70, y: 20, tuple: 9, group: 1 },
+    ]);
+    expect(ds.getCount()).toBe(4);
+    // Both bars survive, in the file's own order, renumbered to 0 and 1.
+    expect(ds.getAllTuples()).toEqual([[0, 1], [2, 3]]);
+  });
+
+  it('⚑ a DENSE file is renumbered to itself - identity, so nothing we write moves', () => {
+    const ds = load([
+      { x: 10, y: 20, tuple: 0, group: 0 },
+      { x: 30, y: 20, tuple: 0, group: 1 },
+      { x: 50, y: 20, tuple: 1, group: 0 },
+      { x: 70, y: 20, tuple: 1, group: 1 },
+    ]);
+    expect(ds.getAllTuples()).toEqual([[0, 1], [2, 3]]);
   });
 
   it('⚑ a group index past the declared slot names does not lengthen the tuple', () => {

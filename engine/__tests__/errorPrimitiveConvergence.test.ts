@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
 import { setErrorRelation } from '../errorRelation.js';
 import { errorSlotNames, slotForRole } from '../../algorithms/errorExtent.js';
+import type { ErrorBarPoint } from '../../algorithms/errorBar.js';
 
 /** A plain screen-aligned calibration: x 0..10 over px 100..300, y 0..10 over py 300..100. */
 function session() {
@@ -83,9 +84,18 @@ describe('one accessor answers for every way an error is stored', () => {
     expect(bars[0]!.yUpper, 'the tuple extent must resolve through the same call').toBeCloseTo(7, 6);
   });
 
-  it('gives the SAME answer for the same figure captured either way', () => {
+  it('gives the SAME READINGS for the same figure captured either way', () => {
     // The two storage forms are not merely both readable - they must agree, or
     // the migration silently changes recorded numbers.
+    //
+    // ⚑⚑ THE READINGS, not the whole object (v2.3 re-audit, F41). The tuple form
+    // now also carries `tupleIndex` - which TUPLE the bar came from - and the
+    // related-series form cannot: it resolves caps GEOMETRICALLY, so there is no
+    // tuple to name. That is a real difference in what the two shapes KNOW, and
+    // flattening it away would be the wrong repair. What must never differ is
+    // any number the record reports, which is what is compared here.
+    const readings = (bars: readonly ErrorBarPoint[]) =>
+      bars.map(({ tupleIndex: _tupleIndex, ...reading }) => reading);
     const oldWay = session();
     oldWay.addDataPoint(200, 200);
     const capIndex = oldWay.addDataset('SD upper');
@@ -101,7 +111,11 @@ describe('one accessor answers for every way an error is stored', () => {
     const cap = ds.addPixel(200, 160);
     ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
 
-    expect(newWay.getResolvedErrorBars(0)).toEqual(oldWay.getResolvedErrorBars(0));
+    expect(readings(newWay.getResolvedErrorBars(0))).toEqual(readings(oldWay.getResolvedErrorBars(0)));
+    // ⚑ And the asymmetry itself is pinned, so it cannot quietly become
+    // symmetric (which would mean the tuple form had stopped knowing its row).
+    expect(newWay.getResolvedErrorBars(0)[0]!.tupleIndex).toBe(0);
+    expect(oldWay.getResolvedErrorBars(0)[0]!.tupleIndex).toBeUndefined();
   });
 
   it('⚑ ORDER MATTERS: a cap pixel added BEFORE slots are adopted becomes a phantom datum', () => {

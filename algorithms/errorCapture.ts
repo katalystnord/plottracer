@@ -127,13 +127,18 @@ export interface DataPixelMapping {
  * So the direction is measured off the axes itself, by stepping the datum's
  * value along the role's own axis and seeing which way the pixel moved. Where
  * `dataToPixel` is still the upstream stub (Polar, Ternary, Map, CCR all
- * return `{x: 0, y: 0}`) the step goes nowhere and this returns null. **Bar
- * returns null too, but for a different reason since v2.0**: its
- * `pixelToData` still returns a length-1 array (one real data value, no
- * second coordinate to step), so `dy === undefined` below fires before
- * `dataToPixel` is even called - giving Bar a real `dataToPixel` did not by
- * itself unlock this constraint. It stays "unconstrained" until a later
- * phase gives Bar a second coordinate to return.
+ * return `{x: 0, y: 0}`) the step goes nowhere and this returns null.
+ *
+ * ⚠️⚑⚑ THIS PARAGRAPH USED TO SAY BAR RETURNS NULL TOO, and v2.3 made that false
+ * in the code below while leaving the sentence standing (found in the re-audit's
+ * second pass). It said Bar *"stays unconstrained until a later phase gives it a
+ * second coordinate"* - and the 1-D branch below IS that phase: a 1-D axes has a
+ * perfectly good `dataToPixel`, so stepping its one value answers `(0, -1)` on a
+ * screen-aligned bar chart and follows the tilt on a rotated one. **Bar, Box
+ * Plot, Histogram and categorical Line are all CONSTRAINED, exactly as XY is.**
+ * Gate 3 in CLAUDE.md: a header describing behaviour the code no longer has is
+ * read instead of the code, and it is read by the person deciding whether the
+ * feature works.
  *
  * **Null degrades to "unconstrained", never to "disabled"** - which is what
  * makes probing safe here, and is the difference from an earlier draft that

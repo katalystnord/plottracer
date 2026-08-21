@@ -49,6 +49,16 @@ export interface ErrorBarPoint {
   yLower?: number;
   xLeft?: number;
   xRight?: number;
+  /**
+   * Which TUPLE of its series this bar came from - present only on the stored
+   * pairing (`errorBarsFromTuples`), absent on the import-boundary path, which
+   * resolves caps geometrically and has no tuple to name.
+   *
+   * ⚑ It exists because the resolved list is COMPACTED and a tuple table's rows
+   * are not: without it, one tuple with an empty first slot shifts every later
+   * row's error by one. See `errorBarsFromTuples` for the full note (F41).
+   */
+  tupleIndex?: number;
 }
 
 /**
