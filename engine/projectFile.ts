@@ -89,8 +89,8 @@ export interface SerializedMeasureScale {
   unit: string;
 }
 
-/** One baked crop, recorded as provenance (checkpoint 95, see
- * docs/project-container-design.md §2). `from{Width,Height}` are the image's
+/** One baked crop, recorded as provenance (checkpoint 95).
+ * `from{Width,Height}` are the image's
  * dimensions BEFORE this crop and `rect` is the region kept, in that pre-crop
  * image's own pixels. Crops are baked (checkpoint 63 shifts the whole document
  * by the crop origin and discards the outside), so this is a *citation* of

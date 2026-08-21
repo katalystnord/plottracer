@@ -258,6 +258,23 @@ export interface EditableNameProps {
   onChange: (name: string) => void;
   /** Close the editor and commit - the caller owns both halves. */
   onFinish: () => void;
+  /**
+   * Put back the name the editor opened with, and close.
+   *
+   * ⚑⚑ ESCAPE MEANT TWO THINGS IN ONE TABLE (v2.3 re-audit, F40). In
+   * `EditableValue`, two cells to the left, Escape CANCELS - it matches the
+   * global ladder, whose own comment is *"Esc = back out of the current step...
+   * It never discards recorded data"*. Here Escape did exactly what Enter did:
+   * blur, which commits. So the key that backs out of everything else in this
+   * app silently wrote a half-typed name, and nothing on screen distinguished
+   * the two cells.
+   *
+   * ⚑ A name is written THROUGH on every keystroke (that is what makes the
+   * table live), so cancelling is not "do not commit" - it is "write back what
+   * was there". The caller owns the seed for the same reason it owns the
+   * editing key.
+   */
+  onCancel: () => void;
 }
 
 export function EditableName({
@@ -271,6 +288,7 @@ export function EditableName({
   onStartEdit,
   onChange,
   onFinish,
+  onCancel,
 }: EditableNameProps) {
   if (editing) {
     return (
@@ -294,7 +312,11 @@ export function EditableName({
           onChange={(e) => onChange(e.target.value)}
           onBlur={onFinish}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
+            // ⚑ Enter accepts, Escape backs out - the same two meanings the
+            // value editor above gives them, and the same Escape the global key
+            // ladder gives everywhere else (F40).
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            else if (e.key === 'Escape') onCancel();
           }}
           // The cell around this one SELECTS its row; typing in the name must
           // not also re-select it out from under the cursor.

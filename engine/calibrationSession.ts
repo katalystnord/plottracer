@@ -4014,6 +4014,41 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * The FIRST pixel a tuple actually holds, or null while it holds none.
+   *
+   * ⚑⚑ THE HALF THAT LETS A TABLE ROW POINT AT THE FIGURE (v2.3 re-audit, F30).
+   * The XY spreadsheet, the spider table and the heatmap matrix all answer "which
+   * one is this?" by ringing the thing on the canvas; Bar, Box Plot, Pie and the
+   * histogram's bins could not, because their rows are TUPLES and every selection
+   * in this app addresses a pixel. Asked of the model rather than unpacked in
+   * each panel: the three of them would otherwise each learn what a tuple's
+   * pixels are, which is the parallel-mechanism smell the reuse rule is about.
+   *
+   * ⚑ The first PLACED one, not slot 0: a half-captured bar has its second
+   * corner and not its first, and a row you can see must be a row you can select.
+   */
+  firstPixelOfTuple(tupleIndex: number, index: number = this.activeDatasetIndex): number | null {
+    const tuple = this.datasetEntries[index]?.dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return null;
+    for (const pixel of tuple) if (pixel != null) return pixel;
+    return null;
+  }
+
+  /**
+   * Which tuple a pixel belongs to, or null - the inverse of `firstPixelOfTuple`,
+   * so a panel can show the row that the canvas selection is standing on.
+   */
+  tupleIndexOfPixel(pixelIndex: number | null, index: number = this.activeDatasetIndex): number | null {
+    if (pixelIndex == null) return null;
+    const tuples = this.datasetEntries[index]?.dataset.getAllTuples();
+    if (!tuples) return null;
+    for (const [t, tuple] of tuples.entries()) {
+      if (tuple.includes(pixelIndex)) return t;
+    }
+    return null;
+  }
+
+  /**
    * Aim the capture cursor at ONE named slot (v1.4, David: *"Can I make an empty
    * slot active again, so that I can re-add a point that is missing?"*).
    *

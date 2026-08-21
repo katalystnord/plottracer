@@ -190,7 +190,13 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     return buildHeatmapJSON(input.heatmapCells ?? [], measures, input.heatmapKey);
   }
   if (exportShape === 'bins') {
-    return buildHistogramJSON(activeName, session.getHistogramBins(), rounder, measures);
+    return buildHistogramJSON(
+      activeName,
+      session.getHistogramBins(),
+      rounder,
+      measures,
+      errorColumnsFor(session, activeIndex).error
+    );
   }
   if (exportShape === 'tuples') {
     // ⚑ EVERY series when the scope says all. This used to pass only the
@@ -200,10 +206,17 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     // tuple shapes so nothing offered a way to get the rest. That is the
     // same active-series-only defect `AxesTypeConfig.exportShape`'s own doc
     // records as the v1.4 spider export bug. (Round-2 audit.)
+    // ⚑ `errorColumnsFor` on BOTH branches, exactly as the CSV path does - its
+    // own doc says "one answer, so a column cannot exist on screen and be
+    // missing from the file", and this was the caller that did not ask (F26).
     const tupleSeries =
       scope === 'all'
-        ? infos.map((info) => ({ name: info.name, rows: session.getTupleRows(info.index) }))
-        : [{ name: activeName, rows: session.getTupleRows() }];
+        ? infos.map((info) => ({
+            name: info.name,
+            rows: session.getTupleRows(info.index),
+            ...errorColumnsFor(session, info.index),
+          }))
+        : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsFor(session, activeIndex) }];
     return buildTupleSeriesJSON(
       tupleSeries,
       session.getSlotNames(),
@@ -228,8 +241,16 @@ export function buildExportJson(input: ExportAssemblyInput): string {
  * ⚑ Both export paths go through here, because they are the same question. The
  * on-screen panel asks `getErrorColumns` too: one answer, so a column cannot
  * exist on screen and be missing from the file.
+ *
+ * ⚑⚑ EXPORTED, because a claim about the screen has to be enforceable from the
+ * screen. The comment above has said "one answer" since B4 while the bins panel
+ * asked nothing at all - a histogram's caps were captured, drawn on the canvas,
+ * and then reported by neither the table nor any of the nine formats. That is
+ * gate 3 in CLAUDE.md: a comment asserting what the design requires, above code
+ * that does not do it. `HistogramBinsTable` now takes its columns from this
+ * function, so the two views cannot answer differently. (v2.3 re-audit, F27.)
  */
-function errorColumnsFor(
+export function errorColumnsFor(
   session: ExportAssemblyInput['session'],
   index: number
 ): { error?: SeriesErrorColumns } {
@@ -273,7 +294,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     // scanning for values meets those first.
     if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
   } else if (exportShape === 'bins') {
-    sections.push(histogramSection(session.getHistogramBins(), rounder));
+    sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsFor(session, activeIndex).error));
   } else if (exportShape === 'tuples') {
     // One titled block per series when the scope says all -- see buildExportJson's
     // note. A single series keeps its untitled block, so existing files are

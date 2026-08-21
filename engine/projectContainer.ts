@@ -1,10 +1,9 @@
 /**
- * Project container (`.zip`) - checkpoint 94, see CLAUDE.md and
- * docs/project-container-design.md.
+ * Project container (`.zip`) - checkpoint 94, see CLAUDE.md.
  *
  * Checkpoint 25's project file was a single JSON blob with the image inlined as
  * a base64 data URL (see engine/projectFile.ts). That is honest but not
- * inspectable - the design doc's §4 makes the case: the image is a megabyte of
+ * inspectable: the image is a megabyte of
  * base64 buried in JSON, so "it's plain text" is technically true and
  * practically worthless. This module packages the same ProjectFile as a `.zip`
  * holding a readable `project.json` plus the image as a *real* file entry
@@ -18,7 +17,7 @@
  * JSON path uses - one deserialization path, not two (the "parallel path"
  * smell the tenet audit warns about).
  *
- * WHY zip and not tar (the design doc's §4, and checkpoint 74's import/export
+ * WHY zip and not tar (checkpoint 74's import/export
  * split): a WPD `.tar` is someone else's bytes we must read faithfully, and
  * hand-rolling its fixed-width headers was correct. Our own export need only
  * make sense, and a zip is browsable-by-double-click everywhere (tar only
@@ -33,6 +32,7 @@
  */
 
 import { zipSync, strToU8, strFromU8 } from 'fflate';
+import { base64ToBytes, bytesToBase64 } from './base64.js';
 import { unzipBounded, unzipEntry } from './zipRead.js';
 import {
   deserializeProject,
@@ -104,21 +104,10 @@ function mimeToExt(mime: string): string {
  * so this stays framework-free. btoa's argument is chunked because spreading a
  * multi-megabyte byte array into String.fromCharCode overflows the call stack.
  */
-export function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-export function bytesToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
-}
+// ⚑ Imported AND re-exported: this module's own readers already look here for
+// them, and moving the name would have changed every call site to no purpose.
+// The one implementation lives in the leaf module (F37).
+export { base64ToBytes, bytesToBase64 } from './base64.js';
 
 /** Splits `data:<mime>;base64,<payload>`. Returns null for anything that is not
  * a base64 data URL - which is all the canvas/image loader ever produce. */

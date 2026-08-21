@@ -169,11 +169,13 @@ import { identifyProject, unsupportedFileMessage } from '../../engine/importRegi
 import type { PlotData } from '../../core/plotData.js';
 import type { Dataset } from '../../core/dataset.js';
 import type { CategoryAxis } from '../../core/categoryAxis.js';
-import { buildExportJson, buildExportSections } from '../../engine/exportAssembly.js';
+import { buildExportJson, buildExportSections, errorColumnsFor } from '../../engine/exportAssembly.js';
+import { resolveErrorTarget } from '../../engine/errorRelation.js';
 import {
   buildSpreadsheetSeries,
   spreadsheetMaxRows as spreadsheetMaxRowCount,
   showsCategoryColumn,
+  editsValuesInTable,
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
@@ -687,8 +689,23 @@ export function Workspace() {
   // would return the PREVIOUS figure's image (loadImageFromSrc updates it only in
   // img.onload). Cleared by the canvas status callback below once the image settles.
   const imageLoadPendingRef = useRef(false);
-  const handleCanvasStatus = useCallback((s: { scale: number; offsetX: number; offsetY: number; hasImage: boolean; imageWidth: number; imageHeight: number }) => {
+  /**
+   * How many pictures the canvas has decoded (see `imageEpoch` on ImageCanvas's
+   * status report).
+   *
+   * ⚑⚑ EVERY READING TAKEN OFF THE PIXELS HAS TO RE-RUN WHEN THE PIXELS CHANGE,
+   * and until this existed there was nothing to notice that they had. The colour
+   * key was memoised over an image it never named as an input, so figure 2's
+   * colours were read against figure 1's key; the heatmap's cells were re-read
+   * on the way IN to a figure, which is necessarily before its picture has
+   * decoded, so the table on screen was sampled from the outgoing figure's ink.
+   * Both are the same missing fact - "the picture is a different one now" - and
+   * both now read it here. (v2.3 re-audit, F24/F25.)
+   */
+  const [imageEpoch, setImageEpoch] = useState(0);
+  const handleCanvasStatus = useCallback((s: { scale: number; offsetX: number; offsetY: number; hasImage: boolean; imageWidth: number; imageHeight: number; imageEpoch: number }) => {
     imageLoadPendingRef.current = false; // audit M1: a status report means the (switched-to) image has settled
+    setImageEpoch(s.imageEpoch);
     setCanvasScale(s.scale);
     setCanvasHasImage(s.hasImage);
     setCanvasImageDims({ w: s.imageWidth, h: s.imageHeight });
@@ -763,6 +780,9 @@ export function Workspace() {
    * pre-filled with an invented "Slice0"/"Slice1" -- the same defect found
    * on Bar, caught live on Pie (David: "Same fix here too!!"). */
   const [editingTupleLabel, setEditingTupleLabel] = useState<number | null>(null);
+  /** Which datum's Category cell is open in the XY-family spreadsheet (F28) -
+   *  by POINT index, the same identity `setPointLabel` takes. */
+  const [editingPointLabel, setEditingPointLabel] = useState<number | null>(null);
   // The Select tool's multi-selection (David 2026-07-21): a set of active-series
   // DATA-point indices, filled by a marquee box or single/Shift clicks. Kept
   // separate from activePointIndex (single-select, used by Place Point) so the
@@ -866,7 +886,7 @@ export function Workspace() {
   // and which of its points, so the arrow keys can nudge it in Measure mode. The
   // measurement's value is DERIVED from the pixels (ckpt 82), so moving a vertex
   // re-derives it live. Mutually exclusive with the point/handle selections.
-  // Figure capture (checkpoint 102, docs/figure-capture-design.md): whether THIS
+  // Figure capture (checkpoint 102): whether THIS
   // document's figure-of-record has been established -- the user framed the whole
   // figure and captured it as the working image. Reset with the document.
   const [figureCaptured, setFigureCaptured] = useState(false);
@@ -988,7 +1008,39 @@ export function Workspace() {
   // ⚑ B4 raises the stakes rather than creating them: the base name is now the
   // EXPORT COLUMN HEADER (`errorSlotNames` -> 'SD upper'/'SD lower'), so an
   // invented label rides into the file instead of staying on screen.
-  const [errorTargetIndex, setErrorTargetIndex] = useState(0);
+  /**
+   * Which series a cap will be filed under - held BY NAME (v2.3 re-audit, F39).
+   *
+   * ⚑⚑ AN INDEX IS NOT AN IDENTITY ACROSS A DELETE. This was a raw dataset index
+   * and nothing ever revalidated it: delete the series above the one you had
+   * chosen and every later index shifts down, so the dropdown went on reading
+   * "Series 3" while the next drag filed its cap under what used to be Series 4.
+   * A cap on the wrong series is exactly the failure the whole error model is
+   * built to make visible, arriving through the one door that could not see it.
+   *
+   * ⚑ A NAME, for the reason `engine/errorRelation.ts` already gives about the
+   * stored relation: it mirrors how a dataset binds to its axes, names are
+   * unique (checkpoint 75), and a name survives the delete of an earlier series
+   * where an index does not. The same argument, so the same answer - not a
+   * second mechanism.
+   *
+   * ⚑ Null means "the series you are working on", which is what a fresh session
+   * means and what a vanished target falls back to.
+   */
+  const [errorTargetName, setErrorTargetName] = useState<string | null>(null);
+  /** Read through a ref by the capture handlers, which are declared long before
+   *  `datasetInfos` is. `resolveErrorTarget` is the ONE resolver - see its doc. */
+  const errorTargetNameRef = useRef<string | null>(null);
+  errorTargetNameRef.current = errorTargetName;
+  const errorTargetIndexNow = useCallback(
+    () =>
+      resolveErrorTarget(
+        sessionRef.current.getDatasetInfos(),
+        errorTargetNameRef.current,
+        sessionRef.current.getActiveDatasetIndex()
+      ),
+    []
+  );
   const [errorBaseName, setErrorBaseName] = useState('');
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   // The in-progress link drag: the datum it snapped to, and where the cursor is
@@ -1465,6 +1517,8 @@ export function Workspace() {
   canvasScaleRef.current = canvasScale;
   const versionRef = useRef(version);
   versionRef.current = version;
+  const imageEpochRef = useRef(imageEpoch);
+  imageEpochRef.current = imageEpoch;
   const commitRef = useRef<() => void>(() => {});
   const measureHost = useMemo(
     () => ({
@@ -1482,6 +1536,7 @@ export function Workspace() {
         isLog: sessionRef.current.getOptions()['isLogValue'] === 'true',
       }),
       calibrationVersion: () => versionRef.current,
+      imageEpoch: () => imageEpochRef.current,
       // ⚑ Through a ref, because `commit` is declared below this call AND its
       // identity changes - either alone would be enough to need one.
       commit: () => commitRef.current(),
@@ -1767,7 +1822,7 @@ export function Workspace() {
   }, [cropRect, applyPixelTransform, applyProvenance]);
 
   // Capture figure (checkpoint 102) -- the first step of the calibration
-  // pipeline, and the design's keystone (docs/figure-capture-design.md). The
+  // pipeline, and the design's keystone. The
   // user has framed the whole figure in the view (which they do anyway to see
   // the axes); this crops the SOURCE to exactly that framing, at native
   // resolution, and makes it the working image they then calibrate and trace on.
@@ -2186,6 +2241,41 @@ export function Workspace() {
     setHeatmapGridNote(null);
     setHeatmapError(null);
   }, [readCellsFor]);
+
+  /**
+   * Re-read the cells once a new picture has actually decoded.
+   *
+   * ⚑⚑ THE OTHER HALF OF `restoreHeatmapGrid`, and the reason it was wrong on
+   * its own. The grid comes from the SESSION, so it is restored the instant the
+   * session is swapped - necessarily before the incoming figure's image has
+   * decoded. So the read that restore does lands on whatever was still on the
+   * canvas: the OUTGOING figure's ink, read through the INCOMING figure's grid,
+   * filed under the incoming figure's labels. Every number wrong, nothing on
+   * screen saying so - a heatmap has no eye-check (CLAUDE.md, "we are never the
+   * only instrument", and its warning that colour IS the value).
+   *
+   * ⚑ Keyed on the picture, not on the figure, so it covers the three ways
+   * pixels change under a standing grid: a figure switch, a project opened on
+   * top of a live figure, and an image EDIT (grid removal repaints the cells
+   * this table measures).
+   *
+   * ⚑ Through a ref-held read: `readCellsFor` changes identity whenever the
+   * label text does, and an effect that re-ran on every keystroke would fight
+   * the person typing.
+   */
+  const rereadCellsRef = useRef<() => void>(() => {});
+  rereadCellsRef.current = () => {
+    const grid = heatmapShownGrid;
+    if (!grid) return;
+    const result = readCellsFor(grid, heatmapCellReadings);
+    if (!result) return;
+    setHeatmapCells(result.rows);
+    setHeatmapSummary(result.summary);
+  };
+  useEffect(() => {
+    if (imageEpoch === 0) return; // no picture has ever arrived
+    rereadCellsRef.current();
+  }, [imageEpoch]);
 
   /**
    * A divider was dragged. Move it, or leave everything exactly as it was.
@@ -2697,6 +2787,93 @@ export function Workspace() {
     // detection), so it alone must NOT be kicked out of that one mechanism.
     setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind).includes(m) ? 'place-point' : m));
   }, []);
+
+  /**
+   * ⚑⚑ ONE DOOR'S WORTH OF RESET, FOR EVERY DOOR THAT INSTALLS A FIGURE.
+   *
+   * A figure arrives in this app three ways - opening a project, switching
+   * between the figures of a multi-figure session, and undo/redo rolling the
+   * session back - and each one had grown its OWN list of what belongs to the
+   * outgoing figure and must not survive. THIS SERVES THE FIRST TWO (see the
+   * warning below about the third). The lists disagreed, every time:
+   * opening a project kept the previous figure's selected point, its marquee
+   * selection, its geometry-closed flag and its picked heatmap cells; switching
+   * figures kept the previous figure's heatmap grid, its hand-taken cell
+   * readings and its category count; only the undo path ever cleared the
+   * marquee. Nothing was wrong with any single list. There were three of them.
+   *
+   * This is the one list. Callers pass the session they have just installed, so
+   * everything that is SEEDED (the fold-out inputs, the curve-fit controls)
+   * reads the incoming figure rather than being blanked - a switch back to a
+   * figure with a saved fit used to show a first-degree polynomial over the
+   * curve it actually holds.
+   *
+   * ⚑ What is NOT here: anything a caller sources differently. The image, the
+   * measurements, the provenance and the history are per-door and stay per-door.
+   *
+   * ⚠️ AND THE UNDO DOOR DELIBERATELY DOES NOT READ THIS ONE - `syncAfterRestore`
+   * keeps its own, shorter list, because an undo is not a new figure: it restores
+   * measurements and a pending gesture FROM THE SNAPSHOT, and it resolves the
+   * mode through a ladder (drop out of an auto-extract mode the restored config
+   * does not offer) that this function's blunter `calibrated ? place-point :
+   * calibrate` would overwrite. It is named here rather than left implied,
+   * because a comment claiming three doors above code serving two is exactly the
+   * false evidence of compliance CLAUDE.md's third gate is about.
+   *
+   * (CLAUDE.md, Key constraints: guards belong in the model, and the model has
+   * more than one entrance. v2.3 re-audit F24.)
+   */
+  const resetPerFigureUI = useCallback(
+    (s: CalibrationSession<CalibratedAxes>) => {
+      setAxesTypeId(s.getConfig().id);
+      // A pending figure-rename belongs to the figure we are leaving.
+      setFigureNameDraft(null);
+      setFigureNameNotice(null);
+      // Selections index into a point set that the incoming figure does not have.
+      setActivePointIndex(null);
+      setSelectedPointIndices([]);
+      setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
+      setProjectNotice(null); // ...and so is a notice about the figure we just left
+      setProjectError(null);
+      setDataValueInputs([]);
+      setSegmentFillError(null);
+      setGeometryClosed(false);
+      // Curve Fit's controls are the figure's own, read back off its dataset.
+      const cf = getCurveFitState(s.getDataset());
+      setCurveFitDegree(cf ? cf.degree : 1);
+      setCurveFitModel(cf?.model ?? 'polynomial');
+      setCurveFitRestrict(cf ? cf.restrict : false);
+      setCurveFitXMinInput(cf && cf.xMin != null ? String(cf.xMin) : '');
+      setCurveFitXMaxInput(cf && cf.xMax != null ? String(cf.xMax) : '');
+      setCurveFitError(null);
+      // ⚑⚑ THE HEATMAP LAYER IS PER-FIGURE AND USED TO WALK ACROSS A SWITCH.
+      // Its grid, its labels and the readings a person took BY HAND live on the
+      // session; the first thing that wrote them back - a cell edit, a divider
+      // nudge - filed the outgoing figure's readings in the incoming figure's
+      // record, and a heatmap has no eye-check that would have shown it.
+      restoreHeatmapGrid();
+      setEditingHeatmapValue(null);
+      setHeatmapValueError(null);
+      setHeatmapDragTint(null);
+      setSelectedCells(new Set());
+      setSelectedDividerId(null);
+      // The category fold-out's inputs, seeded from the incoming figure so the
+      // Categories box cannot show one figure's count beside another's ticks.
+      setCategoryCountInput(String(s.getCategoryAxis().getCategoryCount() || ''));
+      setCategoryFirstEdge(null);
+      setCategoryMarkError(null);
+      setCategoryPlaceBothEdges(false);
+      setCategoryPanelOpen(false);
+      // The measure instrument's in-progress state is the outgoing figure's too.
+      setSettingScale(false);
+      setScaleDraftPx(null);
+      setPending([]);
+      const calibrated = s.isCalibrated();
+      setMode(calibrated ? 'place-point' : 'calibrate');
+      setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
+    },
+    [restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale]
+  );
 
   const restoreDoc = useCallback(
     (snapshot: DocSnapshot) => {
@@ -3648,8 +3825,8 @@ export function Workspace() {
   // because it is the measurement.
   const SNAP_RADIUS_PX = 14;
   const errorLinkSnap = useCallback(
-    (x: number, y: number) => session.nearestDatumPixel(errorTargetIndex, { x, y }, SNAP_RADIUS_PX)?.point ?? null,
-    [session, errorTargetIndex]
+    (x: number, y: number) => session.nearestDatumPixel(errorTargetIndexNow(), { x, y }, SNAP_RADIUS_PX)?.point ?? null,
+    [session, errorTargetIndexNow]
   );
 
   const handleLinkDragMove = useCallback((from: { x: number; y: number }, to: { x: number; y: number }) => {
@@ -3668,7 +3845,7 @@ export function Workspace() {
       errorDragRef.current = null;
       setErrorDrag(null);
       const refusal = session.captureErrorCap({
-        targetIndex: errorTargetIndex,
+        targetIndex: errorTargetIndexNow(),
         datumPixel: from,
         capPixel: to,
         baseName: errorBaseName,
@@ -3677,7 +3854,7 @@ export function Workspace() {
       if (!refusal) commit();
       else bump();
     },
-    [session, errorTargetIndex, errorBaseName, commit, bump]
+    [session, errorTargetIndexNow, errorBaseName, commit, bump]
   );
 
 
@@ -4207,17 +4384,11 @@ export function Workspace() {
       newSession.setImageHeight(imageHeightRef.current);
       newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer);
       sessionRef.current = newSession;
-      setColorTraceRegion(null); // new figure's pixel space -> old trace region is stale (audit A1)
-      // ⚑ The fold-out's own inputs are per-figure too. Without this the
-      // Categories box showed the PREVIOUS figure's number (or nothing) beside
-      // the ticks the loaded one actually has, and a stale "same point" refusal
-      // from ten minutes ago sat there in red (v2.1 audit).
-      restoreHeatmapGrid(); // a saved heatmap reopens with the grid it was saved with
-      setCategoryCountInput(String(newSession.getCategoryAxis().getCategoryCount() || ''));
-      setCategoryFirstEdge(null);
-      setCategoryMarkError(null);
-      setCategoryPlaceBothEdges(false);
-      setCategoryPanelOpen(false);
+      // ⚑ The same reset a figure switch does, from the same list. A saved
+      // heatmap reopens with the grid it was saved with, the category fold-out
+      // shows the loaded figure's own count, and the previous figure's
+      // selections, refusals and curve-fit controls do not survive the load.
+      resetPerFigureUI(newSession);
 
       applyProvenance(fig.provenance ?? {}); // restore where this figure came from
       applyPdfState(null); // a saved project is a baked image, not a live PDF
@@ -4226,37 +4397,19 @@ export function Workspace() {
       const loadedMeasurements = fig.measurements ?? [];
       applyMeasurements(loadedMeasurements);
       applyMeasureScale(fig.measureScale ?? null);
-      setSettingScale(false);
-      setScaleDraftPx(null);
-      setPending([]);
       // Keep new measurement ids from colliding with loaded ones.
       measureIdRef.current = loadedMeasurements.reduce((max, m) => {
         const n = parseInt(m.id.replace(/^meas-/, ''), 10);
         return Number.isFinite(n) && n > max ? n : max;
       }, 0);
       history.reset(captureDoc(fig.imageDataURL)); // loaded document -> fresh history; reset precedes the load, so name the incoming src
-      setAxesTypeId(fig.configId);
-      setDataValueInputs([]);
-      setMode('place-point');
-      setCalibExpanded(false); // arrives calibrated -> folded, like post-calibrate (ckpt 86)
-      setProjectError(null);
-      setCurveFitError(null);
-
-      // Sync the Curve Fit panel to a persisted fit's own parameters. Reads
-      // datasets[0]: loadCalibrated always makes the first loaded dataset active.
-      const loadedCurveFit = getCurveFitState(fig.datasets[0]!);
-      setCurveFitDegree(loadedCurveFit?.degree ?? 1);
-      setCurveFitModel(loadedCurveFit?.model ?? 'polynomial');
-      setCurveFitRestrict(loadedCurveFit?.restrict ?? false);
-      setCurveFitXMinInput(loadedCurveFit && loadedCurveFit.xMin != null ? String(loadedCurveFit.xMin) : '');
-      setCurveFitXMaxInput(loadedCurveFit && loadedCurveFit.xMax != null ? String(loadedCurveFit.xMax) : '');
 
       imageCanvasRef.current?.loadImageFromSrc(fig.imageDataURL, fig.imageFileName);
       markClean(); // a freshly loaded document matches its source
       bump();
       return true;
     },
-    [history, bump, markClean, applyMeasurements, applyMeasureScale, restoreHeatmapGrid, setPending, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle, measureIdRef, setScaleDraftPx, setSettingScale]
+    [history, bump, markClean, applyMeasurements, applyMeasureScale, resetPerFigureUI, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle, measureIdRef]
   );
 
   // === Multi-figure session (checkpoint 110, design §1/§8) ===
@@ -4270,40 +4423,19 @@ export function Workspace() {
   const restoreFigure = useCallback(
     (rec: FigureRecord, fromPersistedSource = false) => {
       sessionRef.current = rec.session;
-      setAxesTypeId(rec.axesTypeId);
-      // A pending figure-rename belongs to the figure we're leaving.
-      setFigureNameDraft(null);
-      setFigureNameNotice(null);
-      // Per-panel UI reset (mirrors swapSession) -- these belong to whatever
-      // figure was active, never carry across.
-      setActivePointIndex(null);
-      setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
-      setProjectNotice(null); // ...and so is a notice about the figure we just left
-      setDataValueInputs([]);
-      setSegmentFillError(null);
-      setCurveFitDegree(1);
-      setCurveFitModel('polynomial');
-      setCurveFitRestrict(false);
-      setCurveFitXMinInput('');
-      setCurveFitXMaxInput('');
-      setCurveFitError(null);
-      setGeometryClosed(false);
+      // Everything that belonged to the figure we are leaving, from the one list
+      // both install doors read.
+      resetPerFigureUI(rec.session);
       // Per-figure document state.
       applyProvenance(rec.provenance);
       setFigureCaptured(rec.figureCaptured);
       applyMeasurements(rec.measurements);
       applyMeasureScale(rec.measureScale);
-      setSettingScale(false);
-      setScaleDraftPx(null);
-      setPending([]);
       setSourcePdf(rec.sourcePdf);
       // A restored figure shows its BAKED image, not a live pager -- the source
       // linkback ("Get another figure from the source") re-opens the pager on
       // demand (ckpt 113). So no live pdfState here, but the source is retained.
       applyPdfState(null);
-      const calibrated = rec.session.isCalibrated();
-      setMode(calibrated ? 'place-point' : 'calibrate');
-      setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
       history.reset(captureDoc(rec.imageDataURL)); // reset precedes the load; name the figure's own baked src
       imageLoadPendingRef.current = true; // audit M1: block a re-entrant switch from stashing this mid-load image
       imageCanvasRef.current?.loadImageFromSrc(rec.imageDataURL, rec.imageFileName);
@@ -4317,7 +4449,7 @@ export function Workspace() {
       if (fromPersistedSource) markClean();
       bump();
     },
-    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setPending, setSourcePdf, applyPdfState, setScaleDraftPx, setSettingScale]
+    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setSourcePdf, applyPdfState, resetPerFigureUI]
   );
 
   /** Switch the active figure. Stashes the live state back into the current slot
@@ -4664,7 +4796,6 @@ export function Workspace() {
         return;
       }
       setProjectError(null);
-      setProjectNotice(imported.notes.length > 0 ? imported.notes.join(' ') : null);
       loadCalibratedFigure({
         configId: imported.configId,
         axes: imported.axes as CalibratedAxes,
@@ -4672,6 +4803,15 @@ export function Workspace() {
         imageDataURL: imported.imageDataURL ?? '',
         // These formats carry no measurement concept -- nothing to bring across.
       });
+      // ⚑⚑ AFTER THE LOAD, because this notice belongs to the figure that just
+      // ARRIVED - "this project held 2 coordinate systems; 1 was not imported" -
+      // and installing a figure clears the notice about the one being left
+      // (`resetPerFigureUI`). Set before the load, it was wiped in the same
+      // batch and never reached the eye. ⚠️ Caught by the e2e that exists for
+      // exactly this half - v1.5 added it because the notice had no coverage
+      // that it ever appears - and it is the second time the ordering has
+      // mattered: the first was the notice OUTLIVING its figure.
+      setProjectNotice(imported.notes.length > 0 ? imported.notes.join(' ') : null);
       return;
     }
     // The two formats that need a flow of their own: an archive that can hold
@@ -5116,7 +5256,16 @@ export function Workspace() {
       setGridRemovalError('No image loaded.');
       return;
     }
+    // ⚑ REFUSED AT THE GESTURE, not silently substituted (F38). The colour box
+    // is free text; an unparseable value used to become black, and "remove every
+    // black pixel" erases the curve, the axes and the labels in one press.
     const gridRGB = hexToRGB(gridRemovalColor);
+    if (!gridRGB) {
+      setGridRemovalError(
+        `"${gridRemovalColor}" is not a colour - type a hex value such as #e6e6e6, or use the eyedropper to pick the gridline colour off the figure.`
+      );
+      return;
+    }
     const result = removeGridLinesOp(imageData.data, imageData.width, imageData.height, gridRGB, [255, 255, 255], gridRemovalTolerance);
     imageCanvasRef.current?.applyImageTransform(result.data, result.width, result.height);
     // A same-dimensions pixel filter: no coordinate remap, but now an UNDOABLE
@@ -5173,7 +5322,17 @@ export function Workspace() {
     }
     const imageData = imageCanvasRef.current!.getImageData()!;
     const { data, width, height } = imageData;
+    // ⚑ REFUSED AT THE GESTURE (F38). The colour box is free text - it has to
+    // be, so a value can be pasted in - and an unparseable one used to become
+    // BLACK, which on a scientific figure traces the axis lines, the tick labels
+    // and the title. Same door, same answer as grid removal.
     const target = hexToRGB(colorTraceColor);
+    if (!target) {
+      setColorTraceInfo(
+        `"${colorTraceColor}" is not a colour - type a hex value such as #1f77b4, or use the eyedropper to pick the curve's own ink off the figure.`
+      );
+      return;
+    }
     // ⚑ THE SERIES ADOPTS THE COLOUR IT WAS TRACED FROM (David, 2026-07-27). The
     // series colour's whole job is to say WHICH series this is, on the canvas and
     // in the table -- and after a By-colour trace the strongest possible answer is
@@ -5302,7 +5461,11 @@ export function Workspace() {
     canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) return null;
-    const { mask, count } = colorFilter(data, width, height, hexToRGB(colorTraceColor), colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined);
+    // ⚑ No preview for a colour we cannot read - a preview of BLACK would show
+    // the axes lit up and read as "this is what your trace will find" (F38).
+    const previewTarget = hexToRGB(colorTraceColor);
+    if (!previewTarget) return null;
+    const { mask, count } = colorFilter(data, width, height, previewTarget, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined);
     const img = context.createImageData(width, height);
     img.data.set(maskToRGBA(mask, width, height, COLOR_TRACE_PREVIEW_RGBA));
     context.putImageData(img, 0, 0);
@@ -5404,7 +5567,9 @@ export function Workspace() {
 
   const handleSetDatasetColor = useCallback(
     (index: number, hex: string) => {
-      session.setDatasetColor(index, hexToRGB(hex));
+      const rgb = hexToRGB(hex);
+      if (!rgb) return; // SeriesPanel validates before calling; this is the model's own door
+      session.setDatasetColor(index, rgb);
       pendingEditRef.current = true; // color-picker edit -- commit on blur (picker close)
       bump();
     },
@@ -5855,6 +6020,13 @@ export function Workspace() {
   );
 
   const activeDatasetIndex = useMemo(() => datasetInfos.find((d) => d.active)?.index ?? 0, [datasetInfos]);
+  /** The same answer `errorTargetIndexNow` gives the capture handlers, from the
+   *  same resolver - so the card, the canvas and the drag cannot disagree about
+   *  which series a cap is going to (F39). */
+  const errorTargetIndex = useMemo(
+    () => resolveErrorTarget(datasetInfos, errorTargetName, activeDatasetIndex),
+    [datasetInfos, errorTargetName, activeDatasetIndex]
+  );
   const activeInfo = useMemo(() => datasetInfos.find((d) => d.active) ?? datasetInfos[0], [datasetInfos]);
   // The adaptive multi-series spreadsheet model (checkpoint 57): every series'
   // data values (pixel columns dropped), joined name+color, plus the ragged row
@@ -6209,6 +6381,9 @@ export function Workspace() {
     );
   }
 
+  /** What the open name editor started with - see `EditableName.onCancel`. */
+  const nameSeedRef = useRef('');
+
   function renderEditableName(
     index: number,
     rawName: string,
@@ -6243,15 +6418,76 @@ export function Workspace() {
         placeholder={placeholder}
         title={title}
         width={width}
-        onStartEdit={() => setEditingIndex(editKey as never)}
+        onStartEdit={() => {
+          // ⚑ THE NAME THE EDITOR OPENED WITH, so Escape has something to put
+          // back (F40). A name is written through on every keystroke - that is
+          // what keeps the table live - so backing out means restoring, not
+          // withholding. Same shape as `editSeed` for a value (F23).
+          nameSeedRef.current = rawName;
+          setEditingIndex(editKey as never);
+        }}
         onChange={(name) => onChange(index, name)}
         onFinish={() => {
           setEditingIndex(null as never);
           commitPendingEdit();
         }}
+        onCancel={() => {
+          onChange(index, nameSeedRef.current);
+          setEditingIndex(null as never);
+          // ⚑ No `commitPendingEdit`: nothing was decided, so nothing goes on
+          // the undo stack. The seed write is the same value the store already
+          // held when the editor opened.
+        }}
       />
     );
   }
+
+  /**
+   * A DATUM's own name, in the XY-family spreadsheet - categorical Line's
+   * Category column (F28).
+   *
+   * ⚑ Keyed on the point index rather than a row: the table is ragged and only
+   * the active series' cells open, so the pixel index is the one identity that
+   * is unambiguous across a re-sort or a deletion.
+   */
+  const renderEditablePointLabel = (pointIndex: number, rawName: string, testId: string) =>
+    renderEditableName(
+      pointIndex, rawName, editingPointLabel, setEditingPointLabel, setPointLabel,
+      testId, 'name…',
+      'Double-click to name this category, as the figure prints it', 90
+    );
+
+  /**
+   * Select a whole ROW of a tuple panel, and show it on the figure (F30).
+   *
+   * ⚑⚑ THE SAME SELECTION EVERY OTHER PANEL MAKES, not a fourth kind of
+   * highlight. The XY spreadsheet and the spider table both answer a row click
+   * with `setActivePointIndex` + `setPickedPointIndex`, and the canvas rings
+   * whatever that names - so Bar, Box Plot, Pie and the histogram's bins get the
+   * behaviour by joining in rather than by growing their own. Before this, four
+   * of the seven output panels had no way at all to ask "which one on the figure
+   * is this row?", which is the first question anyone reading a table of twenty
+   * bars has.
+   *
+   * ⚑ `firstPixelOfTuple` is the model's answer, so a half-captured tuple - one
+   * corner down, the other not - is still selectable.
+   */
+  const selectTuple = useCallback(
+    (tupleIndex: number) => {
+      const pixel = sessionRef.current.firstPixelOfTuple(tupleIndex);
+      setActivePointIndex(pixel);
+      if (pixel !== null) setPickedPointIndex(pixel);
+    },
+    []
+  );
+  /** Which tuple row the current selection is standing on, so the table can show
+   *  it - the inverse of `selectTuple`, and the reason a canvas click highlights
+   *  the row as well as the other way round. */
+  const activeTupleIndex = useMemo(
+    () => session.tupleIndexOfPixel(activePointIndex),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, version, activePointIndex]
+  );
 
   const renderEditableAxisName = (axisIndex: number, rawName: string) =>
     renderEditableName(
@@ -8061,7 +8297,8 @@ export function Workspace() {
               targets={datasetInfos.map((d) => ({ index: d.index, name: d.name }))}
               targetIndex={errorTargetIndex}
               onTargetChange={(i) => {
-                setErrorTargetIndex(i);
+                // ⚑ Stored by NAME - see `errorTargetName` (F39).
+                setErrorTargetName(datasetInfos.find((d) => d.index === i)?.name ?? null);
                 setErrorNotice(null);
               }}
               baseName={errorBaseName}
@@ -8234,7 +8471,14 @@ export function Workspace() {
             // the menu is built, so re-enabling those markers (to make them
             // selectable, say) can't quietly restore an Edit value that no longer
             // renders an editor. Anchors keep the action -- moving one IS the edit.
-            ...(config.axesKind === 'xy' && dataPointRoles[ctxMenu.index] !== 'interpolated'
+            // ⚑⚑ ASKS WHETHER AN EDITOR WILL ACTUALLY RENDER, not merely what
+            // kind of axes this is (F29). `axesKind === 'xy'` includes histogram
+            // and heatmap, neither of which shows the value spreadsheet - so
+            // this offered "Edit value…" on a histogram, set the edit state, and
+            // nothing appeared. One function answers for the menu and for the
+            // table, so they cannot disagree about which cells are editable.
+            ...(editsValuesInTable(config.axesKind, config.outputPanel) &&
+            dataPointRoles[ctxMenu.index] !== 'interpolated'
               ? [
                   <MenuItem
                     key="edit"
@@ -8679,6 +8923,12 @@ export function Workspace() {
               bins={histogramBins}
               tupleNoun={tupleNoun}
               onRemoveTuple={removeTuple}
+              onSelectTuple={selectTuple}
+              activeTupleIndex={activeTupleIndex}
+              noPointsHint={noPointsHint}
+              // ⚑ The SAME function the export asks, so the table and the file
+              // cannot report different columns (F27).
+              error={errorColumnsFor(session, activeDatasetIndex).error}
             />
           ) : config.outputPanel === 'spider' && axes ? (
             <SpiderTable
@@ -8714,6 +8964,8 @@ export function Workspace() {
                 bump();
               }}
               onRemoveTuple={removeTuple}
+              onSelectTuple={selectTuple}
+              activeTupleIndex={activeTupleIndex}
               renderCategoryName={renderEditableCategoryName}
               noPointsHint={noPointsHint}
             />
@@ -8724,6 +8976,8 @@ export function Workspace() {
               derivedColumn={derivedTupleColumn}
               tupleNoun={tupleNoun}
               onRemoveTuple={removeTuple}
+              onSelectTuple={selectTuple}
+              activeTupleIndex={activeTupleIndex}
               renderLabel={renderEditableTupleLabel}
               noPointsHint={noPointsHint}
             />
@@ -8733,6 +8987,7 @@ export function Workspace() {
               maxRows={spreadsheetMaxRows}
               dataDim={config.dataDim}
               axesKind={config.axesKind}
+              outputPanel={config.outputPanel}
               showCategoryColumn={showCategoryColumn}
               valueLabels={tableValueLabels}
               dateFormats={tableDateFormats}
@@ -8769,9 +9024,11 @@ export function Workspace() {
                 if (index !== null) setPickedPointIndex(index);
               }}
               onSelectMarquee={setSelectedPointIndices}
-              onSetPointLabel={setPointLabel}
-              onCommitPendingEdit={commitPendingEdit}
               renderValue={renderEditableValue}
+              // ⚑ The SAME `EditableName` Spider's axis, Bar's category and
+              // Pie/Box Plot's label already use - one click selects the row, a
+              // double click opens the editor (F28).
+              renderCategoryName={renderEditablePointLabel}
               noPointsHint={noPointsHint}
             />
           )}

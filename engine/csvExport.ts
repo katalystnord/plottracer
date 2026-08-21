@@ -398,19 +398,41 @@ export function buildTupleDataCSV(
  * `valueErr` is emitted only when some bin actually carries one, so today's
  * files stay three columns wide (see algorithms/histogram.ts on why the field
  * exists before anything writes it). */
-export function histogramSection(bins: readonly (HistogramBin | null)[], rounder: ValueRounder): TableSection {
-  const complete = bins.filter((b): b is HistogramBin => b !== null);
-  const hasErr = complete.some((b) => b.valueErr !== undefined);
+export function histogramSection(
+  bins: readonly (HistogramBin | null)[],
+  rounder: ValueRounder,
+  /** ⚑⚑ THE CAPS SOMEONE PLACED ON THESE BINS (F27). The error tool is offered
+   * on every type that has points - histogram included - and the whiskers are
+   * drawn on the canvas, but the bins table, this section and the JSON all
+   * reported the interval and the magnitude alone, so a Poisson √N bar a user
+   * had measured reached no file at all. Row-aligned with `bins` by tuple
+   * index, which is why the nulls are carried through the map rather than
+   * filtered away first. */
+  error?: SeriesErrorColumns
+): TableSection {
+  const complete = bins.flatMap((b, i) => (b === null ? [] : [[b, i] as const]));
+  const hasErr = complete.some(([b]) => b.valueErr !== undefined);
+  const err = error?.labels.length ? error : null;
   // Histogram axes is XY: bin edges are X (dim 0), the magnitude is Y (dim 1).
   // Each edge's X-resolution is read at that edge (with the bin's value as the
   // reference Y, which only matters on a rotated calibration).
   return {
-    header: ['bin start', 'bin end', 'value', ...(hasErr ? ['value error'] : [])],
-    rows: complete.map((b) => [
+    header: [
+      'bin start',
+      'bin end',
+      'value',
+      ...(hasErr ? ['value error'] : []),
+      ...(err ? err.labels : []),
+      ...(err ? err.labels.map((l) => `${l} delta`) : []),
+    ],
+    rows: complete.map(([b, i]) => [
       rounder.at([b.binStart, b.value], 0),
       rounder.at([b.binEnd, b.value], 0),
       rounder.at([b.binStart, b.value], 1),
       ...(hasErr ? [ropt(rounder, b.valueErr, [b.binStart, b.value], 1)] : []),
+      // Blank, never 0, where a side was never captured - see flatDataSection.
+      ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
+      ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
     ]),
   };
 }
@@ -595,7 +617,7 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
 
 /** The Measure tool's recorded results (distance/angle/area/slope) -- a
  * separate collection from the series data, so exported as their own labelled
- * block appended after the data (see docs/competitor-data-panel-study.md §5).
+ * block appended after the data - the competitor data-panel study's finding.
  *
  * **`value` is a NUMBER (checkpoint 82).** It used to be the card's formatted
  * string, so the file carried `"45.0°"` -- a glyph inside a value, unparseable
@@ -1092,24 +1114,34 @@ export function buildHistogramJSON(
   name: string,
   bins: readonly (HistogramBin | null)[],
   rounder: ValueRounder,
-  measurements: readonly MeasurementCsvRow[] = []
+  measurements: readonly MeasurementCsvRow[] = [],
+  /** The caps someone placed on these bins - see `histogramSection` (F27). */
+  error?: SeriesErrorColumns
 ): string {
   const doc: Record<string, unknown> = {
     series: [
       {
         name,
-        bins: bins
-          .filter((b): b is HistogramBin => b !== null)
-          .map((b) => {
-            const rounded = {
-              binStart: rounder.at([b.binStart, b.value], 0),
-              binEnd: rounder.at([b.binEnd, b.value], 0),
-              value: rounder.at([b.binStart, b.value], 1),
-            };
-            return b.valueErr === undefined
-              ? rounded
-              : { ...rounded, valueErr: rounder.scalarAt(b.valueErr, [b.binStart, b.value], 1) };
-          }),
+        bins: bins.flatMap((b, i) => {
+          if (b === null) return [];
+          const rounded: Record<string, unknown> = {
+            binStart: rounder.at([b.binStart, b.value], 0),
+            binEnd: rounder.at([b.binEnd, b.value], 0),
+            value: rounder.at([b.binStart, b.value], 1),
+          };
+          if (b.valueErr !== undefined) {
+            rounded['valueErr'] = rounder.scalarAt(b.valueErr, [b.binStart, b.value], 1);
+          }
+          // Same keys, same "an absent key means nobody looked" rule as
+          // `buildSeriesJSON` - a reader who switches format meets the same words.
+          for (const [c, label] of (error?.labels ?? []).entries()) {
+            const value = error!.values[i]?.[c];
+            if (value == null) continue;
+            rounded[label] = value;
+            rounded[`${label} delta`] = error!.deltas[i]?.[c] ?? null;
+          }
+          return [rounded];
+        }),
       },
     ],
   };
@@ -1140,17 +1172,17 @@ export function buildHistogramJSON(
  * `dataToPixel`, which most non-invertible axes -- pie included -- don't
  * have). */
 export function buildTupleSeriesJSON(
-  series: readonly { name: string; rows: readonly TupleRow[] }[],
+  series: readonly { name: string; rows: readonly TupleRow[]; error?: SeriesErrorColumns }[],
   pointGroupNames: readonly string[],
   rounder: ValueRounder,
   derivedLabel: string | undefined,
   measurements: readonly MeasurementCsvRow[] = []
 ): string {
   const doc: Record<string, unknown> = {
-    series: series.map(({ name, rows: tupleRows }) => (
+    series: series.map(({ name, rows: tupleRows, error }) => (
       {
         name,
-        tuples: tupleRows.map((row) => {
+        tuples: tupleRows.map((row, i) => {
           const entry: Record<string, unknown> = {
             // F21: the same coordinate the tables carry - `tupleDataSection`'s
             // comment has the why. Absent, never null, where nothing measured
@@ -1171,6 +1203,20 @@ export function buildTupleSeriesJSON(
           };
           if (derivedLabel != null && row.derived != null) {
             entry[derivedLabel] = row.derived;
+          }
+          // ⚑⚑ THE EXTENTS, in the format that used to be the only one without
+          // them. The CSV path has passed `errorColumnsFor` since B4; this
+          // builder took `{name, rows}` and there was nowhere for them to go, so
+          // a bar chart with SD caps on screen and in its .csv exported a .json
+          // with no error at all - and JSON is the format a program reads. Same
+          // keys, same order, same "an absent key means nobody looked" rule as
+          // `buildSeriesJSON`, because a reader who switches format must meet
+          // the same words. (v2.3 re-audit, F26.)
+          for (const [c, label] of (error?.labels ?? []).entries()) {
+            const value = error!.values[i]?.[c];
+            if (value == null) continue;
+            entry[label] = value;
+            entry[`${label} delta`] = error!.deltas[i]?.[c] ?? null;
           }
           return entry;
         }),

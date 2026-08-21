@@ -21,6 +21,17 @@ export interface TupleTableProps {
   onRemoveTuple: (tupleIndex: number) => void;
   /** The click-to-edit name cell, supplied by the caller. */
   renderLabel: (tupleIndex: number, label: string) => ReactNode;
+  /**
+   * Select this row, and ring it on the figure (F30).
+   *
+   * ⚑⚑ THE FIRST QUESTION ANYONE ASKS OF A TABLE OF TWENTY BOXES is "which one
+   * on the figure is this?", and until now four of the seven output panels could
+   * not answer it - the XY spreadsheet, the spider table and the heatmap matrix
+   * all could. One click SELECTS, exactly as everywhere else (A3).
+   */
+  onSelectTuple: (tupleIndex: number) => void;
+  /** Which row the current selection is standing on, or null. */
+  activeTupleIndex: number | null;
   /** Shown when nothing has been captured yet. */
   noPointsHint: string;
 }
@@ -47,6 +58,8 @@ export function TupleTable({
   tupleNoun,
   onRemoveTuple,
   renderLabel,
+  onSelectTuple,
+  activeTupleIndex,
   noPointsHint,
 }: TupleTableProps) {
   return (
@@ -70,7 +83,17 @@ export function TupleTable({
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.tupleIndex}>
+          <tr
+            key={row.tupleIndex}
+            data-testid={`tuple-row-${row.tupleIndex}`}
+            aria-selected={row.tupleIndex === activeTupleIndex}
+            onClick={() => onSelectTuple(row.tupleIndex)}
+            style={{
+              cursor: 'pointer',
+              background:
+                row.tupleIndex === activeTupleIndex ? theme.color.background.selectedRow : undefined,
+            }}
+          >
             <td style={{ paddingRight: 16 }}>{row.tupleIndex + 1}</td>
             <td style={{ paddingRight: 16 }}>{renderLabel(row.tupleIndex, row.label)}</td>
             {/* ⚑ One DERIVED column where the type's datum is the tuple

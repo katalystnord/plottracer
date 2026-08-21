@@ -33,8 +33,7 @@ import { parseHex } from './contrast.js';
  * most scanned/photographed scientific charts have light paper
  * backgrounds, so a white outline already had poor contrast in the common
  * case. Switched to a dark near-black here as a small, real legibility
- * fix, not scope creep - see the checkpoint note in
- * docs/checkpoint-history.md.
+ * fix, not scope creep.
  */
 export const theme = {
   color: {
@@ -42,6 +41,19 @@ export const theme = {
       primary: '#ffffff',
       canvas: '#f2f2f2',
       panel: '#f5f6f7',
+      /**
+       * The SELECTED ROW of any output panel.
+       *
+       * ⚑⚑ A TOKEN because four tables now use it and one of them invented it
+       * (v2.3 re-audit, F30). It lived as a literal `'#dff0f2'` inside
+       * `SpreadsheetTable`; when Bar, Box Plot, Pie and the histogram's bins
+       * learned to select a row, the choice was to copy the literal three more
+       * times or to name it once. David: *"We ALWAYS need to aim for consistency
+       * ... Even better when two things can mirror each other in a visual
+       * way."* A selected row has to LOOK the same in every panel, or the user
+       * has to be told they mean the same thing.
+       */
+      selectedRow: '#dff0f2',
     },
     border: {
       regular: '#cad3dd',

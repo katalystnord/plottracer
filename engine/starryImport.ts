@@ -45,6 +45,7 @@ import { Calibration } from '../core/calibration.js';
 import { Dataset } from '../core/dataset.js';
 import { XYAxes } from '../core/axes/xy.js';
 import type { AnyAxes } from '../core/plotData.js';
+import { bytesToBase64 } from './base64.js';
 
 export type StarryResult<T> = T | { error: string };
 
@@ -98,15 +99,6 @@ export function isStarryProject(bytes: Uint8Array): boolean {
   } catch {
     return false;
   }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
 }
 
 /** The image entry, found by name then confirmed by extension for its mime.

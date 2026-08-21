@@ -5605,7 +5605,13 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
       expect(await page.getByTestId('measure-tool-slope').isVisible()).toBe(true);
       // Uncalibrated → no chart reference yet (the ref now lives in the output
       // panel's Measurements section, v1.1 step 2).
-      expect(await page.getByTestId('measure-ref').textContent()).toMatch(/Pixels|set a scale/i);
+      // ⚑ Slope is the tool that is armed here, so the line must name SLOPE's
+      // requirement (F32). It used to say "Pixels (set a scale or calibrate)" -
+      // one line for two different situations, each told one remedy that works
+      // and one that does not: a scale cannot answer a slope, and calibrating
+      // the axes cannot answer a length. The old assertion, `/Pixels|set a
+      // scale/i`, passed on either half and so could not tell them apart.
+      expect(await page.getByTestId('measure-ref').textContent()).toMatch(/slope reads against calibrated XY axes/i);
 
       // Pressing it again closes the card (press-again-to-close toggle).
       await page.getByTestId('mode-measure').click();

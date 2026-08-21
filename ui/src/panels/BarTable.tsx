@@ -51,6 +51,18 @@ export interface BarTableProps {
   activeSeriesIndex: number;
   tupleNoun: string;
   onSelectSeries: (seriesIndex: number) => void;
+  /**
+   * Select this bar, and ring it on the figure (F30).
+   *
+   * ⚑ A cell of the ACTIVE series that already holds a bar had NO click
+   * behaviour at all - the only clicks that did anything switched series or
+   * aimed at a missing corner - so a bar table of twenty categories could not
+   * answer "which bar on the figure is this row?". Every other panel's rule
+   * applies here unchanged: one click selects (A3).
+   */
+  onSelectTuple: (tupleIndex: number) => void;
+  /** Which tuple the current selection is standing on, or null. */
+  activeTupleIndex: number | null;
   /** Which slot of this tuple is still empty, or -1 when it is complete. */
   missingSlotIndexOf: (tupleIndex: number) => number;
   /** Aim the next capture at that slot. */
@@ -73,6 +85,8 @@ export function BarTable({
   activeSeriesIndex,
   tupleNoun,
   onSelectSeries,
+  onSelectTuple,
+  activeTupleIndex,
   missingSlotIndexOf,
   onAimSlot,
   onRemoveTuple,
@@ -143,14 +157,20 @@ export function BarTable({
                       return;
                     }
                     if (aimable && aimTupleIndex != null) {
-                  onAimSlot(aimTupleIndex, missingGroupIndex);
-                }
+                      onAimSlot(aimTupleIndex, missingGroupIndex);
+                      return;
+                    }
+                    // A cell that HOLDS a bar selects it - the click every other
+                    // output panel already answers this way (F30).
+                    if (tupleIndex != null) onSelectTuple(tupleIndex);
                   }}
                   title={
                     aimable
                       ? `Click to fill this bar's missing corner next`
                       : value == null
                       ? `${col.seriesName} has no ${categoryName} bar`
+                      : isActive
+                      ? 'Click to select this bar on the figure'
                       : undefined
                   }
                   style={{
@@ -158,7 +178,12 @@ export function BarTable({
                     paddingRight: 16,
                     paddingLeft: 10,
                     borderLeft: `1px solid ${theme.color.border.regular}`,
-                    cursor: isActive && !aimable ? 'default' : 'pointer',
+                    cursor: isActive && !aimable && tupleIndex == null ? 'default' : 'pointer',
+                    // The SAME highlight the other output panels give a selected
+                    // row - a token rather than a fourth copy of one colour.
+                    ...(isActive && tupleIndex != null && tupleIndex === activeTupleIndex
+                      ? { background: theme.color.background.selectedRow }
+                      : {}),
                   }}
                 >
                   {value == null ? (

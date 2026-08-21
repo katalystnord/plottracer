@@ -32,6 +32,7 @@ import { PieAxes } from '../core/axes/pie.js';
 
 import { binFromCorners } from '../algorithms/histogram.js';
 import { checkStripGeometry } from '../algorithms/colorBar.js';
+import { DISCRETE_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
@@ -1714,7 +1715,10 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       }
     }
     if (optionBool(options, 'keyIsCategory')) {
-      return 'A colour key drawn as discrete bands identifies a BAND - a range - not a value, and PlotTracer will not report a number the figure does not contain. v2.2 reads continuous ramps only: read these cells against the key by eye, or set the colour key back to Values if its ramp is continuous.';
+      // ⚑ THE SAME SENTENCE THE SAMPLER GIVES (F34). This door had its own
+      // wording, and it had gone stale where only a user would see it: it named
+      // "v2.2" in the middle of a refusal, still shipping in v2.3.
+      return DISCRETE_KEY_REFUSAL;
     }
     const from = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom);
     const to = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);
@@ -1723,7 +1727,7 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       to !== null &&
       checkStripGeometry({ x: from.px, y: from.py }, { x: to.px, y: to.py }) !== null
     ) {
-      return 'The colour key’s two ends are too close together to read a ramp between them - click where the coloured strip begins and where it ends, along its length, not across its width.';
+      return STRIP_NOT_A_LINE_REFUSAL;
     }
     // Only once BOTH numbers are in, matching every other config's value check:
     // a half-filled step is an unfinished calibration, and the walk already says

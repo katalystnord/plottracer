@@ -33,7 +33,6 @@ import {
   positionOnStrip,
   sampleColorBar,
   stripFromCorners,
-  type ColorBarRefusal,
   type Point2D,
 } from '../algorithms/colorBar.js';
 import {
@@ -55,6 +54,9 @@ import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, inser
 import type { CategoryOverlayInput } from './categoryTickOverlay.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
+// ⚑ ONE refusal table, shared with the calibration's own value check - see
+// `engine/heatmapRefusals.ts` for the two that had drifted apart (F34).
+import { stripRefusalSentence } from './heatmapRefusals.js';
 
 /** The image, as the canvas hands it over. */
 export interface SourceImage {
@@ -72,26 +74,6 @@ export interface HeatmapState {
 
 const KEY_STEPS = ['k1', 'k2', 'kv1', 'kv2'] as const;
 
-function stripRefusalSentence(reason: ColorBarRefusal): string {
-  switch (reason) {
-    case 'not-a-line':
-      return 'The colour key’s two ends are too close together to read a ramp between them - click where the coloured strip begins and where it ends, along its length.';
-    case 'off-image':
-      return 'The colour key’s ends must both be on the image.';
-    case 'no-pixels':
-      return 'Nothing was found along the colour key - the strip is fully transparent there.';
-    case 'no-ramp':
-      return 'The colour key reads as one flat colour, so every cell would come out the same. Click along the strip’s LENGTH rather than across its width.';
-    case 'discrete':
-      // ⚑⚑ NAMES WHY, AND WHAT IT WOULD HAVE COST. The user is being told the
-      // tool will not do the thing they asked for, so the sentence has to carry
-      // the reason: a banded key maps a colour to a RANGE, and the number we
-      // could invent for it - the middle of that range - is one the figure does
-      // not contain. In a heatmap the colour IS the value, so that invented
-      // number would arrive with no symptom at all.
-      return 'This colour key is drawn as a few discrete bands rather than a continuous ramp, so a cell’s colour identifies a BAND - a range - and not a value. PlotTracer will not report a number the figure does not contain: read these cells against the key by eye, or trace a figure whose key is a continuous ramp.';
-  }
-}
 
 /**
  * Sample the key described by the calibration's last four clicks.

@@ -61,16 +61,29 @@ const IN_SCOPE = ALL_TYPES.filter(suppliesItsOwnRows);
  * A6b's `toBe(undefined)`. Asserting the wrong behaviour explicitly keeps every
  * setup assertion loud.
  *
- * ⚑ `categorical` (Line) - its category coordinate is an ORDINAL derived at
- * export time from where the point sits among the others, never measured and
- * never stored. Capture a figure whose second category has no point and every
- * later point silently moves up one: the v2.1 fabricated-category defect alive
- * in a second place. The fix is to collapse it onto a banded x axis
- * (`core/bandedAxis.ts`, shipped in v2.2 and proven on two consumers) and is
- * scheduled for v2.3 as a CORRECTNESS item, not a tidy-up.
+ * ⚑ `categorical` (Line) with NO CATEGORY AXIS MARKED - its category coordinate
+ * is an ORDINAL derived at export time from where the point sits among the
+ * others, never measured and never stored. Capture a figure whose second
+ * category has no point and every later point silently moves up one: the v2.1
+ * fabricated-category defect alive in a second place.
+ *
+ * ⚠️⚑⚑ AND THAT PIN COULD NOT FIRE (v2.3 re-audit, F33). v2.3 fixed this type by
+ * collapsing it onto a banded x axis - but the band is only a coordinate once
+ * the user has MARKED the axis, and this fixture never marked one, so the sweep
+ * exercised the unmarked fallback and nothing else. The pin therefore asserted a
+ * thing that is true forever: an unmarked axis has no measured coordinate BY
+ * CONSTRUCTION, so no fix could ever turn this assertion red, and the mechanism
+ * whose whole purpose is to fail on the day of the fix had quietly become
+ * unfailable. It read as coverage of a scheduled defect while covering nothing.
+ *
+ * ▶ The rule this file now follows: **a pin has to name a case that a fix would
+ * change.** The unmarked fallback is not that case - it is the honest answer to
+ * a question nobody asked - so the MARKED case is swept beside every other type
+ * below, where it is an ordinary green expectation and not a pin at all.
  */
 const KNOWN_DERIVED: Record<string, string> = {
-  categorical: 'x is a rank among the other points; v2.3 collapses it onto a banded axis',
+  categorical:
+    'with NO category axis marked, x is a rank among the other points - mark the axis and it becomes a measured band (swept separately below)',
 };
 
 describe('⚑⚑ tenet 11 - a datum\'s coordinates are MEASURED, not derived from its neighbours', () => {
@@ -134,6 +147,52 @@ describe('⚑⚑ tenet 11 - a datum\'s coordinates are MEASURED, not derived fro
       } else {
         expect(after!.values).toEqual(before);
       }
+    });
+  }
+
+  /**
+   * ⚑⚑ THE SAME QUESTION, ASKED OF THE CASE THE v2.3 FIX ACTUALLY CHANGED (F33).
+   *
+   * The pin above holds the UNMARKED fallback, which is derived by construction
+   * and always will be. This is the half a fix could move: once the category
+   * axis is marked, a point's category is the BAND its own pixel falls in, so it
+   * is a function of that pixel and the calibration and of nothing else - which
+   * is the property the whole file tests.
+   *
+   * ⚑ Swept for every type that offers category ticks, not for `categorical` by
+   * name. Bar already passes it; a thirteenth banded type joins automatically,
+   * which is why the sweep lives here rather than in a per-type file.
+   */
+  const BANDED = IN_SCOPE.filter(([, config]) => config.categoryTicks !== undefined);
+
+  it('is not vacuous - some type actually offers category ticks', () => {
+    expect(BANDED.map(([id]) => id)).toContain('categorical');
+  });
+
+  for (const [id, config] of BANDED) {
+    it(`${labelOf(id)}: with the category axis MARKED, a neighbour cannot move this datum`, () => {
+      const session = calibratedHealthy(id, config);
+      // The axis the figure's categories sit on, and how many there are - the
+      // two things the user marks, and the whole of what makes a band a
+      // MEASURED coordinate rather than a rank.
+      expect(session.markCategoryAxis({ x: 100, y: 400 }, { x: 500, y: 400 })).toBe(true);
+      expect(session.setCategoryCount(4)).toBe(true);
+
+      session.addDataPoint(200, 250);
+      const first = session.getExportRows(0);
+      expect(first.length, 'the fixture must produce a datum to test').toBe(1);
+      const { px, py, values: before } = first[0]!;
+
+      // One to its LEFT - the direction a rank is sensitive to - and one right.
+      session.addDataPoint(150, 350);
+      session.addDataPoint(450, 200);
+
+      const after = session.getExportRows(0).find((r) => r.px === px && r.py === py);
+      expect(after, 'the datum must still be in the record').toBeDefined();
+      expect(
+        after!.values,
+        `${id}'s category is meant to be the BAND its own pixel falls in. If a neighbour moved it, the band is not being measured.`
+      ).toEqual(before);
     });
   }
 });

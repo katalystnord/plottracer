@@ -10,8 +10,8 @@
  * output panel's Measurements section (bound with the series data, copyable,
  * exportable), NOT here - a tool fold-out holds inputs/actions only.
  *
- * History: was a full labelled card with the list inline (2026-07-13, see
- * docs/competitor-data-panel-study.md §5); the list moved to the output panel in
+ * History: was a full labelled card with the list inline (2026-07-13, from the
+ * competitor data-panel study); the list moved to the output panel in
  * the v1.1 fold-out redesign. Reference reasoning unchanged: a Slope reads in the
  * chart's own axis units (reuses calibration); a physical Distance on an
  * uncalibrated drawing needs a NEW px->unit scale (Set-scale).
@@ -48,7 +48,24 @@ export type MeasureRef =
   | { kind: 'colour-key' }
   /** A colour reading on a figure with no key: the colour, and only that. */
   | { kind: 'colour-only' }
-  | { kind: 'none' }; // pixels only, until a reference is chosen
+  /**
+   * Pixels only - and WHICH pixels-only, because the two cases have different
+   * answers (v2.3 re-audit, F32).
+   *
+   * ⚑⚑ ONE `none` USED TO COVER BOTH, and it read *"Pixels (set a scale or
+   * calibrate)"* - so each of the two situations was told one true remedy and
+   * one false one. A Distance with no scale cannot be helped by calibrating the
+   * chart axes: it reads the px->unit reference and nothing else. A Slope cannot
+   * be helped by setting a scale: it reads the CHART's own axes, and on a pie or
+   * a spider there is no XY calibration to be had at all.
+   *
+   * ⚑ So the slope case states the REQUIREMENT rather than offering a step -
+   * *"a slope reads against calibrated XY axes"* - which is true whether or not
+   * this figure can ever have them. `feedback_a_drawn_curve_is_read_as_an_answer`:
+   * refuse with the requirement.
+   */
+  | { kind: 'no-scale' } // Distance / Area: a px->unit reference would answer this
+  | { kind: 'no-xy-axes' }; // Slope: only calibrated XY axes can answer it
 
 const Card = styled('div')({
   display: 'flex',

@@ -14,6 +14,7 @@ import {
   showsCategoryColumn,
   isDerivedAt,
   isCellEditable,
+  editsValuesInTable,
 } from '../spreadsheetModel.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 
@@ -129,20 +130,43 @@ describe('derived rows and editability', () => {
   });
 
   it('allows editing only an ACTIVE, non-derived cell on an XY chart', () => {
-    expect(isCellEditable('xy', true, false)).toBe(true);
+    expect(isCellEditable('xy', undefined, true, false)).toBe(true);
   });
 
   it('refuses a DERIVED cell - an edit there is wiped by the next rebuild', () => {
-    expect(isCellEditable('xy', true, true)).toBe(false);
+    expect(isCellEditable('xy', undefined, true, true)).toBe(false);
   });
 
   it('refuses an inactive series - you edit the series you are working on', () => {
-    expect(isCellEditable('xy', false, false)).toBe(false);
+    expect(isCellEditable('xy', undefined, false, false)).toBe(false);
   });
 
   it('refuses every non-XY kind, whose values are not free numbers', () => {
-    expect(isCellEditable('bar', true, false)).toBe(false);
-    expect(isCellEditable('polar', true, false)).toBe(false);
-    expect(isCellEditable('ternary', true, false)).toBe(false);
+    expect(isCellEditable('bar', undefined, true, false)).toBe(false);
+    expect(isCellEditable('polar', undefined, true, false)).toBe(false);
+    expect(isCellEditable('ternary', undefined, true, false)).toBe(false);
+  });
+
+  /**
+   * ⚑⚑ THE XY-KIND TYPES THAT SHOW NO VALUE TABLE (v2.3 re-audit, F29).
+   *
+   * Histogram and heatmap are both `axesKind: 'xy'` and neither renders the
+   * spreadsheet - one shows BINS derived from pairs of corners, the other CELLS.
+   * The canvas point menu asked `axesKind === 'xy'` alone, so it offered
+   * "Edit value…" on a histogram, set the edit state and rendered no editor
+   * anywhere. Named for the case, not for the function.
+   */
+  it('a HISTOGRAM edits no value in a table - it shows bins, not values', () => {
+    expect(editsValuesInTable('xy', 'bins')).toBe(false);
+    expect(isCellEditable('xy', 'bins', true, false)).toBe(false);
+  });
+
+  it('a HEATMAP edits no value in a table either - it shows cells', () => {
+    expect(editsValuesInTable('xy', 'heatmap')).toBe(false);
+    expect(isCellEditable('xy', 'heatmap', true, false)).toBe(false);
+  });
+
+  it('plain XY, which HAS the spreadsheet, still does', () => {
+    expect(editsValuesInTable('xy', undefined)).toBe(true);
   });
 });

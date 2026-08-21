@@ -13,6 +13,9 @@ export interface SpreadsheetTableProps {
   /** How many value columns this graph type has (XY: 2, Bar: 1, Ternary: 3, …). */
   dataDim: number;
   axesKind: string;
+  /** The type's own output panel, or undefined for the value spreadsheet -
+   *  half of "does this type edit values in a table" (see `editsValuesInTable`). */
+  outputPanel: string | undefined;
   showCategoryColumn: boolean;
   valueLabels: readonly string[];
   /** Per-column date format, where an axis is date-calibrated. */
@@ -33,12 +36,25 @@ export interface SpreadsheetTableProps {
    */
   onSelectPoint: (index: number | null, seriesIndex?: number) => void;
   onSelectMarquee: (indices: number[]) => void;
-  onSetPointLabel: (index: number, label: string) => void;
-  onCommitPendingEdit: () => void;
   /** ⚑ `supplied` rides with the value because the CELL decides how it reads,
    * editable or not (A4): the same number wears the same brackets in every
    * column of the table, not only in the series that happens to be active. */
   renderValue: (index: number, dim: number, value: number, supplied: boolean) => ReactNode;
+  /**
+   * The Category cell of the ACTIVE series - the same `EditableName` every other
+   * output panel names its rows with.
+   *
+   * ⚑⚑ IT USED TO BE A PERMANENT `<input>`, and it was the LAST one (v2.3
+   * re-audit, F28). David, 2026-07-27, on the spider table: *"now a user thinks
+   * he HAS to add something"* - a boxed field on an optional name is a demand,
+   * not an offer, and `EditableCell`'s own header has recorded that ever since.
+   * The fix reached Spider, then Bar, then Pie and Box Plot; categorical Line is
+   * the one type that still reaches this cell, so it kept the box and, with it,
+   * the second convention: everywhere else one click SELECTS the row and a
+   * double click EDITS, while here a click landed in a text field and selected
+   * nothing (A3, David: *"One click == Select, double click == edit value"*).
+   */
+  renderCategoryName: (pointIndex: number, name: string, testId: string) => ReactNode;
   noPointsHint: string;
 }
 
@@ -86,6 +102,7 @@ export function SpreadsheetTable({
   maxRows,
   dataDim,
   axesKind,
+  outputPanel,
   showCategoryColumn,
   valueLabels,
   dateFormats,
@@ -95,9 +112,8 @@ export function SpreadsheetTable({
   activeSeriesPointCount,
   onSelectPoint,
   onSelectMarquee,
-  onSetPointLabel,
-  onCommitPendingEdit,
   renderValue,
+  renderCategoryName,
   noPointsHint,
 }: SpreadsheetTableProps) {
   // The series a row's selection, nudging and editing act on. Every one of
@@ -223,7 +239,7 @@ export function SpreadsheetTable({
               mode === 'select'
                 ? selectedPointIndices.includes(activeRowPixel)
                 : activeRowPixel === activePointIndex;
-            const rowBg = isActive ? '#dff0f2' : undefined; // opaque light teal for the selected point's row
+            const rowBg = isActive ? theme.color.background.selectedRow : undefined; // the token every output panel's selected row uses
             // A ragged multi-series table can render rows past the ACTIVE
             // series' point count; in Select mode only a real active-series
             // point is selectable (the marquee only ever holds those too).
@@ -286,7 +302,7 @@ export function SpreadsheetTable({
                   // `activeRowPixel` agree wherever it is used; named per series
                   // so it cannot quietly become the wrong one.
                   const rowPixel = s.pixelIndices[i] ?? -1;
-                  // The category cell: a text input on the ACTIVE series
+                  // The category cell: double-click-to-edit on the ACTIVE series
                   // (the same "you edit the series you're working on" rule
                   // the value cells follow), plain text elsewhere so a
                   // grouped chart still shows every series' names.
@@ -297,15 +313,7 @@ export function SpreadsheetTable({
                     >
                       {i < s.values.length ? (
                         s.active ? (
-                          <input
-                            data-testid={`category-${s.index}-${i}`}
-                            value={s.labels[i] ?? ''}
-                            placeholder="name…"
-                            onChange={(e) => onSetPointLabel(rowPixel, e.target.value)}
-                            onBlur={onCommitPendingEdit}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ width: 90, fontSize: 12.5 }}
-                          />
+                          renderCategoryName(rowPixel, s.labels[i] ?? '', `category-${s.index}-${i}`)
                         ) : (
                           <span data-testid={`category-${s.index}-${i}`}>{s.labels[i] ?? ''}</span>
                         )
@@ -320,7 +328,7 @@ export function SpreadsheetTable({
                   // It reads muted + italic and refuses the edit, pointing at the
                   // anchors -- which ARE editable, and which the curve follows.
                   const derived = isDerivedAt(s.roles, i);
-                  const editable = isCellEditable(axesKind, s.active, derived);
+                  const editable = isCellEditable(axesKind, outputPanel, s.active, derived);
                   const isErrorCap = s.deltas.length > 0;
                   if (isErrorCap) {
                     const delta = s.deltas[i];

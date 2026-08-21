@@ -55,8 +55,11 @@ else is subordinate to them.
   trick**: for a record, the reverse is *what a library needs to REGENERATE the
   figure*; for a workflow, it is *how a tool that CREATES this figure ASKS the
   user for the same information*. Both sweeps are already project practice - 22
-  tools surveyed for pie, the plotdigitizer data-panel study
-  (`docs/competitor-data-panel-study.md`), WPD, Engauge, StarryDigitizer. ⚑
+  tools surveyed for pie, the plotdigitizer data-panel study, WPD, Engauge,
+  StarryDigitizer. ⚠️ That study's findings live in the memory note
+  `project_study_plotdigitizer_data_panel`, NOT in a repo document: this line
+  named `docs/competitor-data-panel-study.md` until the v2.3 re-audit, and so did
+  two source files, and it has never existed. ⚑
   **LabPlot sits on BOTH sides** - it digitizes AND it plots - which is why it
   has repeatedly been the most informative single source.
   ⚑⚑ **THE DIMENSIONAL TAXONOMY *IS* THE ANSWER TO (a)** - David, 2026-08-14 -

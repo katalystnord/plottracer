@@ -70,6 +70,7 @@ import { Dataset } from '../core/dataset.js';
 import { XYAxes } from '../core/axes/xy.js';
 import { PolarAxes } from '../core/axes/polar.js';
 import type { AnyAxes } from '../core/plotData.js';
+import { base64ToBytes, bytesToBase64 } from './base64.js';
 
 export type DigResult<T> = T | { error: string };
 
@@ -176,22 +177,6 @@ function findImageStart(bytes: Uint8Array): { offset: number; mime: string } | n
     }
   }
   return null;
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
 }
 
 /** Attribute reader - fast-xml-parser gives attributes an `@` prefix. */

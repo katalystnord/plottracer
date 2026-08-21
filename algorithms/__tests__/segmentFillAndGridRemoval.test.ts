@@ -288,6 +288,9 @@ describe('gridRemoval', () => {
     expect(hexToRGB('#c8c8c8')).toEqual([200, 200, 200]);
     expect(hexToRGB('#000000')).toEqual([0, 0, 0]);
     expect(hexToRGB('#ffffff')).toEqual([255, 255, 255]);
+    // ⚑ Three-digit shorthand, because that is what a person types by hand.
+    expect(hexToRGB('#ccc')).toEqual([204, 204, 204]);
+    expect(hexToRGB(' c8c8c8 ')).toEqual([200, 200, 200]);
   });
 });
 
@@ -315,8 +318,8 @@ describe('gridRemoval', () => {
  * on a spider at all.
  */
 describe('gridRemoval on a spider web', () => {
-  const WEB = hexToRGB('#dcdcdc'); // the concentric rings
-  const SPOKE = hexToRGB('#9a9a9a'); // the radial axes you aim along
+  const WEB = hexToRGB('#dcdcdc')!; // the concentric rings
+  const SPOKE = hexToRGB('#9a9a9a')!; // the radial axes you aim along
   const WHITE: [number, number, number] = [255, 255, 255];
 
   /** Two pixels: one of each grey. Geometry is irrelevant - see the header. */

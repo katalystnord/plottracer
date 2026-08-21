@@ -51,7 +51,12 @@ export function MeasurementsCard({ visible, views, reference, onCopyAll, onCopy,
             {reference.kind === 'colour-only' && (
               <span style={{ color: theme.color.text.legend }}>Colour only (no colour key calibrated)</span>
             )}
-            {reference.kind === 'none' && <span style={{ color: theme.color.text.legend }}>Pixels (set a scale or calibrate)</span>}
+            {reference.kind === 'no-scale' && (
+              <span style={{ color: theme.color.text.legend }}>Pixels - set a scale for a real length</span>
+            )}
+            {reference.kind === 'no-xy-axes' && (
+              <span style={{ color: theme.color.text.legend }}>Pixels - a slope reads against calibrated XY axes</span>
+            )}
           </span>
           {views.length > 0 && (
             <button

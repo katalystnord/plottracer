@@ -455,7 +455,13 @@ interface ImageCanvasProps {
    * image). Added at checkpoint 68: MapAxes's bottom-left origin -- WPD's own
    * default -- reads the image height to flip y, and the session has no other
    * way to learn it. */
-  onStatusChange?: (status: { scale: number; offsetX: number; offsetY: number; hasImage: boolean; imageWidth: number; imageHeight: number }) => void;
+  /** ⚑⚑ `imageEpoch` COUNTS PICTURES, and nothing else in this report says one
+   * arrived. Scale, offset and the dimensions are all identical across two
+   * figures of the same size, so every consumer that SAMPLED the pixels - the
+   * colour key, the heatmap's cell read - had no way to learn they had been
+   * replaced, and went on answering from the outgoing figure's ink. Bumped once
+   * per decoded image (a load, a switch, an image edit), never on a zoom or pan. */
+  onStatusChange?: (status: { scale: number; offsetX: number; offsetY: number; hasImage: boolean; imageWidth: number; imageHeight: number; imageEpoch: number }) => void;
   /** Consulted before the Open Image dialog (button or menu) so Workspace can
    * confirm discarding unsaved work; returning false aborts the open. */
   beforeOpenImage?: () => boolean;
@@ -532,7 +538,7 @@ export interface ImageCanvasHandle {
    * clamped to the image bounds -- i.e. what the user has framed in the view
    * (checkpoint 102). Null if no image is loaded or nothing is visible. Used by
    * the "Capture figure" step to crop the source to exactly what the user sees,
-   * at native resolution (see docs/figure-capture-design.md). */
+   * at native resolution. */
   getViewImageRect: () => CropRect | null;
 }
 
@@ -629,6 +635,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   const [openError, setOpenError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false); // drag-and-drop hint (checkpoint 45)
   const originalImageDataRef = useRef<ImageData | null>(null);
+  // See `imageEpoch` on the status report: which picture we last announced, and
+  // how many have been announced in all.
+  // Starts at the empty canvas's own value, so "no image yet" is not counted as
+  // a picture arriving.
+  const lastImageRef = useRef<HTMLImageElement | null>(null);
+  const imageEpochRef = useRef(0);
 
   const loadImageFromSrc = useCallback((src: string, fileName?: string) => {
     // Update the synchronous src mirror up-front so getImageDataURL() is correct
@@ -1012,6 +1024,13 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // Notify Workspace of scale / image-loaded changes (checkpoint 42) so the
   // top bar can render the zoom control and Choose Image button.
   useEffect(() => {
+    // A new Image object IS a new picture: every load and every image edit
+    // allocates one, and nothing else replaces it. Counted here rather than at
+    // each call site so no future loader can forget to announce itself.
+    if (lastImageRef.current !== image) {
+      lastImageRef.current = image;
+      imageEpochRef.current += 1;
+    }
     onStatusChange?.({
       scale: view.scale,
       offsetX: view.offsetX,
@@ -1019,6 +1038,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       hasImage: image !== null,
       imageWidth: image?.naturalWidth ?? 0,
       imageHeight: image?.naturalHeight ?? 0,
+      imageEpoch: imageEpochRef.current,
     });
   }, [view.scale, view.offsetX, view.offsetY, image, onStatusChange]);
 

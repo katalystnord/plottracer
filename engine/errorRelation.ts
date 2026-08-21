@@ -154,3 +154,32 @@ export function clearErrorRelationsTo(datasets: readonly Dataset[], removedName:
     if (getErrorRelation(dataset)?.of === removedName) setErrorRelation(dataset, null);
   }
 }
+
+/**
+ * Which series a cap the user is about to place will be filed under.
+ *
+ * ⚑⚑ THE SAME "BY NAME, NOT BY INDEX" ARGUMENT AS THE STORED RELATION ABOVE,
+ * applied to the LIVE choice (v2.3 re-audit, F39). The Error bars card held a
+ * raw dataset index and nothing revalidated it: delete the series above the
+ * chosen one and every later index shifts down, so the dropdown went on reading
+ * "Series 3" while the next drag filed its cap under what had been Series 4. A
+ * cap on the wrong series is precisely the failure `computeWhisker` is drawn to
+ * make visible, arriving through a door that could not see it.
+ *
+ * ⚑ ONE RESOLVER, because the answer is needed twice - once where the drag is
+ * captured and once where the card and the canvas are rendered - and two
+ * derivations of one fact are two chances to disagree about which series the
+ * user is aiming at.
+ *
+ * ⚑ Falls back to the ACTIVE series, which is what a fresh session means and the
+ * only honest answer once the named one is gone: it is the series on screen, the
+ * dropdown shows it, and the alternative (index 0) would be a silent choice.
+ */
+export function resolveErrorTarget(
+  infos: readonly { index: number; name: string }[],
+  targetName: string | null,
+  activeIndex: number
+): number {
+  if (targetName === null) return activeIndex;
+  return infos.find((info) => info.name === targetName)?.index ?? activeIndex;
+}

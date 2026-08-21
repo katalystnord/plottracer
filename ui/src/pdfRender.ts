@@ -1,6 +1,5 @@
 /**
- * PDF rendering (checkpoint 96, see CLAUDE.md and
- * docs/project-container-design.md §3).
+ * PDF rendering (checkpoint 96, see CLAUDE.md).
  *
  * Chromium's <img> decodes every raster/vector format PlotTracer opens (PNG,
  * JPG, GIF, BMP, WEBP, SVG) - so those load straight through

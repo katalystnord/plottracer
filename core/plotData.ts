@@ -774,9 +774,42 @@ export class PlotData {
               return obj;
             }, {});
           }
-          if (ds.hasSlots() && pt.tuple !== undefined && pt.group !== undefined) {
-            ds.addEmptyTupleAt(pt.tuple);
-            ds.addToTupleAt(pt.tuple, pt.group, added);
+          // ⚑⚑ A TUPLE INDEX FROM A FILE IS AN ARRAY INDEX, AND IT WAS
+          // UNCHECKED (v2.3 re-audit, F35). `addEmptyTupleAt` writes straight
+          // into `_tuples[tupleIndex]`, so `"tuple": 1000000` in a 200-byte file
+          // gives the dataset a million-entry array that `getAllTuples()` hands
+          // to every table, every export and every render - the app stops
+          // responding and nothing on screen says why. `"group": 50` on a
+          // two-slot type is the same door: it lengthens the tuple past its own
+          // slot names, so every consumer that walks `points[i]` against the
+          // header reads members that no column exists for.
+          //
+          // ⚑ BOUNDED BY THE FILE ITSELF, not by a constant. There cannot be
+          // more tuples than pixels - a tuple needs a member - and there cannot
+          // be more slots than the dataset declared names for. Both bounds come
+          // out of the same file, so nothing here is a policy about how big a
+          // real figure may be.
+          //
+          // ⚑ THE MEMBERSHIP IS DROPPED AND THE READING IS KEPT, which is the
+          // opposite call to the coordinate check above and for the stated
+          // reason: there, the coordinate WAS the reading; here the coordinate
+          // is sound and only the claim about which row it belongs to is not.
+          // Same call as F4/F11/F14. A pixel with no tuple is a state this door
+          // already produces (`pt.tuple === undefined`), so nothing new can be
+          // reached by taking it.
+          const tupleIndex = pt.tuple;
+          const groupIndex = pt.group;
+          if (
+            ds.hasSlots() &&
+            Number.isInteger(tupleIndex) &&
+            Number.isInteger(groupIndex) &&
+            tupleIndex! >= 0 &&
+            tupleIndex! < dsData.data.length &&
+            groupIndex! >= 0 &&
+            groupIndex! < ds.getSlotNames().length
+          ) {
+            ds.addEmptyTupleAt(tupleIndex!);
+            ds.addToTupleAt(tupleIndex!, groupIndex!, added);
           }
           ds.addPixel(pt.x, pt.y, metadata);
           added++;

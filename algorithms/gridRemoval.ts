@@ -61,7 +61,29 @@ export function removeGridLinesOp(
   return { data: dst, width, height, keepZoom: true };
 }
 
-export function hexToRGB(hex: string): RGB {
-  const v = parseInt(hex.replace('#', ''), 16);
+/**
+ * A hex colour string as an RGB triple, or NULL if it is not one.
+ *
+ * ⚑⚑ IT USED TO ANSWER ANYTHING (v2.3 re-audit, F38). The grid colour is a FREE
+ * TEXT box - it has to be, so a colour can be pasted in - and this ran
+ * `parseInt(hex, 16)` over whatever was in it. `#e6e6e` (five digits, one
+ * keystroke short) parses happily as a completely different colour, and pure
+ * nonsense gives NaN, whose `& 255` is 0 - so a typo silently meant *remove
+ * BLACK*, which on a scientific figure is the curve, the axis lines and the
+ * tick labels. The operation repaints the image, so the user finds out by
+ * looking at the damage.
+ *
+ * ⚑ NULL, not a fallback colour. There is no honest default here: any colour we
+ * substituted would erase SOMETHING the user did not ask us to erase. The
+ * caller refuses at the gesture instead - CLAUDE.md, pattern 5.
+ *
+ * ⚑ Three-digit shorthand is accepted because a person typing a colour by hand
+ * writes `#ccc`, and refusing a form every browser accepts would read as a bug.
+ */
+export function hexToRGB(hex: string): RGB | null {
+  const body = hex.trim().replace(/^#/, '');
+  if (!/^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(body)) return null;
+  const full = body.length === 3 ? body.replace(/./g, (c) => c + c) : body;
+  const v = parseInt(full, 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }

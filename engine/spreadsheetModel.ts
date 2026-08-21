@@ -160,14 +160,42 @@ export function isDerivedAt(roles: readonly (PointRole | null)[], row: number): 
 }
 
 /**
+ * Does this type edit a DATUM'S VALUE in a table at all?
+ *
+ * ⚑⚑ `axesKind === 'xy'` IS NOT THE WHOLE QUESTION, and the canvas menu is
+ * where that showed (v2.3 re-audit, F29). Histogram and heatmap are xy-kind and
+ * neither renders the spreadsheet: histogram shows BINS, derived from pairs of
+ * corners, and heatmap shows CELLS. So the point context menu, gated on
+ * `axesKind === 'xy'` alone, offered *"Edit value…"* on a histogram, set the
+ * edit state, and no editor appeared anywhere on screen - a menu item that does
+ * nothing, which is worse than an absent one because the user concludes the app
+ * ignored them.
+ *
+ * ⚑ The panel is the answer because the panel is what renders the editor: a
+ * type with an `outputPanel` of its own has replaced the value table, so there
+ * is no cell to type into. Asked HERE rather than at each call site so the menu
+ * and the table cannot answer differently - the drift `getErrorColumns` already
+ * documents one floor down.
+ */
+export function editsValuesInTable(axesKind: string, outputPanel: string | undefined): boolean {
+  return axesKind === 'xy' && outputPanel === undefined;
+}
+
+/**
  * May the user type into this cell?
  *
- * Three conditions, all necessary: only XY carries free numeric values; only
- * the ACTIVE series is edited ("you edit the series you're working on"); and a
- * derived sample refuses, because an edit there is silently wiped by the next
- * rebuild. It reads muted and italic instead, pointing at the anchors - which
- * ARE editable, and which the curve follows.
+ * Four conditions, all necessary: the type must edit values in a table at all
+ * (see `editsValuesInTable`); only the ACTIVE series is edited ("you edit the
+ * series you're working on"); and a derived sample refuses, because an edit
+ * there is silently wiped by the next rebuild. It reads muted and italic
+ * instead, pointing at the anchors - which ARE editable, and which the curve
+ * follows.
  */
-export function isCellEditable(axesKind: string, seriesActive: boolean, derived: boolean): boolean {
-  return axesKind === 'xy' && seriesActive && !derived;
+export function isCellEditable(
+  axesKind: string,
+  outputPanel: string | undefined,
+  seriesActive: boolean,
+  derived: boolean
+): boolean {
+  return editsValuesInTable(axesKind, outputPanel) && seriesActive && !derived;
 }

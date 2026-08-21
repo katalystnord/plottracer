@@ -58,6 +58,10 @@ export interface MeasureHost {
   keyInputs: () => { placed: Parameters<typeof buildColorScale>[0]; isLog: boolean };
   /** A version counter that changes whenever the calibration does. */
   calibrationVersion: () => number;
+  /** A counter that changes whenever a new picture has been decoded. ⚑ The key
+   * is SAMPLED OUT OF THE IMAGE, so the image is one of its inputs - and the
+   * only one that moves without the calibration moving with it. */
+  imageEpoch: () => number;
   /** Push an undo entry. */
   commit: () => void;
 }
@@ -94,6 +98,13 @@ export function useMeasure(host: MeasureHost) {
   // the version is what says the calibration moved - which is when the key must
   // be re-sampled.
   const calibrationVersion = host.calibrationVersion();
+  // ⚑⚑ THE IMAGE IS AN INPUT AND IT USED NOT TO BE NAMED. `host.imageData()` is
+  // read inside the memo but a call expression cannot be a dep, so a figure
+  // switch - which swaps the picture asynchronously, long after the calibration
+  // version has already changed - left this holding a key sampled from the
+  // PREVIOUS figure, and every Colour reading on the new one was taken against
+  // it. Silent by construction: a colour reads as a number either way.
+  const imageEpoch = host.imageEpoch();
   const colourScale = useMemo<ColorScale | null>(() => {
     if (measureTool !== 'colour' && !measurementsNow.some((m) => m.tool === 'colour')) return null;
     const img = host.imageData();
@@ -102,7 +113,7 @@ export function useMeasure(host: MeasureHost) {
     const { scale } = buildColorScale(placed, { data: img.data, width: img.width, height: img.height }, isLog);
     return scale ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measurementsNow, measureTool, calibrationVersion]);
+  }, [measurementsNow, measureTool, calibrationVersion, imageEpoch]);
 
   // Route a measure-mode canvas click. Set-scale intercepts first (arming a
   // px->unit reference); then the active tool. Slope reports Δy/Δx in the chart's
@@ -277,11 +288,14 @@ export function useMeasure(host: MeasureHost) {
     measureTool === 'slope'
       ? axes && host.axesKind() === 'xy'
         ? { kind: 'chart' }
-        : { kind: 'none' }
+        // ⚑ The two pixels-only cases are DIFFERENT cases (F32): a slope reads
+        // the chart's own axes, so setting a px->unit scale cannot help it.
+        : { kind: 'no-xy-axes' }
       : measureTool === 'distance' || measureTool === 'area'
         ? measureScale
           ? { kind: 'scale', perPx: `1 px = ${fmtNum(measureScale.unitPerPx)} ${measureScale.unit}` }
-          : { kind: 'none' }
+          // ...and a length reads the scale, so calibrating the axes cannot help IT.
+          : { kind: 'no-scale' }
         : measureTool === 'colour'
           // ⚑⚑ A COLOUR IS NOT MEASURED IN DEGREES. This branch was the ANGLE
           // fallback and it caught every tool that was not one of the three
