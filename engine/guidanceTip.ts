@@ -317,7 +317,17 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // With a point selected, surface the keyboard precision path -- otherwise
       // arrow-nudge/Del would be a shortcut-only path the user can't see (the
       // keystone rule: he can only use what's on screen).
-      if (activePointIndex != null)
+      // ⚑⚑ AND THE POINT HAS TO EXIST (v2.3). David read `Point 3 selected` on a
+      // series holding ZERO points, beside `Bar start - new bar (0 of 2
+      // filled)`: two lines from the same bar, one of them describing a
+      // selection that could not be there. The index is UI state and it can
+      // outlive the points it named - a series switch, a reset, a load - so the
+      // sentence is checked against what is actually captured rather than
+      // trusting it. Same family as F24/F30's stale selections.
+      // ⚑ The guard is here rather than only at every setter: this is the one
+      // place the claim is MADE, and a claim nobody can substantiate should not
+      // be printed however it came to be true.
+      if (activePointIndex != null && activePointIndex < dataPointCount)
         return `Point ${activePointIndex + 1} selected - ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
       // ⚑ Spider, for the same reason the bar branch below exists: WHERE you
       // click decides the number. On a spider the value is how far out along

@@ -362,9 +362,25 @@ describe('guidanceTip - capture, per graph type', () => {
   });
 
   it('a selected point advertises nudge / step / delete', () => {
-    const tip = guidanceTip(base({ mode: 'place-point', activePointIndex: 4 }));
+    // ⚑ The fixture says FIVE points, because it names the fifth. It used to
+    // leave `dataPointCount` at the default 3 while selecting index 4 - a state
+    // the app cannot be in - and that self-inconsistency is exactly what let the
+    // stale-selection case below go unnoticed.
+    const tip = guidanceTip(base({ mode: 'place-point', dataPointCount: 5, activePointIndex: 4 }));
     expect(tip).toContain('Point 5 selected');
     expect(tip).toContain('Q/W step points');
+  });
+
+  it('⚑⚑ but never announces a point that is not there', () => {
+    // David read `Point 3 selected` on a series holding ZERO points, directly
+    // beside `Bar start - new bar (0 of 2 filled)`: two lines about the same bar,
+    // one of them describing a selection that could not exist. The index is UI
+    // state and it outlives the points it named - a series switch, a reset, a
+    // load. A claim nobody can substantiate should not be printed, however it
+    // came to be set.
+    const tip = guidanceTip(base({ mode: 'place-point', dataPointCount: 0, activePointIndex: 2 }));
+    expect(tip).not.toContain('Point 3 selected');
+    expect(tip).not.toContain('selected');
   });
 });
 
