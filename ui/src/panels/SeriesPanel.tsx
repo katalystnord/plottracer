@@ -240,12 +240,26 @@ export function SeriesPanel(props: SeriesPanelProps) {
           )}
         </div>
       )}
-      {/* Stacked bars (v2.0, Phase 5): the only UI a stack needs is naming
-          which group a series belongs to -- capture itself is the same
-          drag-box every other bar uses (BAR_AXES_CONFIG), one segment per
-          series. Same group name on two or more series = one visual stack;
-          blank = not stacked. Bar-only: a stack is specifically an ordered
-          sequence of bar segments, and no other graph type has that shape. */}
+      {/* Stacked bars (v2.0, Phase 5). Capture itself is the same drag-box every
+          other bar uses (BAR_AXES_CONFIG), one segment per series; what this
+          declares is that neither end of those bars is the chart's baseline, so a
+          segment's value is its own SPAN rather than its distance from zero.
+          Bar-only: a stack is specifically an ordered sequence of bar segments,
+          and no other graph type has that shape.
+
+          ⚠️⚑⚑ THIS COMMENT USED TO SAY *"same group name on two or more series =
+          one visual stack; blank = not stacked"*, AND THE FIRST HALF WAS FICTION
+          (measured 2026-08-23). The ONLY consumer of this value in the tree is
+          `axesTypeConfigs.ts`'s `if (ctx.stackGroup !== null)`. Nothing anywhere
+          reads the STRING - not the export, not the drawing, not any ordering. So
+          any non-empty text behaves identically and two series need not agree on
+          anything. David typed a different name on each series and every one got
+          the stacked rule, which is the only reason his readings came out right.
+          ▶ Gate 3: a comment asserting what the design requires, with nothing
+          enforcing it, is false evidence of compliance - every later reader checks
+          here, sees the agreement, and stops looking.
+          ⚑ The FIX is a checkbox, since one bit is all the code asks for; that is
+          a v2.4 change and this is only the wording made true. */}
       {activeInfo && supportsStackGroups && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
           {/* ⚑ MIRRORS THE NAME FIELD ABOVE IT (2026-08-23). Two text inputs sit
@@ -261,7 +275,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
           <input
             id="series-stack-group"
             data-testid="series-stack-group"
-            title="Group this series with others into one stacked bar -- same name, same stack. Blank = not stacked."
+            title="Tick this series as a stacked segment: its value becomes its own height rather than its distance from the baseline. Blank = an ordinary bar measured from the baseline."
             placeholder="none"
             value={stackGroupOf(activeIndex) ?? ''}
             onChange={(e) => onSetStackGroup(activeIndex, e.target.value.trim() || null)}
