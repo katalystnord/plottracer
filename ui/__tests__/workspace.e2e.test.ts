@@ -1444,7 +1444,13 @@ describe('Workspace: Ternary axes', () => {
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
     await dragMarker(100, 100, 100, 0);
 
-    await expectRow([66.667, 33.333, 0]);
+    // ⚑ 66.7, not 66.667: the TABLE reports at the figure's own resolution (v2.3),
+    // and this axis resolves to about 0.17 per half-pixel, so one decimal is
+    // everything the figure carries. The recalibration is what this asserts and it
+    // is unaffected - the reading still moves from (50, 50, 0) to (66.7, 33.3, 0).
+    // ⚠️ Do NOT "restore" the extra digits: they would be precision the pixels
+    // never had, and the file does not print them either.
+    await expectRow([66.7, 33.3, 0], 0, 1);
   });
 });
 
@@ -4781,8 +4787,14 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(251, 176); // x = 5.03333..., y = 4.93333... - not round numbers
-    await expectRow([5.033333, 4.933333], 0, 4);
+    // ⚑⚑ THE SCREEN ROUNDS AND THE SEED DOES NOT - both halves pinned here, and
+    // that pairing IS the v2.3 precision rule. The table prints at the figure's
+    // own resolution (this axis: 0.05 per half-pixel, so two decimals), while the
+    // editor below still opens on 5.0333333. A test that asserted four decimals
+    // off the SCREEN was asserting a precision the pixels never carried.
+    await expectRow([5.03, 4.93], 0, 2);
     const shown = await textOf('data-value-x-0');
+    expect(shown).toBe('5.03');
 
     await page.getByTestId('data-value-x-0').dblclick();
     const seeded = await page.getByTestId('data-edit-x-0').inputValue();
@@ -4792,7 +4804,11 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // Click away: this is the blur that commits.
     await page.mouse.click(4, 4);
     await page.waitForTimeout(100);
-    await expectRow([5.033333, 4.933333], 0, 4);
+    // ⚑ Unchanged, at the resolution the table reports in - and the `toBe(shown)`
+    // below is the stronger half: the cell's TEXT is character-for-character what
+    // it was before the editor opened. That is the F23 invariant, and rounding the
+    // display cannot weaken it, because a moved datum would move this string too.
+    await expectRow([5.03, 4.93], 0, 2);
     expect(await textOf('data-value-x-0')).toBe(shown);
     // ⚑ And it is not wearing the mark of a value somebody typed.
     expect(await textOf('data-value-x-0')).not.toMatch(/[[\]]/);

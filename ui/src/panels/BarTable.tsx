@@ -2,6 +2,7 @@ import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
 import { Fragment, type ReactNode } from 'react';
+import type { DisplayRounder } from '../../../core/displayPrecision.js';
 
 /**
  * What to say when a category holds more than one of a series' readings.
@@ -48,6 +49,9 @@ export interface BarCategoryTable {
 
 export interface BarTableProps {
   table: BarCategoryTable;
+  /** How a number is rounded before it is printed - the figure's own resolution,
+   * so this table and the file it exports to report the same reading. */
+  display: DisplayRounder;
   activeSeriesIndex: number;
   tupleNoun: string;
   onSelectSeries: (seriesIndex: number) => void;
@@ -107,6 +111,7 @@ export interface ErrorColumns {
  */
 export function BarTable({
   table,
+  display,
   activeSeriesIndex,
   tupleNoun,
   onSelectSeries,
@@ -274,7 +279,12 @@ export function BarTable({
                           helper reads either table the same way. Active-series
                           only, since that's the one whose tupleIndex this is. */}
                       <span data-testid={isActive && tupleIndex != null ? `tuple-derived-${tupleIndex}` : undefined}>
-                        {fmtValue(value)}
+                        {/* ⚑ At the figure's own resolution, by the same route this
+                            table's own export section takes (`makeRounder`, the
+                            data route) - so the panel and the file agree. The bar
+                            family is linear, which is why the data route is sound
+                            here; see core/displayPrecision.ts. */}
+                        {fmtValue(display.atData([value], 0))}
                       </span>
                       {isActive && tupleIndex != null && (
                         <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />

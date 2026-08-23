@@ -2,6 +2,7 @@ import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
 import type { ReactNode } from 'react';
+import type { DisplayRounder } from '../../../core/displayPrecision.js';
 
 /** One tuple's row: its slot members, its name, and the type's derived value. */
 export interface TupleRow {
@@ -12,6 +13,9 @@ export interface TupleRow {
 }
 
 export interface TupleTableProps {
+  /** How a number is rounded before it is printed - the figure's own resolution,
+   * so this table and the file it exports to report the same reading. */
+  display: DisplayRounder;
   rows: readonly TupleRow[];
   /** Slot names, one column each - unless the type declares a derived value. */
   slotNames: readonly string[];
@@ -68,6 +72,7 @@ export interface TupleTableProps {
  * caught the empty screen it left behind.
  */
 export function TupleTable({
+  display,
   rows,
   slotNames,
   derivedColumn,
@@ -127,7 +132,9 @@ export function TupleTable({
                 are five separate readings. */}
             {derivedColumn ? (
               <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
-                {row.derived === null ? '-' : fmtValue(row.derived)}
+                {/* ⚑ The figure's own resolution, by the route this table's own
+                    export section takes - so the panel and the file agree. */}
+                {row.derived === null ? '-' : fmtValue(display.atData([row.derived], 0))}
               </td>
             ) : (
               // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY, sliced to the HEADER's length.
@@ -148,7 +155,7 @@ export function TupleTable({
               // (v2.3 audit fleet.)
               row.points.slice(0, slotNames.length).map((point, gi) => (
                 <td key={gi} style={{ paddingRight: 16 }}>
-                  {point && point.data ? fmtValue(point.data[0]!) : '-'}
+                  {point && point.data ? fmtValue(display.atData(point.data, 0)) : '-'}
                 </td>
               ))
             )}

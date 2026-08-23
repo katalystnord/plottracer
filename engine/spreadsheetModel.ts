@@ -40,6 +40,7 @@ import type {
   PointRole,
 } from './calibrationSession.js';
 import type { ErrorRole } from '../algorithms/errorBar.js';
+import { makeDisplayRounder } from '../core/displayPrecision.js';
 
 /** One series as the spreadsheet shows it: its identity, its values with the
  * pixel columns dropped, and the two per-point annotations that differ BETWEEN
@@ -50,8 +51,37 @@ export interface SpreadsheetSeries {
   name: string;
   color: [number, number, number];
   active: boolean;
-  /** Per row: the point's data values, or null where the series is shorter. */
+  /** Per row: the point's data values, or null where the series is shorter.
+   *
+   * ⚠️⚑⚑ RAW, AND IT MUST STAY RAW. This is what a value EDITOR is seeded from,
+   * and the commit is what moves the datum - F23 measured what a rounded seed
+   * does (`0.00042` committed as `0` on a log axis, silently, on
+   * double-click-and-blur). `display` below is the rounded twin, for the screen
+   * only. */
   values: (number[] | null)[];
+  /**
+   * The same rows, rounded to the figure's own resolution - what the table PRINTS.
+   *
+   * ⚑⚑ SO THE PANEL AND THE FILE AGREE. The export has rounded to about half a
+   * pixel in data units since B6; the panel never did, so a reading showed six
+   * significant figures on screen and its own resolution in the file. Measured
+   * 2026-08-23: `makeRounder` had exactly one non-test caller in the tree.
+   * ⚑ Computed AT EACH POINT'S OWN PIXEL, which is the route `core/exportValues.ts`
+   * takes - exact on every axes class, where `dataToPixel` is a stub on five of
+   * seven. Two fields rather than one rounding applied in place, because the
+   * editor and the display need different numbers and a single field would have
+   * to be one or the other.
+   *
+   * ⚠️⚑⚑ THE ERROR COLUMNS ARE DELIBERATELY NOT ROUNDED, and that is the same
+   * rule rather than an exception to it. MEASURED 2026-08-23: `getErrorRows` and
+   * `getErrorCapDeltas` return raw values and the EXPORT writes them raw, so
+   * rounding them here would CREATE a panel-vs-file disagreement while removing
+   * one. The goal is agreement, not fewer digits.
+   * ▶ That the file reports a datum at half-pixel resolution and a cap position
+   * at full precision is arguably its own defect - but it is a change to the
+   * FILE, so it belongs on the v2.4 list, not inside a display fix.
+   */
+  display: (number[] | null)[];
   roles: (PointRole | null)[];
   /** Per row, which of that point's values the USER supplied rather than
    * reading off its pixel (A4). The table prints those in `[brackets]`, on
@@ -99,6 +129,8 @@ export function buildSpreadsheetSeries(
   datasetInfos: readonly DatasetInfo[],
   session: CalibrationSession<CalibratedAxes>
 ): SpreadsheetSeries[] {
+  // ⚑ ONE rounder for the whole build: it is bound to the axes, not to a row.
+  const rounder = makeDisplayRounder(session.getAxes());
   return allDatasetsData.map((d) => {
     const pixelIndices = session.getDatumPixelIndices(d.index);
     // ⚑ The session's own answer, NOT a second computation here. The export
@@ -124,6 +156,11 @@ export function buildSpreadsheetSeries(
     color: d.color,
     active: d.active,
     values: pixelIndices.map((p) => d.points[p]?.data ?? null),
+    display: pixelIndices.map((p) => {
+      const pt = d.points[p];
+      if (!pt?.data) return null;
+      return pt.data.map((_v, dim) => rounder.atPixel(pt.px, pt.py, pt.data!, dim));
+    }),
     roles: pixelIndices.map((p) => roles[p] ?? null),
     supplied: pixelIndices.map((p) => supplied[p] ?? []),
     labels: pixelIndices.map((p) => labels[p] ?? ''),

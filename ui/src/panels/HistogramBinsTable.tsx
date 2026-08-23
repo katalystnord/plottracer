@@ -1,6 +1,7 @@
 import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
+import type { DisplayRounder } from '../../../core/displayPrecision.js';
 
 /** One captured bin, as the session reports it. */
 export interface HistogramBin {
@@ -10,6 +11,9 @@ export interface HistogramBin {
 }
 
 export interface HistogramBinsTableProps {
+  /** How a number is rounded before it is printed - the figure's own resolution,
+   * so this table and the file it exports to report the same reading. */
+  display: DisplayRounder;
   /** One row per bin, in capture order. */
   rows: readonly { tupleIndex: number }[];
   /**
@@ -54,6 +58,7 @@ export interface HistogramBinsTableProps {
  * tuple which needs a name.
  */
 export function HistogramBinsTable({
+  display,
   rows,
   bins,
   tupleNoun,
@@ -118,10 +123,17 @@ export function HistogramBinsTable({
                     until the second corner decides the ordering, so naming it
                     "Bin start" would be a guess. The group-cursor line above
                     says which corner is next. */}
-                <td style={{ paddingRight: 16 }}>{bin ? fmtValue(bin.binStart) : '-'}</td>
-                <td style={{ paddingRight: 16 }}>{bin ? fmtValue(bin.binEnd) : '-'}</td>
+                {/* ⚑ THE SAME THREE EXPRESSIONS `buildHistogramJSON` USES -
+                    `at([binStart, value], 0)` for an edge and dim 1 for the
+                    height - so a bin reads identically on screen and in the file. */}
+                <td style={{ paddingRight: 16 }}>
+                  {bin ? fmtValue(display.atData([bin.binStart, bin.value], 0)) : '-'}
+                </td>
+                <td style={{ paddingRight: 16 }}>
+                  {bin ? fmtValue(display.scalarAtData(bin.binEnd, [bin.binStart, bin.value], 0)) : '-'}
+                </td>
                 <td style={{ paddingRight: 16, color: theme.color.primary.main }}>
-                  {bin ? fmtValue(bin.value) : '-'}
+                  {bin ? fmtValue(display.atData([bin.binStart, bin.value], 1)) : '-'}
                 </td>
                 {/* Blank, never 0, where that side was never captured - the
                     rule the export follows in the same columns. */}

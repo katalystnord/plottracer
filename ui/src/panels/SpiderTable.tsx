@@ -2,6 +2,7 @@ import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { valueText } from './ValueMark.js';
 import type { ReactNode } from 'react';
+import type { DisplayRounder } from '../../../core/displayPrecision.js';
 
 /** One series' column of the spider table, index-aligned with the axes. */
 export interface SpiderColumn {
@@ -24,6 +25,16 @@ export interface SpiderProfileTable {
 }
 
 export interface SpiderTableProps {
+  /** How a number is rounded before it is printed - the figure's own resolution,
+   * so this table and the file it exports to report the same reading.
+   *
+   * ⚑ A SPIDER NEEDS THE SPOKE, which is why the call sites pass `[axisIndex,
+   * value]`: `SpiderAxes.dataToPixel(index, value)` takes the spoke first, and
+   * every spoke carries its OWN scale - so a resolution taken without it would be
+   * some other axis's. Its `dataToPixel` is real (not one of the five stubs), and
+   * its own comment names `core/exportPrecision.ts` as the caller that relies on
+   * that. */
+  display: DisplayRounder;
   table: SpiderProfileTable;
   activeSeriesIndex: number;
   activePointIndex: number | null;
@@ -77,6 +88,7 @@ export interface SpiderTableProps {
  */
 export function SpiderTable({
   table,
+  display,
   activeSeriesIndex,
   activePointIndex,
   cursorAxisIndex,
@@ -209,7 +221,10 @@ export function SpiderTable({
                   ) : col.seriesIndex === activeSeriesIndex ? (
                     renderValue(col.seriesIndex, pointIndex, axisIndex, value, col.supplied[axisIndex] === true)
                   ) : (
-                    valueText(fmtValue(value), col.supplied[axisIndex] === true)
+                    valueText(
+                      fmtValue(display.scalarAtData(value, [axisIndex, value], 0)),
+                      col.supplied[axisIndex] === true
+                    )
                   )}
                 </td>
               );

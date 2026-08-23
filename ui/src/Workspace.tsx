@@ -243,6 +243,7 @@ import { pointInPolygon } from '../../algorithms/geometry.js';
 import { removeGridLinesOp, hexToRGB } from '../../algorithms/gridRemoval.js';
 import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
+import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
 import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
@@ -6089,6 +6090,17 @@ export function Workspace() {
   // data values (pixel columns dropped), joined name+color, plus the ragged row
   // count (= the longest series). Rendered as one table with a per-type value-dim
   // column set under each series -- see the Data section below.
+  /**
+   * How every panel number is rounded before it is printed - see
+   * `core/displayPrecision.ts`.
+   *
+   * ⚑ Memoised on the AXES, because that is what a resolution comes from. A new
+   * rounder per render would be harmless arithmetic but would churn every memo
+   * that depends on it, which is the shape [[live and stable are separate]]
+   * warns about.
+   */
+  const displayRounder = useMemo(() => makeDisplayRounder(axes), [axes]);
+
   const spreadsheetSeries = useMemo(
     () => buildSpreadsheetSeries(allDatasetsData, datasetInfos, session),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6276,6 +6288,15 @@ export function Workspace() {
   // commitDataPointEdit.
   const renderEditableValue = (index: number, axis: number, value: number, supplied: boolean) => {
     const suffix = axis === 0 ? 'x' : 'y';
+    // ⚑⚑ THE DISPLAY ROUNDS AND THE SEED DOES NOT. `value` arrives raw, because
+    // the commit is what moves the datum; what the cell PRINTS is that number at
+    // the figure's own resolution, so the table and the file agree. The two are
+    // separate expressions below on purpose - F23 is what one shared expression
+    // did (a `toFixed(3)` display feeding the editor turned 0.00042 into 0 on a
+    // log axis, silently, on double-click-and-blur).
+    const pixel = session.getDataset().getPixel(index) as { x: number; y: number } | undefined;
+    const shown =
+      pixel === undefined ? value : displayRounder.scalarAtPixel(value, pixel.x, pixel.y, axis);
     return (
       <EditableValue
         editing={editingCell?.index === index && editingCell.axis === axis}
@@ -6286,7 +6307,7 @@ export function Workspace() {
         // ⚠️ This comment said "now everyone's" above a `value.toFixed(3)` that
         // was neither the shown number nor the bare one, and that is how a
         // silent value-destroying seed survived review: gate 3 exactly.
-        display={valueText(fmtValue(value), supplied)}
+        display={valueText(fmtValue(shown), supplied)}
         testIdEdit={`data-edit-${suffix}-${index}`}
         testIdValue={`data-value-${suffix}-${index}`}
         title={valueTitle('Double-click to edit - moves the point on the canvas', supplied)}
@@ -6322,10 +6343,13 @@ export function Workspace() {
     value: number,
     supplied: boolean
   ) => (
+    // ⚑ `display` is rounded to THIS SPOKE's own resolution - a spider's axes each
+    // carry their own scale, so the spoke index has to go in. The seed below stays
+    // the whole number, because the commit is what moves the datum (F23).
     <EditableValue
       editing={editingCell?.index === pointIndex && editingCell.axis === axisIndex}
       editValue={editingCell?.value ?? ''}
-      display={valueText(fmtValue(value), supplied)}
+      display={valueText(fmtValue(displayRounder.scalarAtData(value, [axisIndex, value], 0)), supplied)}
       testIdEdit={`spider-edit-${seriesIndex}-${axisIndex}`}
       testIdValue={`spider-value-${seriesIndex}-${axisIndex}`}
       title={valueTitle('Double-click to edit - moves the point along its own axis', supplied)}
@@ -9012,6 +9036,7 @@ export function Workspace() {
           ) : config.outputPanel === 'bins' ? (
             <HistogramBinsTable
               rows={tupleRows}
+              display={displayRounder}
               bins={histogramBins}
               tupleNoun={tupleNoun}
               onRemoveTuple={removeTuple}
@@ -9026,6 +9051,7 @@ export function Workspace() {
           ) : config.outputPanel === 'spider' && axes ? (
             <SpiderTable
               table={spiderTable}
+              display={displayRounder}
               activeSeriesIndex={activeDatasetIndex}
               activePointIndex={activePointIndex}
               cursorAxisIndex={currentGroupIndex}
@@ -9051,6 +9077,7 @@ export function Workspace() {
           ) : config.outputPanel === 'bar' && axes ? (
             <BarTable
               table={barTable}
+              display={displayRounder}
               activeSeriesIndex={activeDatasetIndex}
               tupleNoun={tupleNoun}
               onSelectSeries={handleSelectDataset}
@@ -9072,6 +9099,7 @@ export function Workspace() {
           ) : hasSlots ? (
             <TupleTable
               rows={tupleRows}
+              display={displayRounder}
               slotNames={pointGroupNames}
               derivedColumn={derivedTupleColumn}
               tupleNoun={tupleNoun}

@@ -297,6 +297,10 @@ export function SpreadsheetTable({
                 </td>
                 {series.map((s) => {
                   const data = s.values[i];
+                  // ⚑ The rounded twin of the row, for PRINTING. Kept separate
+                  // from `data` because the editable cell seeds an editor from
+                  // the raw number and the commit moves the datum (F23).
+                  const shown = s.display[i];
                   // This series' pixel for this row - what an edit or a rename
                   // addresses. Only the active series is editable, so this and
                   // `activeRowPixel` agree wherever it is used; named per series
@@ -407,7 +411,11 @@ export function SpreadsheetTable({
                                 formatDateNumber(data[d]!, dateFmt)
                               : editable
                               ? renderValue(rowPixel, d, data[d]!, isSupplied(s, i, d))
-                              : valueText(fmtValue(data[d]!), isSupplied(s, i, d))
+                              : // ⚑ `display`, not `values`: the rounded twin, so a
+                                // read-only cell prints the number the FILE has.
+                                // The editable branch above still hands the
+                                // EDITOR the raw value - see `SpreadsheetSeries`.
+                                valueText(fmtValue(shown?.[d] ?? data[d]!), isSupplied(s, i, d))
                             : ''}
                         </td>
                       );
