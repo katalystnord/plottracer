@@ -201,17 +201,20 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     expect(table.columns.map((c) => c.seriesName)).toEqual(['Series 1', 'Treatment B']);
   });
 
-  it('threads a per-series Stack group into the derived value, same as getTupleRows (v2.0 Phase 5)', () => {
+  it('values a stacked segment the same way getTupleRows does', () => {
     // ⚑ getBarCategoryTable has its own derive.compute call (necessarily --
-    // it iterates every series, not just the active one), so the stackGroup
-    // wiring could silently drift from getTupleRows's without a direct check.
+    // it iterates every series, not just the active one), so the two could
+    // silently drift apart without a direct check. Since v2.3 stacking is one
+    // declaration on the AXES rather than a per-series tag, which is what
+    // removed the drift this test was originally written to catch.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    session.setOption('isStacked', 'true');
     calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5 -- unsigned span 3, not baseline-relative
     const table = session.getBarCategoryTable();
     expect(table.columns[0]!.values[0]).toBeCloseTo(3, 9);
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
   });
 });
 
@@ -363,5 +366,68 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     expect(session.removeCategoryTicks()).toBe(true);
     expect(session.getCategoryAxis().hasDeclaredCount()).toBe(false);
     expect(session.getCategoryAxis().getCategories()).toEqual([]);
+  });
+});
+
+describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one', () => {
+  /**
+   * David: *"For the floating bars output window, I think we will add another
+   * row below #, Category, Series N, that says Min, Max in two separate
+   * columns."*
+   *
+   * ⚑ ONLY WHERE THE BAR ACTUALLY FLOATS. He refused showing `Min` on ordinary
+   * bars as well - a column of zeros *"will look like a fault to the users"* -
+   * and adaptive columns are already this project's house rule: `getErrorColumns`
+   * omits left/right on a vertical-error figure because four columns of blanks
+   * assert an emptiness nobody looked for.
+   */
+  function markedFourBands(): CalibrationSession<BarAxes> {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
+    expect(session.setCategoryCount(4)).toBe(true);
+    return session;
+  }
+
+  it('a bar that sits on the baseline reports a value and NO interval', () => {
+    const session = markedFourBands();
+    session.addDataPoint(140, 500); // value 0 - the baseline
+    session.addDataPoint(220, 300); // value 5
+    const col = session.getBarCategoryTable().columns[0]!;
+    expect(col.values[0]).toBeCloseTo(5, 6);
+    expect(col.intervals[0]).toBeNull();
+  });
+
+  it('⚑⚑ a bar that floats reports an interval and NO value', () => {
+    const session = markedFourBands();
+    session.addDataPoint(140, 400); // value 2.5
+    session.addDataPoint(220, 300); // value 5 - neither end is the baseline
+    const col = session.getBarCategoryTable().columns[0]!;
+    expect(col.values[0]).toBeNull();
+    expect(col.intervals[0]!.min).toBeCloseTo(2.5, 6);
+    expect(col.intervals[0]!.max).toBeCloseTo(5, 6);
+  });
+
+  it('⚑ an empty cell has neither, so the row still reads as empty', () => {
+    const session = markedFourBands();
+    session.addDataPoint(140, 400);
+    session.addDataPoint(220, 300);
+    const col = session.getBarCategoryTable().columns[0]!;
+    expect(col.values.slice(1)).toEqual([null, null, null]);
+    expect(col.intervals.slice(1)).toEqual([null, null, null]);
+  });
+
+  it('⚑ the two are per SERIES, so one may float while another sits down', () => {
+    // The columns grow a block per series, which is how this table already grows.
+    const session = markedFourBands();
+    session.addDataPoint(140, 500); // series 1: on the baseline
+    session.addDataPoint(220, 300);
+    session.addDataset('Range');
+    session.setActiveDataset(1);
+    session.addDataPoint(340, 400); // series 2: floating
+    session.addDataPoint(420, 300);
+    const [first, second] = session.getBarCategoryTable().columns;
+    expect(first!.intervals.every((iv) => iv === null)).toBe(true);
+    expect(second!.intervals.some((iv) => iv !== null)).toBe(true);
   });
 });

@@ -105,7 +105,18 @@ describe('a baseline-anchored bar (the default: hasBaseline true, value 0)', () 
   });
 });
 
-describe('a floating bar (no declared baseline)', () => {
+describe('a floating bar has no single VALUE - its record is the interval', () => {
+  /**
+   * ⚑⚑ REWRITTEN v2.3, AND THE OLD ANSWER WAS THE DEFECT. These used to assert
+   * that a floating bar reports its SPAN. Measured against
+   * `samples/bar-floating-temperature.truth.json`, the `Value` column reported
+   * -7.95 for January (-8..2) and 15 for April (3..15): a MINIMUM on some rows
+   * and a MAXIMUM on others, under one heading. A span is no better - it answers
+   * "how tall" where the reader asked "where".
+   * ▶ A bar that does not sit on the baseline is an INTERVAL. Both ends are
+   * measured, both reach the record, and the panel and the file say `Min` and
+   * `Max` rather than inventing one number out of two.
+   */
   function floatingBar(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     session.setOption('hasBaseline', 'false');
@@ -113,26 +124,29 @@ describe('a floating bar (no declared baseline)', () => {
     return session;
   }
 
-  it('reports the SPAN, a magnitude, not a baseline-relative reading', () => {
-    // A temperature-range-style bar: drag from the lower value to the higher.
+  it('reports NO single value', () => {
     const session = floatingBar();
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
+    expect(session.getTupleRows()[0]!.derived).toBeNull();
   });
 
-  it('⚑ gives the SAME value whichever corner is clicked first', () => {
-    // ⚑⚑ THE INVARIANT, and it replaces two tests that asserted the opposite.
-    // Until 2026-08-03 this returned `v2 - v1`, so drag order carried a sign
-    // and the old tests were named "signs the value by DRAG ORDER" and
-    // "direction IS the recorded information" -- a defect asserted as its own
-    // premise, the third instance of that shape in this project.
-    //
-    // The sign was a property of the USER'S HAND, not of the figure: two
-    // people capturing the identical bar got +3 and -3. A span is a magnitude
-    // (a bar from -10 to -5 spans 5, not -5 -- its POSITION is negative, its
-    // EXTENT is not), and the rule was invisible besides, while firing on the
-    // natural top-left-downward gesture.
+  it('⚑ reports both measured ends, lower first', () => {
+    const session = floatingBar();
+    session.addDataPoint(150, 420); // value 2
+    session.addDataPoint(150, 300); // value 5
+    const { interval } = session.getTupleRows()[0]!;
+    expect(interval!.min).toBeCloseTo(2, 9);
+    expect(interval!.max).toBeCloseTo(5, 9);
+  });
+
+  it('⚑⚑ gives the SAME interval whichever corner is clicked first', () => {
+    // THE INVARIANT, and it outlived the value rule that used to carry it.
+    // Until 2026-08-03 the derived number was `v2 - v1`, so drag order carried a
+    // sign: two people capturing the identical bar got +3 and -3. Min and Max
+    // are properties of the INTERVAL; which corner the hand reached first is not
+    // a property of the figure at all, which is exactly why `Bar start` and
+    // `Bar end` were the wrong names for them.
     const upward = floatingBar();
     upward.addDataPoint(150, 420); // value 2
     upward.addDataPoint(150, 300); // value 5
@@ -141,42 +155,81 @@ describe('a floating bar (no declared baseline)', () => {
     downward.addDataPoint(150, 300); // value 5 -- the same bar, opposite order
     downward.addDataPoint(150, 420); // value 2
 
-    expect(downward.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
-    expect(downward.getTupleRows()[0]!.derived).toBeCloseTo(
-      upward.getTupleRows()[0]!.derived!,
-      9
-    );
+    expect(downward.getTupleRows()[0]!.interval).toEqual(upward.getTupleRows()[0]!.interval);
   });
 
-  it('never reports a negative span, even for a bar entirely below zero', () => {
-    // Position negative, extent positive. The old rule could return -3 here
-    // purely from click order, which reads as a measurement the figure never
-    // made.
+  it('a bar entirely below zero keeps its POSITION, which a span threw away', () => {
     // The fixture maps py 300 -> 5 and py 700 -> -5, so py 780 is -7.
+    // The old rule answered 2 for this bar, which is true of its height and says
+    // nothing about where on the axis it sits.
     const session = floatingBar();
     session.addDataPoint(150, 700); // value -5
     session.addDataPoint(150, 780); // value -7
-    const derived = session.getTupleRows()[0]!.derived!;
-    expect(derived).toBeGreaterThan(0);
-    expect(derived).toBeCloseTo(2, 9);
+    const { interval } = session.getTupleRows()[0]!;
+    expect(interval!.min).toBeCloseTo(-7, 9);
+    expect(interval!.max).toBeCloseTo(-5, 9);
   });
 
-  it('correctly signs a bar that straddles zero, with no special-casing needed', () => {
-    // The real case this resolves: a single-coloured floating interval (e.g. a
-    // monthly temperature mean-to-max range) that happens to cross zero. No
-    // splitting, no "crossing" concept anywhere in the capture -- the two ends
-    // are just measured, and the difference is exactly what it is.
+  it('a bar that straddles zero needs no special case', () => {
+    // A single-coloured floating interval (a monthly mean-to-max range) that
+    // happens to cross zero. No splitting, no "crossing" concept anywhere: the
+    // two ends are measured and reported as they are.
     const session = floatingBar();
     session.addDataPoint(150, 700); // value -5
     session.addDataPoint(150, 300); // value 5
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(10, 9); // 5 - (-5)
+    const { interval } = session.getTupleRows()[0]!;
+    expect(interval!.min).toBeCloseTo(-5, 9);
+    expect(interval!.max).toBeCloseTo(5, 9);
+  });
+
+  it('⚑⚑ and a DECLARED baseline does not make a floating bar baseline-relative', () => {
+    // THE MEASURED DISCRIMINATOR, which is the whole fix. `bar-floating-temperature`
+    // declares a baseline of 0 and every one of its bars floats above or below
+    // it. Asking "was a baseline declared" got this wrong for every row.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session); // hasBaseline true, baseline 0, by default
+    session.addDataPoint(150, 420); // value 2
+    session.addDataPoint(150, 300); // value 5
+    expect(session.getAxes()!.hasDeclaredBaseline()).toBe(true);
+    expect(session.getTupleRows()[0]!.derived).toBeNull();
+    expect(session.getTupleRows()[0]!.interval!.min).toBeCloseTo(2, 9);
+  });
+
+  it('⚑ while a bar that DOES sit on the baseline still reports a signed value', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.addDataPoint(150, 500); // value 0 -- on the baseline
+    session.addDataPoint(150, 700); // value -5, drawn downward
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(-5, 9);
+    expect(session.getTupleRows()[0]!.interval).toBeNull();
   });
 });
 
-describe('a stacked-bar segment (v2.0, Phase 5)', () => {
-  it('defaults to no stack group', () => {
+describe('a stacked-bar segment (declared on the AXES since v2.3)', () => {
+  /** A calibrated bar session that declares the figure draws stacked bars. */
+  function stackedBar(baselineValue = '0'): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getDatasetStackGroup(0)).toBeNull();
+    session.setOption('isStacked', 'true');
+    session.setOption('baselineValue', baselineValue);
+    calibratedBar(session);
+    return session;
+  }
+
+  it('⚑⚑ the declaration is asked ONCE, on the calibration card, not per series', () => {
+    // It replaces `Stack group`, a per-series free-text field whose NAME was
+    // never read: its only consumer tested it for non-empty, so any two strings
+    // behaved identically. David: *"THIS is where we should ask if the bars are
+    // stacked!"* - beside the two questions of the same kind already there.
+    const keys = BAR_AXES_CONFIG.options?.map((o) => o.key) ?? [];
+    expect(keys).toContain('isStacked');
+    expect(keys).toContain('hasBaseline');
+    expect(keys).toContain('isRotated');
+  });
+
+  it('defaults to not stacked, which is the ordinary bar chart', () => {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    expect(session.getAxes()!.isStacked()).toBe(false);
   });
 
   it('reads as an UNSIGNED span, regardless of drag direction -- not baseline-relative', () => {
@@ -185,79 +238,56 @@ describe('a stacked-bar segment (v2.0, Phase 5)', () => {
     // not even the bottommost layer, which sits on nothing but still isn't
     // "at zero" in the sense the baseline convention means. A contribution to
     // a stack is never negative, so magnitude is what's meaningful.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
+    const session = stackedBar();
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
   });
 
   it('reads the SAME unsigned span with drag direction reversed', () => {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
+    const session = stackedBar();
     session.addDataPoint(150, 300); // value 5
     session.addDataPoint(150, 420); // value 2
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // still +3, not -3
   });
 
-  it('a bottommost layer touching the declared baseline still reads as a span, not baseline-relative', () => {
+  it('a bottommost layer touching the declared baseline still reads as a span', () => {
     // The case that would otherwise be indistinguishable from an ordinary
     // baseline-anchored bar: this segment's near end genuinely IS at the
-    // chart's baseline (value 0) -- but it's tagged as part of a stack, so
-    // its value must still be its own span (5), not "5 - baseline" (also 5
-    // here, coincidentally -- see the next test for where they'd diverge).
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
+    // chart's baseline (value 0) -- but the figure is declared stacked, so its
+    // value must still be its own span.
+    const session = stackedBar();
     session.addDataPoint(150, 500); // value 0 -- the baseline itself
     session.addDataPoint(150, 300); // value 5
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(5, 9);
   });
 
-  it('a non-zero declared baseline does not leak into a stacked segment\'s value', () => {
-    // Where the two rules would actually disagree: baseline declared at 2.
-    // Baseline-relative would read 5-2=3; the stacked rule ignores the
-    // baseline entirely and reads the segment's own span, 20-15=5.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    session.setOption('baselineValue', '2');
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
+  it("a non-zero declared baseline does not leak into a stacked segment's value", () => {
+    // Where the two rules actually disagree: baseline declared at 2.
+    // Baseline-relative would read 10-2=8; the stacked rule ignores the
+    // baseline entirely and reads the segment's own span, 10-7.5=2.5.
+    const session = stackedBar('2');
     session.addDataPoint(150, 200); // value 7.5
     session.addDataPoint(150, 100); // value 10
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(2.5, 9); // |10 - 7.5|, not baseline-relative
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(2.5, 9);
   });
 
-  it('removing the stack tag (null) reverts to the ordinary sign convention', () => {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
-    session.addDataPoint(150, 700); // value -5
-    session.addDataPoint(150, 500); // value 0 (baseline)
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(5, 9); // stacked: unsigned span
-
-    session.setDatasetStackGroup(0, null);
-    expect(session.getDatasetStackGroup(0)).toBeNull();
-    // Same two pixels, re-read under the ordinary baseline-relative rule.
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(-5, 9); // -5 (far) - 0 (baseline)
-  });
-
-  it('two independent stack groups keep separate segment counts -- no assumption they match', () => {
-    // The real chart this resolves: a bidirectional stacked bar with 2
-    // segments on one side and 3 on the other (a real figure from the
-    // survey). Nothing here enforces symmetry between groups.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.setDatasetStackGroup(0, 'left');
-    session.addDataset('Right layer 1');
-    session.addDataset('Right layer 2');
-    session.addDataset('Right layer 3');
-    session.setDatasetStackGroup(1, 'right');
-    session.setDatasetStackGroup(2, 'right');
-    session.setDatasetStackGroup(3, 'right');
-    expect(session.getDatasetStackGroup(0)).toBe('left');
-    expect([1, 2, 3].map((i) => session.getDatasetStackGroup(i))).toEqual(['right', 'right', 'right']);
+  it('⚑⚑ every series is stacked together, because the figure is', () => {
+    // ⚑ THE DEFECT SHAPE THIS DELETES (v2.3 audit fleet, R1). The old per-series
+    // tag was read off the ACTIVE dataset index while the apex beside it was
+    // read off the ROW'S index, so on a stacked chart every series but one was
+    // valued by the wrong rule - and which one was right depended on what
+    // happened to be selected when Export was pressed. One declaration on the
+    // axes has no per-series index to get wrong.
+    const session = stackedBar();
+    session.addDataPoint(150, 420);
+    session.addDataPoint(150, 300);
+    session.addDataset('Layer 2');
+    session.setActiveDataset(1);
+    session.addDataPoint(250, 300);
+    session.addDataPoint(250, 100); // values 5 and 10 -> span 5
+    expect(session.getTupleRows(0)[0]!.derived).toBeCloseTo(3, 9);
+    expect(session.getTupleRows(1)[0]!.derived).toBeCloseTo(5, 9);
   });
 });
 

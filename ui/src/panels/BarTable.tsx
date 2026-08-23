@@ -27,6 +27,9 @@ export interface BarColumn {
   seriesIndex: number;
   seriesName: string;
   values: readonly (number | null)[];
+  /** Each row's two measured ends, where that bar has no single value - see
+   * `isInterval` below and `CalibrationSession.getBarCategoryTable`. */
+  intervals: readonly ({ min: number; max: number } | null)[];
   tupleIndices: readonly (number | null)[];
 }
 
@@ -134,7 +137,24 @@ export function BarTable({
   // ⚑ The second header row exists only when some series actually carries error,
   // so an ordinary bar chart's table is exactly what it was.
   const anyError = errors.some((e) => e !== null);
-  const headRowSpan = anyError ? 2 : 1;
+  /**
+   * ⚑⚑ WHICH SERIES REPORT AN INTERVAL RATHER THAN A VALUE (v2.3).
+   *
+   * A bar whose near end does not sit on the baseline is not worth one number,
+   * so its column becomes `Min` and `Max` under a spanning series heading.
+   * David: *"add another row below #, Category, Series N, that says Min, Max in
+   * two separate columns."*
+   * ⚑ NOT A NEW CONVENTION: the heatmap matrix header is already two lines
+   * (`C1` over `0.00 - 2.00`), so a spanning name over a pair is something the
+   * reader has met - and it grows the way this table already grows, a block per
+   * series.
+   * ⚑ PER SERIES, and only where bars actually float. David refused showing
+   * `Min` on ordinary bars too: a column of zeros *"will look like a fault to
+   * the users"*, and adaptive columns are already the house rule here.
+   */
+  const isInterval = table.columns.map((col) => col.intervals.some((iv) => iv !== null));
+  const anyInterval = isInterval.some(Boolean);
+  const headRowSpan = anyError || anyInterval ? 2 : 1;
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -150,7 +170,7 @@ export function BarTable({
               // error role beside it - the same fix the spreadsheet's header
               // needed when a series grew a Δ column and the name stayed one
               // cell wide, skewing every column to its right.
-              colSpan={1 + (errors[i]?.labels.length ?? 0)}
+              colSpan={(isInterval[i] ? 2 : 1) + (errors[i]?.labels.length ?? 0)}
               style={{
                 textAlign: 'right',
                 paddingRight: 16,
@@ -164,22 +184,30 @@ export function BarTable({
             </th>
           ))}
         </tr>
-        {anyError && (
+        {(anyError || anyInterval) && (
           <tr>
             {table.columns.map((col, i) => (
               <Fragment key={col.seriesIndex}>
-                <th
-                  style={{
-                    textAlign: 'right',
-                    paddingRight: 16,
-                    paddingLeft: 10,
-                    borderLeft: `1px solid ${theme.color.border.regular}`,
-                    color: theme.color.text.legend,
-                    fontWeight: 400,
-                  }}
-                >
-                  Value
-                </th>
+                {(isInterval[i] ? ['Min', 'Max'] : ['Value']).map((label, sub) => (
+                  <th
+                    key={label}
+                    style={{
+                      textAlign: 'right',
+                      paddingRight: 16,
+                      paddingLeft: 10,
+                      // ⚑ The rule that separates SERIES stays on the first of a
+                      // series' own columns, so `Min` and `Max` read as one block
+                      // rather than as two neighbouring series.
+                      ...(sub === 0
+                        ? { borderLeft: `1px solid ${theme.color.border.regular}` }
+                        : {}),
+                      color: theme.color.text.legend,
+                      fontWeight: 400,
+                    }}
+                  >
+                    {label}
+                  </th>
+                ))}
                 {errors[i]?.labels.map((label) => (
                   <th
                     key={label}
@@ -214,14 +242,30 @@ export function BarTable({
               // slots directly. Same fix, scoped to the case it's
               // actually safe for (see setSlotCursor's own comment on
               // why Box Plot stays excluded).
-              const aimTupleIndex = isActive && value == null && tupleIndex != null ? tupleIndex : null;
+              const interval = col.intervals[categoryIndex] ?? null;
+              // ⚑ A cell is EMPTY when it has neither - not when it has no
+              // `value`, which a floating bar legitimately does not.
+              const empty = value == null && interval == null;
+              const aimTupleIndex = isActive && empty && tupleIndex != null ? tupleIndex : null;
               const missingGroupIndex =
                 aimTupleIndex != null ? missingSlotIndexOf(aimTupleIndex) : -1;
               const aimable = aimTupleIndex != null && missingGroupIndex > -1;
               return (
                 <Fragment key={col.seriesIndex}>
+                {(isInterval[colIndex]
+                  ? [
+                      { key: 'min', shown: interval ? interval.min : null, sub: 0 },
+                      { key: 'max', shown: interval ? interval.max : null, sub: 1 },
+                    ]
+                  : [{ key: 'value', shown: value, sub: 0 }]
+                ).map(({ key: cellKey, shown, sub }) => (
                 <td
-                  data-testid={`bar-cell-${col.seriesIndex}-${categoryIndex}`}
+                  key={cellKey}
+                  data-testid={
+                    sub === 0
+                      ? `bar-cell-${col.seriesIndex}-${categoryIndex}`
+                      : `bar-cell-${col.seriesIndex}-${categoryIndex}-max`
+                  }
                   // Clicking a cell of an INACTIVE series switches to it --
                   // the same reachability rule Spider's own cells follow,
                   // since deleting a bar (below) is offered on the active
@@ -248,7 +292,7 @@ export function BarTable({
                   title={
                     aimable
                       ? `Click to fill this bar's missing corner next`
-                      : value == null
+                      : empty
                       ? `${col.seriesName} has no ${categoryName} bar`
                       : isActive
                       ? 'Click to select this bar on the figure'
@@ -258,7 +302,11 @@ export function BarTable({
                     textAlign: 'right',
                     paddingRight: 16,
                     paddingLeft: 10,
-                    borderLeft: `1px solid ${theme.color.border.regular}`,
+                    // ⚑ The series rule sits on the FIRST of a series' columns,
+                    // so `Min` and `Max` read as one block.
+                    ...(sub === 0
+                      ? { borderLeft: `1px solid ${theme.color.border.regular}` }
+                      : {}),
                     cursor: isActive && !aimable && tupleIndex == null ? 'default' : 'pointer',
                     // The SAME highlight the other output panels give a selected
                     // row - a token rather than a fourth copy of one colour.
@@ -267,7 +315,7 @@ export function BarTable({
                       : {}),
                   }}
                 >
-                  {value == null ? (
+                  {shown == null ? (
                     <span style={{ color: theme.color.text.legend }}>-</span>
                   ) : (
                     <>
@@ -277,21 +325,33 @@ export function BarTable({
                           Plot) has always used for its one-series-at-a-time
                           Value column -- kept so e2e's shared derivedValue()
                           helper reads either table the same way. Active-series
-                          only, since that's the one whose tupleIndex this is. */}
-                      <span data-testid={isActive && tupleIndex != null ? `tuple-derived-${tupleIndex}` : undefined}>
+                          only, since that's the one whose tupleIndex this is.
+                          ⚑ On an interval series it names the FIRST of the pair,
+                          because a floating bar has no single derived value for
+                          that helper to be reading. */}
+                      <span
+                        data-testid={
+                          sub === 0 && isActive && tupleIndex != null
+                            ? `tuple-derived-${tupleIndex}`
+                            : undefined
+                        }
+                      >
                         {/* ⚑ At the figure's own resolution, by the same route this
                             table's own export section takes (`makeRounder`, the
                             data route) - so the panel and the file agree. The bar
                             family is linear, which is why the data route is sound
                             here; see core/displayPrecision.ts. */}
-                        {fmtValue(display.atData([value], 0))}
+                        {fmtValue(display.atData([shown], 0))}
                       </span>
-                      {isActive && tupleIndex != null && (
+                      {/* ⚑ ONE delete button per BAR, on the last of its cells -
+                          a bar is one datum however many columns report it. */}
+                      {isActive && tupleIndex != null && sub === (isInterval[colIndex] ? 1 : 0) && (
                         <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
                       )}
                     </>
                   )}
                 </td>
+                ))}
                 {/* Blank, never 0, where that side was never captured - the rule
                     the export follows in the same columns. */}
                 {err?.labels.map((label, c) => {

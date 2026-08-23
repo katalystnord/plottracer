@@ -385,6 +385,23 @@ export interface TupleRow {
    */
   derived: number | null;
   /**
+   * The row's two measured ends, read as an INTERVAL - the record a tuple keeps
+   * when it has no single value (v2.3).
+   *
+   * ⚑⚑ A FLOATING BAR IS THE CASE THIS EXISTS FOR, and `derived` being null is
+   * exactly when it is filled. A bar whose near end does not sit on the baseline
+   * is not worth one number: reporting the far end alone gave a MINIMUM on rows
+   * below the baseline and a MAXIMUM on rows above it under one heading, and
+   * reporting the span answers "how tall" where the reader asked "where".
+   *
+   * ⚑ `min`/`max`, never start/end: which corner the hand reached first is not a
+   * property of the figure, and the record has discarded that since 2026-08-03.
+   * The two are mutually exclusive by construction - a row has a value or an
+   * interval, never both - so the panel and the file can key their columns on
+   * which one is present.
+   */
+  interval: { min: number; max: number } | null;
+  /**
    * The tuple's CATEGORY COORDINATE, 1-based - the band it sits in while the
    * category axis is marked, its shared name-list index otherwise, and null when
    * neither can answer (F21). The same number, by the same mechanism, that a
@@ -2482,42 +2499,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     entry.dataset.colorRGB = new Color(rgb[0], rgb[1], rgb[2]);
   }
 
-  /**
-   * Tag a dataset as one LAYER of a stacked-bar group (v2.0, Phase 5) - an
-   * arbitrary shared string naming the stack (e.g. "left"/"right" for the
-   * two independent sides of a diverging chart, or any name that groups the
-   * participating series). Stored as ordinary dataset-level metadata
-   * (errorRelation's own mechanism, `core/dataset.ts`'s getMetadata/
-   * setMetadata), so it round-trips through project save/load and undo/redo
-   * with zero new serialization code.
-   *
-   * ⚑ Capture itself needs nothing special once a dataset is tagged - each
-   * segment is still its own ordinary drag-box (BAR_AXES_CONFIG). What DOES
-   * change is the derived VALUE: see its `derivedTupleValue.compute`, which
-   * reads this tag back via getTupleRows' ctx and switches to an unsigned
-   * span, because a stacked segment's near end is never the chart's
-   * declared baseline - not even the bottommost layer - so the ordinary
-   * baseline-relative/floating-direction sign convention does not apply.
-   * Pass `null` to remove a dataset from whichever stack it was in.
-   */
-  setDatasetStackGroup(index: number, group: string | null): void {
-    const entry = this.datasetEntries[index];
-    if (!entry) return;
-    const existing = entry.dataset.getMetadata();
-    if (group === null) {
-      const { stackGroup: _dropped, ...rest } = existing;
-      entry.dataset.setMetadata(rest);
-    } else {
-      entry.dataset.setMetadata({ ...existing, stackGroup: group });
-    }
-  }
-
-  getDatasetStackGroup(index: number): string | null {
-    const entry = this.datasetEntries[index];
-    if (!entry) return null;
-    const group = entry.dataset.getMetadata()['stackGroup'];
-    return typeof group === 'string' ? group : null;
-  }
 
   /** Enter an already-calibrated state directly from a pre-built axes +
    * dataset array, bypassing the click-by-click step walk -- the load half
@@ -4664,26 +4645,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
           derive && this.axes
             ? derive.compute(points, this.axes, {
                 apex: this.getSectorApex(tupleIndex, datasetIndex),
-                // ⚑⚑ THIS SERIES' STACK GROUP, NOT THE ACTIVE ONE (v2.3 audit
-                // fleet, R1 - CRITICAL). It read `this.activeDatasetIndex` while
-                // `apex` one line above correctly threaded `datasetIndex`, so on
-                // a stacked or grouped bar chart - v2.0's headline - EVERY series
-                // but one was valued by the wrong rule, and which one was right
-                // depended on what happened to be selected when Export was
-                // pressed. Exporting the same figure twice, after clicking a
-                // different series in the rail, produced two different files.
-                // The SCREEN was correct throughout (`getBarCategoryTable` passes
-                // `seriesIndex`), so nothing on it could ever have shown this.
-                // ⚑ Resolved exactly as `datasetAt` resolves it, so an
-                // out-of-range index falls back to the active series here too
-                // rather than reading `null` and silently unstacking the value.
-                stackGroup: this.getDatasetStackGroup(
-                  datasetIndex !== undefined && this.datasetEntries[datasetIndex]
-                    ? datasetIndex
-                    : this.activeDatasetIndex
-                ),
+                // ⚑⚑ STACKING IS NO LONGER THREADED THROUGH HERE, and that
+                // closes a whole defect shape. It used to arrive as the SERIES'
+                // stack group, read off `this.activeDatasetIndex` while `apex`
+                // one line above correctly threaded `datasetIndex` - so on a
+                // stacked chart every series but one was valued by the wrong
+                // rule, and which one was right depended on what happened to be
+                // selected when Export was pressed (v2.3 audit fleet, R1). It is
+                // now one declaration on the AXES, which every series shares by
+                // construction, so there is no per-series index to get wrong.
               })
             : null,
+        // ⚑ The other half of the same question: a row that has no single value
+        // has an interval instead, and both come from the CONFIG so the panel
+        // and the file cannot disagree about which one this row is.
+        interval: derive?.interval && this.axes ? derive.interval(points, this.axes) : null,
       };
     });
   }
@@ -4796,6 +4772,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
       seriesIndex: number;
       seriesName: string;
       values: (number | null)[];
+      /**
+       * Each row's two measured ends, where that bar has no single value (v2.3).
+       *
+       * ⚑⚑ A FLOATING BAR IS NOT WORTH ONE NUMBER, and this column pair is what
+       * the panel shows instead of `Value`: `Min` and `Max` under a spanning
+       * series heading, mirroring the heatmap matrix header the reader has
+       * already met. Null wherever `values` answers, so the two are never both
+       * printed for one bar.
+       */
+      intervals: ({ min: number; max: number } | null)[];
       /** Which tuple (in that series' OWN dataset) fills each row, so a
        * click can select/delete it -- one series' tupleIndex is meaningless
        * against another series' dataset, so this is per-column, not global. */
@@ -4845,11 +4831,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
         tupleForCategory.set(idx, tupleIndex);
       });
       const values: (number | null)[] = [];
+      // ⚑ The other half of the same answer - a cell whose bar floats has no
+      // single value and carries its two measured ends instead. Same source as
+      // `getTupleRows`, so the two tables cannot disagree about which it is.
+      const intervals: ({ min: number; max: number } | null)[] = [];
       const tupleIndices: (number | null)[] = [];
       categories.forEach((_, categoryIndex) => {
         const tupleIndex = tupleForCategory.get(categoryIndex);
         if (tupleIndex === undefined) {
           values.push(null);
+          intervals.push(null);
           tupleIndices.push(null);
           return;
         }
@@ -4860,11 +4851,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
         const derived =
-          derive?.compute(points, axes, { apex: null, stackGroup: this.getDatasetStackGroup(seriesIndex) }) ?? null;
+          derive?.compute(points, axes, { apex: null }) ?? null;
         values.push(derived);
+        intervals.push(derive?.interval?.(points, axes) ?? null);
         tupleIndices.push(tupleIndex);
       });
-      return { seriesIndex, seriesName: dataset.name, values, tupleIndices };
+      return { seriesIndex, seriesName: dataset.name, values, intervals, tupleIndices };
     });
     return { categoryNames, categoryRawNames, columns, crowded };
   }

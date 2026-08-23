@@ -9,20 +9,12 @@ export interface SeriesPanelProps {
   infos: readonly DatasetInfo[];
   activeInfo: DatasetInfo | undefined;
   activeIndex: number;
-  /** This graph type is Bar, which is the only one offering stack groups. */
-  /** This type's series can be grouped into stacks -- `supportsStackGroups` on
-   * the config. Named for the CAPABILITY, not the type: it used to be `isBar`,
-   * which asked WHICH TYPE for something that is a question about what the type
-   * can do. */
-  supportsStackGroups: boolean;
   /** The in-flight rename, or null when the field shows the stored name. */
   nameDraft: string | null;
   /** Why the draft name is refused - shown under the field. */
   nameNotice: string | null;
   colorAnchor: HTMLElement | null;
   onColorAnchorChange: (anchor: HTMLElement | null) => void;
-  stackGroupOf: (index: number) => string | null;
-  onSetStackGroup: (index: number, group: string | null) => void;
   onAdd: () => void;
   onSelect: (index: number) => void;
   onRemove: (index: number) => void;
@@ -50,13 +42,10 @@ export function SeriesPanel(props: SeriesPanelProps) {
     infos,
     activeInfo,
     activeIndex,
-    supportsStackGroups,
     nameDraft,
     nameNotice,
     colorAnchor,
     onColorAnchorChange,
-    stackGroupOf,
-    onSetStackGroup,
     onAdd,
     onSelect,
     onRemove,
@@ -238,66 +227,6 @@ export function SeriesPanel(props: SeriesPanelProps) {
               Delete
             </button>
           )}
-        </div>
-      )}
-      {/* Stacked bars (v2.0, Phase 5). Capture itself is the same drag-box every
-          other bar uses (BAR_AXES_CONFIG), one segment per series; what this
-          declares is that neither end of those bars is the chart's baseline, so a
-          segment's value is its own SPAN rather than its distance from zero.
-          Bar-only: a stack is specifically an ordered sequence of bar segments,
-          and no other graph type has that shape.
-
-          ⚠️⚑⚑ THIS COMMENT USED TO SAY *"same group name on two or more series =
-          one visual stack; blank = not stacked"*, AND THE FIRST HALF WAS FICTION
-          (measured 2026-08-23). The ONLY consumer of this value in the tree is
-          `axesTypeConfigs.ts`'s `if (ctx.stackGroup !== null)`. Nothing anywhere
-          reads the STRING - not the export, not the drawing, not any ordering. So
-          any non-empty text behaves identically and two series need not agree on
-          anything. David typed a different name on each series and every one got
-          the stacked rule, which is the only reason his readings came out right.
-          ▶ Gate 3: a comment asserting what the design requires, with nothing
-          enforcing it, is false evidence of compliance - every later reader checks
-          here, sees the agreement, and stops looking.
-          ⚑ The FIX is a checkbox, since one bit is all the code asks for; that is
-          a v2.4 change and this is only the wording made true. */}
-      {/* ⚑⚑ DISABLED UNTIL THERE ARE AXES, MIRRORING `+ Add` DIRECTLY ABOVE IT.
-          A stack group says how a captured bar's VALUE is read, so before
-          calibration it cannot do anything - and this field was offered anyway,
-          on a screen whose only available action is Capture figure. Found by
-          David in the built app, and made worse by widening it: at 90px and the
-          small font it was quiet enough not to invite the click.
-          ⚑ DISABLED RATHER THAN HIDDEN, deliberately. A control that APPEARS once
-          you have done something else is the "invisible precondition" the
-          keystone rule refuses - the user never learns it exists. Greyed out with
-          the reason on it is progressive disclosure they can actually find, and
-          it is the same mechanism `+ Add` already uses for the same fact. */}
-      {activeInfo && supportsStackGroups && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-          {/* ⚑ MIRRORS THE NAME FIELD ABOVE IT (2026-08-23). Two text inputs sit
-              one under the other and both name something about the series - and
-              this one was 90px wide at the small font size while the other was
-              full width at the regular one, so they read as different KINDS of
-              control. David: *"I think we should make the stack group box and
-              font bigger."* Same size, same weight, same right edge: the user can
-              see they are the same kind of thing without being told. */}
-          <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.regular, color: theme.color.text.legend }}>
-            Stack group:
-          </label>
-          <input
-            id="series-stack-group"
-            data-testid="series-stack-group"
-            title={
-              canAddSeries
-                ? 'Tick this series as a stacked segment: its value becomes its own height rather than its distance from the baseline. Blank = an ordinary bar measured from the baseline.'
-                : 'Calibrate the chart first - a stack group changes how a captured bar\u2019s value is read, so there is nothing for it to act on yet.'
-            }
-            placeholder="none"
-            value={stackGroupOf(activeIndex) ?? ''}
-            onChange={(e) => onSetStackGroup(activeIndex, e.target.value.trim() || null)}
-            onBlur={onCommitPendingEdit}
-            disabled={!canAddSeries}
-            style={{ flex: '1 1 auto', minWidth: 80 }}
-          />
         </div>
       )}
       {nameNotice && (

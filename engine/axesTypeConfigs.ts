@@ -34,6 +34,8 @@ import { binFromCorners } from '../algorithms/histogram.js';
 import { checkStripGeometry } from '../algorithms/colorBar.js';
 import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
+import { barInterval, nearEndIsFirst } from '../core/barInterval.js';
+import { halfPixelResolution } from '../core/exportPrecision.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
 export interface CalibratedAxes {
@@ -703,17 +705,24 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
     compute(
       points: (DataPointView | null)[],
       axes: A,
+      /** ⚑ Only what no config can reach on its own. Stacking used to arrive
+       * here as a per-series `stackGroup` string; it is now a declaration on the
+       * BAR AXES (`isStacked`), so the config reads it off `axes` like every
+       * other thing the figure declares about itself. */
       ctx: {
         apex: { x: number; y: number } | null;
-        /** v2.0, Phase 5: the active dataset's stack group (setDatasetStackGroup),
-         * or null when it isn't part of one. A stacked segment's value is its own
-         * SPAN -- neither end is the chart's declared baseline, even for the
-         * bottommost layer, so the ordinary baseline-relative/floating-direction
-         * sign convention (see BAR_AXES_CONFIG) does not apply; see its own
-         * derivedTupleValue for how this is used. */
-        stackGroup: string | null;
       }
     ): number | null;
+    /**
+     * The same tuple read as an INTERVAL, for the rows `compute` cannot answer
+     * with one number (v2.3).
+     *
+     * ⚑ Declared beside `compute` rather than derived by the session, because
+     * WHICH rows have no single value is the type's own model: a floating bar
+     * has an interval, a pie sector never does. Returns null wherever `compute`
+     * answers, so the two can never both be present on one row.
+     */
+    interval?(points: (DataPointView | null)[], axes: A): { min: number; max: number } | null;
   };
   /**
    * What auto-extract MEANS on this graph type - a declared capability, because
@@ -832,14 +841,20 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   capturesAsBox?: boolean;
 
   /**
-   * Series in this type can be grouped into STACKS (v2.3) - the "Stack group"
-   * field on the series panel.
+   * This type's own slots are an unordered INTERVAL, and these are the names the
+   * RECORD calls them by (v2.3).
    *
-   * ⚑ Bar only, and genuinely so: a stack is an ordered sequence of bar
-   * segments, and no other graph type has that shape. Declared rather than asked
-   * as `config.id === 'bar'` because that is the sentence above, in code.
+   * ⚑⚑ WHY THE RECORD NEEDS DIFFERENT WORDS FROM THE CAPTURE. A bar is dragged
+   * corner to corner and its two slots fill in click order, so `Bar start` and
+   * `Bar end` are honest names for the GESTURE - the tips bar uses them to say
+   * which corner is next. They are dishonest names for the RECORD, which has
+   * deliberately discarded drag direction since 2026-08-03: two people capturing
+   * the identical bar must produce the identical file, and start/end imply an
+   * ordering nothing keeps. David: rename them to `Min`/`Max` in the file too.
+   * ▶ So the panel and the exports print these names and SORT the pair; the
+   * capture prompts keep the slot names, which are about the hand.
    */
-  supportsStackGroups?: boolean;
+  intervalSlots?: readonly [string, string];
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
@@ -1857,7 +1872,6 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   outputPanel: 'bar',
   capturesAsBox: true,
-  supportsStackGroups: true,
   label: 'Bar',
   axesKind: 'bar',
   // v2.0 Phase 7: a bounding box IS a bar's two measured ends, so unlike the
@@ -1877,6 +1891,13 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // Defaults ON at '0', the ordinary bar chart, walked past like pie's total/sweep.
     { key: 'hasBaseline', label: 'Bars share a baseline', kind: 'checkbox', default: true },
     { key: 'baselineValue', label: 'Baseline value', kind: 'text', default: '0' },
+    // ⚑⚑ v2.3: THIS IS WHERE THE STACK QUESTION BELONGS, and it replaces the
+    // Series card's `Stack group` free-text field entirely. David, having got
+    // that field working and then asked what it did that a series name did not:
+    // *"THIS is where we should ask if the bars are stacked!"* One fact about
+    // how the whole figure draws its bars, asked once, beside the two questions
+    // of exactly the same kind that were already here.
+    { key: 'isStacked', label: 'Stacked bars', kind: 'checkbox', default: false },
   ],
   fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click the pixel position of a known bar value (e.g. 0)', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
@@ -1885,6 +1906,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
+  intervalSlots: ['Min', 'Max'],
   categoryTicks: { originStep: 'p1' },
   // ⚑ Stage 2: the category ticks this type marks after its value axis
   // is calibrated - the same shape the heatmap's grid has.
@@ -1893,60 +1915,64 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   tupleMembers: 'object',
   derivedTupleValue: {
     label: 'Value',
-    compute(points, axes, ctx) {
+    /**
+     * A BAR'S VALUE, WHEN IT HAS ONE.
+     *
+     * ⚑⚑ REWRITTEN v2.3, and the DISCRIMINATOR was the defect. This asked
+     * whether a baseline had been DECLARED and then reported the far end
+     * relative to it. `samples/bar-floating-temperature` is the counterexample
+     * that made it visible: a declared baseline of 0 with every bar floating,
+     * so January (-8..2) reported -7.95 and April (3..15) reported 15 - a
+     * MINIMUM on some rows and a MAXIMUM on others, under one heading `Value`.
+     * Someone averaging that column gets a number that means nothing.
+     *
+     * ▶ The question is MEASURED instead: does this bar's near end SIT on the
+     * baseline, within the figure's own resolution? See `core/barInterval.ts`,
+     * which is one measurement with several consumers.
+     *
+     * ⚑ Three outcomes, and only two of them are a single number:
+     *   · sits on the baseline  -> the far end relative to it, SIGNED. A bar
+     *     drawn DOWN from zero to -20 is worth -20; its span is 20 and has
+     *     thrown the sign away, which is why "always use the span" is wrong.
+     *   · declared STACKED      -> its own height, the segment's contribution.
+     *   · anything else FLOATS  -> it has no single value. `null`, and the
+     *     panel and the file report the interval as `Min` and `Max` instead.
+     */
+    compute(points, axes) {
       const [start, end] = points;
       if (!start?.data || !end?.data) return null; // a half-dragged bar has no value yet
       const v1 = start.data[0]!;
       const v2 = end.data[0]!;
-      // v2.0 Phase 5: a STACKED segment's near end is never the chart's
-      // declared baseline -- not even the bottommost layer, which sits on
-      // top of nothing but still isn't "at zero" in the sense the baseline-
-      // relative sign convention means. Its value is its own SPAN, and
-      // magnitude-not-direction is what's meaningful (a contribution to a
-      // stack is never negative) -- so this bypasses both the baseline and
-      // the floating-direction rules below entirely.
-      if (ctx.stackGroup !== null) return Math.abs(v2 - v1);
-      if (axes.hasDeclaredBaseline()) {
-        // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
-        // position -- a pixel-position rule ("smaller y = far end") is exactly
-        // backwards for a bar below baseline in a normal vertical orientation,
-        // and pixelToData already encodes orientation/direction/log-scale
-        // correctly, so comparing values needs no such reversal at all.
-        const baseline = axes.getBaselineValue();
-        const nearIsStart = Math.abs(v1 - baseline) <= Math.abs(v2 - baseline);
-        const far = nearIsStart ? v2 : v1;
-        return far - baseline;
-      }
-      // Floating/offset bar (no declared baseline): there is no reference to
-      // sign against, so the value is the bar's own SPAN -- a magnitude, the
-      // same answer the stacked branch above reaches for the same reason.
-      //
-      // ⚑⚑ REVERSED 2026-08-03 (David). This used to return `v2 - v1`, letting
-      // the DRAG DIRECTION carry a sign: corner-to-corner up positive, down
-      // negative. Three things were wrong with it.
-      //
-      // 1. **The sign recorded the user's hand, not the figure.** Two people
-      //    capturing the identical bar got +12 and -12. That is the defect
-      //    shape already written down for the spider off-ray distance: ask
-      //    *whose property is this?* before storing a field. A span is a
-      //    magnitude -- a bar from -10 to -5 spans 5, not -5; its POSITION is
-      //    negative, its EXTENT is not.
-      // 2. **The justification was a false analogy.** It read "same principle
-      //    as pie preserving its boundary-walk direction". In a pie, direction
-      //    changes WHICH SECTOR is meant -- A->B and B->A are different
-      //    regions, so direction is a property of the figure. Two opposite
-      //    corners define the SAME rectangle either way; there is nothing for
-      //    the order to distinguish.
-      // 3. **It was invisible, and it fired on the default gesture.** Nothing
-      //    on screen said click order meant anything -- it appeared in the
-      //    v2.0.0 release notes and nowhere else -- while dragging top-left
-      //    downward, which is the natural motion, produced the negative.
-      //
-      // If a figure ever genuinely needs directional floating bars (a waterfall
-      // being the only candidate found), that is a DECLARATION the user makes
-      // visibly, the way the baseline is declared -- never a meaning inferred
-      // from the order two corners happened to be clicked.
-      return Math.abs(v2 - v1);
+      // ⚑ An undeclared baseline is not a baseline AT zero: with nothing to be
+      // signed against, every bar is an interval and takes the branch below.
+      const baseline = axes.getBaselineValue();
+      // ⚑ Resolution is read at the NEAR end's own pixel - the end the question
+      // is about - through the same `halfPixelResolution` the panels and the
+      // exports round with, so "within resolution" means the same thing here as
+      // it does everywhere else on screen.
+      const nearPoint = nearEndIsFirst(v1, v2, baseline) ? start : end;
+      const resolution = halfPixelResolution(axes, nearPoint.px, nearPoint.py)[0] ?? NaN;
+      const bar = barInterval(v1, v2, baseline, resolution);
+      if (!bar) return null;
+      // ⚑ A stacked segment's own height. Magnitude, not direction: a
+      // contribution to a stack is never negative, and which corner was dragged
+      // first is the operator's hand (see the 2026-08-03 decision below).
+      if (axes.isStacked()) return bar.max - bar.min;
+      if (!axes.hasDeclaredBaseline() || !bar.onBaseline) return null;
+      // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
+      // position - a pixel rule ("smaller y = far end") is exactly backwards for
+      // a bar below the baseline in an ordinary vertical figure, and
+      // `pixelToData` already encodes orientation, direction and log scale.
+      return bar.far - baseline;
+    },
+    /** The two ends, for the floating bars `compute` returns null for. Both were
+     * measured; neither is worth discarding to manufacture a single number. */
+    interval(points, axes) {
+      const [start, end] = points;
+      if (!start?.data || !end?.data) return null;
+      if (BAR_AXES_CONFIG.derivedTupleValue!.compute(points, axes, { apex: null }) !== null) return null;
+      const bar = barInterval(start.data[0]!, end.data[0]!, axes.getBaselineValue(), NaN);
+      return bar ? { min: bar.min, max: bar.max } : null;
     },
   },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
@@ -1965,6 +1991,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     axes.setBaseline(optionBool(ctx.options, 'hasBaseline'), parseFloat(ctx.options.baselineValue ?? '0'));
+    axes.setStacked(optionBool(ctx.options, 'isStacked'));
     return { axes };
   },
   extractOptions(axes) {
@@ -1973,6 +2000,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       isRotated: String(axes.isRotated()),
       hasBaseline: String(axes.hasDeclaredBaseline()),
       baselineValue: String(axes.getBaselineValue()),
+      isStacked: String(axes.isStacked()),
     };
   },
 };

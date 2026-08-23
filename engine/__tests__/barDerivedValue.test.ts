@@ -89,8 +89,11 @@ describe('barCalibrationValueCheck - the refusal a LOADED file must also meet', 
 });
 
 /** A calibrated Bar session: P1=0 @ y=500, P2=10 @ y=100, so 40px == 1 unit. */
-function calibratedBar(): CalibrationSession<BarAxes> {
+function calibratedBar(options: Record<string, string> = {}): CalibrationSession<BarAxes> {
   const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+  // ⚑ Options are DECLARED before the walk, exactly as the card asks them: they
+  // reach `buildAxes`, so setting one afterwards would not be the same session.
+  for (const [key, value] of Object.entries(options)) s.setOption(key, value);
   s.handleCalibrationClick(300, 500);
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
@@ -137,39 +140,49 @@ describe("a bar's value - the sign convention", () => {
   it('measures from a NON-ZERO declared baseline', () => {
     const s = calibratedBar();
     s.setOption('baselineValue', '2');
-    // A bar whose far end is at 5, against a baseline of 2, spans 3.
-    expect(barValue(s, 150, 500, 300)).toBeCloseTo(3, 6);
+    // The fixture maps py 500 -> 0 and py 100 -> 10, so py 420 is the baseline
+    // value 2 and py 300 is 5. A bar drawn from the baseline to 5 is worth 3.
+    expect(barValue(s, 150, 420, 300)).toBeCloseTo(3, 6);
   });
 
-  it('⚑ a FLOATING bar (no baseline) reads as an unsigned SPAN, like a stacked one', () => {
-    // ⚑⚑ REVERSED 2026-08-03. This test used to be named "takes its direction
-    // from the drag order" and asserted -5 for the reversed drag -- a defect
-    // asserted as its own premise.
-    //
-    // ⚑ And the contradiction was sitting in plain sight: the STACKED test
-    // directly below asserts "same span, drag reversed" for exactly the same
-    // question. Two adjacent tests held opposite principles, each internally
-    // consistent, which is why neither looked wrong.
-    //
-    // With no baseline there is no reference to sign against, so the value is
-    // the bar's own span -- a magnitude. The old sign recorded the USER'S
-    // HAND, not the figure: two people capturing the identical bar got +5 and
-    // -5, and the natural top-left-downward gesture produced the negative.
+  it('⚑⚑ and a bar that does NOT start at that baseline is not measured from it', () => {
+    // THE v2.3 FIX. This bar runs 0..5 on a chart whose declared baseline is 2,
+    // so it does not sit on the baseline and there is nothing to sign against.
+    // The old rule reported the far end anyway - which is how a floating figure
+    // came to report a minimum on some rows and a maximum on others.
+    const s = calibratedBar();
+    s.setOption('baselineValue', '2');
+    expect(barValue(s, 150, 500, 300)).toBeNull();
+    expect(s.getTupleRows()[0]!.interval).toEqual({ min: 0, max: 5 });
+  });
+
+  it('⚑⚑ a FLOATING bar has no single value at all - it is an INTERVAL', () => {
+    // ⚑ REWRITTEN TWICE, and the history is the point. Until 2026-08-03 this was
+    // named "takes its direction from the drag order" and asserted -5 for the
+    // reversed drag: a defect asserted as its own premise. That was replaced by
+    // an unsigned SPAN, which fixed the sign and kept the wrong question - a
+    // span says how TALL the bar is where the reader asked WHERE it sits.
+    // ▶ v2.3: both ends were measured, both are kept, and neither is discarded
+    // to manufacture one number. What survives from 2026-08-03 is the invariant
+    // that made it wrong to begin with: the answer must not depend on the hand.
     const up = calibratedBar();
     up.setOption('hasBaseline', 'false');
-    expect(barValue(up, 150, 400, 200)).toBeCloseTo(5, 6);
+    expect(barValue(up, 150, 400, 200)).toBeNull();
 
     const down = calibratedBar();
     down.setOption('hasBaseline', 'false');
-    expect(barValue(down, 150, 200, 400)).toBeCloseTo(5, 6); // same span, drag reversed
+    expect(barValue(down, 150, 200, 400)).toBeNull();
+
+    expect(down.getTupleRows()[0]!.interval).toEqual(up.getTupleRows()[0]!.interval);
   });
 
   it('⚑ a STACKED segment reads as an unsigned SPAN, bypassing the baseline entirely', () => {
-    // v2.0 Phase 5: a stacked segment's near end is never the chart's
-    // baseline -- not even the bottommost layer -- so its value is its own
-    // contribution, and a contribution to a stack is never negative.
-    const s = calibratedBar();
-    s.setDatasetStackGroup(0, 'A');
+    // A stacked segment's near end is never the chart's baseline -- not even
+    // the bottommost layer -- so its value is its own contribution, and a
+    // contribution to a stack is never negative.
+    // ⚑ Declared on the AXES since v2.3 (`Stacked bars`, beside `Horizontal
+    // bars` on the calibration card), not as a per-series free-text tag.
+    const s = calibratedBar({ isStacked: 'true' });
     expect(barValue(s, 150, 400, 200)).toBeCloseTo(5, 6);
     expect(barValue(s, 200, 200, 400)).toBeCloseTo(5, 6); // same span, drag reversed
   });

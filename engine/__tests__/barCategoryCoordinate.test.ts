@@ -158,8 +158,8 @@ describe('a bar carries the category it was measured in', () => {
       'category',
       'Position min',
       'Position max',
-      'Bar start',
-      'Bar end',
+      'Min',
+      'Max',
       'Value',
     ]);
   });
@@ -206,7 +206,7 @@ describe('nothing is invented where nothing was measured', () => {
     const s = barSession();
     bar(s, 210, 290, 200);
     const [data] = sectionsFor(s, 'bar');
-    expect(data!.header).toEqual(['Position', 'category', 'Bar start', 'Bar end', 'Value']);
+    expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
     expect(data!.rows[0]![0]).toBe(1);
   });
 

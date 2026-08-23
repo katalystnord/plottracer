@@ -315,6 +315,34 @@ export function buildFlatDataCSV(rows: readonly ExportRow[], fields: readonly st
  * silently compute a resolution near image origin (0,0) instead of near the
  * sector -- caught by a test that expected the exact analytic value and got a
  * suspiciously round-looking one instead. */
+/**
+ * One tuple's member values, under the names the RECORD calls them by.
+ *
+ * ⚑⚑ SORTED WHEN THE SLOTS ARE AN INTERVAL (v2.3). A bar's two slots fill in
+ * click order, and the record has discarded that order since 2026-08-03 - so
+ * `Min` and `Max` must actually hold the smaller and larger reading, or the
+ * rename is a label over an unchanged column and two people capturing the same
+ * bar still get two different files. One helper, so the CSV family and the JSON
+ * cannot answer differently.
+ */
+function memberValues(
+  row: TupleRow,
+  count: number,
+  rounder: ValueRounder,
+  sortedInterval: boolean
+): (number | null)[] {
+  const values = row.points
+    .slice(0, count)
+    .map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : null));
+  // ⚑ Only a COMPLETE pair is sorted: a half-dragged bar has one reading and no
+  // interval, and moving it into the `Min` column would assert which end of a
+  // bar nobody has finished drawing it is.
+  if (sortedInterval && values.length === 2 && values[0] != null && values[1] != null) {
+    return [Math.min(values[0], values[1]), Math.max(values[0], values[1])];
+  }
+  return values;
+}
+
 export function tupleDataSection(
   pointGroupNames: readonly string[],
   tupleRows: readonly TupleRow[],
@@ -322,7 +350,11 @@ export function tupleDataSection(
   derivedLabel?: string,
   /** The type's own extents, when this series carries any (B4) - appended after
    * the DERIVED value, because that is the number they qualify. */
-  error?: SeriesErrorColumns
+  error?: SeriesErrorColumns,
+  /** The record's own names for slots that are an unordered INTERVAL - see
+   * `AxesTypeConfig.intervalSlots`. Given, these REPLACE `pointGroupNames` in
+   * the header and the pair is written smallest first. */
+  intervalSlots?: readonly [string, string]
 ): TableSection {
   // Box Plot's axes is Bar (dataDim 1): each group's single value is dimension 0.
   const hasDerived = derivedLabel != null && tupleRows.some((r) => r.derived != null);
@@ -352,7 +384,7 @@ export function tupleDataSection(
       ...(hasPosition ? [positionLabel] : []),
       'category',
       ...(hasSpan ? ['Position min', 'Position max'] : []),
-      ...pointGroupNames,
+      ...(intervalSlots ?? pointGroupNames),
       ...(hasDerived ? [derivedLabel] : []),
       ...(err ? err.labels : []),
       ...(err ? err.labels.map((l) => `${l} delta`) : []),
@@ -372,9 +404,9 @@ export function tupleDataSection(
       // is worse than dropping them. Sliced HERE rather than upstream because
       // `TupleRow` is also what the on-screen table reads, where the members are
       // wanted.
-      ...row.points
-        .slice(0, pointGroupNames.length)
-        .map((p) => (p?.data ? rounder.at([p.data[0]!], 0) : '')),
+      ...memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined).map(
+        (v) => v ?? ''
+      ),
       ...(hasDerived ? [row.derived ?? ''] : []),
       // Blank, never 0, where a side was never captured - see flatDataSection.
       ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
@@ -1266,7 +1298,11 @@ export function buildTupleSeriesJSON(
   pointGroupNames: readonly string[],
   rounder: ValueRounder,
   derivedLabel: string | undefined,
-  measurements: readonly MeasurementCsvRow[] = []
+  measurements: readonly MeasurementCsvRow[] = [],
+  /** See `tupleDataSection`'s parameter of the same name - the same names and
+   * the same ordering rule, because a reader who switches format must meet the
+   * same words. */
+  intervalSlots?: readonly [string, string]
 ): string {
   const doc: Record<string, unknown> = {
     series: series.map(({ name, rows: tupleRows, error }) => (
@@ -1285,10 +1321,11 @@ export function buildTupleSeriesJSON(
               ? { positionMin: row.positionSpan[0], positionMax: row.positionSpan[1] }
               : {}),
             ...Object.fromEntries(
-              pointGroupNames.map((label, i) => {
-                const p = row.points[i];
-                return [label, p?.data ? rounder.at([p.data[0]!], 0) : null];
-              })
+              (intervalSlots ?? pointGroupNames).map((label, slot) => [
+                label,
+                memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined)[slot] ??
+                  null,
+              ])
             ),
           };
           if (derivedLabel != null && row.derived != null) {

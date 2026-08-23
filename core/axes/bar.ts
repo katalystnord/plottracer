@@ -70,6 +70,7 @@ export class BarAxes {
   private orientation: Orientation = { axes: 'Y', direction: 'increasing', angle: 0 };
   // v2.0: a declared baseline, not a calibration value -- see setBaseline.
   private _hasBaseline = true;
+  private _isStacked = false;
   private _baselineValue = 0;
 
   isCalibrated(): boolean {
@@ -228,6 +229,34 @@ export class BarAxes {
 
   hasDeclaredBaseline(): boolean {
     return this._hasBaseline;
+  }
+
+  /**
+   * Declares that this figure draws its bars as STACKED SEGMENTS (v2.3).
+   *
+   * ⚑⚑ IT REPLACES `Stack group`, a per-series free-text field whose NAME was
+   * never read anywhere: its only consumer tested it for non-empty, so any two
+   * strings behaved identically and its tooltip's "same name, same stack" rule
+   * did not exist. One fact about the whole figure, asked once, beside
+   * "Horizontal bars" and "Bars share a baseline" - which are the same KIND of
+   * question and were already in the right place.
+   *
+   * ⚑ WHY IT IS DECLARED AND NOT MEASURED, when almost everything else here is.
+   * The stack STRUCTURE is arithmetic on edges we already hold - within a
+   * category, a segment whose min equals another's max sits on it - so nothing
+   * about the arrangement needs typing. One case is genuinely ambiguous and no
+   * measurement settles it: a single bar sitting off the baseline is either a
+   * FLOATING bar or a stacked segment whose neighbours were never captured.
+   * Geometry cannot tell those apart, so this declares the user's intent for the
+   * figure exactly as `hasBaseline` and `isRotated` do, and everything
+   * downstream of it is then measured.
+   */
+  setStacked(stacked: boolean): void {
+    this._isStacked = stacked;
+  }
+
+  isStacked(): boolean {
+    return this._isStacked;
   }
 
   getBaselineValue(): number {

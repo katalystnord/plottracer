@@ -8798,17 +8798,10 @@ export function Workspace() {
         infos={datasetInfos}
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}
-        supportsStackGroups={!!config.supportsStackGroups}
         nameDraft={nameDraft}
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}
         onColorAnchorChange={setColorAnchor}
-        stackGroupOf={(index) => session.getDatasetStackGroup(index)}
-        onSetStackGroup={(index, group) => {
-          session.setDatasetStackGroup(index, group);
-          pendingEditRef.current = true;
-          bump();
-        }}
         onAdd={handleAddDataset}
         onSelect={handleSelectDataset}
         onRemove={handleRemoveDataset}
@@ -9102,6 +9095,8 @@ export function Workspace() {
               display={displayRounder}
               slotNames={pointGroupNames}
               derivedColumn={derivedTupleColumn}
+              // ⚑ A bar's two ends are `Min`/`Max` in the record; see the prop.
+              {...(config.intervalSlots ? { intervalSlots: config.intervalSlots } : {})}
               tupleNoun={tupleNoun}
               onRemoveTuple={removeTuple}
               onSelectTuple={selectTuple}

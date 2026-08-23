@@ -226,8 +226,8 @@ describe('a TUPLE type carrying error - the bar chart', () => {
 
   it('⚑⚑ the header and the row are the same length', () => {
     // ⚠️ THE PLAINEST FORM OF THE BUG, AND IT ARRIVED WITH THE FIX. Routing
-    // `getSlotNames()` to the type's OWN slots gave the header 'Bar start' and
-    // 'Bar end' - while `tupleDataSection` still mapped over ALL of a row's
+    // `getSlotNames()` to the type's OWN slots gave the header its two interval
+    // columns - while `tupleDataSection` still mapped over ALL of a row's
     // members, error slots included. Three header cells against seven row cells:
     // every value under the wrong name, which is worse than dropping them.
     const [data] = sectionsFor(barWithError() as never, 'active');
@@ -245,8 +245,8 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       // Position rather than a name-list index in capture order.
       'Position',
       'category',
-      'Bar start',
-      'Bar end',
+      'Min',
+      'Max',
       'Value',
       'SD upper',
       'SD lower',
@@ -264,7 +264,7 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     // them through the projection instead. Assert the numbers.
     const [data] = sectionsFor(barWithError() as never, 'active');
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
-    expect(at('Bar end')).toBeCloseTo(5, 6);
+    expect(at('Max')).toBeCloseTo(5, 6);
     expect(at('SD upper')).toBeCloseTo(2, 6); // the cap at py 260
     expect(at('SD upper delta')).toBeCloseTo(2, 6); // measured from the bar's base
   });
@@ -285,6 +285,6 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     // ⚑ A2: `Position`, not `Category index`. A single bar with no axis marked
     // still has a position, and it is 1 - what it does not have is a measurable
     // PITCH, which is why no extent columns appear beside it.
-    expect(data!.header).toEqual(['Position', 'category', 'Bar start', 'Bar end', 'Value']);
+    expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
   });
 });

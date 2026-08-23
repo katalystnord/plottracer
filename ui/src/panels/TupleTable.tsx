@@ -21,6 +21,19 @@ export interface TupleTableProps {
   slotNames: readonly string[];
   /** Present when the type's datum is the TUPLE rather than its members. */
   derivedColumn: { label: string } | null;
+  /**
+   * The record's names for slots that are an unordered INTERVAL - a bar's two
+   * ends (`AxesTypeConfig.intervalSlots`).
+   *
+   * ⚑⚑ GIVEN, THE ROW SHOWS BOTH: the two ends AND the derived value, because a
+   * bar can have either and the reader must see which. A floating bar has no
+   * single value at all, and with only the derived column on screen its panel
+   * printed a dash while the file carried both measured ends - the reading was
+   * in the record and invisible on the screen that is meant to BE the record.
+   * ⚑ The pair is printed smallest first, the same rule the export follows:
+   * which corner the hand reached first is not a property of the figure.
+   */
+  intervalSlots?: readonly [string, string];
   tupleNoun: string;
   onRemoveTuple: (tupleIndex: number) => void;
   /** The click-to-edit name cell, supplied by the caller. */
@@ -76,6 +89,7 @@ export function TupleTable({
   rows,
   slotNames,
   derivedColumn,
+  intervalSlots,
   tupleNoun,
   onRemoveTuple,
   renderLabel,
@@ -85,6 +99,19 @@ export function TupleTable({
   noPointsHint,
 }: TupleTableProps) {
   const err = error?.labels.length ? error : null;
+  // ⚑ Adaptive, exactly as the export and the error columns are: no `Value`
+  // heading on a figure whose bars all float, because a column of blanks
+  // asserts an emptiness nobody looked for.
+  const showDerived = derivedColumn !== null && (!intervalSlots || rows.some((r) => r.derived !== null));
+  /** One row's two ends, smallest first - see `intervalSlots`. */
+  const endsOf = (row: TupleRow): (readonly number[] | null)[] => {
+    const values = row.points.slice(0, 2).map((p) => p?.data ?? null);
+    const [a, b] = values;
+    // A half-dragged bar has one reading and no interval; sorting it would
+    // assert which end of an unfinished bar it is.
+    if (a && b && (a[0] ?? 0) > (b[0] ?? 0)) return [b, a];
+    return values;
+  };
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -92,9 +119,14 @@ export function TupleTable({
         <tr>
           <th style={{ textAlign: 'left', paddingRight: 16 }}>#</th>
           <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-          {derivedColumn ? (
-            <th style={{ textAlign: 'left', paddingRight: 16 }}>{derivedColumn.label}</th>
-          ) : (
+          {intervalSlots?.map((name) => (
+            <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
+              {name}
+            </th>
+          ))}
+          {showDerived ? (
+            <th style={{ textAlign: 'left', paddingRight: 16 }}>{derivedColumn!.label}</th>
+          ) : intervalSlots ? null : (
             slotNames.map((name) => (
               <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
                 {name}
@@ -130,13 +162,21 @@ export function TupleTable({
                 the difference between them. Every other tuple type keeps its
                 per-slot columns, because a box plot's Min/Q1/Median really
                 are five separate readings. */}
-            {derivedColumn ? (
+            {intervalSlots?.map((name, gi) => {
+              const data = endsOf(row)[gi];
+              return (
+                <td key={name} style={{ paddingRight: 16 }}>
+                  {data ? fmtValue(display.atData(data, 0)) : '-'}
+                </td>
+              );
+            })}
+            {showDerived ? (
               <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
                 {/* ⚑ The figure's own resolution, by the route this table's own
                     export section takes - so the panel and the file agree. */}
                 {row.derived === null ? '-' : fmtValue(display.atData([row.derived], 0))}
               </td>
-            ) : (
+            ) : intervalSlots ? null : (
               // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY, sliced to the HEADER's length.
               // A row carries every tuple slot, and once a series gains error
               // that includes the four cap slots - while the header is

@@ -49,7 +49,7 @@ describe('buildTupleDataCSV', () => {
     const rows: TupleRow[] = [
       {
         tupleIndex: 0,
-        position: null, positionFrame: 'index', positionSpan: null,
+        position: null, positionFrame: 'index', positionSpan: null, interval: null,
         label: 'Sample A', derived: null,
         points: [
           { px: 0, py: 0, data: [1] },
@@ -65,13 +65,13 @@ describe('buildTupleDataCSV', () => {
 
   it('exports a blank cell for a still-open slot', () => {
     const groupNames = ['Min', 'Q1'];
-    const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Bar0', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
+    const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Bar0', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min,Q1\nBar0,1,');
   });
 
   it('quotes a category label containing a comma', () => {
     const groupNames = ['Min'];
-    const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Sample, batch 2', derived: null, points: [{ px: 0, py: 0, data: [1] }] }];
+    const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Sample, batch 2', derived: null, points: [{ px: 0, py: 0, data: [1] }] }];
     expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe('category,Min\n"Sample, batch 2",1');
   });
 
@@ -81,7 +81,7 @@ describe('buildTupleDataCSV', () => {
     it('adds no column when no derivedLabel is given -- unchanged from before this fix', () => {
       const groupNames = ['Sector start', 'Sector end'];
       const rows: TupleRow[] = [
-        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
       ];
       expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER)).toBe(
         'category,Sector start,Sector end\nSlice A,10,20'
@@ -91,7 +91,7 @@ describe('buildTupleDataCSV', () => {
     it('appends the derived value under its declared label when one is given', () => {
       const groupNames = ['Sector start', 'Sector end'];
       const rows: TupleRow[] = [
-        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
       ];
       expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe(
         'category,Sector start,Sector end,Value\nSlice A,10,20,42'
@@ -101,8 +101,8 @@ describe('buildTupleDataCSV', () => {
     it('leaves the derived cell blank for a tuple with no derived value, not a fabricated 0', () => {
       const groupNames = ['Sector start', 'Sector end'];
       const rows: TupleRow[] = [
-        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
-        { tupleIndex: 1, position: null, positionFrame: 'index', positionSpan: null, label: 'Slice B', derived: null, points: [{ px: 0, py: 0, data: [20] }, null] },
+        { tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Slice A', derived: 42, points: [{ px: 0, py: 0, data: [10] }, { px: 0, py: 0, data: [20] }] },
+        { tupleIndex: 1, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Slice B', derived: null, points: [{ px: 0, py: 0, data: [20] }, null] },
       ];
       expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe(
         'category,Sector start,Sector end,Value\nSlice A,10,20,42\nSlice B,20,,'
@@ -111,7 +111,7 @@ describe('buildTupleDataCSV', () => {
 
     it('omits the column entirely when a label is declared but every row is null (matches hasRoles-style presence rule)', () => {
       const groupNames = ['Min', 'Q1'];
-      const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, label: 'Sample A', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
+      const rows: TupleRow[] = [{ tupleIndex: 0, position: null, positionFrame: 'index', positionSpan: null, interval: null, label: 'Sample A', derived: null, points: [{ px: 0, py: 0, data: [1] }, null] }];
       expect(buildTupleDataCSV(groupNames, rows, FULL_PRECISION_ROUNDER, ',', 'Value')).toBe('category,Min,Q1\nSample A,1,');
     });
   });

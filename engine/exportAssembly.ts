@@ -225,7 +225,8 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       session.getSlotNames(),
       rounder,
       session.getConfig().derivedTupleValue?.label,
-      measures
+      measures,
+      session.getConfig().intervalSlots
     );
   }
   return buildSeriesJSON(scoped, exportFields, measures);
@@ -349,7 +350,8 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(info.index),
           rounder,
           derivedLabel,
-          errorColumnsByTuple(session, info.index).error
+          errorColumnsByTuple(session, info.index).error,
+          session.getConfig().intervalSlots
         );
         sections.push({ ...block, title: info.name });
       }
@@ -360,7 +362,8 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(),
           rounder,
           derivedLabel,
-          errorColumnsByTuple(session, activeIndex).error
+          errorColumnsByTuple(session, activeIndex).error,
+          session.getConfig().intervalSlots
         )
       );
     }

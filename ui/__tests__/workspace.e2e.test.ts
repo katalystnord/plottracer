@@ -871,54 +871,59 @@ describe('Workspace: Bar axes', () => {
     expect(hint).toMatch(/Add points/i);
   });
 
-  // v2.0 Phase 5: the only UI a stacked bar needs -- naming which group a
-  // series belongs to. Capture itself is the ordinary drag-box every other
-  // bar uses; what changes is the derived value (an unsigned span, not
-  // baseline-relative) and this one field.
-  it('⚑ the "Stack group" field is DISABLED before calibration, and says why', async () => {
-    // Found by David in the built app: the field was live on a screen whose only
-    // available action is Capture figure - `Series 1 (0)`, `+ Add` greyed out,
-    // every rail tool greyed out. A stack group says how a captured bar's VALUE is
-    // read, so before there are axes it has nothing to act on.
-    // ⚑ DISABLED, NOT HIDDEN - a control that appears once you have done something
-    // else is the invisible precondition the keystone rule refuses. It is greyed
-    // out with the reason on it, exactly as `+ Add` beside it already is.
+  // ⚑⚑ v2.3: STACKING IS ASKED ON THE CALIBRATION CARD, and the Series card's
+  // `Stack group` free-text field is GONE. David, having got that field working:
+  // *"What does stack groups do that series names does not do???"* - and the
+  // measured answer was almost nothing, because its only consumer tested it for
+  // non-empty and nothing anywhere read the string. *"THIS is where we should
+  // ask if the bars are stacked!"*
+  it('⚑⚑ "Stacked bars" is a question about the FIGURE, beside the other two', async () => {
+    // The keystone rule: it must be visible without knowing it is there. It sits
+    // in the same row as `Horizontal bars` and `Bars share a baseline`, which are
+    // the same KIND of question - one fact about how this figure draws its bars,
+    // asked once while you are already answering questions about them.
     await resetWorkspace('bar');
-    const before = page.getByTestId('series-stack-group');
-    expect(await before.isDisabled()).toBe(true);
-    expect(await before.getAttribute('title')).toMatch(/Calibrate the chart first/);
-
-    await calibrateBarStandard();
-    expect(await before.isDisabled()).toBe(false);
-    expect(await before.getAttribute('title')).toMatch(/stacked segment/);
+    const stacked = page.getByTestId('calib-option-isStacked');
+    await expect.poll(() => stacked.isVisible()).toBe(true);
+    expect(await stacked.isChecked()).toBe(false); // the ordinary bar chart
+    const options = await page.getByTestId('axes-options').textContent();
+    expect(options).toMatch(/Stacked bars/);
+    expect(options).toMatch(/Bars share a baseline/);
   });
 
-  it('a "Stack group" field tags a series, and a stacked segment reads as an unsigned span', async () => {
+  it('⚑ the per-series "Stack group" field is gone from every type', async () => {
+    // It is not moved or renamed: the whole control is deleted. Any non-empty
+    // text behaved identically, so a group NAME was never read by anything.
+    await resetWorkspace('bar');
+    expect(await page.getByTestId('series-stack-group').count()).toBe(0);
+    await calibrateBarStandard();
+    expect(await page.getByTestId('series-stack-group').count()).toBe(0);
+  });
+
+  it('a stacked segment reads as its own span, not as a distance from the baseline', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
+    // The card auto-folds on calibrate; the options live inside it, which is the
+    // mechanism every other calibration option already uses.
+    await page.getByTestId('calib-fold').click();
+    await page.getByTestId('calib-option-isStacked').check();
+    await page.waitForTimeout(200);
 
-    const group = page.getByTestId('series-stack-group');
-    expect(await group.inputValue()).toBe(''); // blank by default -- not stacked
-
-    // Baseline (value 0) to value 5, but tagged as stacked -- reads as the
-    // segment's own SPAN, the same wiring path the engine tests cover with a
+    // Baseline (value 0) to value 5, on a figure declared stacked -- reads as the
+    // segment's own SPAN, the same wiring the engine tests cover with a
     // non-coincidental case; this is the on-screen discoverability check.
-    await group.fill('left');
     await dragMarker(300, 400, 300, 250);
     const derived0 = Number((await textOf('tuple-derived-0')).replace(/[^0-9.eE+-]/g, ''));
     expect(derived0).toBeCloseTo(5, 1);
-
-    // The tag is per-series and survives switching away and back.
-    await page.getByTestId('add-series').click();
-    expect(await page.getByTestId('series-stack-group').inputValue()).toBe(''); // fresh series, untagged
-    await page.getByTestId('series-select').selectOption('0');
-    expect(await page.getByTestId('series-stack-group').inputValue()).toBe('left');
   });
 
-  it('the "Stack group" field is Bar-only -- absent for an XY chart', async () => {
+  it('the "Stacked bars" question is Bar-only -- absent for an XY chart', async () => {
+    // ⚑ Asserted with the card EXPANDED, which is how a fresh workspace starts:
+    // after calibrating it folds and every option is absent, so the same
+    // assertion there would pass for the wrong reason.
     await resetWorkspace('xy');
-    await calibrateXYStandard();
-    expect(await page.getByTestId('series-stack-group').count()).toBe(0);
+    expect(await page.getByTestId('calib-option-isLogY').count()).toBe(1);
+    expect(await page.getByTestId('calib-option-isStacked').count()).toBe(0);
   });
 
   // ---- v2.1 CATEGORY TICKS -------------------------------------------------
@@ -2609,14 +2614,14 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // F21: the bar's category coordinate leads the row, renamed by A2 - see the
     // Box Plot case above. One bar, so there is no measurable pitch and no
     // extent columns follow it.
-    expect(lines[0]).toBe('Position,category,Bar start,Bar end,Value');
+    expect(lines[0]).toBe('Position,category,Min,Max,Value');
     const cells = lines[1]!.split(',').slice(1);
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
     // category column is still present and exported (proven by lines[0]'s
     // header above), just empty until the user actually types a name.
     expect(cells[0]).toBe('');
-    expect(Number(cells[1])).toBeCloseTo(0, 1); // Bar start -- the baseline end
-    expect(Number(cells[2])).toBeCloseTo(5, 1); // Bar end -- the far end
+    expect(Number(cells[1])).toBeCloseTo(0, 1); // Min -- the baseline end
+    expect(Number(cells[2])).toBeCloseTo(5, 1); // Max -- the far end
     expect(Number(cells[3])).toBeCloseTo(5, 1); // the derived Value
 
     fs.unlinkSync(csvPath);
@@ -2866,7 +2871,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // `Position` and letting a reader assume the two series line up. The extent
     // columns appear too: two bars give a measurable pitch, which one does not.
     expect(lines[0]).toBe(
-      'Position (in series),category,Position min,Position max,Bar start,Bar end,Value'
+      'Position (in series),category,Position min,Position max,Min,Max,Value'
     );
     expect(lines[1]!.split(',')[1]).toBe('Flax');
     fs.unlinkSync(csvPath);
@@ -6511,7 +6516,11 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
   it('offers every axes type its own options - none left hardcoded', async () => {
     const expected: Record<string, string[]> = {
       xy: ['isLogX', 'isLogY', 'skipRotation'],
-      bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue'], // v2.0: the declared-baseline setting
+      // ⚑ v2.0 added the declared-baseline setting; v2.3 added `isStacked`,
+      // which REPLACED the Series card's per-series `Stack group` field. The
+      // order is the card's layout, and stacking belongs with the other two
+      // questions about how this figure draws its bars.
+      bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue', 'isStacked'],
       // v2.0 Phase 6: pinned so Box Plot's options can never again silently
       // inherit Bar's by reference -- it did, briefly, right after Phase 2
       // added hasBaseline/baselineValue to BAR_AXES_CONFIG.options, and
