@@ -623,6 +623,80 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
   };
 }
 
+/**
+ * One axis's cell boundaries, ascending, deduplicated.
+ *
+ * ⚑ ONE DERIVATION for the table section and the JSON both. Two copies of an
+ * arithmetic this small look harmless and are exactly how F22 happened - three
+ * JSON builders each writing out one object literal by hand, and the fourth
+ * format quietly missing a field for a release. A consumer that compared the
+ * CSV's edges with the JSON's and found them different would have no way to
+ * decide which to trust.
+ *
+ * ⚑ The dedupe is what makes a shared boundary ONE edge: adjacent cells report
+ * the same divider as one's `xMax` and the next one's `xMin`, so n contiguous
+ * cells collapse to n+1 edges. Where they do NOT coincide the count is higher,
+ * and that is the honest answer rather than a defect - see the section below.
+ */
+function edgesOf(cells: readonly HeatmapExportCell[], axis: 'x' | 'y'): number[] {
+  const pick = (c: HeatmapExportCell): [number, number] =>
+    axis === 'x' ? [c.xMin, c.xMax] : [c.yMin, c.yMax];
+  return [...new Set(cells.flatMap(pick))].sort((a, b) => a - b);
+}
+
+/**
+ * The matrix's COORDINATE VECTORS - the cell boundaries, n+1 of them per axis.
+ *
+ * ⚑⚑ WHY THIS IS NOT THE CENTRES IN `heatmapMatrixSection`'s HEADER. The matrix
+ * is the block that matches a generator's own input signature, so it is the one
+ * block where the coordinate FORM has to be the form that generator accepts -
+ * and `pcolormesh(X, Y, C)` with `shading='flat'` REFUSES centres: it requires X
+ * of n+1 and Y of m+1. matplotlib settled bounds-vs-centres by itself long
+ * before we asked (tenet 11(b)), which is the same fact `shading='flat'` states
+ * on the workflow side as *"you must say where the boundaries are"*.
+ *
+ * ⚑ THE SAMPLE'S OWN GENERATOR IS THE SPECIFICATION, and it lives in this repo:
+ *     pcolormesh(x_edges, y_edges, values, cmap="viridis", vmin=60, vmax=780)
+ * Three arrays. The export published the third as `Matrix (value per cell)` and
+ * the colour axis's span as `Colour key`, and left the first two to be
+ * re-derived from the long form by whoever worked out that they had to.
+ *
+ * ⚑ A SECTION, NOT A HEADER ROW, and the reason is arithmetic rather than taste:
+ * a matrix block has n data columns and one corner slot, so n+1 edges do not fit
+ * without either a ragged row or a column of blanks under the last edge. The
+ * boundaries are also a fact about the FIGURE'S GRID rather than about any one
+ * cell - the same argument `heatmapKeySection` makes for the colour key's span,
+ * so it gets the same shape. Mirror, do not merely match.
+ *
+ * ⚑ DERIVED, never the record. Every edge is already in the long form as
+ * `x min`/`x max`; this is a pivot of a measurement we hold, which is why it can
+ * disagree with nothing. And it asserts only what was measured: a grid with a
+ * GAP has more than n+1 boundaries, and it says so rather than closing the hole
+ * to make the vector the length a library would prefer.
+ */
+export function heatmapMatrixAxesSection(cells: readonly HeatmapExportCell[]): TableSection {
+  const xs = edgesOf(cells, 'x');
+  const ys = edgesOf(cells, 'y');
+  const width = Math.max(xs.length, ys.length);
+  // ⚑ PADDED to one length. A non-square grid gives x and y different edge
+  // counts, and two rows of different length render as ragged CSV - which a
+  // spreadsheet reads wrong in silence. Padded with the same empty string an
+  // unread cell uses, so a blank means "no such edge" exactly as it already
+  // means "no such reading".
+  const row = (name: string, e: number[]): (string | number)[] => [
+    name,
+    ...e,
+    ...Array.from({ length: width - e.length }, () => ''),
+  ];
+  return {
+    title: 'Matrix axes (cell boundaries)',
+    header: ['axis', ...Array.from({ length: width }, (_, i) => `edge ${i + 1}`)],
+    // An unread figure is an empty block, not a broken one - the rule the cells
+    // section already follows.
+    rows: cells.length === 0 ? [] : [row('x', xs), row('y', ys)],
+  };
+}
+
 /** The Measure tool's recorded results (distance/angle/area/slope) -- a
  * separate collection from the series data, so exported as their own labelled
  * block appended after the data - the competitor data-panel study's finding.
@@ -1105,7 +1179,15 @@ export function buildHeatmapJSON(
     },
     matrix: {
       x: xs,
+      // ⚑⚑ THE EDGES RIDE ALONGSIDE THE CENTRES, not instead of them - the same
+      // rule the tick labels below already follow, for the same reason. The two
+      // conventions are both real and both in use: `geom_tile` takes centres
+      // plus a size, `pcolormesh` with `shading='flat'` refuses them and demands
+      // n+1. A document that dropped either half would fail a real consumer.
+      // See `heatmapMatrixAxesSection` for the whole argument.
+      xEdges: edgesOf(cells, 'x'),
       y: ys,
+      yEdges: edgesOf(cells, 'y'),
       // ⚑ The names ride ALONGSIDE the coordinate vectors rather than replacing
       // them: `matplotlib`/`plotly` want numbers for positions and strings for
       // tick labels, and both are here, aligned index for index.

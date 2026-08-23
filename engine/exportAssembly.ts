@@ -37,6 +37,7 @@ import {
   histogramSection,
   heatmapCellsSection,
   heatmapKeySection,
+  heatmapMatrixAxesSection,
   heatmapMatrixSection,
   type HeatmapKeyExport,
   type HeatmapExportCell,
@@ -321,6 +322,13 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     // before the pivoted matrix, which is derived from it.
     const cells = input.heatmapCells ?? [];
     sections.push(heatmapCellsSection(cells, rounder));
+    // ⚑⚑ THE BOUNDARIES IMMEDIATELY BEFORE THE VALUES THEY BOUND (A5). A
+    // generator's three arguments are X, Y and C, so they are adjacent here
+    // rather than one of them being left to re-derive from the long form:
+    // `pcolormesh` with `shading='flat'` refuses the centres the matrix header
+    // carries, so the matrix alone was the one block whose coordinate form its
+    // own consumer rejects.
+    sections.push(heatmapMatrixAxesSection(cells));
     sections.push(heatmapMatrixSection(cells));
     // ⚑ Last, because it describes the FIGURE rather than the data - a reader
     // scanning for values meets those first.
