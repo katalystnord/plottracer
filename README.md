@@ -174,7 +174,7 @@ PlotTracer also reads **StarryDigitizer** projects (MATO Tomoya; MIT). Its licen
 
 > StarryDigitizer - Copyright (c) 2021 MATO Tomoya
 > Licensed under the MIT License
-> <https://github.com/asaru28/StarryDigitizer>
+> <https://github.com/t29mato/starry-digitizer>
 
 The icon set is derived from **Ketcher** by EPAM Systems (Apache-2.0).
 

@@ -3,7 +3,13 @@ licensed under the Apache License, Version 2.0 (see LICENSE in this
 directory). Original source:
 https://github.com/epam/ketcher/tree/master/packages/ketcher-react/src/assets/icons/files
 
-Files are used unmodified except where noted in ui-patches/overrides.js.
+Files are used unmodified except for a rendered-size normalization, which is
+noted here because Apache-2.0 section 4(b) asks a modified file to say so.
+Three glyphs - erase.svg, select-lasso.svg and select-rectangle.svg - arrived
+from Ketcher at 48x48 and carry width="24" height="24" instead, so they match
+the 24x24 set around them. The viewBox and the path data are untouched, so the
+artwork is Ketcher's; only the size it renders at is ours. No other file here
+has been edited since it was imported.
 
 Files under custom/ are original artwork by Katalyst Nord AB (not from
 Ketcher), hand-drawn to match the same 24x24 / currentColor / flat

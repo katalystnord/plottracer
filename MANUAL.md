@@ -261,9 +261,9 @@ whichever series they belong to.
 - **Error for** - the series the bars belong to. It needs at least one point
   already; an error bar hangs off a data point.
 - **Name** - what this uncertainty is called on the figure: `SD`, `95% CI`,
-  `SEM`. The card shows what it becomes - two new series, **SD upper** and
-  **SD lower**. That name is the only meaning PlotTracer records; it never
-  decides what your bars represent.
+  `SEM`. The card shows what it becomes - two **columns** on the series you are
+  already capturing, **SD upper** and **SD lower**. That name is the only
+  meaning PlotTracer records; it never decides what your bars represent.
 
 **Capture.** Drag from a data point out to its cap.
 
@@ -279,8 +279,9 @@ the datum as a *starting position*. On a symmetric figure that is already right.
 On an asymmetric one it is reporting a symmetry the figure never drew, and you
 have to move it.
 
-**To move a cap where the figure actually draws it:** pick its series under
-**Recorded** in the card, then drag that cap. A cap slides only **along its own
+**To move a cap where the figure actually draws it:** drag it where it stands.
+A cap belongs to its own data point, so it is part of the series you are already
+working on - there is nothing to select first. A cap slides only **along its own
 bar** - the sideways part of the drag is discarded - so adjusting one can never
 tilt the whisker off its datum, however you drag.
 
@@ -297,10 +298,12 @@ separate pairs; deleting one leaves the other standing.
 its opposite number - and leaves the data point. Deleting the data point takes
 its error bars with it.
 
-**Export.** The caps leave as their own series, under the names you gave them,
-carrying **both** the **absolute positions** and the **± delta** from each cap to
-its data point. The positions are what was measured off the figure, so they are
-the record; the delta is what a plotting library asks for - matplotlib's `yerr`
+**Export.** The caps leave as **columns beside the value they belong to**, under
+the names you gave them, carrying **both** the **absolute positions** and the
+**± delta** from each cap to its data point - so a row reads `Value, SD upper,
+SD lower, SD upper delta, SD lower delta`. The positions are what was measured
+off the figure, so they are the record; the delta is what a plotting library
+asks for - matplotlib's `yerr`
 and Excel want deltas, ggplot's `ymin`/`ymax` want the absolutes - so neither
 reader has to do arithmetic on the record. A row with no cap leaves the delta
 blank rather than reporting an error of zero.
