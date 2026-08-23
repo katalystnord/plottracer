@@ -248,7 +248,14 @@ export function SeriesPanel(props: SeriesPanelProps) {
           sequence of bar segments, and no other graph type has that shape. */}
       {activeInfo && supportsStackGroups && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-          <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
+          {/* ⚑ MIRRORS THE NAME FIELD ABOVE IT (2026-08-23). Two text inputs sit
+              one under the other and both name something about the series - and
+              this one was 90px wide at the small font size while the other was
+              full width at the regular one, so they read as different KINDS of
+              control. David: *"I think we should make the stack group box and
+              font bigger."* Same size, same weight, same right edge: the user can
+              see they are the same kind of thing without being told. */}
+          <label htmlFor="series-stack-group" style={{ fontSize: theme.font.size.regular, color: theme.color.text.legend }}>
             Stack group:
           </label>
           <input
@@ -259,7 +266,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
             value={stackGroupOf(activeIndex) ?? ''}
             onChange={(e) => onSetStackGroup(activeIndex, e.target.value.trim() || null)}
             onBlur={onCommitPendingEdit}
-            style={{ width: 90, fontSize: theme.font.size.small }}
+            style={{ flex: '1 1 auto', minWidth: 80 }}
           />
         </div>
       )}
