@@ -72,14 +72,15 @@ export interface SpreadsheetSeries {
    * editor and the display need different numbers and a single field would have
    * to be one or the other.
    *
-   * ⚠️⚑⚑ THE ERROR COLUMNS ARE DELIBERATELY NOT ROUNDED, and that is the same
-   * rule rather than an exception to it. MEASURED 2026-08-23: `getErrorRows` and
-   * `getErrorCapDeltas` return raw values and the EXPORT writes them raw, so
-   * rounding them here would CREATE a panel-vs-file disagreement while removing
-   * one. The goal is agreement, not fewer digits.
-   * ▶ That the file reports a datum at half-pixel resolution and a cap position
-   * at full precision is arguably its own defect - but it is a change to the
-   * FILE, so it belongs on the v2.4 list, not inside a display fix.
+   * ⚑⚑ THE ERROR COLUMNS FOLLOW THE SAME RULE, and since v2.3 they get it for
+   * free. This comment used to say they were deliberately left RAW, because
+   * `getErrorRows` and `getErrorCapDeltas` returned raw values and the export
+   * wrote them raw - so rounding here would have created a panel-vs-file
+   * disagreement while removing one. It also said that a file reporting a datum
+   * at half-pixel resolution and its cap at full precision was arguably its own
+   * defect, and deferred it. It was the defect, and it is fixed at the source:
+   * those accessors now round at the DATUM's own pixel, so a cap and the reading
+   * it qualifies are reported to one precision in the panel and in every file.
    */
   display: (number[] | null)[];
   roles: (PointRole | null)[];

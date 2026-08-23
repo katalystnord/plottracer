@@ -1027,6 +1027,43 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * ROUND AN ERROR READING TO THE SAME PRECISION AS THE DATUM IT QUALIFIES.
+   *
+   * ⚑⚑ THE DEFECT THIS CLOSES (v2.3): the export rounded a datum to about half a
+   * pixel in data units and wrote its caps RAW, so one reading reached one file
+   * at two precisions - `-7.95455` beside a cap carried to fifteen significant
+   * figures. `spreadsheetModel` had already noticed and deliberately left the
+   * panel unrounded to MATCH the file, with a comment saying the file was
+   * arguably the defect. It was.
+   *
+   * ⚑ AT THE DATUM'S OWN PIXEL, which is the whole point: a cap and the value it
+   * qualifies are one measurement of one thing, so they must be reported to one
+   * precision. Resolution is a local property of the calibration, and a cap sits
+   * a few pixels from its datum, so this is also the resolution the cap itself
+   * would give.
+   * ⚑ Read from the PIXEL, never from the data value. `resolutionAtData` would
+   * have to map back through `dataToPixel`, which is a stub on five of the seven
+   * axes classes - and error bars are offered on every type.
+   *
+   * ⚑ The DIMENSION comes from what the axes actually returned rather than from
+   * the type: a 1-D axes (Bar and its family) has one, so a role that names a
+   * SIDE still reads on dimension 0 - the same allowance `getResolvedErrorBars`
+   * makes on the way in.
+   */
+  private roundErrorAt(
+    pixel: { x: number; y: number } | null,
+    role: ErrorRole,
+    mode: PrecisionMode
+  ): (value: number | null) => number | null {
+    if (mode === 'full' || !this.axes || !pixel) return (v) => v;
+    const resolutions = halfPixelResolution(this.axes, pixel.x, pixel.y);
+    const dim = resolutions.length <= 1 ? 0 : role === 'upper' || role === 'lower' ? 1 : 0;
+    const step = resolutions[dim];
+    if (step === undefined) return (v) => v;
+    return (v) => (v === null ? null : roundToResolution(v, step));
+  }
+
+  /**
    * Per datum row, that series' error readings - ABSOLUTE positions on each
    * role's axis, aligned with `getErrorColumns`, `null` where a side was never
    * captured.
@@ -1040,11 +1077,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Row-aligned with `getDatumPixelIndices` by construction - both walk the
    * tuples in order and skip a tuple with no datum.
    */
-  getErrorRows(index: number): (number | null)[][] {
+  getErrorRows(index: number, mode: PrecisionMode = 'auto'): (number | null)[][] {
     const columns = this.getErrorColumns(index);
     if (columns.length === 0) return [];
-    return this.getResolvedErrorBars(index).map((bar) =>
-      columns.map((c) => bar[ROLE_FIELD[c.role]] ?? null)
+    // ⚑ Row-aligned with `getDatumPixelIndices` by construction, which is what
+    // lets each row be rounded at ITS OWN datum's pixel - see `roundErrorAt`.
+    const pixels = this.datasetEntries[index]?.dataset.getAllPixels() ?? [];
+    const datumPixels = this.getDatumPixelIndices(index).map((i) => pixels[i] ?? null);
+    return this.getResolvedErrorBars(index).map((bar, row) =>
+      columns.map((c) =>
+        this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(bar[ROLE_FIELD[c.role]] ?? null)
+      )
     );
   }
 
@@ -1065,30 +1108,48 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ A hole is `null`, not an empty array: "this tuple recorded nothing" and
    * "this tuple recorded a blank in every role" are different facts.
    */
-  getErrorRowsByTuple(index: number): ((number | null)[] | null)[] {
-    return this.errorRowsByTuple(index, (bar, role) => bar[ROLE_FIELD[role]] ?? null);
+  getErrorRowsByTuple(index: number, mode: PrecisionMode = 'auto'): ((number | null)[] | null)[] {
+    return this.errorRowsByTuple(index, mode, (bar, role) => bar[ROLE_FIELD[role]] ?? null);
   }
 
   /** `getErrorDeltaRows`, indexed by tuple - see `getErrorRowsByTuple`. */
-  getErrorDeltaRowsByTuple(index: number): ((number | null)[] | null)[] {
-    return this.errorRowsByTuple(index, (bar, role) => deltasFromBar(bar)[ROLE_FIELD[role]] ?? null);
+  getErrorDeltaRowsByTuple(index: number, mode: PrecisionMode = 'auto'): ((number | null)[] | null)[] {
+    return this.errorRowsByTuple(index, mode, (bar, role) => deltasFromBar(bar)[ROLE_FIELD[role]] ?? null);
   }
 
   /** ⚑ ONE walk for both, so the absolutes and their deltas cannot land on
    *  different rows - which is the very failure this method exists to stop. */
   private errorRowsByTuple(
     index: number,
+    mode: PrecisionMode,
     read: (bar: ErrorBarPoint, role: ErrorRole) => number | null
   ): ((number | null)[] | null)[] {
+    const entry = this.datasetEntries[index];
     const columns = this.getErrorColumns(index);
-    const tupleCount = this.datasetEntries[index]?.dataset.getAllTuples().length ?? 0;
-    if (columns.length === 0 || tupleCount === 0) return [];
-    const rows: ((number | null)[] | null)[] = Array.from({ length: tupleCount }, () => null);
+    const tuples = entry?.dataset.getAllTuples() ?? [];
+    if (columns.length === 0 || tuples.length === 0) return [];
+    const pixels = entry!.dataset.getAllPixels();
+    /** The tuple's own reading, for the resolution its caps are reported at.
+     * ⚑ The FIRST slot that was actually captured: a bar is two corners and a
+     * half-dragged one has only the other. Resolution is local, so any of the
+     * tuple's own pixels answers the same. */
+    const datumPixelOf = (tupleIndex: number) => {
+      const own = this.ownSlots(entry!.dataset).length;
+      for (let slot = 0; slot < own; slot += 1) {
+        const pixelIndex = tuples[tupleIndex]?.[slot];
+        if (pixelIndex != null) return pixels[pixelIndex] ?? null;
+      }
+      return null;
+    };
+    const rows: ((number | null)[] | null)[] = Array.from({ length: tuples.length }, () => null);
     for (const bar of this.getResolvedErrorBars(index)) {
       // ⚑ A bar with no tuple came from the import-boundary path, which resolves
       // caps geometrically and has no tuple to name. It cannot be filed.
       if (bar.tupleIndex === undefined) continue;
-      rows[bar.tupleIndex] = columns.map((c) => read(bar, c.role));
+      const pixel = datumPixelOf(bar.tupleIndex);
+      rows[bar.tupleIndex] = columns.map((c) =>
+        this.roundErrorAt(pixel, c.role, mode)(read(bar, c.role))
+      );
     }
     return rows;
   }
@@ -1097,12 +1158,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * matplotlib's `yerr` and Excel's error bars take directly. A subtraction,
    * not an inference: both ends were measured, so their difference assumes
    * nothing. Absent stays absent. */
-  getErrorDeltaRows(index: number): (number | null)[][] {
+  getErrorDeltaRows(index: number, mode: PrecisionMode = 'auto'): (number | null)[][] {
     const columns = this.getErrorColumns(index);
     if (columns.length === 0) return [];
-    return this.getResolvedErrorBars(index).map((bar) => {
+    const pixels = this.datasetEntries[index]?.dataset.getAllPixels() ?? [];
+    const datumPixels = this.getDatumPixelIndices(index).map((i) => pixels[i] ?? null);
+    return this.getResolvedErrorBars(index).map((bar, row) => {
       const d = deltasFromBar(bar);
-      return columns.map((c) => d[ROLE_FIELD[c.role]] ?? null);
+      return columns.map((c) =>
+        this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(d[ROLE_FIELD[c.role]] ?? null)
+      );
     });
   }
 
@@ -1274,7 +1339,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * not an error series at all - never 0, which would read as "measured, and
    * equal".
    */
-  getErrorCapDeltas(index: number): (number | null)[] {
+  getErrorCapDeltas(index: number, mode: PrecisionMode = 'auto'): (number | null)[] {
     const entry = this.datasetEntries[index];
     if (!entry || !this.axes) return [];
     const relation = getErrorRelation(entry.dataset);
@@ -1289,7 +1354,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const datum = di > -1 ? parentData[di] : undefined;
       if (!datum) return null;
       const delta = along === 'y' ? cap.y - datum.y : cap.x - datum.x;
-      return Number.isFinite(delta) ? delta : null;
+      if (!Number.isFinite(delta)) return null;
+      // ⚑ At the CAP's own pixel here, because on this path the cap IS the row -
+      // an imported cap series has a pixel of its own and no tuple to hang off.
+      return this.roundErrorAt(p, relation.role, mode)(delta);
     });
   }
 

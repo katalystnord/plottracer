@@ -160,8 +160,8 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       // An error series exports as an ordinary series carrying its relation
       // (checkpoint 77) -- which is what it is. Omitted for everything else.
       ...(rel ? { relation: rel } : {}),
-      ...(rel ? { deltas: session.getErrorCapDeltas(info.index) } : {}),
-      ...errorColumnsFor(session, info.index),
+      ...(rel ? { deltas: session.getErrorCapDeltas(info.index, input.precision) } : {}),
+      ...errorColumnsFor(session, info.index, input.precision),
       ...(fit ? { fit } : {}),
       ...(geom ? { geometry: geom } : {}),
     };
@@ -196,7 +196,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       session.getHistogramBins(),
       rounder,
       measures,
-      errorColumnsByTuple(session, activeIndex).error
+      errorColumnsByTuple(session, activeIndex, input.precision).error
     );
   }
   if (exportShape === 'tuples') {
@@ -217,9 +217,9 @@ export function buildExportJson(input: ExportAssemblyInput): string {
         ? infos.map((info) => ({
             name: info.name,
             rows: session.getTupleRows(info.index),
-            ...errorColumnsByTuple(session, info.index),
+            ...errorColumnsByTuple(session, info.index, input.precision),
           }))
-        : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsByTuple(session, activeIndex) }];
+        : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsByTuple(session, activeIndex, input.precision) }];
     return buildTupleSeriesJSON(
       tupleSeries,
       session.getSlotNames(),
@@ -256,12 +256,20 @@ export function buildExportJson(input: ExportAssemblyInput): string {
  */
 export function errorColumnsFor(
   session: ExportAssemblyInput['session'],
-  index: number
+  index: number,
+  /** ⚑ The export's own precision, threaded so a cap is reported to the same
+   * resolution as the reading it qualifies - see `roundErrorAt`. Defaulted so a
+   * caller with no precision of its own (the panel) gets the figure's. */
+  precision: PrecisionMode = 'auto'
 ): { error?: SeriesErrorColumns } {
   const labels = session.getErrorColumns(index).map((c) => c.label);
   if (labels.length === 0) return {};
   return {
-    error: { labels, values: session.getErrorRows(index), deltas: session.getErrorDeltaRows(index) },
+    error: {
+      labels,
+      values: session.getErrorRows(index, precision),
+      deltas: session.getErrorDeltaRows(index, precision),
+    },
   };
 }
 
@@ -277,7 +285,9 @@ export function errorColumnsFor(
  */
 export function errorColumnsByTuple(
   session: ExportAssemblyInput['session'],
-  index: number
+  index: number,
+  /** See `errorColumnsFor`. */
+  precision: PrecisionMode = 'auto'
 ): { error?: SeriesErrorColumns } {
   const labels = session.getErrorColumns(index).map((c) => c.label);
   if (labels.length === 0) return {};
@@ -289,8 +299,8 @@ export function errorColumnsByTuple(
       // `SeriesErrorColumns` is what the renderers take and they read "no value"
       // per cell. The distinction the session keeps (a tuple that recorded
       // NOTHING) has no column to live in once the table is drawn.
-      values: session.getErrorRowsByTuple(index).map((r) => r ?? blank),
-      deltas: session.getErrorDeltaRowsByTuple(index).map((r) => r ?? blank),
+      values: session.getErrorRowsByTuple(index, precision).map((r) => r ?? blank),
+      deltas: session.getErrorDeltaRowsByTuple(index, precision).map((r) => r ?? blank),
     },
   };
 }
@@ -335,7 +345,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     // scanning for values meets those first.
     if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
   } else if (exportShape === 'bins') {
-    sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsByTuple(session, activeIndex).error));
+    sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsByTuple(session, activeIndex, input.precision).error));
   } else if (exportShape === 'tuples') {
     // One titled block per series when the scope says all -- see buildExportJson's
     // note. A single series keeps its untitled block, so existing files are
@@ -350,7 +360,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(info.index),
           rounder,
           derivedLabel,
-          errorColumnsByTuple(session, info.index).error,
+          errorColumnsByTuple(session, info.index, input.precision).error,
           session.getConfig().intervalSlots
         );
         sections.push({ ...block, title: info.name });
@@ -362,7 +372,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           session.getTupleRows(),
           rounder,
           derivedLabel,
-          errorColumnsByTuple(session, activeIndex).error,
+          errorColumnsByTuple(session, activeIndex, input.precision).error,
           session.getConfig().intervalSlots
         )
       );
@@ -373,8 +383,8 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
       return {
         name: info.name,
         rows: seriesRows(info.index),
-        ...(rel ? { relation: rel, deltas: session.getErrorCapDeltas(info.index) } : {}),
-        ...errorColumnsFor(session, info.index),
+        ...(rel ? { relation: rel, deltas: session.getErrorCapDeltas(info.index, input.precision) } : {}),
+        ...errorColumnsFor(session, info.index, input.precision),
       };
     });
     sections.push(allSeriesSection(seriesList, exportFields));
@@ -390,7 +400,7 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
       flatDataSection(
         seriesRows(activeIndex),
         exportFields,
-        errorColumnsFor(session, activeIndex).error
+        errorColumnsFor(session, activeIndex, input.precision).error
       )
     );
     // ⚑ Blank, not 'Series'. The v2.0 audit removed this fabricated fallback
