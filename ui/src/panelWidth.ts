@@ -38,20 +38,78 @@ export const MAX_PANEL_WIDTH = 760;
  */
 export const DEFAULT_PANEL_WIDTH = 420;
 
+/**
+ * ⚑⚑ THE HALF THAT WAS LEFT OUT: A DEFAULT PER GRAPH TYPE. The compromise above
+ * is a compromise because one number was being asked to serve a two-column
+ * spreadsheet and a matrix. It does not have to. David, 2026-08-21: *"We have
+ * already talked about making the default size a bit bigger for some types of
+ * graphs. Lets do that."*
+ *
+ * ⚑ MEASURED, not picked. **530** is this file's own figure for a 5-column
+ * heatmap matrix read without scrolling. **480** is for the two panels that grow
+ * a COLUMN PER SERIES - bar and spider - because multi-series is the ordinary
+ * case rather than the exception there: counted across the 887-chart ICPR/PMC
+ * corpus, 65% of vertical bar charts and 47% of horizontal ones carry more than
+ * one series. Everything else keeps 420, which is what it was chosen for.
+ *
+ * ⚑ A DEFAULT ONLY, and it never argues with the user. `readPanelWidth` prefers
+ * a stored width whenever there is one, so this decides the FIRST view of a type
+ * and nothing after it. Widening the rail under someone who has already dragged
+ * it would be the app overruling a gesture, which is worse than a narrow panel.
+ */
+const PANEL_WIDTH_BY_PANEL: Record<string, number> = {
+  heatmap: 530,
+  bar: 480,
+  spider: 480,
+};
+
+/** The width a type opens at when the user has never chosen one. */
+export function defaultPanelWidthFor(outputPanel: string | undefined): number {
+  const wanted = outputPanel === undefined ? undefined : PANEL_WIDTH_BY_PANEL[outputPanel];
+  // Clamped like every other entrance: a table added here with a silly number
+  // must not reach the rail by a route the drag handle does not police.
+  return clampPanelWidth(wanted ?? DEFAULT_PANEL_WIDTH);
+}
+
+/**
+ * The width the user chose, or NULL if they never have.
+ *
+ * ⚑⚑ NULL IS THE POINT, and it is why this exists beside `readPanelWidth`. "The
+ * user picked 420" and "nobody has picked anything" are different facts, and a
+ * function that answers both with the number 420 cannot tell a caller which one
+ * it is holding. The rail needs to know, because an unchosen width may follow
+ * the graph type and a chosen one may not.
+ *
+ * ⚑ A corrupt or unreadable entry reads as UNCHOSEN rather than throwing, the
+ * same tolerance the rest of this file applies: the worst case is that the user
+ * gets a sensible default instead of their own width.
+ */
+export function readStoredPanelWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw === null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? clampPanelWidth(n) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clampPanelWidth(width: number): number {
   if (!Number.isFinite(width)) return DEFAULT_PANEL_WIDTH;
   return Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, Math.round(width)));
 }
 
 /** The remembered width, or the default. Tolerant of missing/corrupt data. */
-export function readPanelWidth(): number {
+export function readPanelWidth(outputPanel?: string): number {
+  const fallback = defaultPanelWidthFor(outputPanel);
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw === null) return DEFAULT_PANEL_WIDTH;
+    if (raw === null) return fallback;
     const n = Number(raw);
-    return Number.isFinite(n) ? clampPanelWidth(n) : DEFAULT_PANEL_WIDTH;
+    return Number.isFinite(n) ? clampPanelWidth(n) : fallback;
   } catch {
-    return DEFAULT_PANEL_WIDTH;
+    return fallback;
   }
 }
 

@@ -245,7 +245,7 @@ import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
 import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
-import { clampPanelWidth, readPanelWidth, writePanelWidth } from './panelWidth.js';
+import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -943,7 +943,17 @@ export function Workspace() {
    * forgetting intact one size along. `readPanelWidth` clamps, so a hand-edited
    * entry cannot smuggle a width past the drag handle's own limits.
    */
-  const [sidebarWidth, setSidebarWidth] = useState(readPanelWidth);
+  const [chosenWidth, setChosenWidth] = useState<number | null>(readStoredPanelWidth);
+  // ⚑⚑ DERIVED, NOT SET IN AN EFFECT. An unchosen width follows the GRAPH TYPE,
+  // and the type is not known at mount - the Graph Type card is the first thing
+  // a session does - so this cannot be decided once and stored. Computing it
+  // each render makes "no choice yet" a state the rail simply reads, instead of
+  // a state something has to remember to update: no effect, no cascading
+  // render, and no window where the rail disagrees with the type on screen.
+  // ⚑ A CHOSEN width always wins. `writePanelWidth` records a drag on release,
+  // so a stored value is the user's own answer, and moving the rail under it
+  // would be the app overruling a gesture it can see.
+  const sidebarWidth = chosenWidth ?? defaultPanelWidthFor(sessionRef.current.getConfig().outputPanel);
   // CSV export scope (checkpoint 60): the active series only (flat pixel-free
   // rows / Box Plot tuples) or every series side by side (spreadsheet columns).
   const [exportScope, setExportScope] = useState<'active' | 'all'>('active');
@@ -971,7 +981,7 @@ export function Workspace() {
       let latest = startWidth;
       const onMove = (ev: MouseEvent) => {
         latest = clampPanelWidth(startWidth + (startX - ev.clientX));
-        setSidebarWidth(latest);
+        setChosenWidth(latest);
       };
       const onUp = () => {
         // ⚑ Written on RELEASE, not per pixel: a drag is one decision, and

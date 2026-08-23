@@ -4,7 +4,9 @@ import {
   MAX_PANEL_WIDTH,
   MIN_PANEL_WIDTH,
   clampPanelWidth,
+  defaultPanelWidthFor,
   readPanelWidth,
+  readStoredPanelWidth,
   writePanelWidth,
 } from '../panelWidth.js';
 
@@ -78,5 +80,61 @@ describe('the data panel remembers its width', () => {
     expect(DEFAULT_PANEL_WIDTH).toBeGreaterThanOrEqual(MIN_PANEL_WIDTH);
     expect(DEFAULT_PANEL_WIDTH).toBeLessThanOrEqual(MAX_PANEL_WIDTH);
     expect(clampPanelWidth(DEFAULT_PANEL_WIDTH)).toBe(DEFAULT_PANEL_WIDTH);
+  });
+});
+
+/**
+ * ⚑⚑ A DEFAULT PER GRAPH TYPE (B5). One number was serving a two-column
+ * spreadsheet and a matrix, and this file's own comment admitted it was a
+ * compromise: *"a 5-column heatmap matrix needs about 530 px."*
+ *
+ * David, 2026-08-21: *"We have already talked about making the default size a
+ * bit bigger for some types of graphs. Lets do that."*
+ */
+describe('a type opens at a width that suits its table', () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it('⚑ a heatmap opens wide enough for its matrix', () => {
+    // 530 is this file's own measured figure for a 5-column matrix read
+    // without scrolling - not a number picked to look generous.
+    expect(defaultPanelWidthFor('heatmap')).toBe(530);
+  });
+
+  it('⚑ the panels that grow a COLUMN PER SERIES open wider than the rest', () => {
+    // Bar and Spider render a matrix, so their width tracks the series count,
+    // and multi-series is the ordinary case: 65% of the ICPR/PMC corpus's 280
+    // vertical bar charts carry more than one series.
+    expect(defaultPanelWidthFor('bar')).toBe(480);
+    expect(defaultPanelWidthFor('spider')).toBe(480);
+  });
+
+  it('⚑ everything else keeps the width that was chosen for it', () => {
+    expect(defaultPanelWidthFor(undefined)).toBe(DEFAULT_PANEL_WIDTH);
+    expect(defaultPanelWidthFor('bins')).toBe(DEFAULT_PANEL_WIDTH);
+  });
+
+  it('⚑⚑ a width the user DRAGGED beats the type default, on every type', () => {
+    // The whole reason the rail remembers. Widening it under someone who has
+    // already answered would be the app overruling a gesture it can see.
+    fakeStorage();
+    writePanelWidth(300);
+    expect(readPanelWidth('heatmap')).toBe(300);
+    expect(readPanelWidth('bar')).toBe(300);
+  });
+
+  it('⚑⚑ NULL and 420 are different facts, which is why the reader can say null', () => {
+    // A function that answers "the user picked 420" and "nobody has picked
+    // anything" with the same number cannot tell the rail which it is holding -
+    // and only one of the two may follow the graph type.
+    fakeStorage();
+    expect(readStoredPanelWidth()).toBeNull();
+    writePanelWidth(DEFAULT_PANEL_WIDTH);
+    expect(readStoredPanelWidth()).toBe(DEFAULT_PANEL_WIDTH);
+  });
+
+  it('⚑ a corrupt entry reads as unchosen, so the type default still applies', () => {
+    fakeStorage({ [KEY]: 'not-a-width' });
+    expect(readStoredPanelWidth()).toBeNull();
+    expect(readPanelWidth('heatmap')).toBe(530);
   });
 });
