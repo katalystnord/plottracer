@@ -214,3 +214,86 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     expect(table.columns[0]!.values[0]).toBeCloseTo(3, 9);
   });
 });
+
+/**
+ * ⚑⚑⚑ A CAPTURED BAR MUST LAND IN A MARKED BAND, NOT MINT A CATEGORY OF ITS OWN
+ * (v2.3, found 2026-08-23 by David driving the built app).
+ *
+ * He marked the category axis on a four-group bar chart, declared 4 categories,
+ * then captured ONE bar whose pixels sit squarely inside the first band. The card
+ * went to **5 categories**: `Day 3 / Day 7 / Day 14 / Day 21` with no values, plus
+ * a fifth unnamed row holding the reading. David: *"And this now ended up as new
+ * categories."*
+ *
+ * ⚑⚑ THE MODEL HAS TWO ENTRANCES AND THEY DISAGREED - this project's own
+ * recurring shape. The READ path (`categoryIndexOfTuple`) checks
+ * `categoriesFollowBands()` and resolves a tuple by the band its pixel falls in.
+ * The CAPTURE path (`autoLabelTuple` -> `reserveEmptyCategorySlot`) gated on
+ * `usesCategoryAxis` instead, so it minted a fresh `addCategory('')` for every new
+ * bar whether or not bands had been declared. One entrance answered "band 0" while
+ * the other was busy creating category 5.
+ *
+ * ⚠️ AND A COMMENT 250 LINES AWAY ASSERTED THE GUARD ALREADY EXISTED - the
+ * point-capture path says *"the same gate the tuple path already has
+ * (`!this.categoriesFollowBands() && ...`)"*. The tuple path had no such gate.
+ * CLAUDE.md gate 3: a comment asserting what the design requires, with nothing
+ * enforcing it, is false evidence of compliance - and it is why nobody looked.
+ *
+ * ⚑ Bands span the axis between the two marked edges, so with 4 categories over
+ * x = 100..900 each band is 200px wide and a bar at x approx 150 is band 0.
+ */
+describe('a marked axis OWNS the categories - capture must not mint more', () => {
+  /** Calibrated, axis edges marked at x=100..900 on the baseline, 4 categories. */
+  function markedFourBands(): CalibrationSession<BarAxes> {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
+    expect(session.setCategoryCount(4)).toBe(true);
+    return session;
+  }
+
+  it('⚑⚑ one bar in the first band does NOT become a fifth category', () => {
+    const session = markedFourBands();
+    expect(session.getBarCategoryTable().categoryNames).toHaveLength(4);
+    // A bar wholly inside band 0 (x = 100..300), captured corner to corner.
+    session.addDataPoint(140, 500);
+    session.addDataPoint(220, 300);
+    expect(session.getBarCategoryTable().categoryNames).toHaveLength(4);
+  });
+
+  it('⚑ and its reading appears in the band it falls in, not in a row of its own', () => {
+    const session = markedFourBands();
+    session.addDataPoint(140, 500);
+    session.addDataPoint(220, 300);
+    const table = session.getBarCategoryTable();
+    const values = table.columns[0]!.values;
+    expect(values).toHaveLength(4);
+    // Band 0 holds the reading; every other band is still empty.
+    expect(values[0]).not.toBeNull();
+    expect(values.slice(1)).toEqual([null, null, null]);
+  });
+
+  it('⚑ four bars, one per band, stay four categories', () => {
+    const session = markedFourBands();
+    for (const x of [140, 340, 540, 740]) {
+      session.addDataPoint(x, 500);
+      session.addDataPoint(x + 80, 300);
+    }
+    const table = session.getBarCategoryTable();
+    expect(table.categoryNames).toHaveLength(4);
+    expect(table.columns[0]!.values.every((v) => v !== null)).toBe(true);
+  });
+
+  it('⚑ WITHOUT a marked axis the old behaviour is unchanged - a bar still gets its own slot', () => {
+    // The guard must stand down only where bands answer. An unmarked bar chart
+    // still needs a distinct addressable slot per bar so a later rename has
+    // somewhere to land - which is what `reserveEmptyCategorySlot` is FOR.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.addDataPoint(140, 500);
+    session.addDataPoint(220, 300);
+    session.addDataPoint(340, 500);
+    session.addDataPoint(420, 300);
+    expect(session.getBarCategoryTable().categoryNames).toHaveLength(2);
+  });
+});
