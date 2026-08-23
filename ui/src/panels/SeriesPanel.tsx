@@ -9,6 +9,19 @@ export interface SeriesPanelProps {
   infos: readonly DatasetInfo[];
   activeInfo: DatasetInfo | undefined;
   activeIndex: number;
+  /**
+   * Whether a series' entry names how many POINTS it holds.
+   *
+   * ⚑⚑ FALSE ON A HEATMAP (v2.3), where the record is CELLS and not points. The
+   * rail read `Series 1 (0)` directly above `20 cells read, all clean.` - two
+   * lines counting different things, one of them zero, with nothing on screen
+   * saying they were different questions. Nothing was wrong with the data; a
+   * first-time reader had to work out that the 0 was not about the 20.
+   * ⚑ The count is DROPPED rather than replaced with the cell count: a heatmap's
+   * cells do not belong to a series, and filing them under one would be the
+   * clearer-looking lie. The line beneath already counts what there is.
+   */
+  showPointCount: boolean;
   /** The in-flight rename, or null when the field shows the stored name. */
   nameDraft: string | null;
   /** Why the draft name is refused - shown under the field. */
@@ -42,6 +55,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
     infos,
     activeInfo,
     activeIndex,
+    showPointCount,
     nameDraft,
     nameNotice,
     colorAnchor,
@@ -84,7 +98,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
         >
           {infos.map((info) => (
             <option key={info.index} value={info.index} data-testid={`series-option-${info.index}`}>
-              {info.name} ({info.pointCount})
+              {showPointCount ? `${info.name} (${info.pointCount})` : info.name}
             </option>
           ))}
         </select>

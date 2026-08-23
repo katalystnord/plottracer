@@ -54,11 +54,16 @@ const cornerStep = (key: string, label: string, fields: Array<'dx' | 'dy' | 'dz'
 
 describe('what a calibration marker says its point is', () => {
   const at = { px: 10, py: 20 };
+  /** ⚑ MID-WALK, because that is when a calibration label is drawn at all: since
+   * v2.3 a committed calibration stops labelling the figure it calibrated (the
+   * anchors sit over a heatmap's own cells). These cases are about what a label
+   * SAYS, so they are taken in the state that says it. */
+  const walking = { isCalibrated: false, mode: 'calibrate' } as const;
 
   it('⚑⚑ a declared COUNT is left out - it is not where the point is', () => {
     const steps = [cornerStep('x2', 'Cn × R1', ['dx', 'dz'])];
     const m = buildCanvasMarkers(
-      base({ steps, placedPoints: { x2: { ...at, values: ['24', '5'] } } })
+      base({ ...walking, steps, placedPoints: { x2: { ...at, values: ['24', '5'] } } })
     );
     const marker = m.find((x) => x.id === 'x2')!;
     expect(marker.label).toBe('Cn × R1=24');
@@ -69,7 +74,7 @@ describe('what a calibration marker says its point is', () => {
     // there is no value to report for this point at all.
     const steps = [cornerStep('y2', 'C1 × Rn', ['dz'])];
     const m = buildCanvasMarkers(
-      base({ steps, placedPoints: { y2: { ...at, values: ['5'] } } })
+      base({ ...walking, steps, placedPoints: { y2: { ...at, values: ['5'] } } })
     );
     expect(m.find((x) => x.id === 'y2')!.label).toBe('C1 × Rn');
   });
@@ -77,7 +82,7 @@ describe('what a calibration marker says its point is', () => {
   it('⚑ an ordinary coordinate still shows - the guard must not over-reach', () => {
     const steps = [cornerStep('x1', 'C1 × R1', ['dx'])];
     const m = buildCanvasMarkers(
-      base({ steps, placedPoints: { x1: { ...at, values: ['0'] } } })
+      base({ ...walking, steps, placedPoints: { x1: { ...at, values: ['0'] } } })
     );
     expect(m.find((x) => x.id === 'x1')!.label).toBe('C1 × R1=0');
   });
@@ -85,7 +90,7 @@ describe('what a calibration marker says its point is', () => {
   it('⚑ and a two-COORDINATE point still shows both', () => {
     const steps = [cornerStep('p1', 'P1', ['dx', 'dy'])];
     const m = buildCanvasMarkers(
-      base({ steps, placedPoints: { p1: { ...at, values: ['3', '4'] } } })
+      base({ ...walking, steps, placedPoints: { p1: { ...at, values: ['3', '4'] } } })
     );
     expect(m.find((x) => x.id === 'p1')!.label).toBe('P1=3, 4');
   });
@@ -179,17 +184,17 @@ describe('calibration handles', () => {
     // ⚑ "Axis 5=80, Biodegradation" - six of those sprawled across the plot,
     // repeating axis names the figure already prints.
     const spider = buildCanvasMarkers(
-      base({ axesKind: 'spider', steps: [step('a1', 'Axis 5')], placedPoints: { a1: { px: 1, py: 2, values: ['80', 'Biodegradation'] } } })
+      base({ isCalibrated: false, mode: 'calibrate', axesKind: 'spider', steps: [step('a1', 'Axis 5')], placedPoints: { a1: { px: 1, py: 2, values: ['80', 'Biodegradation'] } } })
     );
     expect(spider[0]!.label).toBe('80');
 
     const xy = buildCanvasMarkers(
-      base({ steps: [step('x1', 'X1')], placedPoints: { x1: { px: 1, py: 2, values: ['0', '10'] } } })
+      base({ isCalibrated: false, mode: 'calibrate', steps: [step('x1', 'X1')], placedPoints: { x1: { px: 1, py: 2, values: ['0', '10'] } } })
     );
     expect(xy[0]!.label).toBe('X1=0, 10');
 
     const valueless = buildCanvasMarkers(
-      base({ steps: [step('o', 'Origin')], placedPoints: { o: { px: 1, py: 2, values: [] } } })
+      base({ isCalibrated: false, mode: 'calibrate', steps: [step('o', 'Origin')], placedPoints: { o: { px: 1, py: 2, values: [] } } })
     );
     expect(valueless[0]!.label).toBe('Origin');
   });
@@ -197,7 +202,7 @@ describe('calibration handles', () => {
   it('falls back to the step name on a spider handle that has no value yet', () => {
     // Reading values[0] unconditionally would print the string "undefined".
     const m = buildCanvasMarkers(
-      base({ axesKind: 'spider', steps: [step('a1', 'Axis 1')], placedPoints: { a1: { px: 1, py: 2, values: [] } } })
+      base({ isCalibrated: false, mode: 'calibrate', axesKind: 'spider', steps: [step('a1', 'Axis 1')], placedPoints: { a1: { px: 1, py: 2, values: [] } } })
     );
     expect(m[0]!.label).toBe('Axis 1');
   });
@@ -557,5 +562,99 @@ describe('runsForPoints', () => {
 
   it('answers "no runs" for a scatter, which is what keeps it dots', () => {
     expect(runsForPoints(sparse(5))).toEqual([]);
+  });
+});
+
+describe('⚑⚑ a committed calibration stops LABELLING the figure it calibrated', () => {
+  /**
+   * David, 2026-08-23, unable to photograph the heatmap feature: the anchors and
+   * their labels are drawn unconditionally for the rest of the session, and on a
+   * heatmap they sit INSIDE the plot - six labels and a dozen handles over the
+   * very cells you are now reading.
+   *
+   * ⚑ THE FIX IS THE LABELS, NOT A TOGGLE. Asked which he wanted, David chose the
+   * defect-only fix: once a stage has committed, its labels come off and the
+   * handles stay. A visibility toggle is new capability and a mode to learn, and
+   * the handles are what you would still want to grab.
+   *
+   * ⚑ AND THEY COME BACK IN CALIBRATE MODE, which is the mode that can move them.
+   * A handle is draggable only there, so that is exactly where you need to know
+   * which one you are about to nudge - and it is a mode already on screen with a
+   * button of its own, not a hidden state.
+   */
+  const steps = [step('x1', 'X1'), step('y1', 'Y1')];
+  const placed = {
+    x1: { px: 5, py: 6, values: ['0'] },
+    y1: { px: 7, py: 8, values: ['10'] },
+  };
+  const labelsOf = (input: Partial<CanvasMarkerInput>) =>
+    buildCanvasMarkers(base({ steps, placedPoints: placed, ...input }))
+      .filter((m) => m.kind === 'calibration')
+      .map((m) => m.label);
+
+  it('labels every handle DURING the walk, when the label is the instruction', () => {
+    expect(labelsOf({ isCalibrated: false, mode: 'calibrate' })).toEqual(['X1=0', 'Y1=10']);
+  });
+
+  it('⚑⚑ and none of them once the axes are built', () => {
+    expect(labelsOf({ isCalibrated: true, mode: 'place-point' })).toEqual(['', '']);
+  });
+
+  it('⚑ the handles themselves stay, so nothing becomes unreachable', () => {
+    const markers = buildCanvasMarkers(base({ steps, placedPoints: placed }));
+    expect(markers.filter((m) => m.kind === 'calibration').map((m) => m.id)).toEqual(['x1', 'y1']);
+  });
+
+  it('⚑⚑ and they read again in Calibrate mode, which is the mode that can move them', () => {
+    expect(labelsOf({ isCalibrated: true, mode: 'calibrate' })).toEqual(['X1=0', 'Y1=10']);
+  });
+});
+
+describe('⚑ two anchors on ONE pixel print ONE label, not two on top of each other', () => {
+  /**
+   * A heatmap's `x1` and `y1` ARE the same click - the shared corner - so both
+   * labels were drawn at one point and overlapped illegibly: `C1 x R1(0)=0`
+   * rendered as overlapping glyphs. Every shared-corner type has this.
+   *
+   * ⚑ JOINED, NOT DROPPED. Both anchors are really there and both say something
+   * about that pixel; hiding one would make a real reading invisible rather than
+   * unreadable, which is worse.
+   */
+  const shared = { px: 40, py: 40, values: ['0'] };
+
+  it('⚑⚑ joins them onto the first, and leaves the second blank', () => {
+    const markers = buildCanvasMarkers(
+      base({
+        isCalibrated: false,
+        mode: 'calibrate',
+        steps: [step('x1', 'C1'), step('y1', 'R1')],
+        placedPoints: { x1: shared, y1: { ...shared } },
+      })
+    );
+    expect(markers.map((m) => m.label)).toEqual(['C1=0 · R1=0', '']);
+  });
+
+  it('⚑ anchors on DIFFERENT pixels are untouched', () => {
+    const markers = buildCanvasMarkers(
+      base({
+        isCalibrated: false,
+        mode: 'calibrate',
+        steps: [step('x1', 'C1'), step('y1', 'R1')],
+        placedPoints: { x1: shared, y1: { px: 200, py: 90, values: ['5'] } },
+      })
+    );
+    expect(markers.map((m) => m.label)).toEqual(['C1=0', 'R1=5']);
+  });
+
+  it('⚑ three on one pixel still print once', () => {
+    const markers = buildCanvasMarkers(
+      base({
+        isCalibrated: false,
+        mode: 'calibrate',
+        steps: [step('x1', 'C1'), step('y1', 'R1'), step('z1', 'K1')],
+        placedPoints: { x1: shared, y1: { ...shared }, z1: { ...shared } },
+      })
+    );
+    expect(markers.map((m) => m.label)).toEqual(['C1=0 · R1=0 · K1=0', '', '']);
   });
 });

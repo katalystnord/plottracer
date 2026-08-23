@@ -8798,6 +8798,8 @@ export function Workspace() {
         infos={datasetInfos}
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}
+        // ⚑ A heatmap's record is CELLS, not points - see the prop.
+        showPointCount={config.outputPanel !== 'heatmap'}
         nameDraft={nameDraft}
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}

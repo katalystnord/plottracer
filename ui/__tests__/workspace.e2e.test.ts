@@ -8908,6 +8908,33 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
   });
 
+  it("⚑⚑ the series entry does not count POINTS on a type whose record is CELLS", async () => {
+    // `Series 1 (0)` sat directly above `20 cells read, all clean.` - two lines
+    // counting different things, one of them zero, with nothing saying they were
+    // different questions. Nothing was wrong with the data; a first-time reader
+    // had to work that out.
+    // ⚑ The count is DROPPED, not replaced by the cell count: a heatmap's cells
+    // do not belong to a series, and filing them under one would be the
+    // clearer-looking lie. The line beneath already counts what there is.
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(250);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
+    expect(await textOf('series-option-0')).toBe('Series 1');
+  });
+
+  it('⚑ while every type whose record IS points still counts them', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-place-point').click();
+    await clickAt(200, 200);
+    await clickAt(300, 150);
+    expect(await textOf('series-option-0')).toBe('Series 1 (2)');
+  });
+
   it('⚚⚚ a saved heatmap REOPENS with its grid and its cells (audit F7)', async () => {
     // ⚠️⚠️ THE WHOLE RECORD WAS DISCARDED ON REOPEN. `loadCalibratedFigure`
     // takes a `heatmapLayer` and hands it to `loadCalibrated`; the MULTI-figure

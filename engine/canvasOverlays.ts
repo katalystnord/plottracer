@@ -295,6 +295,54 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
 
   const result: CanvasMarker[] = [];
 
+  /**
+   * ⚑⚑ A COMMITTED CALIBRATION STOPS LABELLING THE FIGURE (v2.3).
+   *
+   * The anchors and their labels used to be drawn unconditionally for the rest of
+   * the session. On a heatmap they sit INSIDE the plot rather than on the axes,
+   * so six labels and a dozen handles cover the very cells being read - David
+   * could not photograph the feature. It helps every type.
+   *
+   * ⚑ THE LABELS, NOT THE HANDLES, and not a toggle: a visibility control is new
+   * capability and a mode to learn, while the handles are what anyone would still
+   * want to grab. Once the axes are built the labels have said what they had to
+   * say - the walk is over and the values are in the card.
+   * ⚑ THEY READ AGAIN IN CALIBRATE MODE, which is the only mode a handle is
+   * draggable in, so that is exactly where knowing which one you are nudging
+   * matters. It is a mode with a button on screen, not a hidden state.
+   */
+  const labelsCalibration = !isCalibrated || mode === 'calibrate';
+
+  /**
+   * ⚑ TWO ANCHORS ON ONE PIXEL PRINT ONE LABEL.
+   *
+   * A heatmap's `x1` and `y1` ARE the same click - the shared corner - so both
+   * labels landed on one point and overlapped into a smudge (`C1 x R1(0)=0`).
+   * Every shared-corner type has it.
+   * ⚑ JOINED, not dropped: both anchors are really there and both say something
+   * about that pixel, so hiding one would make a real reading invisible rather
+   * than merely unreadable.
+   */
+  const labelsAtPixel = new Map<string, string[]>();
+  for (const step of steps) {
+    const point = placedPoints[step.key];
+    if (!point || !labelsCalibration) continue;
+    const text = markerLabel(step, point.values, axesKind);
+    if (text === '') continue;
+    const key = `${point.px},${point.py}`;
+    const existing = labelsAtPixel.get(key);
+    if (existing) existing.push(text);
+    else labelsAtPixel.set(key, [text]);
+  }
+  /** Emptied as it is read, so only the FIRST anchor on a pixel prints. */
+  const takeLabel = (px: number, py: number): string => {
+    const key = `${px},${py}`;
+    const texts = labelsAtPixel.get(key);
+    if (!texts) return '';
+    labelsAtPixel.delete(key);
+    return texts.join(' · ');
+  };
+
   for (const step of steps) {
     const point = placedPoints[step.key];
     if (point) {
@@ -307,7 +355,9 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // those sprawled across the plot, repeating axis names the FIGURE already
         // prints and burying the one thing the handle asserts, which is where that
         // value sits. Caught on screen; no test can see a label being cluttered.
-        label: markerLabel(step, point.values, axesKind),
+        // ⚑ Empty once the calibration has committed, and joined where two
+        // anchors share a pixel - see `labelsCalibration` and `takeLabel`.
+        label: takeLabel(point.px, point.py),
         color: step.color,
         kind: 'calibration',
         // ⚑ Spread rather than `labelAway,`: under exactOptionalPropertyTypes an
