@@ -4254,6 +4254,42 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return { dividers: [...along].sort((a, b) => a - b), categoryAxis: axis, reversed };
   }
 
+  /**
+   * Where this chart's BASELINE runs, in image pixels, for the bar detector.
+   *
+   * ⚑⚑ SO A LEGEND SWATCH CAN BE TOLD FROM A BAR. A swatch is a filled rectangle
+   * in exactly the series ink, so it matches the colour ball at any tolerance and
+   * is filed as a bar - a phantom reading that reaches the record and exports.
+   * ⚠️ It is INSET on most published figures, comfortably inside both the
+   * calibrated value span and the declared category span, so restricting the
+   * trace to the plot area excludes nothing. What separates them is that every
+   * bar in an unstacked chart is anchored at the baseline and a swatch floats -
+   * the chart libraries' own model read in reverse.
+   *
+   * ⚑ NULL WHERE THE QUESTION DOES NOT APPLY: no baseline was declared, the type
+   * is not a bar, or the axes cannot invert. Absent means the detector reports
+   * nothing, which is what a technique with no evidence should say.
+   * ⚑ TOLERANCE IS 2 PIXELS AND IS STATED HERE RATHER THAN GUESSED THERE. It is
+   * not the half-pixel resolution a VALUE is read at: a bar's ink stops where it
+   * was drawn, and the axis line, its stroke width and any anti-aliasing sit
+   * between the ink and the baseline. The question is "does this shape reach the
+   * baseline", not "is its edge the same pixel".
+   */
+  baselinePixelForDetect(): { atPixel: number; tolerancePx: number } | null {
+    const axes = this.axes as unknown as {
+      hasDeclaredBaseline?: () => boolean;
+      getBaselineValue?: () => number;
+      dataToPixel?: (v: number, u?: number) => { x: number; y: number };
+    } | null;
+    if (!axes?.hasDeclaredBaseline?.() || !axes.getBaselineValue || !axes.dataToPixel) return null;
+    const declared = this.categoryDividersForDetect();
+    const point = axes.dataToPixel(axes.getBaselineValue());
+    // ⚑ The VALUE axis is the one the categories do NOT run along. Unmarked, the
+    // detector assumes the upright chart, which is what its own default says.
+    const atPixel = declared?.categoryAxis === 'y' ? point.x : point.y;
+    return Number.isFinite(atPixel) ? { atPixel, tolerancePx: 2 } : null;
+  }
+
   /** Which category a SPLIT BAND index refers to. The splitter works in image
    * order; the categories run along the axis as the user marked it. */
   categoryIndexOfBand(bandIndex: number, reversed: boolean): number {

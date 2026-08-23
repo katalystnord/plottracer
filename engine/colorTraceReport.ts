@@ -165,6 +165,27 @@ export function curveTraceReport(points: number, matched: number, width: number,
 }
 
 /**
+ * What a bar detect found that does not look like a bar.
+ *
+ * ⚑⚑ A LEGEND SWATCH IS A FILLED RECTANGLE IN EXACTLY THE SERIES INK, so it
+ * matches the colour ball at any tolerance and is filed as a bar - a phantom
+ * reading that reaches the record and exports. David hit it twice in one day on
+ * the bundled grouped-bar figure.
+ *
+ * ⚑ THE SENTENCE SAYS WHAT WAS MEASURED AND WHAT IT USUALLY MEANS, and stops
+ * there. The shapes are still in the table: the standing rule for bar techniques
+ * is that one may only refuse or corroborate, never act alone, and a silent drop
+ * would delete a measurement without saying so. Naming it is what turns an
+ * invisible wrong reading into one the reader can see and remove.
+ */
+export function swatchSuspectReport(suspects: number): string {
+  if (suspects === 0) return '';
+  return suspects === 1
+    ? ` - 1 shape does not reach the baseline and is much smaller than the others; a legend swatch looks like this. Check it before exporting.`
+    : ` - ${suspects} shapes do not reach the baseline and are much smaller than the others; legend swatches look like this. Check them before exporting.`;
+}
+
+/**
  * The names of the categories a bar detect found nothing in.
  *
  * ⚑⚑ A BAND IS NOT A CATEGORY. The split reports empty slots by BAND - image

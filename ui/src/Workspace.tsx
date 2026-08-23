@@ -45,6 +45,7 @@ import {
   spiderTraceReport,
   barTraceReport,
   categoryMissReport,
+  swatchSuspectReport,
   emptyCategoryNames,
   blobTraceReport,
   curveTraceReport,
@@ -5442,7 +5443,13 @@ export function Workspace() {
       const declaredCount = session.getCategoryAxis().hasDeclaredCount()
         ? session.getCategoryAxis().getCategoryCount()
         : undefined;
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined);
+      // ⚑⚑ WHERE THE BASELINE RUNS, so a legend SWATCH can be told from a bar.
+      // A swatch is the series ink exactly, so it matches at any tolerance and is
+      // filed as a bar - a phantom reading that exports. It is INSET on most
+      // published figures, so a plot-box gate excludes nothing; what separates
+      // them is that a bar is anchored at the baseline and a swatch floats.
+      const baseline = session.baselinePixelForDetect();
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;
@@ -5459,7 +5466,9 @@ export function Workspace() {
         session.getCategoryAxis().getCategories()
       );
       setColorTraceInfo(
-        barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
+        barTraceReport(added, noun, result.matched, width, height) +
+          categoryMissReport(missing) +
+          swatchSuspectReport(result.swatchSuspects?.length ?? 0)
       );
       commit();
       return;
