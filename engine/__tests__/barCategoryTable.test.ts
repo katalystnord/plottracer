@@ -297,3 +297,71 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     expect(session.getBarCategoryTable().categoryNames).toHaveLength(2);
   });
 });
+
+describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () => {
+  /**
+   * David's session, 2026-08-23, reproduced gesture for gesture from his saved
+   * project file (archived as `repro_category_mint_2026-08-23.zip`): he marked
+   * the axis, declared 4, named them, RE-PLACED THE AXIS because the span was
+   * wrong, marked it again, dragged a tick, then captured one bar - and got a
+   * fifth, unnamed category holding the reading.
+   *
+   * ⚑ Re-placing is where it goes wrong, and the two layers already disagree in
+   * their own comments about it. `BandedAxis.clearGeometry` says "the declared
+   * count survives: how many bands the figure has is a fact about the figure,
+   * not about where it was clicked" - and `CategoryAxis.clearGeometry`, one
+   * level up, cleared `_countDeclared` anyway. So marking the axis again brought
+   * back the bands, the ticks and the names, and left the model believing nobody
+   * had ever declared a count.
+   */
+  function markedFourBands(): CalibrationSession<BarAxes> {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
+    expect(session.setCategoryCount(4)).toBe(true);
+    return session;
+  }
+
+  /** Named, re-placed, re-marked - the state his file was saved in. */
+  function replacedAxis(): CalibrationSession<BarAxes> {
+    const session = markedFourBands();
+    ['Day 3', 'Day 7', 'Day 14', 'Day 21'].forEach((name, i) =>
+      session.getCategoryAxis().renameCategory(i, name),
+    );
+    expect(session.clearCategoryAxisGeometry()).toBe(true);
+    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
+    return session;
+  }
+
+  it('⚑⚑ re-placing the axis does not withdraw the declared count', () => {
+    expect(replacedAxis().getCategoryAxis().hasDeclaredCount()).toBe(true);
+  });
+
+  it('⚑⚑ so the bar captured afterwards lands in its band, not in a fifth category', () => {
+    const session = replacedAxis();
+    session.addDataPoint(140, 500);
+    session.addDataPoint(220, 300);
+    const table = session.getBarCategoryTable();
+    expect(table.categoryNames).toEqual(['Day 3', 'Day 7', 'Day 14', 'Day 21']);
+    expect(table.columns[0]!.values[0]).not.toBeNull();
+    expect(table.columns[0]!.values.slice(1)).toEqual([null, null, null]);
+  });
+
+  it('⚑ and it still lands in its band when a tick has been DRAGGED first', () => {
+    // `geometry.adjusted` is true in his file, so the drag is in the sequence.
+    const session = replacedAxis();
+    expect(session.moveCategoryTick(1, { x: 420, y: 500 })).toBe(true);
+    session.addDataPoint(140, 500);
+    session.addDataPoint(220, 300);
+    expect(session.getBarCategoryTable().categoryNames).toHaveLength(4);
+  });
+
+  it("⚑ 'Remove ticks' still means what it says - that declaration IS withdrawn", () => {
+    // The fix must not blur the two buttons together. "Remove ticks" is "I did
+    // not want this declaration"; re-placing is "the axis runs somewhere else".
+    const session = markedFourBands();
+    expect(session.removeCategoryTicks()).toBe(true);
+    expect(session.getCategoryAxis().hasDeclaredCount()).toBe(false);
+    expect(session.getCategoryAxis().getCategories()).toEqual([]);
+  });
+});

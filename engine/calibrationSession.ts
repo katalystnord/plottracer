@@ -4104,6 +4104,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
       assigned.set(entry.dataset, perTuple);
     }
     this.categoryAxis.clearGeometry();
+    // ⚑ "Remove ticks" is the one gesture that WITHDRAWS the declaration -
+    // re-placing the axis does not, which is why these are two calls and not
+    // one. See `CategoryAxis.clearGeometry`.
+    this.categoryAxis.undeclareCount();
 
     const names = [...this.categoryAxis.getCategories()];
     const used = new Set<number>();

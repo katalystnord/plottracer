@@ -200,11 +200,37 @@ export class CategoryAxis {
     return this._bands.hasGeometry();
   }
 
-  /** Drops the geometry entirely, leaving the category NAMES untouched - the
-   * un-ticked path is a supported way to work, not a broken state. */
+  /**
+   * Drops the geometry entirely, leaving the category NAMES untouched - the
+   * un-ticked path is a supported way to work, not a broken state.
+   *
+   * ⚑⚑ AND IT LEAVES THE DECLARATION STANDING, because a count is a fact about
+   * the FIGURE and not about where the axis was clicked - which is what
+   * `BandedAxis.clearGeometry` says one level down. This method used to clear
+   * `_countDeclared` anyway, and the two comments contradicting each other is
+   * exactly how the v2.3 minting defect got in: "Re-place axis" drops the
+   * geometry and keeps the names, so marking the axis again brought back the
+   * bands, the ticks and the names while the model believed nobody had ever
+   * declared a count - and the next bar captured was filed into a freshly
+   * minted category instead of the band it sits in.
+   *
+   * ▶ Withdrawing the declaration is a DIFFERENT operation with its own button
+   * ("Remove ticks"): see `undeclareCount`.
+   */
   clearGeometry(): void {
     this._bands.clearGeometry();
     this._bands.clearBands();
+  }
+
+  /**
+   * Withdraw the declared count - "I did not want this declaration".
+   *
+   * ⚑ Separate from `clearGeometry` on purpose. Re-placing the axis says where
+   * it runs; this says how many categories there are, and only the second one
+   * is being taken back here. `removeCategoryTicks` is its only caller, and it
+   * drops the categories the declaration created in the same operation.
+   */
+  undeclareCount(): void {
     this._countDeclared = false;
   }
 
