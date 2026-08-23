@@ -1030,8 +1030,10 @@ describe('Workspace: Bar axes', () => {
     await page.getByTestId('category-ticks-toggle').click();
     await page.waitForTimeout(100);
 
-    // P1 is already the first edge, so the prompt asks for one click, not two.
-    expect(await textOf('category-ticks-prompt')).toContain('Click where the categories end');
+    // P1 is already the first edge, so the prompt asks for one click, not two -
+    // and it names the FAR END OF THE WHOLE AXIS, because "where the categories
+    // end" sent David to the end of the FIRST category (v2.3).
+    expect(await textOf('category-ticks-prompt')).toContain('FAR END of the whole category axis');
 
     // ⚑ This click must NOT drop a data point -- it places the far edge.
     await clickAt(600, 400);
@@ -1049,6 +1051,91 @@ describe('Workspace: Bar axes', () => {
 
     // The declared categories are rows in the table before any bar is captured.
     expect(await page.getByTestId('category-count').inputValue()).toBe('4');
+  });
+
+  it("⚑⚑⚑ THE WALK, clicking only what the screen says - David's replacement design", async () => {
+    // ⚑⚑ CLAUDE.md GATE 4: a walkthrough test may only click what a prompt on
+    // screen tells it to click. If it needs a coordinate, an order or a
+    // precondition no visible text describes, that is a UI defect found at the
+    // moment the test is written.
+    // ⚠️ THE PREVIOUS WALK FAILED THAT and nobody noticed, because it opened the
+    // fold-out through the summary chevron - a gesture nothing on screen
+    // announced - and the usable form appeared only afterwards. David, meeting
+    // it cold: *"and now, MAGICALLY, it changes to something that looks like
+    // something I can use."*
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+
+    // 1. The only primary thing on the row is the way IN, and it says so.
+    const start = page.getByTestId('category-mark-start');
+    expect(await start.isVisible()).toBe(true);
+    expect(await page.getByTestId('category-read').count()).toBe(0); // the ENDING is not offered yet
+    await start.click();
+    await page.waitForTimeout(100);
+
+    // 2. The step is the first thing in the card, and it names the FAR END of
+    //    the WHOLE axis - the sentence that used to send the click to the end of
+    //    the first category.
+    const step = await textOf('category-ticks-prompt');
+    expect(step).toContain('FAR END of the whole category axis');
+    await clickAt(600, 400);
+    await page.waitForTimeout(150);
+
+    // 3. The card now asks the two questions, and says so.
+    expect(await textOf('category-ticks-step')).toContain('how many categories');
+
+    // 4. The ending cannot fire yet, and the button says why rather than
+    //    no-opping under a teal coat of paint.
+    const read = page.getByTestId('category-read');
+    expect(await read.isDisabled()).toBe(true);
+    expect(await read.getAttribute('title')).toMatch(/how many categories/);
+    // ⚑ And the line above does not claim a count nobody declared.
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - axis marked, no count yet');
+
+    // 5. Answer them; the markers appear at once and the step becomes ADJUSTING.
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(200);
+    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
+    expect(await textOf('category-ticks-step')).toContain('Drag any marker');
+
+    // 6. Now the ending is live, at the end of the card.
+    expect(await read.isDisabled()).toBe(false);
+    await read.click();
+    await page.waitForTimeout(150);
+
+    // 7. It folds to one line, and that line states what was recorded - David's
+    //    design: "Calibration · Calibrated ✓ · 4 categories ✓ · Reset calibration".
+    expect(await page.getByTestId('category-count').count()).toBe(0);
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    expect(await textOf('second-stage-status')).toBe('4 categories ✓');
+  });
+
+  it('⚑ a span far too short to be the whole axis says what it measured', async () => {
+    // David clicked the end of the FIRST category of four and nothing said
+    // anything. This reports rather than refuses - a category axis really can be
+    // a small part of a figure.
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('category-mark-start').click();
+    await page.waitForTimeout(100);
+    await clickAt(330, 400); // barely past the origin: a fraction of the figure
+    await page.waitForTimeout(200);
+    expect(await textOf('category-span-note')).toMatch(/% of the figure/);
+    expect(await textOf('category-span-note')).toMatch(/Re-place axis/);
+  });
+
+  it('⚑⚑ dragging a marker is answered with nothing at all', async () => {
+    // The card used to answer the one constructive gesture the design rests on
+    // with red text about the consequences of other, future actions.
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await page.getByTestId('category-mark-start').click();
+    await page.waitForTimeout(100);
+    await clickAt(600, 400);
+    await page.waitForTimeout(150);
+    await page.getByTestId('category-count').fill('4');
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('category-regenerate-warning').count()).toBe(0);
   });
 
   it('⚑ retyping the count over a NAMED set does not delete the names on the way', async () => {
@@ -9614,8 +9701,15 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(300);
     expect(await textOf('heatmap-selected-cell')).not.toBe('2,1');
     expect(await textOf('heatmap-selected-cell')).not.toBe('');
-    // The series is still empty - the click identified a cell, it did not record one.
-    expect(await page.getByTestId('series-select').textContent()).toMatch(/\(0\)/);
+    // The click identified a cell; it did not record one.
+    // ⚑⚑ ASKED OF THE RECORD, NOT OF THE SERIES LABEL (v2.3). This used to read
+    // the `(0)` beside `Series 1`, and that count is gone on a heatmap: its
+    // record is CELLS, and a series counter reading 0 directly above
+    // "20 cells read, all clean." was two lines counting different things with
+    // nothing saying so. The cells summary is what counts a heatmap's readings,
+    // so it is what this asks.
+    expect(await page.getByTestId('series-select').textContent()).toBe('Series 1');
+    expect(await textOf('heatmap-cells-summary')).toMatch(/20 cells read/);
 
     // Clicking the picked square again clears it.
     const picked = (await textOf('heatmap-selected-cell')).split(',');

@@ -608,6 +608,19 @@ type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 // CLAUDE.md's keystone), just not how to operate the tool.
 
 
+/**
+ * How long the marked category axis is, in image pixels - or null when none is
+ * marked.
+ *
+ * ⚑ Read off the two EDGES the user clicked, which is the only span anybody
+ * declared. It is handed to `categoryPanelView` so the card can say what it
+ * measured when a span looks too short to be a whole category axis.
+ */
+function categoryAxisSpanPx(session: { getCategoryAxis: () => { getAxisEdges: () => readonly [{ x: number; y: number }, { x: number; y: number }] | null } }): number | null {
+  const edges = session.getCategoryAxis().getAxisEdges();
+  return edges ? Math.hypot(edges[1].x - edges[0].x, edges[1].y - edges[0].y) : null;
+}
+
 export function Workspace() {
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
@@ -1425,8 +1438,16 @@ export function Workspace() {
         edgesPlaced: categoryFirstEdge ? 1 : 0,
         placeBothEdges: categoryPlaceBothEdges,
         hasAdjustments: session.getCategoryAxis().hasAdjustments(),
+        // ⚑ A COUNT WAS DECLARED, which is what turns a marked axis into ticks -
+        // and what `Read categories` needs before it has anything to read.
+        hasDeclaredCount: session.getCategoryAxis().hasDeclaredCount(),
+        // ⚑ The figure is the only frame available for judging whether a marked
+        // span is plausibly a whole category axis; there is no plot box in the
+        // record to compare against.
+        imageSize: canvasImageDims.w > 0 ? { width: canvasImageDims.w, height: canvasImageDims.h } : null,
+        spanPx: categoryAxisSpanPx(session),
       }),
-    [session, version, axes, categoryPanelOpen, categoryFirstEdge]
+    [session, version, axes, categoryPanelOpen, categoryFirstEdge, canvasImageDims]
   );
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -5851,7 +5872,11 @@ export function Workspace() {
   const secondStageComplete = heatmapActive
     ? heatmapCells.length > 0
     : session.supportsCategoryTicks()
-      ? session.getCategoryAxis().hasGeometry() && session.getCategoryAxis().getCategoryCount() > 0
+      ? // ⚑ A DECLARED count, not merely a non-empty name list (v2.3). Two
+        // captured bars put two entries in the shared list, and the folded line
+        // then read `2 categories ✓` on a chart with four - a count nobody
+        // typed, reported as finished work.
+        session.getCategoryAxis().hasGeometry() && session.getCategoryAxis().hasDeclaredCount()
       : false;
   const secondStageSummary = heatmapActive
     ? `${heatmapCells.length} cells read`
@@ -5866,8 +5891,38 @@ export function Workspace() {
   const categoryOfferLine = categoryOffer(
     session.supportsCategoryTicks() && session.getCategoryAxis().hasGeometry(),
     session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0,
-    session.seriesWithReadings()
+    session.seriesWithReadings(),
+    // ⚑ Say what was DECLARED, or say that nothing was - see `categoryOffer`.
+    session.supportsCategoryTicks() && session.getCategoryAxis().hasDeclaredCount()
   );
+  /**
+   * ⚑⚑⚑ THE STAGE'S ENDING, RENDERED AT THE END OF THE CARD, in both phases.
+   *
+   * David's design: *"THEN -> [Read categories] at the end of the card... Once
+   * that is pressed the whole card should fold up."* It used to stand on the
+   * HEADER row, teal and imperative, where it read as the way IN - and pressing
+   * it before anything was marked did nothing, because there is nothing to read.
+   * David: *"'Read categories' is teal and looks ready to do the job, but
+   * pressing the button does nothing."* He did what the styling told him to.
+   *
+   * ⚑ DISABLED, NEVER ABSENT, with the reason ON it once the card is open - the
+   * heatmap's own rule, in its own words: a greyed control says "this is what
+   * comes next", a missing one says nothing at all. Which is why it renders in
+   * the marking phase too, rather than appearing once the axis is down.
+   * ⚑ The label comes from the TYPE (`secondStage.ending`), unchanged.
+   */
+  const categoryEndingButton = config.secondStage ? (
+    <button
+      type="button"
+      data-testid="category-read"
+      onClick={() => setCategoryPanelOpen(false)}
+      disabled={!categoryPanel.canRead}
+      title={categoryPanel.readBlockedReason ?? 'Read the categories and finish this step'}
+      style={endsCardButton()}
+    >
+      {config.secondStage.ending}
+    </button>
+  ) : null;
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -7510,26 +7565,35 @@ export function Workspace() {
                 >
                   <span data-testid="category-ticks-summary">{categoryOfferLine.text}</span>
                 </button>
-                {/* ⚑⚑ DISABLED, NEVER ABSENT - the heatmap's own rule, in the
-                    same words its comment gives: "A greyed control says 'this is
-                    what comes next'; a missing one says nothing at all." Its
-                    label comes from the TYPE (`secondStage.ending`), which was
-                    declared for these three types and, until now, rendered for
-                    none of them. */}
-                {config.secondStage && (
+                {/* ⚑⚑⚑ A PLAIN ENTRY BUTTON, WHERE THE ENDING USED TO BE (v2.3).
+                    `Read categories` stood here, teal and imperative, and it is
+                    the button that ENDS the step - `secondStage.ending`'s own
+                    doc says so. Pressed before anything is marked it did
+                    nothing, because there was nothing to read. David: *"'Read
+                    categories' is teal and looks ready to do the job, but
+                    pressing the button does nothing... As a user I would hunt
+                    for a way to press the button again that looks ready to go."*
+                    He did exactly what the styling told him to.
+                    ▶ So the only primary thing on this row is now the way IN,
+                    and the ending has moved to the END of the card where it
+                    belongs. It also removes the invisible precondition: the
+                    usable form used to appear only after a click nothing
+                    announced (David: *"and now, MAGICALLY, it changes to
+                    something that looks like something I can use"*). */}
+                {!session.getCategoryAxis().hasGeometry() && (
                   <button
                     type="button"
-                    data-testid="category-read"
-                    onClick={() => setCategoryPanelOpen(false)}
-                    disabled={!session.getCategoryAxis().hasGeometry()}
-                    title={
-                      session.getCategoryAxis().hasGeometry()
-                        ? 'Finish marking the categories'
-                        : 'Mark the category axis first - then this ends the step'
-                    }
+                    data-testid="category-mark-start"
+                    onClick={() => {
+                      setCategoryFirstEdge(null);
+                      setCategoryMarkError(null);
+                      setCategoryPlaceBothEdges(false);
+                      setCategoryPanelOpen(true);
+                    }}
+                    title="Mark where the category axis runs, then say how many categories there are"
                     style={endsCardButton()}
                   >
-                    {config.secondStage.ending}
+                    Mark categories
                   </button>
                 )}
               </div>
@@ -7552,15 +7616,6 @@ export function Workspace() {
                     borderRadius: 3,
                   }}
                 >
-                  {/* The case FOR opening it is only worth making while it is
-                      still shut in spirit -- once an axis is marked the user has
-                      already been persuaded, and the paragraph is just noise
-                      sitting on top of the figure. */}
-                  {!session.getCategoryAxis().hasGeometry() && (
-                    <div style={{ gridColumn: '1 / -1', color: theme.color.text.legend }}>
-                      {CATEGORY_PANEL_HINT}
-                    </div>
-                  )}
                   {categoryMarkMessage(categoryMarkError) && (
                     <div
                       data-testid="category-mark-error"
@@ -7569,12 +7624,46 @@ export function Workspace() {
                       {categoryMarkMessage(categoryMarkError)}
                     </div>
                   )}
+                  {/* ⚑⚑⚑ THE STEP, FIRST, AND ONE LINE. The card used to open
+                      with two paragraphs of RATIONALE - recommended-for, what it
+                      tells PlotTracer, what it lets Auto-extract do - with the
+                      one actionable sentence buried at the start of the second.
+                      The real instruction was correct and sat ~900px away at the
+                      bottom of the window, in the tips bar. David read the card
+                      under his cursor, which is where anyone reads.
+                      ▶ The action leads; the case FOR the feature is disclosed
+                      below, where someone who wants it can find it. The
+                      calibration walk already does exactly this: it shows the
+                      step you are on, not an essay about why the step exists. */}
                   {categoryPanel.prompt && (
                     <div
                       data-testid="category-ticks-prompt"
-                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary }}
+                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary, fontWeight: 600 }}
                     >
                       {categoryPanel.prompt}
+                    </div>
+                  )}
+                  {/* ⚑ Once the axis is marked the step becomes the ADJUSTING,
+                      which is the gesture the whole design rests on and the one
+                      thing nothing on screen used to mention. */}
+                  {categoryPanel.phase === 'declaring' && (
+                    <div
+                      data-testid="category-ticks-step"
+                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary, fontWeight: 600 }}
+                    >
+                      {session.getCategoryAxis().hasDeclaredCount()
+                        ? 'Drag any marker that is not on a boundary, then press Read categories.'
+                        : 'Now say how many categories there are, and which way the figure marks them.'}
+                    </div>
+                  )}
+                  {/* ⚑ WHAT WAS MEASURED about a span that looks too short - it
+                      reports and does not refuse. See `categoryPanelView`. */}
+                  {categoryPanel.spanNote && (
+                    <div
+                      data-testid="category-span-note"
+                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary }}
+                    >
+                      {categoryPanel.spanNote}
                     </div>
                   )}
                   {categoryPanel.phase === 'mark-axis' && (
@@ -7585,6 +7674,7 @@ export function Workspace() {
                     // re-clicking the summary chevron, and nothing said so
                     // (v2.1 audit).
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
+                      {categoryEndingButton}
                       <button
                         type="button"
                         data-testid="category-cancel-mark"
@@ -7616,7 +7706,10 @@ export function Workspace() {
                           type="number"
                           min={1}
                           data-testid="category-count"
-                          title={CATEGORY_TICK_DRAG_HINT}
+                          title={
+                            CATEGORY_TICK_DRAG_HINT +
+                            (categoryPanel.regenerateWarning ? ` ${categoryPanel.regenerateWarning}` : '')
+                          }
                           value={categoryCountInput}
                           // ⚑ GROWING COMMITS AS YOU TYPE; SHRINKING WAITS FOR
                           // BLUR OR ENTER.
@@ -7685,15 +7778,21 @@ export function Workspace() {
                           style={{ width: 56 }}
                         />
                       </span>
-                      {categoryPanel.regenerateWarning && (
-                        <div
-                          data-testid="category-regenerate-warning"
-                          style={{ gridColumn: '1 / -1', color: theme.color.error }}
-                        >
-                          {categoryPanel.regenerateWarning}
-                        </div>
-                      )}
+                      {/* ⚑⚑ THE RED STANDING WARNING IS GONE. It appeared the
+                          moment a tick had been dragged and said that changing
+                          the count, the style or the axis "rebuilds the ticks
+                          evenly and discards the ones you moved". Three things
+                          were wrong at once: it fired on the CONSTRUCTIVE
+                          gesture the design asks for, it was RED so it read as
+                          an error when nothing was wrong, and it told the user
+                          that adjusting is fragile at the moment they tried it.
+                          A feature cannot ask for a gesture and warn against it
+                          in the same breath.
+                          ▶ The information is real and now travels with the
+                          controls that would actually do it - the count, the
+                          style, Re-place axis - as what they cost when used. */}
                       <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
+                        {categoryEndingButton}
                         {/* ⚑ THE SAFE EXIT MOVED UP, it did not go. It was added
                             here because the only exits on screen were "Re-place
                             axis" and "Remove ticks", both destructive - "the way
@@ -7704,7 +7803,10 @@ export function Workspace() {
                         <button
                           type="button"
                           data-testid="category-replace-axis"
-                          title="Re-place axis - click both ends of the category axis again. Any ticks you moved are lost."
+                          title={
+                            'Re-place axis - click both ends of the category axis again.' +
+                            (categoryPanel.regenerateWarning ? ` ${categoryPanel.regenerateWarning}` : '')
+                          }
                           onClick={() => {
                             // ⚑ BOTH ends, which is what the label says. Reusing
                             // P1 here made the start impossible to correct: P1 is
@@ -7740,6 +7842,18 @@ export function Workspace() {
                       </div>
                     </>
                   )}
+                  {/* ⚑⚑ THE CASE FOR THE FEATURE, DISCLOSED RATHER THAN LEADING.
+                      It is well written and it is not what someone mid-gesture
+                      needs; it used to occupy the top of the card while the
+                      instruction sat at the bottom of the window. `<details>` is
+                      progressive disclosure the keystone rule allows - a layer he
+                      can FIND - rather than a hidden mode. */}
+                  <details style={{ gridColumn: '1 / -1', color: theme.color.text.legend }}>
+                    <summary data-testid="category-why" style={{ cursor: 'pointer' }}>
+                      Why mark categories?
+                    </summary>
+                    <div style={{ marginTop: 4 }}>{CATEGORY_PANEL_HINT}</div>
+                  </details>
                 </div>
               )}
             </div>

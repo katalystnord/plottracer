@@ -165,19 +165,19 @@ describe('what the fold-out asks for', () => {
     const v = panel({ seedPixel: { px: 100, py: 500 } });
     expect(v.canReuseSeed).toBe(true);
     expect(v.prompt).toBe(
-      'Click where the categories end. P1 (the amber handle) is being reused as the start - press Re-place axis if that is wrong.'
+      'Click the FAR END of the whole category axis - past the last category, not the end of the first. P1 (the amber handle) is the start; press Re-place axis if that is wrong.'
     );
   });
 
   it('asks for two when there is no seed to reuse', () => {
     const v = panel({ seedPixel: null });
     expect(v.canReuseSeed).toBe(false);
-    expect(v.prompt).toBe('Click where the categories start, then where they end.');
+    expect(v.prompt).toBe('Click where the category axis STARTS, before the first category, then its FAR END past the last.');
   });
 
   it('asks for the second once the first is down', () => {
     const v = panel({ seedPixel: null, edgesPlaced: 1 });
-    expect(v.prompt).toBe('Now click where the categories end.');
+    expect(v.prompt).toBe('Now click the FAR END of the axis, past the last category.');
   });
 
   it('stops offering the seed once an edge has been placed by hand', () => {
@@ -202,7 +202,7 @@ describe('the regenerate warning', () => {
     // warnings, which is worse than not warning at all.
     expect(panel({ hasGeometry: true, hasAdjustments: false }).regenerateWarning).toBeNull();
     expect(panel({ hasGeometry: true, hasAdjustments: true }).regenerateWarning).toBe(
-      'Changing the count or the tick style, or re-placing the axis, rebuilds the ticks evenly and discards the ones you moved.'
+      'This rebuilds the ticks evenly and discards the ones you moved.'
     );
   });
 
@@ -252,7 +252,7 @@ describe('⚑⚑ "Re-place axis" can place BOTH ends - the walk that was unreach
   it('reuses P1 by default, which is the one-click offer', () => {
     const v = panel({ seedPixel: seed });
     expect(v.canReuseSeed).toBe(true);
-    expect(v.prompt).toContain('P1 (the amber handle) is being reused');
+    expect(v.prompt).toContain('P1 (the amber handle) is the start');
   });
 
   it('⚑⚑ it names the handle THIS TYPE actually has - a Line has no P1', () => {
@@ -277,7 +277,7 @@ describe('⚑⚑ "Re-place axis" can place BOTH ends - the walk that was unreach
       placeBothEdges: false,
       hasAdjustments: false,
     });
-    expect(v.prompt).toContain('V1 (the amber handle) is being reused');
+    expect(v.prompt).toContain('V1 (the amber handle) is the start');
     expect(v.prompt).not.toContain('P1');
   });
 
@@ -291,13 +291,13 @@ describe('⚑⚑ "Re-place axis" can place BOTH ends - the walk that was unreach
     // with nothing on screen able to move it.
     const v = panel({ seedPixel: seed, placeBothEdges: true });
     expect(v.canReuseSeed).toBe(false);
-    expect(v.prompt).toBe('Click where the categories start, then where they end.');
+    expect(v.prompt).toBe('Click where the category axis STARTS, before the first category, then its FAR END past the last.');
   });
 
   it('⚑ and then asks for the second, so the walk is reachable end to end', () => {
     const v = panel({ seedPixel: seed, placeBothEdges: true, edgesPlaced: 1 });
     expect(v.canReuseSeed).toBe(false);
-    expect(v.prompt).toBe('Now click where the categories end.');
+    expect(v.prompt).toBe('Now click the FAR END of the axis, past the last category.');
   });
 });
 
@@ -376,5 +376,137 @@ describe('the weight of a tick handle', () => {
     const ends = markers.filter((m) => m.draggable === false);
     expect(ends).toHaveLength(2);
     for (const m of ends) expect(m.kind).toBe('calibration');
+  });
+});
+
+describe("⚑⚑⚑ the card David called 'not even functional' - what it must now do", () => {
+  /**
+   * David, driving the built v2.3 package cold to shoot a screenshot: *"this is
+   * not great. This is close to unusable for a user. We need to redo this
+   * completely."* and, having dragged a tick and been answered in red: *"I'm
+   * sorry, but this is not even functional as it stands."*
+   *
+   * ⛔ ACCEPT THAT ASSESSMENT. The cases below are his replacement design, one
+   * observable outcome each, so the build cannot read as satisfied while a case
+   * is silently absent (CLAUDE.md gate 1).
+   */
+
+  it('⚑⚑ the prompt sends the click to the FAR END OF THE WHOLE AXIS', () => {
+    // He clicked at about x 310 on a four-category chart - the end of Day 3 -
+    // because the prompt read "click where the categories end", and cold that is
+    // exactly what it means. Gate 4, for the second release running.
+    const v = panel({ seedPixel: { px: 10, py: 20 } });
+    expect(v.prompt).toMatch(/FAR END of the whole category axis/);
+    expect(v.prompt).toMatch(/not the end of the first/);
+  });
+
+  it('⚑⚑ dragging a tick is answered with NOTHING - it is the gesture the design asks for', () => {
+    // The card used to answer a constructive drag with red text about the
+    // consequences of OTHER, future actions. A feature cannot ask for a gesture
+    // and warn against it in the same breath.
+    const v = panel({ hasGeometry: true, hasAdjustments: true });
+    expect(v.prompt).toBeNull();
+    // The information is real and still available - it now belongs ON the
+    // controls that rebuild, as what they will cost when used.
+    expect(v.regenerateWarning).toBe('This rebuilds the ticks evenly and discards the ones you moved.');
+  });
+
+  it('⚑ and nothing to warn about when nothing has been adjusted', () => {
+    expect(panel({ hasGeometry: true }).regenerateWarning).toBeNull();
+  });
+
+  it('⚑⚑ Read categories cannot end a step that has not started', () => {
+    const unmarked = panel();
+    expect(unmarked.canRead).toBe(false);
+    expect(unmarked.readBlockedReason).toMatch(/Mark the category axis first/);
+  });
+
+  it('⚑⚑ nor before anybody has said how many categories there are', () => {
+    // The card asserted "2 categories" with the count field EMPTY, on a chart
+    // with four. A count nobody typed, reported as fact, is the fabricated
+    // -category defect v2.1 was supposed to have closed.
+    const marked = panel({ hasGeometry: true, hasDeclaredCount: false });
+    expect(marked.canRead).toBe(false);
+    expect(marked.readBlockedReason).toMatch(/how many categories/);
+  });
+
+  it('⚑ and it CAN once both are answered', () => {
+    const ready = panel({ hasGeometry: true, hasDeclaredCount: true });
+    expect(ready.canRead).toBe(true);
+    expect(ready.readBlockedReason).toBeNull();
+  });
+
+  it('⚑⚑ a span covering one category of four says what it MEASURED', () => {
+    // Nothing refused it, though the plot box was right there to compare
+    // against. This reports rather than refuses: a category axis really can be a
+    // small part of a figure, and a hard refusal would make that unmarkable.
+    const v = panel({
+      hasGeometry: true,
+      hasDeclaredCount: true,
+      spanPx: 210,
+      imageSize: { width: 1400, height: 900 },
+    });
+    expect(v.spanNote).toMatch(/about 15% of the figure/);
+    expect(v.spanNote).toMatch(/Re-place axis/);
+  });
+
+  it('⚑ and says nothing about a span that covers the figure', () => {
+    const v = panel({
+      hasGeometry: true,
+      hasDeclaredCount: true,
+      spanPx: 1180,
+      imageSize: { width: 1400, height: 900 },
+    });
+    expect(v.spanNote).toBeNull();
+  });
+
+  it('⚑ it never speaks before there is a span to measure', () => {
+    expect(panel({ imageSize: { width: 1400, height: 900 } }).spanNote).toBeNull();
+    expect(panel({ hasGeometry: true, hasDeclaredCount: true, spanPx: 210 }).spanNote).toBeNull();
+  });
+});
+
+describe('⚑⚑ the stage line does not assert a count nobody declared', () => {
+  it('says the axis is marked and the count is missing', () => {
+    // Two bars captured put two entries in the shared name list, and the line
+    // reported `2 categories` as a fact on a chart that has four.
+    const offer = categoryOffer(true, 2, 1, false);
+    expect(offer.text).toBe('Category ticks - axis marked, no count yet');
+    // ⚑ And it is PROMOTED: an axis marked with no count is a half-finished
+    // step, which is the one case this line exists to point at.
+    expect(offer.promoted).toBe(true);
+  });
+
+  it('and states the count once somebody has', () => {
+    expect(categoryOffer(true, 4, 1, true).text).toBe('Category ticks - 4 categories');
+    expect(categoryOffer(true, 1, 1, true).text).toBe('Category ticks - 1 category');
+  });
+});
+
+describe('⚑ the axis-edge labels lean INWARD, so neither runs off the figure', () => {
+  it('each one is pushed away from a point just outside its own end', () => {
+    // David's screenshot: the right-hand label was cut to `Categ` at the plot
+    // boundary, because every label takes the same up-and-to-the-right offset
+    // and the axis ends where the figure does.
+    const markers = categoryTickMarkers({
+      edges: [{ x: 100, y: 500 }, { x: 900, y: 500 }],
+      tickPoints: [],
+    });
+    const start = markers.find((m) => m.id === 'categoryAxisStart')!;
+    const end = markers.find((m) => m.id === 'categoryAxisEnd')!;
+    // Away-points sit OUTSIDE the span, so `marker - away` points into it.
+    expect(start.labelAway!.x).toBeLessThan(100);
+    expect(end.labelAway!.x).toBeGreaterThan(900);
+  });
+
+  it('⚑ and it follows the axis, not the screen - a vertical axis leans along itself', () => {
+    const markers = categoryTickMarkers({
+      edges: [{ x: 80, y: 600 }, { x: 80, y: 100 }],
+      tickPoints: [],
+    });
+    const start = markers.find((m) => m.id === 'categoryAxisStart')!;
+    const end = markers.find((m) => m.id === 'categoryAxisEnd')!;
+    expect(start.labelAway!.y).toBeGreaterThan(600);
+    expect(end.labelAway!.y).toBeLessThan(100);
   });
 });

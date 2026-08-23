@@ -147,11 +147,35 @@ export function categoryTickMarkers({
   // Not draggable, and that stays deliberate: every tick is a function of these
   // two, so dragging one rescales the lot and discards any the user adjusted.
   // Visible is not the same as grabbable, and the labels say which is which.
+  //
+  // ⚑⚑ AND BOTH LABELS LEAN INWARD (v2.3). They used to take the fixed
+  // up-and-to-the-right offset every label has, so on David's figure the right
+  // one was CUT to `Categ` at the plot boundary - the axis ends where the figure
+  // does, and the text ran off it. `labelAway` is aimed at a point just OUTSIDE
+  // each end, which makes the label's direction point back along the axis: it
+  // grows into the span rather than off the edge, and the renderer right-aligns
+  // it when it points left so the text never crosses its own marker.
+  // ⚑ The other half of that finding - the left label overlapping `P1=0` - is
+  // gone for a different reason: a committed calibration no longer labels its
+  // anchors at all (see `buildCanvasMarkers`).
+  const outward = { x: edges[1].x - edges[0].x, y: edges[1].y - edges[0].y };
   const ends: CanvasMarker[] = !markEnds
     ? []
     : [
-        { id: 'categoryAxisStart', x: edges[0].x, y: edges[0].y, label: 'Categories start' },
-        { id: 'categoryAxisEnd', x: edges[1].x, y: edges[1].y, label: 'Categories end' },
+        {
+          id: 'categoryAxisStart',
+          x: edges[0].x,
+          y: edges[0].y,
+          label: 'Categories start',
+          labelAway: { x: edges[0].x - outward.x, y: edges[0].y - outward.y },
+        },
+        {
+          id: 'categoryAxisEnd',
+          x: edges[1].x,
+          y: edges[1].y,
+          label: 'Categories end',
+          labelAway: { x: edges[1].x + outward.x, y: edges[1].y + outward.y },
+        },
       ].map((m) => ({
         ...m,
         color,
@@ -245,6 +269,13 @@ export interface CategoryPanelInput {
    * with nothing on screen able to move it (v2.1 audit).
    */
   placeBothEdges: boolean;
+  /** A COUNT has been declared, so ticks exist rather than merely an axis. */
+  hasDeclaredCount?: boolean;
+  /** The figure's own size in pixels - the only frame available for judging
+   * whether a marked span is plausibly a whole category axis. */
+  imageSize?: { width: number; height: number } | null;
+  /** The span just marked, in pixels, when there is one. */
+  spanPx?: number | null;
 }
 
 /** Why a click could not become an axis edge. Null when nothing has failed. */
@@ -267,12 +298,40 @@ export function categoryMarkMessage(error: CategoryMarkError): string | null {
 
 export interface CategoryPanelView {
   phase: CategoryTickPhase;
-  /** What the fold-out asks for next; null when it is asking nothing. */
+  /** What the card asks for next; null when it is asking nothing. */
   prompt: string | null;
-  /** Shown before anything that regenerates, or null when nothing would be lost. */
+  /**
+   * What the REBUILDING controls have to say before they are used, or null.
+   *
+   * ⚑⚑ IT IS NO LONGER A STANDING LINE ON THE CARD (v2.3). It used to appear the
+   * moment a tick had been dragged, in RED - so David did the one CONSTRUCTIVE
+   * thing the whole design rests on, adjusting a marker, and was answered with
+   * what read as an error about other, future actions. A feature cannot ask for a
+   * gesture and warn against it in the same breath.
+   * ▶ The information is real and belongs ON the controls that rebuild - the
+   * count, the tick style, Re-place axis - as what they will cost when used.
+   */
   regenerateWarning: string | null;
   /** The seed can stand in for the first edge, so only one click is needed. */
   canReuseSeed: boolean;
+  /**
+   * What was MEASURED about a span that looks too short to be a whole category
+   * axis, or null.
+   *
+   * ⚑ IT REPORTS, IT DOES NOT REFUSE. David clicked the end of the FIRST
+   * category on a four-category chart, because the prompt said "click where the
+   * categories end" and read cold that is exactly what it means. Nothing said
+   * anything. But a figure whose category axis really is a small part of the
+   * image exists, and a hard refusal would make it unmarkable - so this states
+   * the measurement and names the way back.
+   * ⚑ The live markers are the other half, and the better half: with a count
+   * declared they appear at once, so a wrong span is visible in a second.
+   */
+  spanNote: string | null;
+  /** `Read categories` has something to read. */
+  canRead: boolean;
+  /** Why it has not, for the disabled button to say. Null when it can. */
+  readBlockedReason: string | null;
 }
 
 /**
@@ -287,34 +346,81 @@ export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView 
   const { supported, isCalibrated, open, hasGeometry, seedPixel, seedLabel, edgesPlaced, hasAdjustments } =
     input;
   const canReuseSeed = seedPixel !== null && edgesPlaced === 0 && !input.placeBothEdges;
+  const blank = {
+    prompt: null,
+    regenerateWarning: null,
+    spanNote: null,
+    canRead: false,
+    readBlockedReason: null,
+  };
 
   if (!supported || !isCalibrated) {
-    return { phase: 'unavailable', prompt: null, regenerateWarning: null, canReuseSeed: false };
+    return { ...blank, phase: 'unavailable', canReuseSeed: false };
   }
   if (!open) {
-    return { phase: 'closed', prompt: null, regenerateWarning: null, canReuseSeed };
+    return { ...blank, phase: 'closed', canReuseSeed };
   }
   if (!hasGeometry) {
-    // ⚑ The prompt says which click is expected, because "mark the category
-    // axis" alone leaves the user guessing whether one point or two is wanted -
-    // and the answer differs depending on whether P1 can stand in for the first.
+    // ⚑⚑ THE PROMPT NAMES THE FAR EDGE OF THE WHOLE AXIS, and that wording is
+    // the fix (v2.3). It used to read "Click where the categories end", and
+    // David clicked the end of the FIRST category on a four-category chart -
+    // read cold, that is exactly what the sentence means. It is CLAUDE.md gate 4
+    // for the second time: v2.2's shared-corners walk sent its second click to
+    // the wrong corner in the same way, and both were found only when a person
+    // made the gesture.
     const prompt = canReuseSeed
-      ? `Click where the categories end. ${seedLabel} (the amber handle) is being reused as the start - press Re-place axis if that is wrong.`
+      ? `Click the FAR END of the whole category axis - past the last category, not the end of the first. ${seedLabel} (the amber handle) is the start; press Re-place axis if that is wrong.`
       : edgesPlaced === 0
-        ? 'Click where the categories start, then where they end.'
-        : 'Now click where the categories end.';
-    return { phase: 'mark-axis', prompt, regenerateWarning: null, canReuseSeed };
+        ? 'Click where the category axis STARTS, before the first category, then its FAR END past the last.'
+        : 'Now click the FAR END of the axis, past the last category.';
+    return {
+      ...blank,
+      phase: 'mark-axis',
+      prompt,
+      canReuseSeed,
+      readBlockedReason: 'Mark the category axis first - then this reads the categories.',
+    };
   }
+  const declaredCount = input.hasDeclaredCount ?? true;
   return {
+    ...blank,
     phase: 'declaring',
-    prompt: null,
-    // Only ever shown when there is something to lose. A warning that appears
-    // when nothing would be discarded teaches the user to ignore it.
+    // ⚑ On the CONTROLS that rebuild, not standing on the card - see the field.
+    // Still only where there is something to lose: a warning that appears when
+    // nothing would be discarded teaches the user to ignore it.
     regenerateWarning: hasAdjustments
-      ? 'Changing the count or the tick style, or re-placing the axis, rebuilds the ticks evenly and discards the ones you moved.'
+      ? 'This rebuilds the ticks evenly and discards the ones you moved.'
       : null,
+    spanNote: shortSpanNote(input.spanPx ?? null, input.imageSize ?? null),
     canReuseSeed: false,
+    canRead: declaredCount,
+    readBlockedReason: declaredCount
+      ? null
+      : 'Say how many categories there are first - then this reads them.',
   };
+}
+
+/**
+ * Under a QUARTER of the figure's longer side, which is where a marked span
+ * stops being plausible as a whole category axis.
+ *
+ * ⚑ A JUDGEMENT, AND SAID OUT LOUD RATHER THAN BURIED. There is no plot box in
+ * the record to compare against, so the image is the only frame available. A
+ * fifth of a figure is a legitimate axis on a small inset; a quarter is where it
+ * is worth ASKING. Nothing is refused either way.
+ */
+const SHORT_SPAN_FRACTION = 0.25;
+
+function shortSpanNote(
+  spanPx: number | null,
+  imageSize: { width: number; height: number } | null
+): string | null {
+  if (spanPx === null || !imageSize) return null;
+  const longSide = Math.max(imageSize.width, imageSize.height);
+  if (!(longSide > 0) || !(spanPx > 0)) return null;
+  const fraction = spanPx / longSide;
+  if (fraction >= SHORT_SPAN_FRACTION) return null;
+  return `That axis covers about ${Math.round(fraction * 100)}% of the figure. If the categories run further, press Re-place axis.`;
 }
 
 /** Whether a canvas click should be taken as placing a category-axis edge. */
@@ -365,9 +471,24 @@ export interface CategoryOffer {
 export function categoryOffer(
   hasGeometry: boolean,
   categoryCount: number,
-  seriesWithReadings: number
+  seriesWithReadings: number,
+  /**
+   * A count was DECLARED, rather than a list of categories having accumulated
+   * some other way.
+   *
+   * ⚑⚑ THE CARD USED TO ASSERT `2 categories` WITH THE COUNT FIELD EMPTY, on a
+   * figure with four - because two bars had been captured and the shared name
+   * list had two entries. A count nobody typed, reported as fact, is exactly the
+   * fabricated-category defect the v2.1 work was supposed to have closed,
+   * arriving through a different door. Say what was declared, or say that
+   * nothing was.
+   */
+  hasDeclaredCount = true
 ): CategoryOffer {
   if (hasGeometry) {
+    if (!hasDeclaredCount) {
+      return { text: 'Category ticks - axis marked, no count yet', promoted: true };
+    }
     return {
       text:
         categoryCount === 1
