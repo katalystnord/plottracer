@@ -260,6 +260,17 @@ export function SeriesPanel(props: SeriesPanelProps) {
           here, sees the agreement, and stops looking.
           ⚑ The FIX is a checkbox, since one bit is all the code asks for; that is
           a v2.4 change and this is only the wording made true. */}
+      {/* ⚑⚑ DISABLED UNTIL THERE ARE AXES, MIRRORING `+ Add` DIRECTLY ABOVE IT.
+          A stack group says how a captured bar's VALUE is read, so before
+          calibration it cannot do anything - and this field was offered anyway,
+          on a screen whose only available action is Capture figure. Found by
+          David in the built app, and made worse by widening it: at 90px and the
+          small font it was quiet enough not to invite the click.
+          ⚑ DISABLED RATHER THAN HIDDEN, deliberately. A control that APPEARS once
+          you have done something else is the "invisible precondition" the
+          keystone rule refuses - the user never learns it exists. Greyed out with
+          the reason on it is progressive disclosure they can actually find, and
+          it is the same mechanism `+ Add` already uses for the same fact. */}
       {activeInfo && supportsStackGroups && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
           {/* ⚑ MIRRORS THE NAME FIELD ABOVE IT (2026-08-23). Two text inputs sit
@@ -275,11 +286,16 @@ export function SeriesPanel(props: SeriesPanelProps) {
           <input
             id="series-stack-group"
             data-testid="series-stack-group"
-            title="Tick this series as a stacked segment: its value becomes its own height rather than its distance from the baseline. Blank = an ordinary bar measured from the baseline."
+            title={
+              canAddSeries
+                ? 'Tick this series as a stacked segment: its value becomes its own height rather than its distance from the baseline. Blank = an ordinary bar measured from the baseline.'
+                : 'Calibrate the chart first - a stack group changes how a captured bar\u2019s value is read, so there is nothing for it to act on yet.'
+            }
             placeholder="none"
             value={stackGroupOf(activeIndex) ?? ''}
             onChange={(e) => onSetStackGroup(activeIndex, e.target.value.trim() || null)}
             onBlur={onCommitPendingEdit}
+            disabled={!canAddSeries}
             style={{ flex: '1 1 auto', minWidth: 80 }}
           />
         </div>

@@ -875,6 +875,24 @@ describe('Workspace: Bar axes', () => {
   // series belongs to. Capture itself is the ordinary drag-box every other
   // bar uses; what changes is the derived value (an unsigned span, not
   // baseline-relative) and this one field.
+  it('⚑ the "Stack group" field is DISABLED before calibration, and says why', async () => {
+    // Found by David in the built app: the field was live on a screen whose only
+    // available action is Capture figure - `Series 1 (0)`, `+ Add` greyed out,
+    // every rail tool greyed out. A stack group says how a captured bar's VALUE is
+    // read, so before there are axes it has nothing to act on.
+    // ⚑ DISABLED, NOT HIDDEN - a control that appears once you have done something
+    // else is the invisible precondition the keystone rule refuses. It is greyed
+    // out with the reason on it, exactly as `+ Add` beside it already is.
+    await resetWorkspace('bar');
+    const before = page.getByTestId('series-stack-group');
+    expect(await before.isDisabled()).toBe(true);
+    expect(await before.getAttribute('title')).toMatch(/Calibrate the chart first/);
+
+    await calibrateBarStandard();
+    expect(await before.isDisabled()).toBe(false);
+    expect(await before.getAttribute('title')).toMatch(/stacked segment/);
+  });
+
   it('a "Stack group" field tags a series, and a stacked segment reads as an unsigned span', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
