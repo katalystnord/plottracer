@@ -19,7 +19,7 @@ import {
   CATEGORY_PANEL_HINT,
   CATEGORY_TICK_DRAG_HINT,
   CONVENTION_LABELS,
-  categoryAxisGlyphs,
+  categoryAidGlyphs,
   categoryOffer,
   categoryPanelView,
   categoryTickIndexFromId,
@@ -30,7 +30,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../core/categoryAxis.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
-import type { GlyphSegment } from '../../engine/histogramGlyph.js';
+import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
 import { type RecordedMeasurement, type MeasureScaleState } from './tools/measureDisplay.js';
 import { useMeasure } from './tools/useMeasure.js';
@@ -6006,7 +6006,7 @@ export function Workspace() {
     const ca = session.getCategoryAxis();
     return { edges: ca.getAxisEdges(), tickPoints: ca.getTickPoints() };
   }, [session, version]);
-  const categoryGlyphs = useMemo(() => categoryAxisGlyphs(categoryOverlay), [categoryOverlay]);
+  const categoryGlyphs = useMemo(() => categoryAidGlyphs(categoryOverlay), [categoryOverlay]);
   const categoryMarkers = useMemo(() => categoryTickMarkers(categoryOverlay), [categoryOverlay]);
 
   /**
@@ -6043,20 +6043,28 @@ export function Workspace() {
    * ⚑ THE SELECTED ONE IS STILL DRAWN BIGGER, because the card names a boundary
    * in data units and the user has to find it among a dozen identical marks.
    */
-  const heatmapGridGlyphs = useMemo<GlyphSegment[][]>(
+  const heatmapGridGlyphs = useMemo<AidGlyph[]>(
     () =>
       heatmapOverlays
-        ? [...categoryAxisGlyphs(heatmapOverlays.x), ...categoryAxisGlyphs(heatmapOverlays.y)]
+        ? [...categoryAidGlyphs(heatmapOverlays.x), ...categoryAidGlyphs(heatmapOverlays.y)].map((g) =>
+            // ⚑ The picked boundary is drawn bigger and ringed - the same
+            // emphasis the marker layer used to apply, moved with the grip it
+            // belongs to. The card names a boundary in data units, so the pick
+            // has to be findable among a dozen identical marks.
+            g.markerId !== null && g.markerId === selectedDividerId
+              ? { ...g, gripRadius: 7, selected: true }
+              : g
+          )
         : [],
-    [heatmapOverlays]
+    [heatmapOverlays, selectedDividerId]
   );
 
   const heatmapHandles = useMemo<CanvasMarker[]>(() => {
     if (!heatmapOverlays) return [];
-    return [...categoryTickMarkers(heatmapOverlays.x), ...categoryTickMarkers(heatmapOverlays.y)].map(
-      (m) => ({ ...m, radius: m.id === selectedDividerId ? 7 : 4 })
-    );
-  }, [heatmapOverlays, selectedDividerId]);
+    // ⚑ No radius map any more: an `aid` marker draws nothing, so its size is
+    // the GRIP's, and the grip travels with the mark in `heatmapGridGlyphs`.
+    return [...categoryTickMarkers(heatmapOverlays.x), ...categoryTickMarkers(heatmapOverlays.y)];
+  }, [heatmapOverlays]);
   // The recorded relations, drawn (checkpoint 79). Concatenated with the tuple
   // glyphs above rather than replacing them: both are error bars on the canvas,
   // and they never coexist (the tuple ones only exist on a project saved under
@@ -6283,9 +6291,9 @@ export function Workspace() {
     [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
   );
 
-  // v2.1: the category axis and its ticks draw through the SAME two props the
-  // rest of the overlay uses -- segments for the marks, markers for the drag
-  // handles -- so ImageCanvas needed no new render path for any of this.
+  // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
+  // grip are one object in `allAidGlyphs`. They were two, in two layers and two
+  // colours, and only the handle could be moved - see `AidGlyph`.
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
       categoryMarkers.length > 0 || heatmapHandles.length > 0
@@ -6293,13 +6301,20 @@ export function Workspace() {
         : markers,
     [markers, categoryMarkers, heatmapHandles]
   );
-  /** ⚑ ONE GLYPH LAYER, three contributors - a histogram's bins, a bar chart's
-   * marked category axis, and a heatmap's grid. The third joined here rather
-   * than getting a layer of its own, because it IS the second thing: the same
-   * `categoryAxisGlyphs`, fed a different axis. */
-  const allBinGlyphs = useMemo(
-    () => [...binGlyphs, ...categoryGlyphs, ...heatmapGridGlyphs],
-    [binGlyphs, categoryGlyphs, heatmapGridGlyphs]
+  /** A histogram's bin glyphs, which is all this layer carries now.
+   *
+   * ⚠️ THE CATEGORY AXIS AND THE HEATMAP GRID USED TO BE HERE TOO, and that is
+   * why their marks came out BLACK and unclickable: this layer paints in
+   * `theme.color.overlay.stroke` with `listening={false}`, which is right for a
+   * bin's glyph and wrong for something the user is meant to grab. They have
+   * their own layer now (`allAidGlyphs`), in their own colour, with their grips
+   * attached. */
+  const allBinGlyphs = useMemo(() => binGlyphs, [binGlyphs]);
+  /** ⚑ ONE AID LAYER, two contributors - a bar chart's marked category axis and
+   * a heatmap's grid - because they are the same thing fed a different axis. */
+  const allAidGlyphs = useMemo<AidGlyph[]>(
+    () => [...categoryGlyphs, ...heatmapGridGlyphs],
+    [categoryGlyphs, heatmapGridGlyphs]
   );
 
   const seriesLines = useMemo<SeriesLine[]>(
@@ -8562,6 +8577,7 @@ export function Workspace() {
           calibrationPreview={calibPreview}
           boxPlotGlyphs={boxPlotGlyphs}
           binGlyphs={allBinGlyphs}
+          aidGlyphs={allAidGlyphs}
           errorBarGlyphs={errorWhiskers}
           curveFitLine={curveFitOverlay}
           // ⚑ PAN ONLY. The fitted curve is drawn AFTER the data points and

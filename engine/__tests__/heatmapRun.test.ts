@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryAxisGlyphs } from '../categoryTickOverlay.js';
+import { categoryAidGlyphs } from '../categoryTickOverlay.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { readPng } from './helpers/readPng.js';
@@ -456,10 +456,10 @@ describe('dragging a divider', () => {
     expect(upFirst[0]!.y).toBe(300);
     expect(downFirst[0]!.y).toBe(100);
     // …and the tick marks follow it, drawn away from the plot in both cases.
-    const [up] = categoryAxisGlyphs(heatmapAxisOverlays(grid, upright).x);
-    const [down] = categoryAxisGlyphs(heatmapAxisOverlays(grid, flipped).x);
-    expect(up![1]!.to.y).toBeGreaterThan(up![1]!.from.y); // downward, below the plot
-    expect(down![1]!.to.y).toBeLessThan(down![1]!.from.y); // upward, above it
+    const up = categoryAidGlyphs(heatmapAxisOverlays(grid, upright).x)[1]!.segments[0]!;
+    const down = categoryAidGlyphs(heatmapAxisOverlays(grid, flipped).x)[1]!.segments[0]!;
+    expect(up.to.y).toBeGreaterThan(up.from.y); // downward, below the plot
+    expect(down.to.y).toBeLessThan(down.from.y); // upward, above it
   });
 
   it('is empty for a grid that is not a grid', () => {

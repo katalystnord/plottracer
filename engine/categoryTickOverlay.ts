@@ -10,9 +10,9 @@
  * value from the calibrated value axis, and auto-extract finds bars from ink.
  * These functions decide what is DRAWN and what is ASKED, and nothing else.
  *
- * The rendering reuses what ImageCanvas already has rather than adding a path:
- * segments (like a histogram's bin glyph) for the marks, and ordinary markers
- * for the drag handles.
+ * ⚑⚑ A MARK IS ONE OBJECT. It used to be two - a segment painted in the bin
+ * glyph layer plus a separate square handle standing 14px away - which is the
+ * error-bar cap defect arriving by another door. See `AidGlyph`.
  */
 
 import type { CategoryAxisPoint, TickConvention } from '../core/categoryAxis.js';
@@ -87,37 +87,102 @@ export interface CategoryOverlayInput {
 }
 
 /**
- * The axis line, its two end marks and one mark per tick, as segment runs.
+ * ONE DRAWN THING PER MARK, with the identity of the handle it IS.
+ *
+ * ⚑⚑ THIS TYPE EXISTS BECAUSE A TICK USED TO BE TWO OBJECTS. The mark was a
+ * `GlyphSegment` painted in the bin-glyph layer (`listening={false}`, and in
+ * that layer's BLACK, not this feature's violet); the grab target was a separate
+ * violet square standing 14px away at the mark's outer end. So the thing you
+ * could see was not the thing you could grab, they were different colours, and
+ * nothing recomputed the mark while the square was being dragged - it stayed
+ * frozen until release. David, reading the loupe: *"Why is the tick marker these
+ * two separate pieces and you can only move one?"*
+ *
+ * ⚑⚑ AND IT IS THE ERROR-BAR CAP DEFECT, UNSWEPT. `ImageCanvas` already carries
+ * the cure in its own words, written for `kind: 'cap'`: *"two objects for one
+ * thing, one moved live by Konva and the other frozen until release, so they
+ * visibly separated while the record stayed perfectly correct... this marker
+ * draws NOTHING. Its whole job is to be grabbable... There is no second object
+ * left that COULD drift."* That rule was applied to caps and stopped there.
+ * A found bug is a search query, not a ticket closed.
+ *
+ * ▶ So a mark is now ONE thing: its segments and its grip are drawn together, in
+ * its own colour, from this one description, and the renderer translates the
+ * whole of it by the live drag while its marker is under the cursor.
+ */
+export interface AidGlyph {
+  /**
+   * The marker this mark IS, so the renderer can follow its drag live - the same
+   * link `errorBarGlyphs`' `capMarkerId` provides. Null for a mark nobody can
+   * drag (the axis line, the two frozen ends).
+   */
+  markerId: string | null;
+  segments: GlyphSegment[];
+  /** Where to draw the square grip, or null for a mark that is not a handle. */
+  grip: { x: number; y: number } | null;
+  /** Half-width of that grip, in screen pixels. The picked one is drawn bigger,
+   * because the card names a boundary in data units and the user has to find it
+   * among a dozen identical marks. */
+  gripRadius?: number;
+  /** Draw the picked ring - the same highlight the marker layer used to own. */
+  selected?: boolean;
+  color: string;
+}
+
+/**
+ * The axis line, its two end marks and one mark per tick.
  *
  * Empty when no axis is marked - an unmarked session draws nothing, which is
  * what makes the whole feature invisible until someone asks for it.
  */
-export function categoryAxisGlyphs({
+export function categoryAidGlyphs({
   edges,
   tickPoints,
   markEnds = true,
-}: CategoryOverlayInput): GlyphSegment[][] {
+  tickId = (i) => `categoryTick${i}`,
+  color = CATEGORY_TICK_COLOR,
+}: CategoryOverlayInput): AidGlyph[] {
   if (!edges) return [];
   const n = outwardNormal(edges);
   if (!n) return [];
 
-  const axis: GlyphSegment = {
-    from: { x: edges[0].x, y: edges[0].y },
-    to: { x: edges[1].x, y: edges[1].y },
+  const axis: AidGlyph = {
+    markerId: null,
+    grip: null,
+    color,
+    segments: [
+      { from: { x: edges[0].x, y: edges[0].y }, to: { x: edges[1].x, y: edges[1].y } },
+    ],
   };
   // The edges are drawn across the axis, the ticks only outward from it - so an
-  // end never reads as one more category divider.
-  const ends: GlyphSegment[] = markEnds
+  // end never reads as one more category divider. They carry no marker id: every
+  // tick is a function of them, so they are deliberately not draggable.
+  const ends: AidGlyph[] = markEnds
     ? [edges[0], edges[1]].map((p) => ({
-        from: { x: p.x - n.x * EDGE_LENGTH, y: p.y - n.y * EDGE_LENGTH },
-        to: { x: p.x + n.x * EDGE_LENGTH, y: p.y + n.y * EDGE_LENGTH },
+        markerId: null,
+        grip: null,
+        color,
+        segments: [
+          {
+            from: { x: p.x - n.x * EDGE_LENGTH, y: p.y - n.y * EDGE_LENGTH },
+            to: { x: p.x + n.x * EDGE_LENGTH, y: p.y + n.y * EDGE_LENGTH },
+          },
+        ],
       }))
     : [];
-  const ticks: GlyphSegment[] = tickPoints.map((p) => ({
-    from: { x: p.x, y: p.y },
-    to: { x: p.x + n.x * TICK_LENGTH, y: p.y + n.y * TICK_LENGTH },
+  // ⚑ THE MARK AND ITS GRIP, IN ONE DESCRIPTION. The grip sits at the mark's
+  // outer end exactly where the separate square used to, so nothing moves on
+  // screen - what changes is that they are now one object with one identity, and
+  // the renderer moves both together.
+  const ticks: AidGlyph[] = tickPoints.map((p, i) => ({
+    markerId: tickId(i),
+    grip: { x: p.x + n.x * TICK_LENGTH, y: p.y + n.y * TICK_LENGTH },
+    color,
+    segments: [
+      { from: { x: p.x, y: p.y }, to: { x: p.x + n.x * TICK_LENGTH, y: p.y + n.y * TICK_LENGTH } },
+    ],
   }));
-  return [[axis, ...ends, ...ticks]];
+  return [axis, ...ends, ...ticks];
 }
 
 /**
@@ -200,6 +265,11 @@ export function categoryTickMarkers({
     label: '',
     color,
     draggable: true,
+    // ⚑⚑ THE WHOLE MARK IS THE HIT AREA, not just the grip at its end. The mark
+    // is what the user sees and therefore what they reach for; before this it
+    // was paint with no hit area at all, so reaching for it did nothing and the
+    // only thing that worked was a 4px square 14px away. See `AidGlyph`.
+    hitFrom: { x: p.x, y: p.y },
     // ⚑⚑ AN AID, NOT A PRECISE REFERENCE. These used to be `calibration`, which
     // draws the crosshair reticle that exists - in its own comment - "so an axis
     // handle reads as a precise reference, not a data dot". A divider is the

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CATEGORY_TICK_COLOR,
   CONVENTION_LABELS,
-  categoryAxisGlyphs,
+  categoryAidGlyphs,
   categoryOffer,
   categoryPanelView,
   categoryTickIndexFromId,
@@ -42,24 +42,50 @@ function panel(over: Partial<CategoryPanelInput> = {}) {
 
 describe('the drawn axis', () => {
   it('draws nothing at all until an axis is marked', () => {
-    expect(categoryAxisGlyphs({ edges: null, tickPoints: [] })).toEqual([]);
+    expect(categoryAidGlyphs({ edges: null, tickPoints: [] })).toEqual([]);
     expect(categoryTickMarkers({ edges: null, tickPoints: [{ x: 1, y: 2 }] })).toEqual([]);
   });
 
   it('draws the axis, its two ends, and one mark per tick', () => {
-    const runs = categoryAxisGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
-    expect(runs).toHaveLength(1);
-    const [axis, endA, endB, t1, t2] = runs[0]!;
-    expect(axis).toEqual({ from: { x: 100, y: 500 }, to: { x: 600, y: 500 } });
+    const glyphs = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
+    // One drawn thing per mark: the axis, its two ends, and a tick each.
+    expect(glyphs).toHaveLength(5);
+    const [axis, endA, endB, t1, t2] = glyphs;
+    expect(axis!.segments[0]).toEqual({ from: { x: 100, y: 500 }, to: { x: 600, y: 500 } });
     // Ends cross the axis; ticks only stand off it.
-    expect(endA).toEqual({ from: { x: 100, y: 489 }, to: { x: 100, y: 511 } });
-    expect(endB).toEqual({ from: { x: 600, y: 489 }, to: { x: 600, y: 511 } });
-    expect(t1).toEqual({ from: { x: 225, y: 500 }, to: { x: 225, y: 514 } });
-    expect(t2).toEqual({ from: { x: 475, y: 500 }, to: { x: 475, y: 514 } });
+    expect(endA!.segments[0]).toEqual({ from: { x: 100, y: 489 }, to: { x: 100, y: 511 } });
+    expect(endB!.segments[0]).toEqual({ from: { x: 600, y: 489 }, to: { x: 600, y: 511 } });
+    expect(t1!.segments[0]).toEqual({ from: { x: 225, y: 500 }, to: { x: 225, y: 514 } });
+    expect(t2!.segments[0]).toEqual({ from: { x: 475, y: 500 }, to: { x: 475, y: 514 } });
+  });
+
+  /**
+   * ⚑⚑ A MARK AND ITS HANDLE ARE ONE OBJECT. They were two - a black segment in
+   * the bin layer and a violet square 14px away in the marker layer, of which
+   * only the square could be moved. David: *"Why is the tick marker these two
+   * separate pieces and you can only move one?"*
+   */
+  it('⚑⚑ a tick names the handle it IS, and carries its own grip', () => {
+    const glyphs = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
+    const tick = glyphs[3]!;
+    expect(tick.markerId).toBe('categoryTick0');
+    // The grip sits at the mark's outer end - the same pixel the separate
+    // square used to occupy, so nothing moved on screen.
+    expect(tick.grip).toEqual({ x: 225, y: 514 });
+    expect(tick.segments[0]!.to).toEqual(tick.grip);
+    // The axis and its frozen ends name no handle: every tick derives from them.
+    expect(glyphs.slice(0, 3).every((g) => g.markerId === null && g.grip === null)).toBe(true);
+  });
+
+  it('⚑ and the marker over it can be grabbed anywhere along the mark', () => {
+    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
+    // `hitFrom` is the mark's far end, so the hit area spans the whole tick
+    // rather than only the grip the user cannot see separately any more.
+    expect(tick!.hitFrom).toEqual({ x: 225, y: 500 });
   });
 
   it('⚑ ticks stand off DOWNWARD on an upright chart - where a figure prints them', () => {
-    const tick = categoryAxisGlyphs({ edges: H, tickPoints: [{ x: 300, y: 500 }] })[0]![3]!;
+    const tick = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 300, y: 500 }] })[3]!.segments[0]!;
     expect(tick.to.y).toBeGreaterThan(tick.from.y);
     expect(tick.to.x).toBe(tick.from.x);
   });
@@ -67,14 +93,14 @@ describe('the drawn axis', () => {
   it('the marks rotate with the axis rather than staying image-aligned', () => {
     // A horizontal-bars chart: the category axis runs down the left side.
     const vertical = [{ x: 100, y: 100 }, { x: 100, y: 600 }] as const;
-    const tick = categoryAxisGlyphs({ edges: vertical, tickPoints: [{ x: 100, y: 300 }] })[0]![3]!;
+    const tick = categoryAidGlyphs({ edges: vertical, tickPoints: [{ x: 100, y: 300 }] })[3]!.segments[0]!;
     expect(tick.to.y).toBe(tick.from.y);
     expect(tick.to.x).toBeLessThan(tick.from.x); // outward, away from the plot
   });
 
   it('works on a tilted axis, at the right stand-off length', () => {
     const tilted = [{ x: 0, y: 0 }, { x: 300, y: 400 }] as const; // length 500
-    const tick = categoryAxisGlyphs({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] })[0]![3]!;
+    const tick = categoryAidGlyphs({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] })[3]!.segments[0]!;
     const dx = tick.to.x - tick.from.x;
     const dy = tick.to.y - tick.from.y;
     expect(Math.hypot(dx, dy)).toBeCloseTo(14, 9);

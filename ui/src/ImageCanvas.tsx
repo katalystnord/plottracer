@@ -15,6 +15,7 @@ import { IS_MAC } from './platform.js';
 import { fitToContainer, zoomAt, zoomByFactor, panBy, screenToImage, imageToScreen, isClick, type ViewState } from '../../engine/canvasView.js';
 import type { BoxPlotGlyphSegment } from '../../engine/boxPlotGlyph.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
+import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import type { CalibrationPreview } from '../../engine/calibrationPreview.js';
 import { computeWhiskerGlyph } from '../../engine/errorBarGlyph.js';
 import type { WhiskerGlyph } from '../../engine/calibrationSession.js';
@@ -228,6 +229,16 @@ interface ImageCanvasProps {
    * engine/histogramGlyph.ts. Same decorative, listening={false} treatment as
    * boxPlotGlyphs: they mark what was captured, they aren't hit targets. */
   binGlyphs?: GlyphSegment[][];
+  /**
+   * The adjustable AIDS - category ticks, heatmap grid boundaries - each one
+   * mark and its grip as a SINGLE object that knows which handle it is.
+   *
+   * ⚑⚑ ITS OWN PROP, not more entries in `binGlyphs`. They were merged into that
+   * list, which meant they were painted in the bin layer's BLACK and with
+   * `listening={false}` - so the violet handle beside them was a different
+   * colour and the only grabbable thing. Two pieces for one mark. See `AidGlyph`.
+   */
+  aidGlyphs?: AidGlyph[];
   /**
    * Error whiskers (checkpoint 70; reshaped for B1/B2 in v2.3), image-pixel
    * space - see engine/errorBarGlyph.ts.
@@ -543,7 +554,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -594,6 +605,15 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
    * live position is only available from the marker's own `onDragMove`.
    */
   const [capDrag, setCapDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  /**
+   * The aid mark currently under the cursor, in SCREEN coordinates.
+   *
+   * ⚑ The same mechanism `capDrag` is, and for the same reason: Konva moves the
+   * dragged node and nothing else, so a mark drawn from the model is frozen
+   * until release. Without this the tick's mark stayed behind while its grip
+   * moved - the two-objects-drifting-apart picture, one layer down.
+   */
+  const [aidDrag, setAidDrag] = useState<{ id: string; x: number; y: number } | null>(null);
   // Crop selection drag (checkpoint 63): the canvas-relative screen start, plus
   // the live current point for drawing the selection rectangle.
   const cropDragRef = useRef<{ x: number; y: number } | null>(null);
@@ -1908,19 +1928,26 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   }
                   if (point.kind === 'aid') {
-                    // ⚑⚑ AN ADJUSTABLE AID, NOT A PRECISE REFERENCE. A category
-                    // tick or a heatmap grid boundary is something you drag onto
-                    // the figure's own rule; the reticle above was chosen to say
-                    // "precise reference". Drawing both alike claimed a boundary
-                    // nudged by eye had a calibration point's authority - and
-                    // invited the calibration point to be dragged as casually as
-                    // a divider. The two-layer model, made visible.
+                    // ⚑⚑ AN AID DRAWS NOTHING HERE ANY MORE. Its whole job is to
+                    // be GRABBABLE, exactly as `cap` above: the tick you see is
+                    // drawn once, in `aidGlyphs`, together with its grip, and it
+                    // follows this drag live. There is no second object left that
+                    // COULD drift.
                     //
-                    // ⚑ A SQUARE. Round is spoken for twice over (a data dot and
-                    // the reticle's ring), and the difference has to survive at
-                    // 4px. The invisible hit disc is the same trick the reticle
-                    // uses so a thin shape is still easy to grab.
-                    const r = point.radius ?? 4;
+                    // ⚠️ WHAT THIS REPLACED, so nobody rebuilds it: a violet
+                    // square drawn HERE, beside a mark painted in the bin-glyph
+                    // layer in BLACK with `listening={false}`. Two objects, two
+                    // colours, 14px apart, and only the square could be moved -
+                    // so reaching for the tick did nothing, and during a drag the
+                    // mark stayed frozen while the square left it. David, reading
+                    // the loupe: *"Why is the tick marker these two separate
+                    // pieces and you can only move one?"* It is the error-bar cap
+                    // defect that was fixed for `cap` and never swept to `aid`.
+                    //
+                    // ⚑ THE HIT AREA IS THE WHOLE MARK, not the grip alone. The
+                    // mark is what the user reaches for, because it is what they
+                    // can see. `hitFrom` is its far end, in image coordinates.
+                    const base = point.hitFrom ? imageToScreen(view, point.hitFrom.x, point.hitFrom.y) : null;
                     return (
                       <Group
                         key={point.id}
@@ -1929,31 +1956,29 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         draggable={interactive}
                         onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
                         onDragStart={cancelDragIfPanning}
-                        onDragMove={(e) => setHover({ x: e.target.x(), y: e.target.y() })}
-                        onDragEnd={(e) => onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY })}
+                        onDragMove={(e) => {
+                          setHover({ x: e.target.x(), y: e.target.y() });
+                          setAidDrag({ id: point.id, x: e.target.x(), y: e.target.y() });
+                        }}
+                        onDragEnd={(e) => {
+                          // Cleared BEFORE the commit, so the one frame between
+                          // "drag finished" and "model updated" draws from the
+                          // model rather than from a stale live position.
+                          setAidDrag(null);
+                          onMarkerDragEndInternal(point.id, e, { x: screenX, y: screenY });
+                        }}
                       >
                         <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
-                        {point.selected && (
-                          <Rect
-                            x={-r - 3}
-                            y={-r - 3}
-                            width={(r + 3) * 2}
-                            height={(r + 3) * 2}
-                            stroke={theme.color.primary.main}
-                            strokeWidth={2.5}
-                            listening={false}
+                        {base && (
+                          <Line
+                            points={[0, 0, base.x - screenX, base.y - screenY]}
+                            stroke="#000000"
+                            strokeWidth={1}
+                            opacity={0}
+                            hitStrokeWidth={16}
+                            listening={interactive}
                           />
                         )}
-                        <Rect
-                          x={-r}
-                          y={-r}
-                          width={r * 2}
-                          height={r * 2}
-                          fill={point.color}
-                          stroke={theme.color.overlay.stroke}
-                          strokeWidth={1}
-                          listening={false}
-                        />
                       </Group>
                     );
                   }
@@ -2055,6 +2080,73 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   })
                 )}
+                {/* ⚑⚑ ONE OBJECT PER MARK. The tick, its grip and its picked
+                    ring are drawn HERE, together, in the aid's own violet - and
+                    the marker over them draws nothing at all. They used to be
+                    two: a segment in the bin layer (black, `listening={false}`)
+                    and a square in the marker layer 14px away, of which only the
+                    square could be moved. Same defect the error-bar cap had, and
+                    the same cure. */}
+                {aidGlyphs?.map((glyph, glyphIndex) => {
+                  // ⚑ The live offset, and this is the half that stops the drift:
+                  // Konva moves the dragged marker and nothing else, so anything
+                  // drawn from the model is frozen until release. When this
+                  // mark's own handle is under the cursor, the WHOLE mark is
+                  // shifted by how far that handle has travelled.
+                  const gripScreen = glyph.grip ? imageToScreen(view, glyph.grip.x, glyph.grip.y) : null;
+                  const live =
+                    aidDrag && glyph.markerId && aidDrag.id === glyph.markerId && gripScreen
+                      ? { dx: aidDrag.x - gripScreen.x, dy: aidDrag.y - gripScreen.y }
+                      : { dx: 0, dy: 0 };
+                  const r = glyph.gripRadius ?? 4;
+                  return (
+                    <Fragment key={`aid-glyph-${glyphIndex}`}>
+                      {glyph.segments.map((segment, segmentIndex) => {
+                        const from = imageToScreen(view, segment.from.x, segment.from.y);
+                        const to = imageToScreen(view, segment.to.x, segment.to.y);
+                        return (
+                          <Line
+                            key={`aid-seg-${segmentIndex}`}
+                            points={[from.x + live.dx, from.y + live.dy, to.x + live.dx, to.y + live.dy]}
+                            stroke={glyph.color}
+                            strokeWidth={2}
+                            listening={false}
+                          />
+                        );
+                      })}
+                      {gripScreen && (
+                        <>
+                          {glyph.selected && (
+                            <Rect
+                              x={gripScreen.x + live.dx - r - 3}
+                              y={gripScreen.y + live.dy - r - 3}
+                              width={(r + 3) * 2}
+                              height={(r + 3) * 2}
+                              stroke={theme.color.primary.main}
+                              strokeWidth={2.5}
+                              listening={false}
+                            />
+                          )}
+                          {/* ⚑ A SQUARE. Round is spoken for twice over (a data
+                              dot and the calibration reticle's ring), and the
+                              difference has to survive at 4px: square reads as a
+                              grip. Unchanged from what the marker layer drew -
+                              what changed is that it is now part of the mark. */}
+                          <Rect
+                            x={gripScreen.x + live.dx - r}
+                            y={gripScreen.y + live.dy - r}
+                            width={r * 2}
+                            height={r * 2}
+                            fill={glyph.color}
+                            stroke={theme.color.overlay.stroke}
+                            strokeWidth={1}
+                            listening={false}
+                          />
+                        </>
+                      )}
+                    </Fragment>
+                  );
+                })}
                 {errorBarGlyphs?.map((whisker, glyphIndex) => {
                   // ⚑⚑ THE LIVE POSITION, AND THIS IS THE WHOLE OF B1. Konva
                   // moves a dragged marker and nothing else, so anything drawn

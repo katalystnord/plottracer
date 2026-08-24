@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryAxisGlyphs, categoryTickMarkers } from '../categoryTickOverlay.js';
+import { categoryAidGlyphs, categoryTickMarkers } from '../categoryTickOverlay.js';
 import { heatmapAxisOverlays, readHeatmapCells, NO_HEATMAP_LABELS } from '../heatmapRun.js';
 import type { PixelProjector } from '../../algorithms/heatmapRead.js';
 
@@ -41,12 +41,14 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
 
   it('DRAWS the axis and a mark per divider - the thing that was missing', () => {
     const { x } = heatmapAxisOverlays(grid, axes);
-    const runs = categoryAxisGlyphs(x);
-    expect(runs).toHaveLength(1);
+    const glyphs = categoryAidGlyphs(x);
     // One axis line + one tick per divider. No separate END marks: a heatmap's
     // outer boundaries are ordinary dividers and draw their own ticks, so
     // marking them twice would say they are a different kind of thing.
-    expect(runs[0]).toHaveLength(1 + x.tickPoints.length);
+    expect(glyphs).toHaveLength(1 + x.tickPoints.length);
+    // ⚑ And every divider's mark names the handle it is, so the renderer moves
+    // the mark and its grip together instead of leaving one behind.
+    expect(glyphs.slice(1).map((g) => g.markerId)).toEqual(['hmx:0', 'hmx:1', 'hmx:2', 'hmx:3']);
   });
 
   it('keeps the ids its drag handler answers to', () => {
@@ -76,8 +78,8 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
     ]);
     expect(markers[0]!.draggable).toBe(false);
     expect(markers[2]!.draggable).toBe(true);
-    // …and its glyph run still carries the axis, both end marks and both ticks.
-    expect(categoryAxisGlyphs(bar)[0]).toHaveLength(1 + 2 + 2);
+    // …and it still draws the axis, both end marks and both ticks.
+    expect(categoryAidGlyphs(bar)).toHaveLength(1 + 2 + 2);
   });
 });
 
