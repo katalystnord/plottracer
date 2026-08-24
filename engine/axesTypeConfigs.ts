@@ -2060,6 +2060,36 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // Without this the Calibration drops the third field silently and the count
   // never reaches `checkValues` or the axis.
   calibrationDimensions: 3,
+  /**
+   * ⚑⚑ THE VALUE ORIGIN IS OFFERED AS THE CATEGORY AXIS'S FIRST END (v2.4).
+   * David: *"I think that we can offer to reuse the lowest point on the Y axis
+   * as the first point for the Category axis as well... It is the same mechanism
+   * as for XY-graphs."*
+   *
+   * ▶ And it IS the same mechanism, not a second one: `commonOrigin` already
+   * declares "these two steps stand on one pixel", already renders its own
+   * checkbox, and already knows to share the pixel WITHOUT a prefill when the
+   * target step takes no typed value - which is exactly `Cat 1`. That last part
+   * exists because of David's own report that *"the common origin does not work
+   * when you have a categorial axis."*
+   *
+   * ⚠️ WHY THIS IS NOT THE SEED THAT WAS DELETED THIS MORNING, which reused P1
+   * for the same purpose and produced a category axis running diagonally across
+   * the figure. Three things differ, and they are the whole difference:
+   *   · it is an OFFER WITH A VISIBLE CHECKBOX the user can untick, not an
+   *     invisible precondition;
+   *   · the reused pixel lands on a NAMED STEP with its own chip and handle, so
+   *     it is on screen and draggable rather than implied;
+   *   · and the far end is still a step of the walk with its own prompt, instead
+   *     of one unexplained click on the canvas.
+   *
+   * ⚑ `p1` RATHER THAN "WHICHEVER IS LOWER", because the declaration is static
+   * and the mechanism keys on a step. On a chart calibrated low-then-high - the
+   * ordinary way - P1 is the bottom one and this is right. Calibrate high-first
+   * and the offer seeds the wrong end: the checkbox is how you decline it, and
+   * the handle is on screen to drag either way.
+   */
+  commonOrigin: [{ from: 'p1', to: 'c1' }],
   categoryTicks: { startStep: 'c1', endStep: 'c2' },
   // ⚑ Stage 2: the ticks INSIDE the axis the walk just calibrated - the same
   // shape, and now the same card, as the heatmap's grid.
@@ -2229,6 +2259,9 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   // Without this the Calibration drops the third field silently and the count
   // never reaches `checkValues` or the axis.
   calibrationDimensions: 3,
+  // ⚑ The same offer Bar makes, with this type's own value origin - see
+  // `BAR_AXES_CONFIG.commonOrigin` for why it is `commonOrigin` and not a seed.
+  commonOrigin: [{ from: 'v1', to: 'c1' }],
   categoryTicks: { startStep: 'c1', endStep: 'c2' },
   // Stage 2: the ticks INSIDE the axis the walk calibrated - the same shape,
   // and the same card, as Bar, Box Plot and the heatmap's grid.
@@ -2304,7 +2337,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
   // list; see the comment immediately below for why sharing it was a bug.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard']),
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
   // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
   // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
   // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and

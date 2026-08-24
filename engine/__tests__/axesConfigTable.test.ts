@@ -546,9 +546,33 @@ describe('the shared corner is declared, not named at the call site', () => {
     expect(HISTOGRAM_AXES_CONFIG.commonOrigin).toBe(XY_AXES_CONFIG.commonOrigin);
   });
 
+  /**
+   * ⚑⚑ THE BAR FAMILY DECLARES ONE SINCE v2.4, and it is the same mechanism XY
+   * uses rather than a second one. David: *"I think that we can offer to reuse
+   * the lowest point on the Y axis as the first point for the Category axis as
+   * well... It is the same mechanism as for XY-graphs."*
+   * ⚑ The pixel is shared and NO value is prefilled, because `Cat 1` takes none -
+   * the behaviour `commonOriginReuse` grew for the heatmap's category edge.
+   */
+  it('⚑⚑ the bar family shares its VALUE ORIGIN with the category axis start', () => {
+    for (const config of [BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG] as unknown as AxesTypeConfig<CalibratedAxes>[]) {
+      expect(commonOriginPairs(config), config.id).toEqual([{ from: 'p1', to: 'c1' }]);
+    }
+    // A Line's value origin is `v1`; it has no `p1` to share.
+    expect(commonOriginPairs(CATEGORICAL_LINE_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>))
+      .toEqual([{ from: 'v1', to: 'c1' }]);
+  });
+
+  it('⚑ and the shared pixel carries NO prefill, because Cat 1 takes no value', () => {
+    const bar = BAR_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
+    const catStep = bar.fixedSteps.find((st) => st.key === 'c1')!;
+    expect(catStep.valueFields).toEqual([]);
+    expect(commonOriginReuse(bar, true, 'c1', placedWith('p1', 'p2'), catStep))
+      .toEqual({ from: 'p1', prefill: [] });
+  });
+
   it('the types with no shared corner declare none', () => {
-    for (const config of [BAR_AXES_CONFIG, CATEGORICAL_LINE_CONFIG, BOX_PLOT_AXES_CONFIG,
-                          POLAR_AXES_CONFIG, TERNARY_AXES_CONFIG, MAP_AXES_CONFIG,
+    for (const config of [POLAR_AXES_CONFIG, TERNARY_AXES_CONFIG, MAP_AXES_CONFIG,
                           CIRCULAR_CHART_RECORDER_AXES_CONFIG, SPIDER_AXES_CONFIG,
                           PIE_AXES_CONFIG] as unknown as AxesTypeConfig<CalibratedAxes>[]) {
       expect(config.commonOrigin, config.id).toBeUndefined();

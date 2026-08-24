@@ -308,6 +308,25 @@ async function resetWorkspace(
   canvasBox = box;
 }
 
+/**
+ * Decline the offer to reuse the value origin as the category axis's first end.
+ *
+ * ⚑⚑ WHY A HELPER AND NOT AN INLINE `uncheck()`. `resetWorkspace` ends with a
+ * click on `reset-calibration`, and unchecking in the very next statement raced
+ * the React cascade that click sets off: the check landed on a node that was
+ * being replaced, so the box read unchecked while the state stayed true and the
+ * walk took the offer anyway. Settling first makes it deterministic, in ONE
+ * place rather than at a dozen call sites.
+ *
+ * ⚑ Most tests decline because they need a KNOWN axis span (x 100..500) for
+ * their band arithmetic to mean anything. The default - three clicks, the offer
+ * taken - has its own two tests.
+ */
+async function declineCommonOrigin() {
+  await page.waitForTimeout(150);
+  await page.getByTestId('common-origin').uncheck();
+}
+
 // Re-reads the canvas's on-screen position -- needed whenever a preceding
 // action changes page layout above the canvas (e.g. the "Box Plot Groups"
 // button disappearing once applied), which would otherwise leave clickAt's
@@ -541,7 +560,7 @@ describe('Workspace: XY axes', () => {
     // Turn off "common origin" (checkpoint 50, default on) so the *manual*
     // reuse buttons appear -- common origin otherwise auto-reuses X1 for Y1,
     // which is the very shortcut this test drives by hand.
-    await page.getByTestId('common-origin').uncheck();
+    await declineCommonOrigin();
 
     await clickAt(100, 250); // X1
     await confirmValue('0');
@@ -797,6 +816,10 @@ describe('Workspace: Bar axes', () => {
   // ratio along the calibration axis (see the XY handle-drag test above
   // for why this is scale/offset-independent).
   async function calibrateBarStandard(categories = 4) {
+    // ⚑ DECLINED BEFORE THE FIRST CLICK, not after. The offer fires the moment
+    // the walk ARRIVES at `Cat 1`, which is the instant P2's value is confirmed -
+    // so unticking later is too late, and the following clicks land one step out.
+    await declineCommonOrigin();
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -804,6 +827,9 @@ describe('Workspace: Bar axes', () => {
     // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
     // v2.4: a bar chart has two axes, and only one of them used to be
     // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
+    // ⚑ The offer was declined at the top of this helper, so both ends are
+    // placed by hand and the span is known (x 100..500) - which is what the
+    // band arithmetic in these tests is measured against.
     await clickAt(100, 400);
     await clickAt(500, 400);
     await confirmValue(String(categories));
@@ -822,6 +848,7 @@ describe('Workspace: Bar axes', () => {
 
   it('walks a 4-step calibration - two axes - and reads back a bar dragged corner to corner', async () => {
     await resetWorkspace('bar');
+    await declineCommonOrigin();
     // ⚑ FOUR, not two: the value axis AND the category axis. The old title said
     // "a shorter 2-step calibration", which was true of the value axis and
     // silent about the other one - the reading that let the category axis be a
@@ -960,7 +987,11 @@ describe('Workspace: Bar axes', () => {
     await clickAt(300, 100);
     await confirmValue('10');
     expect(await page.getByTestId('calib-chip-c1').count()).toBe(1);
-    expect(await textOf('tips-bar')).toContain('category axis STARTS');
+    // ⚑ `Cat n`, not `Cat 1`: by default the value origin is OFFERED as the
+    // category axis's first end, so the walk is already past it. The point of
+    // this case is that the walk asks for the category axis BY NAME, which it
+    // does either way - and declining the offer is covered on its own below.
+    expect(await textOf('tips-bar')).toContain('category axis ENDS');
   });
 
   /**
@@ -1039,6 +1070,41 @@ describe('Workspace: Bar axes', () => {
     expect(await page.getByTestId('category-convention-edge').getAttribute('title')).toContain('Drag');
   });
 
+  /**
+   * ⚑⚑ THE DEFAULT WALK IS THREE CLICKS, because the value origin is OFFERED as
+   * the category axis's first end. David: *"I think that we can offer to reuse
+   * the lowest point on the Y axis as the first point for the Category axis as
+   * well... It is the same mechanism as for XY-graphs."*
+   *
+   * ⚑ It IS that mechanism - `commonOrigin`, with its own checkbox - and not the
+   * seed that was deleted this morning. The difference is what is on screen: a
+   * checkbox you can untick, a named step with its own chip and handle, and a
+   * far end that is still a step of the walk with its own prompt.
+   */
+  it('⚑⚑ offers the value origin as Cat 1, so the ordinary walk is three clicks', async () => {
+    await resetWorkspace('bar');
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    // No third click: the offer has already placed Cat 1 on P1's pixel, and the
+    // walk has moved straight to the far end.
+    expect(await textOf('tips-bar')).toContain('4/4 - Cat n');
+    expect(await textOf('calib-chip-c1')).toContain('placed');
+    // …and the offer is a control the user can see and decline.
+    expect(await page.getByTestId('common-origin').isChecked()).toBe(true);
+  });
+
+  it('⚑ and declining it puts the first end back in the user\u2019s hands', async () => {
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    expect(await textOf('tips-bar')).toContain('3/4 - Cat 1');
+  });
+
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
@@ -1054,6 +1120,7 @@ describe('Workspace: Bar axes', () => {
    */
   it('⚑⚑ the fold-out\'s controls are absent, not merely restyled', async () => {
     await resetWorkspace('bar');
+    await declineCommonOrigin();
     await calibrateBarStandard();
     for (const id of ['category-mark-start', 'category-count', 'category-replace-axis', 'category-remove-ticks', 'category-ticks-toggle', 'category-why']) {
       expect(await page.getByTestId(id).count(), `${id} must be gone`).toBe(0);
@@ -1179,6 +1246,9 @@ describe('Workspace: Box Plot / Point Groups', () => {
   // blocks). Five clicks at py = 385,355,325,295,265 read back exactly
   // 0.5,1.5,2.5,3.5,4.5 -- (400-py)/30*10 -- one per Min/Q1/Median/Q3/Max group.
   async function calibrateBarStandard(categories = 4) {
+    // ⚑ DECLINED BEFORE THE FIRST CLICK, not after. The offer fires the moment
+    // the walk ARRIVES at `Cat 1`, which is the instant P2's value is confirmed -
+    // so unticking later is too late, and the following clicks land one step out.
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1186,6 +1256,9 @@ describe('Workspace: Box Plot / Point Groups', () => {
     // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
     // v2.4: a bar chart has two axes, and only one of them used to be
     // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
+    // ⚑ The offer was declined at the top of this helper, so both ends are
+    // placed by hand and the span is known (x 100..500) - which is what the
+    // band arithmetic in these tests is measured against.
     await clickAt(100, 400);
     await clickAt(500, 400);
     await confirmValue(String(categories));
@@ -1198,6 +1271,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     // selector and the Min/Q1/Median/Q3/Max capture is already the active shape,
     // so the legacy "Box Plot Groups" toggle is neither shown nor needed.
     await resetWorkspace('boxplot');
+    await declineCommonOrigin();
     // The legacy toggle is a top-bar button, gated on config.id==='bar' -- absent
     // for the 'boxplot' config, which already has its groups.
     expect(await page.getByTestId('apply-box-plot-groups').count()).toBe(0);
@@ -2525,6 +2599,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await clickAt(300, 100);
     await confirmValue('10');
     // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    // Common origin declined so the span is known - see `calibrateBarStandard`.
     await clickAt(100, 400);
     await clickAt(500, 400);
     await confirmValue('4');
@@ -2580,8 +2655,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -2649,8 +2725,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -2682,8 +2759,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -2775,8 +2853,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -2811,6 +2890,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // PREFILL algorithm itself (nearest-named-bar-along-the-category-axis)
     // is unchanged, just ported from points to tuples.
     await resetWorkspace('bar');
+    await declineCommonOrigin();
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3097,8 +3177,9 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -3482,8 +3563,9 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
-    await clickAt(100, 400);
+    // ⚑ …and the CATEGORY axis. This case has nothing to say about WHERE the
+    // categories run, so it takes the default offer - the value origin becomes
+    // `Cat 1` and only the far end is clicked. That is the walk a user gets.
     await clickAt(500, 400);
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
@@ -4927,6 +5009,7 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // Bar axes: dataToPixel is an unimplemented stub, so the table is plain
     // text with no click-to-edit spans (data-value-*).
     await resetWorkspace('bar');
+    await declineCommonOrigin();
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -5308,6 +5391,7 @@ describe('Workspace: drag-and-drop / paste image (checkpoint 45)', () => {
 describe('Workspace: categorical line (checkpoint 101)', () => {
   it('calibrates value-only, captures points, and exports Position + Value', async () => {
     await resetWorkspace('categorical');
+    await declineCommonOrigin();
     // ⚑⚑ TWO clicks on the VALUE (Y) axis, and no X VALUE is ever typed - that is
     // still the whole point: "X is not numeric", so there is no X coordinate to
     // enter. What the walk DOES ask for since v2.4 is where the category axis
@@ -5517,7 +5601,7 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
 describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
   it('reusing a placed pixel pre-fills the new value with the reused point\'s value', async () => {
     await resetWorkspace('xy');
-    await page.getByTestId('common-origin').uncheck(); // manual-reuse path (see note above)
+    await declineCommonOrigin();
     await clickAt(100, 250);
     await confirmValue('7'); // X1 = 7
     await clickAt(400, 250);
@@ -6516,7 +6600,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
   it('reads a log Y axis correctly end to end', async () => {
     await resetWorkspace('xy');
     await page.getByTestId('calib-option-isLogY').check();
-    await page.getByTestId('common-origin').uncheck();
+    await declineCommonOrigin();
     await clickAt(100, 250); // X1 = 0
     await confirmValue('0');
     await clickAt(400, 250); // X2 = 10
