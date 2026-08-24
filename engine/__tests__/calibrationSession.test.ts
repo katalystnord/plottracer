@@ -3044,4 +3044,35 @@ describe('withdrawing the reused pixel', () => {
     const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     expect(s.withdrawReusedPixels()).toBe(false);
   });
+
+  /**
+   * ⚑⚑ THE MEMORY OF AN OFFER MUST NOT OUTLIVE ITS WALK. Found in the audit
+   * hours after the feature landed: `reusedStepKeys` was cleared only by
+   * `withdrawReusedPixels`, so a key survived `Reset calibration`, a project
+   * load and an undo. Tick the box on one walk, reset, place `Cat 1` BY HAND on
+   * the next, untick - and the tool would delete the point the user had just
+   * clicked, which is exactly what `withdrawReusedPixels`'s own comment promises
+   * it never does. Gate 3 on a comment six hours old.
+   */
+  it('⚑⚑ forgets the offer when the walk it belonged to is thrown away', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    expect(s.reuseStepPixel('p1')).toBe(true); // the offer fires
+    s.reset();
+
+    // A fresh walk, and this time `Cat 1` is placed BY HAND.
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    s.handleCalibrationClick(120, 500);
+    expect(s.getPlacedPoints()['c1']).toBeDefined();
+
+    // Nothing was offered on THIS walk, so nothing may be taken back.
+    expect(s.withdrawReusedPixels()).toBe(false);
+    expect(s.getPlacedPoints()['c1']).toBeDefined();
+  });
 });

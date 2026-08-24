@@ -612,6 +612,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ Tracked rather than inferred, so withdrawing the offer can take back
    * exactly what it placed and nothing the user put down by hand - see
    * `withdrawReusedPixels`.
+   *
+   * ⚑⚑ IT IS CLEARED WHEREVER `placed` IS, AND FOR THE SAME REASON. These
+   * keys name steps in ONE walk. Surviving into the next figure, they would let
+   * `withdrawReusedPixels` un-place a point the user had put down BY HAND at a
+   * step of that name - exactly what the line above promises never happens.
+   * ⚠️ The interactive entrance was right and the LOAD entrances were not,
+   * which is this codebase's standing defect shape: the model has more than one
+   * entrance. `reset`, `loadCalibrated` and `restoreState` are all of them.
    */
   private reusedStepKeys = new Set<string>();
 
@@ -2717,6 +2725,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // above exist for.
     this.heatmapLayer = heatmapLayer ?? null;
     this.placed = {};
+    this.reusedStepKeys.clear(); // ⚑ always with `placed` - see the field.
     const cal = (axes as unknown as { calibration: Calibration | null }).calibration;
     // ⚑ THE SHAPE COMES FROM THE FILE, not from the config. A variable-length
     // calibration has no shape until something says how long it is, and on this
@@ -6313,6 +6322,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   reset(): void {
     this.placed = {};
+    this.reusedStepKeys.clear(); // ⚑ always with `placed` - see the field.
     this.stepIndex = 0;
     this.pendingPixel = null;
     this.axes = null;
@@ -6438,6 +6448,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       slotCursor: validCursorFor(dataset, snapshot.cursors[i]),
     }));
     this.placed = structuredClone(snapshot.placed);
+    this.reusedStepKeys.clear(); // ⚑ always with `placed` - see the field.
     this.stepIndex = snapshot.stepIndex;
     this.pendingPixel = snapshot.pendingPixel ? { ...snapshot.pendingPixel } : null;
     this.calibrationError = snapshot.calibrationError;
