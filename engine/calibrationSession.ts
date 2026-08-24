@@ -257,6 +257,7 @@ export * from './axesTypeConfigs.js';
 // checkGuards/mustDiffer/PIE_RIM_SNAP_FRACTION are shared between the graph-type
 // declarations and this state machine, so they are part of that module's
 // surface rather than private to a file the two no longer share.
+import { BASELINE_TOLERANCE_PX } from '../core/barInterval.js';
 import {
   type CalibratedAxes,
   type AxesTypeConfig,
@@ -605,6 +606,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * `categoryAxis` - the type that already got this right - the two are
    * independent by construction and nothing has to be copied across.
    */
+  /**
+   * Steps whose pixel arrived by `commonOrigin` REUSE rather than by a click.
+   *
+   * ⚑ Tracked rather than inferred, so withdrawing the offer can take back
+   * exactly what it placed and nothing the user put down by hand - see
+   * `withdrawReusedPixels`.
+   */
+  private reusedStepKeys = new Set<string>();
+
   private heatmapLayer: SerializedHeatmapLayer | null = null;
 
   /** How many times `config.repeatingStep` is currently unrolled - the spoke count
@@ -4422,7 +4432,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ The VALUE axis is the one the categories do NOT run along. Unmarked, the
     // detector assumes the upright chart, which is what its own default says.
     const atPixel = declared?.categoryAxis === 'y' ? point.x : point.y;
-    return Number.isFinite(atPixel) ? { atPixel, tolerancePx: 2 } : null;
+    // ⚑ The SAME constant the derived value asks with - see `BASELINE_TOLERANCE_PX`.
+    return Number.isFinite(atPixel) ? { atPixel, tolerancePx: BASELINE_TOLERANCE_PX } : null;
   }
 
   /** Which category a SPLIT BAND index refers to. The splitter works in image
@@ -5232,8 +5243,45 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // exists to give it one - so the calibration simply stopped. David: *"the
     // common origin does not work when you have a categorial axis."* See
     // completeValuelessStep for why the rule lives in one place now.
-    if (this.completeValuelessStep(source.px, source.py)) return true;
+    if (this.completeValuelessStep(source.px, source.py)) {
+      // ⚑ Remembered so it can be TAKEN BACK - see `withdrawReusedPixels`.
+      this.reusedStepKeys.add(step.key);
+      return true;
+    }
     this.pendingPixel = { px: source.px, py: source.py };
+    return true;
+  }
+
+  /**
+   * Un-place every step whose pixel arrived by REUSE, and put the walk back on
+   * the first of them.
+   *
+   * ⚑⚑ BECAUSE UNTICKING THE BOX HAD NO WAY BACK. David: *"If you do not unclick
+   * the common origin BEFORE you get to that point, you have no way to revert
+   * it... That should revert when you unclick the box."* He is right, and it is
+   * this project's own rule about exits: *"the way out must never be the way to
+   * lose your work"* - the only route out was `Reset calibration`, which throws
+   * the whole walk away.
+   *
+   * ⚑ ONLY WHAT THE OFFER PLACED. A pixel the user clicked by hand is theirs and
+   * is never touched, which is why this is tracked rather than inferred from
+   * "these two points are equal" - a user may legitimately click the same pixel,
+   * and un-placing it would be the tool deleting a measurement it did not make.
+   */
+  withdrawReusedPixels(): boolean {
+    if (this.axes) return false;
+    const steps = this.getSteps();
+    let earliest = -1;
+    for (const key of this.reusedStepKeys) {
+      if (this.placed[key] === undefined) continue;
+      delete this.placed[key];
+      const at = steps.findIndex((st) => st.key === key);
+      if (at >= 0 && (earliest < 0 || at < earliest)) earliest = at;
+    }
+    this.reusedStepKeys.clear();
+    if (earliest < 0) return false;
+    this.stepIndex = earliest;
+    this.pendingPixel = null;
     return true;
   }
 

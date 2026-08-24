@@ -9,6 +9,18 @@ export interface TupleRow {
   tupleIndex: number;
   label: string;
   derived: number | null;
+  /**
+   * The row's two measured ends, when it has no single value.
+   *
+   * ⚑⚑ THE MODEL'S OWN CONTRACT, and this view was missing the half it needed:
+   * *"a row has a value or an interval, never both - so the panel and the file
+   * can key their columns on which one is present"* (`TupleRow.interval` in
+   * `calibrationSession.ts`). Without it here the table could only read the raw
+   * corner points, so it showed `Min`/`Max` on every bar - including the ones
+   * sitting on the baseline, where the near end is zero and printing it is the
+   * "column that looks like a fault" David has now objected to twice.
+   */
+  interval: { min: number; max: number } | null;
   points: readonly ({ data: readonly number[] | null } | null)[];
 }
 
@@ -102,16 +114,29 @@ export function TupleTable({
   // ⚑ Adaptive, exactly as the export and the error columns are: no `Value`
   // heading on a figure whose bars all float, because a column of blanks
   // asserts an emptiness nobody looked for.
-  const showDerived = derivedColumn !== null && (!intervalSlots || rows.some((r) => r.derived !== null));
-  /** One row's two ends, smallest first - see `intervalSlots`. */
-  const endsOf = (row: TupleRow): (readonly number[] | null)[] => {
-    const values = row.points.slice(0, 2).map((p) => p?.data ?? null);
-    const [a, b] = values;
-    // A half-dragged bar has one reading and no interval; sorting it would
-    // assert which end of an unfinished bar it is.
-    if (a && b && (a[0] ?? 0) > (b[0] ?? 0)) return [b, a];
-    return values;
-  };
+  const showDerived = derivedColumn !== null && rows.some((r) => r.derived !== null);
+  /**
+   * ⚑⚑ THE INTERVAL COLUMNS APPEAR ONLY WHERE A BAR ACTUALLY FLOATS, which is
+   * the rule David settled on 2026-08-23 and the contract `TupleRow.interval`
+   * states in its own words: *"a row has a value or an interval, never both - so
+   * the panel and the file can key their columns on which one is present."*
+   *
+   * ⚠️ THE PANEL KEYED ON NEITHER. It rendered `Min`/`Max` whenever the type
+   * declared them and read the RAW POINTS rather than `interval`, so an ordinary
+   * bar chart showed a `Min` column of near-zero noise - 0.03, 0.05 - beside no
+   * `Value` column at all. David: *"When we have a bar graph that we know the bar
+   * sits on zero, we do not need to report the min I think. It will just be a bit
+   * confusing, no?"* And on 2026-08-23, about the same column: *"it will look
+   * like a fault to the users I think."*
+   *
+   * ⚑ The record is unaffected - `Min` and `Max` are in the file for every bar
+   * either way. David: *"We can still store it."* This is only what the panel
+   * SHOWS.
+   */
+  const showInterval = !!intervalSlots && rows.some((r) => r.interval !== null);
+  /** One row's two ends, or null where the row has a single value instead. */
+  const endsOf = (row: TupleRow): (number | null)[] =>
+    row.interval === null ? [null, null] : [row.interval.min, row.interval.max];
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -119,14 +144,15 @@ export function TupleTable({
         <tr>
           <th style={{ textAlign: 'left', paddingRight: 16 }}>#</th>
           <th style={{ textAlign: 'left', paddingRight: 16 }}>Category</th>
-          {intervalSlots?.map((name) => (
-            <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
-              {name}
-            </th>
-          ))}
+          {showInterval &&
+            intervalSlots!.map((name) => (
+              <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
+                {name}
+              </th>
+            ))}
           {showDerived ? (
             <th style={{ textAlign: 'left', paddingRight: 16 }}>{derivedColumn!.label}</th>
-          ) : intervalSlots ? null : (
+          ) : showInterval ? null : (
             slotNames.map((name) => (
               <th key={name} style={{ textAlign: 'left', paddingRight: 16 }}>
                 {name}
@@ -162,21 +188,27 @@ export function TupleTable({
                 the difference between them. Every other tuple type keeps its
                 per-slot columns, because a box plot's Min/Q1/Median really
                 are five separate readings. */}
-            {intervalSlots?.map((name, gi) => {
-              const data = endsOf(row)[gi];
-              return (
-                <td key={name} style={{ paddingRight: 16 }}>
-                  {data ? fmtValue(display.atData(data, 0)) : '-'}
-                </td>
-              );
-            })}
+            {showInterval &&
+              intervalSlots!.map((name, gi) => {
+                // ⚑ Blank on a row that HAS a single value: its near end is the
+                // baseline, and printing that zero beside the value is the
+                // "column that looks like a fault" all over again, one cell at a
+                // time. Which rows those are is the model's own answer, not a
+                // guess made here - see `showInterval`.
+                const end = endsOf(row)[gi];
+                return (
+                  <td key={name} style={{ paddingRight: 16 }}>
+                    {end === null || end === undefined ? '-' : fmtValue(display.atData([end], 0))}
+                  </td>
+                );
+              })}
             {showDerived ? (
               <td data-testid={`tuple-derived-${row.tupleIndex}`} style={{ paddingRight: 16 }}>
                 {/* ⚑ The figure's own resolution, by the route this table's own
                     export section takes - so the panel and the file agree. */}
                 {row.derived === null ? '-' : fmtValue(display.atData([row.derived], 0))}
               </td>
-            ) : intervalSlots ? null : (
+            ) : showInterval ? null : (
               // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY, sliced to the HEADER's length.
               // A row carries every tuple slot, and once a series gains error
               // that includes the four cap slots - while the header is

@@ -2991,3 +2991,57 @@ describe('the value axis and the category axis must point different ways', () =>
     expect(s.confirmCalibrationValues(['4'])).toBe(false);
   });
 });
+
+/**
+ * ⚑⚑ THE COMMON-ORIGIN OFFER CAN BE TAKEN BACK.
+ *
+ * David, driving the built app: *"If you do not unclick the common origin BEFORE
+ * you get to that point, you have no way to revert it... That should revert when
+ * you unclick the box."* Until this, the checkbox was a decision you could only
+ * make in ADVANCE: once the walk had passed `Cat 1`, the reused pixel was there
+ * for good and the only exit was `Reset calibration`, which throws the whole walk
+ * away. This project has ruled on that shape before - *"the way out must never be
+ * the way to lose your work."*
+ */
+describe('withdrawing the reused pixel', () => {
+  function walkToCatN(): CalibrationSession<BarAxes> {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    // What the card does on arriving at `Cat 1` with the box ticked.
+    expect(s.reuseStepPixel('p1')).toBe(true);
+    return s;
+  }
+
+  it('⚑⚑ un-places the offered pixel and puts the walk back on that step', () => {
+    const s = walkToCatN();
+    expect(s.getCurrentStep()?.key).toBe('c2');
+    expect(s.withdrawReusedPixels()).toBe(true);
+    expect(s.getCurrentStep()?.key).toBe('c1');
+    expect(s.getPlacedPoints()['c1']).toBeUndefined();
+    // …and the value axis is untouched: only the offer is withdrawn.
+    expect(s.getPlacedPoints()['p1']).toBeDefined();
+    expect(s.getPlacedPoints()['p2']).toBeDefined();
+  });
+
+  it('⚑ leaves a pixel the user placed BY HAND alone', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    s.handleCalibrationClick(100, 500); // Cat 1, clicked - not offered
+    expect(s.getCurrentStep()?.key).toBe('c2');
+    // Nothing to withdraw, and the hand-placed point stays where it was put.
+    expect(s.withdrawReusedPixels()).toBe(false);
+    expect(s.getCurrentStep()?.key).toBe('c2');
+    expect(s.getPlacedPoints()['c1']).toBeDefined();
+  });
+
+  it('⚑ and says there was nothing to withdraw when the offer never fired', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    expect(s.withdrawReusedPixels()).toBe(false);
+  });
+});

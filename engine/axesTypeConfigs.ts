@@ -34,7 +34,7 @@ import { binFromCorners } from '../algorithms/histogram.js';
 import { checkStripGeometry } from '../algorithms/colorBar.js';
 import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
-import { barInterval, nearEndIsFirst } from '../core/barInterval.js';
+import { barInterval, nearEndIsFirst, BASELINE_TOLERANCE_PX } from '../core/barInterval.js';
 import { halfPixelResolution } from '../core/exportPrecision.js';
 import { CONVENTION_LABELS } from './categoryTickOverlay.js';
 
@@ -2138,7 +2138,13 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // exports round with, so "within resolution" means the same thing here as
       // it does everywhere else on screen.
       const nearPoint = nearEndIsFirst(v1, v2, baseline) ? start : end;
-      const resolution = halfPixelResolution(axes, nearPoint.px, nearPoint.py)[0] ?? NaN;
+      // ⚑⚑ THE BASELINE TOLERANCE, NOT THE READING RESOLUTION - they are different
+      // questions and this asked the wrong one. `halfPixelResolution` is how
+      // precisely a VALUE can be stated; "does this end sit on the baseline" is
+      // answered at `BASELINE_TOLERANCE_PX`, which the detector has always used.
+      // `halfPixelResolution` returns HALF a pixel, so a whole pixel is twice it.
+      const halfPx = halfPixelResolution(axes, nearPoint.px, nearPoint.py)[0] ?? NaN;
+      const resolution = halfPx * 2 * BASELINE_TOLERANCE_PX;
       const bar = barInterval(v1, v2, baseline, resolution);
       if (!bar) return null;
       // ⚑ A stacked segment's own height. Magnitude, not direction: a

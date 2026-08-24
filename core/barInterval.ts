@@ -60,6 +60,31 @@ export interface BarInterval {
  * near end, and asking that question twice in two places is how the two answers
  * come to disagree.
  */
+/**
+ * How far from the baseline still counts as SITTING ON IT, in pixels.
+ *
+ * ⚑⚑ ONE QUESTION, ONE TOLERANCE. This number was already stated once, on the
+ * bar DETECTOR, with the reasoning written out: *"It is not the half-pixel
+ * resolution a VALUE is read at: a bar's ink stops where it was drawn, and the
+ * axis line, its stroke width and any anti-aliasing sit between the two. The
+ * question is 'does this shape reach the baseline', not 'is its edge the same
+ * pixel'."* The DERIVED VALUE asked the same question at half a pixel, so the
+ * two halves of one product answered it differently.
+ *
+ * ⚠️ MEASURED on David's own figure. Value axis 0..10 over 546px, bottom corners
+ * clicked on the axis by hand: the near ends read 0.03 to 0.05, half a pixel is
+ * 0.0092, and two pixels is 0.0366. So every ordinary hand-clicked bar came back
+ * as FLOATING - no `Value` column at all, and a `Min` column of near-zero noise
+ * on a chart where every bar plainly sits on zero. David: *"When we have a bar
+ * graph that we know the bar sits on zero, we do not need to report the min I
+ * think. It will just be a bit confusing, no?"*
+ *
+ * ⚑ It applies MORE to a hand click than to detected ink, not less: a person
+ * aiming at an axis line is a pixel or two out by nature, and the tool must not
+ * read that as a claim about the figure.
+ */
+export const BASELINE_TOLERANCE_PX = 2;
+
 export function nearEndIsFirst(v1: number, v2: number, baseline: number): boolean {
   return Math.abs(v1 - baseline) <= Math.abs(v2 - baseline);
 }

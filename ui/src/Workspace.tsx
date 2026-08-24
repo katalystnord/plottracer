@@ -7428,7 +7428,20 @@ export function Workspace() {
                 type="checkbox"
                 data-testid="common-origin"
                 checked={commonOrigin}
-                onChange={(e) => setCommonOrigin(e.target.checked)}
+                onChange={(e) => {
+                  setCommonOrigin(e.target.checked);
+                  // ⚑⚑ UNTICKING TAKES THE OFFER BACK. David: *"If you do not
+                  // unclick the common origin BEFORE you get to that point, you
+                  // have no way to revert it... That should revert when you
+                  // unclick the box."* Without this the box was a decision you
+                  // could only make in advance, and the only exit afterwards was
+                  // `Reset calibration` - which throws the whole walk away, and
+                  // is exactly the "way out that loses your work" this project
+                  // has ruled against before.
+                  // ⚑ Only what the OFFER placed: a pixel clicked by hand is
+                  // never touched. See `withdrawReusedPixels`.
+                  if (!e.target.checked && session.withdrawReusedPixels()) commit();
+                }}
               />
               {/* ⚑ BUILT FROM THE PAIRINGS THE TYPE DECLARES, not written out
                   here: a heatmap shares BOTH corners of its plot box, so a
