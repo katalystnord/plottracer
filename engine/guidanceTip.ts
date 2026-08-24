@@ -490,12 +490,31 @@ export function guidanceTip(input: GuidanceTipInput): string {
  * card-swallowing-clicks bug, reached by a different route. Caught on David's
  * screenshot test bench while shooting the By-colour gallery image.
  */
-export function noPointsHint({ mode, config }: { mode: ToolMode; config: GuidanceConfig }): string {
+export function noPointsHint({
+  mode,
+  config,
+  heatmapHasGrid = false,
+}: {
+  mode: ToolMode;
+  config: GuidanceConfig;
+  /** A heatmap grid already exists, so half the hint below is work already done. */
+  heatmapHasGrid?: boolean;
+}): string {
   // ⚑ Before every mode branch, because it is true in all of them: a heatmap's
   // cells are never placed by hand, so no tool on the rail is the answer and
   // naming one would be the contradiction this function exists to prevent.
-  if (config.id === 'heatmap')
-    return 'No points yet - a heatmap is read from its grid: use the Heatmap card to detect the grid, then Read cells.';
+  //
+  // ⚑⚑ AND IT STOPS NAMING WORK ALREADY DONE. The sentence was unconditional, so
+  // a user looking at a DETECTED grid - dividers drawn, handles on the axis, the
+  // card offering `Read cells` - was still told to "use the Heatmap card to
+  // detect the grid". Seen on the screenshot bench. This function's own header is
+  // entirely about hints that name a gesture the type does not have; a hint that
+  // names a gesture already PERFORMED is the same defect facing the other way.
+  if (config.id === 'heatmap') {
+    return heatmapHasGrid
+      ? 'No cells yet - press Read cells to record every cell through the colour key. Drag a boundary handle first if the grid needs adjusting.'
+      : 'No points yet - a heatmap is read from its grid: use the Heatmap card to detect the grid, then Read cells.';
+  }
   if (mode === 'color-trace')
     return 'No points yet - pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
   if (mode === 'segment-fill') return 'No points yet - click the curve on the image to flood-fill it.';

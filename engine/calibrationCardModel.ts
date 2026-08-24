@@ -128,7 +128,15 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
     stage,
     foldedLine: {
       title: 'Calibration',
-      status: calibrated ? 'Calibrated ✓' : `${placed}/${steps} set`,
+      // ⚑⚑ THE WALK, NOT JUST THE AXES (v2.4). This asked only whether an axes
+      // object existed, which was the same question as "is the walk finished"
+      // right up until a figure could arrive calibrated with steps unplaced -
+      // a WPD import, a pre-v2.4 project. Caught on the bench: the card said
+      // `Calibrated ✓` while the tips bar said `Calibration step 3/4`, two lines
+      // on screen at once disagreeing about whether the job was done. The same
+      // stale equivalence that had to be removed from `getCurrentStep`,
+      // `getStepIndex` and `handleCalibrationClick`, in the one place left.
+      status: calibrated && placed >= steps ? 'Calibrated ✓' : `${placed}/${steps} set`,
       // ⚑ Only once the stage has actually produced something. A label with no
       // reading behind it would assert work that has not happened - the same
       // rule that stops a generated grid being drawn like a measured one.

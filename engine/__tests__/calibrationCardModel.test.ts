@@ -16,10 +16,21 @@ import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
  * types grew three second stages. Here each case costs a millisecond.
  */
 
+/**
+ * ⚠️ `placed` MUST AGREE WITH `calibrated`, and it did not: this said
+ * `placed: 3, steps: 8` and every case below then set `calibrated: true` on top
+ * of it - a heatmap with three of eight points placed and a working axes object,
+ * which the app cannot produce. It went unnoticed while the status line asked
+ * only whether axes existed; the moment that line started reading the WALK, the
+ * inconsistency baked into the fixture became visible.
+ * [[feedback_fixture_blind_by_construction]] - ask what your fixture sets to a
+ * value nothing else in it could have produced.
+ * ▶ The walk-in-progress cases pass their own `placed` explicitly.
+ */
 const base: CalibrationCardInput = {
   figureCaptured: true,
   calibrated: false,
-  placed: 3,
+  placed: 8,
   steps: 8,
   secondStageComplete: false,
   expanded: true,
@@ -32,7 +43,10 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
   });
 
   it('walking stage 1: the walk, ending in Calibrate, and the count as its status', () => {
-    const m = calibrationCardModel({ ...base, secondStage: GRID });
+    // ⚑ Mid-walk, so this case states its own `placed` rather than borrowing the
+    // finished base - the two facts have to agree, which is what `base`'s own
+    // note is about.
+    const m = calibrationCardModel({ ...base, placed: 3, secondStage: GRID });
     expect(m.stage).toBe('calibrating');
     expect(m.ending).toBe('Calibrate');
     expect(m.foldedLine.status).toBe('3/8 set');
@@ -264,5 +278,35 @@ describe('what a finished second stage is CALLED', () => {
       secondStageComplete: false,
     });
     expect(model.foldedLine.secondStage).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ `Calibrated ✓` MEANT "an axes object exists", and that stopped being the
+ * same thing as "the walk is finished" the day a figure could arrive
+ * part-calibrated - a WPD import, a pre-v2.4 project.
+ *
+ * ⚠️ CAUGHT ON THE BENCH: the card said `Calibrated ✓` while the tips bar said
+ * `Calibration step 3/4 - Cat 1`. Two lines on screen at once, disagreeing about
+ * whether the job was done. The same stale equivalence had already been removed
+ * from `getCurrentStep`, `getStepIndex` and `handleCalibrationClick`; this was
+ * the one place it survived.
+ */
+describe('the status line reports the WALK, not merely that axes exist', () => {
+  const base = { figureCaptured: true, expanded: false, secondStageComplete: false };
+
+  it('⚑⚑ says how many are set while any step is unplaced, even with axes built', () => {
+    const model = calibrationCardModel({ ...base, calibrated: true, placed: 2, steps: 4 });
+    expect(model.foldedLine.status).toBe('2/4 set');
+  });
+
+  it('says Calibrated once every step is placed', () => {
+    const model = calibrationCardModel({ ...base, calibrated: true, placed: 4, steps: 4 });
+    expect(model.foldedLine.status).toBe('Calibrated ✓');
+  });
+
+  it('and still counts up during an ordinary first walk', () => {
+    const model = calibrationCardModel({ ...base, calibrated: false, placed: 1, steps: 4 });
+    expect(model.foldedLine.status).toBe('1/4 set');
   });
 });

@@ -905,3 +905,29 @@ describe('⚑ the tips bar while the category axis is being marked (v2.1 audit)'
     expect(guidanceTipBase(barPlacing())).toContain('corner');
   });
 });
+
+/**
+ * ⚑⚑ A HINT MUST NOT NAME WORK ALREADY DONE. `noPointsHint`'s own header is
+ * about hints that name a gesture the type does not have; this is the same
+ * defect facing the other way - the heatmap sentence was unconditional, so a
+ * user looking at a DETECTED grid, with the dividers drawn, the handles on the
+ * axis and `Read cells` sitting right there, was still told to "use the Heatmap
+ * card to detect the grid".
+ *
+ * ⚠️ Found on the screenshot bench, not by a test: the sentence was correct in
+ * isolation and wrong in the state it was being shown in.
+ */
+describe('the heatmap empty-cells hint follows the grid', () => {
+  const heat = { id: 'heatmap', axesKind: 'xy', autoExtractKind: 'none' } as never;
+
+  it('sends the user to detect a grid when there is none', () => {
+    const hint = noPointsHint({ mode: 'place-point', config: heat });
+    expect(hint).toContain('detect the grid');
+  });
+
+  it('⚑⚑ and stops saying so once the grid exists - it names the NEXT step', () => {
+    const hint = noPointsHint({ mode: 'place-point', config: heat, heatmapHasGrid: true });
+    expect(hint).not.toContain('detect the grid');
+    expect(hint).toContain('Read cells');
+  });
+});

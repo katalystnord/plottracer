@@ -298,7 +298,15 @@ export function categoryTickIndexFromId(id: string): number | null {
  * stage as finished only once the ending has actually been pressed, never merely
  * because ticks exist. Ticks exist the moment the walk completes now, so "there
  * are ticks" is not evidence that anyone has looked at them. */
-export function categoryStageLine(count: number, marked: boolean): string {
+export function categoryStageLine(count: number, marked: boolean, declared = true): string {
+  // ⚑⚑ NO COUNT NOBODY DECLARED. With the axis in the walk this line is only
+  // reached undeclared on a figure whose walk is unfinished - a WPD import, a
+  // pre-v2.4 project - and it read `Categories - 0 categories` there: a number
+  // presented as the figure's, that nobody typed.
+  // ⚠️ This is the SAME defect the v2.3 card had (`2 categories` with the count
+  // box empty), arriving through a door that did not exist when it was fixed.
+  // It points at the walk, because that is where the count comes from now.
+  if (!declared) return 'Categories - finish the calibration first';
   const n = count === 1 ? '1 category' : `${count} categories`;
   return marked ? `Categories - ${n} ✓` : `Categories - ${n}`;
 }

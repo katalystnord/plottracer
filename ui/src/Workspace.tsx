@@ -1421,6 +1421,10 @@ export function Workspace() {
       hasGeometry: ca.hasGeometry(),
       count: ca.getCategoryCount(),
       marked: ca.categoriesMarked(),
+      // ⚑ Say what was DECLARED, or say that nothing was. A figure whose walk is
+      // unfinished has no count, and printing `0 categories` would be a number
+      // nobody typed - see `categoryStageLine`.
+      declared: ca.hasDeclaredCount(),
       convention: ca.getConvention(),
       regenerateWarning: categoryRegenerateWarning(ca.hasAdjustments()),
     };
@@ -5836,7 +5840,7 @@ export function Workspace() {
   // (`secondStage.done`) so the component does not assemble it.
   const secondStageSummary = heatmapActive ? `${heatmapCells.length} cells read` : undefined;
   /** The stage's summary line - the sibling of `heatmapGridSummary`. */
-  const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.marked);
+  const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.marked, categoryStage.declared);
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -6822,7 +6826,7 @@ export function Workspace() {
     captureProgressText: captureProgress.text,
   });
 
-  const noPointsHint = buildNoPointsHint({ mode, config });
+  const noPointsHint = buildNoPointsHint({ mode, config, heatmapHasGrid: heatmapShownGrid !== null });
 
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
@@ -7510,7 +7514,7 @@ export function Workspace() {
                   ending is disabled, and its controls wait. */}
               {cardModel.showsSecondStage && (
                 <CategoriesCard
-                  declared={categoryStage.count}
+                  declared={categoryStage.declared ? categoryStage.count : null}
                   convention={categoryStage.convention}
                   onConventionChange={(c) => {
                     if (session.setCategoryTickConvention(c)) commit();

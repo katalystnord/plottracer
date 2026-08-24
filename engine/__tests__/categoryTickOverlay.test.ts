@@ -189,6 +189,20 @@ describe('the stage line', () => {
     expect(categoryStageLine(12, false)).not.toContain('✓');
     expect(categoryStageLine(12, true)).toBe('Categories - 12 categories ✓');
   });
+
+  /**
+   * ⚑⚑ NO COUNT NOBODY DECLARED, ONE MORE TIME. The v2.3 card printed
+   * `2 categories` with its count box empty, because two captured bars had put
+   * two entries in the shared name list. That door is gone - the count arrives
+   * on a calibration click - and a NEW one opened in its place: a figure that
+   * arrives part-calibrated (a WPD import, a pre-v2.4 project) has an axis with
+   * no count, and this line read `Categories - 0 categories`.
+   * ⚠️ Caught on the bench, not by a test, which is why it is named here now.
+   */
+  it('⚑⚑ says nothing about a count when the walk has not declared one', () => {
+    expect(categoryStageLine(0, false, false)).toBe('Categories - finish the calibration first');
+    expect(categoryStageLine(0, false, false)).not.toContain('0 categories');
+  });
 });
 
 describe('the regenerate warning', () => {

@@ -39,8 +39,12 @@ import type { TickConvention } from '../../../core/categoryAxis.js';
  * finishes the job sat inside a closed fold-out inside a closed card.
  */
 export interface CategoriesCardProps {
-  /** How many categories the CALIBRATION declared - shown, never re-collected. */
-  declared: number;
+  /**
+   * How many categories the CALIBRATION declared - shown, never re-collected.
+   * `null` when the walk has not got there yet, which is only reachable on a
+   * figure that arrived part-calibrated (a WPD import, a pre-v2.4 project).
+   */
+  declared: number | null;
   convention: TickConvention;
   onConventionChange: (convention: TickConvention) => void;
   /**
@@ -81,8 +85,15 @@ export function CategoriesCard({
           the whole grid - and how this card came to print `axis marked, no count
           yet` beside a box reading 17. Correct it where it was declared: the
           calibration values are editable in place, above. */}
+      {/* ⚑⚑ AND IT DOES NOT SAY `0 categories` WHEN NOBODY HAS SAID ANY. The
+          count arrives on the second category click, so a figure whose walk is
+          unfinished has none - and a zero presented as the figure's own count is
+          the fabricated-count defect this card had once already, arriving
+          through a door that did not exist when it was fixed. */}
       <span data-testid="category-declared" style={{ color: theme.color.text.secondary }}>
-        {declared === 1 ? '1 category' : `${declared} categories`}, from the calibration
+        {declared === null
+          ? 'The calibration has not placed the category axis yet - its last two clicks are the axis ends.'
+          : `${declared === 1 ? '1 category' : `${declared} categories`}, from the calibration`}
       </span>
       {/* ⚑⚑ THE HEATMAP'S OWN WORDS, not a second vocabulary for one fact. This
           control used to say `Under each category` / `Between categories` while
