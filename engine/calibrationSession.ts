@@ -1650,6 +1650,39 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const slots = entry.dataset.getSlotNames();
       if (hasErrorSlots(slots)) {
         const pixels = entry.dataset.getAllPixels();
+        // ⚑⚑ A BAR'S WHISKER STARTS AT THE BAR'S CENTRE, NOT AT A CORNER (v2.4).
+        // David: *"The error bars need to be drawn on the center of the bar
+        // however. Not from a corner point."* Every real figure draws them there
+        // - ggplot, matplotlib, the published charts he sent - and a bar is
+        // captured as two OPPOSITE CORNERS, so NEITHER stored point is at the
+        // centre. The whisker leaned diagonally from a corner to a cap the user
+        // had placed where the figure draws it: the picture disagreeing with the
+        // record, which is CLAUDE.md pattern 4.
+        //
+        // ⚑ DERIVED, NEVER STORED. Both numbers are already in the record - the
+        // midpoint along the CATEGORY direction, and whichever end lies nearer
+        // the cap along the VALUE direction. Nothing measured changes; the cap's
+        // own pixel is still the measurement, and a bar whose corners move drags
+        // its whisker with them for free.
+        //
+        // ⚑ It follows the ORIENTATION rather than the screen: on a horizontal
+        // bar chart the categories run down and the value across, so the two
+        // roles swap. `isRotated` is the axes' own answer, not a guess here.
+        const barShaped = this.isBarIntervalShape(entry.dataset);
+        const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
+        const anchorFor = (tuple: readonly (number | null | undefined)[], cap: { x: number; y: number }) => {
+          const a = tuple[0] == null ? null : pixels[tuple[0]];
+          const b = tuple[1] == null ? null : pixels[tuple[1]];
+          if (!a) return null;
+          // A half-dragged bar has one corner and no centre to speak of: the one
+          // point it has is the honest anchor.
+          if (!barShaped || !b) return { x: a.x, y: a.y };
+          const midCategory = rotated ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
+          const ends = rotated ? [a.x, b.x] : [a.y, b.y];
+          const along = cap[rotated ? 'x' : 'y'];
+          const nearEnd = Math.abs(ends[0]! - along) <= Math.abs(ends[1]! - along) ? ends[0]! : ends[1]!;
+          return rotated ? { x: nearEnd, y: midCategory } : { x: midCategory, y: nearEnd };
+        };
         for (const tuple of entry.dataset.getAllTuples()) {
           const datumIndex = tuple[0];
           if (datumIndex == null) continue;
@@ -1660,8 +1693,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
             if (capIndex == null) continue;
             const cap = pixels[capIndex];
             if (!cap) continue;
+            const anchor = anchorFor(tuple, cap) ?? { x: datum.x, y: datum.y };
             whiskers.push({
-              ...computeWhiskerGlyph({ x: datum.x, y: datum.y }, { x: cap.x, y: cap.y }),
+              ...computeWhiskerGlyph(anchor, { x: cap.x, y: cap.y }),
               color,
               ...(active ? { capMarkerId: dataPointMarkerId(capIndex) } : {}),
             });
