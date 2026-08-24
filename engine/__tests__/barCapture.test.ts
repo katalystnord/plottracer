@@ -435,3 +435,74 @@ describe('aiming the cursor at a slot of a tuple that does not exist yet', () =>
     expect(session.setSlotCursor(null, 99)).toBe(false);
   });
 });
+
+/**
+ * ⚑⚑⚑ A STRAY HALF-FINISHED BAR MUST NOT ABSORB THE NEXT CAPTURE.
+ *
+ * David, driving his own five-colour bar chart: *"no matter if I try to place
+ * points by hand or use the auto trace, the first bar gets registered on the
+ * third category."*
+ *
+ * ⚠️ MEASURED OFF HIS SCREEN, and the arithmetic is the proof. A stray click sat
+ * above the plot in the GREEN band. `addDataPoint` fills the NEXT OPEN SLOT - the
+ * right rule for finishing a bar by hand, and the wrong one for a gesture that
+ * carries BOTH corners - so the trace's first corner completed that stray tuple
+ * and its second corner opened a new one. The record got a single bar reading
+ * `Green 7.98 .. 14.19`: the stray's height paired with the red bar's top, filed
+ * under a category neither of them is in.
+ *
+ * ⚑⚑ AND THE TWO HALVES OF ONE OPERATION DISAGREED IN WRITING. `runBarDetect`
+ * had the box in band 0 throughout and said so - *"no bar found for 4 categories:
+ * Blue, Green, Yellow, Pink"* - while the table filed it under Green. A detector
+ * and a session contradicting each other inside one click is the tell that the
+ * fault is in the FILING, not in the measurement.
+ */
+describe('a bar left half-finished does not swallow the next one', () => {
+  /** Five categories across x 191..921, so each band is 146px wide. */
+  function fiveCategories(): CalibrationSession<BarAxes> {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(191, 900);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(191, 300);
+    s.confirmCalibrationValues(['20']);
+    walkCategoryAxis(s, { from: { x: 191, y: 900 }, to: { x: 921, y: 900 }, count: 5 });
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  }
+
+  it('⚑⚑ a detected box lands in ITS OWN band, with a stray sitting in another', () => {
+    const s = fiveCategories();
+    s.addDataPoint(544, 200); // the stray: one corner only, in band 2
+    s.addBarDetectBoxes([{ start: { x: 246, y: 900 }, end: { x: 356, y: 500 } }]);
+    const values = s.getBarCategoryTable().columns[0]!.values;
+    // Band 0 is the traced bar's own; band 2 is the stray's and holds no reading.
+    expect(values[0]).toBeCloseTo(13.33, 1);
+    expect(values[2]).toBeNull();
+  });
+
+  it('⚑⚑ and neither does a hand-dragged box - the same defect, the other door', () => {
+    const s = fiveCategories();
+    s.addDataPoint(544, 200); // the stray
+    // What `handleBoxRect` does for a real drag: start a new tuple, then both
+    // corners. Without the reset these two would complete the stray's tuple.
+    s.setSlotCursor(null, 0);
+    s.addDataPoint(246, 900);
+    s.addDataPoint(356, 500);
+    const values = s.getBarCategoryTable().columns[0]!.values;
+    expect(values[0]).toBeCloseTo(13.33, 1);
+    expect(values[2]).toBeNull();
+  });
+
+  /**
+   * ⚑ THE TWO-CLICK PATH KEEPS THE OLD RULE, deliberately: a plain click fills
+   * the next open slot, which is how a bar interrupted half-way is finished on
+   * purpose. Taking that away to fix the drag would break the fallback.
+   */
+  it('⚑ but a plain CLICK still finishes the bar that was left open', () => {
+    const s = fiveCategories();
+    s.addDataPoint(246, 900); // first corner by hand
+    s.addDataPoint(356, 500); // second click completes THAT bar
+    expect(s.getTupleRows()).toHaveLength(1);
+    expect(s.getBarCategoryTable().columns[0]!.values[0]).toBeCloseTo(13.33, 1);
+  });
+});

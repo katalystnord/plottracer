@@ -3234,6 +3234,29 @@ export class CalibrationSession<A extends CalibratedAxes> {
       rotated ? a.start.y + a.end.y - (b.start.y + b.end.y) : a.start.x + a.end.x - (b.start.x + b.end.x)
     );
     for (const box of sorted) {
+      // ⚑⚑⚑ EACH DETECTED BOX STARTS ITS OWN TUPLE, and leaving this out was a
+      // silent record corruption David hit on his own figure.
+      //
+      // `addDataPoint` fills the NEXT OPEN SLOT, which is the right rule for a
+      // hand capture and the wrong one here: a bar abandoned half-way - one
+      // click, no second corner - leaves an open slot anywhere on the chart, and
+      // the first corner of the next detected box goes into IT. The bar that
+      // reaches the record then has one end from the stray and one from the box,
+      // is filed under the STRAY's category, and the box's real second corner
+      // opens a fresh incomplete tuple for the next one to fall into.
+      //
+      // ⚠️ MEASURED off David's screen: a stray click above the plot in the GREEN
+      // band, then a trace of the RED bar, produced a single row reading
+      // `Green 7.98 .. 14.19` - the stray's height and the red bar's top, in a
+      // category neither of them is in. Detection's own report said the opposite
+      // in the same breath (*"no bar found for 4 categories: Blue, Green,
+      // Yellow, Pink"*), because `runBarDetect` had the box in band 0 all along.
+      // The DETECTOR and the SESSION disagreed inside one operation.
+      //
+      // ⚑ It is not an auto-extract defect: a manual drag-box absorbs a stray the
+      // same way. This is the entrance that can be fixed without taking the
+      // next-open-slot rule away from the hand path, which needs it.
+      this.setSlotCursor(null, 0);
       this.addDataPoint(box.start.x, box.start.y);
       this.addDataPoint(box.end.x, isHistogramBin ? box.start.y : box.end.y);
     }

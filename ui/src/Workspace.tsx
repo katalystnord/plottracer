@@ -3695,6 +3695,20 @@ export function Workspace() {
   const handleBoxRect = useCallback(
     (start: { x: number; y: number }, end: { x: number; y: number }) => {
       const isClick = Math.abs(end.x - start.x) < 3 && Math.abs(end.y - start.y) < 3;
+      // ⚑⚑⚑ A REAL DRAG IS A WHOLE BAR, SO IT STARTS ITS OWN TUPLE. `addDataPoint`
+      // fills the next OPEN slot, which is exactly right for the two-click
+      // fallback below and wrong for a corner-to-corner drag: a bar abandoned
+      // half-way leaves an open slot somewhere on the chart, and this drag's
+      // FIRST corner goes into it. The bar that reaches the record then has one
+      // end from the stray and one from the drag, and is filed under the stray's
+      // category.
+      // ⚠️ MEASURED off David's own screen: a stray click above the plot in the
+      // GREEN band, then a drag across the RED bar, recorded `Green 7.98 .. 14.19`
+      // - the stray's height and the red bar's top, in a category neither is in.
+      // ⚑ ONLY THE DRAG. A plain click is the deliberate one-slot-at-a-time path
+      // and MUST keep filling the open slot; that is how a bar interrupted
+      // half-way is finished on purpose.
+      if (!isClick) session.setSlotCursor(null, 0);
       session.addDataPoint(start.x, start.y);
       if (!isClick) session.addDataPoint(end.x, end.y);
       const placed = session.getDataPoints();

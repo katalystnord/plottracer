@@ -390,7 +390,15 @@ export function BarTable({
         ⚑ Caught by the e2e (`the empty-table hint recommends BOTH Add points and
         Auto-extract`), which timed out waiting for a hint that no longer
         rendered - the failure mode of a control that quietly stops existing. */}
-    {table.columns.every((c) => c.values.every((v) => v === null)) && (
+    {/* ⚠️ AND IT ASKS ABOUT TUPLES, NOT DERIVED VALUES. The first version of this
+        fix asked whether every `values` entry was null - which is TRUE for a
+        chart of FLOATING bars, because a floating bar has no single value at
+        all: its record is `Min` and `Max`. So a figure with bars captured and
+        their two ends on screen said "No points yet" directly above them. David
+        hit it within the hour. `tupleIndices` is what the table already carries
+        to know which row is which bar, and it answers the question actually
+        being asked: has anything been captured? */}
+    {table.columns.every((c) => c.tupleIndices.every((t) => t === null)) && (
       <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
         {noPointsHint}
       </div>
