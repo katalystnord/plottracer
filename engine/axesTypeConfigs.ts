@@ -329,6 +329,17 @@ export interface ParallelAxisGuard {
   v2: readonly [string, string];
   /** How the two axes are named to the user, e.g. "X and Y". */
   label: string;
+  /**
+   * The whole refusal, where the default sentence would be untrue.
+   *
+   * ⚑ The default ends *"or the calibration has no scale"*, which is exactly
+   * right for XY and for a heatmap: two parallel axes make the 2x2 transform
+   * singular and every value reads NaN. A BAR chart's value scale is fine - its
+   * two value points are unaffected - so what parallel axes cost there is
+   * something else entirely, and saying "no scale" would send the user to look
+   * at the wrong thing.
+   */
+  message?: string;
 }
 
 /**
@@ -436,7 +447,10 @@ export function checkGuards(
     if (d1 && d2) {
       const cross = d1.x * d2.y - d1.y * d2.x;
       if (Math.abs(cross) < 1e-9) {
-        return `The ${pag.label} calibration axes are parallel - they must point in different directions, or the calibration has no scale.`;
+        return (
+          pag.message ??
+          `The ${pag.label} calibration axes are parallel - they must point in different directions, or the calibration has no scale.`
+        );
       }
     }
   }
@@ -1950,6 +1964,31 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // divider and every category assignment read back NaN with nothing on screen
   // wrong (`CategoryAxis.setAxisEdges`'s own refusal, at the other entrance).
   distinctPixelSteps: [['p1', 'p2'], ['c1', 'c2']],
+  /**
+   * ⚑⚑ THE TWO AXES MUST NOT POINT THE SAME WAY (v2.4), and until this release
+   * there was nothing to guard: a bar chart HAD one axis. The moment the
+   * category axis became two clicks of its own, "these two directions are
+   * independent" became an assumption nobody was checking.
+   *
+   * ⚠️ MEASURED, and it is the silent kind. Clicking both category ends down the
+   * y axis of an upright chart is accepted, builds, reports no error - and a bar
+   * at x=250 comes back in band 1, a category derived from its HEIGHT. Every bar
+   * is then filed by its VALUE instead of its position, every number is
+   * plausible, and nothing on screen is wrong.
+   *
+   * ⚑ Direction-agnostic on purpose, so it covers `Horizontal bars` too: there
+   * the category axis is the vertical one and the value axis horizontal, and
+   * parallel is still exactly the degenerate case.
+   */
+  parallelAxisGuard: {
+    v1: ['p1', 'p2'],
+    v2: ['c1', 'c2'],
+    label: 'value and category',
+    // ⚑ The default sentence blames the SCALE, which is untrue here - the value
+    // scale is perfectly good. What breaks is which category each bar lands in.
+    message:
+      'The category axis runs the same way as the value axis, so every bar would be filed by its value instead of its position. Click the two ends of the axis the CATEGORIES run along.',
+  },
   // WPD: templates/_sidebars.html bar-axes-scale / bar-axes-rotated.
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
@@ -2167,6 +2206,15 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
   distinctPixelSteps: [['v1', 'v2'], ['c1', 'c2']],
+  // ⚑ The same two-axis guard Bar declares, with this type's own value pair -
+  // see `BAR_AXES_CONFIG.parallelAxisGuard` for what it costs when absent.
+  parallelAxisGuard: {
+    v1: ['v1', 'v2'],
+    v2: ['c1', 'c2'],
+    label: 'value and category',
+    message:
+      'The category axis runs the same way as the value axis, so every reading would be filed by its value instead of its position. Click the two ends of the axis the CATEGORIES run along.',
+  },
   // ⚑⚑ THE CATEGORY AXIS IS CALIBRATED, NOT SEEDED (v2.4). This used to read
   // `originStep: 'v1'`, on the reasoning that V1 is a click on the Y axis and
   // therefore "IS the left edge of the category axis on an ordinary upright
@@ -2256,7 +2304,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
   // list; see the comment immediately below for why sharing it was a bug.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps']),
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard']),
   // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
   // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
   // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and

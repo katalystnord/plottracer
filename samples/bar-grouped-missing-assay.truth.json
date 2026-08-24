@@ -26,16 +26,16 @@
         "value": 60
       },
       "c1": {
-        "px": 67.78,
+        "px": 63.33,
         "py": 660.28
       },
       "c2": {
-        "px": 885.0,
+        "px": 888.67,
         "py": 660.28,
         "value": 4
       }
     },
-    "categoryAxisNote": "c1/c2 are the two ends of the CATEGORY axis, measured off the figure: the left spine (where p1 sits) and the right spine at 885. c2 carries how many categories the figure draws. Added when the category axis became part of the calibration walk - a bar chart has two axes and the truth file has to describe both."
+    "categoryAxisNote": "c1/c2 are the two ends of the CATEGORY axis: the OUTER EDGE of the first and last category band. MEASURED off the figure from the bars themselves - the first and last bar (or group) centre, extended by half the pitch - NOT the plot box. They differ: on this figure the plot spines sit outside the category extent, and using them puts every band boundary far enough off to cut through a bar. c2 carries how many categories the figure draws."
   },
   "series": [
     {

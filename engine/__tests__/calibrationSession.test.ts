@@ -2914,3 +2914,80 @@ describe('a calibrated figure whose walk is not finished', () => {
     expect(s.getStepIndex()).toBe(4);
   });
 });
+
+/**
+ * ⚑⚑ A BAR CHART HAS TWO AXES NOW, AND THEY MUST NOT POINT THE SAME WAY.
+ *
+ * There was nothing to guard until v2.4: a bar chart HAD one axis, so "these two
+ * directions are independent" was not an assumption anyone could break. The
+ * moment the category axis became two clicks of its own it became one, and
+ * nothing was checking it.
+ *
+ * ⚠️ MEASURED BEFORE THE FIX, and it is the silent kind: clicking both category
+ * ends down the y axis of an upright chart was ACCEPTED, BUILT, reported NO
+ * ERROR, and filed a bar at x=250 into band 1 - a category derived from its
+ * HEIGHT. Every bar sorted by value instead of position, every number plausible,
+ * nothing on screen wrong.
+ */
+describe('the value axis and the category axis must point different ways', () => {
+  function walkWith(c1: [number, number], c2: [number, number]): CalibrationSession<BarAxes> {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    s.handleCalibrationClick(c1[0], c1[1]);
+    s.handleCalibrationClick(c2[0], c2[1]);
+    return s;
+  }
+
+  it('⚑⚑ refuses a category axis running the same way as the value axis', () => {
+    const s = walkWith([200, 500], [200, 100]); // both vertical, like p1/p2
+    expect(s.confirmCalibrationValues(['4'])).toBe(false);
+    expect(s.runCalibration()).toBe(false);
+  });
+
+  it('⚑ and says what it would have COST, not that the scale is broken', () => {
+    // The default parallel-axes sentence ends "or the calibration has no scale",
+    // which is true for XY and a heatmap and false here: the value scale is
+    // perfectly good. What breaks is which category each bar lands in.
+    const s = walkWith([200, 500], [200, 100]);
+    s.confirmCalibrationValues(['4']);
+    expect(s.getCalibrationError()).toContain('filed by its value instead of its position');
+    expect(s.getCalibrationError()).not.toContain('no scale');
+  });
+
+  it('accepts the ordinary upright chart, where they are perpendicular', () => {
+    const s = walkWith([100, 500], [500, 500]);
+    expect(s.confirmCalibrationValues(['4'])).toBe(true);
+    expect(s.runCalibration()).toBe(true);
+  });
+
+  /**
+   * ⚑ DIRECTION-AGNOSTIC, so `Horizontal bars` is covered by the same guard:
+   * there the category axis is the vertical one and the value axis horizontal,
+   * and parallel is still exactly the degenerate case.
+   */
+  it('⚑ accepts a HORIZONTAL bar chart, whose category axis is the vertical one', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(100, 300);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(500, 300); // value axis runs across
+    s.confirmCalibrationValues(['10']);
+    s.handleCalibrationClick(100, 100);
+    s.handleCalibrationClick(100, 500); // categories run down
+    expect(s.confirmCalibrationValues(['4'])).toBe(true);
+    expect(s.runCalibration()).toBe(true);
+  });
+
+  it('⚑ and a Box Plot inherits the guard, because it inherits the walk', () => {
+    const s = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    s.handleCalibrationClick(200, 500);
+    s.handleCalibrationClick(200, 100);
+    expect(s.confirmCalibrationValues(['4'])).toBe(false);
+  });
+});

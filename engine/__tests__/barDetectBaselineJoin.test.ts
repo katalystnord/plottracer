@@ -153,3 +153,67 @@ describe('samples/bar-floating-temperature.png, traced end to end', () => {
     });
   });
 });
+
+/**
+ * ⚑⚑ THE CONFIGURATION THE APP ACTUALLY RUNS IN, which the tests above do not.
+ *
+ * Every case above takes the no-categories branch of `runBarDetect` - the one
+ * that was the ordinary path while marking the axis was an offer. Since v2.4 the
+ * category axis is part of the calibration walk, so a real trace ALWAYS arrives
+ * with declared dividers and takes the OTHER branch, where each blob is measured
+ * against the bands and a merged run is cut at them.
+ *
+ * ⚠️ A FIXTURE IS BLIND TO WHAT IT LACKS: the join was proven on the branch the
+ * app has stopped using. That is exactly the shape
+ * [[feedback_fixture_blind_by_construction]] names, so the real figure is traced
+ * here through the path a user's click now takes.
+ */
+describe('the same figure, traced the way the app now always traces it', () => {
+  const truth = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../samples/bar-floating-temperature.truth.json', import.meta.url)), 'utf8')
+  ) as {
+    calibration: { anchors: { p1: { px: number; py: number; value: number }; p2: { px: number; py: number; value: number }; c1: { px: number; py: number }; c2: { px: number; py: number; value: number } } };
+    series: { points: { start: number; end: number }[] }[];
+  };
+  const img = readPng(fileURLToPath(new URL('../../samples/bar-floating-temperature.png', import.meta.url)));
+  const { p1, p2, c1, c2 } = truth.calibration.anchors;
+  const valueAt = (py: number) => p1.value + ((py - p1.py) * (p2.value - p1.value)) / (p2.py - p1.py);
+  const baseline = { atPixel: p1.py + ((0 - p1.value) * (p2.py - p1.py)) / (p2.value - p1.value), tolerancePx: 2 };
+  /** The twelve bands the walk declares, as the session hands them to detection:
+   * N+1 dividers evenly spaced between the two clicked ends. */
+  const dividers = Array.from({ length: c2.value + 1 }, (_, i) => c1.px + ((c2.px - c1.px) * i) / c2.value);
+
+  it('⚑⚑ finds twelve bars with the categories DECLARED, not just without them', () => {
+    const result = runBarDetect(
+      img.data, img.width, img.height, [31, 78, 121], 30, 'foreground', undefined,
+      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, baseline
+    );
+    expect('error' in result).toBe(false);
+    if ('error' in result) return;
+    expect(result.boxes).toHaveLength(12);
+    expect(result.joinedAcrossBaseline).toBe(5);
+    // ⚑ Every declared band got exactly one bar - the report detection makes
+    // about the structure it was given, which is what a user reads.
+    expect(result.expectation?.emptyBands).toEqual([]);
+    expect(result.expectation?.complete).toBe(true);
+  });
+
+  it('⚑ and each band\u2019s bar still reads its two ends off the ink', () => {
+    const result = runBarDetect(
+      img.data, img.width, img.height, [31, 78, 121], 30, 'foreground', undefined,
+      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, baseline
+    );
+    if ('error' in result) throw new Error(result.error);
+    const found = result.boxes
+      .map((b) => ({
+        x: (b.start.x + b.end.x) / 2,
+        lo: Math.min(valueAt(b.start.y), valueAt(b.end.y)),
+        hi: Math.max(valueAt(b.start.y), valueAt(b.end.y)),
+      }))
+      .sort((a, b) => a.x - b.x);
+    truth.series[0]!.points.forEach((p, i) => {
+      expect(found[i]!.lo).toBeCloseTo(Math.min(p.start, p.end), 1);
+      expect(found[i]!.hi).toBeCloseTo(Math.max(p.start, p.end), 1);
+    });
+  });
+});
