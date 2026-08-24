@@ -16,19 +16,13 @@ import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../en
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import {
-  CATEGORY_PANEL_HINT,
-  CATEGORY_TICK_DRAG_HINT,
-  CONVENTION_LABELS,
   categoryAidGlyphs,
-  categoryOffer,
-  categoryPanelView,
+  categoryRegenerateWarning,
+  categoryStageLine,
   categoryTickIndexFromId,
   categoryTickMarkers,
-  categoryMarkMessage,
-  isMarkingCategoryAxis,
-  type CategoryMarkError,
 } from '../../engine/categoryTickOverlay.js';
-import type { TickConvention } from '../../core/categoryAxis.js';
+import { CategoriesCard } from './panels/CategoriesCard.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
@@ -37,7 +31,7 @@ import { useMeasure } from './tools/useMeasure.js';
 import { colourMeasureReading } from '../../engine/colourMeasure.js';
 import type { MeasurementCsvRow } from '../../engine/csvExport.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
-import { routeCanvasClick, resolveCategoryEdgeClick, indexOfPlacedPoint } from '../../engine/canvasClickRoute.js';
+import { routeCanvasClick, indexOfPlacedPoint } from '../../engine/canvasClickRoute.js';
 import { samplePixelRgb } from '../../algorithms/samplePixel.js';
 import { exportBaseName as baseNameForExport, EXPORT_FILTER_NAMES } from '../../engine/exportNaming.js';
 import {
@@ -608,18 +602,6 @@ type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 // CLAUDE.md's keystone), just not how to operate the tool.
 
 
-/**
- * How long the marked category axis is, in image pixels - or null when none is
- * marked.
- *
- * ⚑ Read off the two EDGES the user clicked, which is the only span anybody
- * declared. It is handed to `categoryPanelView` so the card can say what it
- * measured when a span looks too short to be a whole category axis.
- */
-function categoryAxisSpanPx(session: { getCategoryAxis: () => { getAxisEdges: () => readonly [{ x: number; y: number }, { x: number; y: number }] | null } }): number | null {
-  const edges = session.getCategoryAxis().getAxisEdges();
-  return edges ? Math.hypot(edges[1].x - edges[0].x, edges[1].y - edges[0].y) : null;
-}
 
 export function Workspace() {
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
@@ -1100,10 +1082,9 @@ export function Workspace() {
   // axis crossing) -- the overwhelmingly common case. When ticked, placing X1
   // auto-reuses that pixel for Y1 so you never place or reuse it by hand.
   const [commonOrigin, setCommonOrigin] = useState(true);
-  // v2.1 category ticks. `categoryFirstEdge` holds the first click of a two-click
-  // axis marking -- gesture state, not document state, so it lives here rather
-  // than in the session: there is nothing to undo about half a gesture.
-  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
+  // ⚑ THE CATEGORY STAGE HAS NO FOLD OF ITS OWN (v2.4). One card, one triangle:
+  // `calibExpanded` governs both stages, exactly as it does on a heatmap. The
+  // `categoryPanelOpen` flag went with the entry button that used to set it.
   /** The heatmap grid's fold-down on the calibration card. Closed to begin
    * with, like the category-tick panel: its summary line is on screen from the
    * start, so the feature is discoverable without the card growing over the
@@ -1221,13 +1202,14 @@ export function Workspace() {
   // `renderEditableName`'s `editKey`.
   const [editingHeatmapXName, setEditingHeatmapXName] = useState<number | string | null>(null);
   const [editingHeatmapYName, setEditingHeatmapYName] = useState<number | string | null>(null);
-  const [categoryFirstEdge, setCategoryFirstEdge] = useState<{ x: number; y: number } | null>(null);
-  const [categoryCountInput, setCategoryCountInput] = useState('');
-  const [categoryMarkError, setCategoryMarkError] = useState<CategoryMarkError>(null);
-  // Set by "Re-place axis": the next marking gesture asks for BOTH ends rather
-  // than reusing P1, which is the only way to correct an axis whose start P1 got
-  // wrong. Cleared once an axis is marked.
-  const [categoryPlaceBothEdges, setCategoryPlaceBothEdges] = useState(false);
+  // ⚑⚑ FOUR PIECES OF GESTURE STATE ARE GONE, because the gesture is gone. The
+  // category axis was marked by clicking the CANVAS while a fold-out was open,
+  // so the component had to remember a half-finished marking (`categoryFirstEdge`),
+  // whether the seed was being overridden (`categoryPlaceBothEdges`), why a click
+  // had been refused (`categoryMarkError`), and a count typed into a box of its
+  // own (`categoryCountInput`). Both ends are calibration steps now, so the walk
+  // owns all of it and the canvas needs no special mode.
+  // ⛔ `# Series (optional)` stays exactly as it was - parked by standing order.
   const [categorySeriesInput, setCategorySeriesInput] = useState('');
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
@@ -1426,29 +1408,23 @@ export function Workspace() {
   // documents: it is the only signal React has that the ref-held session
   // mutated, and dropping it would freeze the fold-out on its first render.
   /* eslint-disable react-hooks/exhaustive-deps */
-  const categoryPanel = useMemo(
-    () =>
-      categoryPanelView({
-        supported: session.supportsCategoryTicks(),
-        isCalibrated: axes !== null,
-        open: categoryPanelOpen,
-        hasGeometry: session.getCategoryAxis().hasGeometry(),
-        seedPixel: session.categoryTickOriginPixel(),
-        seedLabel: session.categoryTickOriginLabel(),
-        edgesPlaced: categoryFirstEdge ? 1 : 0,
-        placeBothEdges: categoryPlaceBothEdges,
-        hasAdjustments: session.getCategoryAxis().hasAdjustments(),
-        // ⚑ A COUNT WAS DECLARED, which is what turns a marked axis into ticks -
-        // and what `Read categories` needs before it has anything to read.
-        hasDeclaredCount: session.getCategoryAxis().hasDeclaredCount(),
-        // ⚑ The figure is the only frame available for judging whether a marked
-        // span is plausibly a whole category axis; there is no plot box in the
-        // record to compare against.
-        imageSize: canvasImageDims.w > 0 ? { width: canvasImageDims.w, height: canvasImageDims.h } : null,
-        spanPx: categoryAxisSpanPx(session),
-      }),
-    [session, version, axes, categoryPanelOpen, categoryFirstEdge, canvasImageDims]
-  );
+  /**
+   * The categorical stage, as three facts. It used to be a state machine with
+   * four phases, a prompt, a seed, an escape hatch and a measured note about a
+   * span that looked too short - all of it serving a marking gesture that is now
+   * two steps of the calibration walk. See `engine/categoryTickOverlay.ts`.
+   */
+  const categoryStage = useMemo(() => {
+    const ca = session.getCategoryAxis();
+    return {
+      supported: session.supportsCategoryTicks(),
+      hasGeometry: ca.hasGeometry(),
+      count: ca.getCategoryCount(),
+      marked: ca.categoriesMarked(),
+      convention: ca.getConvention(),
+      regenerateWarning: categoryRegenerateWarning(ca.hasAdjustments()),
+    };
+  }, [session, version, axes]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const isCalibrating = currentStep !== null;
@@ -2917,13 +2893,11 @@ export function Workspace() {
       setHeatmapDragTint(null);
       setSelectedCells(new Set());
       setSelectedDividerId(null);
-      // The category fold-out's inputs, seeded from the incoming figure so the
-      // Categories box cannot show one figure's count beside another's ticks.
-      setCategoryCountInput(String(s.getCategoryAxis().getCategoryCount() || ''));
-      setCategoryFirstEdge(null);
-      setCategoryMarkError(null);
-      setCategoryPlaceBothEdges(false);
-      setCategoryPanelOpen(false);
+      // ⚑ Nothing to reset for the category stage any more: its count lives in
+      // the incoming figure's own calibration and its ticks in that figure's
+      // model, so switching figures cannot leave one figure's number beside
+      // another figure's marks. Five setters stood here for state the component
+      // no longer holds.
       // ⚑ WHICH SERIES GETS THE CAPS is a fact about the figure, and a refusal
       // about the figure you just left must not sit in red over the new one.
       // The base NAME deliberately survives: it is the user's own convention for
@@ -3546,40 +3520,12 @@ export function Workspace() {
 
   const handleImageClick = useCallback(
     (px: number, py: number) => {
-      // v2.1: while the fold-out is asking for the category axis, a click places
-      // an edge and nothing else -- checked BEFORE the ordinary routing, so a
-      // marking click cannot also drop a data point.
-      if (isMarkingCategoryAxis(categoryPanel)) {
-        const seed = session.categoryTickOriginPixel();
-        // ⚑ The three-input decision (stored edge, calibration seed, whether the
-        // panel allows the seed) is `resolveCategoryEdgeClick` in engine/, where
-        // a unit test can reach every combination - v2.3 theme G. What stays
-        // here is the effect: which state to set, and what to say on a refusal.
-        const edge = resolveCategoryEdgeClick({
-          point: { x: px, y: py },
-          first: categoryFirstEdge,
-          seed: seed ? { x: seed.px, y: seed.py } : null,
-          canReuseSeed: categoryPanel.canReuseSeed,
-        });
-        if (edge.kind === 'hold-first') {
-          setCategoryFirstEdge(edge.point);
-          return;
-        }
-        if (session.markCategoryAxis(edge.from, edge.to)) {
-          setCategoryFirstEdge(null);
-          setCategoryMarkError(null);
-          setCategoryPlaceBothEdges(false);
-          setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
-          commit();
-        } else {
-          // ⚑ Say why. The only way this refuses is a zero-length axis -- the
-          // second click landing on the first edge -- and without this the click
-          // did nothing, the prompt was unchanged, and the app simply appeared
-          // to ignore the user.
-          setCategoryMarkError('too-close');
-        }
-        return;
-      }
+      // ⚑⚑ THE CANVAS HAS NO CATEGORY-MARKING MODE ANY MORE (v2.4). A branch
+      // stood here, ahead of every other route, hijacking any click anywhere in
+      // the app while the fold-out was open - in Eraser and Select too - and
+      // turning it into an axis edge. The two ends are calibration steps now, so
+      // they arrive through the walk's own click handling like every other
+      // calibration point, and this special case is deleted rather than guarded.
       const route = routeCanvasClick({ eyedropper, mode, figureCaptured, readsCellsFromAGrid: heatmapActive });
       switch (route.kind) {
         case 'sample-colour': {
@@ -3710,7 +3656,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, categoryPanel, categoryFirstEdge, heatmapActive, heatmapShownGrid]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -5876,53 +5822,21 @@ export function Workspace() {
         // captured bars put two entries in the shared list, and the folded line
         // then read `2 categories ✓` on a chart with four - a count nobody
         // typed, reported as finished work.
-        session.getCategoryAxis().hasGeometry() && session.getCategoryAxis().hasDeclaredCount()
+        // ⚑⚑ THE ENDING WAS PRESSED, not merely "ticks exist" (v2.4). Since the
+        // axis and its count arrive with the calibration walk, ticks exist the
+        // instant the walk finishes - so the old test (`hasGeometry &&
+        // hasDeclaredCount`) would fold the card at the exact moment the user
+        // was about to drag a marker onto the figure's own rule. Same rule the
+        // heatmap has always had: its stage ends when `Read cells` produces a
+        // record, not when a grid becomes possible.
+        session.getCategoryAxis().categoriesMarked()
       : false;
-  const secondStageSummary = heatmapActive
-    ? `${heatmapCells.length} cells read`
-    : `${session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0} categories`;
-  /**
-   * The category stage's own line (v2.3, theme E / C).
-   *
-   * ⚑ Computed from the session's own count of series CARRYING READINGS, so the
-   * card and the export cannot disagree about whether the ordinal is shared -
-   * `getExportFields` asks the same question of the same method.
-   */
-  const categoryOfferLine = categoryOffer(
-    session.supportsCategoryTicks() && session.getCategoryAxis().hasGeometry(),
-    session.supportsCategoryTicks() ? session.getCategoryAxis().getCategoryCount() : 0,
-    session.seriesWithReadings(),
-    // ⚑ Say what was DECLARED, or say that nothing was - see `categoryOffer`.
-    session.supportsCategoryTicks() && session.getCategoryAxis().hasDeclaredCount()
-  );
-  /**
-   * ⚑⚑⚑ THE STAGE'S ENDING, RENDERED AT THE END OF THE CARD, in both phases.
-   *
-   * David's design: *"THEN -> [Read categories] at the end of the card... Once
-   * that is pressed the whole card should fold up."* It used to stand on the
-   * HEADER row, teal and imperative, where it read as the way IN - and pressing
-   * it before anything was marked did nothing, because there is nothing to read.
-   * David: *"'Read categories' is teal and looks ready to do the job, but
-   * pressing the button does nothing."* He did what the styling told him to.
-   *
-   * ⚑ DISABLED, NEVER ABSENT, with the reason ON it once the card is open - the
-   * heatmap's own rule, in its own words: a greyed control says "this is what
-   * comes next", a missing one says nothing at all. Which is why it renders in
-   * the marking phase too, rather than appearing once the axis is down.
-   * ⚑ The label comes from the TYPE (`secondStage.ending`), unchanged.
-   */
-  const categoryEndingButton = config.secondStage ? (
-    <button
-      type="button"
-      data-testid="category-read"
-      onClick={() => setCategoryPanelOpen(false)}
-      disabled={!categoryPanel.canRead}
-      title={categoryPanel.readBlockedReason ?? 'Read the categories and finish this step'}
-      style={endsCardButton()}
-    >
-      {config.secondStage.ending}
-    </button>
-  ) : null;
+  // ⚑ The heatmap's summary is a count of what was READ; a bar chart's folded
+  // line is David's own words for the walk being done, declared on the type
+  // (`secondStage.done`) so the component does not assemble it.
+  const secondStageSummary = heatmapActive ? `${heatmapCells.length} cells read` : undefined;
+  /** The stage's summary line - the sibling of `heatmapGridSummary`. */
+  const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.marked);
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -6830,7 +6744,10 @@ export function Workspace() {
     // ⚑ The caliper is drawn only for a SINGLE picked cell, and the tip names it
     // only when it is there to be dragged - same source of truth as the marker.
     heatmapCellPicked: selectedCell !== null,
-    isMarkingCategoryAxis: isMarkingCategoryAxis(categoryPanel),
+    // ⚑ There is no marking MODE any more - the category axis is two steps of
+    // the calibration walk, so the tips bar shows their step prompts like any
+    // other calibration step.
+    isMarkingCategoryAxis: false,
     mode,
     figureCaptured,
     eyedropper,
@@ -7493,383 +7410,87 @@ export function Workspace() {
               })()}
             </label>
           )}
-          {/* ⚑⚑ THE GRID IS A DATA DEFINITION, SO IT LIVES ON THE CALIBRATION
-              CARD - a fold-down beside the bar chart's category ticks, not a
-              card of its own in the sidebar (David: "it is part of setting up
-              the data definition / calibration. NOT outputs"). The cells it
-              produces go to the Cells panel, where every other type's output
-              already is; what stays here is only what DESCRIBES the figure. */}
-          {/* ⚑ VISIBLE FROM THE START, closed, with a summary saying what it
-              needs - so the grid is discoverable before it exists rather than
-              appearing out of nowhere once the last value is typed.
-              ⚠️ It was briefly gated on "calibrated" because an e2e failed with
-              the open fold-down covering the pixels the walk asks you to click.
-              That was a FIXED-WINDOW-SIZE artefact, not a defect: a user with a
-              figure to see makes the window bigger, and that is their call. A
-              fixed display size is authoritative about CONTENT and only
-              suggestive about LAYOUT - the harness is not the judge of this. */}
-          {/* ⚑⚑ ONLY WHILE THE SECOND STAGE IS SHOWING - the model decides, not
-              `heatmapActive`. A finished card stops offering "Read cells" for
-              cells it has already read; unfolding a finished card brings the
-              whole stage back, because at that point the card is a record
-              rather than a workspace. */}
-          {/* v2.1 CATEGORY TICKS. A fold-out on the calibration card, not a step
-              in the walk: a bar chart still calibrates in two clicks, a
-              single-series chart never needs any of this, and nobody has to know
-              the feature exists to find it -- the summary line is on screen the
-              moment the axes are calibrated. Every branch below comes from
-              `categoryPanelView`, which is pure and unit-tested. */}
-          {/* ⚑ Not during a Challenge round: opening it mid-round turns the
-              player's bar clicks into category-axis edges while the clock runs
-              (v2.1 audit). */}
-          {/* ⚑⚑ THE CARD'S OWN FOLD GOVERNS IT (v2.3, E2). `showsSecondStageHeader`
-              keeps the offer visible while you are IN the stage - folded card or
-              not, because that is the step you are on - and lets it go once the
-              categories exist and the card is shut, where the folded line
-              already says "4 categories ✓". One card, one triangle, one row when
-              finished. The heatmap's grid is gated on the same field.
-              ⚑⚑ `|| categoryPanelOpen` IS LOAD-BEARING, and its absence was a
-              defect for about ten minutes: a stage the user has OPENED stays on
-              screen until they end it, whatever the model thinks of its
-              progress. Without it the section vanished the moment the axis was
-              marked - the model called the stage done, the card folded, and the
-              count field the user was reaching for went with it. */}
-          {gamePhase === null &&
-            categoryPanel.phase !== 'unavailable' &&
-            (cardModel.showsSecondStageHeader || categoryPanelOpen) && (
+          {/* ⚑⚑ STAGE 2, AND IT IS THE HEATMAP'S STAGE 2 (v2.4). David, with the
+              two cards side by side: *"So it is a two stage fold out card,
+              mirroring exactly heatmaps, and when we unfold from a calibrated
+              state, then we show both card content at the same time, exact
+              mirroring heatmaps."*
+
+              ⚠️ WHAT STOOD HERE, 380 lines of it, and why none of it survives.
+              The categorical stage was a FOLD-OUT INSIDE the card, with its own
+              chevron-free toggle, its own bordered section, a teal `Mark
+              categories` entry button, a prompt, a step line, a measured
+              short-span note, a count box, a tick-style control in its own
+              vocabulary, `Re-place axis`, `Remove ticks`, an ending at the
+              bottom, and a `<details>` arguing the case for the feature. Beside
+              the heatmap's stage 2 it read as a different feature by a different
+              author - and it was, which is exactly the failure CLAUDE.md's own
+              reuse rule names.
+
+              ▶ Now: a SUMMARY LINE with the stage's ENDING beside it, then the
+              stage's controls, gated on `cardModel.showsSecondStage`. Character
+              for character the arrangement `heatmap-grid-panel` uses fifty lines
+              below, because it is the same card. */}
+          {gamePhase === null && categoryStage.supported && cardModel.showsSecondStageHeader && (
             <div
               data-testid="category-ticks-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
             >
-              {/* ⚑⚑ THE STAGE'S OWN HEADER ROW, and it is the heatmap's (v2.3,
-                  theme E). One card, ONE triangle: this used to carry a second
-                  rotating chevron of its own, so a finished chart asked the user
-                  to open two things to see what one card had recorded. The
-                  summary states the stage; the ending button closes it. The
-                  chevron's other job - "this is how you close it again" - is the
-                  ENDING's job, which is what E2 gave every stage.
-                  ⚑⚑ AND THE LINE SPEAKS UP WHEN IT MATTERS (C). Quiet on a
-                  one-series chart, where the unmarked ordinal is a faithful
-                  statement about that series' own pixels; promoted the moment a
-                  SECOND series carries readings, because from then on the two
-                  are being paired by a number they do not share. Evidence, not
-                  prediction - and it never blocks (tenet 1). */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  type="button"
-                  data-testid="category-ticks-toggle"
-                  onClick={() => setCategoryPanelOpen((open) => !open)}
-                  title={categoryPanelOpen ? 'Close category ticks' : 'Open category ticks'}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    font: 'inherit',
-                    // ⚑ The promoted line is the app saying what it SAW, so it
-                    // reads as text the user is meant to act on rather than as
-                    // the hint-grey this app uses for inert prose (E3's lesson,
-                    // one panel over).
-                    color: categoryOfferLine.promoted ? theme.color.text.primary : theme.color.text.secondary,
-                    fontWeight: categoryOfferLine.promoted ? 600 : 400,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span data-testid="category-ticks-summary">{categoryOfferLine.text}</span>
-                </button>
-                {/* ⚑⚑⚑ A PLAIN ENTRY BUTTON, WHERE THE ENDING USED TO BE (v2.3).
-                    `Read categories` stood here, teal and imperative, and it is
-                    the button that ENDS the step - `secondStage.ending`'s own
-                    doc says so. Pressed before anything is marked it did
-                    nothing, because there was nothing to read. David: *"'Read
-                    categories' is teal and looks ready to do the job, but
-                    pressing the button does nothing... As a user I would hunt
-                    for a way to press the button again that looks ready to go."*
-                    He did exactly what the styling told him to.
-                    ▶ So the only primary thing on this row is now the way IN,
-                    and the ending has moved to the END of the card where it
-                    belongs. It also removes the invisible precondition: the
-                    usable form used to appear only after a click nothing
-                    announced (David: *"and now, MAGICALLY, it changes to
-                    something that looks like something I can use"*). */}
-                {!session.getCategoryAxis().hasGeometry() && (
+                {/* ⚑ NO SECOND TRIANGLE. One card, one fold - and this line is
+                    now plain text rather than a button, because there is nothing
+                    left for it to open. */}
+                <span data-testid="category-ticks-summary" style={{ color: theme.color.text.secondary }}>
+                  {categoryStageSummary}
+                </span>
+                {/* ⚑⚑ THE ENDING, ON THE SUMMARY ROW, in exactly the place and
+                    with exactly the gating `heatmap-read` has. It used to sit at
+                    the END of an opened fold-out, which is the arrangement the
+                    heatmap already had to abandon: everything on screen said
+                    READY while the one action that finishes the job was inside a
+                    closed fold-out inside a closed card. David: *"that is a UI
+                    design fault."*
+                    ⚑ DISABLED, NEVER ABSENT, with the reason on it - a greyed
+                    control says "this is what comes next", a missing one says
+                    nothing at all.
+                    ⚑ And ONLY in the second stage: during stage 1 the ending is
+                    "Calibrate", so gating on `ending !== null` alone would give
+                    this button stage 1's word and stage 2's handler. */}
+                {cardModel.ending !== null && cardModel.stage !== 'calibrating' && (
                   <button
                     type="button"
-                    data-testid="category-mark-start"
+                    data-testid="category-read"
                     onClick={() => {
-                      setCategoryFirstEdge(null);
-                      setCategoryMarkError(null);
-                      setCategoryPlaceBothEdges(false);
-                      setCategoryPanelOpen(true);
+                      if (session.markCategories()) commit();
+                      setCalibExpanded(false);
                     }}
-                    title="Mark where the category axis runs, then say how many categories there are"
-                    style={endsCardButton()}
+                    disabled={!categoryStage.hasGeometry}
+                    title={
+                      categoryStage.hasGeometry
+                        ? 'Accept these ticks as the figure\u2019s category boundaries and finish this step'
+                        : 'Calibrate the category axis first - there are no ticks to mark yet'
+                    }
+                    style={endsCardButton(categoryStage.hasGeometry)}
                   >
-                    Mark categories
+                    {cardModel.ending}
                   </button>
                 )}
               </div>
-              {categoryPanelOpen && (
-                // Its own bounded section, not more rows in the calibration list.
-                // Unbounded, it read as three extra calibration settings -- the
-                // reader had no way to see where "the category thing" stopped and
-                // "Log scale / Horizontal bars" began.
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto 1fr',
-                    alignItems: 'center',
-                    columnGap: 10,
-                    rowGap: 7,
-                    padding: '8px 10px',
-                    marginBottom: 2,
-                    borderLeft: `2px solid ${theme.color.primary.main}`,
-                    background: theme.color.background.primary,
-                    borderRadius: 3,
+              {/* ⚑⚑ THE STAGE'S CONTROLS FOLLOW THE STAGE; the row above only
+                  NAMES it - the heatmap's rule, in the heatmap's own words.
+                  While you are still calibrating, the stage is named and its
+                  ending is disabled, and its controls wait. */}
+              {cardModel.showsSecondStage && (
+                <CategoriesCard
+                  declared={categoryStage.count}
+                  convention={categoryStage.convention}
+                  onConventionChange={(c) => {
+                    if (session.setCategoryTickConvention(c)) commit();
                   }}
-                >
-                  {categoryMarkMessage(categoryMarkError) && (
-                    <div
-                      data-testid="category-mark-error"
-                      style={{ gridColumn: '1 / -1', color: theme.color.error }}
-                    >
-                      {categoryMarkMessage(categoryMarkError)}
-                    </div>
-                  )}
-                  {/* ⚑⚑⚑ THE STEP, FIRST, AND ONE LINE. The card used to open
-                      with two paragraphs of RATIONALE - recommended-for, what it
-                      tells PlotTracer, what it lets Auto-extract do - with the
-                      one actionable sentence buried at the start of the second.
-                      The real instruction was correct and sat ~900px away at the
-                      bottom of the window, in the tips bar. David read the card
-                      under his cursor, which is where anyone reads.
-                      ▶ The action leads; the case FOR the feature is disclosed
-                      below, where someone who wants it can find it. The
-                      calibration walk already does exactly this: it shows the
-                      step you are on, not an essay about why the step exists. */}
-                  {categoryPanel.prompt && (
-                    <div
-                      data-testid="category-ticks-prompt"
-                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary, fontWeight: 600 }}
-                    >
-                      {categoryPanel.prompt}
-                    </div>
-                  )}
-                  {/* ⚑ Once the axis is marked the step becomes the ADJUSTING,
-                      which is the gesture the whole design rests on and the one
-                      thing nothing on screen used to mention. */}
-                  {categoryPanel.phase === 'declaring' && (
-                    <div
-                      data-testid="category-ticks-step"
-                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary, fontWeight: 600 }}
-                    >
-                      {session.getCategoryAxis().hasDeclaredCount()
-                        ? 'Drag any marker that is not on a boundary, then press Read categories.'
-                        : 'Now say how many categories there are, and which way the figure marks them.'}
-                    </div>
-                  )}
-                  {/* ⚑ WHAT WAS MEASURED about a span that looks too short - it
-                      reports and does not refuse. See `categoryPanelView`. */}
-                  {categoryPanel.spanNote && (
-                    <div
-                      data-testid="category-span-note"
-                      style={{ gridColumn: '1 / -1', color: theme.color.text.primary }}
-                    >
-                      {categoryPanel.spanNote}
-                    </div>
-                  )}
-                  {categoryPanel.phase === 'mark-axis' && (
-                    // ⚑ A VISIBLE WAY OUT. In this phase the panel rendered only
-                    // a prompt -- no Done, no Cancel -- while every canvas click
-                    // anywhere in the app was being captured as an axis edge,
-                    // including in Eraser and Select. The only exit was
-                    // re-clicking the summary chevron, and nothing said so
-                    // (v2.1 audit).
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
-                      {categoryEndingButton}
-                      <button
-                        type="button"
-                        data-testid="category-cancel-mark"
-                        onClick={() => {
-                          setCategoryFirstEdge(null);
-                          setCategoryMarkError(null);
-                          setCategoryPlaceBothEdges(false);
-                          setCategoryPanelOpen(false);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                  {categoryPanel.phase === 'declaring' && (
-                    <>
-                      {/* ⚑ THE DRAG SENTENCE IS NOW THE COUNT FIELD'S TOOLTIP
-                          (E6), exactly as the heatmap's moved onto its boundary
-                          buttons. The count is what GENERATES evenly spaced
-                          ticks, so "they may not be evenly spaced - drag them"
-                          belongs on the control that made them. The FACT
-                          survives; the permanent line under it does not, and
-                          dragging a marker is conventional everywhere else in
-                          this app. */}
-                      <label htmlFor="category-count-input">Categories</label>
-                      <span>
-                        <input
-                          id="category-count-input"
-                          type="number"
-                          min={1}
-                          data-testid="category-count"
-                          title={
-                            CATEGORY_TICK_DRAG_HINT +
-                            (categoryPanel.regenerateWarning ? ` ${categoryPanel.regenerateWarning}` : '')
-                          }
-                          value={categoryCountInput}
-                          // ⚑ GROWING COMMITS AS YOU TYPE; SHRINKING WAITS FOR
-                          // BLUR OR ENTER.
-                          //
-                          // `setCategoryCount` shrinks by TRUNCATION, dropping
-                          // the trailing categories names and all -- so with the
-                          // whole field selected, retyping 12 over a 5 passed
-                          // through the intermediate "1" and silently deleted
-                          // four named categories on the way (v2.1 audit).
-                          //
-                          // ⚑ But committing only on blur was WORSE: the ticks
-                          // stopped appearing as the number was typed, and that
-                          // live redraw is the entire feedback loop this panel
-                          // is built around -- you type a count and SEE whether
-                          // the marks land on the figure. Caught by the e2e.
-                          // Growing can never destroy a name, so it stays
-                          // instant; only the destructive direction waits.
-                          onChange={(e) => {
-                            setCategoryCountInput(e.target.value);
-                            const n = Number(e.target.value);
-                            const current = session.getCategoryAxis().getCategoryCount();
-                            if (Number.isInteger(n) && n >= 1 && n >= current && session.setCategoryCount(n))
-                              commit();
-                          }}
-                          onBlur={() => {
-                            const n = Number(categoryCountInput);
-                            if (Number.isInteger(n) && n >= 1 && session.setCategoryCount(n)) commit();
-                            else setCategoryCountInput(String(session.getCategoryAxis().getCategoryCount() || ''));
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') e.currentTarget.blur();
-                          }}
-                          style={{ width: 56 }}
-                        />
-                      </span>
-                      {/* Two RADIOS, not a select: both readings have to be visible
-                          without a click, because the user is being asked which one
-                          their figure prints -- and flipping it moves the marks on
-                          screen, which is the whole answer. */}
-                      <span>Ticks are</span>
-                      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                        {(['centred', 'edge'] as TickConvention[]).map((c) => (
-                          <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                            <input
-                              type="radio"
-                              name="category-convention"
-                              data-testid={`category-convention-${c}`}
-                              checked={session.getCategoryAxis().getConvention() === c}
-                              onChange={() => {
-                                if (session.setCategoryTickConvention(c)) commit();
-                              }}
-                            />
-                            <span style={{ whiteSpace: 'nowrap' }}>{CONVENTION_LABELS[c]}</span>
-                          </label>
-                        ))}
-                      </fieldset>
-                      <label htmlFor="category-series-input"># Series (optional)</label>
-                      <span>
-                        <input
-                          id="category-series-input"
-                          type="number"
-                          min={1}
-                          data-testid="category-series-count"
-                          value={categorySeriesInput}
-                          onChange={(e) => setCategorySeriesInput(e.target.value)}
-                          style={{ width: 56 }}
-                        />
-                      </span>
-                      {/* ⚑⚑ THE RED STANDING WARNING IS GONE. It appeared the
-                          moment a tick had been dragged and said that changing
-                          the count, the style or the axis "rebuilds the ticks
-                          evenly and discards the ones you moved". Three things
-                          were wrong at once: it fired on the CONSTRUCTIVE
-                          gesture the design asks for, it was RED so it read as
-                          an error when nothing was wrong, and it told the user
-                          that adjusting is fragile at the moment they tried it.
-                          A feature cannot ask for a gesture and warn against it
-                          in the same breath.
-                          ▶ The information is real and now travels with the
-                          controls that would actually do it - the count, the
-                          style, Re-place axis - as what they cost when used. */}
-                      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 2 }}>
-                        {categoryEndingButton}
-                        {/* ⚑ THE SAFE EXIT MOVED UP, it did not go. It was added
-                            here because the only exits on screen were "Re-place
-                            axis" and "Remove ticks", both destructive - "the way
-                            out must never be the way to lose your work" (David).
-                            That exit is now the stage's ENDING on the header row,
-                            in the type's own word, beside the line it ends; two
-                            buttons doing one job is what E2 came to remove. */}
-                        <button
-                          type="button"
-                          data-testid="category-replace-axis"
-                          title={
-                            'Re-place axis - click both ends of the category axis again.' +
-                            (categoryPanel.regenerateWarning ? ` ${categoryPanel.regenerateWarning}` : '')
-                          }
-                          onClick={() => {
-                            // ⚑ BOTH ends, which is what the label says. Reusing
-                            // P1 here made the start impossible to correct: P1 is
-                            // "a known bar value (e.g. 0)", so a figure calibrated
-                            // on a gridline mid-plot anchored the category axis in
-                            // the middle of the figure for good.
-                            session.clearCategoryAxisGeometry();
-                            setCategoryFirstEdge(null);
-                            setCategoryMarkError(null);
-                            setCategoryPlaceBothEdges(true);
-                            commit();
-                          }}
-                        >
-                          Re-place axis
-                        </button>
-                        <button
-                          type="button"
-                          data-testid="category-remove-ticks"
-                          title="Remove ticks - drop the marks and the empty categories they created. Named categories and captured bars are kept."
-                          onClick={() => {
-                            // Takes back the empty categories the declaration
-                            // created; keeps any that were named or have a bar.
-                            session.removeCategoryTicks();
-                            setCategoryFirstEdge(null);
-                            setCategoryMarkError(null);
-                            setCategoryPlaceBothEdges(false);
-                            setCategoryPanelOpen(false);
-                            commit();
-                          }}
-                        >
-                          Remove ticks
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {/* ⚑⚑ THE CASE FOR THE FEATURE, DISCLOSED RATHER THAN LEADING.
-                      It is well written and it is not what someone mid-gesture
-                      needs; it used to occupy the top of the card while the
-                      instruction sat at the bottom of the window. `<details>` is
-                      progressive disclosure the keystone rule allows - a layer he
-                      can FIND - rather than a hidden mode. */}
-                  <details style={{ gridColumn: '1 / -1', color: theme.color.text.legend }}>
-                    <summary data-testid="category-why" style={{ cursor: 'pointer' }}>
-                      Why mark categories?
-                    </summary>
-                    <div style={{ marginTop: 4 }}>{CATEGORY_PANEL_HINT}</div>
-                  </details>
-                </div>
+                  regenerateWarning={categoryStage.regenerateWarning}
+                  seriesInput={categorySeriesInput}
+                  onSeriesInputChange={setCategorySeriesInput}
+                />
               )}
             </div>
           )}
@@ -8637,14 +8258,13 @@ export function Workspace() {
           // regionMode makes above, same reason (that click samples a colour).
           boxMode={
             // ⚑ Bar capture is a DRAG-BOX, so in boxMode a plain click is one
-            // CORNER of a bar and never reaches onImageClick at all. While the
-            // fold-out is asking for a category-axis edge, that click has to BE
-            // the edge -- so box capture stands down for exactly that moment.
-            // Caught by the e2e; no unit test could have seen it.
-            (mode === 'place-point' &&
-              !!config.capturesAsBox &&
-              eyedropper === null &&
-              !isMarkingCategoryAxis(categoryPanel)) ||
+            // CORNER of a bar and never reaches onImageClick at all.
+            // ⚑ The category-axis exception is GONE with the mode it guarded: the
+            // fold-out used to hijack canvas clicks to place an axis edge, so box
+            // capture had to stand down for exactly that moment. Both ends are
+            // calibration steps now, and calibration clicks never reached this
+            // path anyway.
+            (mode === 'place-point' && !!config.capturesAsBox && eyedropper === null) ||
             // ⚑⚑ THE COLOUR KEY IS DRAGGED CORNER TO CORNER (v2.2), and it is the
             // SAME gesture as a bar's box for the same reason: two opposite
             // corners of a rectangle, with the rubber band showing what you have

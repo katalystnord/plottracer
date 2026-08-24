@@ -87,6 +87,23 @@ export class CategoryAxis {
    */
   private _countDeclared = false;
 
+  /**
+   * The user has said the ticks are where they want them - the stage's ENDING.
+   *
+   * ⚑⚑ NOT the same as "the ticks exist", and that difference is the whole
+   * reason it is stored. Since v2.4 the axis and its count arrive with the
+   * calibration walk, so ticks exist the instant the walk finishes - and a card
+   * that folded on THAT would close itself at the exact moment the user was
+   * about to drag a marker onto the figure's own rule. The heatmap has the same
+   * shape and answers it the same way: its stage ends when `Read cells` produces
+   * a record, not when a grid becomes possible.
+   *
+   * ⚑ It is on the MODEL rather than in the component so a reopened project does
+   * not ask for the marking again. Dropped by `clearGeometry`, because ticks
+   * nobody has placed cannot have been accepted.
+   */
+  private _marked = false;
+
   /** Appends a new category and returns its index. */
   addCategory(name: string): number {
     this._categories.push(name);
@@ -220,6 +237,18 @@ export class CategoryAxis {
   clearGeometry(): void {
     this._bands.clearGeometry();
     this._bands.clearBands();
+    this._marked = false;
+  }
+
+  /** The stage's ending: these ticks are where the figure's own boundaries are.
+   * See `_marked`. */
+  markCategories(): void {
+    this._marked = true;
+  }
+
+  /** Whether that ending has been pressed. */
+  categoriesMarked(): boolean {
+    return this._marked;
   }
 
   /**

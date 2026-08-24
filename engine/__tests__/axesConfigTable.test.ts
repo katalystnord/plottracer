@@ -386,9 +386,18 @@ describe('the config table - how many clicks each type asks for', () => {
     const expected: Record<string, number> = {
       xy: 4,
       histogram: 4,
-      bar: 2,
-      categorical: 2,
-      boxplot: 2,
+      // ⚑⚑ FOUR, NOT TWO, SINCE v2.4 - and the extra pair is the point. Two of
+      // these clicks calibrate the VALUE axis, which is all `BarAxes` reads;
+      // the other two calibrate the CATEGORY axis, which is not a
+      // `CalibratedAxes` at all and has no pixel transform. The walk is the
+      // FIGURE's calibration, not one class's argument list, and a bar chart
+      // has two axes.
+      // ⚠️ The old comment on this table - *"an extra one asks for a click the
+      // maths ignores"* - is exactly the reading that let the category axis be
+      // a fold-out seeded off P1 for three releases.
+      bar: 4,
+      categorical: 4,
+      boxplot: 4,
       polar: 3,
       ternary: 3,
       map: 2,

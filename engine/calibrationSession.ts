@@ -4059,30 +4059,62 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * The already-placed calibration pixel that seeds the category axis's first
-   * edge - the value origin, which sits on that edge in an ordinary bar chart.
-   * Null when the type has no categories or the seed step is not placed yet.
+   * Put the calibrated category axis into the model: its two ends, and the count
+   * declared on the second click.
    *
-   * ⚑ Offered, never imposed: this is what lets the UI put the first edge down
-   * for free, exactly as an XY calibration reuses X1 for Y1, and the user can
-   * place both edges by hand when P1 was clicked partway up the axis instead of
-   * at the corner.
+   * ⚑⚑ THE WALK IS THE ONLY WAY IN NOW (v2.4). The axis used to be marked by a
+   * fold-out that SEEDED its first edge from P1 and took one free click for the
+   * second, which is how a category axis came to run diagonally across a figure
+   * with nothing able to refuse it. Both ends are calibration steps with their
+   * own prompts and their own handles, so there is one entrance and it is
+   * guided. `categoryTickOriginPixel`/`categoryTickOriginLabel` went with the
+   * seed they existed to offer.
+   *
+   * ⚑ AND THE COUNT CANNOT LAG THE AXIS. It is typed ON the second click, so
+   * there is no state where geometry exists and no count does - the state that
+   * printed `axis marked, no count yet` beside a box reading 17.
+   *
+   * ⚑ Called from `runCalibration`, which is also what a HANDLE DRAG re-runs, so
+   * nudging `Cat 1` moves every tick with it. Returns false without touching
+   * anything if either end is missing or the pair is degenerate; the walk cannot
+   * complete in that state, and `distinctPixelSteps` refuses it one layer up.
    */
-  categoryTickOriginPixel(): { px: number; py: number } | null {
+  private applyCalibratedCategoryAxis(): boolean {
     const ticks = this.config.categoryTicks;
-    if (!ticks) return null;
-    const seed = this.placed[ticks.originStep];
-    return seed ? { px: seed.px, py: seed.py } : null;
-  }
-
-  /** The LABEL of that seed handle - 'P1' on a bar chart, 'V1' on a Line - so
-   * the prompt can name the handle this figure actually has. Blank when the type
-   * has no categories. See `CategoryPanelInput.seedLabel` for what naming the
-   * wrong one cost. */
-  categoryTickOriginLabel(): string {
-    const ticks = this.config.categoryTicks;
-    if (!ticks) return '';
-    return this.config.fixedSteps.find((s) => s.key === ticks.originStep)?.label ?? '';
+    if (!ticks) return false;
+    const a = this.placed[ticks.startStep];
+    const b = this.placed[ticks.endStep];
+    if (!a || !b) return false;
+    // ⚑⚑ ONLY WHEN THE ENDS ACTUALLY MOVED, and leaving this out was a real
+    // defect caught by `an image edit does NOT discard ticks the user dragged`.
+    // `runCalibration` re-runs on far more than a fresh walk - an image edit, an
+    // option change, a nudged handle - and `setAxisEdges` REGENERATES the ticks
+    // evenly by design. So rebuilding unconditionally silently threw away every
+    // tick the user had dragged onto the figure's own rule, which is the one
+    // gesture this whole feature rests on.
+    // ⚑ Moving an end SHOULD regenerate: the span changed, so the marks derived
+    // from it are no longer where the user put them relative to anything.
+    const edges = this.categoryAxis.getAxisEdges();
+    const same =
+      edges !== null &&
+      edges[0].x === a.px && edges[0].y === a.py &&
+      edges[1].x === b.px && edges[1].y === b.py;
+    if (!same && !this.categoryAxis.setAxisEdges({ x: a.px, y: a.py }, { x: b.px, y: b.py })) return false;
+    // ⚑ The count is the second end's only typed field. An unparseable one is
+    // left to `checkValues`, which refuses the calibration with a sentence -
+    // silently defaulting it here would be a count nobody declared.
+    const declared = Number(b.values[0] ?? '');
+    if (!Number.isInteger(declared) || declared < 1) return false;
+    // ⚑ Re-declaring the SAME count must not rebuild the ticks, or a nudge to
+    // either end (which re-runs the whole calibration) would discard every tick
+    // the user had dragged. `setAxisEdges` has already regenerated them from the
+    // new ends, which is what a moved end should do; the count has not changed.
+    if (this.categoryAxis.getCategoryCount() !== declared) {
+      if (!this.categoryAxis.setCategoryCount(declared)) return false;
+    } else {
+      this.categoryAxis.markCountDeclared();
+    }
+    return true;
   }
 
   /** Mark the two edges that ARE the category axis. Refuses for a type with no
@@ -4096,6 +4128,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
   setCategoryCount(count: number): boolean {
     if (!this.supportsCategoryTicks()) return false;
     return this.categoryAxis.setCategoryCount(count);
+  }
+
+  /**
+   * The categorical stage's ENDING - "these ticks are where the figure's
+   * boundaries are". Mirrors the heatmap's `Read cells`: it is what finishes the
+   * stage and folds the card, and until it is pressed the marks stay adjustable.
+   */
+  markCategories(): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    if (!this.categoryAxis.hasGeometry()) return false;
+    this.categoryAxis.markCategories();
+    return true;
   }
 
   /** Switch between ticks under the categories and ticks between them. */
@@ -5275,6 +5319,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // RE-CALIBRATION, without anything copying them" is that measurement, kept.
     this.axes = result.axes;
     this.applyAxesDerivedSlots();
+    // ⚑ The category axis is part of THIS calibration now, not a fold-out bolted
+    // on after it - so it is built here, from the same placed points, every time
+    // the walk completes or a handle is nudged.
+    if (this.config.categoryTicks) this.applyCalibratedCategoryAxis();
     return true;
   }
 

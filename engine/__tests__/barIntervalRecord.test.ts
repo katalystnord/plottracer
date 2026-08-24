@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A BAR'S TWO ENDS, IN THE FILE - `Min` and `Max`, smallest first (v2.3).
@@ -33,6 +34,7 @@ function barSession() {
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(100, 100);
   expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }
@@ -168,6 +170,7 @@ describe("⚑⚑ the figure David measured it on - samples/bar-floating-temperat
     expect(s.confirmCalibrationValues([String(p1.value)])).toBe(true);
     s.handleCalibrationClick(p2.px, p2.py);
     expect(s.confirmCalibrationValues([String(p2.value)])).toBe(true);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     return s;
   }

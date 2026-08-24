@@ -3,6 +3,7 @@ import { CalibrationSession } from '../calibrationSession.js';
 import { BAR_AXES_CONFIG, PIE_AXES_CONFIG } from '../axesTypeConfigs.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { PieAxes } from '../../core/axes/pie.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A TUPLE ROW CAN NAME ITS PIXEL, AND A PIXEL CAN NAME ITS ROW (v2.3
@@ -26,6 +27,7 @@ function calibratedBar(): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(100, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   s.runCalibration();
   return s;
 }

@@ -3,6 +3,7 @@ import { CalibrationSession, HISTOGRAM_AXES_CONFIG, XY_AXES_CONFIG, BAR_AXES_CON
 import type { BarAxes } from '../../core/axes/bar.js';
 import { computeBinGlyph } from '../histogramGlyph.js';
 import type { XYAxes } from '../../core/axes/xy.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * `getHistogramBinGlyphs()` - what the canvas draws so a captured bin reads as
@@ -94,6 +95,7 @@ describe('getHistogramBinGlyphs', () => {
     bar.confirmCalibrationValues(['0']);
     bar.handleCalibrationClick(300, 100);
     bar.confirmCalibrationValues(['10']);
+    walkCategoryAxis(bar);
     expect(bar.runCalibration()).toBe(true);
     bar.addDataPoint(200, 400);
     bar.addDataPoint(260, 500);

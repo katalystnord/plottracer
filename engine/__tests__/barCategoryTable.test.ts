@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * getBarCategoryTable / renameCategory (v2.0) -- the shared Bar table's own
@@ -13,12 +14,23 @@ import type { BarAxes } from '../../core/axes/bar.js';
  */
 
 // P1=0 @ (300,500), P2=10 @ (300,100) -- same convention as barCapture.test.ts.
-function calibratedBar(session: CalibrationSession<BarAxes>): void {
+function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
   session.handleCalibrationClick(300, 500);
   session.confirmCalibrationValues(['0']);
   session.handleCalibrationClick(300, 100);
   session.confirmCalibrationValues(['10']);
+  // ⚑ The category axis is part of the walk since v2.4, so its COUNT is part of
+  // the fixture: a test that builds two bars is describing a two-category
+  // figure, and the table shows every category the figure declares.
+  walkCategoryAxis(session, { count });
   expect(session.runCalibration()).toBe(true);
+}
+
+/** The un-ticked path, which since v2.4 only a pre-v2.4 project file reaches.
+ * See `unmarkedBarSession` in `calibrationSession.test.ts`. */
+function unmarkedBar(session: CalibrationSession<BarAxes>): void {
+  calibratedBar(session);
+  session.removeCategoryTicks();
 }
 
 describe('getBarCategoryTable: gating', () => {
@@ -38,11 +50,15 @@ describe('getBarCategoryTable: gating', () => {
 describe('getBarCategoryTable: single series', () => {
   it('lists one row per bar, positional placeholder names, real derived values', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.addDataPoint(150, 500); // bar 0: value 5
+    calibratedBar(session, 2);
+    // ⚑ x=150 and x=350: with the axis marked 100..500 and TWO categories the
+    // bands are 100-300 and 300-500, so these are two different categories.
+    // At 150 and 250 they would be the same one - which is the model working,
+    // and a fixture describing two bars stacked on one category position.
+    session.addDataPoint(150, 500); // bar 0, category 1: value 5
     session.addDataPoint(150, 300);
-    session.addDataPoint(250, 500); // bar 1: value 2
-    session.addDataPoint(250, 420);
+    session.addDataPoint(350, 500); // bar 1, category 2: value 2
+    session.addDataPoint(350, 420);
 
     const table = session.getBarCategoryTable();
     expect(table.categoryRawNames).toEqual(['', '']); // never invented (tenet 9)
@@ -63,7 +79,7 @@ describe('getBarCategoryTable: single series', () => {
     // one shared '' slot, so naming either would rename BOTH. Nothing looks
     // wrong until a user types the second name and watches the first change.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
+    calibratedBar(session, 2);
     session.addDataPoint(150, 500);
     session.addDataPoint(150, 300);
     session.addDataPoint(250, 500);
@@ -114,10 +130,10 @@ describe('setSlotCursor: aiming at a specific half-filled bar (v2.0 audit)', () 
     // separate half-filled bars, built via explicit aiming the way two
     // interrupted drags would leave them:
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
-    session.addDataPoint(150, 500); // tuple 0, one corner only (Bar 1)
+    calibratedBar(session, 2);
+    session.addDataPoint(150, 500); // tuple 0, one corner only (Bar 1), category 1
     expect(session.setSlotCursor(null, 0)).toBe(true); // start a genuinely NEW tuple
-    session.addDataPoint(250, 500); // tuple 1, one corner only (Bar 2)
+    session.addDataPoint(350, 500); // tuple 1, one corner only (Bar 2), category 2
     expect(session.getBarCategoryTable().columns[0]!.tupleIndices).toEqual([0, 1]);
     expect(session.getBarCategoryTable().columns[0]!.values).toEqual([null, null]);
 
@@ -152,7 +168,7 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     // genuine null cell here, series 1 needs a SECOND category series 2 never
     // reaches at all.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
+    calibratedBar(session, 2);
     session.addDataPoint(150, 500); // series 1, Flax: value 5
     session.addDataPoint(150, 300);
     session.renameCategory(0, 'Flax');
@@ -176,8 +192,11 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
   });
 
   it('a shared category (via the nearest-bar prefill) reads BOTH series in the SAME row', () => {
+    // ⚑ THE PREFILL, so the UN-TICKED path: with the axis marked, two bars in
+    // one band share a category by construction and no prefill runs at all.
+    // This still covers a pre-v2.4 project file, where it does.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
+    unmarkedBar(session);
     session.addDataPoint(150, 500); // series 1, value 5
     session.addDataPoint(150, 300);
     session.renameCategory(0, 'Flax');
@@ -292,7 +311,7 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     // still needs a distinct addressable slot per bar so a later rename has
     // somewhere to land - which is what `reserveEmptyCategorySlot` is FOR.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
+    unmarkedBar(session);
     session.addDataPoint(140, 500);
     session.addDataPoint(220, 300);
     session.addDataPoint(340, 500);

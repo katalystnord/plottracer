@@ -7,6 +7,7 @@ import {
   TERNARY_AXES_CONFIG,
 } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * Checkpoint 92 - the right-panel table's value-column headers come from the
@@ -71,6 +72,7 @@ describe('getTableValueLabels - table headers match the file', () => {
       s.handleCalibrationClick(px, py);
       s.confirmCalibrationValues([v]);
     }
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     const table = s.getTableValueLabels();
     const file = s.getExportFields();

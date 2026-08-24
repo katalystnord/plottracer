@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import { hasErrorSlots, slotForRole } from '../../algorithms/errorExtent.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** x 0..10 over px 100..300; y 0..10 over py 300..100. */
 function session() {
@@ -224,6 +225,7 @@ describe('error on a BAR series appends to the bar\'s own slots', () => {
       expect(s.handleCalibrationClick(px, py)).toBe('awaiting-value');
       expect(s.confirmCalibrationValues([v])).toBe(true);
     }
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     const ds = s.getDatasets()[0]!;
     const own = [...ds.getSlotNames()];

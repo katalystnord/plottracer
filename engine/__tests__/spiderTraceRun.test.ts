@@ -14,6 +14,7 @@ import {
 import { SpiderAxes as SpiderAxesClass } from '../../core/axes/spider.js';
 import { Calibration } from '../../core/calibration.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * The axis-aware colour trace, orchestrated (v1.4) - and its landing in the record.
@@ -490,6 +491,7 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     bar.confirmCalibrationValues(['0']);
     bar.handleCalibrationClick(100, 100);
     bar.confirmCalibrationValues(['10']);
+    walkCategoryAxis(bar);
     expect(bar.runCalibration()).toBe(true);
     // v2.0: a plain bar is ALREADY tuple-shaped (its own 2-slot interval
     // record, BAR_INTERVAL_SLOTS) -- not the 'flat' shape a pre-v2.0 bar

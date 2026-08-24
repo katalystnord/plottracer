@@ -126,52 +126,17 @@ export function routeCanvasClick({
   return { kind: 'add-point' };
 }
 
-/** A point in the image's own pixel space. */
-export interface ClickPoint {
-  x: number;
-  y: number;
-}
-
-export interface CategoryEdgeClickInput {
-  /** Where the user just clicked. */
-  point: ClickPoint;
-  /** The first edge already placed by a previous click, if any. */
-  first: ClickPoint | null;
-  /** The calibration's own origin pixel, which can stand in for the first edge. */
-  seed: ClickPoint | null;
-  /** The panel's answer to whether the seed may stand in - never guessed here. */
-  canReuseSeed: boolean;
-}
-
-export type CategoryEdgeClick =
-  /** Only one end is known so far; hold it and wait for the second click. */
-  | { kind: 'hold-first'; point: ClickPoint }
-  /** Both ends are known - mark the axis between them. */
-  | { kind: 'mark'; from: ClickPoint; to: ClickPoint };
-
 /**
- * Which pixel is the category axis's first edge, and is the axis now known?
+ * ⛔ `resolveCategoryEdgeClick` WAS HERE, AND IT WENT WITH ITS GESTURE (v2.4).
  *
- * ⚑⚑ THE ONE-CLICK WALK LIVES HERE (v2.1's promise: *"P1 is already the first
- * edge, so the prompt asks for one click, not two"*). Three inputs decide it -
- * a stored first edge, the calibration seed, and whether the panel says the seed
- * may be reused - and until v2.3 they were resolved inside a 163-line
- * `useCallback`, where no unit test could reach the combination.
- *
- * ⚑ A STORED EDGE OUTRANKS THE SEED, because the user placed it deliberately;
- * and a seed the panel refuses is not quietly promoted into an edge the user was
- * never told about.
+ * It decided, for a click on the canvas while the category fold-out was open,
+ * whether that click was the FIRST edge, the second, or a second one paired with
+ * a SEED borrowed from the value-axis calibration handle. Both ends of the
+ * category axis are calibration steps now, so a canvas click is never an axis
+ * edge, there is no seed to pair with, and there is no half-finished marking for
+ * anything to hold. [[feedback_delete_unreachable_code]] - chased to a fixpoint:
+ * its only caller was `Workspace`, and its tests went with it.
  */
-export function resolveCategoryEdgeClick({
-  point,
-  first,
-  seed,
-  canReuseSeed,
-}: CategoryEdgeClickInput): CategoryEdgeClick {
-  const from = first ?? (canReuseSeed && seed ? seed : null);
-  if (!from) return { kind: 'hold-first', point };
-  return { kind: 'mark', from, to: point };
-}
 
 /**
  * Which index is the point that was just placed at this pixel?

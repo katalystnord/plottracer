@@ -7,6 +7,7 @@ import {
   type CalibratedAxes,
 } from '../calibrationSession.js';
 import { buildExportJson, buildExportSections, type ExportAssemblyInput } from '../exportAssembly.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * Export assembly for the two shapes that are NOT a flat series: `bins`
@@ -32,6 +33,7 @@ function barSession(): CalibrationSession<CalibratedAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s as unknown as CalibrationSession<CalibratedAxes>;
 }

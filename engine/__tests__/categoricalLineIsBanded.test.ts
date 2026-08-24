@@ -43,6 +43,7 @@
 import { describe, it, expect } from 'vitest';
 import { CalibrationSession } from '../calibrationSession.js';
 import { CATEGORICAL_LINE_CONFIG } from '../axesTypeConfigs.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 type LineSession = ReturnType<typeof lineSession>;
 
@@ -53,6 +54,7 @@ function lineSession() {
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(100, 100);
   expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }
@@ -74,14 +76,18 @@ describe('the type declares a category axis', () => {
     expect(lineSession().supportsCategoryTicks()).toBe(true);
   });
 
-  it("⚑⚑ seeded from `v1`, because a Line has no `p1` to seed from", () => {
-    // Bar and Box Plot seed the axis from `p1`, the origin corner. A Line's
-    // calibration is TWO points on the VALUE axis and nothing else - `v1` is the
-    // click on the Y axis, which IS the left edge of the category axis. The
-    // config declared `originStep` as a name rather than a literal precisely so
-    // this type could differ; this is that prediction coming true.
+  /**
+   * ⛔ THE SEED IS GONE (v2.4). This asserted `categoryTickOriginPixel()` is
+   * `v1`, *"the click on the Y axis, which IS the left edge of the category
+   * axis"*. It is not: V1's prompt is *"a known value on the Y axis (e.g.
+   * Y=0)"*, which says nothing about where ALONG the axis to click. Bar proved
+   * the same claim false the hard way - a category axis that ran diagonally
+   * across David's figure. Both ends are calibration steps now.
+   */
+  it('⚑⚑ calibrates its category axis in the walk, like Bar and Box Plot', () => {
     const s = lineSession();
-    expect(s.categoryTickOriginPixel()).toEqual({ px: 100, py: 300 });
+    expect(s.getCategoryAxis().getAxisEdges()).not.toBeNull();
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
   });
 });
 
@@ -223,6 +229,9 @@ describe('what must NOT change', () => {
     // left-to-right reading of its own pixels - a faithful view of one series,
     // and the honest answer when nobody has said where the categories are.
     const s = lineSession();
+    // ⚑ "No axis marked" is reached by WITHDRAWING the declaration since v2.4 -
+    // a pre-v2.4 project file. The behaviour it guards is unchanged.
+    s.removeCategoryTicks();
     s.addDataPoint(350, 150);
     s.addDataPoint(150, 250);
     expect(positions(s, 0)).toEqual([2, 1]);

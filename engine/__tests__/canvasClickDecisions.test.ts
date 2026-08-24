@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCategoryEdgeClick, indexOfPlacedPoint } from '../canvasClickRoute.js';
+import { indexOfPlacedPoint } from '../canvasClickRoute.js';
 import { emptyCategoryNames } from '../colorTraceReport.js';
 import { samplePixelRgb } from '../../algorithms/samplePixel.js';
 
@@ -16,44 +16,13 @@ import { samplePixelRgb } from '../../algorithms/samplePixel.js';
  * moves, the hook stays and calls it. What changes is who can ask the question.
  */
 
-describe('G - which pixel is the category axis edge', () => {
-  const at = (x: number, y: number) => ({ x, y });
-
-  it('the FIRST click of two is held, not marked', () => {
-    expect(
-      resolveCategoryEdgeClick({ point: at(50, 400), first: null, seed: null, canReuseSeed: false })
-    ).toEqual({ kind: 'hold-first', point: at(50, 400) });
-  });
-
-  it('the second click marks the axis between them', () => {
-    expect(
-      resolveCategoryEdgeClick({ point: at(600, 400), first: at(50, 400), seed: null, canReuseSeed: false })
-    ).toEqual({ kind: 'mark', from: at(50, 400), to: at(600, 400) });
-  });
-
-  it('⚑ the calibration SEED stands in for the first click, so the walk is one click', () => {
-    // v2.1's own promise - "P1 is already the first edge, so the prompt asks for
-    // one click, not two". The seed only counts when the panel says it may:
-    // `canReuseSeed` is the panel's answer, not a guess made here.
-    expect(
-      resolveCategoryEdgeClick({ point: at(600, 400), first: null, seed: at(50, 400), canReuseSeed: true })
-    ).toEqual({ kind: 'mark', from: at(50, 400), to: at(600, 400) });
-  });
-
-  it('⚑ and an UNUSABLE seed does not silently become the first edge', () => {
-    // A seed exists but the panel refused to reuse it: the click must start the
-    // pair, not mark an axis from a corner the user was never told about.
-    expect(
-      resolveCategoryEdgeClick({ point: at(600, 400), first: null, seed: at(50, 400), canReuseSeed: false })
-    ).toEqual({ kind: 'hold-first', point: at(600, 400) });
-  });
-
-  it('⚑ a stored first edge OUTRANKS the seed - it is the one the user placed', () => {
-    expect(
-      resolveCategoryEdgeClick({ point: at(600, 400), first: at(80, 400), seed: at(50, 400), canReuseSeed: true })
-    ).toEqual({ kind: 'mark', from: at(80, 400), to: at(600, 400) });
-  });
-});
+/**
+ * ⛔ THE CATEGORY-EDGE CLICK TESTS WENT WITH THE GESTURE (v2.4). They covered
+ * `resolveCategoryEdgeClick` - which click is the first edge, which is the
+ * second, and when the value-axis handle may stand in for the first. Both ends
+ * of the category axis are calibration steps now, so a canvas click is never an
+ * axis edge and the function is deleted rather than left unreachable.
+ */
 
 describe('G - which point did I just place', () => {
   const pts = [

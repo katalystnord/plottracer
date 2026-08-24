@@ -14,6 +14,7 @@ import {
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 // Same calibration fixture as projectFile.test.ts / the e2e block: X 0..10 over
 // px 100..400, Y 0..10 over px 250..100, one point at (250,175) reading (5,5).
@@ -179,6 +180,7 @@ describe('multi-figure container (checkpoint 115)', () => {
     // Figure 2: BAR -- a different graph type in the same project (David's point).
     const s2 = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(s2);
+    walkCategoryAxis(s2);
     s2.runCalibration();
     s2.addDataPoint(300, 300); // reads 5
 

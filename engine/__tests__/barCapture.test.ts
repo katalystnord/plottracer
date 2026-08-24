@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * Capturing a bar - two clicks, opposite corners (v2.0).
@@ -22,6 +23,7 @@ function calibratedBar(session: CalibrationSession<BarAxes>): void {
   session.confirmCalibrationValues(['0']);
   session.handleCalibrationClick(300, 100);
   session.confirmCalibrationValues(['10']);
+  walkCategoryAxis(session);
   expect(session.runCalibration()).toBe(true);
 }
 
@@ -100,6 +102,7 @@ describe('a baseline-anchored bar (the default: hasBaseline true, value 0)', () 
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(300, 100);
     session.confirmCalibrationValues(['10']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toMatch(/baseline/i);
   });
@@ -355,6 +358,7 @@ describe('addBarDetectBoxes (v2.0, Phase 7) -- colour-detected boxes, the SAME r
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(700, 500);
     session.confirmCalibrationValues(['10']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
 
     const added = session.addBarDetectBoxes([

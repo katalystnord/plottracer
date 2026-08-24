@@ -8,6 +8,7 @@ import {
 } from '../calibrationSession.js';
 import { Calibration } from '../../core/calibration.js';
 import { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * A bar's VALUE - the sign convention - and the file-load door that refuses a
@@ -98,6 +99,7 @@ function calibratedBar(options: Record<string, string> = {}): CalibrationSession
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }
@@ -131,6 +133,7 @@ describe("a bar's value - the sign convention", () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(300, 100); // 10 above it
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
     expect(barValue(s, 150, 300, 200)).toBeCloseTo(5, 6); // above the baseline
@@ -210,6 +213,7 @@ describe("a histogram bin's value", () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
     // Both corners at y=300 -> exactly halfway up a 0..10 scale.
@@ -230,6 +234,7 @@ describe("a histogram bin's value", () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
     s.addDataPoint(150, 340); // value 4
@@ -247,6 +252,7 @@ describe("a histogram bin's value", () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     s.addDataPoint(150, 300);
     expect(s.getTupleRows()[0]!.derived).toBeNull();
@@ -262,6 +268,7 @@ describe('a log-scale bar reads its value through the log axis', () => {
     s.confirmCalibrationValues(['1']);
     s.handleCalibrationClick(300, 100);
     s.confirmCalibrationValues(['1000']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
     // Halfway up three decades is 10^1.5; against a baseline of 1 the span is

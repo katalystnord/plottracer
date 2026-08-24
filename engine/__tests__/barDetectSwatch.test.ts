@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runBarDetect } from '../barDetectRun.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A LEGEND SWATCH IS NOT A BAR - and the record was carrying it as one.
@@ -156,6 +157,7 @@ describe('the session says where the baseline runs, so the detector can ask', ()
     expect(s.confirmCalibrationValues(['0'])).toBe(true);
     s.handleCalibrationClick(100, 100);
     expect(s.confirmCalibrationValues(['10'])).toBe(true);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     // The baseline defaults to 0, which is py 500 on this calibration.
     expect(s.baselinePixelForDetect()?.atPixel).toBeCloseTo(500, 6);
@@ -172,6 +174,7 @@ describe('the session says where the baseline runs, so the detector can ask', ()
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     expect(s.baselinePixelForDetect()?.atPixel).toBeCloseTo(420, 6);
   });
@@ -184,6 +187,7 @@ describe('the session says where the baseline runs, so the detector can ask', ()
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
     // A figure with no baseline has no anchor to measure against, and the
     // detector must not be handed one that was never declared.

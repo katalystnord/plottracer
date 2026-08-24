@@ -10,6 +10,7 @@ import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG, CIRCULAR_CHART_REC
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 // Same fixtures as calibrationSession.test.ts's calibrateStandardXY/Bar/CCR --
 // duplicated locally rather than imported, since that file doesn't export them.
@@ -141,6 +142,7 @@ describe('serializeProject', () => {
   it('writes categoryAxisColl once a Bar session actually names a category', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
+    walkCategoryAxis(session);
     session.runCalibration();
     session.addDataPoint(150, 500);
     session.addDataPoint(150, 300);
@@ -149,7 +151,13 @@ describe('serializeProject', () => {
     const result = serializeProject(session, FAKE_IMAGE_DATA_URL);
     if ('error' in result) throw new Error(`unexpected error: ${result.error}`);
     expect(result.plotData.categoryAxisColl).toHaveLength(1);
-    expect(result.plotData.categoryAxisColl?.[0]?.categories).toEqual(['Wheat']);
+    // ⚑ FOUR entries, because the walk DECLARED four categories and one of them
+    // has been named. An unnamed category is not an absent one: it is a band the
+    // figure has, which is exactly what the declaration is for.
+    expect(result.plotData.categoryAxisColl?.[0]?.categories).toEqual(['Wheat', '', '', '']);
+    // ⚑ …and the geometry rides with it, so a reopened project has the axis it
+    // was calibrated with rather than asking for it again.
+    expect(result.plotData.categoryAxisColl?.[0]?.geometry?.countDeclared).toBe(true);
     expect(result.plotData.datasetColl[0]!.categoryAxisName).toBe(result.plotData.categoryAxisColl?.[0]?.name);
   });
 });
@@ -326,6 +334,7 @@ describe('deserializeProject', () => {
   it('round-trips a Box Plot (Bar + Point Groups) session, including tuple labels', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
+    walkCategoryAxis(session);
     session.runCalibration();
     session.applyBoxPlotGroups();
     for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py);
@@ -361,6 +370,7 @@ describe('deserializeProject', () => {
     // then renaming through the file's OWN restored CategoryAxis instance.
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
+    walkCategoryAxis(session);
     session.runCalibration();
     session.addDataPoint(150, 500);
     session.addDataPoint(150, 300);
@@ -388,6 +398,7 @@ describe('deserializeProject', () => {
   it('a file predating v2.0 (no categoryAxisColl) opens with a fresh empty CategoryAxis, not a crash', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
+    walkCategoryAxis(session);
     session.runCalibration();
     session.addDataPoint(150, 500);
     session.addDataPoint(150, 300);

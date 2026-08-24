@@ -70,6 +70,7 @@ import { CalibrationSession, BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../ca
 import { buildExportSections } from '../exportAssembly.js';
 import type { TableSection } from '../tableFormats.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** Value axis: 0 at py 300, 10 at py 100. Vertical bars, screen-aligned. */
 function barSession(config = BAR_AXES_CONFIG) {
@@ -78,7 +79,14 @@ function barSession(config = BAR_AXES_CONFIG) {
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(100, 100);
   expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
+  // ⚑⚑ THE AXIS IS THEN UNMARKED, DELIBERATELY - this whole file is about the
+  // DERIVED frame: what a bar chart can say about position, pitch and extent
+  // from the INK ALONE, with nothing declared. Since v2.4 the walk always marks
+  // the axis, so that state is reached by withdrawing the declaration, which is
+  // exactly what a pre-v2.4 project file presents on load.
+  s.removeCategoryTicks();
   return s;
 }
 
@@ -92,7 +100,11 @@ function horizontalBarSession() {
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(300, 300);
   expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  // ⚑ The category axis here is VERTICAL, but this file measures the DERIVED
+  // frame, so the declaration is withdrawn either way - see `barSession`.
+  walkCategoryAxis(s, { from: { x: 100, y: 100 }, to: { x: 100, y: 500 } });
   expect(s.runCalibration()).toBe(true);
+  s.removeCategoryTicks();
   return s;
 }
 
@@ -208,7 +220,12 @@ describe('the frame follows the axis, not the screen', () => {
     expect(s.confirmCalibrationValues(['0'])).toBe(true);
     s.handleCalibrationClick(160, 220); // value axis tilted 3-4-5
     expect(s.confirmCalibrationValues(['10'])).toBe(true);
+    // ⚑ The category axis runs PERPENDICULAR to that tilt (4,3 normalised), so
+    // its two ends are clicked along it - and then withdrawn, because this test
+    // is about the DERIVED frame. See `barSession`.
+    walkCategoryAxis(s, { from: { x: 100, y: 300 }, to: { x: 340, y: 480 } });
     expect(s.runCalibration()).toBe(true);
+    s.removeCategoryTicks();
     // Three bars stepped ALONG the perpendicular (4, 3)/5, each one 40 further.
     bar(s, 132, 156, 276);
     bar(s, 164, 188, 252);

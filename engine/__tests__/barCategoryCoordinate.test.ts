@@ -58,6 +58,7 @@ import { describe, it, expect } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../calibrationSession.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** Value axis: 0 at py 300, 10 at py 100. */
 function barSession(config = BAR_AXES_CONFIG) {
@@ -66,6 +67,7 @@ function barSession(config = BAR_AXES_CONFIG) {
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(100, 100);
   expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }
@@ -204,6 +206,10 @@ describe('nothing is invented where nothing was measured', () => {
   // one bar's PITCH, and an empty category's existence.
   it('⚑⚑ one bar has a position but no pitch, so no extent is claimed', () => {
     const s = barSession();
+    // ⚑ The DERIVED frame: no declared bands, which since v2.4 means the
+    // declaration is withdrawn (a pre-v2.4 file). The pitch is what one bar
+    // cannot supply, and that is unchanged.
+    s.removeCategoryTicks();
     bar(s, 210, 290, 200);
     const [data] = sectionsFor(s, 'bar');
     expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
@@ -228,6 +234,7 @@ describe('nothing is invented where nothing was measured', () => {
     // name-list slot, so a typed name survives a coordinate that is derived
     // from geometry the name knows nothing about.
     const s = barSession();
+    s.removeCategoryTicks();
     bar(s, 210, 290, 200);
     expect(s.setTupleLabel(0, 'Control')).toBe(true);
     const [data] = sectionsFor(s, 'bar');

@@ -36,6 +36,7 @@ import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatm
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
 import { barInterval, nearEndIsFirst } from '../core/barInterval.js';
 import { halfPixelResolution } from '../core/exportPrecision.js';
+import { CONVENTION_LABELS } from './categoryTickOverlay.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
 export interface CalibratedAxes {
@@ -902,7 +903,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * ⚑ Ticks are an AID, not a calibration: nothing here is a step in the walk,
    * and no measured value depends on any of it. See core/categoryAxis.ts.
    */
-  categoryTicks?: { originStep: string };
+  categoryTicks?: { startStep: string; endStep: string };
   /**
    * ⚑⚑ THE SECOND STAGE - what this type reads once its axes are calibrated.
    *
@@ -935,8 +936,18 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
   secondStage?: {
     /** What the stage is called on the folded line - "Grid", "Categories". */
     label: string;
-    /** The button that ENDS it - "Read cells", "Read categories". */
+    /** The button that ENDS it - "Read cells", "Mark categories". */
     ending: string;
+    /**
+     * What the FOLDED line calls the finished stage, when that is not a count.
+     *
+     * ⚑ A heatmap's folded line says "20 cells read ✓", which is a summary of a
+     * READING and is assembled from the record. A bar chart's says
+     * "Categories marked ✓" - David's own words for it - which is a statement
+     * about the WALK, and belongs on the type rather than being built in the
+     * component. Absent = the caller's summary, then `label`.
+     */
+    done?: string;
   };
   /**
    * Rewrite the walk when an OPTION changes what a step is asking for.
@@ -1446,10 +1457,16 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // category ticks already render as two radios, with the reason written on
     // that control: *"both readings have to be visible without a click, because
     // the user is being asked which one their figure prints."*
+    // ⚑ THE WORDS COME FROM `CONVENTION_LABELS`, the one place a `TickConvention`
+    // is put into English. They were written out here AND differently again on
+    // the bar chart's own control (`Under each category` / `Between
+    // categories`), so one question had two vocabularies and nothing said they
+    // were the same question. Importing the constant is what stops them drifting
+    // apart a second time.
     { key: 'xTicksCentred', label: 'ticks at', group: 'X axis', newRow: true, kind: 'choice', default: 'false',
-      choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
+      choices: [{ value: 'false', label: CONVENTION_LABELS.edge }, { value: 'true', label: CONVENTION_LABELS.centred }] },
     { key: 'yTicksCentred', label: 'ticks at', group: 'Y axis', newRow: true, kind: 'choice', default: 'false',
-      choices: [{ value: 'false', label: 'Boundaries' }, { value: 'true', label: 'Centres' }] },
+      choices: [{ value: 'false', label: CONVENTION_LABELS.edge }, { value: 'true', label: CONVENTION_LABELS.centred }] },
     // ⚑⚑ THE THIRD AXIS GETS ITS OWN ROW, with the word COLOUR on it - David:
     // *"that also captures the word colour on that row, which was what I was
     // after."* A log colour scale is the ordinary log axis, so it reads exactly
@@ -1870,10 +1887,37 @@ export const BAR_INTERVAL_SLOTS = ['Min', 'Max'] as const;
  * without this a bad file opened clean while every bar silently read back
  * one constant value.
  */
+/**
+ * How many categories the figure has, typed on the SECOND category click.
+ *
+ * ⚑⚑ CHECKED AT BOTH ENTRANCES, which is this project's standing rule and the
+ * shape it has been bitten by repeatedly: a guard only the click path reaches is
+ * a guard a loaded file walks straight past. A count of 0, 2.5 or "lots" would
+ * otherwise reach `CategoryAxis.setCategoryCount`, be refused there silently, and
+ * leave a calibrated figure whose axis has geometry and no bands.
+ *
+ * ⚑ It says nothing while the field is still blank - the walk already says what
+ * is missing, far better than a refusal would.
+ */
+function categoryCountValueCheck(cal: Calibration, index: number): string | null {
+  const raw = String((cal.getPoint(index) as { dz?: unknown } | null)?.dz ?? '');
+  if (raw.trim() === '') return null;
+  const n = parseFloat(raw);
+  return Number.isInteger(n) && n >= 1
+    ? null
+    : 'The number of categories must be a whole number, 1 or more - count them off the figure.';
+}
+
+/** Where the category count sits in the calibration: the fourth step on every
+ * type that calibrates a `BarAxes` (two value points, then the two axis ends). */
+const CATEGORY_COUNT_POINT = 3;
+
 function barCalibrationValueCheck(
   cal: Calibration,
   options: Readonly<Record<string, string>>
 ): string | null {
+  const countProblem = categoryCountValueCheck(cal, CATEGORY_COUNT_POINT);
+  if (countProblem) return countProblem;
   const p1 = parseFloat(String(cal.getPoint(0)?.dy ?? ''));
   const p2 = parseFloat(String(cal.getPoint(1)?.dy ?? ''));
   if (Number.isFinite(p1) && Number.isFinite(p2)) {
@@ -1901,7 +1945,11 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
-  distinctPixelSteps: [['p1', 'p2']],
+  // ⚑ Each axis's own two clicks must differ. The category pair is guarded for
+  // the same reason the value pair is: two coincident ends make every tick, every
+  // divider and every category assignment read back NaN with nothing on screen
+  // wrong (`CategoryAxis.setAxisEdges`'s own refusal, at the other entrance).
+  distinctPixelSteps: [['p1', 'p2'], ['c1', 'c2']],
   // WPD: templates/_sidebars.html bar-axes-scale / bar-axes-rotated.
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
@@ -1918,18 +1966,69 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // of exactly the same kind that were already here.
     { key: 'isStacked', label: 'Stacked bars', kind: 'checkbox', default: false },
   ],
+  /**
+   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.4). The value axis is
+   * calibrated by P1/P2; the CATEGORY axis is calibrated by its own two clicks,
+   * exactly as a heatmap's category axis is. David, 2026-08-24: *"I think we
+   * need to make the categories axis a two click from us users. Because
+   * otherwise we end up in this kind of trouble."* And: *"shall we then make it
+   * not an offer but a requirement?"*
+   *
+   * ⚠️ WHAT THIS REPLACES, so nobody rebuilds it. The category axis used to be a
+   * FOLD-OUT offered after calibration, whose first edge was SEEDED from P1 and
+   * whose second was one unconstrained click. But P1's own prompt is *"a known
+   * bar value (e.g. 0)"* - it is nowhere near a promise about the category axis.
+   * On David's floating-temperature figure P1 sat at -10 on the left spine, the
+   * second click landed on the zero rule at the right, and the app accepted a
+   * category axis running DIAGONALLY across the plot with seventeen ticks
+   * marching up it. Nothing refused, because nothing could: the model had no
+   * opinion about where a category axis may run, and the only thing that could
+   * have shown the error - the marks - are not drawn until after both clicks.
+   *
+   * ⚑ TWO CLICKS AND A COUNT REMOVE THE WHOLE CLASS. Both ends are asked for by
+   * name, in the walk, each with its own prompt and its own handle; the count
+   * arrives ON the second click, so there is no state where a marked axis has no
+   * count (which is what printed `axis marked, no count yet` beside a filled-in
+   * box). The seed, `Re-place axis`, `Remove ticks` and the entry button all
+   * stop existing rather than being redesigned.
+   *
+   * ⚑ THE CONVENTION IS NOT ASKED HERE, and that is a deliberate divergence from
+   * the heatmap. There the two clicks land ON a band edge or ON a band centre,
+   * so the convention has to be chosen first. Here they are the OUTER ENDS of
+   * the whole axis either way, and the convention only decides where the ticks
+   * fall INSIDE that span - so it is asked once, on the card, after the clicks,
+   * which is the order David gave.
+   */
   fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click the pixel position of a known bar value (e.g. 0)', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
     { key: 'p2', label: 'P2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different bar value', valueFields: [{ key: 'p2', label: 'value', field: 'dy' }] },
+    // ⚑ THE STRUCTURE VIOLET, not a third calibration colour. These two handles
+    // and the ticks they generate are one axis, and the app already says
+    // "violet" for every mark the user placed on the figure's frame
+    // (`CATEGORY_TICK_COLOR`). Mirroring, rather than matching.
+    // ⚑ No typed value on the first end - a click with nothing to type is the
+    // difference between recording where the ink is and inferring it, which is
+    // the same shape the heatmap's first column edge has.
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click where the category axis STARTS - the outer edge of the FIRST category', valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click where the category axis ENDS - the outer edge of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
   intervalSlots: ['Min', 'Max'],
-  categoryTicks: { originStep: 'p1' },
-  // ⚑ Stage 2: the category ticks this type marks after its value axis
-  // is calibrated - the same shape the heatmap's grid has.
-  secondStage: { label: 'Categories', ending: 'Read categories' },
+  // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
+  // - the same slot a heatmap's column and row counts use, for the same reason.
+  // Without this the Calibration drops the third field silently and the count
+  // never reaches `checkValues` or the axis.
+  calibrationDimensions: 3,
+  categoryTicks: { startStep: 'c1', endStep: 'c2' },
+  // ⚑ Stage 2: the ticks INSIDE the axis the walk just calibrated - the same
+  // shape, and now the same card, as the heatmap's grid.
+  // ⚑ `done` is the word the FOLDED line uses. David: *"> Calibration
+  // *Calibrated check* *categories marked check* [reset calibration]"*. It is
+  // declared rather than assembled in the component, because the heatmap's
+  // reads "20 cells read" and a bar chart's is not a count of anything read.
+  secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
   tupleNoun: 'bar',
   tupleMembers: 'object',
   derivedTupleValue: {
@@ -2067,27 +2166,34 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['Value'],
   globalFields: [],
   logScaleGuards: [{ option: 'isLog', points: [0, 1], field: 'dy', label: 'value' }],
-  distinctPixelSteps: [['v1', 'v2']],
-  // ⚑⚑ CATEGORY TICKS, AND `v1` IS THE SEED (v2.3). The note this replaces said
-  // "NO categoryTicks yet, deliberately… when the per-point path moves to a
-  // category index, the seed step here is `v1`, not `p1` -- which is exactly why
-  // `categoryTicks.originStep` is declared rather than written as a literal."
-  // That is this change: the per-point path now reads its category from the
-  // marked axis, so the capability has something to write to and something to
-  // read from.
-  //
-  // ⚑ `v1` rather than `p1` because a Line's calibration is TWO points on the
-  // VALUE axis and nothing else - there is no origin corner. `v1` is the click
-  // on the Y axis, which IS the left edge of the category axis on an ordinary
-  // upright figure, so the first edge comes for free exactly as Bar's does.
-  categoryTicks: { originStep: 'v1' },
-  // Stage 2: mark the categories once the value axis is calibrated - the same
-  // shape Bar, Box Plot and the heatmap's grid have.
-  secondStage: { label: 'Categories', ending: 'Read categories' },
+  distinctPixelSteps: [['v1', 'v2'], ['c1', 'c2']],
+  // ⚑⚑ THE CATEGORY AXIS IS CALIBRATED, NOT SEEDED (v2.4). This used to read
+  // `originStep: 'v1'`, on the reasoning that V1 is a click on the Y axis and
+  // therefore "IS the left edge of the category axis on an ordinary upright
+  // figure, so the first edge comes for free exactly as Bar's does".
+  // ⚠️ BOTH HALVES OF THAT WERE WRONG, and Bar's is what proved it: V1's prompt
+  // is *"a known value on the Y axis (e.g. Y=0)"*, which says nothing about
+  // where along the axis to click, and a figure calibrated on a gridline mid-plot
+  // anchored the category axis in the middle of the figure with nothing on
+  // screen able to move it. See `BAR_AXES_CONFIG.fixedSteps`.
+  // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
+  // - the same slot a heatmap's column and row counts use, for the same reason.
+  // Without this the Calibration drops the third field silently and the count
+  // never reaches `checkValues` or the axis.
+  calibrationDimensions: 3,
+  categoryTicks: { startStep: 'c1', endStep: 'c2' },
+  // Stage 2: the ticks INSIDE the axis the walk calibrated - the same shape,
+  // and the same card, as Bar, Box Plot and the heatmap's grid.
+  secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
   fixedSteps: [
     { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
     { key: 'v2', label: 'V2', color: '#5fb4e0', prompt: 'Click a second, different known value on the Y axis', valueFields: [{ key: 'v2', label: 'value', field: 'dy' }] },
+    // ⚑ The same two clicks Bar asks for, in the same words and the same violet.
+    // A categorical Line's other axis is a category axis exactly as a bar
+    // chart's is, so it is asked for the same way - MIRROR, not merely match.
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click where the category axis STARTS - the outer edge of the FIRST category', valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click where the category axis ENDS - the outer edge of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
   checkValues(cal, options) {
@@ -2135,11 +2241,16 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   defaultSlots: BOX_PLOT_SLOTS,
-  // Shares Bar's fixedSteps (below), so the same seed step.
-  categoryTicks: { originStep: 'p1' },
-  // ⚑ Stage 2: the category ticks this type marks after its value axis
-  // is calibrated - the same shape the heatmap's grid has.
-  secondStage: { label: 'Categories', ending: 'Read categories' },
+  // Shares Bar's fixedSteps (below), so the same two category clicks.
+  // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
+  // - the same slot a heatmap's column and row counts use, for the same reason.
+  // Without this the Calibration drops the third field silently and the count
+  // never reaches `checkValues` or the axis.
+  calibrationDimensions: 3,
+  categoryTicks: { startStep: 'c1', endStep: 'c2' },
+  // ⚑ Stage 2: the ticks INSIDE the axis the walk calibrated - the same shape,
+  // and the same card, as Bar and the heatmap's grid.
+  secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
   tupleNoun: 'box',
   // Shares Bar's calibration and guards -- reusing the arrays keeps them from
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this

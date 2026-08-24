@@ -295,317 +295,86 @@ export function categoryTickIndexFromId(id: string): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// The fold-out
+// The categorical STAGE - stage 2 of the calibration card
 // ---------------------------------------------------------------------------
 
-export type CategoryTickPhase = 'unavailable' | 'closed' | 'mark-axis' | 'declaring';
+/**
+ * ⚑⚑ THIS SECTION USED TO BE A STATE MACHINE FOR A FLOW THAT NO LONGER EXISTS.
+ *
+ * It carried `CategoryTickPhase` (`unavailable` | `closed` | `mark-axis` |
+ * `declaring`), the prompts for a two-click marking gesture, a seed pixel and
+ * the label of the calibration handle it was borrowed from, a "place both edges"
+ * escape hatch, a refusal message for a second click that landed on the first, a
+ * measured note about a span that looked too short to be a whole axis, and an
+ * OFFER line that had to argue for opening the fold-out at all.
+ *
+ * All of it existed because the category axis was marked by a fold-out AFTER
+ * calibration, seeded from a value-axis handle. Since v2.4 it is two steps of
+ * the calibration walk (`BAR_AXES_CONFIG.fixedSteps`), so:
+ *
+ *   · there is no phase - the stage exists exactly when the type declares one;
+ *   · there is no prompt here - each click has its own step prompt, in the walk,
+ *     beside the handle it places;
+ *   · there is no seed, so nothing has to name the handle it was taken from;
+ *   · there is no short-span note, because there is no click that can be
+ *     mistaken for the end of the first category - the step says "the outer edge
+ *     of the LAST category";
+ *   · and there is no offer, because a required step is not offered.
+ *
+ * ▶ What is left is what the heatmap's stage has: a SUMMARY LINE and what the
+ * rebuilding control costs. [[feedback_delete_unreachable_code]].
+ */
 
-export interface CategoryPanelInput {
-  /** The graph type has categories at all. */
-  supported: boolean;
-  /** The value axis is calibrated - the fold-out appears after it, not during. */
-  isCalibrated: boolean;
-  /** The user has opened the fold-out. */
-  open: boolean;
-  /** An axis has been marked. */
-  hasGeometry: boolean;
-  /** The pixel of the seed calibration step, if placed - offered as the first edge. */
-  seedPixel: { px: number; py: number } | null;
-  /**
-   * The LABEL of the calibration handle being reused as the axis' first edge -
-   * 'P1' on a bar chart, 'V1' on a categorical Line.
-   *
-   * ⚠️ It was the literal string 'P1', and extending category ticks to Line
-   * (v2.3) gave a chart whose handle is labelled V1 a prompt telling the user to
-   * look for a P1 that is not on the figure. Gate 4's exact class: a prompt may
-   * only name what is actually on screen. `categoryTicks.originStep` was always
-   * a NAME rather than a literal for this reason; this is the prompt catching up.
-   */
-  seedLabel: string;
-  /** How many edges are down in the current marking gesture (0 or 1). */
-  edgesPlaced: number;
-  /** A tick has been dragged since the last generation. */
-  hasAdjustments: boolean;
-  /**
-   * The user asked to place BOTH ends by hand - "Re-place axis".
-   *
-   * ⚑ Without this the seed always wins and the two-click walk is unreachable:
-   * `seedPixel` is P1, which exists the moment the figure is calibrated, so
-   * `canReuseSeed` was permanently true, `edgesPlaced` permanently 0, and the
-   * two prompts below were dead strings. P1 is only the category axis's corner
-   * on a chart calibrated AT the corner - its own prompt is "a known bar value
-   * (e.g. 0)", and clicking the 0 gridline mid-plot is perfectly ordinary
-   * calibration, which anchored the category axis in the middle of the figure
-   * with nothing on screen able to move it (v2.1 audit).
-   */
-  placeBothEdges: boolean;
-  /** A COUNT has been declared, so ticks exist rather than merely an axis. */
-  hasDeclaredCount?: boolean;
-  /** The figure's own size in pixels - the only frame available for judging
-   * whether a marked span is plausibly a whole category axis. */
-  imageSize?: { width: number; height: number } | null;
-  /** The span just marked, in pixels, when there is one. */
-  spanPx?: number | null;
+/** The stage's summary line - the sibling of `heatmapGridLine`.
+ *
+ * ⚑ It states what the CALIBRATION declared, and says so; and it reports the
+ * stage as finished only once the ending has actually been pressed, never merely
+ * because ticks exist. Ticks exist the moment the walk completes now, so "there
+ * are ticks" is not evidence that anyone has looked at them. */
+export function categoryStageLine(count: number, marked: boolean): string {
+  const n = count === 1 ? '1 category' : `${count} categories`;
+  return marked ? `Categories - ${n} ✓` : `Categories - ${n}`;
 }
 
-/** Why a click could not become an axis edge. Null when nothing has failed. */
-export type CategoryMarkError = 'too-close' | null;
-
 /**
- * What to say when `markCategoryAxis` refuses.
+ * What re-generating would cost, or null when it would cost nothing.
  *
- * ⚑ A REFUSAL WITH NO VISIBLE REASON is the shape this project has been bitten
- * by repeatedly, and the fold-out had one: if the second click lands on the seed
- * pixel (or on the first edge), `setAxisEdges` refuses a zero-length axis, the
- * handler returns having done nothing, and the prompt is unchanged. The user
- * clicks and the app appears to ignore them (code review, 2026-08-10).
+ * ⚑⚑ IT IS NOT A STANDING LINE, and it is not red. It used to appear the moment
+ * a tick had been dragged - the one CONSTRUCTIVE gesture the whole design rests
+ * on - and warn, in the colour this app uses for errors, about the consequences
+ * of OTHER, future actions. A feature cannot ask for a gesture and warn against
+ * it in the same breath. It travels with the control that would actually rebuild.
  */
-export function categoryMarkMessage(error: CategoryMarkError): string | null {
-  return error === 'too-close'
-    ? 'That is the same point as the start of the axis - click where the categories END, further along.'
+export function categoryRegenerateWarning(hasAdjustments: boolean): string | null {
+  return hasAdjustments
+    ? 'Changing the tick convention rebuilds these ticks evenly and discards the ones you moved.'
     : null;
 }
-
-export interface CategoryPanelView {
-  phase: CategoryTickPhase;
-  /** What the card asks for next; null when it is asking nothing. */
-  prompt: string | null;
-  /**
-   * What the REBUILDING controls have to say before they are used, or null.
-   *
-   * ⚑⚑ IT IS NO LONGER A STANDING LINE ON THE CARD (v2.3). It used to appear the
-   * moment a tick had been dragged, in RED - so David did the one CONSTRUCTIVE
-   * thing the whole design rests on, adjusting a marker, and was answered with
-   * what read as an error about other, future actions. A feature cannot ask for a
-   * gesture and warn against it in the same breath.
-   * ▶ The information is real and belongs ON the controls that rebuild - the
-   * count, the tick style, Re-place axis - as what they will cost when used.
-   */
-  regenerateWarning: string | null;
-  /** The seed can stand in for the first edge, so only one click is needed. */
-  canReuseSeed: boolean;
-  /**
-   * What was MEASURED about a span that looks too short to be a whole category
-   * axis, or null.
-   *
-   * ⚑ IT REPORTS, IT DOES NOT REFUSE. David clicked the end of the FIRST
-   * category on a four-category chart, because the prompt said "click where the
-   * categories end" and read cold that is exactly what it means. Nothing said
-   * anything. But a figure whose category axis really is a small part of the
-   * image exists, and a hard refusal would make it unmarkable - so this states
-   * the measurement and names the way back.
-   * ⚑ The live markers are the other half, and the better half: with a count
-   * declared they appear at once, so a wrong span is visible in a second.
-   */
-  spanNote: string | null;
-  /** `Read categories` has something to read. */
-  canRead: boolean;
-  /** Why it has not, for the disabled button to say. Null when it can. */
-  readBlockedReason: string | null;
-}
-
-/**
- * What the fold-out is doing right now.
- *
- * ⚑ The fold-out appears only once the value axis is CALIBRATED, and never
- * gates it. A bar chart still calibrates in two clicks and a single-series chart
- * never needs any of this - the whole feature is an offer made after the work
- * that matters is already done.
- */
-export function categoryPanelView(input: CategoryPanelInput): CategoryPanelView {
-  const { supported, isCalibrated, open, hasGeometry, seedPixel, seedLabel, edgesPlaced, hasAdjustments } =
-    input;
-  const canReuseSeed = seedPixel !== null && edgesPlaced === 0 && !input.placeBothEdges;
-  const blank = {
-    prompt: null,
-    regenerateWarning: null,
-    spanNote: null,
-    canRead: false,
-    readBlockedReason: null,
-  };
-
-  if (!supported || !isCalibrated) {
-    return { ...blank, phase: 'unavailable', canReuseSeed: false };
-  }
-  if (!open) {
-    return { ...blank, phase: 'closed', canReuseSeed };
-  }
-  if (!hasGeometry) {
-    // ⚑⚑ THE PROMPT NAMES THE FAR EDGE OF THE WHOLE AXIS, and that wording is
-    // the fix (v2.3). It used to read "Click where the categories end", and
-    // David clicked the end of the FIRST category on a four-category chart -
-    // read cold, that is exactly what the sentence means. It is CLAUDE.md gate 4
-    // for the second time: v2.2's shared-corners walk sent its second click to
-    // the wrong corner in the same way, and both were found only when a person
-    // made the gesture.
-    const prompt = canReuseSeed
-      ? `Click the FAR END of the whole category axis - past the last category, not the end of the first. ${seedLabel} (the amber handle) is the start; press Re-place axis if that is wrong.`
-      : edgesPlaced === 0
-        ? 'Click where the category axis STARTS, before the first category, then its FAR END past the last.'
-        : 'Now click the FAR END of the axis, past the last category.';
-    return {
-      ...blank,
-      phase: 'mark-axis',
-      prompt,
-      canReuseSeed,
-      readBlockedReason: 'Mark the category axis first - then this reads the categories.',
-    };
-  }
-  const declaredCount = input.hasDeclaredCount ?? true;
-  return {
-    ...blank,
-    phase: 'declaring',
-    // ⚑ On the CONTROLS that rebuild, not standing on the card - see the field.
-    // Still only where there is something to lose: a warning that appears when
-    // nothing would be discarded teaches the user to ignore it.
-    regenerateWarning: hasAdjustments
-      ? 'This rebuilds the ticks evenly and discards the ones you moved.'
-      : null,
-    spanNote: shortSpanNote(input.spanPx ?? null, input.imageSize ?? null),
-    canReuseSeed: false,
-    canRead: declaredCount,
-    readBlockedReason: declaredCount
-      ? null
-      : 'Say how many categories there are first - then this reads them.',
-  };
-}
-
-/**
- * Under a QUARTER of the figure's longer side, which is where a marked span
- * stops being plausible as a whole category axis.
- *
- * ⚑ A JUDGEMENT, AND SAID OUT LOUD RATHER THAN BURIED. There is no plot box in
- * the record to compare against, so the image is the only frame available. A
- * fifth of a figure is a legitimate axis on a small inset; a quarter is where it
- * is worth ASKING. Nothing is refused either way.
- */
-const SHORT_SPAN_FRACTION = 0.25;
-
-function shortSpanNote(
-  spanPx: number | null,
-  imageSize: { width: number; height: number } | null
-): string | null {
-  if (spanPx === null || !imageSize) return null;
-  const longSide = Math.max(imageSize.width, imageSize.height);
-  if (!(longSide > 0) || !(spanPx > 0)) return null;
-  const fraction = spanPx / longSide;
-  if (fraction >= SHORT_SPAN_FRACTION) return null;
-  return `That axis covers about ${Math.round(fraction * 100)}% of the figure. If the categories run further, press Re-place axis.`;
-}
-
-/** Whether a canvas click should be taken as placing a category-axis edge. */
-export function isMarkingCategoryAxis(view: CategoryPanelView): boolean {
-  return view.phase === 'mark-axis';
-}
-
-/** What the stage's own line says, and whether it is asking for attention. */
-export interface CategoryOffer {
-  text: string;
-  /**
-   * The app has EVIDENCE that leaving the categories unmarked will cost
-   * something, so the line stops being a quiet offer and becomes the next step.
-   */
-  promoted: boolean;
-}
-
-/**
- * The stage's own line - it has to say when this is worth opening, because
- * nothing else on screen will.
- *
- * ⚑⚑ IT SPEAKS UP ONLY WHEN THE APP HAS EVIDENCE (v2.3, theme E / C). David:
- * *"Are there instances where we would not want to mark their categories now?
- * Or would it in fact always happen?"* Both halves have an answer, and they
- * differ:
- *
- *   ONE series, unmarked - the export's `Position` is a left-to-right ordinal
- *   computed from that series' own pixels, which is a faithful statement about
- *   it. Marking adds nothing, and asking would spend the user's attention on a
- *   chart that never needed it.
- *
- *   TWO series, unmarked - the same ordinal is now being read as a coordinate
- *   the two SHARE, which it is not. A series missing one category slides every
- *   later reading one place: every number plausible, nothing on screen wrong.
- *   That is the tenet-11 failure `Line` was fixed for, arriving through the
- *   other door.
- *
- * ⚠️ EVIDENCE, NEVER PREDICTION (tenet 9's habit applied to a prompt). It fires
- * on series that CARRY READINGS - what was captured - not on series that exist,
- * and not on what the user might do next.
- *
- * ⛔ AND IT DOES NOT BLOCK. Tenet 1: nothing may put constraints on graph in ->
- * reliable data out. What changes is what the card SAYS, and what the FILE
- * claims (`getExportFields` stops calling an unshared ordinal `Position`), never
- * what the user is allowed to do. A prompt that cannot be ignored is a refusal
- * wearing a prompt's clothes.
- */
-export function categoryOffer(
-  hasGeometry: boolean,
-  categoryCount: number,
-  seriesWithReadings: number,
-  /**
-   * A count was DECLARED, rather than a list of categories having accumulated
-   * some other way.
-   *
-   * ⚑⚑ THE CARD USED TO ASSERT `2 categories` WITH THE COUNT FIELD EMPTY, on a
-   * figure with four - because two bars had been captured and the shared name
-   * list had two entries. A count nobody typed, reported as fact, is exactly the
-   * fabricated-category defect the v2.1 work was supposed to have closed,
-   * arriving through a different door. Say what was declared, or say that
-   * nothing was.
-   */
-  hasDeclaredCount = true
-): CategoryOffer {
-  if (hasGeometry) {
-    if (!hasDeclaredCount) {
-      return { text: 'Category ticks - axis marked, no count yet', promoted: true };
-    }
-    return {
-      text:
-        categoryCount === 1
-          ? 'Category ticks - 1 category'
-          : `Category ticks - ${categoryCount} categories`,
-      promoted: false,
-    };
-  }
-  // ⚑ It states WHAT IT SAW and what that costs, in the vocabulary the panel
-  // hint already uses ("which bar belongs to which, instead of it guessing from
-  // position"). A prompt that gives its reason can be judged; one that only
-  // insists has to be obeyed or ignored.
-  if (seriesWithReadings > 1) {
-    return { text: `${seriesWithReadings} series - mark category ticks to pair them`, promoted: true };
-  }
-  return { text: 'Mark category ticks?', promoted: false };
-}
-
-/**
- * Why someone would open it. Shown inside, once, rather than as a tooltip.
- *
- * ⚑ The third sentence is the one a user looking at a MERGED RUN needs. Splitting
- * touching same-coloured bars at the marked boundaries is the biggest thing this
- * feature buys, and it was documented only in MANUAL - so someone staring at the
- * exact figure it helps had nothing on screen telling them to open the fold-out
- * (v2.1 audit).
- */
-export const CATEGORY_PANEL_HINT =
-  'Recommended for charts with more than one series, or where a series is missing a bar. ' +
-  'Marking the categories tells PlotTracer which bar belongs to which, instead of it guessing from position. ' +
-  'It also lets Auto-extract split a run of touching same-coloured bars at the boundaries you mark.';
 
 /**
  * Shown once the ticks are up, because dragging them is otherwise invisible.
  *
- * ⚑ The ticks are 4px dots with no label and no tooltip. "Drag any of them if
- * the figure isn't evenly spaced" lived only in MANUAL, and the sole hint on
- * screen was the regenerate warning's "discarding the ones you moved" - legible
- * only to someone who already knew. A capability whose only announcement is the
- * manual fails the keystone rule (v2.1 audit).
+ * ⚑ The ticks are small marks with no label and no tooltip of their own.
+ * "Drag any of them if the figure isn't evenly spaced" lived only in MANUAL, and
+ * a capability whose only announcement is the manual fails the keystone rule
+ * (v2.1 audit). It rides on the control that GENERATED them.
  */
 export const CATEGORY_TICK_DRAG_HINT =
   'Ticks not lining up? Drag any of them along the axis - the figure may not be evenly spaced.';
 
-/** The convention labels, kept here so the two words the user reads are next to
- * the code that acts on them. */
+/**
+ * The two words the user reads for a `TickConvention`, in ONE place.
+ *
+ * ⚑⚑ THE HEATMAP'S WORDS, AND NOW LITERALLY THE HEATMAP'S STRINGS. This used to
+ * say `Under each category` / `Between categories` while
+ * `HEATMAP_AXES_CONFIG.options` said `Centres` / `Boundaries` for the identical
+ * fact, so one question wore two vocabularies and nothing on screen said they
+ * were the same question. David: *"we should be CONSISTENT and use the same
+ * mechanism / drawing in all places so that users can recognize them easily."*
+ * The heatmap's own choices are built from this constant, so they cannot drift
+ * apart again.
+ */
 export const CONVENTION_LABELS: Record<TickConvention, string> = {
-  centred: 'Under each category',
-  edge: 'Between categories',
+  centred: 'Centres',
+  edge: 'Boundaries',
 };

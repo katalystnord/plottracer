@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG, CATEGORICAL_LINE_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * `getExportRows` - what actually reaches a file.
@@ -42,6 +43,7 @@ function calibratedCategorical(): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }

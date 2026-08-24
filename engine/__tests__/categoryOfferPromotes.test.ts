@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { categoryOffer } from '../categoryTickOverlay.js';
 import { CalibrationSession, CATEGORICAL_LINE_CONFIG } from '../calibrationSession.js';
 import { flatDataSection } from '../csvExport.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 
 /**
- * THEME E / C: THE OFFER SPEAKS UP WHEN THE APP HAS EVIDENCE IT MATTERS.
+ * ⛔⛔ THE OFFER IS GONE, AND ITS PREMISE WITH IT (v2.4). This file used to open
+ * by asserting that *"marking categories is not always needed, and the app knows
+ * which is which"* - one series quiet, a second series promoted. David settled
+ * that the other way: the category axis is a REQUIREMENT, calibrated in the walk
+ * like the value axis, so there is no offer to promote and no unmarked state to
+ * reason about on a chart being captured now.
+ *
+ * ⚑ WHAT SURVIVES, AND WHY. The export half below is about what a FILE claims,
+ * and it still has a job: a project SAVED before this change can be reopened
+ * with an unmarked axis, and its ordinal must still not be called a coordinate
+ * two series share. The claim is checked at the file, where it is made.
+ *
+ * THEME E / C, as it now stands:
  *
  * ⚑⚑ MARKING CATEGORIES IS NOT ALWAYS NEEDED, AND THE APP KNOWS WHICH IS WHICH.
  * One series with every reading present: the left-to-right ordinal is a faithful
@@ -31,30 +42,15 @@ function calibratedCategorical(): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  // ⚑ THE CATEGORY AXIS IS PART OF THE WALK NOW - two clicks and a count, the
+  // same four steps a user makes. A fixture that stopped at the value axis is a
+  // fixture describing a state the app can no longer be in.
+  s.handleCalibrationClick(100, 500);
+  s.handleCalibrationClick(500, 500);
+  s.confirmCalibrationValues(['4']);
   expect(s.runCalibration()).toBe(true);
   return s;
 }
-
-describe('C - the offer is quiet until there is something to pair', () => {
-  it('a chart with one series is offered the ticks, quietly', () => {
-    expect(categoryOffer(false, 0, 1)).toEqual({ text: 'Mark category ticks?', promoted: false });
-  });
-
-  it('a chart with nothing captured yet is quiet too - there is no evidence either way', () => {
-    expect(categoryOffer(false, 0, 0)).toEqual({ text: 'Mark category ticks?', promoted: false });
-  });
-
-  it('⚑ a SECOND series carrying readings promotes the offer, and says what it saw', () => {
-    const offer = categoryOffer(false, 0, 2);
-    expect(offer.promoted).toBe(true);
-    expect(offer.text).toBe('2 series - mark category ticks to pair them');
-  });
-
-  it('once the ticks exist the offer is over, and the line reports instead', () => {
-    expect(categoryOffer(true, 1, 3)).toEqual({ text: 'Category ticks - 1 category', promoted: false });
-    expect(categoryOffer(true, 5, 3)).toEqual({ text: 'Category ticks - 5 categories', promoted: false });
-  });
-});
 
 describe('C - the session counts what was actually captured', () => {
   it('counts only series that carry a reading', () => {
@@ -75,6 +71,7 @@ describe('C - the session counts what was actually captured', () => {
 describe('C - the file stops claiming a coordinate the series do not share', () => {
   it('one unmarked series exports Position, because within a series it is true', () => {
     const s = calibratedCategorical();
+    s.clearCategoryAxisGeometry();
     s.addDataPoint(150, 300);
     s.addDataPoint(250, 300);
     expect(s.getExportFields()[0]).toBe('Position');
@@ -82,6 +79,12 @@ describe('C - the file stops claiming a coordinate the series do not share', () 
 
   it('⚑ two unmarked series export "Position (in series)" - the ordinal is real, the sharing is not', () => {
     const s = calibratedCategorical();
+    // ⚑⚑ THE UNMARKED STATE IS REACHED DELIBERATELY, because the walk can no
+    // longer produce it: a calibrated bar-family figure has its category axis by
+    // construction since v2.4. What this still describes is a project SAVED
+    // before that change and reopened now - the file door, which is the entrance
+    // this project has been bitten through repeatedly.
+    s.clearCategoryAxisGeometry();
     s.addDataPoint(150, 300);
     s.addDataset();
     s.setActiveDataset(1);
@@ -97,9 +100,10 @@ describe('C - the file stops claiming a coordinate the series do not share', () 
     s.addDataset();
     s.setActiveDataset(1);
     s.addDataPoint(250, 300);
-    // Mark the category axis: both edges and a count, the same way the card does.
-    expect(s.markCategoryAxis({ x: 100, y: 500 }, { x: 500, y: 500 })).toBe(true);
-    expect(s.setCategoryCount(4)).toBe(true);
+    // ⚑ Already marked - the walk did it. That IS the change: `Position` is
+    // shared by construction now, because a calibrated bar-family figure cannot
+    // be missing its category axis.
+    expect(s.getCategoryAxis().hasGeometry()).toBe(true);
     expect(s.getExportFields()[0]).toBe('Position');
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A DELETED BAR GIVES ITS CATEGORY BACK - round-2 audit.
@@ -19,13 +20,28 @@ import type { BarAxes } from '../../core/axes/bar.js';
  * see. It fails the keystone test outright: a capable first-time user is left
  * with a row they can neither fill nor remove.
  */
+/**
+ * ⚑⚑ THE UN-TICKED PATH, AND THIS WHOLE FILE IS ABOUT IT (v2.4).
+ *
+ * An ORPHAN is a category left behind with no bar and no way to remove it, and
+ * that can only happen where capturing a bar MINTS a category. With the category
+ * axis calibrated in the walk, the categories are DECLARED up front: deleting a
+ * bar leaves its band, which is the figure still having that category, not a
+ * ghost row. So there is nothing to orphan.
+ *
+ * ▶ The mechanism still runs on a project SAVED before v2.4, which is the door
+ * these tests now come through - stated, rather than arrived at by a fixture
+ * that looks like an ordinary capture.
+ */
 function calibratedBar(): CalibrationSession<BarAxes> {
   const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
   s.handleCalibrationClick(300, 500);
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
+  s.removeCategoryTicks();
   return s;
 }
 

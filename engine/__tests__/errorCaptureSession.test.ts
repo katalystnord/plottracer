@@ -3,6 +3,7 @@ import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrat
 import type { XYAxes } from '../../core/axes/xy.js';
 import { getErrorRelation } from '../errorRelation.js';
 import { slotForRole, deltasFromBar } from '../../algorithms/errorExtent.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** The same 4-point setup the rest of engine/'s tests use: a pixel maps to data
  * as x = (px-100)/30, y = (250-py)/15. */
@@ -99,6 +100,7 @@ describe('captureErrorCap - the drag gesture', () => {
       expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
       expect(session.confirmCalibrationValues(values)).toBe(true);
     }
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
     session.renameDataset(0, 'Bar A');
     session.addDataPoint(150, 180);
@@ -592,6 +594,7 @@ describe('errorCapDragLine - the axis-lock a cap is dragged along', () => {
       expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
       expect(session.confirmCalibrationValues(values)).toBe(true);
     }
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
     session.renameDataset(0, 'Bar A');
     session.addDataPoint(150, 180);

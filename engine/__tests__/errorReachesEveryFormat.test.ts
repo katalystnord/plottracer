@@ -14,6 +14,7 @@ import {
 } from '../exportAssembly.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { XYAxes } from '../../core/axes/xy.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A CAP THAT IS ON SCREEN IS IN THE FILE - IN EVERY FORMAT (v2.3 re-audit,
@@ -47,6 +48,7 @@ function calibratedBar<T extends BarAxes>(config: typeof BAR_AXES_CONFIG): Calib
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(100, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   s.runCalibration();
   return s;
 }

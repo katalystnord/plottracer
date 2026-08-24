@@ -21,6 +21,7 @@ import type { TernaryAxes } from '../../core/axes/ternary.js';
 import type { MapAxes } from '../../core/axes/map.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
 import { Dataset } from '../../core/dataset.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   // Same 4-point setup used throughout the engine/ui spike's checkpoints:
@@ -69,28 +70,36 @@ describe('Categorical line (checkpoint 101)', () => {
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(80, 100);
     session.confirmCalibrationValues(['100']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
 
     // Place points OUT of left-to-right order to prove Position is derived from
-    // pixel-x, not placement order.
-    session.addDataPoint(300, 250); // px 300, value 50
-    session.addDataPoint(150, 200); // px 150, value ~66.7
-    session.addDataPoint(450, 100); // px 450, value 100
+    // WHERE THE POINT IS, not from the order it was placed in.
+    //
+    // ⚑⚑ AND SINCE v2.4 "where" MEANS THE BAND, not the rank among this series'
+    // own pixels. The walk above marked the category axis 100..500 with four
+    // categories, so the bands are 100-200, 200-300, 300-400, 400-500 and these
+    // three points fall in the first three of them. That is the A2 finding
+    // landing: an unmarked chart's `Position` was capture order dressed as a
+    // coordinate, and two series with a gap between them slid against each other
+    // with every number looking plausible.
+    session.addDataPoint(250, 250); // px 250, band 1, value 50
+    session.addDataPoint(150, 200); // px 150, band 0, value ~66.7
+    session.addDataPoint(350, 100); // px 350, band 2, value 100
 
     expect(session.getExportFields()).toEqual(['Position', 'Value']);
     const rows = session.getExportRows(0);
     // rows align with the stored point order, which insert-in-place (v1.1 #1) may
     // permute -- so key Position/Value by each point's pixel-x rather than a fixed
-    // row index. Position must still be the ordinal by pixel-x: px150->1, px300->2,
-    // px450->3, no matter what order they were placed in.
+    // row index.
     const pts = session.getDataPoints();
     const posByPx = new Map(pts.map((p, i) => [Math.round(p.px), rows[i]!.values[0]]));
     const valByPx = new Map(pts.map((p, i) => [Math.round(p.px), rows[i]!.values[1]]));
     expect(posByPx.get(150)).toBe(1);
-    expect(posByPx.get(300)).toBe(2);
-    expect(posByPx.get(450)).toBe(3);
-    expect(valByPx.get(300)).toBeCloseTo(50, 5);
-    expect(valByPx.get(450)).toBeCloseTo(100, 5);
+    expect(posByPx.get(250)).toBe(2);
+    expect(posByPx.get(350)).toBe(3);
+    expect(valByPx.get(250)).toBeCloseTo(50, 5);
+    expect(valByPx.get(350)).toBeCloseTo(100, 5);
     // Table shows the measured Value only (Position is an export-derived column).
     expect(session.getTableValueLabels()).toEqual(['Value']);
   });
@@ -165,6 +174,7 @@ describe('CalibrationSession captureState/restoreState (checkpoint 38)', () => {
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(100, 100);
     session.confirmCalibrationValues(['10']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
     expect(session.isCalibrated()).toBe(true);
 
@@ -458,6 +468,11 @@ function calibrateStandardBar(session: CalibrationSession<BarAxes>) {
     expect(session.handleCalibrationClick(px, py)).toBe('awaiting-value');
     expect(session.confirmCalibrationValues([value])).toBe(true);
   }
+  // ⚑ …and the CATEGORY axis, which is the other half of the same walk since
+  // v2.4. Without it `runCalibration` refuses, and every test below was
+  // silently exercising an uncalibrated session - which is exactly what a
+  // fixture that describes an impossible state does.
+  walkCategoryAxis(session);
 }
 
 describe('Interpolation-assist stores the series in curve order (rc.2 fix)', () => {
@@ -572,6 +587,33 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     return session;
   }
 
+  /**
+   * ⚑⚑ THE UN-TICKED PATH, REACHED DELIBERATELY (v2.4).
+   *
+   * Since the category axis is part of the calibration walk, a chart being
+   * captured now ALWAYS has bands, and a bar's category is DERIVED from the band
+   * it falls in rather than minted and stored on the pixel
+   * (`categoriesFollowBands`). The minting machinery below - `addCategory('')`
+   * per tuple, the name prefill from a neighbouring series, the sole-owner
+   * rename protection - is therefore no longer reachable by clicking.
+   *
+   * ▶ It is still REACHABLE, and that is why these tests stay: a project SAVED
+   * before v2.4 reopens with no geometry, and every one of those mechanisms runs
+   * on it. The file door is the entrance this project has been bitten through
+   * repeatedly, so it keeps its coverage - stated, rather than arrived at by a
+   * fixture that looks like an ordinary capture.
+   */
+  function unmarkedBarSession() {
+    const session = barSession();
+    // ⚑ `removeCategoryTicks`, not `clearCategoryAxisGeometry`: the latter keeps
+    // the NAMES on purpose (re-placing an axis is not abandoning its
+    // categories), so the four empty entries the walk's declaration created
+    // would still be sitting in the list. A pre-v2.4 file has no categories at
+    // all, and this is the operation that WITHDRAWS the declaration.
+    session.removeCategoryTicks();
+    return session;
+  }
+
   /** Two clicks at the same x (Bar start, Bar end) capture one bar/tuple --
    * standing in for a drag-box's two corners in these engine-level tests. */
   function addBar(session: CalibrationSession<BarAxes>, x: number, yStart: number, yEnd: number) {
@@ -588,15 +630,26 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']);
   });
 
-  it('registers the categoryIndex metadata key as soon as a bar is captured', () => {
-    // The record is only durable if plotData knows to serialize the key.
-    // v2.0: unlike the old per-point behaviour, the key is registered
-    // IMMEDIATELY on capture, not only once a name is explicitly typed --
-    // autoLabelTuple names every new tuple right away (same as Box Plot/Pie/
-    // Histogram already do), so there is no longer an unlabeled-tuple state.
-    // Phase 3: the key is "categoryIndex" now, not "label" -- a bar's category
-    // resolves through the canonical CategoryAxis, not a per-tuple string.
+  /**
+   * ⚑⚑ ON A MARKED AXIS THERE IS NOTHING TO STORE, and that is the v2.4 change.
+   * This asserted that capturing a bar registers a `categoryIndex` key - true
+   * while a bar chart could be captured with no category axis. Now the axis is
+   * always there, so the category is a pure function of the pixel and the
+   * declared dividers: derived, never copied, and therefore never stale when a
+   * tick is dragged.
+   */
+  it('⚑⚑ stores NO categoryIndex on a marked axis - the band IS the category', () => {
     const session = barSession();
+    addBar(session, 150, 300, 250);
+    expect(session.getMetadataKeys()).not.toContain('categoryIndex');
+    // …and the category is still there, read from the band it falls in.
+    expect(session.getTupleRows()[0]!.label).toBe('');
+    expect(session.getCategoryAxis().getCategoryCount()).toBe(4);
+  });
+
+  it('⚑ and DOES register it on a figure with no axis - the pre-v2.4 file', () => {
+    // The record is only durable if plotData knows to serialize the key.
+    const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
     expect(session.getMetadataKeys()).toContain('categoryIndex');
   });
@@ -621,7 +674,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
   it('writes the prefilled name ONTO the tuple, so retyping one bar moves nothing else', () => {
     // The reason this is a prefill and not a shared positional list: a series
     // that skips a category must be correctable without shifting its neighbours.
-    const session = barSession();
+    const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
     addBar(session, 250, 300, 200);
     session.setTupleLabel(0, 'Flax');
@@ -684,7 +737,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     // invented and written as if it were one (tenet 9). It gets its own reserved,
     // distinct category slot (so it has somewhere to hang a name once typed) but
     // getTupleLabel reads back '' until then, same as a Spider axis nobody named.
-    const session = barSession();
+    const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
     session.setTupleLabel(0, 'Flax');
 
@@ -720,7 +773,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
   // sibling series' data when it isn't. Direct coverage beyond what the
   // adapted tests above exercise incidentally.
   it('renaming a category with no other owner propagates in place -- the same category, just a better name', () => {
-    const session = barSession();
+    const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
     session.setTupleLabel(0, 'Flax'); // sole owner: renames in place
     session.setTupleLabel(0, 'Flaxseed'); // retyping again, still sole owner
@@ -734,7 +787,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     // user directly typing a name that already exists elsewhere, and it must
     // share the SAME index -- so renaming either bar afterward renames both,
     // exactly as if prefill had assigned it.
-    const session = barSession();
+    const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
     session.setTupleLabel(0, 'Flax');
 
@@ -782,7 +835,14 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
 });
 
 describe('CalibrationSession (Bar axes)', () => {
-  it('walks through the 2 calibration steps in order, fewer than XY', () => {
+  /**
+   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.4). This asserted TWO,
+   * and its title said "fewer than XY" - which was true of the VALUE axis and
+   * silent about the other one. The category axis was a fold-out offered
+   * afterwards, seeded from P1, and that is how a category axis came to run
+   * diagonally across a figure with nothing able to refuse it.
+   */
+  it('walks through the 4 calibration steps in order - the value axis, then the category axis', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     expect(session.getCurrentStep()?.key).toBe('p1');
 
@@ -792,7 +852,69 @@ describe('CalibrationSession (Bar axes)', () => {
 
     session.handleCalibrationClick(300, 100);
     session.confirmCalibrationValues(['10']);
+    expect(session.getCurrentStep()?.key).toBe('c1');
+
+    // ⚑ The first category end takes NO typed value - a click with nothing to
+    // type is the difference between recording where the ink is and inferring
+    // it, which is the shape the heatmap's first column edge already had.
+    session.handleCalibrationClick(100, 500);
+    expect(session.getCurrentStep()?.key).toBe('c2');
+
+    // ⚑ …and the COUNT arrives on the second end, so there is no state where a
+    // marked axis has no count. That state is what printed "axis marked, no
+    // count yet" beside a box the user had already filled in.
+    session.handleCalibrationClick(500, 500);
+    session.confirmCalibrationValues(['4']);
     expect(session.getCurrentStep()).toBeNull();
+  });
+
+  /**
+   * ⚑⚑ AND THE WALK IS THE ONLY ENTRANCE, so the axis cannot be missing from a
+   * calibrated figure. This is the case the whole change exists for: David's
+   * floating-temperature figure calibrated fine and then had its categories
+   * marked along a DIAGONAL, because the first end was borrowed from P1 (at -10
+   * on the left spine) and the second was one unconstrained click.
+   */
+  it('⚑⚑ produces the category axis and its count from the walk itself', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    calibrateStandardBar(session);
+    expect(session.runCalibration()).toBe(true);
+    const ca = session.getCategoryAxis();
+    expect(ca.hasGeometry()).toBe(true);
+    expect(ca.hasDeclaredCount()).toBe(true);
+    expect(ca.getCategoryCount()).toBe(4);
+    expect(ca.getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 500, y: 500 }]);
+  });
+
+  it('⚑ refuses a calibration whose category count is not a whole number of categories', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    session.handleCalibrationClick(300, 500);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(300, 100);
+    session.confirmCalibrationValues(['10']);
+    session.handleCalibrationClick(100, 500);
+    session.handleCalibrationClick(500, 500);
+    session.confirmCalibrationValues(['2.5']);
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/whole number/i);
+  });
+
+  /**
+   * ⚑ THE DEGENERATE AXIS IS REFUSED AT THE WALK, not discovered later as NaN.
+   * Two coincident ends make every tick, every divider and every category
+   * assignment read back NaN with nothing on screen wrong - the
+   * `calibrate()`-that-cannot-fail shape this project has now found five times.
+   */
+  it('⚑ refuses two category ends on the same pixel', () => {
+    const session = new CalibrationSession(BAR_AXES_CONFIG);
+    session.handleCalibrationClick(300, 500);
+    session.confirmCalibrationValues(['0']);
+    session.handleCalibrationClick(300, 100);
+    session.confirmCalibrationValues(['10']);
+    session.handleCalibrationClick(250, 500);
+    session.handleCalibrationClick(250, 500);
+    session.confirmCalibrationValues(['4']);
+    expect(session.runCalibration()).toBe(false);
   });
 
   it('runs calibration and produces a working BarAxes reading a single value per point', () => {
@@ -1049,12 +1171,19 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.runCalibration();
       session.applyBoxPlotGroups();
 
-      session.addDataPoint(300, 500); // starts tuple 0 (Min)
+      // ⚑⚑ TWO DIFFERENT x, AND THAT IS THE CHANGE (v2.4). Both boxes used to
+      // be captured at x=300; with the category axis now calibrated in the walk
+      // (100..500, four bands), x=300 is ONE band, so two boxes there are one
+      // category and naming either names both. That is correct, and it makes
+      // the old fixture describe a figure nobody draws: two box plots stacked on
+      // one category position. Put them in different categories, which is what
+      // "distinct slots" meant.
+      session.addDataPoint(150, 500); // starts tuple 0 (Min), band 0
       expect(session.getTupleLabel(0)).toBe('');
       expect(session.getTupleRows()[0]!.label).toBe('');
 
-      for (const py of [460, 420, 380, 340]) session.addDataPoint(300, py); // Q1, Median, Q3, Max
-      session.addDataPoint(300, 500); // starts tuple 1 (Min)
+      for (const py of [460, 420, 380, 340]) session.addDataPoint(150, py); // Q1, Median, Q3, Max
+      session.addDataPoint(350, 500); // starts tuple 1 (Min), band 2
       expect(session.getTupleLabel(1)).toBe('');
       // Distinct slots, not one shared "" category (see calibrationSession's
       // own "two still-unnamed bars" test for the merge trap this guards).
@@ -1077,7 +1206,12 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.setTupleLabel(0, 'Sample A');
       expect(session.getTupleLabel(0)).toBe('Sample A');
       expect(session.getTupleRows()[0]!.label).toBe('Sample A');
-      expect(session.getMetadataKeys()).toContain('categoryIndex');
+      // ⚑ NO STORED INDEX on a marked axis (v2.4): naming a box names the BAND
+      // it sits in, and which band that is comes from the pixel and the declared
+      // dividers. The key is registered only on the un-ticked path, which since
+      // v2.4 is reached by a pre-v2.4 file rather than by clicking.
+      expect(session.getMetadataKeys()).not.toContain('categoryIndex');
+      expect(session.getCategoryAxis().getCategories()).toContain('Sample A');
     });
 
     it('is empty for a tuple index with no primary-group point placed yet', () => {
@@ -1120,8 +1254,11 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       const session = new CalibrationSession(BOX_PLOT_AXES_CONFIG);
       calibrateStandardBar(session);
       session.runCalibration();
-      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // tuple 0
-      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(300, py); // tuple 1
+      // ⚑ Two boxes in two different CATEGORIES that happen to be typed with the
+      // same name - which is the case this protects. At one x they would be one
+      // category since v2.4, and sharing a name would be the model working.
+      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(150, py); // tuple 0
+      for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(350, py); // tuple 1
       session.setTupleLabel(0, 'Groop A');
       session.setTupleLabel(1, 'Groop A'); // shares tuple 0's category index
 
@@ -1169,6 +1306,7 @@ describe('CalibrationSession: shared-origin pixel reuse', () => {
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(100, 100);
     session.confirmCalibrationValues(['10']);
+    walkCategoryAxis(session);
     session.runCalibration();
     expect(session.reuseStepPixel('x1')).toBe(false); // already calibrated
   });
@@ -1650,6 +1788,7 @@ describe('CalibrationSession - per-axes calibration options (checkpoint 68)', ()
     session.confirmCalibrationValues(['1']);
     session.handleCalibrationClick(100, 0);
     session.confirmCalibrationValues(['1000']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
 
     session.addDataPoint(100, 200); // one decade up from the bottom
@@ -1667,6 +1806,7 @@ describe('CalibrationSession - per-axes calibration options (checkpoint 68)', ()
     session.confirmCalibrationValues(['1']);
     session.handleCalibrationClick(100, 0);
     session.confirmCalibrationValues(['1000']);
+    walkCategoryAxis(session);
     session.runCalibration();
     session.addDataPoint(100, 200);
     // py 200 is one third of the way up from Y1(py 300) to Y2(py 0):
@@ -1717,6 +1857,7 @@ describe('CalibrationSession - per-axes calibration options (checkpoint 68)', ()
     session.confirmCalibrationValues(['1']);
     session.handleCalibrationClick(100, 0);
     session.confirmCalibrationValues(['1000']);
+    walkCategoryAxis(session);
     session.runCalibration();
 
     const restored = new CalibrationSession(XY_AXES_CONFIG);
@@ -1819,6 +1960,7 @@ describe('CalibrationSession - guard classes (checkpoint 72)', () => {
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(10, 100);
     session.confirmCalibrationValues(['100']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toMatch(/log value scale cannot pass through zero/);
   });
@@ -1831,6 +1973,7 @@ describe('CalibrationSession - guard classes (checkpoint 72)', () => {
     session.confirmCalibrationValues(['0', '0']); // r1 = 0
     session.handleCalibrationClick(100, 200);
     session.confirmCalibrationValues(['10', '90']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toMatch(/log radial scale cannot pass through zero/);
   });
@@ -1853,6 +1996,7 @@ describe('CalibrationSession - guard classes (checkpoint 72)', () => {
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(100, 0);
     session.confirmCalibrationValues(['10']);
+    walkCategoryAxis(session);
     expect(session.runCalibration()).toBe(true);
 
     // Drag X2 onto X1 - no reuse button involved.

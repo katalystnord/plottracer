@@ -15,6 +15,7 @@ import type { CalibratedAxes } from '../axesTypeConfigs.js';
 import { runBarDetect } from '../barDetectRun.js';
 import { categoryMissReport } from '../colorTraceReport.js';
 import { reconcileWithExpected } from '../../algorithms/barSplit.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * CATEGORY TICKS, wired into the session (v2.1).
@@ -33,24 +34,36 @@ import { reconcileWithExpected } from '../../algorithms/barSplit.js';
 const A = { x: 100, y: 500 };
 const B = { x: 600, y: 500 };
 
-/** A calibrated Bar session. P1=0 at the origin (100,500), P2=10 at (100,100). */
-function calibratedBar(): CalibrationSession<BarAxes> {
+/**
+ * A calibrated Bar session whose category axis runs A..B with `n` categories.
+ *
+ * ⚑⚑ ONE HELPER NOW, NOT TWO (v2.4). There used to be `calibratedBar()` and
+ * `withTicks(n)`, because a bar chart could be calibrated WITHOUT its category
+ * axis and the ticks were marked afterwards through a fold-out that seeded its
+ * first edge from P1. Both ends are calibration steps now, so a calibrated
+ * bar-family session has its axis by construction and the second helper has
+ * nothing left to do.
+ * ⚑ The seed is what made the two-helper shape necessary and it is also what
+ * made the axis wrong: P1's prompt is *"a known bar value (e.g. 0)"*, which
+ * promises nothing about where the categories start.
+ */
+function withTicks(n = 4): CalibrationSession<BarAxes> {
   const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
   s.handleCalibrationClick(A.x, A.y);
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(100, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s, { from: A, to: B, count: n });
   expect(s.runCalibration()).toBe(true);
   return s;
 }
 
-/** A Bar session whose category axis is marked with `n` categories. */
-function withTicks(n = 4): CalibrationSession<BarAxes> {
-  const s = calibratedBar();
-  const seed = s.categoryTickOriginPixel();
-  expect(seed).not.toBeNull();
-  expect(s.markCategoryAxis({ x: seed!.px, y: seed!.py }, B)).toBe(true);
-  expect(s.setCategoryCount(n)).toBe(true);
+/** The same session with no category axis - a project saved before v2.4, which
+ * is the only way to reach the un-ticked path now. See `unmarkedBarSession` in
+ * `calibrationSession.test.ts` for the fuller note. */
+function calibratedBar(): CalibrationSession<BarAxes> {
+  const s = withTicks();
+  s.removeCategoryTicks();
   return s;
 }
 
@@ -97,28 +110,23 @@ describe('which graph types have categories at all', () => {
     expect(s.moveCategoryTick(0, A)).toBe(false);
     expect(s.clearCategoryAxisGeometry()).toBe(false);
     expect(s.categoryBandAt(300, 300)).toBeNull();
-    expect(s.categoryTickOriginPixel()).toBeNull();
     expect(s.getCategoryAxis().hasGeometry()).toBe(false);
   });
 });
 
-describe('the seed pixel - what makes marking the axis one click, not two', () => {
-  it('is nothing until the seed step has been placed', () => {
-    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(s.categoryTickOriginPixel()).toBeNull();
-  });
-
-  it('is P1 once placed - the value origin sits on the category axis edge', () => {
-    expect(calibratedBar().categoryTickOriginPixel()).toEqual({ px: 100, py: 500 });
-  });
-
-  it('Box Plot shares Bar’s steps, so it shares the seed', () => {
-    const s = new CalibrationSession<BarAxes>(BOX_PLOT_AXES_CONFIG);
-    s.handleCalibrationClick(11, 22);
-    s.confirmCalibrationValues(['0']);
-    expect(s.categoryTickOriginPixel()).toEqual({ px: 11, py: 22 });
-  });
-});
+/**
+ * ⛔ THE SEED IS GONE (v2.4), and with it this file's `the seed pixel - what
+ * makes marking the axis one click, not two` block.
+ *
+ * It asserted that `categoryTickOriginPixel()` is P1 once placed, *"the value
+ * origin sits on the category axis edge"* - a claim about the FIGURE that the
+ * calibration never asked for. P1's own prompt is *"a known bar value (e.g.
+ * 0)"*, so clicking the zero gridline mid-plot is ordinary calibration and
+ * anchored the category axis in the middle of the figure. On David's
+ * floating-temperature chart it anchored at -10 on the left spine and the axis
+ * came out diagonal. Both ends are calibration steps now; there is no seed to
+ * test.
+ */
 
 describe('marking the axis and declaring the categories', () => {
   it('the whole gesture: reuse P1, click the far edge, say how many', () => {

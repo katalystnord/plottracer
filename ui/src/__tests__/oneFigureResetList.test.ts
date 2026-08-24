@@ -70,11 +70,6 @@ const PER_FIGURE_RESETS = [
   'setHeatmapDragTint',
   'setSelectedCells',
   'setSelectedDividerId',
-  'setCategoryCountInput',
-  'setCategoryFirstEdge',
-  'setCategoryMarkError',
-  'setCategoryPlaceBothEdges',
-  'setCategoryPanelOpen',
   'setActivePointIndex',
   'setSelectedPointIndices',
   'setColorTraceRegion',
@@ -96,6 +91,13 @@ const PER_FIGURE_RESETS = [
   'setMode',
   'setCalibExpanded',
   'setAxesTypeId',
+  // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.4), and the list is the
+  // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
+  // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and
+  // `setCategoryPanelOpen` were state the COMPONENT held about a marking gesture
+  // performed on the canvas. Both ends of the category axis are calibration
+  // steps now, so the incoming figure's own calibration carries all of it and
+  // there is nothing per-figure left to reset.
 ] as const;
 
 describe('one per-figure reset list, read by every door that installs a figure', () => {

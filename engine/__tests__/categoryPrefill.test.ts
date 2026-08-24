@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, CATEGORICAL_LINE_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * Category-name PREFILL - the convenience that must never invent a name.
@@ -31,7 +32,15 @@ function calibratedBar(rotated = false): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);
   s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
+  // ⚑⚑ AND THE DECLARATION IS WITHDRAWN, because THE PREFILL IS THE UN-TICKED
+  // MECHANISM. With the axis marked, two bars in one band share a category by
+  // construction and nothing is donated from a neighbour at all. Since v2.4 the
+  // walk always marks it, so this state is a pre-v2.4 project file - where the
+  // prefill still runs, and still has to not donate a name that is already
+  // claimed in the series being captured into.
+  s.removeCategoryTicks();
   return s;
 }
 
@@ -175,6 +184,7 @@ describe('prefill is Bar-family only', () => {
     box.confirmCalibrationValues(['0']);
     box.handleCalibrationClick(300, 100);
     box.confirmCalibrationValues(['10']);
+    walkCategoryAxis(box);
     expect(box.runCalibration()).toBe(true);
     box.applyBoxPlotGroups();
     box.addDataPoint(152, 500);
@@ -191,6 +201,7 @@ describe('prefill is Bar-family only', () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(300, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
     s.addDataPoint(150, 400);

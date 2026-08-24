@@ -44,6 +44,7 @@ import {
   PIE_SECTOR_SLOTS,
 } from '../axesTypeConfigs.js';
 import { ownSlotNames, errorSlotNames } from '../../algorithms/errorExtent.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** x 0..10 over px 100..300; y 0..10 over py 300..100. */
 function xySession() {
@@ -71,6 +72,7 @@ function barSession() {
     expect(s.handleCalibrationClick(px, py)).toBe('awaiting-value');
     expect(s.confirmCalibrationValues([v])).toBe(true);
   }
+  walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
   return s;
 }

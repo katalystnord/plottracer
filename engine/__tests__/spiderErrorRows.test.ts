@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, SPIDER_AXES_CONFIG, CATEGORICAL_LINE_CONFIG } from '../calibrationSession.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ ONE ROW PER DATUM - ON EVERY TYPE (v2.3 re-audit, F20).
@@ -54,6 +55,7 @@ describe('a series that carries error still exports one row per datum', () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s);
     s.runCalibration();
     s.addDataPoint(150, 200);
     const before = s.getExportRows(0).length;

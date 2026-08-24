@@ -41,9 +41,16 @@ import {
 export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   xy: [[100, 400], [500, 400], [100, 400], [100, 100]],
   histogram: [[100, 400], [500, 400], [100, 400], [100, 100]],
-  bar: [[300, 500], [300, 100]],
-  categorical: [[300, 500], [300, 100]],
-  boxplot: [[300, 500], [300, 100]],
+  // ⚑⚑ FOUR CLICKS SINCE v2.4: two on the VALUE axis, then the two ends of the
+  // CATEGORY axis. A bar chart has two axes and only one of them used to be
+  // calibrated - the other was a fold-out seeded from P1.
+  // ⚠️ The list must have an entry PER STEP: `clickHealthy` repeats the LAST
+  // pixel once it runs off the end, so a two-entry layout put `Cat 1` and
+  // `Cat n` on the same point and every one of these types failed its own
+  // healthy control with "they must be different points".
+  bar: [[300, 500], [300, 100], [100, 500], [500, 500]],
+  categorical: [[300, 500], [300, 100], [100, 500], [500, 500]],
+  boxplot: [[300, 500], [300, 100], [100, 500], [500, 500]],
   // The frame's three corners (x1 and y1 share the first), then the colour
   // key's strip -- two opposite corners of a bar standing clear of the plot
   // box, then two points ON that strip carrying its values. Kept off the plot

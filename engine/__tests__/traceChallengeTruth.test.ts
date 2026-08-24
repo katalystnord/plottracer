@@ -670,11 +670,18 @@ describe('adopting a calibration with a REPEATING step', () => {
   });
 
   it('⚑ leaves a FIXED-shape type at repeatCount 0, digits in its keys and all', () => {
-    // A bar's anchors are `p1`/`p2`. An earlier version read a trailing digit as
-    // a repeat count and reported 2 for a type with no repeating step -- the
-    // loader would then have grown a session that has nothing to grow.
-    expect(Object.keys(BAR.calibration.anchors)).toEqual(['p1', 'p2']);
+    // A bar's anchors are `p1`/`p2` for the value axis and `c1`/`c2` for the
+    // CATEGORY axis (v2.4 - a bar chart has two axes and the truth file has to
+    // describe both). An earlier version read a trailing digit as a repeat count
+    // and reported 2 for a type with no repeating step -- the loader would then
+    // have grown a session that has nothing to grow. Four digit-suffixed keys
+    // now, and still no repeat.
+    expect(Object.keys(BAR.calibration.anchors)).toEqual(['p1', 'p2', 'c1', 'c2']);
     expect(calibrationInputsFromAnchors(BAR.calibration).repeatCount).toBe(0);
+    // ⚑ The first category end takes NO typed value, the second carries the
+    // COUNT - the same shape the walk asks for on screen.
+    expect(calibrationInputsFromAnchors(BAR.calibration).placed.c1!.values).toEqual([]);
+    expect(calibrationInputsFromAnchors(BAR.calibration).placed.c2!.values).toEqual(['6']);
   });
 });
 

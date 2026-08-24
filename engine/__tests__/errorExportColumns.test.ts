@@ -29,6 +29,7 @@ import { describe, it, expect } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
+import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 function session() {
   const s = new CalibrationSession(XY_AXES_CONFIG);
@@ -209,6 +210,7 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       s.handleCalibrationClick(px, py);
       s.confirmCalibrationValues([v]);
     }
+    walkCategoryAxis(s);
     s.runCalibration();
     s.renameDataset(0, 'Sample');
     s.addDataPoint(200, 300); // bar start, value 0
@@ -245,6 +247,13 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       // Position rather than a name-list index in capture order.
       'Position',
       'category',
+      // ⚑ THE BAR'S MEASURED CATEGORY EXTENT, present since v2.4 because every
+      // bar chart now has a marked axis: the corners' separation along the
+      // category direction IS the bar's width, and it used to be measured and
+      // then discarded (F21/A2). It appears here for the same reason it appears
+      // everywhere else - the axis is marked.
+      'Position min',
+      'Position max',
       'Min',
       'Max',
       'Value',
@@ -278,13 +287,16 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       s.handleCalibrationClick(px, py);
       s.confirmCalibrationValues([v]);
     }
+    walkCategoryAxis(s);
     s.runCalibration();
     s.addDataPoint(200, 300);
     s.addDataPoint(200, 200);
+    // ⚑ NO AXIS MARKED, which since v2.4 means the declaration is withdrawn -
+    // and that is the state this case is about: a single bar with no declared
+    // categories still has a position, and it is 1. What it does not have is a
+    // measurable PITCH, which is why no extent columns appear beside it.
+    s.removeCategoryTicks();
     const [data] = sectionsFor(s as never, 'active');
-    // ⚑ A2: `Position`, not `Category index`. A single bar with no axis marked
-    // still has a position, and it is 1 - what it does not have is a measurable
-    // PITCH, which is why no extent columns appear beside it.
     expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
   });
 });

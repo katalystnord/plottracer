@@ -1,0 +1,140 @@
+import { theme } from '../theme.js';
+import { CATEGORY_TICK_DRAG_HINT, CONVENTION_LABELS } from '../../../engine/categoryTickOverlay.js';
+import type { TickConvention } from '../../../core/categoryAxis.js';
+
+/**
+ * The categorical stage - stage 2 of the calibration card, for Bar, Box Plot and
+ * categorical Line (v2.4).
+ *
+ * ⚑⚑ IT IS `HeatmapCard`'s SIBLING, DELIBERATELY AND VISIBLY. David, putting the
+ * two cards side by side: *"So it is a two stage fold out card, mirroring exactly
+ * heatmaps, and when we unfold from a calibrated state, then we show both card
+ * content at the same time, exact mirroring heatmaps."* And, on what happens when
+ * a thirteenth type needs two stages: *"I will give you a hint. Mirror the
+ * process from heatmaps."*
+ *
+ * ⚠️ WHAT THIS REPLACES, so nobody rebuilds it. The categorical stage was not a
+ * card at all - it was a fold-out INSIDE the card, behind a teal `Mark
+ * categories` entry button, with its own bordered section, its own count box,
+ * its own vocabulary for the tick convention, a `Re-place axis` and a `Remove
+ * ticks` beside it, and two paragraphs of rationale. Beside the heatmap's stage
+ * 2 it read as a different feature by a different author. Every one of those
+ * controls is GONE rather than restyled:
+ *
+ *   · the entry button - the stage is not optional any more, so there is
+ *     nothing to enter. David: *"not have 'Mark categories' ready before it can
+ *     actually do it."*
+ *   · the count box - the count is declared ON the second calibration click, and
+ *     is shown here, never re-collected. That is the heatmap's own rule, in its
+ *     own words: *"A CATEGORY AXIS IS NOT ASKED TWICE."*
+ *   · `Re-place axis` - the axis IS two calibration steps now, and a calibration
+ *     handle is dragged where it stands, like every other one.
+ *   · `Remove ticks` - there is no state with an axis and no ticks to get back to.
+ *   · the rationale - a required step does not have to argue for itself.
+ *
+ * ⚑ WHAT IS LEFT IS WHAT E6's TEST ADMITS: an ACTION of this stage, or STATE you
+ * need in order to choose between those actions. The ending lives on the summary
+ * row outside this body, exactly as `Read cells` does, and for the reason that
+ * move was made: everything on screen said READY while the one action that
+ * finishes the job sat inside a closed fold-out inside a closed card.
+ */
+export interface CategoriesCardProps {
+  /** How many categories the CALIBRATION declared - shown, never re-collected. */
+  declared: number;
+  convention: TickConvention;
+  onConventionChange: (convention: TickConvention) => void;
+  /**
+   * What changing the convention would cost, or null when nothing would be lost.
+   *
+   * ⚑ ONLY WHERE THERE IS SOMETHING TO LOSE, which is the bar chart's own rule
+   * written on its own `regenerateWarning`: a warning that appears when nothing
+   * would be discarded teaches the user to ignore it. And it is in the quiet
+   * colour, not the error colour - it cautions about something that has not
+   * happened, it does not refuse something attempted.
+   */
+  regenerateWarning: string | null;
+  /**
+   * ⛔ `# Series (optional)` IS PARKED AND UNTOUCHED, by standing order. It is
+   * carried across verbatim rather than redesigned or dropped, so this rebuild
+   * does not quietly settle a question David has reserved.
+   */
+  seriesInput: string;
+  onSeriesInputChange: (value: string) => void;
+}
+
+export function CategoriesCard({
+  declared,
+  convention,
+  onConventionChange,
+  regenerateWarning,
+  seriesInput,
+  onSeriesInputChange,
+}: CategoriesCardProps) {
+  return (
+    <div
+      data-testid="categories-card"
+      style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
+    >
+      {/* ⚑⚑ NO COUNT BOX. How many categories the figure has is declared ONCE,
+          on the second category click in the walk, and shown here. Two fields
+          for one fact is how a heatmap's 5 met a typo'd 6 and detection refused
+          the whole grid - and how this card came to print `axis marked, no count
+          yet` beside a box reading 17. Correct it where it was declared: the
+          calibration values are editable in place, above. */}
+      <span data-testid="category-declared" style={{ color: theme.color.text.secondary }}>
+        {declared === 1 ? '1 category' : `${declared} categories`}, from the calibration
+      </span>
+      {/* ⚑⚑ THE HEATMAP'S OWN WORDS, not a second vocabulary for one fact. This
+          control used to say `Under each category` / `Between categories` while
+          the heatmap said `Centres` / `Boundaries` for the identical
+          `TickConvention` - so the user had to be told that the two were the
+          same question. David: *"we should be CONSISTENT and use the same
+          mechanism / drawing in all places so that users can recognize them
+          easily."*
+          ⚑ Two RADIOS, not a select: both readings have to be visible without a
+          click, because the user is being asked which one their figure prints,
+          and flipping it moves the marks on screen, which is the whole answer. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ minWidth: 84 }}>ticks at</span>
+        <fieldset
+          style={{ border: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
+        >
+          {(['edge', 'centred'] as TickConvention[]).map((c) => (
+            <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="category-convention"
+                data-testid={`category-convention-${c}`}
+                checked={convention === c}
+                onChange={() => onConventionChange(c)}
+                /* ⚑ THE DRAG SENTENCE IS THE TOOLTIP HERE (E6), exactly as the
+                   heatmap's moved onto its boundary buttons. The convention is
+                   what GENERATES evenly spaced ticks, so "they may not be evenly
+                   spaced - drag them" belongs on the control that made them. */
+                title={CATEGORY_TICK_DRAG_HINT}
+              />
+              <span style={{ whiteSpace: 'nowrap' }}>{CONVENTION_LABELS[c]}</span>
+            </label>
+          ))}
+        </fieldset>
+      </div>
+      <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <span style={{ minWidth: 84 }}># Series (optional)</span>
+        <input
+          id="category-series-input"
+          type="number"
+          min={1}
+          data-testid="category-series-count"
+          value={seriesInput}
+          onChange={(e) => onSeriesInputChange(e.target.value)}
+          style={{ width: 56 }}
+        />
+      </label>
+      {regenerateWarning && (
+        <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>
+          {regenerateWarning}
+        </span>
+      )}
+    </div>
+  );
+}

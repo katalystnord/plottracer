@@ -162,6 +162,18 @@ export interface SerializedCategoryGeometry {
    * knows to warn before regenerating discards their adjustments. */
   adjusted?: boolean;
   /**
+   * Whether the user pressed the stage's ENDING - "these ticks are right".
+   *
+   * ⚑ STORED for the same reason `countDeclared` is: since v2.4 the ticks exist
+   * the moment the calibration walk finishes, so "there are ticks" no longer
+   * implies anybody has looked at them. Without this a reopened project would
+   * ask to have its categories marked again, every time.
+   * ⚑ The fallback is `false`, the safe side: a file written before this field
+   * existed simply shows the stage as unfinished, which costs one press and
+   * claims nothing that did not happen.
+   */
+  marked?: boolean;
+  /**
    * Whether the user actually DECLARED a category count.
    *
    * ⚑ STORED, NEVER INFERRED. This is the flag `categoriesFollowBands()` gates
@@ -728,6 +740,7 @@ export class PlotData {
           // user can declare the count again in one keystroke if they want
           // bands, and that keystroke is visible.
           if (geo.countDeclared === true) ca.markCountDeclared();
+          if (geo.marked === true) ca.markCategories();
         }
         this.addCategoryAxis(ca);
       }
@@ -1071,6 +1084,7 @@ export class PlotData {
                   ticks: [...ca.getTickParams()],
                   ...(ca.hasAdjustments() ? { adjusted: true } : {}),
                   ...(ca.hasDeclaredCount() ? { countDeclared: true } : {}),
+                  ...(ca.categoriesMarked() ? { marked: true } : {}),
                 },
               }
             : {}),
