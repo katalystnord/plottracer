@@ -28,7 +28,7 @@ function calibratedBar(session: CalibrationSession<BarAxes>): void {
 describe('the record shape itself', () => {
   it('is a 2-slot OBJECT tuple, exportShape tuples, from the moment the session exists', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getSlotNames()).toEqual(['Bar start', 'Bar end']);
+    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
     expect(session.hasSlots()).toBe(true);
     expect(session.getExportShape()).toBe('tuples');
   });

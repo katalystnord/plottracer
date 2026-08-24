@@ -338,19 +338,19 @@ describe('guidanceTip - capture, per graph type', () => {
         mode: 'place-point',
         config: BAR_AXES_CONFIG,
         hasSlots: true,
-        currentGroupLabel: 'Bar start',
+        currentGroupLabel: 'Min',
         tupleNoun: 'bar',
         currentTupleIndex: 2,
       })
     );
     expect(tip).toContain('one corner of the bar to the opposite corner');
     expect(tip).toContain('both ends are measured');
-    expect(tip).toContain('bar 3, filling Bar start');
+    expect(tip).toContain('bar 3, filling Min');
   });
 
   it('Bar beats the generic slot line - Bar always has slots, so order decides', () => {
     const tip = guidanceTip(
-      base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', tupleNoun: 'bar' })
+      base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Min', tupleNoun: 'bar' })
     );
     expect(tip).not.toContain('Click to add a point - filling');
   });
@@ -452,8 +452,8 @@ describe('guidanceTip - the slot-aim suffix', () => {
         isCalibrating: true,
         currentStep: { label: 'P1', prompt: 'click the baseline' },
         stepCount: 2,
-        captureProgressText: 'Next: Bar start - new bar (0 of 2 filled)',
-        currentGroupLabel: 'Bar start',
+        captureProgressText: 'Next: Min - new bar (0 of 2 filled)',
+        currentGroupLabel: 'Min',
       })
     );
     expect(tip).toBe('Calibration step 1/2 - P1: click the baseline');
@@ -694,7 +694,7 @@ describe('guidanceTip - place-point, the remaining branches', () => {
 
   it('Bar says "starting a new bar" before the first corner goes down', () => {
     const tip = guidanceTip(
-      base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', tupleNoun: 'bar' })
+      base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Min', tupleNoun: 'bar' })
     );
     expect(tip).toContain('starting a new bar');
   });
@@ -810,7 +810,7 @@ describe('autoExtractModesFor', () => {
 
 /** A bar chart mid-capture: the state whose message the marking mode overrides. */
 const barPlacing = (over: Partial<GuidanceTipInput> = {}): GuidanceTipInput =>
-  base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Bar start', ...over });
+  base({ mode: 'place-point', config: BAR_AXES_CONFIG, hasSlots: true, currentGroupLabel: 'Min', ...over });
 
 describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
   const heatmap = (over: Partial<GuidanceTipInput> = {}): GuidanceTipInput =>

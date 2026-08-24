@@ -495,7 +495,7 @@ describe('a graph type declares the SHAPE its data takes in a file', () => {
     // record, BAR_INTERVAL_SLOTS) -- not the 'flat' shape a pre-v2.0 bar
     // session had before Box Plot Groups was applied.
     expect(bar.getExportShape()).toBe('tuples');
-    expect(bar.getSlotNames()).toEqual(['Bar start', 'Bar end']);
+    expect(bar.getSlotNames()).toEqual(['Min', 'Max']);
     expect(bar.applyBoxPlotGroups()).toBe(true);
     expect(bar.getExportShape()).toBe('tuples'); // ...the same session, toggled to the 5-slot shape
     expect(bar.getSlotNames()).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);

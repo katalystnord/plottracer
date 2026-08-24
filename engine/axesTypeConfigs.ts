@@ -844,15 +844,15 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * This type's own slots are an unordered INTERVAL, and these are the names the
    * RECORD calls them by (v2.3).
    *
-   * ⚑⚑ WHY THE RECORD NEEDS DIFFERENT WORDS FROM THE CAPTURE. A bar is dragged
-   * corner to corner and its two slots fill in click order, so `Bar start` and
-   * `Bar end` are honest names for the GESTURE - the tips bar uses them to say
-   * which corner is next. They are dishonest names for the RECORD, which has
-   * deliberately discarded drag direction since 2026-08-03: two people capturing
-   * the identical bar must produce the identical file, and start/end imply an
-   * ordering nothing keeps. David: rename them to `Min`/`Max` in the file too.
-   * ▶ So the panel and the exports print these names and SORT the pair; the
-   * capture prompts keep the slot names, which are about the hand.
+   * ⚑⚑ THE SAME WORDS AS THE CAPTURE SLOTS, since v2.4. This field existed
+   * because the two disagreed: the capture said `Bar start`/`Bar end` and the
+   * record said `Min`/`Max`, so one pair of readings wore two names and only
+   * someone who had read the code knew they were the same number. David closed
+   * it by renaming the capture (`BAR_INTERVAL_SLOTS`).
+   * ▶ What the field still DOES is the half that was never about wording: the
+   * panel and the exports SORT the pair, so the smaller reading is always under
+   * `Min` however the box was dragged. A rename without the sort would have been
+   * a label over an unchanged column.
    */
   intervalSlots?: readonly [string, string];
 
@@ -1839,7 +1839,26 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   },
 };
 
-export const BAR_INTERVAL_SLOTS = ['Bar start', 'Bar end'] as const;
+/**
+ * ⚑⚑ `Min` / `Max`, IN THE CAPTURE TOO - David, 2026-08-24: *"Can we stop using
+ * bar start / stop and -> min / max instead."*
+ *
+ * These used to read `Bar start` / `Bar end` on the grounds that they name the
+ * GESTURE - the tips bar prints them to say which corner is next - while the
+ * record calls the pair `Min`/`Max` because it discards drag direction. That
+ * split gave one pair of readings two names depending on which surface you were
+ * looking at, which is exactly the "matching, not mirroring" failure this
+ * project keeps finding: the user has to be TOLD that `Bar end` and `Max` are
+ * the same number.
+ *
+ * ⚑ IT DOES NOT INSTRUCT AN ORDER, and that was the objection when this was
+ * first raised. Neither slot has to be clicked first: a bar is captured as two
+ * OPPOSITE CORNERS and the pair is sorted on read (`core/barInterval.ts`), so
+ * two people dragging the same bar in opposite directions still produce the
+ * identical file. The names say what the two readings ARE, and the capture
+ * prompt says what to do with them.
+ */
+export const BAR_INTERVAL_SLOTS = ['Min', 'Max'] as const;
 
 /**
  * Shared by every config that calibrates a `BarAxes` (Bar, Categorical Line,

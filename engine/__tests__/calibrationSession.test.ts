@@ -945,7 +945,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
 
     session.clearPoints();
     expect(session.hasSlots()).toBe(true);
-    expect(session.getSlotNames()).toEqual(['Bar start', 'Bar end']);
+    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
     expect(session.getCurrentTupleIndex()).toBeNull();
     expect(session.getCurrentSlotIndex()).toBe(0);
   });
@@ -1595,7 +1595,7 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
 
     session.addDataset(); // Series 2, active -- starts with Bar's own 2 default slots
     expect(session.hasSlots()).toBe(true);
-    expect(session.getSlotNames()).toEqual(['Bar start', 'Bar end']);
+    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
     session.applyBoxPlotGroups();
     expect(session.getCurrentSlotLabel()).toBe('Min'); // fresh cursor, unaffected by Series 1's
 
