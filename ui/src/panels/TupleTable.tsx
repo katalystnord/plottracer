@@ -96,6 +96,52 @@ export interface TupleTableProps {
  * to do. Found because a plain Bar chart used to show it and a real e2e test
  * caught the empty screen it left behind.
  */
+/**
+ * WHICH VALUE COLUMNS THIS TABLE SHOWS - the one decision, in one place.
+ *
+ * ⚑⚑ EXTRACTED SO THE RULE CAN BE NAMED IN A TEST. It lived as two inline
+ * consts in the component, where the only instrument that could reach it was a
+ * full Electron e2e - so the MIXED case (one series holding a bar that sits on
+ * the baseline AND one that floats) was never stated as an outcome anywhere,
+ * only reasoned about. `crowdedMessage` in `BarTable` is extracted for exactly
+ * this reason and is the precedent followed here.
+ *
+ * ⚑ Adaptive, exactly as the export and the error columns are: no `Value`
+ * heading on a figure whose bars all float, because a column of blanks asserts
+ * an emptiness nobody looked for.
+ *
+ * ⚑⚑ AND THE INTERVAL COLUMNS APPEAR ONLY WHERE A BAR ACTUALLY FLOATS,
+ * which is the rule David settled on 2026-08-23 and the contract
+ * `TupleRow.interval` states in its own words: *"a row has a value or an
+ * interval, never both - so the panel and the file can key their columns on
+ * which one is present."*
+ *
+ * ⚠️ THE PANEL KEYED ON NEITHER. It rendered `Min`/`Max` whenever the type
+ * declared them and read the RAW POINTS rather than `interval`, so an ordinary
+ * bar chart showed a `Min` column of near-zero noise - 0.03, 0.05 - beside no
+ * `Value` column at all. David: *"When we have a bar graph that we know the bar
+ * sits on zero, we do not need to report the min I think. It will just be a bit
+ * confusing, no?"* And on 2026-08-23, about the same column: *"it will look
+ * like a fault to the users I think."*
+ *
+ * ⚑ The record is unaffected - `Min` and `Max` are in the file for every bar
+ * either way. David: *"We can still store it."* This is only what the panel
+ * SHOWS.
+ *
+ * ▶ SO THE MIXED FIGURE SHOWS BOTH, and each row fills only the pair that is
+ * its own - which is the answer the record already gives, not a new rule.
+ */
+export function tupleTableColumns(
+  rows: readonly TupleRow[],
+  intervalSlots: readonly [string, string] | undefined,
+  derivedColumn: TupleTableProps['derivedColumn'],
+): { showDerived: boolean; showInterval: boolean } {
+  return {
+    showDerived: derivedColumn !== null && rows.some((r) => r.derived !== null),
+    showInterval: !!intervalSlots && rows.some((r) => r.interval !== null),
+  };
+}
+
 export function TupleTable({
   display,
   rows,
@@ -111,29 +157,7 @@ export function TupleTable({
   noPointsHint,
 }: TupleTableProps) {
   const err = error?.labels.length ? error : null;
-  // ⚑ Adaptive, exactly as the export and the error columns are: no `Value`
-  // heading on a figure whose bars all float, because a column of blanks
-  // asserts an emptiness nobody looked for.
-  const showDerived = derivedColumn !== null && rows.some((r) => r.derived !== null);
-  /**
-   * ⚑⚑ THE INTERVAL COLUMNS APPEAR ONLY WHERE A BAR ACTUALLY FLOATS, which is
-   * the rule David settled on 2026-08-23 and the contract `TupleRow.interval`
-   * states in its own words: *"a row has a value or an interval, never both - so
-   * the panel and the file can key their columns on which one is present."*
-   *
-   * ⚠️ THE PANEL KEYED ON NEITHER. It rendered `Min`/`Max` whenever the type
-   * declared them and read the RAW POINTS rather than `interval`, so an ordinary
-   * bar chart showed a `Min` column of near-zero noise - 0.03, 0.05 - beside no
-   * `Value` column at all. David: *"When we have a bar graph that we know the bar
-   * sits on zero, we do not need to report the min I think. It will just be a bit
-   * confusing, no?"* And on 2026-08-23, about the same column: *"it will look
-   * like a fault to the users I think."*
-   *
-   * ⚑ The record is unaffected - `Min` and `Max` are in the file for every bar
-   * either way. David: *"We can still store it."* This is only what the panel
-   * SHOWS.
-   */
-  const showInterval = !!intervalSlots && rows.some((r) => r.interval !== null);
+  const { showDerived, showInterval } = tupleTableColumns(rows, intervalSlots, derivedColumn);
   /** One row's two ends, or null where the row has a single value instead. */
   const endsOf = (row: TupleRow): (number | null)[] =>
     row.interval === null ? [null, null] : [row.interval.min, row.interval.max];
