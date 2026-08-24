@@ -66,20 +66,24 @@ describe('a heatmap axis becomes the SAME overlay a bar chart draws', () => {
     expect(categoryTickMarkers(x).every((m) => m.draggable)).toBe(true);
   });
 
-  it('still marks a BAR chart’s two edges, unchanged', () => {
-    // The guard on the shared code: the default is what v2.1 shipped.
+  /**
+   * ⚑⚑ THE BAR CHART AND THE HEATMAP NOW DRAW THE SAME THING, which is what
+   * this test used to guard the DIFFERENCE of. It asserted that a bar chart
+   * still got its two axis EDGES marked and labelled while a heatmap did not -
+   * the one place the shared overlay behaved differently per caller.
+   * ▶ That difference is gone: a bar chart's ends are calibration steps now, so
+   * the walk owns them exactly as a heatmap's calibration owns its plot box.
+   * One mechanism, one behaviour, no per-caller branch left to guard.
+   */
+  it('⚑⚑ marks a BAR chart exactly as it marks a heatmap - one tick per divider, no end marks', () => {
     const bar = {
       edges: [{ x: 100, y: 300 }, { x: 500, y: 300 }] as const,
       tickPoints: [{ x: 200, y: 300 }, { x: 400, y: 300 }],
     };
-    const markers = categoryTickMarkers(bar);
-    expect(markers.map((m) => m.id)).toEqual([
-      'categoryAxisStart', 'categoryAxisEnd', 'categoryTick0', 'categoryTick1',
-    ]);
-    expect(markers[0]!.draggable).toBe(false);
-    expect(markers[2]!.draggable).toBe(true);
-    // …and it still draws the axis, both end marks and both ticks.
-    expect(categoryAidGlyphs(bar)).toHaveLength(1 + 2 + 2);
+    expect(categoryTickMarkers(bar).map((m) => m.id)).toEqual(['categoryTick0', 'categoryTick1']);
+    expect(categoryTickMarkers(bar).every((m) => m.draggable)).toBe(true);
+    // The axis line plus one mark per tick, and nothing else.
+    expect(categoryAidGlyphs(bar)).toHaveLength(1 + 2);
   });
 });
 

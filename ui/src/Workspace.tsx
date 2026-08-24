@@ -5916,6 +5916,19 @@ export function Workspace() {
     padding: '6px 8px',
   };
   const binGlyphs = useMemo(() => session.getHistogramBinGlyphs(), [session, version]);
+  /**
+   * ⚑⚑ THE AXIS ENDS ARE NOT MARKED HERE ANY MORE (v2.4). They
+   * used to be marked by this overlay - two violet dots labelled `Categories
+   * start` and `Categories end` - because they were placed by a fold-out and
+   * nothing else on screen owned them. They are CALIBRATION STEPS now (`Cat 1`,
+   * `Cat n`), so the walk already draws a handle at each of those pixels, names
+   * it in the card's chip row, and lets it be dragged.
+   *
+   * ▶ Drawing them twice put two markers on one pixel and printed a label across
+   * the axis line, which is what David's bench shot shows. With the bar chart's
+   * ends owned by the calibration, no caller wanted them marked, so the option
+   * went with them - see `CategoryOverlayInput`.
+   */
   const categoryOverlay = useMemo(() => {
     const ca = session.getCategoryAxis();
     return { edges: ca.getAxisEdges(), tickPoints: ca.getTickPoints() };
@@ -7217,7 +7230,11 @@ export function Workspace() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
               {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
-                const active = !axes && i === session.getStepIndex();
+                // ⚑ NOT `!axes`: a figure can arrive CALIBRATED with steps
+                // nobody placed (a WPD import, a pre-v2.4 project), and the chip
+                // it is asking for has to light up like any other. A finished
+                // walk has no such step, so nothing changes for it.
+                const active = i === session.getStepIndex() && currentStep !== null;
                 const editing = active && !!pendingPixel && step.valueFields.length > 0;
                 return (
                   <div key={step.key} data-testid={`calib-chip-${step.key}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>

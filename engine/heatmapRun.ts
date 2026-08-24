@@ -990,7 +990,9 @@ export function labelsForCells(
  *
  * ⚑ EVERY divider is a tick and none is an "end". A bar chart freezes its two
  * edges because every tick is a function of them; a heatmap's outer boundaries
- * are ordinary dividers, so `markEnds` is off and they drag like the rest.
+ * are ordinary dividers, and they drag like the rest. (`markEnds` used to be
+ * passed `false` here; the option is gone - nothing marks axis ends any more,
+ * because on a bar chart the calibration owns them.)
  */
 export function heatmapAxisOverlays(
   grid: HeatmapState,
@@ -998,7 +1000,7 @@ export function heatmapAxisOverlays(
 ): { x: CategoryOverlayInput; y: CategoryOverlayInput } {
   const xs = checkDividers(grid.xDividers).dividers;
   const ys = checkDividers(grid.yDividers).dividers;
-  const empty: CategoryOverlayInput = { edges: null, tickPoints: [], markEnds: false };
+  const empty: CategoryOverlayInput = { edges: null, tickPoints: [] };
   if (xs === null || ys === null) return { x: empty, y: empty };
   const xLo = xs[0]!;
   const yLo = ys[0]!;
@@ -1043,7 +1045,7 @@ export function heatmapAxisOverlays(
     prefix: 'hmx' | 'hmy'
   ): CategoryOverlayInput =>
     edges.every(finite) && points.every(finite)
-      ? { edges: [edges[0], edges[1]], tickPoints: points, markEnds: false, tickId: (i) => `${prefix}:${i}` }
+      ? { edges: [edges[0], edges[1]], tickPoints: points, tickId: (i) => `${prefix}:${i}` }
       : empty;
 
   return {

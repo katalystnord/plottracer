@@ -24,11 +24,6 @@ import type { GlyphSegment } from './histogramGlyph.js';
  * it - the same judgement histogramGlyph.ts's own EDGE_TICK makes. */
 const TICK_LENGTH = 14;
 
-/** The axis EDGES stand off further, and to both sides, so they read as the
- * ends of a thing rather than as two more ticks. They are not ticks: the user
- * placed them, they are frozen, and every generated mark derives from them. */
-const EDGE_LENGTH = 11;
-
 /**
  * ⚑⚑ THE STRUCTURE VIOLET - every mark the USER placed on the figure's frame.
  * Category ticks and their axis ends, a heatmap's grid dividers, the bar
@@ -68,17 +63,21 @@ export interface CategoryOverlayInput {
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint] | null;
   tickPoints: readonly CategoryAxisPoint[];
   /**
-   * Draw the two ends as their own labelled, non-draggable marks.
+   * ⛔ `markEnds` IS GONE (v2.4), and its absence is the point.
    *
-   * ⚑⚑ TRUE FOR A BAR CHART, FALSE FOR A HEATMAP, and the difference is real
-   * rather than cosmetic. A bar chart's axis edges are FROZEN: every tick is a
-   * function of them, so dragging one rescales the lot - they are a different
-   * kind of thing and are marked as one. A heatmap's outer boundaries are
-   * ORDINARY DIVIDERS that drag like any other (the two-layer model: the
-   * CALIBRATION is the axis, the grid merely derives from it), so marking them
-   * separately would assert a distinction the model does not make.
+   * It drew the two axis ENDS as their own labelled marks, because on a bar
+   * chart they were placed by a fold-out and nothing else on screen owned them.
+   * They are CALIBRATION STEPS now (`Cat 1`, `Cat n`), so the walk draws a
+   * handle at each of those pixels, names it in the card's chip row and lets it
+   * be dragged - and drawing them here as well put two markers on one pixel and
+   * printed a label across the axis line.
+   *
+   * ⚑ The heatmap already passed `false` for the same reason at one remove: its
+   * outer boundaries are ordinary dividers, so marking them separately would
+   * assert a distinction the model does not make. With the bar chart's ends now
+   * owned by the calibration, NOTHING wanted them marked here, and an option
+   * every caller declines is not an option. [[feedback_delete_unreachable_code]]
    */
-  markEnds?: boolean;
   /** Identity for tick `i`. Defaults to v2.1's `categoryTick<i>`; a heatmap
    * brings `hmx:3`, which is what its drag handler answers to. */
   tickId?: (index: number) => string;
@@ -138,7 +137,6 @@ export interface AidGlyph {
 export function categoryAidGlyphs({
   edges,
   tickPoints,
-  markEnds = true,
   tickId = (i) => `categoryTick${i}`,
   color = CATEGORY_TICK_COLOR,
 }: CategoryOverlayInput): AidGlyph[] {
@@ -154,22 +152,6 @@ export function categoryAidGlyphs({
       { from: { x: edges[0].x, y: edges[0].y }, to: { x: edges[1].x, y: edges[1].y } },
     ],
   };
-  // The edges are drawn across the axis, the ticks only outward from it - so an
-  // end never reads as one more category divider. They carry no marker id: every
-  // tick is a function of them, so they are deliberately not draggable.
-  const ends: AidGlyph[] = markEnds
-    ? [edges[0], edges[1]].map((p) => ({
-        markerId: null,
-        grip: null,
-        color,
-        segments: [
-          {
-            from: { x: p.x - n.x * EDGE_LENGTH, y: p.y - n.y * EDGE_LENGTH },
-            to: { x: p.x + n.x * EDGE_LENGTH, y: p.y + n.y * EDGE_LENGTH },
-          },
-        ],
-      }))
-    : [];
   // ⚑ THE MARK AND ITS GRIP, IN ONE DESCRIPTION. The grip sits at the mark's
   // outer end exactly where the separate square used to, so nothing moves on
   // screen - what changes is that they are now one object with one identity, and
@@ -182,7 +164,7 @@ export function categoryAidGlyphs({
       { from: { x: p.x, y: p.y }, to: { x: p.x + n.x * TICK_LENGTH, y: p.y + n.y * TICK_LENGTH } },
     ],
   }));
-  return [axis, ...ends, ...ticks];
+  return [axis, ...ticks];
 }
 
 /**
@@ -197,7 +179,6 @@ export function categoryAidGlyphs({
 export function categoryTickMarkers({
   edges,
   tickPoints,
-  markEnds = true,
   tickId = (i) => `categoryTick${i}`,
   color = CATEGORY_TICK_COLOR,
 }: CategoryOverlayInput): CanvasMarker[] {
@@ -223,31 +204,6 @@ export function categoryTickMarkers({
   // ⚑ The other half of that finding - the left label overlapping `P1=0` - is
   // gone for a different reason: a committed calibration no longer labels its
   // anchors at all (see `buildCanvasMarkers`).
-  const outward = { x: edges[1].x - edges[0].x, y: edges[1].y - edges[0].y };
-  const ends: CanvasMarker[] = !markEnds
-    ? []
-    : [
-        {
-          id: 'categoryAxisStart',
-          x: edges[0].x,
-          y: edges[0].y,
-          label: 'Categories start',
-          labelAway: { x: edges[0].x - outward.x, y: edges[0].y - outward.y },
-        },
-        {
-          id: 'categoryAxisEnd',
-          x: edges[1].x,
-          y: edges[1].y,
-          label: 'Categories end',
-          labelAway: { x: edges[1].x + outward.x, y: edges[1].y + outward.y },
-        },
-      ].map((m) => ({
-        ...m,
-        color,
-        draggable: false,
-        kind: 'calibration' as const,
-        radius: 5,
-      }));
   // ⚑⚑ THE HANDLE SITS AT THE OUTER END OF ITS TICK, not on the axis line.
   // Two reasons, and the second is a defect the first would have hidden:
   //  · it stays visibly BOUND to the axis - the mark connects it - where the
@@ -295,7 +251,7 @@ export function categoryTickMarkers({
     kind: 'aid' as const,
     radius: 4,
   }));
-  return [...ends, ...ticks];
+  return ticks;
 }
 
 /** The tick index a marker id refers to, or null when the id is not one of ours. */

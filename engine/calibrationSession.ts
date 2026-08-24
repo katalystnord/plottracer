@@ -849,12 +849,48 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.axes !== null;
   }
 
+  /**
+   * The step the walk is asking for, or null when it is asking for nothing.
+   *
+   * ⚑⚑ A CALIBRATED FIGURE CAN STILL HAVE STEPS NOBODY PLACED, and this used to
+   * answer `null` for all of them - `if (this.axes) return null`. That was true
+   * while every door produced either a complete walk or none, and it stopped
+   * being true the moment a type gained a step: a WPD project imports as a bar
+   * chart with `p1`/`p2` and NO category axis, and a project saved before v2.4
+   * reopens the same way. MEASURED on both doors: `calibrated: true`,
+   * `currentStep: null`, `hasGeometry: false`, with `c1`/`c2` sitting in the
+   * step list unplaced.
+   *
+   * ▶ So the card showed `Calibrated ✓`, two empty chips, and a disabled ending
+   * whose reason named an action the screen did not offer. The walk was over and
+   * the calibration was not finished - a dead end reachable through an ordinary
+   * import, not merely by legacy files.
+   *
+   * ⚑ ASKING FOR THE FIRST UNPLACED STEP COSTS A FINISHED FIGURE NOTHING: it has
+   * none, so this still returns null and nothing about the ordinary walk moves.
+   * What changes is that an INCOMPLETE one says so, and its prompt, its chip and
+   * its click routing all come back for free because they were never conditional
+   * on anything but this.
+   */
   getCurrentStep(): CalibStepInfo | null {
-    if (this.axes) return null;
-    return this.getSteps()[this.stepIndex] ?? null;
+    const steps = this.getSteps();
+    if (this.axes) {
+      const unplaced = steps.find((s) => this.placed[s.key] === undefined);
+      return unplaced ?? null;
+    }
+    return steps[this.stepIndex] ?? null;
   }
 
+  /** Which step the card should highlight. Derived from `getCurrentStep` so the
+   * chip and the prompt cannot disagree - on a figure that arrived calibrated
+   * with steps unplaced, the cursor is wherever that step is, not wherever the
+   * walk happened to stop. */
   getStepIndex(): number {
+    if (this.axes) {
+      const steps = this.getSteps();
+      const i = steps.findIndex((s) => this.placed[s.key] === undefined);
+      return i < 0 ? steps.length : i;
+    }
     return this.stepIndex;
   }
 
@@ -2814,7 +2850,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * with no valueFields (e.g. Polar's origin) is placed immediately, with no
    * value prompt shown. */
   handleCalibrationClick(px: number, py: number): CalibrationClickResult {
-    if (this.axes) return 'ignored';
+    // ⚑⚑ NOT `if (this.axes) return 'ignored'` ANY MORE. That guard read "a
+    // calibrated figure has nothing left to click", which was the same thing as
+    // "there is no step asking for anything" only while every door produced a
+    // complete walk or none. A WPD import arrives calibrated with `p1`/`p2` and
+    // its category axis unplaced, and this line was what made that a DEAD END:
+    // the step was there, the prompt was there, and the click was thrown away.
+    // ⚑ `getCurrentStep` is the one question worth asking, and it answers null on
+    // a finished figure - so a completed calibration still ignores canvas clicks
+    // exactly as before.
     const step = this.getCurrentStep();
     if (!step) return 'ignored';
     if (this.completeValuelessStep(px, py)) return 'point-placed';
@@ -2840,12 +2884,36 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * a value nothing could accept. Adding a fourth copy of the rule was how this
    * kept happening, so there is now one.
    */
+  /**
+   * Re-run the calibration when a point is placed on a figure that is ALREADY
+   * calibrated - the amend case.
+   *
+   * ⚑⚑ WITHOUT THIS THE RESUMED WALK GOES NOWHERE. A figure can arrive
+   * calibrated with steps unplaced (a WPD import, a pre-v2.4 project), and
+   * `getCurrentStep` now asks for them - but the `Calibrate` button belongs to
+   * stage 1 and a calibrated card is past it, so the two clicks would land in
+   * `placed` and nothing would read them.
+   *
+   * ⚑ It is the rule this session already follows everywhere else: *"setOption
+   * re-calibrates live when `this.axes` exists"*. A change to a calibrated
+   * figure takes effect immediately; only the first walk has a button.
+   *
+   * ⚑ Only once the walk is COMPLETE, so a half-placed amendment cannot tear
+   * down a working calibration mid-gesture.
+   */
+  private recalibrateIfAmendingComplete(): void {
+    if (!this.axes) return;
+    if (!this.getSteps().every((st) => this.placed[st.key] !== undefined)) return;
+    this.runCalibration();
+  }
+
   private completeValuelessStep(px: number, py: number): boolean {
     const step = this.getCurrentStep();
     if (!step || step.valueFields.length > 0) return false;
     this.placed[step.key] = { px, py, values: [] };
     this.pendingPixel = null;
     this.stepIndex += 1;
+    this.recalibrateIfAmendingComplete();
     return true;
   }
 
@@ -5201,6 +5269,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.placed[step.key] = candidate;
     this.pendingPixel = null;
     this.stepIndex += 1;
+    this.recalibrateIfAmendingComplete();
     return true;
   }
 

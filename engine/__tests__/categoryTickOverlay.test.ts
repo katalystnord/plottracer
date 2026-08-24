@@ -30,13 +30,12 @@ describe('the drawn axis', () => {
 
   it('draws the axis, its two ends, and one mark per tick', () => {
     const glyphs = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
-    // One drawn thing per mark: the axis, its two ends, and a tick each.
-    expect(glyphs).toHaveLength(5);
-    const [axis, endA, endB, t1, t2] = glyphs;
+    // ⚑ THE AXIS AND ONE MARK PER TICK - no end marks (v2.4). The two ends are
+    // calibration steps now, so the walk draws a handle at each of those pixels
+    // and marking them here as well put two markers on one pixel.
+    expect(glyphs).toHaveLength(3);
+    const [axis, t1, t2] = glyphs;
     expect(axis!.segments[0]).toEqual({ from: { x: 100, y: 500 }, to: { x: 600, y: 500 } });
-    // Ends cross the axis; ticks only stand off it.
-    expect(endA!.segments[0]).toEqual({ from: { x: 100, y: 489 }, to: { x: 100, y: 511 } });
-    expect(endB!.segments[0]).toEqual({ from: { x: 600, y: 489 }, to: { x: 600, y: 511 } });
     expect(t1!.segments[0]).toEqual({ from: { x: 225, y: 500 }, to: { x: 225, y: 514 } });
     expect(t2!.segments[0]).toEqual({ from: { x: 475, y: 500 }, to: { x: 475, y: 514 } });
   });
@@ -49,14 +48,15 @@ describe('the drawn axis', () => {
    */
   it('⚑⚑ a tick names the handle it IS, and carries its own grip', () => {
     const glyphs = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
-    const tick = glyphs[3]!;
+    const tick = glyphs[1]!;
     expect(tick.markerId).toBe('categoryTick0');
     // The grip sits at the mark's outer end - the same pixel the separate
     // square used to occupy, so nothing moved on screen.
     expect(tick.grip).toEqual({ x: 225, y: 514 });
     expect(tick.segments[0]!.to).toEqual(tick.grip);
-    // The axis and its frozen ends name no handle: every tick derives from them.
-    expect(glyphs.slice(0, 3).every((g) => g.markerId === null && g.grip === null)).toBe(true);
+    // The axis line itself names no handle - it is not draggable.
+    expect(glyphs[0]!.markerId).toBeNull();
+    expect(glyphs[0]!.grip).toBeNull();
   });
 
   /**
@@ -68,7 +68,7 @@ describe('the drawn axis', () => {
    * teaches the user that a tick off the axis is a thing they might get.
    */
   it('⚑⚑ a tick declares the LINE its drag is confined to - the axis itself', () => {
-    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
+    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
     expect(tick!.dragLine?.direction).toEqual({ x: 1, y: 0 });
     // The origin is the GRIP, which is where the drag actually starts.
     expect(tick!.dragLine?.origin).toEqual({ x: 225, y: 514 });
@@ -76,13 +76,13 @@ describe('the drawn axis', () => {
 
   it('⚑ and it follows a tilted axis rather than the screen', () => {
     const tilted = [{ x: 0, y: 0 }, { x: 300, y: 400 }] as const;
-    const [tick] = categoryTickMarkers({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] }).slice(2);
+    const [tick] = categoryTickMarkers({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] });
     expect(tick!.dragLine?.direction.x).toBeCloseTo(0.6, 9);
     expect(tick!.dragLine?.direction.y).toBeCloseTo(0.8, 9);
   });
 
   it('⚑ and the marker sits at the mark\u2019s outer end, where the grip is drawn', () => {
-    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
+    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
     // ⚠️ THE HIT AREA DELIBERATELY STOPS SHORT OF THE AXIS. A first version gave
     // the marker an invisible line spanning the whole mark so it could be
     // grabbed anywhere along it - and the mark's inner end sits ON the category
@@ -95,7 +95,7 @@ describe('the drawn axis', () => {
   });
 
   it('⚑ ticks stand off DOWNWARD on an upright chart - where a figure prints them', () => {
-    const tick = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 300, y: 500 }] })[3]!.segments[0]!;
+    const tick = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 300, y: 500 }] })[1]!.segments[0]!;
     expect(tick.to.y).toBeGreaterThan(tick.from.y);
     expect(tick.to.x).toBe(tick.from.x);
   });
@@ -103,14 +103,14 @@ describe('the drawn axis', () => {
   it('the marks rotate with the axis rather than staying image-aligned', () => {
     // A horizontal-bars chart: the category axis runs down the left side.
     const vertical = [{ x: 100, y: 100 }, { x: 100, y: 600 }] as const;
-    const tick = categoryAidGlyphs({ edges: vertical, tickPoints: [{ x: 100, y: 300 }] })[3]!.segments[0]!;
+    const tick = categoryAidGlyphs({ edges: vertical, tickPoints: [{ x: 100, y: 300 }] })[1]!.segments[0]!;
     expect(tick.to.y).toBe(tick.from.y);
     expect(tick.to.x).toBeLessThan(tick.from.x); // outward, away from the plot
   });
 
   it('works on a tilted axis, at the right stand-off length', () => {
     const tilted = [{ x: 0, y: 0 }, { x: 300, y: 400 }] as const; // length 500
-    const tick = categoryAidGlyphs({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] })[3]!.segments[0]!;
+    const tick = categoryAidGlyphs({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] })[1]!.segments[0]!;
     const dx = tick.to.x - tick.from.x;
     const dy = tick.to.y - tick.from.y;
     expect(Math.hypot(dx, dy)).toBeCloseTo(14, 9);
@@ -133,30 +133,7 @@ describe('the drag handles', () => {
     expect(markers.every((m) => m.color === CATEGORY_TICK_COLOR)).toBe(true);
   });
 
-  it('⚑ marks the axis ENDS visibly, and names them', () => {
-    // Drawn only as glyph segments they were invisible in practice -- the
-    // segment channel carries no colour, so they rendered dark straight on the
-    // figure's own axis and the marked SPAN could not be seen at all. David
-    // spotted it in a screenshot: "I cannot see that you ever set the end".
-    const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 350, y: 500 }] });
-    const start = markers.find((m) => m.id === 'categoryAxisStart');
-    const end = markers.find((m) => m.id === 'categoryAxisEnd');
-    expect(start).toMatchObject({ x: 100, y: 500, label: 'Categories start' });
-    expect(end).toMatchObject({ x: 600, y: 500, label: 'Categories end' });
-  });
 
-  it('⚑ but the ends are NOT draggable - visible is not the same as grabbable', () => {
-    // Every tick is a function of the two edges, so dragging one rescales them
-    // all and discards any the user adjusted. Re-placing the axis lives in the
-    // fold-out, where it can warn first.
-    const markers = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] });
-    for (const id of ['categoryAxisStart', 'categoryAxisEnd']) {
-      expect(markers.find((m) => m.id === id)!.draggable, id).toBe(false);
-    }
-    // ...and neither end can be mistaken for a tick by the drag router.
-    expect(categoryTickIndexFromId('categoryAxisStart')).toBeNull();
-    expect(categoryTickIndexFromId('categoryAxisEnd')).toBeNull();
-  });
 
   it('⚑ does not wear the calibration amber - P1 sits on the very same pixel', () => {
     // Two different kinds of thing in one place must not wear one uniform.
@@ -271,7 +248,6 @@ describe('the weight of a tick handle', () => {
         { x: 160, y: 300 },
         { x: 220, y: 300 },
       ],
-      markEnds: false,
     });
     expect(markers).toHaveLength(2);
     for (const m of markers) {
@@ -280,40 +256,10 @@ describe('the weight of a tick handle', () => {
     }
   });
 
-  it('keeps the AXIS ENDS as calibration marks, because that is what they are', () => {
-    // ⚑ The two edges are not adjustable - every tick is a function of them, and
-    // they are non-draggable for exactly that reason. They ARE references, so
-    // they keep the reference mark. The distinction is authority, not decoration.
-    const markers = categoryTickMarkers({ edges, tickPoints: [{ x: 160, y: 300 }] });
-    const ends = markers.filter((m) => m.draggable === false);
-    expect(ends).toHaveLength(2);
-    for (const m of ends) expect(m.kind).toBe('calibration');
-  });
 });
-describe('⚑ the axis-edge labels lean INWARD, so neither runs off the figure', () => {
-  it('each one is pushed away from a point just outside its own end', () => {
-    // David's screenshot: the right-hand label was cut to `Categ` at the plot
-    // boundary, because every label takes the same up-and-to-the-right offset
-    // and the axis ends where the figure does.
-    const markers = categoryTickMarkers({
-      edges: [{ x: 100, y: 500 }, { x: 900, y: 500 }],
-      tickPoints: [],
-    });
-    const start = markers.find((m) => m.id === 'categoryAxisStart')!;
-    const end = markers.find((m) => m.id === 'categoryAxisEnd')!;
-    // Away-points sit OUTSIDE the span, so `marker - away` points into it.
-    expect(start.labelAway!.x).toBeLessThan(100);
-    expect(end.labelAway!.x).toBeGreaterThan(900);
-  });
-
-  it('⚑ and it follows the axis, not the screen - a vertical axis leans along itself', () => {
-    const markers = categoryTickMarkers({
-      edges: [{ x: 80, y: 600 }, { x: 80, y: 100 }],
-      tickPoints: [],
-    });
-    const start = markers.find((m) => m.id === 'categoryAxisStart')!;
-    const end = markers.find((m) => m.id === 'categoryAxisEnd')!;
-    expect(start.labelAway!.y).toBeGreaterThan(600);
-    expect(end.labelAway!.y).toBeLessThan(100);
-  });
-});
+/**
+ * ⛔ THE AXIS-EDGE LABEL TESTS WENT WITH THE LABELS (v2.4). They covered
+ * `Categories start` / `Categories end` leaning INWARD so neither ran off the
+ * figure - a real fix for a real clipping problem, on marks that no longer
+ * exist. The two ends are calibration steps now, drawn and named by the walk.
+ */

@@ -15,7 +15,8 @@ import {
   PIE_AXES_CONFIG,
 } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
-import type { BarAxes } from '../../core/axes/bar.js';
+import { Calibration } from '../../core/calibration.js';
+import { BarAxes } from '../../core/axes/bar.js';
 import type { PolarAxes } from '../../core/axes/polar.js';
 import type { TernaryAxes } from '../../core/axes/ternary.js';
 import type { MapAxes } from '../../core/axes/map.js';
@@ -913,7 +914,17 @@ describe('CalibrationSession (Bar axes)', () => {
     session.confirmCalibrationValues(['10']);
     session.handleCalibrationClick(250, 500);
     session.handleCalibrationClick(250, 500);
-    session.confirmCalibrationValues(['4']);
+    // ⚑⚑ REFUSED AT THE GESTURE THAT COMPLETES THE WALK, not at Calibrate. The
+    // confirm is where `checkGuards` runs once every step is accounted for
+    // (`problemWith`), so the count's ✓ is answered immediately rather than the
+    // user pressing Calibrate and being told about a click four steps back.
+    // ⚠️ Recorded because the first audit pass claimed the opposite - that the
+    // refusal only arrived at Calibrate - from reading `runCalibration` and not
+    // `confirmCalibrationValues`. MEASURED, not assumed.
+    expect(session.confirmCalibrationValues(['4'])).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/same pixel/i);
+    // …and the pending pixel STAYS, so the correction is a re-click rather than
+    // a restart - the rule the whole walk follows.
     expect(session.runCalibration()).toBe(false);
   });
 
@@ -2843,5 +2854,63 @@ describe('adoptCalibration and the config’s own defaults', () => {
     expect(session.getGlobalFieldValues().total).toBe('2500');
     // ...and the one it did NOT name still stands.
     expect(session.getGlobalFieldValues().sweep).toBe('360');
+  });
+});
+
+/**
+ * ⚑⚑ A FIGURE CAN ARRIVE CALIBRATED WITH STEPS NOBODY PLACED, and until v2.4 the
+ * walk had nothing to say about it. This is not a legacy-file curiosity: a WPD
+ * project imports as a bar chart with `p1`/`p2` and no category axis, so an
+ * ordinary supported import lands here.
+ *
+ * MEASURED before it was fixed: `calibrated: true`, `currentStep: null`,
+ * `hasGeometry: false`, `c1`/`c2` in the step list and unplaced. The card read
+ * `Calibrated ✓`, showed two empty chips, and offered a disabled ending whose
+ * reason named an action the screen did not have. A dead end.
+ */
+describe('a calibrated figure whose walk is not finished', () => {
+  /** What `loadCalibrated` produces from a two-point bar calibration - the shape
+   * a WPD import and a pre-v2.4 project both present. */
+  function importedBar(): CalibrationSession<BarAxes> {
+    const cal = new Calibration(3);
+    cal.addPoint(300, 500, '0', '0', '');
+    cal.addPoint(300, 100, '0', '10', '');
+    const axes = new BarAxes();
+    expect(axes.calibrate(cal, false, false)).toBe(true);
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.loadCalibrated(axes, [new Dataset()]);
+    return s;
+  }
+
+  it('⚑⚑ ASKS for the step nobody placed, instead of reporting nothing to do', () => {
+    const s = importedBar();
+    expect(s.isCalibrated()).toBe(true);
+    expect(s.getCurrentStep()?.key).toBe('c1');
+    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+  });
+
+  it('⚑ and the card highlights that chip, not the end of the list', () => {
+    expect(importedBar().getStepIndex()).toBe(2);
+  });
+
+  it('⚑⚑ placing it takes effect LIVE, because a calibrated card has no Calibrate button', () => {
+    const s = importedBar();
+    s.handleCalibrationClick(100, 500); // Cat 1 - no value to type
+    expect(s.getCurrentStep()?.key).toBe('c2');
+    s.handleCalibrationClick(500, 500);
+    expect(s.confirmCalibrationValues(['4'])).toBe(true);
+    // No `runCalibration()` call here on purpose: that button belongs to stage 1
+    // and this figure is past it. The amendment has to land by itself.
+    expect(s.getCategoryAxis().hasGeometry()).toBe(true);
+    expect(s.getCategoryAxis().getCategoryCount()).toBe(4);
+    expect(s.getCurrentStep()).toBeNull();
+  });
+
+  it('⚑ a FINISHED walk is unaffected - it has no unplaced step to ask for', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibrateStandardBar(s);
+    expect(s.runCalibration()).toBe(true);
+    expect(s.getCurrentStep()).toBeNull();
+    expect(s.getStepIndex()).toBe(4);
   });
 });
