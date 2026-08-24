@@ -109,7 +109,16 @@ const barTruth = JSON.parse(
   fs.readFileSync(path.join(REPO_ROOT, 'samples/bar-tensile-strength.truth.json'), 'utf8')
 ) as {
   axes: { y: { min: number; max: number } };
-  calibration: { anchors: { p1: { px: number; py: number; value: number }; p2: { px: number; py: number; value: number } } };
+  calibration: {
+    anchors: {
+      p1: { px: number; py: number; value: number };
+      p2: { px: number; py: number; value: number };
+      // ⚑ The CATEGORY axis's two ends, measured off the figure (v2.4). The first
+      // carries no value; the second carries how many categories the figure draws.
+      c1: { px: number; py: number };
+      c2: { px: number; py: number; value: number };
+    };
+  };
   series: { points: { category: string; value: number }[] }[];
 };
 
@@ -787,11 +796,17 @@ describe('Workspace: Bar axes', () => {
   // Coordinates chosen so every query point's expected value is an exact
   // ratio along the calibration axis (see the XY handle-drag test above
   // for why this is scale/offset-independent).
-  async function calibrateBarStandard() {
+  async function calibrateBarStandard(categories = 4) {
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
+    // v2.4: a bar chart has two axes, and only one of them used to be
+    // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue(String(categories));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
@@ -805,9 +820,13 @@ describe('Workspace: Bar axes', () => {
     return Number((await textOf(`tuple-derived-${tupleIndex}`)).replace(/[^0-9.eE+-]/g, ''));
   }
 
-  it('walks a shorter 2-step calibration and reads back a bar dragged corner to corner', async () => {
+  it('walks a 4-step calibration - two axes - and reads back a bar dragged corner to corner', async () => {
     await resetWorkspace('bar');
-    expect(await textOf('tips-bar')).toMatch(/1\/2 - P1/);
+    // ⚑ FOUR, not two: the value axis AND the category axis. The old title said
+    // "a shorter 2-step calibration", which was true of the value axis and
+    // silent about the other one - the reading that let the category axis be a
+    // fold-out seeded off P1 for three releases.
+    expect(await textOf('tips-bar')).toMatch(/1\/4 - P1/);
 
     await calibrateBarStandard();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
@@ -933,253 +952,112 @@ describe('Workspace: Bar axes', () => {
   // clicks to edge placement instead of dropping a data point -- exists only
   // here. A user who cannot find it has no feature.
 
-  it('offers category ticks on the calibration card once the axes exist, and not before', async () => {
+  it('⚑⚑ the category axis is part of the WALK - the step asks for it by name', async () => {
     await resetWorkspace('bar');
-    // Not during the walk: the fold-out must never look like a calibration step.
-    expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
-    await calibrateBarStandard();
-    // ⚑ No unfolding. The card auto-folds on calibrate and the offer is ON the
-    // folded chip bar -- which is the whole reason this costs the simple
-    // two-click workflow one line of text and nothing else.
-    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
+    // Two value-axis clicks, and the walk is NOT over: a bar chart has two axes.
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    expect(await page.getByTestId('calib-chip-c1').count()).toBe(1);
+    expect(await textOf('tips-bar')).toContain('category axis STARTS');
   });
 
-  it('⚑ C: one series is offered the ticks QUIETLY - the ordinal is true within a series', async () => {
-    // David: *"Are there instances where we would not want to mark their
-    // categories now?"* Yes - a single series with every bar present. Its
-    // unmarked Position is a left-to-right ordinal computed from its own pixels,
-    // which is a faithful statement about it, so the offer stays one quiet line.
+  /**
+   * ⚑⚑⚑ GATE 4: THIS WALK CLICKS ONLY WHAT A PROMPT ON SCREEN TELLS IT TO.
+   *
+   * The previous version of this test reused P1 as the axis start, because the
+   * card did - and that is precisely how a category axis came to run diagonally
+   * across David's figure while every instrument reported green. Each click
+   * below is the click its own step asks for, and nothing else.
+   */
+  it('⚑⚑⚑ THE WALK: two value clicks, two category clicks, and a count', async () => {
     await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await dragMarker(300, 400, 300, 250);
-    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
-  });
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
 
-  it('⚑⚑ C: a SECOND series carrying readings promotes the offer, and says what it saw', async () => {
-    // From here the two series are being paired by a number they do not share:
-    // a series missing one category numbers every later reading one lower, so
-    // `Position 3` means a different category in each. The card says so, in the
-    // terms it measured - and it still does not block anything (tenet 1).
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await dragMarker(300, 400, 300, 250);
-    await page.getByTestId('add-series').click();
-    await dragMarker(400, 400, 400, 300);
-    await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('2 series - mark category ticks to pair them');
-  });
+    // "Click where the category axis STARTS - the outer edge of the FIRST category"
+    await clickAt(100, 400);
+    expect(await textOf('tips-bar')).toContain('category axis ENDS');
 
-  it('⚑ C: and marking them puts the offer to rest', async () => {
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await dragMarker(300, 400, 300, 250);
-    await page.getByTestId('add-series').click();
-    await dragMarker(400, 400, 400, 300);
-    await page.getByTestId('category-ticks-toggle').click();
-    await clickAt(600, 400);
-    await page.getByTestId('category-count').fill('4');
-    await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
-  });
-
-  it('⚑⚑ E2: the stage ends in the TYPE\'s own word, and the finished card is one row', async () => {
-    // The categorical types kept a second triangle, their own open/close state
-    // and a `Done` of their own, while `axesTypeConfigs` had declared their
-    // ending as "Read categories" and nothing rendered it. One card, one
-    // triangle, one ending - the shape the heatmap already had.
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await page.getByTestId('category-ticks-toggle').click();
-    // Disabled before there is anything to end, never absent: a greyed control
-    // says "this is what comes next", a missing one says nothing at all.
-    expect(await page.getByTestId('category-read').isDisabled()).toBe(true);
-    await clickAt(600, 400);
-    await page.getByTestId('category-count').fill('4');
+    // "…then enter how many CATEGORIES the figure has"
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    expect(await page.getByTestId('category-read').textContent()).toBe('Read categories');
+    // The stage is named, and it reports the count the CALIBRATION declared.
+    expect(await textOf('category-ticks-summary')).toBe('Categories - 4 categories');
+    expect(await textOf('category-declared')).toContain('4 categories, from the calibration');
+  });
+
+  it('⚑⚑ E2: the ending marks the categories, and the finished card is ONE row', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    // Disabled is never the same as absent: a greyed control says "this is what
+    // comes next", a missing one says nothing at all. Here it is ready.
+    const ending = page.getByTestId('category-read');
+    expect(await ending.textContent()).toBe('Mark categories');
+    await ending.click();
+    await page.waitForTimeout(150);
+    // David's own line: "> Calibration *Calibrated check* *categories marked
+    // check* [reset calibration]".
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    expect(await textOf('second-stage-status')).toBe('Categories marked ✓');
+  });
+
+  it('⚑ unfolding a FINISHED card shows BOTH stages at once - the review view', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
     await page.getByTestId('category-read').click();
     await page.waitForTimeout(150);
-
-    // ⚑ ONE ROW. The stage is over, the card is folded, and what it recorded is
-    // on the folded line - not in a second fold-out the user has to open.
-    expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
-    expect(await textOf('second-stage-status')).toBe('4 categories ✓');
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(150);
+    // Stage 1's walk AND stage 2's controls, together - exactly the heatmap's
+    // rule: while you are working the card is a workspace and shows the step you
+    // are on; once done it is a RECORD and shows everything it recorded.
+    expect(await page.getByTestId('calib-chip-p1').count()).toBe(1);
+    expect(await page.getByTestId('categories-card').count()).toBe(1);
   });
 
-  it('⚑ E6: the drag fact survives as the count field\'s tooltip, not as a line of prose', async () => {
+  it('⚑⚑ the tick convention is the HEATMAP\'s words, and switching it moves the marks', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await page.getByTestId('category-ticks-toggle').click();
-    await clickAt(600, 400);
-    await page.getByTestId('category-count').fill('4');
+    // `Boundaries` / `Centres` - not a second vocabulary for one fact.
+    expect(await page.getByTestId('category-convention-edge').count()).toBe(1);
+    expect(await page.getByTestId('category-convention-centred').count()).toBe(1);
+    await page.getByTestId('category-convention-centred').check();
     await page.waitForTimeout(150);
-    expect(await page.getByTestId('category-drag-hint').count()).toBe(0);
-    expect(await page.getByTestId('category-count').getAttribute('title')).toContain('Drag');
+    expect(await page.getByTestId('category-convention-centred').isChecked()).toBe(true);
+  });
+
+  it('⚑ E6: the drag fact survives as the convention control\'s tooltip, not as prose', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    expect(await page.getByTestId('category-convention-edge').getAttribute('title')).toContain('Drag');
   });
 
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard();
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
   });
 
-  it('⚑ marks the axis in ONE click, reusing the value origin, and draws the ticks', async () => {
+  /**
+   * ⚑⚑ THE ENTRY BUTTON, THE COUNT BOX, `Re-place axis` AND `Remove ticks` ARE
+   * GONE, and this asserts their absence rather than trusting the diff. Each was
+   * a control on a fold-out that no longer exists: the stage is not optional, so
+   * there is nothing to enter; the count is declared on the second category
+   * click, so it is never re-collected; and an axis end is a calibration handle,
+   * dragged where it stands like every other one.
+   */
+  it('⚑⚑ the fold-out\'s controls are absent, not merely restyled', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await page.getByTestId('category-ticks-toggle').click();
-    await page.waitForTimeout(100);
-
-    // P1 is already the first edge, so the prompt asks for one click, not two -
-    // and it names the FAR END OF THE WHOLE AXIS, because "where the categories
-    // end" sent David to the end of the FIRST category (v2.3).
-    expect(await textOf('category-ticks-prompt')).toContain('FAR END of the whole category axis');
-
-    // ⚑ This click must NOT drop a data point -- it places the far edge.
-    await clickAt(600, 400);
-    await page.waitForTimeout(150);
-    expect(await page.getByTestId('category-ticks-prompt').count()).toBe(0);
-    expect(await textOf('category-ticks-summary')).toContain('Category ticks');
-
-    await page.getByTestId('category-count').fill('4');
-    await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
-
-    // Both conventions are visible without opening anything, and centred is preset.
-    expect(await page.getByTestId('category-convention-centred').isChecked()).toBe(true);
-    expect(await page.getByTestId('category-convention-edge').isChecked()).toBe(false);
-
-    // The declared categories are rows in the table before any bar is captured.
-    expect(await page.getByTestId('category-count').inputValue()).toBe('4');
-  });
-
-  it("⚑⚑⚑ THE WALK, clicking only what the screen says - David's replacement design", async () => {
-    // ⚑⚑ CLAUDE.md GATE 4: a walkthrough test may only click what a prompt on
-    // screen tells it to click. If it needs a coordinate, an order or a
-    // precondition no visible text describes, that is a UI defect found at the
-    // moment the test is written.
-    // ⚠️ THE PREVIOUS WALK FAILED THAT and nobody noticed, because it opened the
-    // fold-out through the summary chevron - a gesture nothing on screen
-    // announced - and the usable form appeared only afterwards. David, meeting
-    // it cold: *"and now, MAGICALLY, it changes to something that looks like
-    // something I can use."*
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-
-    // 1. The only primary thing on the row is the way IN, and it says so.
-    const start = page.getByTestId('category-mark-start');
-    expect(await start.isVisible()).toBe(true);
-    expect(await page.getByTestId('category-read').count()).toBe(0); // the ENDING is not offered yet
-    await start.click();
-    await page.waitForTimeout(100);
-
-    // 2. The step is the first thing in the card, and it names the FAR END of
-    //    the WHOLE axis - the sentence that used to send the click to the end of
-    //    the first category.
-    const step = await textOf('category-ticks-prompt');
-    expect(step).toContain('FAR END of the whole category axis');
-    await clickAt(600, 400);
-    await page.waitForTimeout(150);
-
-    // 3. The card now asks the two questions, and says so.
-    expect(await textOf('category-ticks-step')).toContain('how many categories');
-
-    // 4. The ending cannot fire yet, and the button says why rather than
-    //    no-opping under a teal coat of paint.
-    const read = page.getByTestId('category-read');
-    expect(await read.isDisabled()).toBe(true);
-    expect(await read.getAttribute('title')).toMatch(/how many categories/);
-    // ⚑ And the line above does not claim a count nobody declared.
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - axis marked, no count yet');
-
-    // 5. Answer them; the markers appear at once and the step becomes ADJUSTING.
-    await page.getByTestId('category-count').fill('4');
-    await page.waitForTimeout(200);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 4 categories');
-    expect(await textOf('category-ticks-step')).toContain('Drag any marker');
-
-    // 6. Now the ending is live, at the end of the card.
-    expect(await read.isDisabled()).toBe(false);
-    await read.click();
-    await page.waitForTimeout(150);
-
-    // 7. It folds to one line, and that line states what was recorded - David's
-    //    design: "Calibration · Calibrated ✓ · 4 categories ✓ · Reset calibration".
-    expect(await page.getByTestId('category-count').count()).toBe(0);
-    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
-    expect(await textOf('second-stage-status')).toBe('4 categories ✓');
-  });
-
-  it('⚑ a span far too short to be the whole axis says what it measured', async () => {
-    // David clicked the end of the FIRST category of four and nothing said
-    // anything. This reports rather than refuses - a category axis really can be
-    // a small part of a figure.
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await page.getByTestId('category-mark-start').click();
-    await page.waitForTimeout(100);
-    await clickAt(330, 400); // barely past the origin: a fraction of the figure
-    await page.waitForTimeout(200);
-    expect(await textOf('category-span-note')).toMatch(/% of the figure/);
-    expect(await textOf('category-span-note')).toMatch(/Re-place axis/);
-  });
-
-  it('⚑⚑ dragging a marker is answered with nothing at all', async () => {
-    // The card used to answer the one constructive gesture the design rests on
-    // with red text about the consequences of other, future actions.
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await page.getByTestId('category-mark-start').click();
-    await page.waitForTimeout(100);
-    await clickAt(600, 400);
-    await page.waitForTimeout(150);
-    await page.getByTestId('category-count').fill('4');
-    await page.waitForTimeout(200);
-    expect(await page.getByTestId('category-regenerate-warning').count()).toBe(0);
-  });
-
-  it('⚑ retyping the count over a NAMED set does not delete the names on the way', async () => {
-    // The count field commits as you type so the marks redraw live -- but
-    // `setCategoryCount` shrinks by TRUNCATION, so with the field selected,
-    // retyping 6 over a 3 passes through the intermediate "6"... and retyping 2
-    // over a 6 passes through nothing, while retyping 12 over a 5 passes through
-    // "1" and used to delete four NAMED categories on the way (v2.1 audit).
-    // Growing is instant; shrinking waits for blur.
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await page.getByTestId('category-ticks-toggle').click();
-    await page.waitForTimeout(100);
-    await clickAt(600, 400);
-    await page.waitForTimeout(150);
-
-    await page.getByTestId('category-count').fill('5');
-    await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 5 categories');
-
-    // Name the last one, then retype the count with the field selected: the
-    // browser replaces the whole value, so the first keystroke IS "1".
-    await page.getByTestId('category-count').fill('1');
-    await page.getByTestId('category-count').fill('12');
-    await page.waitForTimeout(150);
-    // The transient "1" must not have taken effect -- only the final 12.
-    expect(await textOf('category-ticks-summary')).toBe('Category ticks - 12 categories');
-  });
-
-  it('removes the ticks again, leaving the calibration untouched', async () => {
-    await resetWorkspace('bar');
-    await calibrateBarStandard();
-    await page.getByTestId('category-ticks-toggle').click();
-    await clickAt(600, 400);
-    await page.waitForTimeout(150);
-    await page.getByTestId('category-count').fill('3');
-    await page.waitForTimeout(150);
-
-    await page.getByTestId('category-remove-ticks').click();
-    await page.waitForTimeout(150);
-    expect(await textOf('category-ticks-summary')).toBe('Mark category ticks?');
-    // The value calibration is untouched -- ticks never gated it and removing
-    // them must not disturb it.
-    expect(await page.getByTestId('run-calibration').count()).toBe(0);
+    for (const id of ['category-mark-start', 'category-count', 'category-replace-axis', 'category-remove-ticks', 'category-ticks-toggle', 'category-why']) {
+      expect(await page.getByTestId(id).count(), `${id} must be gone`).toBe(0);
+    }
   });
 });
 
@@ -1193,11 +1071,17 @@ describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
   async function openBarTruthProject() {
     const fixture = (() => {
       const session = new CalibrationSession(BAR_AXES_CONFIG);
-      const { p1, p2 } = barTruth.calibration.anchors;
+      const { p1, p2, c1, c2 } = barTruth.calibration.anchors;
       session.handleCalibrationClick(p1.px, p1.py);
       session.confirmCalibrationValues([String(p1.value)]);
       session.handleCalibrationClick(p2.px, p2.py);
       session.confirmCalibrationValues([String(p2.value)]);
+      // ⚑ THE CATEGORY AXIS, from the truth file's own MEASURED anchors - the
+      // left spine and the right spine, with the count on the second. A bar
+      // chart has two axes and its truth has to describe both (v2.4).
+      session.handleCalibrationClick(c1.px, c1.py);
+      session.handleCalibrationClick(c2.px, c2.py);
+      session.confirmCalibrationValues([String(c2.value)]);
       if (!session.runCalibration()) throw new Error('fixture calibration failed');
       const png = path.join(REPO_ROOT, 'samples/bar-tensile-strength.png');
       const result = serializeProject(
@@ -1294,11 +1178,17 @@ describe('Workspace: Box Plot / Point Groups', () => {
   // trap checkpoint 18's Polar tests hit, see this file's other describe
   // blocks). Five clicks at py = 385,355,325,295,265 read back exactly
   // 0.5,1.5,2.5,3.5,4.5 -- (400-py)/30*10 -- one per Min/Q1/Median/Q3/Max group.
-  async function calibrateBarStandard() {
+  async function calibrateBarStandard(categories = 4) {
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
+    // v2.4: a bar chart has two axes, and only one of them used to be
+    // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue(String(categories));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
@@ -2634,6 +2524,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     for (const py of [385, 355, 325, 295, 265]) {
@@ -2686,6 +2580,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
@@ -2746,6 +2644,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
@@ -2775,6 +2677,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
@@ -2864,6 +2770,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     await dragMarker(250, 400, 250, 250);
@@ -2900,6 +2810,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
@@ -3171,6 +3085,10 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(false); // still allowed
@@ -3552,6 +3470,10 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     // The floating-panel triggers (checkpoint 40) are XY-only: absent for Bar.
@@ -4997,6 +4919,10 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     await clickAt(300, 250);
@@ -5368,12 +5294,17 @@ describe('Workspace: drag-and-drop / paste image (checkpoint 45)', () => {
 describe('Workspace: categorical line (checkpoint 101)', () => {
   it('calibrates value-only, captures points, and exports Position + Value', async () => {
     await resetWorkspace('categorical');
-    // Only TWO calibration clicks -- both on the VALUE (Y) axis, no X. That's the
-    // whole point: "X is not numeric", so there is no X value to click.
+    // ⚑⚑ TWO clicks on the VALUE (Y) axis, and no X VALUE is ever typed - that is
+    // still the whole point: "X is not numeric", so there is no X coordinate to
+    // enter. What the walk DOES ask for since v2.4 is where the category axis
+    // RUNS, which is geometry rather than a number: two clicks and a count.
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(100, 100);
     await confirmValue('100');
+    await clickAt(100, 300);
+    await clickAt(500, 300);
+    await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);

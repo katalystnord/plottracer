@@ -7468,7 +7468,18 @@ export function Workspace() {
                     title={
                       categoryStage.hasGeometry
                         ? 'Accept these ticks as the figure\u2019s category boundaries and finish this step'
-                        : 'Calibrate the category axis first - there are no ticks to mark yet'
+                        : // ⚑⚑ A REASON THAT NAMES AN ACTION THE SCREEN ACTUALLY OFFERS.
+                          // The button only renders past stage 1, so "finish
+                          // calibrating" is not the case here - a calibrated
+                          // bar-family figure has its axis by construction, and
+                          // the ONLY way to be here without one is a project
+                          // saved before the category axis joined the walk.
+                          // ⚑ The first draft said "calibrate the category axis
+                          // first" - true, and describing nothing the user can
+                          // do, because the walk is over. A message naming an
+                          // action the interface does not offer is the
+                          // keystone-persona failure this project keeps finding.
+                          'This figure was calibrated before the category axis was part of the walk. Press Reset calibration to place it - the values will need re-reading.'
                     }
                     style={endsCardButton(categoryStage.hasGeometry)}
                   >

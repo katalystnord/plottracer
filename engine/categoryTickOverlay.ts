@@ -258,6 +258,12 @@ export function categoryTickMarkers({
   //    axis's outward normal separates them by construction.
   const n = outwardNormal(edges);
   const stand = n ?? { x: 0, y: 0 };
+  /** The axis's own unit vector - the only direction a tick may travel. */
+  const axisLen = Math.hypot(edges[1].x - edges[0].x, edges[1].y - edges[0].y);
+  const along =
+    axisLen > 0
+      ? { x: (edges[1].x - edges[0].x) / axisLen, y: (edges[1].y - edges[0].y) / axisLen }
+      : { x: 1, y: 0 };
   const ticks: CanvasMarker[] = tickPoints.map((p, i) => ({
     id: tickId(i),
     x: p.x + stand.x * TICK_LENGTH,
@@ -270,6 +276,16 @@ export function categoryTickMarkers({
     // was paint with no hit area at all, so reaching for it did nothing and the
     // only thing that worked was a 4px square 14px away. See `AidGlyph`.
     hitFrom: { x: p.x, y: p.y },
+    // ⚑⚑ AND THE DRAG IS BOUND TO THE AXIS ON SCREEN, not only in the record.
+    // `moveTick` has always PROJECTED the drop point onto the axis and clamped
+    // it between its neighbours - so the model was right and the picture was
+    // not: the mark leaned off the axis under the cursor and snapped back on
+    // release, teaching the user that a tick off the axis is a thing they might
+    // get. CLAUDE.md pattern 4, and the same `dragLine` the error cap already
+    // declares for the same reason.
+    // ⚑ It became MORE visible, not less, once the mark and its grip travelled
+    // together: before, only a 4px square swung out.
+    dragLine: { origin: { x: p.x + stand.x * TICK_LENGTH, y: p.y + stand.y * TICK_LENGTH }, direction: along },
     // ⚑⚑ AN AID, NOT A PRECISE REFERENCE. These used to be `calibration`, which
     // draws the crosshair reticle that exists - in its own comment - "so an axis
     // handle reads as a precise reference, not a data dot". A divider is the

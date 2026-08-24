@@ -219,3 +219,50 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card - a thirteenth canno
     }
   });
 });
+
+/**
+ * ⚑⚑ THE FOLDED LINE'S WORD COMES FROM THE TYPE - and this case was declared and
+ * never read for one commit, which is CLAUDE.md gate 3 in miniature: the field
+ * existed, its doc described the behaviour, and nothing enforced it. The e2e
+ * caught it at 20 minutes a run; this catches it in a millisecond.
+ */
+describe('what a finished second stage is CALLED', () => {
+  const base = { figureCaptured: true, calibrated: true, placed: 4, steps: 4, expanded: false };
+
+  it("⚑⚑ uses the type's own `done` word - David: \"Categories marked check\"", () => {
+    const model = calibrationCardModel({
+      ...base,
+      secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
+      secondStageComplete: true,
+    });
+    expect(model.foldedLine.secondStage).toBe('Categories marked ✓');
+  });
+
+  it('⚑ a caller-supplied SUMMARY still wins, because a heatmap counts what it read', () => {
+    const model = calibrationCardModel({
+      ...base,
+      secondStage: { label: 'Grid', ending: 'Read cells' },
+      secondStageComplete: true,
+      secondStageSummary: '20 cells read',
+    });
+    expect(model.foldedLine.secondStage).toBe('20 cells read ✓');
+  });
+
+  it('falls back to the stage LABEL when the type says neither', () => {
+    const model = calibrationCardModel({
+      ...base,
+      secondStage: { label: 'Grid', ending: 'Read cells' },
+      secondStageComplete: true,
+    });
+    expect(model.foldedLine.secondStage).toBe('Grid ✓');
+  });
+
+  it('says nothing at all until the stage has actually finished', () => {
+    const model = calibrationCardModel({
+      ...base,
+      secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
+      secondStageComplete: false,
+    });
+    expect(model.foldedLine.secondStage).toBeNull();
+  });
+});

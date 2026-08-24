@@ -42,7 +42,10 @@ export type CardStage =
 
 export interface CalibrationCardInput {
   /** The type's declared second stage, or undefined if it has none. */
-  secondStage?: { label: string; ending: string } | undefined;
+  /** The type's declared second stage. `done` is what the FOLDED line calls the
+   * finished stage where that is not a count of readings - see the field's own
+   * note on `AxesTypeConfig.secondStage`. */
+  secondStage?: { label: string; ending: string; done?: string | undefined } | undefined;
   figureCaptured: boolean;
   calibrated: boolean;
   /** How many calibration points are placed, and how many the walk asks for. */
@@ -129,9 +132,15 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
       // ⚑ Only once the stage has actually produced something. A label with no
       // reading behind it would assert work that has not happened - the same
       // rule that stops a generated grid being drawn like a measured one.
+      // ⚑⚑ THE TYPE'S OWN WORD FIRST. A heatmap's line is a summary of what was
+      // READ ("20 cells read"), assembled by the caller from the record; a bar
+      // chart's is a statement about the WALK, and David gave it verbatim:
+      // "> Calibration *Calibrated check* *categories marked check*". So the
+      // type declares `done` and the caller supplies a summary only where there
+      // is a reading to summarise. `label` remains the last resort.
       secondStage:
         secondStage && secondStageComplete
-          ? `${secondStageSummary ?? secondStage.label} ✓`
+          ? `${secondStageSummary ?? secondStage.done ?? secondStage.label} ✓`
           : null,
     },
     // ⚑⚑ ONE AT A TIME WHILE WORKING, BOTH WHEN REVIEWING. The walk shows while

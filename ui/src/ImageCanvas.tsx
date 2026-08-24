@@ -1948,12 +1948,28 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     // mark is what the user reaches for, because it is what they
                     // can see. `hitFrom` is its far end, in image coordinates.
                     const base = point.hitFrom ? imageToScreen(view, point.hitFrom.x, point.hitFrom.y) : null;
+                    // ⚑⚑ BOUND TO ITS AXIS ON SCREEN - the same projection the
+                    // cap above uses, and for the same reason. `moveTick` has
+                    // always projected the drop point onto the axis and clamped
+                    // it between its neighbours, so the record was right while
+                    // the picture leaned off and snapped back. Pattern 4.
+                    const aidLine = point.dragLine;
+                    const aidBound = aidLine
+                      ? (pos: { x: number; y: number }) => {
+                          const o = imageToScreen(view, aidLine.origin.x, aidLine.origin.y);
+                          const ux = aidLine.direction.x;
+                          const uy = aidLine.direction.y;
+                          const along = (pos.x - o.x) * ux + (pos.y - o.y) * uy;
+                          return { x: o.x + ux * along, y: o.y + uy * along };
+                        }
+                      : undefined;
                     return (
                       <Group
                         key={point.id}
                         x={screenX}
                         y={screenY}
                         draggable={interactive}
+                        {...(aidBound ? { dragBoundFunc: aidBound } : {})}
                         onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
                         onDragStart={cancelDragIfPanning}
                         onDragMove={(e) => {

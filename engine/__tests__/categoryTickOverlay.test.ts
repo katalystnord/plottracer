@@ -59,6 +59,28 @@ describe('the drawn axis', () => {
     expect(glyphs.slice(0, 3).every((g) => g.markerId === null && g.grip === null)).toBe(true);
   });
 
+  /**
+   * ⚑⚑ PATTERN 4: A CONSTRAINED GESTURE MUST BE BOUND TO ITS CONSTRAINT ON
+   * SCREEN. `moveTick` has always projected the drop point onto the axis and
+   * clamped it between its neighbours, so the RECORD was right - and the picture
+   * was not, because Konva moves the dragged node wherever the cursor goes. The
+   * mark leaned off the axis under the cursor and snapped back on release, which
+   * teaches the user that a tick off the axis is a thing they might get.
+   */
+  it('⚑⚑ a tick declares the LINE its drag is confined to - the axis itself', () => {
+    const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
+    expect(tick!.dragLine?.direction).toEqual({ x: 1, y: 0 });
+    // The origin is the GRIP, which is where the drag actually starts.
+    expect(tick!.dragLine?.origin).toEqual({ x: 225, y: 514 });
+  });
+
+  it('⚑ and it follows a tilted axis rather than the screen', () => {
+    const tilted = [{ x: 0, y: 0 }, { x: 300, y: 400 }] as const;
+    const [tick] = categoryTickMarkers({ edges: tilted, tickPoints: [{ x: 150, y: 200 }] }).slice(2);
+    expect(tick!.dragLine?.direction.x).toBeCloseTo(0.6, 9);
+    expect(tick!.dragLine?.direction.y).toBeCloseTo(0.8, 9);
+  });
+
   it('⚑ and the marker over it can be grabbed anywhere along the mark', () => {
     const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
     // `hitFrom` is the mark's far end, so the hit area spans the whole tick
