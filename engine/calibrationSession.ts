@@ -6074,6 +6074,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!point) return;
     point.px = px;
     point.py = py;
+    // ⚑⚑ DRAGGING A REUSED POINT ADOPTS IT. `withdrawReusedPixels` promises
+    // in its own words that "a pixel the user clicked by hand is theirs and is
+    // never touched" - and it had no way to know this had happened, so a user
+    // who took the offer, dragged the handle to where they actually wanted it,
+    // and THEN unticked the box lost the pixel they had placed themselves. The
+    // offer supplied a starting position; once it is moved, the position is the
+    // user's measurement and there is nothing left to take back.
+    this.reusedStepKeys.delete(key);
     if (this.axes) this.runCalibration();
   }
 

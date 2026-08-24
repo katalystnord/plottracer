@@ -3040,6 +3040,22 @@ describe('withdrawing the reused pixel', () => {
     expect(s.getPlacedPoints()['c1']).toBeDefined();
   });
 
+  it('⚑⚑ and leaves one the offer placed but the user then DRAGGED - it is theirs now', () => {
+    // ⚑⚑ THE GAP THE TEST ABOVE LEFT. It covers an offer that never fired,
+    // which is the easy half. The user who TAKES the offer, drags the handle to
+    // where they actually wanted it, and only then unticks the box had their own
+    // pixel deleted - measured at (140, 505), gone. `withdrawReusedPixels`
+    // promises in its own words that a hand-placed pixel is never touched, and
+    // nothing told it this one had become hand-placed.
+    const s = walkToCatN();
+    s.updateCalibPointPixel('c1', 140, 505);
+
+    expect(s.withdrawReusedPixels()).toBe(false);
+    expect(s.getPlacedPoints()['c1']).toMatchObject({ px: 140, py: 505 });
+    // ⚑ And the walk does not jump backwards to a step that is still placed.
+    expect(s.getCurrentStep()?.key).toBe('c2');
+  });
+
   it('⚑ and says there was nothing to withdraw when the offer never fired', () => {
     const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     expect(s.withdrawReusedPixels()).toBe(false);
