@@ -185,6 +185,30 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getCategoryAxis().hasAdjustments()).toBe(true);
   });
 
+  it('⚑⚑ but re-declaring a DIFFERENT count DOES regenerate, ends unmoved', () => {
+    // ⚑⚑ THE COMPANION ASSERTION to the test above, and the reason this one
+    // exists: that guard is a DISABLING one. It stops `runCalibration` from
+    // rebuilding the ticks, and the only thing separating "does not throw away
+    // the user's drags" from "can never change the count again" is that the
+    // count is re-read AFTER the ends are compared. Nothing else in the suite
+    // says so, so widening the guard by one line would pass everything.
+    const s = withTicks(4);
+    s.moveCategoryTick(1, { x: 300, y: 500 });
+    expect(s.getCategoryAxis().hasAdjustments()).toBe(true);
+    const edges = s.getCategoryAxis().getAxisEdges();
+
+    expect(s.setCalibrationValues('c2', ['6'])).toBe(true);
+
+    expect(s.getCategoryAxis().getCategoryCount()).toBe(6);
+    expect(s.getCategoryAxis().getTickPoints()).toHaveLength(6);
+    // ⚑ And the ENDS did not move, which is what makes this the count's own
+    // path rather than `setAxisEdges` regenerating as a side effect.
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual(edges);
+    // ⚑ A count change is a NEW set of boundaries, so the old drag is gone -
+    // correctly. There is no tick 1 of four left to have been adjusted.
+    expect(s.getCategoryAxis().hasAdjustments()).toBe(false);
+  });
+
   it('a rotation carries the geometry onto a tilted axis', () => {
     const s = withTicks(2);
     // 90 degrees about the origin: (x,y) -> (-y,x)
