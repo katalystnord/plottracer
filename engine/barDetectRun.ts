@@ -20,7 +20,7 @@
  */
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
-import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import { detectBlobs, type Blob, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import {
   reconcileWithExpected,
   runColumnsFromMembers,
@@ -99,6 +99,17 @@ export interface BarDetectSuccess {
    * square, while a bar spans a real share of its category.
    */
   swatchSuspects?: number[];
+  /**
+   * How many bars were put back together after being severed by whatever the
+   * figure draws along its BASELINE. Present only when a baseline was supplied.
+   *
+   * ⚑⚑ IT IS REPORTED BECAUSE IT CHANGED THE ANSWER. Every other bar technique
+   * here may only refuse or corroborate; this one JOINS, which is an action - so
+   * it says how often it acted, and the trace line prints it. A count of 0 is
+   * still worth carrying: it is the difference between "nothing needed joining"
+   * and "this build cannot join".
+   */
+  joinedAcrossBaseline?: number;
 }
 
 /** Declared category geometry, when the user has marked it (v2.1). Absent =
@@ -177,6 +188,122 @@ function swatchSuspectsIn(
   );
 }
 
+/**
+ * How much of the two shapes' CATEGORY extents have to coincide before they can
+ * be two halves of one bar.
+ *
+ * ⚑ A FRACTION, NOT A PIXEL COUNT, so it means the same thing on a 900px figure
+ * and a 4000px one. Two halves of a severed rectangle have identical extents;
+ * the tenth of slack is for the anti-aliased column or two the filter drops at
+ * the cut, and nothing more. It is deliberately tight: the cost of joining two
+ * shapes that are not one bar is a reading that never existed.
+ */
+const SAME_CATEGORY_OVERLAP = 0.9;
+
+/**
+ * Put back together the bars that were severed by whatever the figure draws
+ * along its baseline - the zero rule, the axis spine, a target line.
+ *
+ * ⚑⚑ WHY THIS IS NEEDED AT ALL. A bar drawn ACROSS the baseline has the rule
+ * painted over its middle in the rule's own colour, so the colour filter drops
+ * those rows and the connected component is cut in two. Both halves are then
+ * filed as bars: on `samples/bar-floating-temperature.png` twelve months came
+ * back as seventeen readings, with January reading `0.11 .. 2` on one row and
+ * `-8 .. -0.04` on the next. Every number plausible, five bars that do not
+ * exist, and nothing on screen wrong - the failure class this project treats as
+ * the worst one.
+ *
+ * ⚑⚑ THE GATE IS THE USER'S OWN DECLARATION, which is the standing rule for
+ * every bar technique here: it must be gated by something the app computes from
+ * what the user said, so the population it cannot help is provably untouched.
+ * That gate is the DECLARED BASELINE, and the test reuses the tolerance the
+ * caller already states for "does this shape sit on the baseline" rather than
+ * inventing a thickness of its own:
+ *
+ *   · the two shapes lie on OPPOSITE sides of the baseline;
+ *   · BOTH reach it, within that tolerance - so the gap between them is the
+ *     rule, not a gap the figure drew; and
+ *   · their CATEGORY extents coincide - they are the same bar's width.
+ *
+ * ⚑ IT CANNOT FIRE ON A STACKED FIGURE, which is the case worth naming because
+ * it is the one that looks similar: only the bottom segment of a stack touches
+ * the baseline, so no pair ever satisfies the second clause. Two same-coloured
+ * segments straddling the baseline is not a figure anyone draws - a stack is
+ * legible only when its segments differ in colour, and same-colour segments that
+ * touch have already flooded into one blob long before this.
+ */
+function joinAcrossBaseline(
+  blobs: readonly Blob[],
+  categoryAxis: 'x' | 'y',
+  baseline: BarDetectBaseline
+): { blobs: Blob[]; joined: number } {
+  const valueLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minY : b.bbox.minX);
+  const valueHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxY : b.bbox.maxX);
+  const catLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minX : b.bbox.minY);
+  const catHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxX : b.bbox.maxY);
+  /** Do these two occupy the same slice of the category axis? */
+  const sameCategoryExtent = (a: Blob, b: Blob): boolean => {
+    const overlap = Math.min(catHi(a), catHi(b)) - Math.max(catLo(a), catLo(b));
+    const widest = Math.max(catHi(a) - catLo(a), catHi(b) - catLo(b));
+    return widest > 0 && overlap / widest >= SAME_CATEGORY_OVERLAP;
+  };
+  const at = baseline.atPixel;
+  const tol = baseline.tolerancePx;
+  /** Wholly above the baseline and touching it - the piece drawn upwards. */
+  const above = (b: Blob) => valueHi(b) <= at && at - valueHi(b) <= tol;
+  /** Wholly below it and touching it - the piece drawn downwards. */
+  const below = (b: Blob) => valueLo(b) >= at && valueLo(b) - at <= tol;
+
+  const taken = new Set<number>();
+  const out: Blob[] = [];
+  let joined = 0;
+  blobs.forEach((a, i) => {
+    if (taken.has(i)) return;
+    if (!above(a)) return;
+    // ⚑ The FIRST match wins and both are then spent. A bar has one piece on
+    // each side of the baseline, so a second candidate below the same width
+    // would be a different shape entirely and joining it would invent an extent
+    // spanning both.
+    const j = blobs.findIndex((b, k) => k !== i && !taken.has(k) && below(b) && sameCategoryExtent(a, b));
+    if (j < 0) return;
+    const b = blobs[j]!;
+    taken.add(i);
+    taken.add(j);
+    joined += 1;
+    const area = a.area + b.area;
+    const members =
+      a.members && b.members
+        ? (() => {
+            const m = new Int32Array(a.members.length + b.members.length);
+            m.set(a.members, 0);
+            m.set(b.members, a.members.length);
+            return m;
+          })()
+        : undefined;
+    out.push({
+      // ⚑ Recomputed, not inherited from the larger half: an area-weighted mean
+      // of the two centroids IS the centroid of the union, and a diameter that
+      // still described one half would misreport the joined shape to the size
+      // filters and to anything reading it later.
+      centroid: {
+        x: (a.centroid.x * a.area + b.centroid.x * b.area) / area,
+        y: (a.centroid.y * a.area + b.centroid.y * b.area) / area,
+      },
+      area,
+      diameter: 2 * Math.sqrt(area / Math.PI),
+      bbox: {
+        minX: Math.min(a.bbox.minX, b.bbox.minX),
+        minY: Math.min(a.bbox.minY, b.bbox.minY),
+        maxX: Math.max(a.bbox.maxX, b.bbox.maxX),
+        maxY: Math.max(a.bbox.maxY, b.bbox.maxY),
+      },
+      ...(members ? { members } : {}),
+    });
+  });
+  // Everything untouched keeps its place; the joined pairs follow.
+  return { blobs: [...blobs.filter((_, i) => !taken.has(i)), ...out], joined };
+}
+
 export function runBarDetect(
   data: Uint8ClampedArray | Uint8Array,
   width: number,
@@ -203,7 +330,19 @@ export function runBarDetect(
   if (blobs.length === 0) {
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }
-  const plainBoxes = blobs.map((b) => ({
+  // ⚑⚑ BEFORE ANYTHING ELSE READS THEM. A bar severed by the baseline rule is
+  // ONE shape that arrived as two, so every step below - the box, the divider
+  // split, the swatch test, the empty-band report - has to see the whole bar or
+  // it is answering about a shape the figure does not contain.
+  // ⚑ The category axis defaults to `x` for the same reason the swatch test
+  // does: an unmarked figure is the upright chart the caller drew its baseline
+  // for, and that default is stated in `BarDetectCategories.categoryAxis`.
+  const join = baseline
+    ? joinAcrossBaseline(blobs, categories?.categoryAxis ?? 'x', baseline)
+    : { blobs: [...blobs], joined: 0 };
+  const whole = join.blobs;
+  const joinReport = baseline ? { joinedAcrossBaseline: join.joined } : {};
+  const plainBoxes = whole.map((b) => ({
     start: { x: b.bbox.minX, y: b.bbox.minY },
     end: { x: b.bbox.maxX, y: b.bbox.maxY },
   }));
@@ -216,8 +355,13 @@ export function runBarDetect(
     return {
       boxes: plainBoxes,
       matched: count,
-      blobs: blobs.length,
+      // ⚑ The blobs the user is being told about are the SHAPES FOUND, after a
+      // severed bar has been made whole again - not the connected components the
+      // flood happened to produce. Reporting 17 beside 12 boxes would describe a
+      // figure nobody is looking at.
+      blobs: whole.length,
       ...(baseline ? { swatchSuspects: suspects } : {}),
+      ...joinReport,
     };
   }
 
@@ -231,7 +375,7 @@ export function runBarDetect(
   const along = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
     categoryAxis === 'x' ? { lo: b.minX, hi: b.maxX } : { lo: b.minY, hi: b.maxY };
   const boxes: DetectedBarBox[] = [];
-  for (const blob of blobs) {
+  for (const blob of whole) {
     const span = along(blob.bbox);
     // ⚑ INTERIOR dividers only. The first and last entries are the axis EDGES,
     // and the model says the outermost bands are UNBOUNDED -- everything left of
@@ -289,7 +433,8 @@ export function runBarDetect(
   return {
     boxes,
     matched: count,
-    blobs: blobs.length,
+    blobs: whole.length,
+    ...joinReport,
     ...(expected !== undefined
       ? { expectation: reconcileWithExpected({ pieces: boxes, emptyBands }, expected) }
       : {}),
