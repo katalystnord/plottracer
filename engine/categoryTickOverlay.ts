@@ -271,11 +271,6 @@ export function categoryTickMarkers({
     label: '',
     color,
     draggable: true,
-    // ⚑⚑ THE WHOLE MARK IS THE HIT AREA, not just the grip at its end. The mark
-    // is what the user sees and therefore what they reach for; before this it
-    // was paint with no hit area at all, so reaching for it did nothing and the
-    // only thing that worked was a 4px square 14px away. See `AidGlyph`.
-    hitFrom: { x: p.x, y: p.y },
     // ⚑⚑ AND THE DRAG IS BOUND TO THE AXIS ON SCREEN, not only in the record.
     // `moveTick` has always PROJECTED the drop point onto the axis and clamped
     // it between its neighbours - so the model was right and the picture was

@@ -66,17 +66,6 @@ export interface CanvasMarker {
    */
   kind?: 'calibration' | 'data' | 'aid' | 'cap';
   /**
-   * The far end, in IMAGE coordinates, of the mark this marker IS - so the
-   * renderer can give the whole mark a hit area rather than only the grip.
-   *
-   * ⚑⚑ AN `aid` IS DRAWN AS A TICK, and the tick is what the user reaches for.
-   * It used to be paint in another layer with no hit area at all, so the only
-   * thing that could be grabbed was a 4px square standing 14px off the axis -
-   * two pieces for one thing, and only one of them movable. See
-   * `engine/categoryTickOverlay.ts`'s `AidGlyph`.
-   */
-  hitFrom?: { x: number; y: number };
-  /**
    * A point in IMAGE coordinates to push this marker's label AWAY from.
    *
    * ⚑ Every label is otherwise drawn up-and-to-the-right at a fixed offset, which is

@@ -2597,17 +2597,22 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
     // F21: the bar's category coordinate leads the row, renamed by A2 - see the
-    // Box Plot case above. One bar, so there is no measurable pitch and no
-    // extent columns follow it.
-    expect(lines[0]).toBe('Position,category,Min,Max,Value');
+    // Box Plot case above.
+    // ⚑⚑ AND THE EXTENT COLUMNS ARE THERE NOW (v2.4). This used to say "one bar,
+    // so there is no measurable pitch and no extent columns follow it" - true
+    // while a bar chart could be captured with no category axis, because the
+    // frame had to be DERIVED from the bars themselves and one bar cannot supply
+    // a pitch. The axis is calibrated in the walk now, so the bands are declared
+    // and the bar's own width is measured against them.
+    expect(lines[0]).toBe('Position,category,Position min,Position max,Min,Max,Value');
     const cells = lines[1]!.split(',').slice(1);
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
     // category column is still present and exported (proven by lines[0]'s
     // header above), just empty until the user actually types a name.
     expect(cells[0]).toBe('');
-    expect(Number(cells[1])).toBeCloseTo(0, 1); // Min -- the baseline end
-    expect(Number(cells[2])).toBeCloseTo(5, 1); // Max -- the far end
-    expect(Number(cells[3])).toBeCloseTo(5, 1); // the derived Value
+    expect(Number(cells[3])).toBeCloseTo(0, 1); // Min -- the baseline end
+    expect(Number(cells[4])).toBeCloseTo(5, 1); // Max -- the far end
+    expect(Number(cells[5])).toBeCloseTo(5, 1); // the derived Value
 
     fs.unlinkSync(csvPath);
   });
@@ -2813,7 +2818,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
     await clickAt(100, 400);
     await clickAt(500, 400);
-    await confirmValue('4');
+    // ⚑ TWO categories: this figure has two named bars, and the table shows one
+    // row per DECLARED category since v2.4.
+    await confirmValue('2');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
@@ -2866,13 +2873,18 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    // ⚑⚑ A2, AND THIS WALK IS WHERE IT SHOWS. Two series, no axis marked - so
-    // the frame is each series' own bars and the coordinate is NOT shared
-    // between them. The header says so in Line's own words rather than printing
-    // `Position` and letting a reader assume the two series line up. The extent
-    // columns appear too: two bars give a measurable pitch, which one does not.
+    // ⚑⚑ A2, AND v2.4 ANSWERS IT AT THE SOURCE. This asserted `Position (in
+    // series)` - the heading Line uses to say "two series, no axis marked, so
+    // this coordinate is NOT shared between them and a reader must not assume
+    // they line up". That heading was the honest report of a real hazard.
+    // ▶ The hazard is gone: a calibrated bar-family figure has its category axis
+    // by construction, so both series are numbered by the BAND they sit in and
+    // the coordinate IS shared. The column can say `Position` and mean it.
+    // ⚑ The heading itself survives for the one door that can still produce an
+    // unmarked axis - a project saved before v2.4 - which is where its unit test
+    // now reaches it (`categoryOfferPromotes.test.ts`).
     expect(lines[0]).toBe(
-      'Position (in series),category,Position min,Position max,Min,Max,Value'
+      'Position,category,Position min,Position max,Min,Max,Value'
     );
     expect(lines[1]!.split(',')[1]).toBe('Flax');
     fs.unlinkSync(csvPath);
@@ -4922,7 +4934,9 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
     await clickAt(100, 400);
     await clickAt(500, 400);
-    await confirmValue('4');
+    // ⚑ ONE category, because this figure has one bar - the table has a row per
+    // DECLARED category since v2.4, not per captured point.
+    await confirmValue('1');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     await clickAt(300, 250);
@@ -5324,11 +5338,15 @@ describe('Workspace: categorical line (checkpoint 101)', () => {
     expect(lines[0]).toMatch(/Position/);
     expect(lines[0]).toMatch(/Value/);
     expect(lines.length).toBe(3); // header + 2 points
-    // Position is derived left-to-right: the px=200 point is Position 1.
+    // ⚑⚑ POSITION IS THE BAND, not a rank among this series' own points (v2.4).
+    // The walk marked the category axis 100..500 with four categories, so the
+    // bands are 100-200, 200-300, 300-400, 400-500 and these two readings fall
+    // in the second and the third. That is the whole A2 fix: an unmarked
+    // chart's `Position` was capture order wearing a coordinate's clothes.
     const cols = lines[0]!.split(',');
     const posCol = cols.indexOf('Position');
     const positions = lines.slice(1).map((l) => Number(l.split(',')[posCol]));
-    expect(positions.sort()).toEqual([1, 2]);
+    expect(positions.sort()).toEqual([2, 3]);
     fs.unlinkSync(csvPath);
   });
 });

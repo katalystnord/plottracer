@@ -81,11 +81,17 @@ describe('the drawn axis', () => {
     expect(tick!.dragLine?.direction.y).toBeCloseTo(0.8, 9);
   });
 
-  it('⚑ and the marker over it can be grabbed anywhere along the mark', () => {
+  it('⚑ and the marker sits at the mark\u2019s outer end, where the grip is drawn', () => {
     const [tick] = categoryTickMarkers({ edges: H, tickPoints: [{ x: 225, y: 500 }] }).slice(2);
-    // `hitFrom` is the mark's far end, so the hit area spans the whole tick
-    // rather than only the grip the user cannot see separately any more.
-    expect(tick!.hitFrom).toEqual({ x: 225, y: 500 });
+    // ⚠️ THE HIT AREA DELIBERATELY STOPS SHORT OF THE AXIS. A first version gave
+    // the marker an invisible line spanning the whole mark so it could be
+    // grabbed anywhere along it - and the mark's inner end sits ON the category
+    // axis, which is where a bar's drag-box starts on a chart whose categories
+    // run along the baseline. The tick swallowed the bar capture. The renderer's
+    // 11px disc around this point already covers all but the ~3px nearest the
+    // axis, which is exactly the part that collided.
+    expect(tick!.x).toBe(225);
+    expect(tick!.y).toBe(514);
   });
 
   it('⚑ ticks stand off DOWNWARD on an upright chart - where a figure prints them', () => {

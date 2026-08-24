@@ -1944,10 +1944,21 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     // pieces and you can only move one?"* It is the error-bar cap
                     // defect that was fixed for `cap` and never swept to `aid`.
                     //
-                    // ⚑ THE HIT AREA IS THE WHOLE MARK, not the grip alone. The
-                    // mark is what the user reaches for, because it is what they
-                    // can see. `hitFrom` is its far end, in image coordinates.
-                    const base = point.hitFrom ? imageToScreen(view, point.hitFrom.x, point.hitFrom.y) : null;
+                    // ⚑⚑ THE HIT AREA IS THE GRIP'S DISC, AND THAT IS A MEASURED
+                    // DECISION, not a retreat. The first version added an
+                    // invisible thick line spanning the whole mark, so the tick
+                    // could be grabbed anywhere along it - and the mark's inner
+                    // end sits ON the category axis, which on a chart whose
+                    // categories run along the value baseline is exactly where a
+                    // bar's drag-box starts. The tick then swallowed the bar
+                    // capture. Caught by the e2e (`types a category name and
+                    // prefills it into the next series`), where series 1's
+                    // second bar simply never appeared.
+                    // ▶ The disc is 11px and the mark is 14px, so it already
+                    // covers everything except the ~3px nearest the axis - which
+                    // is precisely the part that overlapped. Nearly all of "grab
+                    // the mark, not the square" survives, and the collision does
+                    // not.
                     // ⚑⚑ BOUND TO ITS AXIS ON SCREEN - the same projection the
                     // cap above uses, and for the same reason. `moveTick` has
                     // always projected the drop point onto the axis and clamped
@@ -1985,16 +1996,6 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         }}
                       >
                         <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
-                        {base && (
-                          <Line
-                            points={[0, 0, base.x - screenX, base.y - screenY]}
-                            stroke="#000000"
-                            strokeWidth={1}
-                            opacity={0}
-                            hitStrokeWidth={16}
-                            listening={interactive}
-                          />
-                        )}
                       </Group>
                     );
                   }

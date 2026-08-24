@@ -380,7 +380,17 @@ export function BarTable({
         ))}
       </tbody>
     </table>
-    {table.categoryNames.length === 0 && (
+    {/* ⚑⚑ NO READINGS YET, NOT "NO ROWS" (v2.4). This asked whether the table had
+        any CATEGORY rows - which was the same question while a bar chart could be
+        calibrated without its category axis. Since the axis is part of the walk,
+        a freshly calibrated figure ALREADY has one row per declared category, so
+        the hint that tells a first-time user how to capture anything at all
+        became unreachable on every bar-family type. The rows are not the
+        readings: what the hint is about is whether anything has been MEASURED.
+        ⚑ Caught by the e2e (`the empty-table hint recommends BOTH Add points and
+        Auto-extract`), which timed out waiting for a hint that no longer
+        rendered - the failure mode of a control that quietly stops existing. */}
+    {table.columns.every((c) => c.values.every((v) => v === null)) && (
       <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
         {noPointsHint}
       </div>
