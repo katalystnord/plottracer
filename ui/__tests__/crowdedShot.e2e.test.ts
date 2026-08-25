@@ -60,7 +60,9 @@ describe.runIf(RUN)('crowded shot', () => {
     await drag(240, 560, 258, 578);   // the swatch, same band
     await drag(350, 744, 425, 478);   // Jute
     await page.mouse.move(5, 5);
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(400);
+    await page.getByTestId('conflict-row-hidden').click();
+    await page.waitForTimeout(500);
     await page.screenshot({ path: OUT });
   }, 90000);
 });

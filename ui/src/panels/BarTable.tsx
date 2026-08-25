@@ -50,6 +50,48 @@ export interface BarCategoryTable {
   crowded?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
 }
 
+/**
+ * Is this figure carrying a few STRAY readings, or a whole second series?
+ *
+ * ⚑⚑ TWO SITUATIONS, ONE SYMPTOM, AND OPPOSITE REMEDIES. A legend swatch or a
+ * bar past the last divider crowds ONE category, and the fix is to delete it. A
+ * second colour traced into the same series crowds EVERY category, and deleting
+ * anything would be wrong - the readings are all real, they simply belong in a
+ * series of their own.
+ *
+ * ⚠️ WRITTEN AFTER THE FIRST VERSION SHIPPED A WALL. Every crowded reading drew
+ * its own block with its own neighbours, which reads fine for one and is
+ * unusable for five: the same four values repeat down the panel with nothing
+ * saying what is actually wrong. David, tracing a second colour into series 1:
+ * *"this is what I thought. It is completely broken."* The design was only ever
+ * exercised with N=1, which is the fixture being blind to what it lacks.
+ *
+ * ▶ MEASURED, NOT GUESSED: how many DISTINCT categories are doubled, against how
+ * many the figure has. Half or more is not a stray pattern, and saying so names
+ * the likely cause without asserting it - the same shape as the swatch report,
+ * which reports and does not act.
+ */
+export function crowdedIsSystematic(
+  crowded: readonly { categoryIndex: number }[],
+  categoryCount: number
+): boolean {
+  if (categoryCount === 0) return false;
+  const doubled = new Set(crowded.map((c) => c.categoryIndex)).size;
+  return doubled >= 2 && doubled * 2 >= categoryCount;
+}
+
+/**
+ * What to say when the doubling is systematic.
+ *
+ * ⚑ IT OFFERS THE CAUSE AS A QUESTION, because the panel cannot know. Two
+ * series in one slot is much the likeliest way every category gains a second
+ * reading, and naming the remedy is what turns a report into something the user
+ * can act on - but it is still their figure and their judgement.
+ */
+export function systematicCrowdedMessage(doubled: number, tupleNoun: string): string {
+  return `${doubled} of the categories hold a second ${tupleNoun} that is not shown above. If you traced two colours into one series, add a series and trace the second colour into that instead - the extra readings are real, they just belong in a series of their own.`;
+}
+
 export interface ConflictRow {
   key: string;
   /** The category this row is about, named or numbered. */
@@ -133,12 +175,16 @@ function ConflictBlock({
   table,
   display,
   onSelectTuples,
+  onRemoveTuple,
+  tupleNoun,
   activeTupleIndex,
 }: {
   crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number };
   table: BarCategoryTable;
   display: DisplayRounder;
   onSelectTuples: (tupleIndices: readonly number[]) => void;
+  onRemoveTuple: (tupleIndex: number) => void;
+  tupleNoun: string;
   activeTupleIndex: number | null;
 }) {
   const col = table.columns.find((c) => c.seriesIndex === crowded.seriesIndex);
@@ -148,6 +194,12 @@ function ConflictBlock({
 
   const rows = conflictRows(crowded, table, display);
 
+  // ⚑⚑ EITHER ONE SELECTED TINTS BOTH, because they are a PAIR - two
+  // candidates for one cell, and the question on screen is which of them belongs
+  // there. Tinting only the row that was clicked shows a selection; tinting both
+  // shows the conflict. David: *"perhaps change the background of both rows?"*
+  const pairSelected = activeTupleIndex !== null && pair.includes(activeTupleIndex);
+
   const row = (
     key: string,
     label: string,
@@ -156,7 +208,7 @@ function ConflictBlock({
     tupleIndex: number | null,
     note: string
   ) => {
-    const selected = tupleIndex !== null && tupleIndex === activeTupleIndex;
+    const selected = kind === 'candidate' && pairSelected;
     return (
       <tr
         key={key}
@@ -176,7 +228,21 @@ function ConflictBlock({
       >
         <td style={{ paddingRight: 10, textAlign: 'right' }}>{label}</td>
         <td style={{ paddingRight: 16 }}>{reading}</td>
-        <td style={{ color: theme.color.text.legend, fontSize: 11.5 }}>{note}</td>
+        <td style={{ color: theme.color.text.legend, fontSize: 11.5, paddingRight: 8 }}>{note}</td>
+        {/* ⚑⚑ THE ENDING. Selecting a candidate and stopping there is a flow
+            with no way out: David, driving it, *"when one is selected, what
+            happens then? Nothing, and I have no way of moving forward."* The
+            resolution is to keep one and delete the other, so the gesture that
+            does it belongs HERE, on the row - the same `TupleDeleteButton` every
+            row of the table above carries, not a new control.
+            ⚑ And deleting the one holding the cell needs no follow-up: the
+            hidden reading takes it by itself, straight out of first-wins
+            recomputation. Measured, not assumed. */}
+        <td>
+          {kind === 'candidate' && tupleIndex !== null && (
+            <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
+          )}
+        </td>
       </tr>
     );
   };
@@ -559,7 +625,12 @@ export function BarTable({
     {(table.crowded?.length ?? 0) > 0 && (
       <div data-testid="bar-crowded" style={{ padding: 8, fontSize: 12.5 }}>
         <div style={{ color: theme.color.error, marginBottom: 8 }}>
-          {crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
+          {crowdedIsSystematic(table.crowded!, table.categoryNames.length)
+            ? systematicCrowdedMessage(
+                new Set(table.crowded!.map((c) => c.categoryIndex)).size,
+                tupleNoun
+              )
+            : crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
         </div>
         {/* ⚑⚑ THE READING ITSELF, NOT JUST A SENTENCE ABOUT IT. The message
             already carried the `tupleIndex` of the bar it is describing, and the
@@ -581,13 +652,23 @@ export function BarTable({
             the user can see which one might actually be correct, based on the
             neighbours."* They are context, not candidates, so they do not
             respond to a click and are drawn back. */}
-        {table.crowded!.map((c) => (
+        {/* ⚑⚑ NO BLOCKS WHEN THE DOUBLING IS SYSTEMATIC. One conflict wants
+            its neighbours beside it so the user can judge which reading belongs;
+            five of them repeat the same four values down the panel and say
+            nothing. And the remedy is different in that case - the extra
+            readings are all real and belong in their own series, so offering to
+            delete them one at a time would be offering the wrong thing five
+            times. */}
+        {!crowdedIsSystematic(table.crowded!, table.categoryNames.length) &&
+          table.crowded!.map((c) => (
           <ConflictBlock
             key={`${c.seriesIndex}-${c.tupleIndex}`}
             crowded={c}
             table={table}
             display={display}
             onSelectTuples={onSelectTuples}
+            onRemoveTuple={onRemoveTuple}
+            tupleNoun={tupleNoun}
             activeTupleIndex={activeTupleIndex}
           />
         ))}

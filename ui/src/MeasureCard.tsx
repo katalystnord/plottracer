@@ -19,6 +19,7 @@
 import { type ReactNode } from 'react';
 import styled from '@emotion/styled';
 import { theme, glassSurface } from './theme.js';
+import { EyedropperIcon } from './icons.js';
 
 /**
  * ⚑⚑ `colour` IS AN INSTRUMENT, NOT A GEOMETRY (v2.3, theme C). It sits with
@@ -143,10 +144,20 @@ export const measureIcons: Record<MeasureToolId, ReactNode> = {
   angle: S(<>{<path d="M3 3 L3 13 L13 13" />}<path d="M3 9 A6 6 0 0 0 9 13" /></>),
   area: S(<polygon points="3,6 8,3 13,7 11,13 5,12" />),
   slope: S(<>{<path d="M3 13 L3 3" />}<path d="M3 13 L13 13" />{<line x1="4" y1="12" x2="12" y2="4" />}</>),
-  // A pipette: the barrel angled like the other glyphs' strokes, with a filled
-  // tip - the drop it takes. Same 16x16 frame and 1.5 stroke as its siblings, so
-  // the row reads as one set of instruments rather than four plus a guest.
-  colour: S(<>{<path d="M12.5 3.5 L8 8" />}<path d="M10.5 1.5 L14.5 5.5" /><path d="M8 8 L4 12 L3 13.5 L2.5 13 L4 12" /><circle cx="4.6" cy="11.4" r="1.6" fill="currentColor" stroke="none" /></>),
+  // ⚑⚑ THE APP'S OWN EYEDROPPER, not a second drawing of one. This used to
+  // be a hand-drawn pipette, justified in a comment as keeping the row "one set
+  // of instruments rather than four plus a guest" - true of the ROW, and the
+  // reason the defect survived review. Across the APP it meant two different
+  // glyphs for one idea: `Pick from image` in Grid Removal and Auto-extract wears
+  // `EyedropperIcon`, and this wore something else, so a user had to learn that
+  // two pictures mean "sample a colour off the figure".
+  //
+  // ▶ David, on seeing them side by side: *"What is this icon for the eye dropper
+  // colour measurement tool? We already have a proper one here."* Recognition
+  // across the app beats stroke-consistency within one row - which is the trade
+  // `icons.tsx` already made when it drew this eyedropper in the first place,
+  // because the Pick buttons were wearing Place Point's reticle.
+  colour: <EyedropperIcon />,
 };
 const scaleIcon = S(<>{<line x1="2" y1="8" x2="14" y2="8" />}<line x1="2" y1="5" x2="2" y2="11" /><line x1="14" y1="5" x2="14" y2="11" /><line x1="6" y1="6.5" x2="6" y2="9.5" /><line x1="10" y1="6.5" x2="10" y2="9.5" /></>);
 const XIcon = () => (

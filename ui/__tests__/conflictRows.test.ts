@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conflictRows } from '../src/panels/BarTable.js';
+import { conflictRows, crowdedIsSystematic, systematicCrowdedMessage } from '../src/panels/BarTable.js';
 import type { BarCategoryTable } from '../src/panels/BarTable.js';
 
 /**
@@ -80,5 +80,56 @@ describe('the rows shown for a crowded reading', () => {
   it('⚑ still offers the hidden bar when the cell somehow holds nothing', () => {
     const rows = conflictRows(CROWDED, table([342, null, 207], ['A', 'B', 'C']), display);
     expect(rows.filter((r) => r.kind === 'candidate').map((r) => r.key)).toEqual(['hidden']);
+  });
+});
+
+/**
+ * ⚑⚑ TWO SITUATIONS, ONE SYMPTOM, OPPOSITE REMEDIES.
+ *
+ * ⚠️ THE FIRST VERSION OF THIS PANEL SHIPPED A WALL. Every crowded reading drew
+ * its own block with its own neighbours - fine for one, unusable for five: the
+ * same four values repeating down the panel with nothing saying what was
+ * actually wrong. David, tracing a second colour into series 1: *"this is what I
+ * thought. It is completely broken."* The design had only ever been exercised
+ * with ONE conflict, which is the fixture being blind to what it lacks.
+ */
+describe('telling a few strays from a whole second series', () => {
+  const at = (...ix: number[]) => ix.map((categoryIndex) => ({ categoryIndex }));
+
+  it('⚑⚑ one stray in a four-category figure is NOT systematic', () => {
+    expect(crowdedIsSystematic(at(1), 4)).toBe(false);
+  });
+
+  it('⚑⚑ every category doubled IS - that is a second series in one slot', () => {
+    expect(crowdedIsSystematic(at(0, 1, 2, 3), 4)).toBe(true);
+  });
+
+  it('⚑ counts DISTINCT categories, not readings - three strays in one band is still one band', () => {
+    // Otherwise a single category collecting several extras (a dense legend, a
+    // mis-declared count) would be read as "you traced two series", and the
+    // panel would offer the wrong remedy with confidence.
+    expect(crowdedIsSystematic(at(1, 1, 1), 4)).toBe(false);
+  });
+
+  it('⚑ needs at least two doubled categories, so one cannot carry the claim', () => {
+    expect(crowdedIsSystematic(at(0), 2)).toBe(false);
+    expect(crowdedIsSystematic(at(0, 1), 2)).toBe(true);
+  });
+
+  it('⚑ says nothing at all on a figure with no categories', () => {
+    expect(crowdedIsSystematic(at(0), 0)).toBe(false);
+  });
+
+  it('⚑⚑ names the remedy, and does NOT tell the user to delete anything', () => {
+    // The readings are all real in this case. Offering to delete them one at a
+    // time would be offering the wrong thing, once per category.
+    const msg = systematicCrowdedMessage(4, 'bar');
+    expect(msg).toContain('add a series');
+    expect(msg).toContain('belong in a series of their own');
+    expect(msg).not.toMatch(/delete|remove/i);
+  });
+
+  it('⚑ offers the cause as a condition, because the panel cannot know it', () => {
+    expect(systematicCrowdedMessage(4, 'bar')).toMatch(/If you traced two colours/);
   });
 });
