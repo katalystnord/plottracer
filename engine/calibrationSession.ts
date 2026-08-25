@@ -4261,13 +4261,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return true;
   }
 
-  /** Mark the two edges that ARE the category axis. Refuses for a type with no
-   * categories, and for a degenerate axis (the model's own guard). */
-  markCategoryAxis(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
-    if (!this.supportsCategoryTicks()) return false;
-    return this.categoryAxis.setAxisEdges(a, b);
-  }
-
   /** Declare how many categories the figure has, regenerating the ticks. */
   setCategoryCount(count: number): boolean {
     if (!this.supportsCategoryTicks()) return false;
@@ -4296,91 +4289,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
   moveCategoryTick(index: number, point: { x: number; y: number }): boolean {
     if (!this.supportsCategoryTicks()) return false;
     return this.categoryAxis.moveTick(index, point);
-  }
-
-  /** Drop the marks, keeping every category - for RE-PLACING the axis, where the
-   * user is fixing where it runs, not abandoning the categories they named. */
-  clearCategoryAxisGeometry(): boolean {
-    if (!this.supportsCategoryTicks()) return false;
-    this.categoryAxis.clearGeometry();
-    return true;
-  }
-
-  /**
-   * Remove the ticks AND the empty categories declaring them created.
-   *
-   * ⚑ WHY THIS IS SEPARATE FROM `clearCategoryAxisGeometry`. Declaring "5
-   * categories" appends five empty ones; dropping only the geometry left all
-   * five behind as phantom rows with no way to delete them, and the next bar
-   * captured then appended a SIXTH (code review, 2026-08-10). "Remove ticks"
-   * means "I did not want this declaration", so it takes back what the
-   * declaration created - and nothing else.
-   *
-   * ⚑ A category is kept if it is NAMED or if any bar is filed under it. Only
-   * the untouched leftovers go, so nothing a user typed or captured is lost to a
-   * cleanup.
-   *
-   * ⚑ Removing a category shifts every later index, and `CategoryAxis` says in
-   * its own comment that remapping bound tuples is the WIRING layer's job, in
-   * the same operation. This is that operation: the stored `categoryIndex` on
-   * every dataset is rewritten before the names are dropped, so no tuple is left
-   * pointing at a category that moved.
-   */
-  removeCategoryTicks(): boolean {
-    if (!this.supportsCategoryTicks()) return false;
-    // Read the assignments BEFORE the geometry goes: while it is still marked
-    // they are derived from bands, and afterwards they come from the stored
-    // index. Taking the picture first is what keeps the two consistent.
-    const assigned = new Map<Dataset, Map<number, number>>();
-    for (const entry of this.datasetEntries) {
-      const perTuple = new Map<number, number>();
-      entry.dataset.getAllTuples().forEach((_t, tupleIndex) => {
-        const idx = this.categoryIndexOfTuple(entry.dataset, tupleIndex);
-        if (idx !== null) perTuple.set(tupleIndex, idx);
-      });
-      assigned.set(entry.dataset, perTuple);
-    }
-    this.categoryAxis.clearGeometry();
-    // ⚑ "Remove ticks" is the one gesture that WITHDRAWS the declaration -
-    // re-placing the axis does not, which is why these are two calls and not
-    // one. See `CategoryAxis.clearGeometry`.
-    this.categoryAxis.undeclareCount();
-
-    const names = [...this.categoryAxis.getCategories()];
-    const used = new Set<number>();
-    for (const perTuple of assigned.values()) for (const idx of perTuple.values()) used.add(idx);
-    const keep = names.map((name, i) => name !== '' || used.has(i));
-
-    const newIndex = new Map<number, number>();
-    let next = 0;
-    keep.forEach((k, i) => {
-      if (k) newIndex.set(i, next++);
-    });
-
-    // ⚑ WRITE EVERY TUPLE BACK, not just the ones whose index MOVED.
-    //
-    // This is the whole reason the picture is taken above. While the axis was
-    // marked, a bar's category was DERIVED from its band and deliberately not
-    // stored -- so after `clearGeometry` there is nothing on the pixel at all.
-    // Skipping an unchanged index (`mapped === oldIdx`), or returning early
-    // when nothing needed renumbering (`keep.every(Boolean)`), therefore wrote
-    // nothing and left every band-captured bar with no category: three bars on
-    // the canvas, three empty rows in the table, no message. An identity
-    // mapping is not a no-op here -- it is the first time the value is
-    // materialised (v2.1 audit; the original fix's own tests only covered
-    // bands whose index shifted, which is the one path that did write).
-    for (const entry of this.datasetEntries) {
-      const perTuple = assigned.get(entry.dataset)!;
-      for (const [tupleIndex, oldIdx] of perTuple) {
-        const mapped = newIndex.get(oldIdx);
-        if (mapped === undefined) continue; // its category is being dropped
-        this.writeTupleCategoryIndex(entry.dataset, tupleIndex, mapped);
-      }
-    }
-    for (let i = names.length - 1; i >= 0; i--) {
-      if (!keep[i]) this.categoryAxis.removeCategory(i);
-    }
-    return true;
   }
 
   /** Store a tuple's category index on its primary pixel, stripping it from the

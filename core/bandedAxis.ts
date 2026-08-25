@@ -362,14 +362,6 @@ export class BandedAxis {
     return this._edges !== null;
   }
 
-  /** Drops the geometry entirely. The declared count survives: how many bands
-   * the figure has is a fact about the figure, not about where it was clicked. */
-  clearGeometry(): void {
-    this._edges = null;
-    this._tickParams = [];
-    this._adjusted = false;
-  }
-
   getConvention(): TickConvention {
     return this._convention;
   }

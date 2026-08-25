@@ -483,18 +483,19 @@ describe('bandIndexAt - what replaces the nearest-donor guess', () => {
   });
 });
 
-describe('clearGeometry', () => {
-  it('drops the marks and keeps the names - the un-ticked path is supported, not broken', () => {
-    const ax = withAxis(3);
-    ax.renameCategory(0, 'Flax');
-    ax.moveTick(1, { x: 300, y: 500 });
-    ax.clearGeometry();
-    expect(ax.hasGeometry()).toBe(false);
-    expect(ax.getTickParams()).toEqual([]);
-    expect(ax.hasAdjustments()).toBe(false);
-    expect(ax.getCategories()).toEqual(['Flax', '', '']);
-  });
-});
+/**
+ * ⚑⚑ DELETED WITH ITS SUBJECT: the `clearGeometry` block.
+ *
+ * `CategoryAxis.clearGeometry` existed for two session mutators - "Re-place
+ * axis" and "Remove ticks" - and both are gone. Since v2.4 the category axis IS
+ * calibration steps c1/c2: re-placing it is dragging those handles, which never
+ * drops the geometry, and "Remove ticks" was removed with the card rebuild.
+ *
+ * ▶ The property it asserted, that an axis with no geometry keeps its names, is
+ * still true and still tested - `the defaults a fresh axis starts from` covers
+ * the no-geometry state, and the un-ticked figure is exercised where it really
+ * occurs, on a WPD import (`wpdImport.test.ts`).
+ */
 
 describe('the defaults a fresh axis starts from', () => {
   it('is centred, unmarked, unadjusted and named', () => {

@@ -218,27 +218,23 @@ export class CategoryAxis {
   }
 
   /**
-   * Drops the geometry entirely, leaving the category NAMES untouched - the
-   * un-ticked path is a supported way to work, not a broken state.
+   * ⚑⚑ `clearGeometry` WAS HERE, AND IS GONE WITH ITS LAST CALLER.
    *
-   * ⚑⚑ AND IT LEAVES THE DECLARATION STANDING, because a count is a fact about
-   * the FIGURE and not about where the axis was clicked - which is what
-   * `BandedAxis.clearGeometry` says one level down. This method used to clear
-   * `_countDeclared` anyway, and the two comments contradicting each other is
-   * exactly how the v2.3 minting defect got in: "Re-place axis" drops the
-   * geometry and keeps the names, so marking the axis again brought back the
-   * bands, the ticks and the names while the model believed nobody had ever
-   * declared a count - and the next bar captured was filed into a freshly
-   * minted category instead of the band it sits in.
+   * It dropped the bands and the marks while keeping the names, for the two
+   * session mutators `clearCategoryAxisGeometry` ("Re-place axis") and
+   * `removeCategoryTicks` ("Remove ticks"). Since v2.4 the category axis IS
+   * calibration steps c1/c2: re-placing it is dragging those handles, and the
+   * "Remove ticks" button no longer exists, so neither gesture reaches this.
    *
-   * ▶ Withdrawing the declaration is a DIFFERENT operation with its own button
-   * ("Remove ticks"): see `undeclareCount`.
+   * ⚠️ IT IS WORTH KNOWING WHAT IT COST WHILE IT LIVED. This method used to
+   * clear `_countDeclared` too, contradicting `BandedAxis.clearGeometry` one
+   * level down - and that is exactly how the v2.3 minting defect got in:
+   * "Re-place axis" kept the names and brought the bands back while the model
+   * believed nobody had declared a count, so the next bar captured was filed
+   * into a freshly minted category instead of the band it sits in. A geometry
+   * that can be dropped independently of the declaration is what made two
+   * facts able to disagree; the walk owning both is what closed it.
    */
-  clearGeometry(): void {
-    this._bands.clearGeometry();
-    this._bands.clearBands();
-    this._marked = false;
-  }
 
   /** The stage's ending: these ticks are where the figure's own boundaries are.
    * See `_marked`. */
@@ -252,16 +248,12 @@ export class CategoryAxis {
   }
 
   /**
-   * Withdraw the declared count - "I did not want this declaration".
-   *
-   * ⚑ Separate from `clearGeometry` on purpose. Re-placing the axis says where
-   * it runs; this says how many categories there are, and only the second one
-   * is being taken back here. `removeCategoryTicks` is its only caller, and it
-   * drops the categories the declaration created in the same operation.
+   * ⚑ `undeclareCount` WAS HERE. Its only caller was `removeCategoryTicks`,
+   * the "Remove ticks" button, which the v2.4 card rebuild removed: there is no
+   * state with an axis and no ticks to get back to. Nothing withdraws a
+   * declaration any more - the count is typed on the click that places the
+   * second end, and correcting it means editing it there.
    */
-  undeclareCount(): void {
-    this._countDeclared = false;
-  }
 
   getConvention(): TickConvention {
     return this._bands.getConvention();

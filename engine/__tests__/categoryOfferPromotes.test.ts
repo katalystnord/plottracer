@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, CATEGORICAL_LINE_CONFIG } from '../calibrationSession.js';
 import { flatDataSection } from '../csvExport.js';
 import type { BarAxes } from '../../core/axes/bar.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
  * ⛔⛔ THE OFFER IS GONE, AND ITS PREMISE WITH IT (v2.4). This file used to open
@@ -71,7 +72,7 @@ describe('C - the session counts what was actually captured', () => {
 describe('C - the file stops claiming a coordinate the series do not share', () => {
   it('one unmarked series exports Position, because within a series it is true', () => {
     const s = calibratedCategorical();
-    s.clearCategoryAxisGeometry();
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
     s.addDataPoint(150, 300);
     s.addDataPoint(250, 300);
     expect(s.getExportFields()[0]).toBe('Position');
@@ -79,12 +80,12 @@ describe('C - the file stops claiming a coordinate the series do not share', () 
 
   it('⚑ two unmarked series export "Position (in series)" - the ordinal is real, the sharing is not', () => {
     const s = calibratedCategorical();
-    // ⚑⚑ THE UNMARKED STATE IS REACHED DELIBERATELY, because the walk can no
-    // longer produce it: a calibrated bar-family figure has its category axis by
-    // construction since v2.4. What this still describes is a project SAVED
-    // before that change and reopened now - the file door, which is the entrance
+    // ⚑⚑ THE UNMARKED STATE IS REACHED THROUGH THE FILE DOOR, because the
+    // walk can no longer produce it: a calibrated bar-family figure has its
+    // category axis by construction since v2.4. What it describes is a WPD
+    // IMPORT - permanent, not a legacy file - and the file door is the entrance
     // this project has been bitten through repeatedly.
-    s.clearCategoryAxisGeometry();
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
     s.addDataPoint(150, 300);
     s.addDataset();
     s.setActiveDataset(1);

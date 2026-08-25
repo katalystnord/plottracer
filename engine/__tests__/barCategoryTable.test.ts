@@ -334,13 +334,19 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
    * wrong, marked it again, dragged a tick, then captured one bar - and got a
    * fifth, unnamed category holding the reading.
    *
-   * ⚑ Re-placing is where it goes wrong, and the two layers already disagree in
-   * their own comments about it. `BandedAxis.clearGeometry` says "the declared
+   * ⚑ Re-placing was where it went wrong, and the two layers disagreed in
+   * their own comments about it. `BandedAxis.clearGeometry` said "the declared
    * count survives: how many bands the figure has is a fact about the figure,
    * not about where it was clicked" - and `CategoryAxis.clearGeometry`, one
    * level up, cleared `_countDeclared` anyway. So marking the axis again brought
    * back the bands, the ticks and the names, and left the model believing nobody
    * had ever declared a count.
+   *
+   * ⚠️ BOTH METHODS ARE GONE NOW, and so is the shape that allowed this: since
+   * v2.4 the category axis IS calibration steps c1/c2, so nothing can drop the
+   * geometry independently of the declaration and let the two facts disagree.
+   * The test stays because the defect it names is about what re-placing must NOT
+   * do, and re-placing still exists - it is a handle drag.
    */
   function markedFourBands(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
@@ -390,14 +396,6 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     expect(session.getBarCategoryTable().categoryNames).toHaveLength(4);
   });
 
-  it("⚑ 'Remove ticks' still means what it says - that declaration IS withdrawn", () => {
-    // The fix must not blur the two buttons together. "Remove ticks" is "I did
-    // not want this declaration"; re-placing is "the axis runs somewhere else".
-    const session = markedFourBands();
-    expect(session.removeCategoryTicks()).toBe(true);
-    expect(session.getCategoryAxis().hasDeclaredCount()).toBe(false);
-    expect(session.getCategoryAxis().getCategories()).toEqual([]);
-  });
 });
 
 describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one', () => {

@@ -314,9 +314,14 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     // -- and every bar's category flipped from the index it was captured under
     // to whichever band it happens to sit in. One Ctrl+Z was the whole trigger,
     // and nothing on screen said anything had changed.
+    //
+    // ⚑⚑ THE FIGURE IS AN IMPORT, not a marked axis with the count left out.
+    // That second state is unreachable since v2.4 - the count is typed on the
+    // click that places the second end - but the PROPERTY this guards is not:
+    // a WPD import has no category axis at all, so `_countDeclared` is false and
+    // must still be false after a round trip.
     const s = calibratedBar();
-    s.markCategoryAxis(A, B);
-    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false); // the panel's Done needs no count
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false);
 
     // Two bars captured RIGHT to LEFT, so band order and capture order disagree.
     s.addDataPoint(520, 300);
@@ -492,17 +497,24 @@ describe('the un-ticked path is untouched', () => {
     expect(s.getTupleLabel(0)).toBe('Flax'); // prefilled from the donor
   });
 
-  it('⚑ clearing the marks hands the job back to the stored index', () => {
-    const s = calibratedBar();
-    barAt(s, 150);
-    s.setTupleLabel(0, 'Flax');
-    // Mark an axis AFTER the fact: the band now answers instead.
-    walkCategoryAxis(s, { from: A, to: B, count: 2 });
-    s.runCalibration();
-    expect(s.getTupleLabel(0)).toBe('Flax'); // band 0, still named Flax
-    s.clearCategoryAxisGeometry();
-    expect(s.getTupleLabel(0)).toBe('Flax'); // stored index again
-  });
+  /**
+   * ⚑⚑ DELETED: `clearing the marks hands the job back to the stored index`.
+   *
+   * It named a bar, marked an axis AFTER the fact so the band answered instead,
+   * then CLEARED the marks and checked the name came back from the stored index.
+   * The middle step is fine; the last one has no door left. Nothing keeps a
+   * calibrated figure and drops its category axis - `clearCategoryAxisGeometry`
+   * and `removeCategoryTicks` were the only two, and both were mutators no
+   * production code ever called. A saved file cannot hold named categories with
+   * no geometry either, because the walk that names them is the walk that builds
+   * them.
+   *
+   * ▶ The LIVE half of what it guarded - the stored index answering on a figure
+   * with no bands - is exercised where that state really occurs: an import, in
+   * `categoryOfferPromotes` ("one unmarked series exports Position") and in
+   * `barCategoryTable` ("WITHOUT a marked axis ... a bar still gets its own
+   * slot").
+   */
 });
 
 // ---------------------------------------------------------------------------
@@ -694,30 +706,31 @@ describe('the divider handover holds up against the awkward cases', () => {
 });
 
 describe('⚑ the two ways a bar could vanish from the table (code review, 2026-08-10)', () => {
-  it('⚑ HIGH: an axis marked with NO count must not swallow every bar', () => {
-    // markCategoryAxis succeeds while the category list is still empty, and the
-    // fold-out's Done button lets the user leave in exactly that state. Bands
-    // then "answered" for every bar while there were no categories to answer
-    // WITH: capture appended none, and the table iterates the category list for
-    // its rows -- so every captured bar existed on the canvas and in the record
-    // with NO ROW AT ALL.
+  it('⚑⚑ an axis with GEOMETRY but no declared COUNT cannot be reached', () => {
+    // ⚑⚑ WHAT THIS REPLACES, and why it is stronger. Two tests used to
+    // describe what happens in that state - every captured bar existing in the
+    // record with NO ROW AT ALL, and a count-less axis behaving as an unmarked
+    // one. Both were real defects, and both were reachable only because
+    // `markCategoryAxis` wrote geometry with no count beside it.
+    //
+    // Since v2.4 the count is typed on the SAME click that places the second
+    // end, and `applyCalibratedCategoryAxis` refuses to build any geometry
+    // without a valid one. So the honest assertion is not "here is what the bad
+    // state does" but "the bad state has no door" - which is also what protects
+    // it if anyone later splits the count back off its step.
     const s = calibratedBar();
-    expect(s.markCategoryAxis(A, B)).toBe(true);
-    expect(s.getCategoryAxis().getCategoryCount()).toBe(0); // no count declared
-    barAt(s, 150);
-    barAt(s, 350);
-    expect(s.getDataset().getTupleCount()).toBe(2); // the bars are recorded...
-    const table = s.getBarCategoryTable();
-    expect(table.categoryNames.length).toBeGreaterThan(0); // ...and they have rows
-    expect(table.columns[0]!.values.filter((v) => v !== null)).toHaveLength(2);
-  });
-
-  it('an axis with no count behaves exactly as an unmarked one', () => {
-    const s = calibratedBar();
-    s.markCategoryAxis(A, B);
-    barAt(s, 150);
-    s.setTupleLabel(0, 'Flax');
-    expect(s.getTupleLabel(0)).toBe('Flax'); // the ordinary prefill path still runs
+    s.handleCalibrationClick(A.x, A.y);
+    s.handleCalibrationClick(B.x, B.y);
+    // Both ends clicked, no count yet: no geometry, and nothing to file bars in.
+    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+    expect(s.confirmCalibrationValues([''])).toBe(false);
+    expect(s.confirmCalibrationValues(['0'])).toBe(false);
+    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+    // And a real count produces both together, never one without the other.
+    expect(s.confirmCalibrationValues(['2'])).toBe(true);
+    expect(s.runCalibration()).toBe(true);
+    expect(s.getCategoryAxis().hasGeometry()).toBe(true);
+    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
   });
 
   it('⚑ HIGH: two bars of one series in ONE band - the first keeps its row, the rest are REPORTED', () => {
@@ -897,56 +910,19 @@ describe('⚑ the split measures the blob, not its bounding box (review #8)', ()
   });
 });
 
-describe('⚑ "Remove ticks" takes back what the declaration created (review #7)', () => {
-  it('leaves no phantom rows behind', () => {
-    // Declaring 3 categories appends three empty ones. Dropping only the
-    // geometry left all three as rows with no way to delete them, and the next
-    // bar captured then appended a FOURTH.
-    const s = withTicks(3);
-    expect(s.removeCategoryTicks()).toBe(true);
-    expect(s.getCategoryAxis().getCategories()).toEqual([]);
-    barAt(s, 150);
-    expect(s.getBarCategoryTable().categoryNames).toHaveLength(1); // one bar, one row
-  });
-
-  it('⚑ keeps a category the user NAMED', () => {
-    const s = withTicks(3);
-    s.getCategoryAxis().renameCategory(1, 'Hemp');
-    s.removeCategoryTicks();
-    expect(s.getCategoryAxis().getCategories()).toEqual(['Hemp']);
-  });
-
-  it('⚑ keeps a category that has a BAR in it, and the bar keeps pointing at it', () => {
-    // The index shifts when earlier categories are dropped, so the bound tuple
-    // has to be remapped in the same operation -- which CategoryAxis's own
-    // comment says is the wiring layer's job.
-    const s = withTicks(4);
-    barAt(s, 550); // band 3, the last one
-    s.setTupleLabel(0, 'Jute');
-    expect(s.getCategoryAxis().getCategories()).toEqual(['', '', '', 'Jute']);
-    s.removeCategoryTicks();
-    expect(s.getCategoryAxis().getCategories()).toEqual(['Jute']);
-    expect(s.getTupleLabel(0)).toBe('Jute'); // still points at it after the shift
-  });
-
-  it('keeps an UNNAMED category that has a bar in it', () => {
-    const s = withTicks(3);
-    barAt(s, 350); // band 1, never named
-    s.removeCategoryTicks();
-    expect(s.getCategoryAxis().getCategoryCount()).toBe(1);
-    expect(s.getBarCategoryTable().columns[0]!.values.filter((v) => v !== null)).toHaveLength(1);
-  });
-
-  it('remaps several survivors at once, in order', () => {
-    const s = withTicks(5);
-    s.getCategoryAxis().renameCategory(1, 'B');
-    s.getCategoryAxis().renameCategory(3, 'D');
-    s.removeCategoryTicks();
-    expect(s.getCategoryAxis().getCategories()).toEqual(['B', 'D']);
-  });
-
-  it('does nothing on a type with no categories', () => {
-    const s = new CalibrationSession<CalibratedAxes>(SPIDER_AXES_CONFIG as never);
-    expect(s.removeCategoryTicks()).toBe(false);
-  });
-});
+/**
+ * ⚑⚑ DELETED: the `"Remove ticks" takes back what the declaration created`
+ * block (six tests).
+ *
+ * `Remove ticks` was a BUTTON, and the v2.4 card rebuild removed it: *"there is
+ * no state with an axis and no ticks to get back to."* Its session method had no
+ * production caller afterwards, and these tests were the only thing keeping it
+ * and its forty lines of tuple-remapping alive.
+ *
+ * ▶ THE REMAP ITSELF IS NOT LOST. Dropping categories and renumbering the bars
+ * bound to them is also what `pruneOrphanedCategories` does - four live callers,
+ * every deletion door - and `categoryOrphans.test.ts` covers it directly,
+ * including `⚑ renumbers the SURVIVING bars, so their labels do not shift`.
+ * What went is a second copy of that job, performed by a gesture that no longer
+ * exists.
+ */
