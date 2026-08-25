@@ -4,6 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readWpdArchive, listWpdFigures, importWpdFigure } from '../wpdImport.js';
+import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
+import { CategoryAxis } from '../../core/categoryAxis.js';
+import type { BarAxes } from '../../core/axes/bar.js';
 /** Narrow a WpdResult, failing the test with its error rather than a cast. */
 function ok<T>(r: T | { error: string }): T {
   if (r !== null && typeof r === 'object' && 'error' in r) {
@@ -181,5 +184,66 @@ describe('a project folder name with regex metacharacters', () => {
   it('still strips an ordinary prefix', () => {
     const arc = ok(readWpdArchive(tarNamed('project')));
     expect(arc.images.map((i) => i.name)).toEqual(['figure.png']);
+  });
+});
+
+/**
+ * ⚑⚑ AN IMPORTED BAR CHART HAS NO CATEGORY AXIS, AND MUST BE ABLE TO GET ONE.
+ *
+ * `WPD_AXES_TO_CONFIG` maps `BarAxes` to `bar`, and WebPlotDigitizer has no
+ * category axis to bring with it. Since v2.4 ours is a REQUIREMENT calibrated in
+ * the walk, so an import lands calibrated on its value axis with the two
+ * category steps unplaced - a state no walk produces and every import does.
+ *
+ * ⚠️ IT WAS ON THE OPEN LIST AS A DEFECT, filed as *"a pre-v2.4 project reopens
+ * with no category axis and no way to place one"*, parked under "no users yet".
+ * Both halves were wrong: the state is an IMPORT (permanent, tenet 6) rather
+ * than a legacy file, and the app already handles it - `getCurrentStep` asks
+ * whether any step is unplaced rather than whether an axes object exists, so the
+ * walk simply resumes. This test is the evidence, which is what it was missing:
+ * nothing said so, so it read as broken for a release.
+ */
+describe('⚑⚑ an imported bar chart can still be given a category axis', () => {
+  function importedBar() {
+    const { plotData, figures } = ok(listWpdFigures(fixture('wpd4.json')));
+    const bar = figures.find((f) => f.configId === 'bar')!;
+    const { axes, datasets } = ok(importWpdFigure(plotData, figures, bar.index));
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    session.loadCalibrated(axes as BarAxes, datasets, new CategoryAxis(), null);
+    return session;
+  }
+
+  it('arrives calibrated on its value axis, with no category axis', () => {
+    const s = importedBar();
+    expect(s.isCalibrated()).toBe(true);
+    expect(Object.keys(s.getPlacedPoints())).toEqual(['p1', 'p2']);
+    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+  });
+
+  it('⚑⚑ and the walk RESUMES at Cat 1 - the user is not stranded', () => {
+    // The whole finding. Without this the only route on screen was `Reset
+    // calibration`, which throws away the calibration the import brought.
+    const s = importedBar();
+    expect(s.getCurrentStep()?.key).toBe('c1');
+    expect(s.getStepIndex()).toBe(2);
+    expect(s.getSteps()).toHaveLength(4);
+  });
+
+  it('⚑ and it SAYS so - the prompt names the click, not the feature', () => {
+    // ⚑ The screen has to carry it: an import is exactly the case where the
+    // user did not walk the first two steps and has no idea a third exists.
+    const s = importedBar();
+    expect(s.getCurrentStep()?.prompt).toMatch(/category axis STARTS/);
+  });
+
+  it('places the axis from those two clicks, keeping the imported calibration', () => {
+    const s = importedBar();
+    s.handleCalibrationClick(100, 500);
+    s.handleCalibrationClick(500, 500);
+    expect(s.confirmCalibrationValues(['4'])).toBe(true);
+    expect(s.runCalibration()).toBe(true);
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 500, y: 500 }]);
+    expect(s.getCategoryAxis().getCategoryCount()).toBe(4);
+    expect(s.isCalibrated()).toBe(true);
   });
 });

@@ -115,11 +115,10 @@ describe('which graph types have categories at all', () => {
     // Otherwise a stray call could give a spider tick geometry, which would then
     // serialize into its project file and mean nothing to anyone.
     const s = new CalibrationSession<CalibratedAxes>(SPIDER_AXES_CONFIG as never);
-    expect(s.markCategoryAxis(A, B)).toBe(false);
     expect(s.setCategoryCount(4)).toBe(false);
     expect(s.setCategoryTickConvention('edge')).toBe(false);
     expect(s.moveCategoryTick(0, A)).toBe(false);
-    expect(s.clearCategoryAxisGeometry()).toBe(false);
+    expect(s.markCategories()).toBe(false);
     expect(s.categoryBandAt(300, 300)).toBeNull();
     expect(s.getCategoryAxis().hasGeometry()).toBe(false);
   });
@@ -149,8 +148,13 @@ describe('marking the axis and declaring the categories', () => {
   });
 
   it('refuses a degenerate axis, the model’s own guard reaching through', () => {
+    // ⚑⚑ ASKED OF THE MODEL, because the session wrapper that used to ask it
+    // is gone. The WALK's refusal of the same figure is a separate assertion and
+    // lives with the walk (`confirmCalibrationValues` runs `checkGuards` the
+    // moment the two ends are in); this one keeps the guard itself asserted, so
+    // deleting the wrapper did not quietly delete the rule.
     const s = calibratedBar();
-    expect(s.markCategoryAxis(A, { ...A })).toBe(false);
+    expect(s.getCategoryAxis().setAxisEdges(A, { ...A })).toBe(false);
     expect(s.getCategoryAxis().hasGeometry()).toBe(false);
   });
 
@@ -162,10 +166,14 @@ describe('marking the axis and declaring the categories', () => {
   });
 
   it('RE-PLACING the axis keeps every category - the user is fixing the axis, not abandoning them', () => {
+    // ⚑⚑ RE-PLACING IS DRAGGING THE TWO HANDLES, which is the only gesture
+    // that exists for it since v2.4. The names must survive the move: the user
+    // is saying where the axis runs, not abandoning the categories they typed.
     const s = withTicks(3);
     s.getCategoryAxis().renameCategory(0, 'Flax');
-    expect(s.clearCategoryAxisGeometry()).toBe(true);
-    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+    s.updateCalibPointPixel('c1', 150, 480);
+    s.updateCalibPointPixel('c2', 650, 480);
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 150, y: 480 }, { x: 650, y: 480 }]);
     expect(s.getCategoryAxis().getCategories()).toEqual(['Flax', '', '']);
   });
 
@@ -239,8 +247,12 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     const before = s.captureState();
     const ticks = [...s.getCategoryAxis().getTickParams()];
 
-    s.clearCategoryAxisGeometry();
-    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
+    // ⚑⚑ THE MUTATION IS A HANDLE DRAG, the gesture that actually exists.
+    // Moving an end regenerates the ticks by design, so the user's dragged tick
+    // and its adjusted flag are exactly what undo has to bring back.
+    s.updateCalibPointPixel('c2', 800, 500);
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 800, y: 500 }]);
+    expect(s.getCategoryAxis().hasAdjustments()).toBe(false);
 
     s.restoreState(before);
     const ca = s.getCategoryAxis();
@@ -250,38 +262,6 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(ca.hasAdjustments()).toBe(true);
     expect(ca.getCategories()[2]).toBe('Jute');
     expect(ca.getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 600, y: 500 }]);
-  });
-
-  it('⚑⚑ "Remove ticks" keeps every bar\'s category when NOTHING is renumbered', () => {
-    // THE DEFECT (v2.1 audit) -- in the fix for review #7, one commit old.
-    // Under bands a bar's category is derived and never stored, so after
-    // `clearGeometry` the pixel carries nothing. The write-back skipped indexes
-    // that did not shift and returned early when no category was dropped, so
-    // the common case wrote NOTHING: three bars still on the canvas, three
-    // blank rows, no message.
-    const s = withTicks(3);
-    const xs = [200, 350, 500];
-    for (const x of xs) {
-      s.addDataPoint(x, 300);
-      s.addDataPoint(x, 500);
-    }
-    const before = s.getBarCategoryTable().columns[0]?.values.slice();
-    expect(before?.filter((v) => v !== null)).toHaveLength(3);
-
-    expect(s.removeCategoryTicks()).toBe(true);
-
-    expect(s.getCategoryAxis().hasGeometry()).toBe(false);
-    expect(s.getBarCategoryTable().columns[0]?.values).toEqual(before);
-  });
-
-  it('⚑ and a SINGLE bar in band 0 survives it too - the identity mapping', () => {
-    // keep = [true,false,false]: nothing is renumbered for the survivor, which
-    // is exactly the path that used to write nothing at all.
-    const s = withTicks(3);
-    s.addDataPoint(200, 300);
-    s.addDataPoint(200, 500);
-    expect(s.removeCategoryTicks()).toBe(true);
-    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(1);
   });
 
   it('⚑⚑ deleting ONE bar under bands does not wipe every category', () => {
