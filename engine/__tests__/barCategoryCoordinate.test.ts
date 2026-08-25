@@ -75,9 +75,18 @@ function barSession(config = BAR_AXES_CONFIG) {
 
 /** The category axis runs x 100..400 with three categories, so the bands are
  * x 100-200, 200-300, 300-400. */
-function withThreeCategories<S extends { markCategoryAxis: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean; setCategoryCount: (n: number) => boolean }>(s: S) {
-  expect(s.markCategoryAxis({ x: 100, y: 300 }, { x: 400, y: 300 })).toBe(true);
-  expect(s.setCategoryCount(3)).toBe(true);
+function withThreeCategories<S extends {
+  updateCalibPointPixel: (key: string, px: number, py: number) => void;
+  setCalibrationValues: (key: string, values: readonly string[]) => boolean;
+}>(s: S) {
+  // ⚑⚑ THE AXIS IS RE-PLACED THE WAY A USER RE-PLACES IT: the two category
+  // handles are dragged, and the count is edited where it was declared. Since
+  // v2.4 the category axis IS calibration steps c1/c2, so `markCategoryAxis`
+  // moved the geometry while leaving the calibration record pointing at the old
+  // ends - a state no gesture can produce.
+  s.updateCalibPointPixel('c1', 100, 300);
+  s.updateCalibPointPixel('c2', 400, 300);
+  expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
   return s;
 }
 

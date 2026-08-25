@@ -185,8 +185,13 @@ describe('⚑⚑ tenet 11 - a datum\'s coordinates are MEASURED, not derived fro
       // The axis the figure's categories sit on, and how many there are - the
       // two things the user marks, and the whole of what makes a band a
       // MEASURED coordinate rather than a rank.
-      expect(session.markCategoryAxis({ x: 100, y: 400 }, { x: 500, y: 400 })).toBe(true);
-      expect(session.setCategoryCount(4)).toBe(true);
+      // ⚑⚑ MOVED BY DRAGGING ITS TWO HANDLES. `calibratedHealthy` walks the
+      // whole calibration, category steps included, so this places the axis
+      // where the test wants it the only way a user can - and keeps the
+      // calibration record and the geometry saying the same thing.
+      session.updateCalibPointPixel('c1', 100, 400);
+      session.updateCalibPointPixel('c2', 500, 400);
+      expect(session.setCalibrationValues('c2', ['4'])).toBe(true);
 
       session.addDataPoint(200, 250);
       const first = session.getExportRows(0);

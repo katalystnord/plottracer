@@ -111,9 +111,15 @@ function horizontalBarSession() {
 
 /** The declared frame the marked case uses: x 100..400, three categories, so
  * the bands are x 100-200, 200-300, 300-400. */
-function withThreeCategories<S extends { markCategoryAxis: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean; setCategoryCount: (n: number) => boolean }>(s: S) {
-  expect(s.markCategoryAxis({ x: 100, y: 300 }, { x: 400, y: 300 })).toBe(true);
-  expect(s.setCategoryCount(3)).toBe(true);
+function withThreeCategories<S extends {
+  updateCalibPointPixel: (key: string, px: number, py: number) => void;
+  setCalibrationValues: (key: string, values: readonly string[]) => boolean;
+}>(s: S) {
+  // ⚑⚑ RE-PLACED BY DRAGGING THE HANDLES, which is the only way a user can
+  // do it. See the same helper in `barCategoryCoordinate`.
+  s.updateCalibPointPixel('c1', 100, 300);
+  s.updateCalibPointPixel('c2', 400, 300);
+  expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
   return s;
 }
 

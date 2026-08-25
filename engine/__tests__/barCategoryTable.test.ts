@@ -270,8 +270,13 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
   function markedFourBands(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
-    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
-    expect(session.setCategoryCount(4)).toBe(true);
+    // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
+    // walked the category axis; this fixture wants it to span x 100..900
+    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // moving them. `markCategoryAxis` moved the geometry and left the
+    // calibration record on the old ends - a state no gesture produces.
+    session.updateCalibPointPixel('c1', 100, 500);
+    session.updateCalibPointPixel('c2', 900, 500);
     return session;
   }
 
@@ -340,8 +345,13 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
   function markedFourBands(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
-    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
-    expect(session.setCategoryCount(4)).toBe(true);
+    // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
+    // walked the category axis; this fixture wants it to span x 100..900
+    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // moving them. `markCategoryAxis` moved the geometry and left the
+    // calibration record on the old ends - a state no gesture produces.
+    session.updateCalibPointPixel('c1', 100, 500);
+    session.updateCalibPointPixel('c2', 900, 500);
     return session;
   }
 
@@ -351,8 +361,9 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     ['Day 3', 'Day 7', 'Day 14', 'Day 21'].forEach((name, i) =>
       session.getCategoryAxis().renameCategory(i, name),
     );
-    expect(session.clearCategoryAxisGeometry()).toBe(true);
-    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
+    // ⚑ RE-PLACING is dragging the two handles back onto the figure.
+    session.updateCalibPointPixel('c1', 100, 500);
+    session.updateCalibPointPixel('c2', 900, 500);
     return session;
   }
 
@@ -404,8 +415,13 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
   function markedFourBands(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
-    expect(session.markCategoryAxis({ x: 100, y: 500 }, { x: 900, y: 500 })).toBe(true);
-    expect(session.setCategoryCount(4)).toBe(true);
+    // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
+    // walked the category axis; this fixture wants it to span x 100..900
+    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // moving them. `markCategoryAxis` moved the geometry and left the
+    // calibration record on the old ends - a state no gesture produces.
+    session.updateCalibPointPixel('c1', 100, 500);
+    session.updateCalibPointPixel('c2', 900, 500);
     return session;
   }
 
