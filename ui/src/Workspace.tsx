@@ -176,7 +176,7 @@ import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../eng
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
-import { runColorTrace, calibrationBoxRegion } from '../../engine/colorTraceRun.js';
+import { runColorTrace, calibrationBoxRegion, tracingADifferentColour } from '../../engine/colorTraceRun.js';
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
@@ -5542,9 +5542,7 @@ export function Workspace() {
     if (!info || info.pointCount === 0) return false;
     const target = hexToRGB(colorTraceColor);
     if (!target) return false;
-    const [r, g, b] = info.color;
-    const apart = Math.abs(r - target[0]) + Math.abs(g - target[1]) + Math.abs(b - target[2]);
-    return apart > 90;
+    return tracingADifferentColour(info.color, target, info.pointCount);
   }, [session, colorTraceColor, mode, version]);
 
   /**

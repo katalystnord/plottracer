@@ -75,3 +75,44 @@ export function runColorTrace(
   const points = subsample(ordered, maxPoints);
   return { points, matched: count };
 }
+
+/**
+ * Do this series' existing readings come from a DIFFERENT colour than the one
+ * about to be traced?
+ *
+ * ⚑⚑ TRACING A SECOND COLOUR INTO ONE SERIES IS THE COMMONEST WAY TO RUIN A
+ * GROUPED BAR CHART. Every category ends up holding two readings, the table can
+ * show only one of each, and the output panel explains it AFTERWARDS - once the
+ * damage is done. David, having done exactly that and undone it by hand: *"new
+ * colour should automatically suggest a new series."* The offer belongs at the
+ * gesture, and this is the question behind it.
+ *
+ * ⚑ MEASURED FROM WHAT IS ALREADY RECORDED. A trace ADOPTS its colour onto the
+ * series it fills, so a series' own swatch IS the colour that produced its
+ * readings. No new state, and nothing to keep in sync.
+ *
+ * ⚑ QUIET WHERE IT SHOULD BE. An EMPTY series can take any colour. And
+ * re-tracing the SAME colour after nudging the tolerance is the ordinary
+ * adjust-and-look loop - a suggestion that fires there is worse than none,
+ * because it teaches the user to dismiss the one that matters.
+ *
+ * ⚠️ THE THRESHOLD IS DELIBERATELY GENEROUS. The question is "is this a
+ * different curve", not "is this the same pixel": an eyedropper landing one
+ * pixel off an anti-aliased edge picks a slightly different value for what is
+ * plainly the same ink, and nagging about that would be the false positive that
+ * kills the feature.
+ */
+export const NEW_COLOUR_DISTANCE = 90;
+
+export function tracingADifferentColour(
+  seriesColour: readonly [number, number, number],
+  target: readonly [number, number, number],
+  pointCount: number
+): boolean {
+  if (pointCount === 0) return false;
+  const apart =
+    Math.abs(seriesColour[0] - target[0]) +
+    Math.abs(seriesColour[1] - target[1]) +
+    Math.abs(seriesColour[2] - target[2]);
+  return apart > NEW_COLOUR_DISTANCE;
+}
