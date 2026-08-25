@@ -2980,6 +2980,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ManualSelectionTool.onMouseClick behavior for Bar axes datasets. */
   addDataPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
+    // ⚑⚑ NO CAPTURE UNTIL THE CATEGORY AXIS IS PLACED - see
+    // `categoryAxisIncomplete`. The tips bar says so at the same moment, which is
+    // what keeps this from being a click that does nothing for no stated reason.
+    if (this.categoryAxisIncomplete()) return 'ignored';
     const entry = this.activeEntry;
     const dataset = entry.dataset;
     if (dataset.hasSlots()) {
@@ -3267,6 +3271,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Returns how many boxes were added (0 if not calibrated or neither shape). */
   addBarDetectBoxes(boxes: readonly { start: { x: number; y: number }; end: { x: number; y: number } }[]): number {
     if (!this.axes) return 0;
+    // ⚑ THE SAME GATE AS THE CLICK PATH, and it has to be here too: a trace
+    // that filed twenty bars by stored index would rebuild the second category
+    // model wholesale, which is the failure this closes. Auto-extract is a
+    // capture like any other. See `categoryAxisIncomplete`.
+    if (this.categoryAxisIncomplete()) return 0;
     const dataset = this.activeEntry.dataset;
     const isBar = this.isBarIntervalShape(dataset);
     const isHistogramBin = this.isHistogramBinShape(dataset);
@@ -3777,6 +3786,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * function of a pixel and the declared dividers; it cannot be inconsistent,
    * only recomputed.
    */
+  /**
+   * The type HAS a category axis but the walk has not finished placing it.
+   *
+   * ⚑⚑ THIS IS ONLY EVER TRUE FOR AN IMPORT. A figure calibrated here cannot
+   * reach it: the category axis IS calibration steps c1/c2, so `isCalibrated`
+   * implies both ends are placed, and `checkValues` refuses a count that would
+   * leave `applyCalibratedCategoryAxis` unable to build the geometry. So a
+   * normally-walked bar chart always has its bands.
+   *
+   * ⚑⚑ WHAT IT GUARDS, AND WHY THE GUARD IS THE WHOLE POINT. A WebPlotDigitizer
+   * project has no category axis to bring - `WPD_AXES_TO_CONFIG` maps `BarAxes`
+   * to `bar` and WPD has no such concept - so an imported bar chart lands
+   * calibrated on its value axis with c1/c2 unplaced, and the walk resumes at
+   * `Cat 1`. Capturing in that state produces bars whose category is a STORED
+   * INDEX rather than a measured band: a second category model, kept alive in
+   * the code by 17 branches and in the FILE FORMAT by `countDeclared`.
+   *
+   * ▶ That second model is ours, not WPD's - a leftover from when our own
+   * category axis was an offer rather than a requirement. Making it a
+   * requirement closed every one of our own doors to it; this closes the last.
+   * David: *"importers should only import things that they can correctly import.
+   * If it cannot do that, that should be plainly stated to the user."* A WPD file
+   * has no category axis, so the honest behaviour is to say so and ask for one,
+   * not to keep a whole parallel model alive to accommodate its absence.
+   */
+  categoryAxisIncomplete(): boolean {
+    return this.supportsCategoryTicks() && !this.categoriesFollowBands();
+  }
+
   private categoriesFollowBands(): boolean {
     // ⚑ A COUNT IS REQUIRED, not just an axis, and leaving it out was a real
     // defect (code review, 2026-08-10). `markCategoryAxis` succeeds while the
