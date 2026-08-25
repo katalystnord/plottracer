@@ -63,8 +63,12 @@ function lineSession() {
 /** Mark the category axis across the plot and declare three categories, so the
  * bands are x 100–200, 200–300, 300–400. */
 function withThreeCategories(s: LineSession) {
-  expect(s.markCategoryAxis({ x: 100, y: 300 }, { x: 400, y: 300 })).toBe(true);
-  expect(s.setCategoryCount(3)).toBe(true);
+  // ⚑⚑ DRAGGED, not re-marked. Categorical Line's category axis is steps
+  // c1/c2 like Bar's; `markCategoryAxis` moved the geometry and left the
+  // calibration record behind. See `barCategoryCoordinate`.
+  s.updateCalibPointPixel('c1', 100, 300);
+  s.updateCalibPointPixel('c2', 400, 300);
+  expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
   return s;
 }
 
@@ -144,7 +148,7 @@ describe('a category is the band the reading sits in', () => {
     expect(positions(s, 0)).toEqual([2]);
     // Slide the axis right so x=250 now falls in the FIRST band (250–400 split
     // into three: 250–300, 300–350, 350–400 - 250 is band 0).
-    expect(s.markCategoryAxis({ x: 250, y: 300 }, { x: 400, y: 300 })).toBe(true);
+    s.updateCalibPointPixel('c1', 250, 300);
     expect(positions(s, 0)).toEqual([1]);
   });
 
