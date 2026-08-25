@@ -33,6 +33,20 @@ export interface AutoExtractCardProps {
   /** The live colour-match preview, or null when nothing is loaded. */
   colorTraceMask: { count: number; pct: number } | null;
   onTrace: () => void;
+  /**
+   * The active series already holds readings, and they came from a DIFFERENT
+   * colour than the one about to be traced.
+   *
+   * ⚑⚑ TRACING A SECOND COLOUR INTO ONE SERIES IS THE COMMONEST WAY TO RUIN A
+   * GROUPED BAR CHART. Every category ends up holding two readings, the table
+   * can only show one of each, and the panel explains it AFTERWARDS - once the
+   * damage is done and five categories are doubled. David, having done exactly
+   * that and undone it by hand: *"new colour should automatically suggest a new
+   * series."* The offer belongs at the gesture.
+   */
+  newColourForThisSeries: boolean;
+  /** Take the offer: add a series and trace into it, in one gesture. */
+  onTraceIntoNewSeries: () => void;
 
   onArmEyedropper: (target: 'trace') => void;
 }
@@ -71,6 +85,8 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
     colorTraceInfo,
     colorTraceMask,
     onTrace,
+  newColourForThisSeries,
+  onTraceIntoNewSeries,
     onArmEyedropper,
   } = props;
   return (
@@ -270,6 +286,33 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
               Trace
             </button>
           </div>
+          {/* ⚑⚑ OFFERED, NEVER IMPOSED. The user may genuinely mean to add a
+              second colour to one series - two shades of the same treatment, a
+              re-trace after a tolerance nudge that shifted the pick. So this
+              suggests and does not refuse: `Trace` still does exactly what it
+              says, one button along.
+              ⚑ And taking the offer is ONE gesture, not "add a series, find
+              the tool again, trace" - a suggestion is only worth making if
+              acting on it costs less than the mistake it avoids. */}
+          {newColourForThisSeries && (
+            <div
+              data-testid="new-colour-series-offer"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                fontSize: theme.font.size.small, color: theme.color.text.legend,
+              }}
+            >
+              <span>This series was traced from a different colour.</span>
+              <button
+                type="button"
+                data-testid="trace-into-new-series"
+                onClick={onTraceIntoNewSeries}
+                title="Add a series and trace this colour into it"
+              >
+                Trace into a new series
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {/* B1 - restrict the trace to a rectangle drawn DIRECTLY on the
                 image (v1.2). No arm-first toggle: the hint tells the user

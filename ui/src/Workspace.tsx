@@ -5515,6 +5515,51 @@ export function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, colorTraceColor, colorTraceTolerance, colorTraceRegion, canvasHasImage, version]);
 
+  /**
+   * Do the readings already in this series come from a DIFFERENT colour?
+   *
+   * ⚑⚑ TRACING A SECOND COLOUR INTO ONE SERIES IS THE COMMONEST WAY TO RUIN A
+   * GROUPED BAR CHART, and until now the tool let it happen in silence and
+   * explained afterwards, in the output panel, once every category was doubled.
+   * David, having done exactly that and then undone it by hand: *"new colour
+   * should automatically suggest a new series."* The offer belongs at the
+   * gesture.
+   *
+   * ⚑ MEASURED FROM WHAT IS ALREADY RECORDED, with no new state. A trace
+   * ADOPTS its colour onto the series it fills (`adoptTracedColour`), so a
+   * series' own swatch IS the colour that produced its readings - comparing the
+   * two is comparing what is there against what is about to be traced.
+   *
+   * ⚑ AND ONLY WHERE IT MATTERS: a series with nothing in it can take any
+   * colour, and re-tracing the SAME colour after nudging the tolerance is the
+   * ordinary adjust-and-look loop, which must not be nagged at. The threshold is
+   * generous because the question is "is this a different curve", not "is this
+   * the same pixel".
+   */
+  const tracingANewColour = useMemo(() => {
+    if (!AUTO_EXTRACT_MODES.includes(mode)) return false;
+    const info = session.getDatasetInfos().find((d) => d.active);
+    if (!info || info.pointCount === 0) return false;
+    const target = hexToRGB(colorTraceColor);
+    if (!target) return false;
+    const [r, g, b] = info.color;
+    const apart = Math.abs(r - target[0]) + Math.abs(g - target[1]) + Math.abs(b - target[2]);
+    return apart > 90;
+  }, [session, colorTraceColor, mode, version]);
+
+  /**
+   * Trace this colour into a series of its own.
+   *
+   * ⚑ ONE GESTURE, not "add a series, then find the tool again, then trace".
+   * The suggestion is only worth making if taking it costs less than the mistake
+   * it avoids.
+   */
+  const traceIntoNewSeries = useCallback(() => {
+    session.addDataset();
+    setGeometryClosed(false);
+    handleColorTrace();
+  }, [session, handleColorTrace]);
+
   const handleAddDataset = useCallback(() => {
     session.addDataset();
     setGeometryClosed(false); // a fresh series has no geometry -- don't inherit the prior series' toggle
@@ -8220,6 +8265,8 @@ export function Workspace() {
               colorTraceInfo={colorTraceInfo}
               colorTraceMask={colorTraceMask}
               onTrace={handleColorTrace}
+              newColourForThisSeries={tracingANewColour}
+              onTraceIntoNewSeries={traceIntoNewSeries}
               onArmEyedropper={setEyedropper}
             />
           )}
