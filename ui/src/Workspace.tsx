@@ -6589,6 +6589,34 @@ export function Workspace() {
    * ⚑ `firstPixelOfTuple` is the model's answer, so a half-captured tuple - one
    * corner down, the other not - is still selectable.
    */
+  /**
+   * Select SEVERAL tuples at once - the conflicting pair behind a crowded row.
+   *
+   * ⚑⚑ IT IS `selectTuple`'S OWN BRANCH, WIDENED, not a second mechanism.
+   * Select mode's highlight IS `selectedPointIndices`, which already holds any
+   * number of points (marquee, Shift-click, whole-series pick, since v1.2), so
+   * lighting two bars needs nothing new - only the union of their pixels.
+   * Outside Select mode there is one active point by construction, so the FIRST
+   * tuple given wins, which is the one the user clicked.
+   *
+   * ▶ David, on seeing that a crowded reading and the row it collides with are
+   * two candidates for the same cell: *"find a mechanism so that both can be
+   * highlighted at the same time."* This is that mechanism, and it was already
+   * here.
+   */
+  const selectTuples = useCallback(
+    (tupleIndices: readonly number[]) => {
+      const pixels = tupleIndices.flatMap((t) => sessionRef.current.pixelsOfTuple(t));
+      if (modeRef.current === 'select') {
+        setSelectedPointIndices(pixels);
+        return;
+      }
+      const pixel = pixels[0] ?? null;
+      setActivePointIndex(pixel);
+      if (pixel !== null) setPickedPointIndex(pixel);
+    },
+    []
+  );
   const selectTuple = useCallback(
     (tupleIndex: number) => {
       // ⚑⚑ IN SELECT MODE THE WHOLE TUPLE LIGHTS UP, because that is what Select
@@ -8905,6 +8933,7 @@ export function Workspace() {
               }}
               onRemoveTuple={removeTuple}
               onSelectTuple={selectTuple}
+              onSelectTuples={selectTuples}
               activeTupleIndex={activeTupleIndex}
               renderCategoryName={renderEditableCategoryName}
               // ⚑ PER SERIES, from the SAME accessor the export asks - a bar

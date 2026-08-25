@@ -50,6 +50,149 @@ export interface BarCategoryTable {
   crowded?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
 }
 
+export interface ConflictRow {
+  key: string;
+  /** The category this row is about, named or numbered. */
+  label: string;
+  reading: string;
+  /** A CANDIDATE is one of the two bars competing for this cell and is
+   * clickable; CONTEXT is a neighbour, shown as evidence and inert. */
+  kind: 'context' | 'candidate';
+  tupleIndex: number | null;
+  note: string;
+}
+
+/**
+ * The rows shown beneath the table for ONE crowded reading.
+ *
+ * ⚑⚑ EXTRACTED SO THE RULE CAN BE NAMED IN A TEST, following `crowdedMessage`
+ * directly above - the same reason, and the same precedent. What has to be right
+ * here is WHICH rows appear and which of them a click may act on, and neither is
+ * reachable from a component body.
+ *
+ * ⚑⚑ BOTH CANDIDATES, NEVER ONE. The reading sitting in the table above is
+ * not the trustworthy one by virtue of being there: which reading wins a cell is
+ * decided by CAPTURE ORDER, and on an auto-trace that is position along the
+ * category axis - so a legend swatch drawn to the LEFT of the bar it collides
+ * with takes the cell and the real bar is the hidden one. David: *"that row might
+ * be the one that we want to remove."*
+ *
+ * ⚑ THE NEIGHBOURS ARE EVIDENCE, NOT CHOICES, so they are inert and drawn
+ * back. David: *"show the row just above and below, so the user can see which one
+ * might actually be correct, based on the neighbours."* A reading that fits the
+ * trend either side is the plausible one, and that judgement is the user's.
+ *
+ * ⚠️ THE HIDDEN ROW HAS NO NUMBER, and says so rather than showing a blank. It
+ * lost the cell, so its value is not among `col.values` at all - the table knows
+ * THAT it exists and WHICH bar it is, which is what makes it selectable, and
+ * nothing more. A blank there would read as "this bar measured nothing".
+ */
+export function conflictRows(
+  crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number },
+  table: BarCategoryTable,
+  display: DisplayRounder
+): ConflictRow[] {
+  const col = table.columns.find((c) => c.seriesIndex === crowded.seriesIndex);
+  if (!col) return [];
+  const held = col.tupleIndices[crowded.categoryIndex] ?? null;
+  const nameOf = (i: number) => {
+    const n = table.categoryNames[i];
+    return n === undefined ? '' : n === '' ? `Category ${i + 1}` : n;
+  };
+  const readingOf = (i: number): string => {
+    const iv = col.intervals[i] ?? null;
+    if (iv) return `${display.atData([iv.min], 0)} to ${display.atData([iv.max], 0)}`;
+    const v = col.values[i];
+    return v == null ? '-' : String(display.atData([v], 0));
+  };
+  const at = crowded.categoryIndex;
+  const out: ConflictRow[] = [];
+  if (at - 1 >= 0) {
+    out.push({ key: 'above', label: nameOf(at - 1), reading: readingOf(at - 1), kind: 'context', tupleIndex: null, note: '' });
+  }
+  if (held !== null) {
+    out.push({ key: 'held', label: nameOf(at), reading: readingOf(at), kind: 'candidate', tupleIndex: held, note: 'in the table above' });
+  }
+  out.push({ key: 'hidden', label: nameOf(at), reading: 'not read', kind: 'candidate', tupleIndex: crowded.tupleIndex, note: 'not shown above' });
+  if (at + 1 < table.categoryNames.length) {
+    out.push({ key: 'below', label: nameOf(at + 1), reading: readingOf(at + 1), kind: 'context', tupleIndex: null, note: '' });
+  }
+  return out;
+}
+
+/**
+ * One crowded reading, shown WITH the row it collides with and their neighbours.
+ *
+ * ⚑⚑ TWO CANDIDATES FOR ONE CELL, and the panel must not decide which is
+ * right. First-wins is capture order, not correctness, so the reading sitting in
+ * the table above is not the trustworthy one by virtue of being there. Both are
+ * offered; the neighbours are drawn faint because they are evidence, not choices.
+ */
+function ConflictBlock({
+  crowded,
+  table,
+  display,
+  onSelectTuples,
+  activeTupleIndex,
+}: {
+  crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number };
+  table: BarCategoryTable;
+  display: DisplayRounder;
+  onSelectTuples: (tupleIndices: readonly number[]) => void;
+  activeTupleIndex: number | null;
+}) {
+  const col = table.columns.find((c) => c.seriesIndex === crowded.seriesIndex);
+  if (!col) return null;
+  const held = col.tupleIndices[crowded.categoryIndex] ?? null;
+  const pair = held === null ? [crowded.tupleIndex] : [held, crowded.tupleIndex];
+
+  const rows = conflictRows(crowded, table, display);
+
+  const row = (
+    key: string,
+    label: string,
+    reading: string,
+    kind: 'context' | 'candidate',
+    tupleIndex: number | null,
+    note: string
+  ) => {
+    const selected = tupleIndex !== null && tupleIndex === activeTupleIndex;
+    return (
+      <tr
+        key={key}
+        data-testid={`conflict-row-${key}`}
+        onClick={kind === 'candidate' ? () => onSelectTuples(pair) : undefined}
+        title={kind === 'candidate' ? 'Click to select both bars on the figure' : undefined}
+        style={{
+          cursor: kind === 'candidate' ? 'pointer' : 'default',
+          // ⚑⚑ THE SAME ROW TINT THE TABLE ABOVE USES, so "selected" looks
+          // like "selected" everywhere. David: *"perhaps change the background of
+          // both rows?"* - and because a click selects the PAIR, both take it at
+          // once without a second highlight style being invented.
+          background: selected ? theme.color.background.selectedRow : undefined,
+          color: kind === 'context' ? theme.color.text.legend : undefined,
+          opacity: kind === 'context' ? 0.55 : 1,
+        }}
+      >
+        <td style={{ paddingRight: 10, textAlign: 'right' }}>{label}</td>
+        <td style={{ paddingRight: 16 }}>{reading}</td>
+        <td style={{ color: theme.color.text.legend, fontSize: 11.5 }}>{note}</td>
+      </tr>
+    );
+  };
+
+  return (
+    <table
+      data-testid={`bar-conflict-${crowded.seriesIndex}-${crowded.tupleIndex}`}
+      style={{ borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 10 }}
+    >
+      <tbody>
+        {rows.map((r) => row(r.key, r.label, r.reading, r.kind, r.tupleIndex, r.note))}
+      </tbody>
+    </table>
+  );
+}
+
 export interface BarTableProps {
   table: BarCategoryTable;
   /** How a number is rounded before it is printed - the figure's own resolution,
@@ -68,6 +211,15 @@ export interface BarTableProps {
    * applies here unchanged: one click selects (A3).
    */
   onSelectTuple: (tupleIndex: number) => void;
+  /**
+   * Select SEVERAL bars at once - the two candidates for one crowded cell.
+   *
+   * ⚑⚑ `selectTuple`'S OWN BRANCH, WIDENED, not a second mechanism. Select
+   * mode's highlight is `selectedPointIndices`, which has held any number of
+   * points since v1.2 (marquee, Shift-click, whole-series pick). David: *"find a
+   * mechanism so that both can be highlighted at the same time."* It was there.
+   */
+  onSelectTuples: (tupleIndices: readonly number[]) => void;
   /** Which tuple the current selection is standing on, or null. */
   activeTupleIndex: number | null;
   /** Which slot of this tuple is still empty, or -1 when it is complete. */
@@ -119,6 +271,7 @@ export function BarTable({
   tupleNoun,
   onSelectSeries,
   onSelectTuple,
+  onSelectTuples,
   activeTupleIndex,
   missingSlotIndexOf,
   onAimSlot,
@@ -404,11 +557,40 @@ export function BarTable({
       </div>
     )}
     {(table.crowded?.length ?? 0) > 0 && (
-      <div
-        data-testid="bar-crowded"
-        style={{ padding: 8, color: theme.color.error, fontSize: 12.5 }}
-      >
-        {crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
+      <div data-testid="bar-crowded" style={{ padding: 8, fontSize: 12.5 }}>
+        <div style={{ color: theme.color.error, marginBottom: 8 }}>
+          {crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
+        </div>
+        {/* ⚑⚑ THE READING ITSELF, NOT JUST A SENTENCE ABOUT IT. The message
+            already carried the `tupleIndex` of the bar it is describing, and the
+            renderer printed prose and threw it away - so the panel said a
+            reading was missing and gave you nothing to press, while every other
+            row in the table above selects its bar on click. Finding it meant
+            hunting two dots on the figure by eye.
+
+            ⚑⚑ AND THE ROW IT COLLIDES WITH IS SHOWN BESIDE IT, because the
+            one in the table above may be the wrong one. Which reading wins a
+            cell is decided by CAPTURE ORDER, and on an auto-trace that is
+            position along the axis - so a legend swatch to the left of the bar
+            it collides with wins, and the real bar is the hidden one. David:
+            *"that row might be the one that we want to remove."*
+
+            ⚑ WITH ITS NEIGHBOURS, in faint grey, so the choice can be made on
+            evidence: a reading that fits the trend of the categories either side
+            is the plausible one. David: *"show the row just above and below, so
+            the user can see which one might actually be correct, based on the
+            neighbours."* They are context, not candidates, so they do not
+            respond to a click and are drawn back. */}
+        {table.crowded!.map((c) => (
+          <ConflictBlock
+            key={`${c.seriesIndex}-${c.tupleIndex}`}
+            crowded={c}
+            table={table}
+            display={display}
+            onSelectTuples={onSelectTuples}
+            activeTupleIndex={activeTupleIndex}
+          />
+        ))}
       </div>
     )}
     </>  );
