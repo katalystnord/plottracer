@@ -112,14 +112,16 @@ function horizontalBarSession() {
 /** The declared frame the marked case uses: x 100..400, three categories, so
  * the bands are x 100-200, 200-300, 300-400. */
 function withThreeCategories<S extends {
-  updateCalibPointPixel: (key: string, px: number, py: number) => void;
-  setCalibrationValues: (key: string, values: readonly string[]) => boolean;
+  handleCalibrationClick: (px: number, py: number) => unknown;
+  confirmCalibrationValues: (values: string[]) => unknown;
+  runCalibration: () => boolean;
 }>(s: S) {
-  // ⚑⚑ RE-PLACED BY DRAGGING THE HANDLES, which is the only way a user can
-  // do it. See the same helper in `barCategoryCoordinate`.
-  s.updateCalibPointPixel('c1', 100, 300);
-  s.updateCalibPointPixel('c2', 400, 300);
-  expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
+  // ⚑⚑ WALKED, because `barSession` here is the UNMARKED one - this whole
+  // file is about the DERIVED frame, so its sessions arrive with the category
+  // steps unplaced, exactly as a WPD import does. There is no handle to drag
+  // until the walk has placed one, and the walk is what resumes at `Cat 1`.
+  walkCategoryAxis(s, { from: { x: 100, y: 300 }, to: { x: 400, y: 300 }, count: 3 });
+  expect(s.runCalibration()).toBe(true);
   return s;
 }
 

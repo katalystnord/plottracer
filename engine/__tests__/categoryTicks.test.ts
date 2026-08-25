@@ -347,8 +347,8 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
   it('undo of an unmarked session restores an unmarked one, not a stale axis', () => {
     const s = calibratedBar();
     const blank = s.captureState();
-    s.markCategoryAxis(A, B);
-    s.setCategoryCount(3);
+    walkCategoryAxis(s, { from: A, to: B, count: 3 });
+    s.runCalibration();
     s.restoreState(blank);
     expect(s.getCategoryAxis().hasGeometry()).toBe(false);
   });
@@ -497,8 +497,8 @@ describe('the un-ticked path is untouched', () => {
     barAt(s, 150);
     s.setTupleLabel(0, 'Flax');
     // Mark an axis AFTER the fact: the band now answers instead.
-    s.markCategoryAxis(A, B);
-    s.setCategoryCount(2);
+    walkCategoryAxis(s, { from: A, to: B, count: 2 });
+    s.runCalibration();
     expect(s.getTupleLabel(0)).toBe('Flax'); // band 0, still named Flax
     s.clearCategoryAxisGeometry();
     expect(s.getTupleLabel(0)).toBe('Flax'); // stored index again
@@ -639,9 +639,20 @@ describe('the dividers the DETECTOR is handed', () => {
   it('⚑ MEASURES the direction from the marked axis, not from the option', () => {
     // "Horizontal bars" and the marked axis are independent declarations today,
     // so asking the geometry is the one that cannot disagree with what was drawn.
-    const s = calibratedBar();
-    s.markCategoryAxis({ x: 90, y: 100 }, { x: 90, y: 600 }); // a vertical axis
-    s.setCategoryCount(2);
+    //
+    // ⚑⚑ THE FIGURE HAD TO BE MADE POSSIBLE. This used to mark a VERTICAL
+    // category axis on a chart whose VALUE axis is vertical too - two parallel
+    // axes, which the walk refuses at the gesture. It passed because
+    // `markCategoryAxis` wrote the geometry straight into the model and never
+    // met the guard. A vertical category axis means HORIZONTAL bars, so the
+    // value axis runs across: that is the figure this test is about.
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    s.handleCalibrationClick(100, 300);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(500, 300);
+    s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s, { from: { x: 90, y: 100 }, to: { x: 90, y: 600 }, count: 2 });
+    expect(s.runCalibration()).toBe(true);
     const d = s.categoryDividersForDetect()!;
     expect(d.categoryAxis).toBe('y');
     expect(d.dividers).toEqual([100, 350, 600]);
@@ -674,8 +685,8 @@ describe('the divider handover holds up against the awkward cases', () => {
     // of the model descending, and splitRunAtDividers requires ascending -- it
     // would cut nothing at all and the feature would silently do nothing.
     const s = calibratedBar();
-    s.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 });
-    s.setCategoryCount(4);
+    walkCategoryAxis(s, { from: { x: 600, y: 500 }, to: { x: 100, y: 500 }, count: 4 });
+    s.runCalibration();
     const d = s.categoryDividersForDetect()!;
     expect(d.dividers).toEqual([...d.dividers].sort((a, b) => a - b));
     expect(d.dividers).toEqual([100, 225, 350, 475, 600]);
@@ -781,8 +792,8 @@ describe('⚑ the split REPORT is surfaced, and points at the right category', (
     expect(s.categoryIndexOfBand(3, false)).toBe(3);
 
     const back = calibratedBar();
-    back.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 }); // right to left
-    back.setCategoryCount(4);
+    walkCategoryAxis(back, { from: { x: 600, y: 500 }, to: { x: 100, y: 500 }, count: 4 }); // right to left
+    back.runCalibration();
     expect(back.categoryDividersForDetect()!.reversed).toBe(true);
     // Band 0 is the LEFTMOST in image order, which is the LAST category here.
     expect(back.categoryIndexOfBand(0, true)).toBe(3);
@@ -791,8 +802,8 @@ describe('⚑ the split REPORT is surfaced, and points at the right category', (
 
   it('the dividers stay ascending either way - the splitter requires it', () => {
     const back = calibratedBar();
-    back.markCategoryAxis({ x: 600, y: 500 }, { x: 100, y: 500 });
-    back.setCategoryCount(3);
+    walkCategoryAxis(back, { from: { x: 600, y: 500 }, to: { x: 100, y: 500 }, count: 3 });
+    back.runCalibration();
     const d = back.categoryDividersForDetect()!.dividers;
     expect(d).toEqual([...d].sort((a, b) => a - b));
   });
