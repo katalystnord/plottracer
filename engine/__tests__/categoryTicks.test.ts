@@ -16,6 +16,7 @@ import { runBarDetect } from '../barDetectRun.js';
 import { categoryMissReport } from '../colorTraceReport.js';
 import { reconcileWithExpected } from '../../algorithms/barSplit.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
  * CATEGORY TICKS, wired into the session (v2.1).
@@ -58,12 +59,22 @@ function withTicks(n = 4): CalibrationSession<BarAxes> {
   return s;
 }
 
-/** The same session with no category axis - a project saved before v2.4, which
- * is the only way to reach the un-ticked path now. See `unmarkedBarSession` in
- * `calibrationSession.test.ts` for the fuller note. */
+/**
+ * The same session with NO category axis - which is what a WPD IMPORT produces,
+ * permanently, not a legacy file.
+ *
+ * ⚠️ THE OLD NOTE HERE SAID *"a project saved before v2.4, which is the only way
+ * to reach the un-ticked path now"*, and that was wrong in the direction that
+ * matters. This project has no users and owes its own old files nothing
+ * ([[feedback_dont_overbuild_legacy_migration]]); `WPD_AXES_TO_CONFIG` maps
+ * `BarAxes` to `bar` and WebPlotDigitizer has no category axis, so every
+ * imported bar chart lands here - tenet 6, and forever. Describing a permanent
+ * interop state as expiring legacy support is how it came to be built by a
+ * mutator no user can reach.
+ */
 function calibratedBar(): CalibrationSession<BarAxes> {
   const s = withTicks();
-  s.removeCategoryTicks();
+  loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
   return s;
 }
 

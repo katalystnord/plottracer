@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
  * ⚑⚑ A DELETED BAR GIVES ITS CATEGORY BACK - round-2 audit.
@@ -41,7 +42,7 @@ function calibratedBar(): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['10']);
   walkCategoryAxis(s);
   expect(s.runCalibration()).toBe(true);
-  s.removeCategoryTicks();
+  loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
   return s;
 }
 

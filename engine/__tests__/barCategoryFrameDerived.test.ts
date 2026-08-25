@@ -71,6 +71,7 @@ import { buildExportSections } from '../exportAssembly.js';
 import type { TableSection } from '../tableFormats.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /** Value axis: 0 at py 300, 10 at py 100. Vertical bars, screen-aligned. */
 function barSession(config = BAR_AXES_CONFIG) {
@@ -85,8 +86,8 @@ function barSession(config = BAR_AXES_CONFIG) {
   // DERIVED frame: what a bar chart can say about position, pitch and extent
   // from the INK ALONE, with nothing declared. Since v2.4 the walk always marks
   // the axis, so that state is reached by withdrawing the declaration, which is
-  // exactly what a pre-v2.4 project file presents on load.
-  s.removeCategoryTicks();
+  // exactly what a WPD import presents on load.
+  loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
   return s;
 }
 
@@ -104,7 +105,7 @@ function horizontalBarSession() {
   // frame, so the declaration is withdrawn either way - see `barSession`.
   walkCategoryAxis(s, { from: { x: 100, y: 100 }, to: { x: 100, y: 500 } });
   expect(s.runCalibration()).toBe(true);
-  s.removeCategoryTicks();
+  loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
   return s;
 }
 
@@ -225,7 +226,7 @@ describe('the frame follows the axis, not the screen', () => {
     // is about the DERIVED frame. See `barSession`.
     walkCategoryAxis(s, { from: { x: 100, y: 300 }, to: { x: 340, y: 480 } });
     expect(s.runCalibration()).toBe(true);
-    s.removeCategoryTicks();
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
     // Three bars stepped ALONG the perpendicular (4, 3)/5, each one 40 further.
     bar(s, 132, 156, 276);
     bar(s, 164, 188, 252);

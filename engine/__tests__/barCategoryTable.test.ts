@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
  * getBarCategoryTable / renameCategory (v2.0) -- the shared Bar table's own
@@ -26,11 +27,11 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
   expect(session.runCalibration()).toBe(true);
 }
 
-/** The un-ticked path, which since v2.4 only a pre-v2.4 project file reaches.
+/** The un-ticked path, which since v2.4 only a WPD import reaches.
  * See `unmarkedBarSession` in `calibrationSession.test.ts`. */
 function unmarkedBar(session: CalibrationSession<BarAxes>): void {
   calibratedBar(session);
-  session.removeCategoryTicks();
+  loadWithoutCategoryAxis(session, session.getAxes()!, session.getDatasets());
 }
 
 describe('getBarCategoryTable: gating', () => {
@@ -194,7 +195,7 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
   it('a shared category (via the nearest-bar prefill) reads BOTH series in the SAME row', () => {
     // ⚑ THE PREFILL, so the UN-TICKED path: with the axis marked, two bars in
     // one band share a category by construction and no prefill runs at all.
-    // This still covers a pre-v2.4 project file, where it does.
+    // This still covers a WPD import, where it does.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     unmarkedBar(session);
     session.addDataPoint(150, 500); // series 1, value 5

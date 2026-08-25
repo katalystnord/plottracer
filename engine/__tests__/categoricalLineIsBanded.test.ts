@@ -44,6 +44,7 @@ import { describe, it, expect } from 'vitest';
 import { CalibrationSession } from '../calibrationSession.js';
 import { CATEGORICAL_LINE_CONFIG } from '../axesTypeConfigs.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 type LineSession = ReturnType<typeof lineSession>;
 
@@ -230,8 +231,8 @@ describe('what must NOT change', () => {
     // and the honest answer when nobody has said where the categories are.
     const s = lineSession();
     // ⚑ "No axis marked" is reached by WITHDRAWING the declaration since v2.4 -
-    // a pre-v2.4 project file. The behaviour it guards is unchanged.
-    s.removeCategoryTicks();
+    // a WPD import. The behaviour it guards is unchanged.
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
     s.addDataPoint(350, 150);
     s.addDataPoint(150, 250);
     expect(positions(s, 0)).toEqual([2, 1]);

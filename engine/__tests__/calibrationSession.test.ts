@@ -23,6 +23,7 @@ import type { MapAxes } from '../../core/axes/map.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
 import { Dataset } from '../../core/dataset.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   // Same 4-point setup used throughout the engine/ui spike's checkpoints:
@@ -606,12 +607,15 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
    */
   function unmarkedBarSession() {
     const session = barSession();
-    // ⚑ `removeCategoryTicks`, not `clearCategoryAxisGeometry`: the latter keeps
-    // the NAMES on purpose (re-placing an axis is not abandoning its
-    // categories), so the four empty entries the walk's declaration created
-    // would still be sitting in the list. A pre-v2.4 file has no categories at
-    // all, and this is the operation that WITHDRAWS the declaration.
-    session.removeCategoryTicks();
+    // ⚑⚑ LOADED, not un-walked. This state is what a WPD IMPORT produces -
+    // `WPD_AXES_TO_CONFIG` maps `BarAxes` to `bar` and WebPlotDigitizer has no
+    // category axis to bring - so it arrives through `loadCalibrated`, with the
+    // fresh empty `CategoryAxis` that `deserializeProject` hands over. It used
+    // to be built by walking the axis and then calling `removeCategoryTicks`,
+    // a mutator no production code calls, which meant the state was constructed
+    // by an operation no user can perform and the real entrance was tested by
+    // nothing.
+    loadWithoutCategoryAxis(session, session.getAxes()!, session.getDatasets());
     return session;
   }
 
