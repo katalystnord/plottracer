@@ -44,7 +44,6 @@ import { describe, it, expect } from 'vitest';
 import { CalibrationSession } from '../calibrationSession.js';
 import { CATEGORICAL_LINE_CONFIG } from '../axesTypeConfigs.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
-import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 type LineSession = ReturnType<typeof lineSession>;
 
@@ -229,19 +228,6 @@ describe('a name belongs to the CATEGORY, not to each point that lands in it', (
 });
 
 describe('what must NOT change', () => {
-  it('⚑ with no axis marked, the ordinal is exactly what it was', () => {
-    // The companion assertion. A Line that never marks an axis keeps today's
-    // left-to-right reading of its own pixels - a faithful view of one series,
-    // and the honest answer when nobody has said where the categories are.
-    const s = lineSession();
-    // ⚑ "No axis marked" is reached by WITHDRAWING the declaration since v2.3 -
-    // a WPD import. The behaviour it guards is unchanged.
-    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
-    s.addDataPoint(350, 150);
-    s.addDataPoint(150, 250);
-    expect(positions(s, 0)).toEqual([2, 1]);
-  });
-
   it('⚑ the VALUE is still read from the value calibration, untouched', () => {
     const s = withThreeCategories(lineSession());
     s.addDataPoint(250, 200);

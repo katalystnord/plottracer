@@ -59,7 +59,6 @@ import { CalibrationSession, BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG } from '../ca
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
-import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /** Value axis: 0 at py 300, 10 at py 100. */
 function barSession(config = BAR_AXES_CONFIG) {
@@ -214,18 +213,6 @@ describe('nothing is invented where nothing was measured', () => {
   // `barCategoryFrameDerived.test.ts` - so the coordinate is a Position in both
   // cases, and what remains genuinely unmeasured is narrower than F21 thought:
   // one bar's PITCH, and an empty category's existence.
-  it('⚑⚑ one bar has a position but no pitch, so no extent is claimed', () => {
-    const s = barSession();
-    // ⚑ The DERIVED frame: no declared bands, which since v2.3 means the
-    // declaration is withdrawn (a WPD import). The pitch is what one bar
-    // cannot supply, and that is unchanged.
-    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
-    bar(s, 210, 290, 200);
-    const [data] = sectionsFor(s, 'bar');
-    expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
-    expect(data!.rows[0]![0]).toBe(1);
-  });
-
   it('⚑⚑ marking the axis states the count the ink cannot carry', () => {
     // Same figure, same clicks, one more declaration. A2 made the coordinate
     // measured either way, so what marking adds is no longer the Position
@@ -238,19 +225,4 @@ describe('nothing is invented where nothing was measured', () => {
     expect(data!.rows[0]![0]).toBe(2); // band 2, not "the first bar I clicked"
   });
 
-  it('⚑ the NAME still comes from the shared category list, not from the frame', () => {
-    // ⚑⚑ The identity and the position are two questions, and A2 is what
-    // happens when one number is asked to be both. `getTupleLabel` reads the
-    // name-list slot, so a typed name survives a coordinate that is derived
-    // from geometry the name knows nothing about.
-    const s = barSession();
-    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
-    bar(s, 210, 290, 200);
-    expect(s.setTupleLabel(0, 'Control')).toBe(true);
-    const [data] = sectionsFor(s, 'bar');
-    const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
-    expect(at('Position')).toBe(1);
-    expect(at('category')).toBe('Control');
-    expect(data!.header).not.toContain('Position min');
-  });
 });

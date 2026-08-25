@@ -886,22 +886,31 @@ describe('⚑ a heatmap’s tips bar tracks what is actually on screen', () => {
 
 describe('⚑ the tips bar while the category axis is being marked (v2.1 audit)', () => {
   it('stops telling the user to drag a bar, because no click can capture one', () => {
-    // Box capture stands down while the fold-out is asking for an edge, and a
-    // plain click becomes the edge. The tips bar -- described in its own header
-    // as the one constant place for contextual guidance -- went on saying "Drag
-    // from one corner of the bar to the opposite corner", false in both halves.
-    const marking = guidanceTipBase(barPlacing({ isMarkingCategoryAxis: true }));
-    expect(marking).not.toContain('corner');
-    expect(marking).toContain('category axis');
+    // Capture stands down until the category axis is placed, and the tips bar --
+    // described in its own header as the one constant place for contextual
+    // guidance -- went on saying "Drag from one corner of the bar to the
+    // opposite corner", false in both halves.
+    const unplaced = guidanceTipBase(barPlacing({ categoryAxisUnplaced: true }));
+    expect(unplaced).not.toContain('corner');
+    expect(unplaced).toContain('category axis');
   });
 
-  it('says how to get back, so it is not a state with no visible exit', () => {
-    const marking = guidanceTipBase(barPlacing({ isMarkingCategoryAxis: true }));
-    expect(marking).toContain('Mark category ticks?');
+  it('⚑⚑ says WHY there is no axis, because the user did not walk this figure', () => {
+    // The only way to reach this state is an import, so the user never saw the
+    // first two calibration clicks and has no reason to expect a third. A
+    // sentence naming the step without naming its cause reads as a fault.
+    const unplaced = guidanceTipBase(barPlacing({ categoryAxisUnplaced: true }));
+    expect(unplaced).toContain('import did not bring one');
   });
 
-  it('leaves the ordinary bar guidance alone when nothing is being marked', () => {
-    expect(guidanceTipBase(barPlacing({ isMarkingCategoryAxis: false }))).toContain('corner');
+  it('⚑ names the clicks AND the count - the whole step, not half of it', () => {
+    const unplaced = guidanceTipBase(barPlacing({ categoryAxisUnplaced: true }));
+    expect(unplaced).toMatch(/STARTS and ENDS/);
+    expect(unplaced).toContain('how many categories');
+  });
+
+  it('leaves the ordinary bar guidance alone once the axis is placed', () => {
+    expect(guidanceTipBase(barPlacing({ categoryAxisUnplaced: false }))).toContain('corner');
     expect(guidanceTipBase(barPlacing())).toContain('corner');
   });
 });

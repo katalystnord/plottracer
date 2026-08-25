@@ -78,6 +78,66 @@ function calibratedBar(): CalibrationSession<BarAxes> {
   return s;
 }
 
+describe('⚑⚑ when the walk is OVER and there is still no category axis', () => {
+  /**
+   * ⚑⚑ THE STATE ONLY A FILE CAN PRODUCE, and the reason `categoryAxisIncomplete`
+   * asks whether the session is CALIBRATED before anything else.
+   *
+   * ⚠️ WRITTEN BECAUSE THE FIRST VERSION DID NOT ASK. Without the calibrated
+   * check the predicate is true for the whole of every ordinary bar walk too -
+   * the category axis is not placed until its own steps are answered - so the
+   * tips bar replaced `1/4 - P1` with "this figure has no category axis yet" on
+   * the very first click of a figure nobody had imported. Five e2e walks caught
+   * it; no amount of reading the post-walk state would have.
+   */
+  it('is FALSE mid-walk, at every step, because the walk is what places it', () => {
+    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    expect(s.categoryAxisIncomplete()).toBe(false); // nothing placed
+    s.handleCalibrationClick(A.x, A.y);
+    s.confirmCalibrationValues(['0']);
+    expect(s.categoryAxisIncomplete()).toBe(false); // one value point
+    s.handleCalibrationClick(100, 100);
+    s.confirmCalibrationValues(['10']);
+    expect(s.categoryAxisIncomplete()).toBe(false); // both value points, no axes yet
+    s.handleCalibrationClick(A.x, A.y);
+    expect(s.categoryAxisIncomplete()).toBe(false); // Cat 1 placed, Cat n pending
+  });
+
+  it('⚑ is FALSE once the walk finishes - an ordinary figure always has its bands', () => {
+    const s = withTicks(4);
+    expect(s.isCalibrated()).toBe(true);
+    expect(s.categoryAxisIncomplete()).toBe(false);
+  });
+
+  it('⚑⚑ is TRUE for a figure that arrived calibrated with no category axis', () => {
+    // The import. `loadWithoutCategoryAxis` hands `loadCalibrated` the two value
+    // points a WPD project really carries, so c1/c2 are unplaced and the walk
+    // resumes - but the session IS calibrated, which is what separates this from
+    // the mid-walk case above.
+    const s = withTicks(4);
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
+    expect(s.isCalibrated()).toBe(true);
+    expect(s.categoryAxisIncomplete()).toBe(true);
+  });
+
+  it('⚑⚑ and capture is REFUSED while it is true, on both doors', () => {
+    const s = withTicks(4);
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
+    expect(s.addDataPoint(150, 400)).toBe('ignored');
+    expect(s.addBarDetectBoxes([{ start: { x: 140, y: 500 }, end: { x: 220, y: 300 } }])).toBe(0);
+    expect(s.getDataset().getCount()).toBe(0);
+  });
+
+  it('⚑ and allowed again the moment the axis is placed', () => {
+    const s = withTicks(4);
+    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
+    walkCategoryAxis(s, { from: A, to: B, count: 4 });
+    expect(s.runCalibration()).toBe(true);
+    expect(s.categoryAxisIncomplete()).toBe(false);
+    expect(s.addDataPoint(150, 400)).toBe('point-added');
+  });
+});
+
 describe('which graph types have categories at all', () => {
   it('the tuple-shaped bar types, which are the ones that can consume a band', () => {
     for (const config of [BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG]) {
@@ -290,54 +350,6 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(3);
   });
 
-  it('⚑ and the sweep still runs where it belongs - the UN-ticked path', () => {
-    // The guard must not switch the sweep off everywhere. Without ticks a
-    // category exists only because a bar reserved it, so removing that bar
-    // genuinely does leave an orphan, and the old behaviour is correct.
-    const s = calibratedBar();
-    s.addDataPoint(150, 300);
-    s.addDataPoint(150, 500);
-    s.addDataPoint(400, 350);
-    s.addDataPoint(400, 500);
-    expect(s.getCategoryAxis().getCategories()).toHaveLength(2);
-    s.removeTuple(0);
-    expect(s.getCategoryAxis().getCategories()).toHaveLength(1);
-  });
-
-  it('⚑⚑ UNDO does not INVENT a declared count - the rows must not reorder', () => {
-    // THE DEFECT, found by two independent reviewers (v2.1 audit).
-    //
-    // `_countDeclared` was not serialized; the load door guessed it back as
-    // "there are categories, so a count was declared". But categories also come
-    // into existence one at a time on the UN-ticked path, so the reachable state
-    // "axis marked, no count typed, bars captured" round-tripped into BAND mode
-    // -- and every bar's category flipped from the index it was captured under
-    // to whichever band it happens to sit in. One Ctrl+Z was the whole trigger,
-    // and nothing on screen said anything had changed.
-    //
-    // ⚑⚑ THE FIGURE IS AN IMPORT, not a marked axis with the count left out.
-    // That second state is unreachable since v2.3 - the count is typed on the
-    // click that places the second end - but the PROPERTY this guards is not:
-    // a WPD import has no category axis at all, so `_countDeclared` is false and
-    // must still be false after a round trip.
-    const s = calibratedBar();
-    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false);
-
-    // Two bars captured RIGHT to LEFT, so band order and capture order disagree.
-    s.addDataPoint(520, 300);
-    s.addDataPoint(520, 500);
-    s.addDataPoint(180, 400);
-    s.addDataPoint(180, 500);
-    const before = s.getBarCategoryTable().columns[0]?.values.slice();
-    expect(before).toHaveLength(2);
-
-    const snap = s.captureState();
-    s.restoreState(snap);
-
-    expect(s.getCategoryAxis().hasDeclaredCount()).toBe(false);
-    expect(s.getBarCategoryTable().columns[0]?.values).toEqual(before);
-  });
-
   it('⚑ but a count the user DID declare survives the same round trip', () => {
     // The guard must not over-reach: storing the flag has to keep band mode for
     // anyone who actually asked for it, or the fix trades one silent flip for
@@ -485,37 +497,22 @@ describe('the table shows every declared category, empty ones included', () => {
   });
 });
 
-describe('the un-ticked path is untouched', () => {
-  it('still uses the nearest-donor prefill when no axis is marked', () => {
-    const s = calibratedBar();
-    barAt(s, 150);
-    s.setTupleLabel(0, 'Flax');
-    barAt(s, 350);
-    s.setTupleLabel(1, 'Jute');
-    s.addDataset('Series 2');
-    barAt(s, 152);
-    expect(s.getTupleLabel(0)).toBe('Flax'); // prefilled from the donor
-  });
-
-  /**
-   * ⚑⚑ DELETED: `clearing the marks hands the job back to the stored index`.
-   *
-   * It named a bar, marked an axis AFTER the fact so the band answered instead,
-   * then CLEARED the marks and checked the name came back from the stored index.
-   * The middle step is fine; the last one has no door left. Nothing keeps a
-   * calibrated figure and drops its category axis - `clearCategoryAxisGeometry`
-   * and `removeCategoryTicks` were the only two, and both were mutators no
-   * production code ever called. A saved file cannot hold named categories with
-   * no geometry either, because the walk that names them is the walk that builds
-   * them.
-   *
-   * ▶ The LIVE half of what it guarded - the stored index answering on a figure
-   * with no bands - is exercised where that state really occurs: an import, in
-   * `categoryOfferPromotes` ("one unmarked series exports Position") and in
-   * `barCategoryTable` ("WITHOUT a marked axis ... a bar still gets its own
-   * slot").
-   */
-});
+/**
+ * ⚑⚑ `the un-ticked path is untouched` IS GONE, DESCRIBE AND ALL - because
+ * there is no un-ticked path any more.
+ *
+ * A bar-family figure cannot be captured into until its category axis is placed
+ * (`CalibrationSession.categoryAxisIncomplete` gates both capture doors), so the
+ * regime this block described - categories tallied from the bars, each carrying a
+ * stored `categoryIndex`, named by donation from a neighbouring series - has no
+ * way to come into existence. It was ours, a leftover from when the category axis
+ * was an offer rather than a requirement, and a WPD import was the last door into
+ * it.
+ *
+ * ▶ What replaced it is not a smaller version of the same thing. It is one model:
+ * the band IS the category, in every series, measured off an axis the user
+ * declared.
+ */
 
 // ---------------------------------------------------------------------------
 // Splitting a merged run at the declared dividers, through the detector.
