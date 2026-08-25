@@ -210,12 +210,14 @@ function ConflictBlock({
   tupleNoun: string;
   activeTupleIndex: number | null;
 }) {
-  const col = table.columns.find((c) => c.seriesIndex === crowded.seriesIndex);
-  if (!col) return null;
-  const held = col.tupleIndices[crowded.categoryIndex] ?? null;
-  const pair = held === null ? [crowded.tupleIndex] : [held, crowded.tupleIndex];
-
   const rows = conflictRows(crowded, table, display);
+  if (rows.length === 0) return null;
+  // ⚑⚑ THE PAIR IS READ OFF THE ROWS, not worked out a second time. This
+  // block used to find the column and the held tuple for itself, beside
+  // `conflictRows` doing the same - one decision in two places, which is the
+  // fork this codebase keeps paying for. A row already says whether it is a
+  // CANDIDATE and which bar it is; that is the whole answer.
+  const pair = rows.flatMap((r) => (r.kind === 'candidate' && r.tupleIndex !== null ? [r.tupleIndex] : []));
 
   // ⚑⚑ EITHER ONE SELECTED TINTS BOTH, because they are a PAIR - two
   // candidates for one cell, and the question on screen is which of them belongs

@@ -395,7 +395,17 @@ export function tupleDataSection(
       // really carry.
       ...(hasPosition ? [row.position ?? ''] : []),
       row.label,
-      ...(hasSpan ? [row.positionSpan?.[0] ?? '', row.positionSpan?.[1] ?? ''] : []),
+      // ⚑⚑ THROUGH THE ROUNDER, like every other measured column. These two
+      // were written RAW, so a bar's category extent reached the file as
+      // `2.0999999999999996` - sixteen significant digits claimed from a pixel
+      // measurement, in a column beside numbers reported at the figure's own
+      // resolution.
+      ...(hasSpan
+        ? [
+            row.positionSpan ? rounder.at([row.positionSpan[0]], 0) : '',
+            row.positionSpan ? rounder.at([row.positionSpan[1]], 0) : '',
+          ]
+        : []),
       // ⚑⚑ THE TYPE'S OWN MEMBERS ONLY. A row carries every tuple slot, and once
       // a series gains error that includes the four cap slots - while the header
       // is the type's own names. Mapping the whole row put four values under no
@@ -407,6 +417,19 @@ export function tupleDataSection(
       ...memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined).map(
         (v) => v ?? ''
       ),
+      // ⚠️ NOT ROUNDED HERE, DELIBERATELY - see the note on `row.derived` above,
+      // and do not 'fix' this without reading it. `compute` has already rounded
+      // to the TYPE's own precision, and re-rounding needs `axes.dataToPixel`,
+      // which is a stub for every non-invertible axes (pie included) and would
+      // silently resolve near image origin instead of near the datum.
+      //
+      // ⚑⚑ WHAT IS STILL WRONG, AND IS NOT THIS LINE'S TO FIX: on a
+      // baseline-anchored bar `Value` IS `Max`, and the two can disagree in
+      // adjacent columns - measured, `Max 3.273` beside `Value 3.2725`. One
+      // measurement, two precisions, one row. The cause is that the two travel
+      // by different rounding RULES (the type's own, and the export's), not that
+      // either is applied wrongly here. Raised for David rather than papered
+      // over, because picking which rule wins is a record decision.
       ...(hasDerived ? [row.derived ?? ''] : []),
       // Blank, never 0, where a side was never captured - see flatDataSection.
       ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
