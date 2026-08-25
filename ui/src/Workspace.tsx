@@ -4149,6 +4149,50 @@ export function Workspace() {
   // drops the entire category. Unconfirmed but undoable, matching the trash and
   // series-delete precedents (all one Ctrl+Z away). The selection is cleared
   // because point indices shift when a tuple's pixels are spliced out.
+  /**
+   * Remove a tuple from a NAMED series, switching to it first.
+   *
+   * ⚑⚑ BECAUSE `crowded` SPANS EVERY SERIES AND `removeTuple` DOES NOT. A
+   * crowded reading carries the `seriesIndex` it belongs to, but the plain
+   * remove acts on whichever series happens to be ACTIVE - so pressing the
+   * conflict row's delete while another series was selected removed a perfectly
+   * good bar from THAT one, left the crowded reading exactly where it was, and
+   * said nothing. Measured: series 0 `[5,5,5]` became `[5,null,5]` while series
+   * 1's doubled band was untouched.
+   *
+   * ▶ The table's own cells have always guarded this - *"switch AND select, in
+   * one click"* - and the conflict block was written without it. Making the
+   * series EXPLICIT is stronger than remembering to switch first, because there
+   * is then no order to get wrong.
+   */
+  const removeTupleIn = useCallback(
+    (seriesIndex: number, tupleIndex: number) => {
+      sessionRef.current.setActiveDataset(seriesIndex);
+      sessionRef.current.removeTuple(tupleIndex);
+      setActivePointIndex(null);
+      commit();
+    },
+    [commit]
+  );
+
+  /** Select several tuples of a NAMED series - see `removeTupleIn` for why the
+   * series is explicit rather than assumed to be the active one. */
+  const selectTuplesIn = useCallback(
+    (seriesIndex: number, tupleIndices: readonly number[]) => {
+      sessionRef.current.setActiveDataset(seriesIndex);
+      const pixels = tupleIndices.flatMap((t) => sessionRef.current.pixelsOfTuple(t, seriesIndex));
+      if (modeRef.current === 'select') {
+        setSelectedPointIndices(pixels);
+      } else {
+        const pixel = pixels[0] ?? null;
+        setActivePointIndex(pixel);
+        if (pixel !== null) setPickedPointIndex(pixel);
+      }
+      bump();
+    },
+    [bump]
+  );
+
   const removeTuple = useCallback(
     (tupleIndex: number) => {
       session.removeTuple(tupleIndex);
@@ -8978,7 +9022,8 @@ export function Workspace() {
               }}
               onRemoveTuple={removeTuple}
               onSelectTuple={selectTuple}
-              onSelectTuples={selectTuples}
+              onSelectTuples={selectTuplesIn}
+              onRemoveTupleIn={removeTupleIn}
               activeTupleIndex={activeTupleIndex}
               renderCategoryName={renderEditableCategoryName}
               // ⚑ PER SERIES, from the SAME accessor the export asks - a bar

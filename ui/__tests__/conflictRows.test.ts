@@ -12,18 +12,21 @@ import type { BarCategoryTable } from '../src/panels/BarTable.js';
  */
 const display = { atData: (v: readonly number[]) => v[0]! } as never;
 
-const table = (values: (number | null)[], names: string[]): BarCategoryTable =>
+const column = (seriesIndex: number, values: (number | null)[]) => ({
+  seriesIndex,
+  seriesName: `Series ${seriesIndex + 1}`,
+  values,
+  intervals: values.map(() => null),
+  tupleIndices: values.map((v, i) => (v === null ? null : i)),
+});
+
+const table = (values: (number | null)[], names: string[], extraSeries = 0): BarCategoryTable =>
   ({
     categoryNames: names,
     categoryRawNames: names,
     columns: [
-      {
-        seriesIndex: 0,
-        seriesName: 'Series 1',
-        values,
-        intervals: values.map(() => null),
-        tupleIndices: values.map((v, i) => (v === null ? null : i)),
-      },
+      column(0, values),
+      ...Array.from({ length: extraSeries }, (_, i) => column(i + 1, values)),
     ],
     crowded: [],
   }) as unknown as BarCategoryTable;
@@ -77,6 +80,18 @@ describe('the rows shown for a crowded reading', () => {
     expect(rows.map((r) => r.label)).toEqual(['Category 1', 'Category 2', 'Category 2', 'Category 3']);
   });
 
+  it('⚑⚑ names the SERIES once there is more than one, and stays quiet at one', () => {
+    // `crowded` spans every series, so on a grouped figure "Category 2, 281.5,
+    // in the table above" says nothing about WHICH column it means - and the two
+    // candidates may sit in a series the user is not even looking at.
+    const one = conflictRows(CROWDED, table([342, 281, 207], ['A', 'B', 'C']), display);
+    expect(one.find((r) => r.key === 'held')!.note).toBe('in the table above');
+
+    const many = conflictRows(CROWDED, table([342, 281, 207], ['A', 'B', 'C'], 1), display);
+    expect(many.find((r) => r.key === 'held')!.note).toBe('Series 1, in the table above');
+    expect(many.find((r) => r.key === 'hidden')!.note).toBe('Series 1, not shown above');
+  });
+
   it('⚑ still offers the hidden bar when the cell somehow holds nothing', () => {
     const rows = conflictRows(CROWDED, table([342, null, 207], ['A', 'B', 'C']), display);
     expect(rows.filter((r) => r.kind === 'candidate').map((r) => r.key)).toEqual(['hidden']);
@@ -94,7 +109,8 @@ describe('the rows shown for a crowded reading', () => {
  * with ONE conflict, which is the fixture being blind to what it lacks.
  */
 describe('telling a few strays from a whole second series', () => {
-  const at = (...ix: number[]) => ix.map((categoryIndex) => ({ categoryIndex }));
+  /** Crowded readings in ONE series, at these categories. */
+  const at = (...ix: number[]) => ix.map((categoryIndex) => ({ seriesIndex: 0, categoryIndex }));
 
   it('⚑⚑ one stray in a four-category figure is NOT systematic', () => {
     expect(crowdedIsSystematic(at(1), 4)).toBe(false);
@@ -131,5 +147,28 @@ describe('telling a few strays from a whole second series', () => {
 
   it('⚑ offers the cause as a condition, because the panel cannot know it', () => {
     expect(systematicCrowdedMessage(4, 'bar')).toMatch(/If you traced two colours/);
+  });
+
+  it('⚑⚑ two unrelated strays in DIFFERENT series are not systematic', () => {
+    // The claim is "you traced two colours into ONE series", so the evidence has
+    // to be one series doubled across its own categories. Counting distinct
+    // categories across ALL series instead, a swatch caught by series 1 and a
+    // stray bar in series 2 looked systematic on any figure of four categories
+    // or fewer - and the panel then gave advice for a mistake nobody had made
+    // while suppressing the rows that would have fixed the real one.
+    const spread = [
+      { seriesIndex: 0, categoryIndex: 0 },
+      { seriesIndex: 1, categoryIndex: 2 },
+    ];
+    expect(crowdedIsSystematic(spread, 4)).toBe(false);
+  });
+
+  it('⚑ but ONE series doubled across its own categories still is', () => {
+    const oneSeries = [
+      { seriesIndex: 1, categoryIndex: 0 },
+      { seriesIndex: 1, categoryIndex: 1 },
+      { seriesIndex: 1, categoryIndex: 2 },
+    ];
+    expect(crowdedIsSystematic(oneSeries, 4)).toBe(true);
   });
 });

@@ -72,12 +72,28 @@ export interface BarCategoryTable {
  * which reports and does not act.
  */
 export function crowdedIsSystematic(
-  crowded: readonly { categoryIndex: number }[],
+  crowded: readonly { seriesIndex: number; categoryIndex: number }[],
   categoryCount: number
 ): boolean {
   if (categoryCount === 0) return false;
-  const doubled = new Set(crowded.map((c) => c.categoryIndex)).size;
-  return doubled >= 2 && doubled * 2 >= categoryCount;
+  // ⚑⚑ ASKED PER SERIES, AND ASKING IT OF THE FIGURE WAS WRONG. The claim is
+  // *"you traced two colours into ONE series"*, so the evidence has to be one
+  // series doubled across its own categories. Counting distinct categories
+  // across ALL series instead, two unrelated strays - a swatch caught by series
+  // 1, a stray bar in series 2 - looked systematic on any figure of four
+  // categories or fewer. The panel then gave advice for a mistake nobody had
+  // made AND suppressed the conflict rows that would have fixed the real one.
+  // Found in the audit the night it was written.
+  const perSeries = new Map<number, Set<number>>();
+  for (const c of crowded) {
+    const seen = perSeries.get(c.seriesIndex) ?? new Set<number>();
+    seen.add(c.categoryIndex);
+    perSeries.set(c.seriesIndex, seen);
+  }
+  for (const seen of perSeries.values()) {
+    if (seen.size >= 2 && seen.size * 2 >= categoryCount) return true;
+  }
+  return false;
 }
 
 /**
@@ -149,13 +165,18 @@ export function conflictRows(
   };
   const at = crowded.categoryIndex;
   const out: ConflictRow[] = [];
+  const seriesPrefix = table.columns.length > 1 ? `${col.seriesName}, ` : '';
   if (at - 1 >= 0) {
     out.push({ key: 'above', label: nameOf(at - 1), reading: readingOf(at - 1), kind: 'context', tupleIndex: null, note: '' });
   }
   if (held !== null) {
-    out.push({ key: 'held', label: nameOf(at), reading: readingOf(at), kind: 'candidate', tupleIndex: held, note: 'in the table above' });
+    out.push({ key: 'held', label: nameOf(at), reading: readingOf(at), kind: 'candidate', tupleIndex: held, note: `${seriesPrefix}in the table above` });
   }
-  out.push({ key: 'hidden', label: nameOf(at), reading: 'not read', kind: 'candidate', tupleIndex: crowded.tupleIndex, note: 'not shown above' });
+  // ⚑⚑ THE SERIES IS NAMED WHERE THERE IS MORE THAN ONE. `crowded` spans every
+  // series, so on a grouped figure "Category 2, 281.5, in the table above" says
+  // nothing about WHICH column it means - and the two candidates might sit in a
+  // series the user is not even looking at. One series, and the name is noise.
+  out.push({ key: 'hidden', label: nameOf(at), reading: 'not read', kind: 'candidate', tupleIndex: crowded.tupleIndex, note: `${seriesPrefix}not shown above` });
   if (at + 1 < table.categoryNames.length) {
     out.push({ key: 'below', label: nameOf(at + 1), reading: readingOf(at + 1), kind: 'context', tupleIndex: null, note: '' });
   }
@@ -175,15 +196,17 @@ function ConflictBlock({
   table,
   display,
   onSelectTuples,
-  onRemoveTuple,
+  onRemoveTupleIn,
   tupleNoun,
   activeTupleIndex,
 }: {
   crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number };
   table: BarCategoryTable;
   display: DisplayRounder;
-  onSelectTuples: (tupleIndices: readonly number[]) => void;
-  onRemoveTuple: (tupleIndex: number) => void;
+  onSelectTuples: (seriesIndex: number, tupleIndices: readonly number[]) => void;
+  /** Remove a tuple from a NAMED series - `crowded` spans every series, and the
+   * plain remove acts on whichever is ACTIVE. See `removeTupleIn`. */
+  onRemoveTupleIn: (seriesIndex: number, tupleIndex: number) => void;
   tupleNoun: string;
   activeTupleIndex: number | null;
 }) {
@@ -213,7 +236,7 @@ function ConflictBlock({
       <tr
         key={key}
         data-testid={`conflict-row-${key}`}
-        onClick={kind === 'candidate' ? () => onSelectTuples(pair) : undefined}
+        onClick={kind === 'candidate' ? () => onSelectTuples(crowded.seriesIndex, pair) : undefined}
         title={kind === 'candidate' ? 'Click to select both bars on the figure' : undefined}
         style={{
           cursor: kind === 'candidate' ? 'pointer' : 'default',
@@ -240,7 +263,11 @@ function ConflictBlock({
             recomputation. Measured, not assumed. */}
         <td>
           {kind === 'candidate' && tupleIndex !== null && (
-            <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
+            <TupleDeleteButton
+              tupleIndex={tupleIndex}
+              noun={tupleNoun}
+              onDelete={(t) => onRemoveTupleIn(crowded.seriesIndex, t)}
+            />
           )}
         </td>
       </tr>
@@ -285,7 +312,10 @@ export interface BarTableProps {
    * points since v1.2 (marquee, Shift-click, whole-series pick). David: *"find a
    * mechanism so that both can be highlighted at the same time."* It was there.
    */
-  onSelectTuples: (tupleIndices: readonly number[]) => void;
+  onSelectTuples: (seriesIndex: number, tupleIndices: readonly number[]) => void;
+  /** Remove a tuple from a NAMED series - `crowded` spans every series, and the
+   * plain remove acts on whichever is ACTIVE. See `removeTupleIn`. */
+  onRemoveTupleIn: (seriesIndex: number, tupleIndex: number) => void;
   /** Which tuple the current selection is standing on, or null. */
   activeTupleIndex: number | null;
   /** Which slot of this tuple is still empty, or -1 when it is complete. */
@@ -342,6 +372,7 @@ export function BarTable({
   missingSlotIndexOf,
   onAimSlot,
   onRemoveTuple,
+  onRemoveTupleIn,
   renderCategoryName,
   errorForSeries,
   noPointsHint,
@@ -667,7 +698,7 @@ export function BarTable({
             table={table}
             display={display}
             onSelectTuples={onSelectTuples}
-            onRemoveTuple={onRemoveTuple}
+            onRemoveTupleIn={onRemoveTupleIn}
             tupleNoun={tupleNoun}
             activeTupleIndex={activeTupleIndex}
           />
