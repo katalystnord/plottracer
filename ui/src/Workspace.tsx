@@ -6782,7 +6782,7 @@ export function Workspace() {
     // ⚑ There is no marking MODE any more - the category axis is two steps of
     // the calibration walk, so the tips bar shows their step prompts like any
     // other calibration step.
-    isMarkingCategoryAxis: false,
+    categoryAxisUnplaced: session.categoryAxisIncomplete(),
     mode,
     figureCaptured,
     eyedropper,

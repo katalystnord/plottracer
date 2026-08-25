@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
-import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
  * getBarCategoryTable / renameCategory (v2.0) -- the shared Bar table's own
@@ -27,12 +26,9 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
   expect(session.runCalibration()).toBe(true);
 }
 
-/** The un-ticked path, which since v2.3 only a WPD import reaches.
- * See `unmarkedBarSession` in `calibrationSession.test.ts`. */
-function unmarkedBar(session: CalibrationSession<BarAxes>): void {
-  calibratedBar(session);
-  loadWithoutCategoryAxis(session, session.getAxes()!, session.getDatasets());
-}
+  /** ⚑⚑ `unmarkedBar` IS GONE: nothing can be captured into a
+   * figure with no category axis any more, so no test needs to build one.
+   * See `CalibrationSession.categoryAxisIncomplete`. */
 
 describe('getBarCategoryTable: gating', () => {
   it('is empty before calibration', () => {
@@ -192,27 +188,6 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     expect(s2.tupleIndices[1]).toBeNull();
   });
 
-  it('a shared category (via the nearest-bar prefill) reads BOTH series in the SAME row', () => {
-    // ⚑ THE PREFILL, so the UN-TICKED path: with the axis marked, two bars in
-    // one band share a category by construction and no prefill runs at all.
-    // This still covers a WPD import, where it does.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    unmarkedBar(session);
-    session.addDataPoint(150, 500); // series 1, value 5
-    session.addDataPoint(150, 300);
-    session.renameCategory(0, 'Flax');
-
-    session.addDataset('Alkali');
-    session.addDataPoint(155, 500); // near x=150 -> prefills into the SAME "Flax" category
-    session.addDataPoint(155, 460); // value 1
-
-    const table = session.getBarCategoryTable();
-    expect(table.categoryNames).toEqual(['Flax']); // one row, not two
-    expect(table.columns).toHaveLength(2);
-    expect(table.columns[0]!.values[0]).toBeCloseTo(5, 9);
-    expect(table.columns[1]!.values[0]).toBeCloseTo(1, 9);
-  });
-
   it('carries each series own seriesName through, not a shared/global one', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
@@ -312,18 +287,6 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     expect(table.columns[0]!.values.every((v) => v !== null)).toBe(true);
   });
 
-  it('⚑ WITHOUT a marked axis the old behaviour is unchanged - a bar still gets its own slot', () => {
-    // The guard must stand down only where bands answer. An unmarked bar chart
-    // still needs a distinct addressable slot per bar so a later rename has
-    // somewhere to land - which is what `reserveEmptyCategorySlot` is FOR.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    unmarkedBar(session);
-    session.addDataPoint(140, 500);
-    session.addDataPoint(220, 300);
-    session.addDataPoint(340, 500);
-    session.addDataPoint(420, 300);
-    expect(session.getBarCategoryTable().categoryNames).toHaveLength(2);
-  });
 });
 
 describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () => {

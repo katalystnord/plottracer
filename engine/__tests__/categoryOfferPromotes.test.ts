@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, CATEGORICAL_LINE_CONFIG } from '../calibrationSession.js';
-import { flatDataSection } from '../csvExport.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
@@ -76,23 +75,6 @@ describe('C - the file stops claiming a coordinate the series do not share', () 
     s.addDataPoint(150, 300);
     s.addDataPoint(250, 300);
     expect(s.getExportFields()[0]).toBe('Position');
-  });
-
-  it('⚑ two unmarked series export "Position (in series)" - the ordinal is real, the sharing is not', () => {
-    const s = calibratedCategorical();
-    // ⚑⚑ THE UNMARKED STATE IS REACHED THROUGH THE FILE DOOR, because the
-    // walk can no longer produce it: a calibrated bar-family figure has its
-    // category axis by construction since v2.3. What it describes is a WPD
-    // IMPORT - permanent, not a legacy file - and the file door is the entrance
-    // this project has been bitten through repeatedly.
-    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
-    s.addDataPoint(150, 300);
-    s.addDataset();
-    s.setActiveDataset(1);
-    s.addDataPoint(250, 300);
-    expect(s.getExportFields()[0]).toBe('Position (in series)');
-    const section = flatDataSection(s.getExportRows(0), s.getExportFields());
-    expect(section.header[2]).toBe('Position (in series)');
   });
 
   it('⚑ marking the axis makes it shared again, and the heading says so', () => {

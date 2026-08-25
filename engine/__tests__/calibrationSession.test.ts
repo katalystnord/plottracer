@@ -23,7 +23,6 @@ import type { MapAxes } from '../../core/axes/map.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
 import { Dataset } from '../../core/dataset.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
-import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   // Same 4-point setup used throughout the engine/ui spike's checkpoints:
@@ -589,35 +588,9 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     return session;
   }
 
-  /**
-   * ⚑⚑ THE UN-TICKED PATH, REACHED DELIBERATELY (v2.3).
-   *
-   * Since the category axis is part of the calibration walk, a chart being
-   * captured now ALWAYS has bands, and a bar's category is DERIVED from the band
-   * it falls in rather than minted and stored on the pixel
-   * (`categoriesFollowBands`). The minting machinery below - `addCategory('')`
-   * per tuple, the name prefill from a neighbouring series, the sole-owner
-   * rename protection - is therefore no longer reachable by clicking.
-   *
-   * ▶ It is still REACHABLE, and that is why these tests stay: a project SAVED
-   * before v2.3 reopens with no geometry, and every one of those mechanisms runs
-   * on it. The file door is the entrance this project has been bitten through
-   * repeatedly, so it keeps its coverage - stated, rather than arrived at by a
-   * fixture that looks like an ordinary capture.
-   */
-  function unmarkedBarSession() {
-    const session = barSession();
-    // ⚑⚑ LOADED, not un-walked. This state is what a WPD IMPORT produces -
-    // `WPD_AXES_TO_CONFIG` maps `BarAxes` to `bar` and WebPlotDigitizer has no
-    // category axis to bring - so it arrives through `loadCalibrated`, with the
-    // fresh empty `CategoryAxis` that `deserializeProject` hands over. It used
-    // to be built by walking the axis and then calling `removeCategoryTicks`,
-    // a mutator no production code calls, which meant the state was constructed
-    // by an operation no user can perform and the real entrance was tested by
-    // nothing.
-    loadWithoutCategoryAxis(session, session.getAxes()!, session.getDatasets());
-    return session;
-  }
+  /** ⚑⚑ `unmarkedBarSession` IS GONE: nothing can be captured into a
+   * figure with no category axis any more, so no test needs to build one.
+   * See `CalibrationSession.categoryAxisIncomplete`. */
 
   /** Two clicks at the same x (Bar start, Bar end) capture one bar/tuple --
    * standing in for a drag-box's two corners in these engine-level tests. */
@@ -652,13 +625,6 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     expect(session.getCategoryAxis().getCategoryCount()).toBe(4);
   });
 
-  it('⚑ and DOES register it on a figure with no axis - the WPD import', () => {
-    // The record is only durable if plotData knows to serialize the key.
-    const session = unmarkedBarSession();
-    addBar(session, 150, 300, 250);
-    expect(session.getMetadataKeys()).toContain('categoryIndex');
-  });
-
   it('prefills a new series\' bar from whichever series already named that column', () => {
     // A grouped bar chart repeats one category set across series; typing it again
     // per series is pure friction (David's call: prefill, not a shared list).
@@ -674,24 +640,6 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     addBar(session, 160, 300, 240);
     addBar(session, 260, 300, 190);
     expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']);
-  });
-
-  it('writes the prefilled name ONTO the tuple, so retyping one bar moves nothing else', () => {
-    // The reason this is a prefill and not a shared positional list: a series
-    // that skips a category must be correctable without shifting its neighbours.
-    const session = unmarkedBarSession();
-    addBar(session, 150, 300, 250);
-    addBar(session, 250, 300, 200);
-    session.setTupleLabel(0, 'Flax');
-    session.setTupleLabel(1, 'Hemp');
-    session.addDataset('Alkali');
-    addBar(session, 160, 300, 240);
-    addBar(session, 260, 300, 190);
-
-    session.setTupleLabel(1, 'Jute'); // series 2 has no Hemp bar
-    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Jute']);
-    session.setActiveDataset(0);
-    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', 'Hemp']); // series 1 untouched
   });
 
   // ⚑ The v1.3 release-gate audit proved the prefill could fabricate a WRONG name
@@ -730,28 +678,6 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Hemp', 'Flax']);
   });
 
-  it('leaves the category unnamed rather than reuse a name when the pairing is ambiguous', () => {
-    // A category appears at most once per series, so a second claim on one name
-    // means the nearest-bar pairing cannot tell -- and refusing to prefill is
-    // honest where reusing a name that looks typed is not (tenets 9+10).
-    //
-    // ⚑ v2.0, revised: a bar tuple that fails the prefill no longer falls back to
-    // a WPD-style numbered default ("Bar1") either -- David: "we do not need the
-    // names, the position is enough for OUR identification. But the user probably
-    // needs the category names," meaning a name is the user's to type, never
-    // invented and written as if it were one (tenet 9). It gets its own reserved,
-    // distinct category slot (so it has somewhere to hang a name once typed) but
-    // getTupleLabel reads back '' until then, same as a Spider axis nobody named.
-    const session = unmarkedBarSession();
-    addBar(session, 150, 300, 250);
-    session.setTupleLabel(0, 'Flax');
-
-    session.addDataset('Alkali');
-    addBar(session, 155, 300, 245);
-    addBar(session, 158, 300, 235); // a second bar by the same donor
-    expect([session.getTupleLabel(0), session.getTupleLabel(1)]).toEqual(['Flax', '']);
-  });
-
   it('two still-unnamed bars get DISTINCT category slots, not one shared "" category', () => {
     // The trap a naive fix falls into: writing '' via the same reuse-by-name path
     // setTupleLabel uses for a typed name would look up the FIRST bar's empty
@@ -777,36 +703,6 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
   // at once -- a rename propagates when it's safe, and never corrupts a
   // sibling series' data when it isn't. Direct coverage beyond what the
   // adapted tests above exercise incidentally.
-  it('renaming a category with no other owner propagates in place -- the same category, just a better name', () => {
-    const session = unmarkedBarSession();
-    addBar(session, 150, 300, 250);
-    session.setTupleLabel(0, 'Flax'); // sole owner: renames in place
-    session.setTupleLabel(0, 'Flaxseed'); // retyping again, still sole owner
-    expect(session.getTupleLabel(0)).toBe('Flaxseed');
-    // It's a RENAME, not a new category sitting alongside the old one.
-    expect(session.getCategoryAxis().getCategories()).toEqual(['Flaxseed']);
-  });
-
-  it('typing an EXISTING category\'s exact name joins it by canonical identity, not just by position', () => {
-    // Distinct from prefill (which matches by nearest position): this is the
-    // user directly typing a name that already exists elsewhere, and it must
-    // share the SAME index -- so renaming either bar afterward renames both,
-    // exactly as if prefill had assigned it.
-    const session = unmarkedBarSession();
-    addBar(session, 150, 300, 250);
-    session.setTupleLabel(0, 'Flax');
-
-    session.addDataset('Alkali');
-    addBar(session, 900, 300, 200); // far away -- prefill would NOT have matched this to Flax
-    session.setTupleLabel(0, 'Flax'); // typed manually, same exact name
-    expect(session.getCategoryAxis().getCategories()).toEqual(['Flax']); // joined, not duplicated
-
-    // Now shared -- renaming this series' bar must not corrupt series 1's.
-    session.setTupleLabel(0, 'Flax (batch 2)');
-    session.setActiveDataset(0);
-    expect(session.getTupleLabel(0)).toBe('Flax'); // untouched
-  });
-
   it('grows the categorical export a Category column only once something is named', () => {
     const session = new CalibrationSession<BarAxes>(CATEGORICAL_LINE_CONFIG);
     calibrateStandardBar(session);

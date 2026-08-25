@@ -30,7 +30,6 @@ import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrat
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
-import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 function session() {
   const s = new CalibrationSession(XY_AXES_CONFIG);
@@ -279,27 +278,4 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     expect(at('SD upper delta')).toBeCloseTo(2, 6); // measured from the bar's base
   });
 
-  it('⚑ a bar with no error exports exactly as it did before', () => {
-    const s = new CalibrationSession(BAR_AXES_CONFIG);
-    for (const [px, py, v] of [
-      [100, 300, '0'],
-      [100, 100, '10'],
-    ] as Array<[number, number, string]>) {
-      s.handleCalibrationClick(px, py);
-      s.confirmCalibrationValues([v]);
-    }
-    walkCategoryAxis(s);
-    s.runCalibration();
-    s.addDataPoint(200, 300);
-    s.addDataPoint(200, 200);
-    // ⚑⚑ NO AXIS MARKED, WITH A BAR ALREADY CAPTURED - which is precisely
-    // what a WPD IMPORT delivers: WebPlotDigitizer brings its recorded points
-    // and has no category axis to bring with them. A single bar with no
-    // declared categories still has a position, and it is 1. What it does not
-    // have is a measurable PITCH, which is why no extent columns appear beside
-    // it.
-    loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
-    const [data] = sectionsFor(s as never, 'active');
-    expect(data!.header).toEqual(['Position', 'category', 'Min', 'Max', 'Value']);
-  });
 });

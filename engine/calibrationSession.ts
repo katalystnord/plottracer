@@ -222,7 +222,6 @@ import {
  * having started ON it. The UI snaps within 14px in canvas space; this is the
  * model's own bound, so the guard does not depend on the UI having snapped. */
 const CAP_DATUM_MATCH_PX = 20;
-import { BandedAxis } from '../core/bandedAxis.js';
 import {
   capFreeDirection,
   constrainCap,
@@ -2040,9 +2039,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // something we measured; blanking it would throw a fact away to correct a
       // claim, when correcting the claim is what was needed. Marking the axis
       // makes it shared again and the word comes back.
-      const position = this.categoriesFollowBands() || this.seriesWithReadings() <= 1
-        ? 'Position'
-        : 'Position (in series)';
+      // ⚑⚑ ALWAYS `Position`. `Position (in series)` named an ordinal that
+      // only meant something within one series, for a figure where nobody had
+      // said where the categories were. That state is gone: the category axis is
+      // part of the walk, so the coordinate is a declared band and means the
+      // same thing in every series.
+      const position = 'Position';
       return this.anyPointLabels() ? [position, 'Category', 'Value'] : [position, 'Value'];
     }
     // Spider (v1.4): `Axis, Name, Value`, the same independent-variables-first
@@ -2192,27 +2194,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
       // Must stay index-aligned with getExportFields() -- same condition, so the
       // Category cell exists exactly when the header does.
       const withCategory = this.anyPointLabels();
-      const banded = this.categoriesFollowBands();
-      // ⚑ ONE source for the name, shared with the on-screen table: with the
-      // axis marked it comes from the BAND, otherwise from the point. Reading
-      // the pixel's metadata directly here would have made the file disagree
-      // with the panel the moment the axis was marked.
+      // ⚑ ONE source for the name, shared with the on-screen table: it comes
+      // from the BAND. Reading the pixel's metadata directly here would have made
+      // the file disagree with the panel.
       const labels = this.getPointLabels(datasetIndex);
-      const rank: number[] = [];
-      if (!banded) {
-        pixels
-          .map((p, i) => ({ i, x: p.x }))
-          .sort((a, b) => a.x - b.x)
-          .forEach((o, k) => { rank[o.i] = k + 1; });
-      }
       // ⚑ Null, never a nearest guess, for a reading outside every band. A point
       // off the marked axis has no category, and inventing one is precisely the
       // fabricated-category defect v2.1 already fixed once.
-      const positionOf = (p: { x: number; y: number }, i: number): number | null =>
-        banded ? (this.categoryAxis.bandIndexAt({ x: p.x, y: p.y }) ?? null) !== null
-            ? this.categoryAxis.bandIndexAt({ x: p.x, y: p.y })! + 1
-            : null
-          : rank[i]!;
+      //
+      // ⚑⚑ AND THE X-SORTED RANK IS GONE WITH THE REGIME THAT NEEDED IT. It
+      // numbered a series' own points left to right for a figure with no declared
+      // category axis - a coordinate that meant nothing outside that one series.
+      const positionOf = (p: { x: number; y: number }): number | null => {
+        const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+        return band === null ? null : band + 1;
+      };
       // ⚑⚑ ONE ROW PER DATUM, exactly as the general branch below. B4 made a
       // datum's error caps pixels of its own series, and its fix landed in ONE
       // of the three branches - so this one still handed every cap out as a
@@ -2231,7 +2227,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const value = typeof raw === 'number' && res != null ? roundToResolution(raw, res) : raw;
         const role = roleAt(i);
         const label = labels[i] ?? '';
-        const position = positionOf(p, i);
+        const position = positionOf(p);
         // Position, Category, Value -- independent first, dependent last, matching
         // getExportFields() and the on-screen table. An unnamed point in a figure
         // that HAS names exports a BLANK cell, so a reader can see which ticks were
@@ -2600,7 +2596,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // A removed series takes its bars with it, so any category only IT owned
     // is now an orphan -- see pruneOrphanedCategories for what a ghost row
     // costs the user.
-    this.pruneOrphanedCategories();
     // Nothing may keep pointing at a series that is gone (engine/errorRelation.ts).
     clearErrorRelationsTo(this.getDatasets(), removedName);
     if (this.activeDatasetIndex >= this.datasetEntries.length) {
@@ -2980,6 +2975,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ManualSelectionTool.onMouseClick behavior for Bar axes datasets. */
   addDataPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
+    // ⚑⚑ NO CAPTURE UNTIL THE CATEGORY AXIS IS PLACED - see
+    // `categoryAxisIncomplete`. The tips bar says so at the same moment, which is
+    // what keeps this from being a click that does nothing for no stated reason.
+    if (this.categoryAxisIncomplete()) return 'ignored';
     const entry = this.activeEntry;
     const dataset = entry.dataset;
     if (dataset.hasSlots()) {
@@ -3100,13 +3099,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // store -- the band answers, and reserveEmptyCategorySlot would append a
         // category BEYOND the declared count, which is exactly the drift
         // `ticksAreStale` exists to detect.
-        if (
-          newTupleIndex !== null &&
-          !this.categoriesFollowBands() &&
-          !this.prefillTupleCategoryLabel(dataset, newTupleIndex)
-        ) {
-          this.autoLabelTuple(newTupleIndex);
-        }
+        // ⚑⚑ NOTHING TO GUESS, EVER. Prefill copied a name from the nearest
+        // already-named bar in another series - a guess about WHICH category a
+        // reading meant, for a figure that had not declared any. A band says
+        // outright, so this whole path went with the regime that needed it.
       } else {
         dataset.addToTupleAt(tupleIndex, groupIndex, index);
       }
@@ -3129,7 +3125,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
           this.setSectorApex(t, this.pendingApex.x, this.pendingApex.y);
           // The tuple now has a primary pixel, so it finally has somewhere to hold a
           // name -- see the apex branch above for why this could not happen earlier.
-          this.autoLabelTuple(t);
         }
         // Hold the suppression until this slice's SECOND edge lands, then release.
         if (dataset.getAllTuples()[t]?.every((v) => v !== null)) {
@@ -3154,22 +3149,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
     if (anchorDerived) {
       dataset.addPixel(px, py);
-      if (!this.categoriesFollowBands()) {
-        this.prefillCategoryLabel(dataset, dataset.getAllPixels().length - 1);
-      }
     } else {
       const index = bestInsertionIndex(pixels, { x: px, y: py });
       dataset.insertPixel(index, px, py);
-      // ⚑ THE GUESS STANDS DOWN ONCE THE BANDS ANSWER - the same gate the tuple
-      // path already has (`!this.categoriesFollowBands() && !prefillTuple…`).
-      // Prefill exists to copy a name from the nearest already-named point in
-      // another series, i.e. to GUESS which category this reading means. A
-      // declared band says outright, so guessing could only disagree with it.
-      //
-      // Prefill by ROW index -- the position the table shows and the user reasons
-      // about -- not by the categorical export's x-sorted Position, which is a
-      // separate derivation and would surprise anyone reading the panel.
-      if (!this.categoriesFollowBands()) this.prefillCategoryLabel(dataset, index);
+      // ⚑⚑ THE GUESS IS GONE, not merely stood down. Prefill copied a name
+      // from the nearest already-named point in another series - a GUESS about
+      // which category a reading meant. A declared band says outright.
     }
     return 'point-added';
   }
@@ -3219,7 +3204,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!dataset.hasSlots()) return 0;
 
     let tupleIndex = entry.slotCursor.tupleIndex;
-    let createdTuple = false;
     let added = 0;
     const slots = dataset.getSlotNames().length;
     for (let groupIndex = 0; groupIndex < Math.min(points.length, slots); groupIndex++) {
@@ -3235,16 +3219,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // right number on the wrong axis, which is worse than no number at all.
         tupleIndex = dataset.getAllTuples().length;
         dataset.addEmptyTupleAt(tupleIndex);
-        createdTuple = true;
       }
       dataset.addToTupleAt(tupleIndex, groupIndex, pixelIndex);
       added++;
-    }
-    // The category label lives on the tuple's primary-group pixel, so it can only
-    // be written once that slot exists -- same as the click path, which always
-    // fills slot 0 first.
-    if (createdTuple && tupleIndex !== null && dataset.getAllTuples()[tupleIndex]?.[0] != null) {
-      this.autoLabelTuple(tupleIndex);
     }
     entry.slotCursor = this.computeSlotCursorFor(dataset);
     return added;
@@ -3267,6 +3244,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Returns how many boxes were added (0 if not calibrated or neither shape). */
   addBarDetectBoxes(boxes: readonly { start: { x: number; y: number }; end: { x: number; y: number } }[]): number {
     if (!this.axes) return 0;
+    // ⚑ THE SAME GATE AS THE CLICK PATH, and it has to be here too: a trace
+    // that filed twenty bars by stored index would rebuild the second category
+    // model wholesale, which is the failure this closes. Auto-extract is a
+    // capture like any other. See `categoryAxisIncomplete`.
+    if (this.categoryAxisIncomplete()) return 0;
     const dataset = this.activeEntry.dataset;
     const isBar = this.isBarIntervalShape(dataset);
     const isHistogramBin = this.isHistogramBinShape(dataset);
@@ -3420,49 +3402,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     });
   }
 
-  /** Called when a new tuple starts, to give it a category identity. Used to
-   * write a WPD-ported default like "Bar0" (axes.dataPointsLabelPrefix +
-   * index) into metadata.label -- removed v2.0, 2026-07-30, for every tuple
-   * type at once (found on Bar, then the identical bug live on Pie as
-   * "Slice0"/"Slice1"): position already identifies a row; a name is the
-   * user's to type, never invented (tenet 9), matching how Spider's own
-   * spoke naming already worked (core/axes/spider.ts). Bar-family tuples
-   * still need a distinct, ADDRESSABLE CategoryAxis slot reserved up front
-   * so a later rename has somewhere to land (reserveEmptyCategorySlot);
-   * every other type needs nothing here at all. */
-  private autoLabelTuple(tupleIndex: number): boolean {
-    const dataset = this.activeEntry.dataset;
-    if (this.usesCategoryAxis(dataset)) return this.reserveEmptyCategorySlot(tupleIndex);
-    return true;
-  }
-
-  /** The bar-family counterpart of autoLabelTuple's plain no-op: reserves a
-   * fresh, unnamed categoryIndex. NOT `setTupleLabel(tupleIndex, '')` --
-   * that reuses an EXISTING category by matching name, and two still-unnamed
-   * bars must not collapse onto one shared '' category the instant a second
-   * is added (naming one would then rename both). addCategory('') always
-   * mints a distinct index instead. */
-  private reserveEmptyCategorySlot(tupleIndex: number): boolean {
-    const dataset = this.activeEntry.dataset;
-    const tuple = dataset.getAllTuples()[tupleIndex];
-    if (!tuple) return false;
-    const pixels = tuple.filter((v): v is number => v !== null && v !== undefined);
-    if (pixels.length === 0) return false;
-    const target = pixels[0]!;
-    const idx = this.categoryAxis.addCategory('');
-    for (const pixelIndex of pixels) {
-      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
-      if (pixelIndex === target) {
-        dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: idx });
-      } else if ('categoryIndex' in existing) {
-        const { categoryIndex: _dropped, ...rest } = existing;
-        dataset.setMetadataAt(pixelIndex, rest);
-      }
-    }
-    this.registerCategoryIndexMetadataKey(dataset);
-    return true;
-  }
-
   /**
    * The category label for a tuple (Box Plot's per-box name) in the active dataset.
    *
@@ -3537,44 +3476,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const target = pixels[0]!;
 
     if (this.usesCategoryAxis(dataset)) {
-      // v2.1: with the axis marked, the BAND is the category's identity, so
-      // renaming a bar renames its band -- for every series at once, which is
-      // correct, because one band is one category. None of the reuse-or-create
-      // reasoning below applies: it exists to resolve WHICH category an
-      // unmarked bar means, and a declared band leaves nothing to resolve.
-      if (this.categoriesFollowBands()) {
-        const band = this.categoryIndexOfTuple(dataset, tupleIndex);
-        return band === null ? false : this.categoryAxis.renameCategory(band, label);
-      }
-      const existingRaw = dataset.getPixel(target).metadata?.['categoryIndex'];
-      const existingIdx = typeof existingRaw === 'number' ? existingRaw : -1;
-      let idx: number;
-      if (existingIdx >= 0 && !this.categoryIndexHasOtherOwner(existingIdx, dataset, tupleIndex)) {
-        // Sole owner of this category: renaming it in place is unambiguous
-        // (no other bar, in any series, is affected) -- this is what lets a
-        // genuine typo fix propagate once a SECOND series adopts it later.
-        this.categoryAxis.renameCategory(existingIdx, label);
-        idx = existingIdx;
-      } else {
-        // Either unassigned yet, or SHARED with another series' bar (e.g. a
-        // prefilled guess that turned out wrong -- v1.3 #9's "series 2 has no
-        // Hemp bar" case). Never silently rename a category out from under
-        // another series' bar; reuse an existing category with this exact
-        // name, or create a new one.
-        idx = this.categoryAxis.getCategoryIndex(label);
-        if (idx < 0) idx = this.categoryAxis.addCategory(label);
-      }
-      for (const pixelIndex of pixels) {
-        const existing = dataset.getPixel(pixelIndex).metadata ?? {};
-        if (pixelIndex === target) {
-          dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: idx });
-        } else if ('categoryIndex' in existing) {
-          const { categoryIndex: _dropped, ...rest } = existing;
-          dataset.setMetadataAt(pixelIndex, rest);
-        }
-      }
-      this.registerCategoryIndexMetadataKey(dataset);
-      return true;
+      // ⚑⚑ THE BAND IS THE CATEGORY'S IDENTITY, so renaming a bar renames its
+      // band - for every series at once, which is correct, because one band is
+      // one category.
+      //
+      // ⚑ The reuse-or-create path that used to sit here is gone with the
+      // regime it served. It existed to resolve WHICH category an unmarked bar
+      // meant - reuse an existing name, or mint one, and never rename a category
+      // out from under another series. A declared band leaves nothing to resolve.
+      const band = this.categoryIndexOfTuple(dataset, tupleIndex);
+      return band === null ? false : this.categoryAxis.renameCategory(band, label);
     }
 
     for (const pixelIndex of pixels) {
@@ -3625,14 +3536,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     //
     // ⚑ A category nobody has named reads BLANK, never `Category 2` - the
     // fabricated-name defect v2.1 removed from Bar and Pie.
-    const banded = this.categoriesFollowBands();
     return entry.dataset.getAllPixels().map((p) => {
-      if (banded) {
-        const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
-        return band === null ? '' : (this.categoryAxis.getCategories()[band] ?? '');
-      }
-      const label = p.metadata?.['label'];
-      return typeof label === 'string' ? label : '';
+      const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+      return band === null ? '' : (this.categoryAxis.getCategories()[band] ?? '');
     });
   }
 
@@ -3650,15 +3556,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // reuse-or-create reasoning the unmarked path needs applies here; that
     // exists to resolve WHICH category an unmarked reading means, and a declared
     // band leaves nothing to resolve.
-    if (this.categoriesFollowBands()) {
-      const p = dataset.getPixel(pointIndex);
-      const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
-      if (band !== null) this.categoryAxis.renameCategory(band, label);
-      return;
-    }
-    const existing = dataset.getPixel(pointIndex).metadata ?? {};
-    dataset.setMetadataAt(pointIndex, { ...existing, label });
-    this.registerLabelMetadataKey(dataset);
+    const p = dataset.getPixel(pointIndex);
+    const band = this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
+    if (band !== null) this.categoryAxis.renameCategory(band, label);
   }
 
   /** Does any series carry a category name? Decides whether the categorical
@@ -3672,72 +3572,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "nobody transcribed anything" for a fully-named figure - which silently
     // dropped the Category column out of the export.
     return this.datasetEntries.some((_e, i) => this.getPointLabels(i).some((l) => l.length > 0));
-  }
-
-  /** Copy a category name onto a newly added point from the NEAREST already-named
-   * bar in another series, measured along the category axis (v1.3 #9, David's
-   * call: per-point storage + prefill).
-   *
-   * A grouped bar chart repeats one category set across series, so typing
-   * Flax/Hemp/Jute again for every series is pure friction. The name is still
-   * written ON the point -- it is a real, editable value the table shows
-   * immediately, not a live link to another series -- so a series that skips a
-   * category is corrected by retyping that one cell, and nothing else shifts.
-   *
-   * ⚑ v1.3 gate: this used to match by ROW INDEX, which is CLICK ORDER, not
-   * category identity -- so the two most ordinary grouped-bar situations silently
-   * fabricated a wrong name. A series with no Hemp bar (click Flax, then Jute) got
-   * row 1 prefilled "Hemp", and that wrong name went into the Label / Category
-   * column of every export, indistinguishable from a transcription. Clicking the
-   * rightmost bar first did the same. Now the pairing is a MEASUREMENT: the donor
-   * is whichever named bar sits nearest along the CATEGORY axis (x for upright
-   * bars, y when the chart is rotated), which lands on the right category however
-   * the user clicks and whatever they skip. Side-by-side sub-bars of a group are
-   * offset from their donor but still nearest to it, so grouped charts -- the case
-   * the feature exists for -- keep working.
-   *
-   * Fails SAFE rather than guessing: if that donor's name is already carried by
-   * another point in this same series, nothing is written (a category appears at
-   * most once per series, so a second claim on one name means the pairing is
-   * ambiguous). A blank cell the user fills in is honest; a wrong name that looks
-   * typed is not (tenets 9 + 10).
-   *
-   * Bar-family only (Box Plot and Histogram return before this -- they file into
-   * tuples and already have their own per-tuple name field). */
-  private prefillCategoryLabel(dataset: Dataset, index: number): void {
-    if (this.config.axesKind !== 'bar') return;
-    const target = dataset.getAllPixels()[index];
-    if (!target) return;
-    // The category axis is the one the bars are spread ALONG: x for upright bars,
-    // y once "Horizontal bars" is checked. Read it off the live axes so the two
-    // orientations share one code path.
-    const rotated = this.axes instanceof BarAxes ? this.axes.isRotated() : false;
-    const categoryOf = (p: { x: number; y: number }): number => (rotated ? p.y : p.x);
-    const here = categoryOf(target);
-
-    let bestLabel: string | null = null;
-    let bestDistance = Infinity;
-    for (const other of this.datasetEntries) {
-      if (other.dataset === dataset) continue;
-      for (const pixel of other.dataset.getAllPixels()) {
-        const label = pixel.metadata?.['label'];
-        if (typeof label !== 'string' || label.length === 0) continue;
-        const distance = Math.abs(categoryOf(pixel) - here);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestLabel = label;
-        }
-      }
-    }
-    if (bestLabel === null) return;
-
-    // Already used in THIS series -> the pairing is ambiguous, so record nothing.
-    const taken = dataset.getAllPixels().some((p, i) => i !== index && p.metadata?.['label'] === bestLabel);
-    if (taken) return;
-
-    const existing = target.metadata ?? {};
-    dataset.setMetadataAt(index, { ...existing, label: bestLabel });
-    this.registerLabelMetadataKey(dataset);
   }
 
   /** Category-axis coordinate of a pixel: x for upright bars, y once
@@ -3777,23 +3611,45 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * function of a pixel and the declared dividers; it cannot be inconsistent,
    * only recomputed.
    */
-  private categoriesFollowBands(): boolean {
-    // ⚑ A COUNT IS REQUIRED, not just an axis, and leaving it out was a real
-    // defect (code review, 2026-08-10). `markCategoryAxis` succeeds while the
-    // category list is still empty, and the fold-out's Done button lets the user
-    // leave in exactly that state. Bands then "answered" for every bar while
-    // there were no categories to answer WITH: capture stopped appending one,
-    // and getBarCategoryTable iterates the category list for its rows -- so every
-    // captured bar existed on the canvas and in the record with no row at all.
-    // A table that looks complete and is not is the precise failure this whole
-    // feature was built to remove.
+  /**
+   * The type HAS a category axis but the walk has not finished placing it.
+   *
+   * ⚑⚑ THIS IS ONLY EVER TRUE FOR AN IMPORT. A figure calibrated here cannot
+   * reach it: the category axis IS calibration steps c1/c2, so `isCalibrated`
+   * implies both ends are placed, and `checkValues` refuses a count that would
+   * leave `applyCalibratedCategoryAxis` unable to build the geometry. So a
+   * normally-walked bar chart always has its bands.
+   *
+   * ⚑⚑ WHAT IT GUARDS. A WebPlotDigitizer project has no category axis to
+   * bring - `WPD_AXES_TO_CONFIG` maps `BarAxes` to `bar` and WPD has no such
+   * concept - so an imported bar chart lands calibrated on its value axis with
+   * c1/c2 unplaced, and the walk resumes at `Cat 1`. Capturing in that state used
+   * to produce bars whose category was a STORED INDEX rather than a measured
+   * band: a second category model, kept alive in the code by 17 branches and in
+   * the FILE FORMAT by `countDeclared`.
+   *
+   * ▶ That second model was ours, not WPD's - a leftover from when our own
+   * category axis was an offer rather than a requirement. Making it a requirement
+   * closed every one of our own doors to it; this closed the last. David:
+   * *"importers should only import things that they can correctly import. If it
+   * cannot do that, that should be plainly stated to the user."*
+   */
+  categoryAxisIncomplete(): boolean {
+    // ⚑⚑ CALIBRATED FIRST, AND LEAVING THIS OUT WAS A REAL DEFECT - caught by
+    // the e2e walk, not by reasoning. Without it the predicate is true for the
+    // whole of every ORDINARY bar calibration too, because the category axis is
+    // not placed until its own steps are answered. So the tips bar replaced
+    // `1/4 - P1` with "this figure has no category axis yet" on the very first
+    // click of a figure nobody had imported, and capture was refused in a state
+    // where nothing could capture anyway.
     //
-    // With no count declared there are no bands, so this reads exactly as an
-    // unmarked session and the ordinary prefill path runs.
+    // ▶ The state this names is "the WALK IS OVER and there is still no category
+    // axis", which only a file can produce. Mid-walk, the step's own prompt owns
+    // the tips bar and is the right thing to be reading.
+    if (!this.axes) return false;
     return (
       this.supportsCategoryTicks() &&
-      this.categoryAxis.hasGeometry() &&
-      this.categoryAxis.hasDeclaredCount()
+      !(this.categoryAxis.hasGeometry() && this.categoryAxis.hasDeclaredCount())
     );
   }
 
@@ -3820,9 +3676,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * heatmap grid's P2 decision (measured dividers pinned to the ink, generated
    * ones parametric to the box) applied one level out.
    */
-  private categoryFrameFor(dataset: Dataset): CategoryFrame | null {
-    if (this.categoriesFollowBands()) return this.categoryAxis;
-    return this.derivedCategoryFrame(dataset);
+  private categoryFrameFor(_dataset: Dataset): CategoryFrame | null {
+    // ⚑⚑ ONE FRAME. The other was a `BandedAxis` DERIVED from the bars, for a
+    // figure that had not declared a category axis. Nothing produces that figure
+    // any more - see `categoryAxisIncomplete`.
+    return this.categoryAxis;
   }
 
   /**
@@ -3842,56 +3700,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const along = capFreeDirection(this.axes, { x: first.x, y: first.y }, 'upper');
     if (!along) return null;
     return { x: -along.y, y: along.x };
-  }
-
-  /**
-   * A frame measured off the bars themselves, for a session where nobody marked
-   * the axis.
-   *
-   * Each tuple projects onto the category direction as an interval; its centre
-   * is that interval's midpoint. The dividers are the midpoints BETWEEN adjacent
-   * centres and the two outer edges continue half a pitch past the end bars - so
-   * three bars at 150, 250 and 350 produce edges at 100 and 400 with dividers at
-   * 200 and 300, which is exactly what marking that axis and declaring three
-   * categories would have produced. The same figure, the same numbers.
-   *
-   * ⚑ NULL BELOW TWO TUPLES, and that is a measurement statement rather than a
-   * guard. One bar's own width is measured; the PITCH it sits on is not, because
-   * a spacing needs two bars to be seen. Reporting a lone bar as filling its
-   * band would assert a spacing nobody measured - tenet 9, and pattern 3's
-   * "assert only what was measured".
-   *
-   * ⚠️ A CATEGORY WITH NO BAR IN ANY SERIES LEAVES NO INK, so this under-counts
-   * on that figure and reports a wider band than the chart has. David:
-   * *"that is the outlier that proves the others right."* It is why the derived
-   * frame is OFFERED and why marking the axis stays the way to state what the
-   * ink cannot show. `barCategoryFrameDerived.test.ts` pins both halves.
-   */
-  private derivedCategoryFrame(dataset: Dataset): BandedAxis | null {
-    const direction = this.categoryDirection(dataset);
-    if (!direction) return null;
-    const centres = this.tupleCentresAlong(dataset, direction);
-    if (centres.length < 2) return null;
-    const sorted = [...centres].sort((a, b) => a - b);
-    const n = sorted.length;
-    const lead = (sorted[1]! - sorted[0]!) / 2;
-    const tail = (sorted[n - 1]! - sorted[n - 2]!) / 2;
-    const a = sorted[0]! - lead;
-    const b = sorted[n - 1]! + tail;
-    const span = b - a;
-    if (!Number.isFinite(span) || span <= 0) return null;
-    const interior = sorted.slice(0, -1).map((c, i) => (c + sorted[i + 1]!) / 2).map((m) => (m - a) / span);
-    const frame = new BandedAxis();
-    frame.setConvention('edge');
-    if (!frame.setCount(n)) return null;
-    const at = (t: number) => ({ x: t * direction.x, y: t * direction.y });
-    if (!frame.setEdges(at(a), at(b))) return null;
-    // ⚑ REFUSED rather than repaired. `restoreTickParams` regenerates an EVEN
-    // set when it rejects one, which is the right answer for a loaded file (a
-    // tick is an aid) and the wrong one here: an even frame we did not measure
-    // is precisely the drawn-not-measured failure pattern 3 names.
-    if (!frame.restoreTickParams(interior, true)) return null;
-    return frame;
   }
 
   /** Each tuple's midpoint along `direction`, for the tuples that have a pixel. */
@@ -3946,10 +3754,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Which of the three frames answered, so the column can be named for what it
    * actually is. See `TupleRow.positionFrame`. */
-  private positionFrameKind(dataset: Dataset): 'declared' | 'measured' | 'in-series' | 'index' {
-    if (this.categoriesFollowBands()) return 'declared';
-    if (!this.categoryDirection(dataset)) return 'index';
-    return this.seriesWithReadings() > 1 ? 'in-series' : 'measured';
+  private positionFrameKind(_dataset: Dataset): 'declared' {
+    // ⚑⚑ ONLY ONE KIND SURVIVES. `measured`, `in-series` and `index` named
+    // frames for a figure with no declared category axis, which no longer exists.
+    return 'declared';
   }
 
   /** The category a tuple belongs to: its BAND while the axis is marked, the
@@ -3957,18 +3765,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private categoryIndexOfTuple(dataset: Dataset, tupleIndex: number): number | null {
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple) return null;
-    if (this.categoriesFollowBands()) {
-      const primary = tuple.find((v): v is number => v !== null && v !== undefined);
-      if (primary === undefined) return null;
-      const p = dataset.getPixel(primary);
-      return this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
-    }
-    for (const pixelIndex of tuple) {
-      if (pixelIndex === null || pixelIndex === undefined) continue;
-      const idx = dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
-      if (typeof idx === 'number') return idx;
-    }
-    return null;
+    const primary = tuple.find((v): v is number => v !== null && v !== undefined);
+    if (primary === undefined) return null;
+    const p = dataset.getPixel(primary);
+    return this.categoryAxis.bandIndexAt({ x: p.x, y: p.y });
   }
 
   /**
@@ -4039,115 +3839,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * this is Bar-2-slot-interval only. */
   private wantsAutoCategoryPrefill(dataset: Dataset): boolean {
     return this.isBarIntervalShape(dataset);
-  }
-
-  /** Does any tuple OTHER than (dataset, tupleIndex) already reference this
-   * categoryIndex? Answers whether renaming it in place is safe (no other
-   * bar, in any series, would be silently relabeled) or whether it must be
-   * treated as a reassignment instead -- see setTupleLabel's own comment for
-   * why this distinction is the whole point. */
-  private categoryIndexHasOtherOwner(categoryIndex: number, dataset: Dataset, tupleIndex: number): boolean {
-    for (const entry of this.datasetEntries) {
-      const tuples = entry.dataset.getAllTuples();
-      for (let i = 0; i < tuples.length; i++) {
-        if (entry.dataset === dataset && i === tupleIndex) continue;
-        const owns = tuples[i]!.some(
-          (pixelIndex) =>
-            pixelIndex !== null &&
-            pixelIndex !== undefined &&
-            entry.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'] === categoryIndex
-        );
-        if (owns) return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Tuple-shaped counterpart of prefillCategoryLabel (v2.0). A bar is now TWO
-   * pixels (its dragged corners), not one, so a NEW TUPLE - not a new pixel -
-   * is the thing that needs a category name, and the donor search/ambiguity
-   * guard both need to compare TUPLES (via getTupleLabel-style scanning and
-   * each tuple's PRIMARY pixel for position) rather than raw pixel indexes.
-   * Same algorithm, same fail-safe-on-ambiguity rule as prefillCategoryLabel
-   * - see its doc comment for the full reasoning, not repeated here.
-   *
-   * Bar-only (`config.id === 'bar'`, not just `axesKind === 'bar'`): Box Plot
-   * shares BarAxes but a box has no comparable "one repeated category set
-   * across series" pattern to prefill from, and keeps its own plain
-   * `Bar<i>`-via-autoLabelTuple default.
-   *
-   * Returns whether it wrote a name, so the caller can fall back to
-   * autoLabelTuple's plain default when there is no donor - mirroring how
-   * the old per-point path left a name blank rather than inventing one.
-   *
-   * ⚑ v2.0: assigns the donor's CATEGORYINDEX, not a copied string -- the new
-   * tuple shares canonical identity with its donor from the moment it's
-   * created, so renaming either one afterward (setTupleLabel) renames both.
-   * A copied string would have looked identical on screen at prefill time but
-   * silently diverged the instant either series' name was corrected.
-   */
-  private prefillTupleCategoryLabel(dataset: Dataset, tupleIndex: number): boolean {
-    if (!this.wantsAutoCategoryPrefill(dataset)) return false;
-    const tuple = dataset.getAllTuples()[tupleIndex];
-    const primaryPixelIndex = tuple?.find((v): v is number => v !== null && v !== undefined);
-    if (primaryPixelIndex === undefined) return false;
-    const here = this.categoryCoordOf(dataset.getPixel(primaryPixelIndex));
-
-    let bestIdx: number | null = null;
-    let bestDistance = Infinity;
-    for (const other of this.datasetEntries) {
-      if (other.dataset === dataset) continue;
-      for (const otherTuple of other.dataset.getAllTuples()) {
-        const otherPrimary = otherTuple.find((v): v is number => v !== null && v !== undefined);
-        if (otherPrimary === undefined) continue;
-        let idx: number | null = null;
-        for (const pixelIndex of otherTuple) {
-          if (pixelIndex === null || pixelIndex === undefined) continue;
-          const candidate = other.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
-          if (typeof candidate === 'number') {
-            idx = candidate;
-            break;
-          }
-        }
-        if (idx === null) continue;
-        const distance = Math.abs(this.categoryCoordOf(other.dataset.getPixel(otherPrimary)) - here);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIdx = idx;
-        }
-      }
-    }
-    if (bestIdx === null) return false;
-
-    // Already used by another tuple in THIS dataset -> ambiguous, write nothing.
-    const taken = dataset.getAllTuples().some((t, i) => {
-      if (i === tupleIndex) return false;
-      return t.some(
-        (pixelIndex) =>
-          pixelIndex !== null &&
-          pixelIndex !== undefined &&
-          dataset.getPixel(pixelIndex).metadata?.['categoryIndex'] === bestIdx
-      );
-    });
-    if (taken) return false;
-
-    // Same write shape as setTupleLabel, parameterized on `dataset` rather
-    // than assumed to be the active one -- matching prefillCategoryLabel's
-    // own defensive style above.
-    const pixels = tuple!.filter((v): v is number => v !== null && v !== undefined);
-    const target = pixels[0]!;
-    for (const pixelIndex of pixels) {
-      const existing = dataset.getPixel(pixelIndex).metadata ?? {};
-      if (pixelIndex === target) {
-        dataset.setMetadataAt(pixelIndex, { ...existing, categoryIndex: bestIdx });
-      } else if ('categoryIndex' in existing) {
-        const { categoryIndex: _dropped, ...rest } = existing;
-        dataset.setMetadataAt(pixelIndex, rest);
-      }
-    }
-    this.registerCategoryIndexMetadataKey(dataset);
-    return true;
   }
 
   /** The active dataset's registered per-pixel metadata keys (e.g. "label"
@@ -4599,7 +4290,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     dataset.addToTupleAt(next, 0, copy);
     entry.slotCursor.tupleIndex = next;
     entry.slotCursor.groupIndex = 1;
-    this.autoLabelTuple(next);
   }
 
   /**
@@ -5481,82 +5171,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * except a stuck "click its edges" prompt. (Round-2 audit.)
    */
   /**
-   * Drop categories no tuple owns any more, shifting the rest down.
+   * ⚑⚑ `pruneOrphanedCategories` WAS HERE, AND IT WENT WITH THE SECOND MODEL.
    *
-   * ⚑ WHY IT EXISTS. Every new bar reserves a fresh category slot
-   * (`reserveEmptyCategorySlot`), and NOTHING gave one back: deleting a bar,
-   * a point, or a whole series left the category behind. The shared v2.0 Bar
-   * table draws its rows from the CategoryAxis, not from the tuples, so each
-   * deleted bar left a dead row with a null value and no tuple - and the
-   * per-cell delete only renders where a value exists, so the ghost row had
-   * **no delete affordance on any cell**. It rode into the saved file and
-   * reloaded. Adding a replacement bar minted `Category 3` rather than reusing
-   * the freed slot, and retyping the freed NAME hit `setTupleLabel`'s
-   * sole-owner branch and renamed in place, leaving TWO identically named rows
-   * - after which `getCategoryIndex` resolved that name to the invisible one.
+   * It swept categories that no tuple's stored `categoryIndex` pointed at any
+   * more, and renumbered the survivors' stored indexes in the same operation.
+   * Both halves only ever ran on a figure whose categories were TALLIED from its
+   * bars - it returned immediately under declared bands, and its own comment says
+   * why: *"the count is the user's DECLARATION about the figure, not a tally of
+   * what is captured, and an empty category is the very state this feature exists
+   * to record."*
    *
-   * `CategoryAxis.removeCategory` had existed since v2.0 with zero callers;
-   * its own doc says the wiring layer must check every bound dataset first,
-   * and that layer was never written. This is it. Removing an index shifts
-   * every later one, so the stored `categoryIndex` metadata is renumbered in
-   * the same pass - which is exactly why it could not be a bare call.
-   * (Round-2 audit.)
+   * ▶ So "no hanging categories" stops being ENFORCED and becomes IMPOSSIBLE,
+   * which is the better state: with the axis declared, deleting a bar empties a
+   * band and cannot orphan anything. David asked for the rule; the model now
+   * makes it structural instead of swept.
    */
-  private pruneOrphanedCategories(): void {
-    if (this.categoryAxis.getCategories().length === 0) return;
-    // ⚑⚑ UNDER BANDS THERE ARE NO ORPHANS TO SWEEP, and sweeping is destructive.
-    //
-    // This whole routine reads `metadata.categoryIndex` -- the stored-index
-    // door -- and band-mode capture deliberately stores no such index. Left
-    // unguarded it therefore saw NOTHING owned, called every category an orphan,
-    // and deleting one bar's row emptied the table while the other bars sat on
-    // the canvas.
-    //
-    // ⚑ AND THE OBVIOUS REPAIR -- ask `categoryIndexOfTuple`, which knows both
-    // regimes -- IS STILL WRONG, which is why it is not what this does. Removing
-    // a category changes the COUNT, the count regenerates the ticks, and the new
-    // bands re-home every remaining bar; deleting one row of four then silently
-    // moved two survivors into one band and dropped a real reading. The count is
-    // the user's DECLARATION about the figure, not a tally of what is captured,
-    // and an empty category is the very state this feature exists to record.
-    // So under bands: leave it alone (v2.1 audit).
-    if (this.categoriesFollowBands()) return;
-    // Which indexes does any tuple, in any series, still point at?
-    //
-    const owned = new Set<number>();
-    for (const entry of this.datasetEntries) {
-      if (!this.usesCategoryAxis(entry.dataset)) continue;
-      for (const tuple of entry.dataset.getAllTuples()) {
-        for (const pixelIndex of tuple) {
-          if (pixelIndex === null) continue;
-          const raw = entry.dataset.getPixel(pixelIndex).metadata?.['categoryIndex'];
-          const idx = typeof raw === 'number' ? raw : Number(raw);
-          if (Number.isInteger(idx) && idx >= 0) owned.add(idx);
-        }
-      }
-    }
-    const total = this.categoryAxis.getCategories().length;
-    const orphans: number[] = [];
-    for (let i = 0; i < total; i++) if (!owned.has(i)) orphans.push(i);
-    if (orphans.length === 0) return;
-
-    // Highest first, so the indexes still to be removed stay valid.
-    for (const orphan of [...orphans].reverse()) {
-      if (!this.categoryAxis.removeCategory(orphan)) continue;
-      for (const entry of this.datasetEntries) {
-        if (!this.usesCategoryAxis(entry.dataset)) continue;
-        const dataset = entry.dataset;
-        for (let p = 0; p < dataset.getCount(); p++) {
-          const existing = dataset.getPixel(p).metadata ?? {};
-          const raw = existing['categoryIndex'];
-          const idx = typeof raw === 'number' ? raw : Number(raw);
-          if (Number.isInteger(idx) && idx > orphan) {
-            dataset.setMetadataAt(p, { ...existing, categoryIndex: idx - 1 });
-          }
-        }
-      }
-    }
-  }
 
   private fixPendingExplodedAfterTupleRemoval(removedIndex: number): void {
     if (this.pendingExplodedTuple === null) return;
@@ -5582,7 +5211,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
         this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
-        this.pruneOrphanedCategories();
       }
       this.previousSlot();
     } else {
@@ -5610,7 +5238,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (tupleIndex > -1 && dataset.isTupleEmpty(tupleIndex)) {
         dataset.removeTuple(tupleIndex);
         this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
-        this.pruneOrphanedCategories();
       }
     } else {
       dataset.removePixelAtIndex(index);
@@ -5830,7 +5457,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // method's own pixel removal already accounts for -- so the pending index
     // has to shift with it or it will point at the wrong tuple from here on.
     this.fixPendingExplodedAfterTupleRemoval(tupleIndex);
-    this.pruneOrphanedCategories();
   }
 
   /** Whether sortByNearestNeighbour would do anything for the active series --

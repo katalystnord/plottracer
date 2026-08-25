@@ -34,15 +34,27 @@ export type GuidanceMeasureTool = 'distance' | 'angle' | 'area' | 'slope' | 'col
 export interface GuidanceTipInput {
   canvasHasImage: boolean;
   /**
-   * The category-ticks fold-out is waiting for an axis edge.
+   * The figure has a category axis to place, and the walk has not placed it.
    *
-   * ⚑ While it is, box capture STANDS DOWN and a click on the canvas becomes an
-   * axis edge instead of a bar corner. Without this input the tips bar -- the
-   * one constant place for contextual guidance -- went on telling the user to
-   * "drag from one corner of the bar to the opposite corner", which was false in
-   * both halves at that moment (v2.1 audit).
+   * ⚑ While that is true, capture STANDS DOWN - a bar-family figure cannot be
+   * captured into until its categories have somewhere to go. Without this input
+   * the tips bar, the one constant place for contextual guidance, went on
+   * telling the user to "drag from one corner of the bar to the opposite
+   * corner", which was false in both halves at that moment (v2.1 audit).
+   *
+   * ⚑⚑ IT IS ONLY EVER TRUE FOR AN IMPORT, and that is the whole point. A
+   * WebPlotDigitizer project has no category axis to bring, so an imported bar
+   * chart lands calibrated on its value axis with the walk resumed at `Cat 1`.
+   * This is the sentence that says so, at the moment a click would otherwise do
+   * nothing for no stated reason.
+   *
+   * ⚠️ THE OLD NAME WAS `isMarkingCategoryAxis` AND IT WAS HARD-WIRED TO FALSE.
+   * The four-phase fold-out that fed it was deleted in the card rebuild and
+   * nothing took over, so the branch below could not fire at all - the mechanism
+   * survived its own input. Re-pointing it at the real condition is the fix; a
+   * second sentence somewhere else would have been the reuse defect.
    */
-  isMarkingCategoryAxis?: boolean;
+  categoryAxisUnplaced?: boolean;
   /** A heatmap has a grid on the figure, so its handles are there to be dragged.
    * ⚑ Without this the tips bar kept telling a calibrated heatmap user to go and
    * detect a grid they already had, while the gesture for adjusting it was
@@ -134,8 +146,12 @@ export interface GuidanceTipInput {
 export function guidanceTipBase(input: GuidanceTipInput): string {
   // Checked first: it overrides every capture message, because for as long as it
   // is true no click can capture anything.
-  if (input.isMarkingCategoryAxis === true) {
-    return 'Marking the category axis - your next click sets where the categories end. Close “Mark category ticks?” to go back to placing bars.';
+  if (input.categoryAxisUnplaced === true) {
+    // ⚑ NAMES THE STEP AND WHY, because the user of an imported figure did not
+    // walk the first two clicks and has no reason to expect a third. The old
+    // sentence pointed at a “Mark category ticks?” fold-out that no longer
+    // exists.
+    return 'This figure has no category axis yet - the import did not bring one. Click where the category axis STARTS and ENDS, then say how many categories, before capturing.';
   }
   const {
     canvasHasImage,
