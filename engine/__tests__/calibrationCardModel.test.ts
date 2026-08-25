@@ -284,7 +284,7 @@ describe('what a finished second stage is CALLED', () => {
 /**
  * ⚑⚑ `Calibrated ✓` MEANT "an axes object exists", and that stopped being the
  * same thing as "the walk is finished" the day a figure could arrive
- * part-calibrated - a WPD import, a pre-v2.4 project.
+ * part-calibrated - a WPD import, a pre-v2.3 project.
  *
  * ⚠️ CAUGHT ON THE BENCH: the card said `Calibrated ✓` while the tips bar said
  * `Calibration step 3/4 - Cat 1`. Two lines on screen at once, disagreeing about

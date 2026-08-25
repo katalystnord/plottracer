@@ -20,14 +20,14 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
   session.confirmCalibrationValues(['0']);
   session.handleCalibrationClick(300, 100);
   session.confirmCalibrationValues(['10']);
-  // ⚑ The category axis is part of the walk since v2.4, so its COUNT is part of
+  // ⚑ The category axis is part of the walk since v2.3, so its COUNT is part of
   // the fixture: a test that builds two bars is describing a two-category
   // figure, and the table shows every category the figure declares.
   walkCategoryAxis(session, { count });
   expect(session.runCalibration()).toBe(true);
 }
 
-/** The un-ticked path, which since v2.4 only a WPD import reaches.
+/** The un-ticked path, which since v2.3 only a WPD import reaches.
  * See `unmarkedBarSession` in `calibrationSession.test.ts`. */
 function unmarkedBar(session: CalibrationSession<BarAxes>): void {
   calibratedBar(session);
@@ -272,7 +272,7 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     calibratedBar(session);
     // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
     // walked the category axis; this fixture wants it to span x 100..900
-    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);
@@ -343,7 +343,7 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
    * had ever declared a count.
    *
    * ⚠️ BOTH METHODS ARE GONE NOW, and so is the shape that allowed this: since
-   * v2.4 the category axis IS calibration steps c1/c2, so nothing can drop the
+   * v2.3 the category axis IS calibration steps c1/c2, so nothing can drop the
    * geometry independently of the declaration and let the two facts disagree.
    * The test stays because the defect it names is about what re-placing must NOT
    * do, and re-placing still exists - it is a handle drag.
@@ -353,7 +353,7 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     calibratedBar(session);
     // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
     // walked the category axis; this fixture wants it to span x 100..900
-    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);
@@ -415,7 +415,7 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
     calibratedBar(session);
     // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
     // walked the category axis; this fixture wants it to span x 100..900
-    // instead, and since v2.4 that axis IS steps c1/c2, so moving it means
+    // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);

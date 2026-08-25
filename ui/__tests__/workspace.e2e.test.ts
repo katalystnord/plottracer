@@ -113,7 +113,7 @@ const barTruth = JSON.parse(
     anchors: {
       p1: { px: number; py: number; value: number };
       p2: { px: number; py: number; value: number };
-      // ⚑ The CATEGORY axis's two ends, measured off the figure (v2.4). The first
+      // ⚑ The CATEGORY axis's two ends, measured off the figure (v2.3). The first
       // carries no value; the second carries how many categories the figure draws.
       c1: { px: number; py: number };
       c2: { px: number; py: number; value: number };
@@ -825,7 +825,7 @@ describe('Workspace: Bar axes', () => {
     await clickAt(300, 100);
     await confirmValue('10');
     // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
-    // v2.4: a bar chart has two axes, and only one of them used to be
+    // v2.3: a bar chart has two axes, and only one of them used to be
     // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
     // ⚑ The offer was declined at the top of this helper, so both ends are
     // placed by hand and the span is known (x 100..500) - which is what the
@@ -1145,7 +1145,7 @@ describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
       session.confirmCalibrationValues([String(p2.value)]);
       // ⚑ THE CATEGORY AXIS, from the truth file's own MEASURED anchors - the
       // left spine and the right spine, with the count on the second. A bar
-      // chart has two axes and its truth has to describe both (v2.4).
+      // chart has two axes and its truth has to describe both (v2.3).
       session.handleCalibrationClick(c1.px, c1.py);
       session.handleCalibrationClick(c2.px, c2.py);
       session.confirmCalibrationValues([String(c2.value)]);
@@ -1254,7 +1254,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     await clickAt(300, 100);
     await confirmValue('10');
     // ⚑⚑ …AND THE CATEGORY AXIS, which is the other half of the same walk since
-    // v2.4: a bar chart has two axes, and only one of them used to be
+    // v2.3: a bar chart has two axes, and only one of them used to be
     // calibrated. `Cat 1` takes no typed value; `Cat n` carries the count.
     // ⚑ The offer was declined at the top of this helper, so both ends are
     // placed by hand and the span is known (x 100..500) - which is what the
@@ -2598,7 +2598,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.3.
     // Common origin declined so the span is known - see `calibrateBarStandard`.
     await clickAt(100, 400);
     await clickAt(500, 400);
@@ -2674,7 +2674,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
     // F21: the bar's category coordinate leads the row, renamed by A2 - see the
     // Box Plot case above.
-    // ⚑⚑ AND THE EXTENT COLUMNS ARE THERE NOW (v2.4). This used to say "one bar,
+    // ⚑⚑ AND THE EXTENT COLUMNS ARE THERE NOW (v2.3). This used to say "one bar,
     // so there is no measurable pitch and no extent columns follow it" - true
     // while a bar chart could be captured with no category axis, because the
     // frame had to be DERIVED from the bars themselves and one bar cannot supply
@@ -2895,11 +2895,11 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.3.
     await clickAt(100, 400);
     await clickAt(500, 400);
     // ⚑ TWO categories: this figure has two named bars, and the table shows one
-    // row per DECLARED category since v2.4.
+    // row per DECLARED category since v2.3.
     await confirmValue('2');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
@@ -2953,7 +2953,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('export-format-csv').click();
     await page.waitForTimeout(300);
     const lines = fs.readFileSync(csvPath, 'utf8').split('\n');
-    // ⚑⚑ A2, AND v2.4 ANSWERS IT AT THE SOURCE. This asserted `Position (in
+    // ⚑⚑ A2, AND v2.3 ANSWERS IT AT THE SOURCE. This asserted `Position (in
     // series)` - the heading Line uses to say "two series, no axis marked, so
     // this coordinate is NOT shared between them and a reader must not assume
     // they line up". That heading was the honest report of a real hazard.
@@ -2961,7 +2961,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // by construction, so both series are numbered by the BAND they sit in and
     // the coordinate IS shared. The column can say `Position` and mean it.
     // ⚑ The heading itself survives for the one door that can still produce an
-    // unmarked axis - a project saved before v2.4 - which is where its unit test
+    // unmarked axis - a project saved before v2.3 - which is where its unit test
     // now reaches it (`categoryOfferPromotes.test.ts`).
     expect(lines[0]).toBe(
       'Position,category,Position min,Position max,Min,Max,Value'
@@ -5014,11 +5014,11 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     await confirmValue('0');
     await clickAt(300, 100);
     await confirmValue('10');
-    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.4.
+    // ⚑ …and the CATEGORY axis, the other half of the same walk since v2.3.
     await clickAt(100, 400);
     await clickAt(500, 400);
     // ⚑ ONE category, because this figure has one bar - the table has a row per
-    // DECLARED category since v2.4, not per captured point.
+    // DECLARED category since v2.3, not per captured point.
     await confirmValue('1');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
@@ -5394,7 +5394,7 @@ describe('Workspace: categorical line (checkpoint 101)', () => {
     await declineCommonOrigin();
     // ⚑⚑ TWO clicks on the VALUE (Y) axis, and no X VALUE is ever typed - that is
     // still the whole point: "X is not numeric", so there is no X coordinate to
-    // enter. What the walk DOES ask for since v2.4 is where the category axis
+    // enter. What the walk DOES ask for since v2.3 is where the category axis
     // RUNS, which is geometry rather than a number: two clicks and a count.
     await clickAt(100, 250);
     await confirmValue('0');
@@ -5422,7 +5422,7 @@ describe('Workspace: categorical line (checkpoint 101)', () => {
     expect(lines[0]).toMatch(/Position/);
     expect(lines[0]).toMatch(/Value/);
     expect(lines.length).toBe(3); // header + 2 points
-    // ⚑⚑ POSITION IS THE BAND, not a rank among this series' own points (v2.4).
+    // ⚑⚑ POSITION IS THE BAND, not a rank among this series' own points (v2.3).
     // The walk marked the category axis 100..500 with four categories, so the
     // bands are 100-200, 200-300, 300-400, 400-500 and these two readings fall
     // in the second and the third. That is the whole A2 fix: an unmarked
@@ -9424,12 +9424,22 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-boundary')).toMatch(/^Column boundary at x = /);
     // And the cells were re-read, not left describing the grid they had.
     expect(await page.getByTestId('heatmap-row').count()).toBe(24);
-    // ⚑⚑ AND DETECTION'S REPORT IS GONE. It read "5 columns, matching the 4
-    // boundaries found" beside "Grid: 6 × 4 cells" - a card contradicting itself
-    // about the figure in front of it, found by looking at a screenshot rather
-    // than by any assertion. The user overruled the proposal; the proposal stops
-    // describing the grid.
-    expect(await page.getByTestId('heatmap-detect-message').count()).toBe(0);
+    // ⚑⚑ AND DETECTION'S REPORT IS STILL THERE - REVERSED 2026-08-25, by
+    // David, on the built package. This used to assert the report was GONE, on
+    // the reasoning that "5 columns, matching the 4 boundaries found" beside
+    // "Grid: 6 × 4 cells" is a card contradicting itself.
+    //
+    // He overruled it, and the reason is the stronger one: *"You are treating
+    // the users like idiots, which they are not otherwise. They can see clearly
+    // that something is amiss here, but the text should just stay until they
+    // click [Read cells]."* Adjusting boundaries IS the adjust-then-look loop,
+    // and the report is what the user is adjusting AGAINST - taking it away at
+    // the first edit removes the reference exactly when it is being used, and
+    // treats one unfinished adjustment as a decision.
+    //
+    // ▶ `Read cells` is the gesture that means "I am done defining this grid",
+    // and that is where the card's guidance retires. Nothing else does it.
+    expect(await page.getByTestId('heatmap-detect-message').count()).toBe(1);
 
     await page.getByTestId('heatmap-remove-boundary').click();
     await page.waitForTimeout(300);

@@ -38,7 +38,7 @@ const B = { x: 600, y: 500 };
 /**
  * A calibrated Bar session whose category axis runs A..B with `n` categories.
  *
- * ⚑⚑ ONE HELPER NOW, NOT TWO (v2.4). There used to be `calibratedBar()` and
+ * ⚑⚑ ONE HELPER NOW, NOT TWO (v2.3). There used to be `calibratedBar()` and
  * `withTicks(n)`, because a bar chart could be calibrated WITHOUT its category
  * axis and the ticks were marked afterwards through a fold-out that seeded its
  * first edge from P1. Both ends are calibration steps now, so a calibrated
@@ -63,7 +63,7 @@ function withTicks(n = 4): CalibrationSession<BarAxes> {
  * The same session with NO category axis - which is what a WPD IMPORT produces,
  * permanently, not a legacy file.
  *
- * ⚠️ THE OLD NOTE HERE SAID *"a project saved before v2.4, which is the only way
+ * ⚠️ THE OLD NOTE HERE SAID *"a project saved before v2.3, which is the only way
  * to reach the un-ticked path now"*, and that was wrong in the direction that
  * matters. This project has no users and owes its own old files nothing
  * ([[feedback_dont_overbuild_legacy_migration]]); `WPD_AXES_TO_CONFIG` maps
@@ -125,7 +125,7 @@ describe('which graph types have categories at all', () => {
 });
 
 /**
- * ⛔ THE SEED IS GONE (v2.4), and with it this file's `the seed pixel - what
+ * ⛔ THE SEED IS GONE (v2.3), and with it this file's `the seed pixel - what
  * makes marking the axis one click, not two` block.
  *
  * It asserted that `categoryTickOriginPixel()` is P1 once placed, *"the value
@@ -167,7 +167,7 @@ describe('marking the axis and declaring the categories', () => {
 
   it('RE-PLACING the axis keeps every category - the user is fixing the axis, not abandoning them', () => {
     // ⚑⚑ RE-PLACING IS DRAGGING THE TWO HANDLES, which is the only gesture
-    // that exists for it since v2.4. The names must survive the move: the user
+    // that exists for it since v2.3. The names must survive the move: the user
     // is saying where the axis runs, not abandoning the categories they typed.
     const s = withTicks(3);
     s.getCategoryAxis().renameCategory(0, 'Flax');
@@ -316,7 +316,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     // and nothing on screen said anything had changed.
     //
     // ⚑⚑ THE FIGURE IS AN IMPORT, not a marked axis with the count left out.
-    // That second state is unreachable since v2.4 - the count is typed on the
+    // That second state is unreachable since v2.3 - the count is typed on the
     // click that places the second end - but the PROPERTY this guards is not:
     // a WPD import has no category axis at all, so `_countDeclared` is false and
     // must still be false after a round trip.
@@ -713,7 +713,7 @@ describe('⚑ the two ways a bar could vanish from the table (code review, 2026-
     // one. Both were real defects, and both were reachable only because
     // `markCategoryAxis` wrote geometry with no count beside it.
     //
-    // Since v2.4 the count is typed on the SAME click that places the second
+    // Since v2.3 the count is typed on the SAME click that places the second
     // end, and `applyCalibratedCategoryAxis` refuses to build any geometry
     // without a valid one. So the honest assertion is not "here is what the bad
     // state does" but "the bad state has no door" - which is also what protects
@@ -914,7 +914,7 @@ describe('⚑ the split measures the blob, not its bounding box (review #8)', ()
  * ⚑⚑ DELETED: the `"Remove ticks" takes back what the declaration created`
  * block (six tests).
  *
- * `Remove ticks` was a BUTTON, and the v2.4 card rebuild removed it: *"there is
+ * `Remove ticks` was a BUTTON, and the v2.3 card rebuild removed it: *"there is
  * no state with an axis and no ticks to get back to."* Its session method had no
  * production caller afterwards, and these tests were the only thing keeping it
  * and its forty lines of tuple-remapping alive.

@@ -164,7 +164,7 @@ export interface SerializedCategoryGeometry {
   /**
    * Whether the user pressed the stage's ENDING - "these ticks are right".
    *
-   * ⚑ STORED for the same reason `countDeclared` is: since v2.4 the ticks exist
+   * ⚑ STORED for the same reason `countDeclared` is: since v2.3 the ticks exist
    * the moment the calibration walk finishes, so "there are ticks" no longer
    * implies anybody has looked at them. Without this a reopened project would
    * ask to have its categories marked again, every time.

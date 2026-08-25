@@ -127,7 +127,7 @@ export function routeCanvasClick({
 }
 
 /**
- * ⛔ `resolveCategoryEdgeClick` WAS HERE, AND IT WENT WITH ITS GESTURE (v2.4).
+ * ⛔ `resolveCategoryEdgeClick` WAS HERE, AND IT WENT WITH ITS GESTURE (v2.3).
  *
  * It decided, for a click on the canvas while the category fold-out was open,
  * whether that click was the FIRST edge, the second, or a second one paired with

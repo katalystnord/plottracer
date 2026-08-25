@@ -30,7 +30,7 @@ describe('the drawn axis', () => {
 
   it('draws the axis, its two ends, and one mark per tick', () => {
     const glyphs = categoryAidGlyphs({ edges: H, tickPoints: [{ x: 225, y: 500 }, { x: 475, y: 500 }] });
-    // ⚑ THE AXIS AND ONE MARK PER TICK - no end marks (v2.4). The two ends are
+    // ⚑ THE AXIS AND ONE MARK PER TICK - no end marks (v2.3). The two ends are
     // calibration steps now, so the walk draws a handle at each of those pixels
     // and marking them here as well put two markers on one pixel.
     expect(glyphs).toHaveLength(3);
@@ -151,7 +151,7 @@ describe('the drag handles', () => {
 });
 
 /**
- * ⛔⛔ THE FOLD-OUT'S STATE MACHINE IS GONE, AND SO ARE ITS TESTS (v2.4).
+ * ⛔⛔ THE FOLD-OUT'S STATE MACHINE IS GONE, AND SO ARE ITS TESTS (v2.3).
  *
  * Removed with it: `the fold-out only offers itself when it can do something`,
  * `what the fold-out asks for`, `a refused mark says why`, `"Re-place axis" can
@@ -179,7 +179,7 @@ describe('the stage line', () => {
 
   /**
    * ⚑⚑ TICKS EXISTING IS NOT THE SAME AS SOMEBODY HAVING LOOKED AT THEM, and
-   * that distinction is new. Before v2.4 an axis only existed once the user had
+   * that distinction is new. Before v2.3 an axis only existed once the user had
    * marked it by hand, so the two were the same fact; now the walk produces
    * ticks the instant it finishes, and a card that treated THAT as the stage
    * being finished would fold itself shut at the moment the user reached for a
@@ -195,7 +195,7 @@ describe('the stage line', () => {
    * `2 categories` with its count box empty, because two captured bars had put
    * two entries in the shared name list. That door is gone - the count arrives
    * on a calibration click - and a NEW one opened in its place: a figure that
-   * arrives part-calibrated (a WPD import, a pre-v2.4 project) has an axis with
+   * arrives part-calibrated (a WPD import, a pre-v2.3 project) has an axis with
    * no count, and this line read `Categories - 0 categories`.
    * ⚠️ Caught on the bench, not by a test, which is why it is named here now.
    */
@@ -272,7 +272,7 @@ describe('the weight of a tick handle', () => {
 
 });
 /**
- * ⛔ THE AXIS-EDGE LABEL TESTS WENT WITH THE LABELS (v2.4). They covered
+ * ⛔ THE AXIS-EDGE LABEL TESTS WENT WITH THE LABELS (v2.3). They covered
  * `Categories start` / `Categories end` leaning INWARD so neither ran off the
  * figure - a real fix for a real clipping problem, on marks that no longer
  * exist. The two ends are calibration steps now, drawn and named by the walk.

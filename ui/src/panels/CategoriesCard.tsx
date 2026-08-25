@@ -4,7 +4,7 @@ import type { TickConvention } from '../../../core/categoryAxis.js';
 
 /**
  * The categorical stage - stage 2 of the calibration card, for Bar, Box Plot and
- * categorical Line (v2.4).
+ * categorical Line (v2.3).
  *
  * ⚑⚑ IT IS `HeatmapCard`'s SIBLING, DELIBERATELY AND VISIBLY. David, putting the
  * two cards side by side: *"So it is a two stage fold out card, mirroring exactly
@@ -42,7 +42,7 @@ export interface CategoriesCardProps {
   /**
    * How many categories the CALIBRATION declared - shown, never re-collected.
    * `null` when the walk has not got there yet, which is only reachable on a
-   * figure that arrived part-calibrated (a WPD import, a pre-v2.4 project).
+   * figure that arrived part-calibrated (a WPD import, a pre-v2.3 project).
    */
   declared: number | null;
   convention: TickConvention;

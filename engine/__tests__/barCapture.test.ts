@@ -361,7 +361,7 @@ describe('addBarDetectBoxes (v2.0, Phase 7) -- colour-detected boxes, the SAME r
     // ⚑⚑ THE CATEGORY AXIS RUNS DOWN, because on a HORIZONTAL bar chart the
     // value axis is the horizontal one. The default helper marks it across,
     // which on this figure would put both axes on the same line - and the
-    // v2.4 parallel-axes guard refuses it, which is how this fixture was found
+    // v2.3 parallel-axes guard refuses it, which is how this fixture was found
     // to be describing a figure nobody can draw.
     walkCategoryAxis(session, { from: { x: 300, y: 100 }, to: { x: 300, y: 500 } });
     expect(session.runCalibration()).toBe(true);

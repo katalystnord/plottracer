@@ -22,7 +22,7 @@ import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
  * with a row they can neither fill nor remove.
  */
 /**
- * ⚑⚑ THE UN-TICKED PATH, AND THIS WHOLE FILE IS ABOUT IT (v2.4).
+ * ⚑⚑ THE UN-TICKED PATH, AND THIS WHOLE FILE IS ABOUT IT (v2.3).
  *
  * An ORPHAN is a category left behind with no bar and no way to remove it, and
  * that can only happen where capturing a bar MINTS a category. With the category
@@ -30,7 +30,7 @@ import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
  * bar leaves its band, which is the figure still having that category, not a
  * ghost row. So there is nothing to orphan.
  *
- * ▶ The mechanism still runs on a project SAVED before v2.4, which is the door
+ * ▶ The mechanism still runs on a project SAVED before v2.3, which is the door
  * these tests now come through - stated, rather than arrived at by a fixture
  * that looks like an ordinary capture.
  */

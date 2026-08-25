@@ -38,7 +38,7 @@
  * built on - `pixelToData` returns `[value]`, and this method inverts ONTO THE
  * CALIBRATION LINE, so a caller wanting to move an existing point to a new
  * value must step ALONG that direction from where the point is, never jump to
- * the pixel this returns. See the v2.4 typed-value work (B1).
+ * the pixel this returns. See the v2.3 typed-value work (B1).
  */
 
 import { taninverse } from '../mathFunctions.js';

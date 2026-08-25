@@ -37,7 +37,7 @@ function calibratedBar(rotated = false): CalibrationSession<BarAxes> {
   expect(s.runCalibration()).toBe(true);
   // ⚑⚑ AND THE DECLARATION IS WITHDRAWN, because THE PREFILL IS THE UN-TICKED
   // MECHANISM. With the axis marked, two bars in one band share a category by
-  // construction and nothing is donated from a neighbour at all. Since v2.4 the
+  // construction and nothing is donated from a neighbour at all. Since v2.3 the
   // walk always marks it, so this state is a WPD import - where the
   // prefill still runs, and still has to not donate a name that is already
   // claimed in the series being captured into.

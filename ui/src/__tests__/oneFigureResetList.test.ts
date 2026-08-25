@@ -91,7 +91,7 @@ const PER_FIGURE_RESETS = [
   'setMode',
   'setCalibExpanded',
   'setAxesTypeId',
-  // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.4), and the list is the
+  // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.3), and the list is the
   // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
   // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and
   // `setCategoryPanelOpen` were state the COMPONENT held about a marking gesture

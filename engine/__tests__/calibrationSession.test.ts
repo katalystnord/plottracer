@@ -78,7 +78,7 @@ describe('Categorical line (checkpoint 101)', () => {
     // Place points OUT of left-to-right order to prove Position is derived from
     // WHERE THE POINT IS, not from the order it was placed in.
     //
-    // ⚑⚑ AND SINCE v2.4 "where" MEANS THE BAND, not the rank among this series'
+    // ⚑⚑ AND SINCE v2.3 "where" MEANS THE BAND, not the rank among this series'
     // own pixels. The walk above marked the category axis 100..500 with four
     // categories, so the bands are 100-200, 200-300, 300-400, 400-500 and these
     // three points fall in the first three of them. That is the A2 finding
@@ -471,7 +471,7 @@ function calibrateStandardBar(session: CalibrationSession<BarAxes>) {
     expect(session.confirmCalibrationValues([value])).toBe(true);
   }
   // ⚑ …and the CATEGORY axis, which is the other half of the same walk since
-  // v2.4. Without it `runCalibration` refuses, and every test below was
+  // v2.3. Without it `runCalibration` refuses, and every test below was
   // silently exercising an uncalibrated session - which is exactly what a
   // fixture that describes an impossible state does.
   walkCategoryAxis(session);
@@ -590,7 +590,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
   }
 
   /**
-   * ⚑⚑ THE UN-TICKED PATH, REACHED DELIBERATELY (v2.4).
+   * ⚑⚑ THE UN-TICKED PATH, REACHED DELIBERATELY (v2.3).
    *
    * Since the category axis is part of the calibration walk, a chart being
    * captured now ALWAYS has bands, and a bar's category is DERIVED from the band
@@ -600,7 +600,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
    * rename protection - is therefore no longer reachable by clicking.
    *
    * ▶ It is still REACHABLE, and that is why these tests stay: a project SAVED
-   * before v2.4 reopens with no geometry, and every one of those mechanisms runs
+   * before v2.3 reopens with no geometry, and every one of those mechanisms runs
    * on it. The file door is the entrance this project has been bitten through
    * repeatedly, so it keeps its coverage - stated, rather than arrived at by a
    * fixture that looks like an ordinary capture.
@@ -636,7 +636,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
   });
 
   /**
-   * ⚑⚑ ON A MARKED AXIS THERE IS NOTHING TO STORE, and that is the v2.4 change.
+   * ⚑⚑ ON A MARKED AXIS THERE IS NOTHING TO STORE, and that is the v2.3 change.
    * This asserted that capturing a bar registers a `categoryIndex` key - true
    * while a bar chart could be captured with no category axis. Now the axis is
    * always there, so the category is a pure function of the pixel and the
@@ -652,7 +652,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
     expect(session.getCategoryAxis().getCategoryCount()).toBe(4);
   });
 
-  it('⚑ and DOES register it on a figure with no axis - the pre-v2.4 file', () => {
+  it('⚑ and DOES register it on a figure with no axis - the WPD import', () => {
     // The record is only durable if plotData knows to serialize the key.
     const session = unmarkedBarSession();
     addBar(session, 150, 300, 250);
@@ -841,7 +841,7 @@ describe('categorical-X labels (v1.3 #9) - v2.0: Bar is now 2 clicks (a tuple), 
 
 describe('CalibrationSession (Bar axes)', () => {
   /**
-   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.4). This asserted TWO,
+   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.3). This asserted TWO,
    * and its title said "fewer than XY" - which was true of the VALUE axis and
    * silent about the other one. The category axis was a fold-out offered
    * afterwards, seeded from P1, and that is how a category axis came to run
@@ -1186,7 +1186,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.runCalibration();
       session.applyBoxPlotGroups();
 
-      // ⚑⚑ TWO DIFFERENT x, AND THAT IS THE CHANGE (v2.4). Both boxes used to
+      // ⚑⚑ TWO DIFFERENT x, AND THAT IS THE CHANGE (v2.3). Both boxes used to
       // be captured at x=300; with the category axis now calibrated in the walk
       // (100..500, four bands), x=300 is ONE band, so two boxes there are one
       // category and naming either names both. That is correct, and it makes
@@ -1221,10 +1221,10 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.setTupleLabel(0, 'Sample A');
       expect(session.getTupleLabel(0)).toBe('Sample A');
       expect(session.getTupleRows()[0]!.label).toBe('Sample A');
-      // ⚑ NO STORED INDEX on a marked axis (v2.4): naming a box names the BAND
+      // ⚑ NO STORED INDEX on a marked axis (v2.3): naming a box names the BAND
       // it sits in, and which band that is comes from the pixel and the declared
       // dividers. The key is registered only on the un-ticked path, which since
-      // v2.4 is reached by a pre-v2.4 file rather than by clicking.
+      // v2.3 is reached by a WPD import rather than by clicking.
       expect(session.getMetadataKeys()).not.toContain('categoryIndex');
       expect(session.getCategoryAxis().getCategories()).toContain('Sample A');
     });
@@ -1271,7 +1271,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
       session.runCalibration();
       // ⚑ Two boxes in two different CATEGORIES that happen to be typed with the
       // same name - which is the case this protects. At one x they would be one
-      // category since v2.4, and sharing a name would be the model working.
+      // category since v2.3, and sharing a name would be the model working.
       for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(150, py); // tuple 0
       for (const py of [500, 460, 420, 380, 340]) session.addDataPoint(350, py); // tuple 1
       session.setTupleLabel(0, 'Groop A');
@@ -2862,7 +2862,7 @@ describe('adoptCalibration and the config’s own defaults', () => {
 });
 
 /**
- * ⚑⚑ A FIGURE CAN ARRIVE CALIBRATED WITH STEPS NOBODY PLACED, and until v2.4 the
+ * ⚑⚑ A FIGURE CAN ARRIVE CALIBRATED WITH STEPS NOBODY PLACED, and until v2.3 the
  * walk had nothing to say about it. This is not a legacy-file curiosity: a WPD
  * project imports as a bar chart with `p1`/`p2` and no category axis, so an
  * ordinary supported import lands here.
@@ -2874,7 +2874,7 @@ describe('adoptCalibration and the config’s own defaults', () => {
  */
 describe('a calibrated figure whose walk is not finished', () => {
   /** What `loadCalibrated` produces from a two-point bar calibration - the shape
-   * a WPD import and a pre-v2.4 project both present. */
+   * a WPD import and a pre-v2.3 project both present. */
   function importedBar(): CalibrationSession<BarAxes> {
     const cal = new Calibration(3);
     cal.addPoint(300, 500, '0', '0', '');
@@ -2922,7 +2922,7 @@ describe('a calibrated figure whose walk is not finished', () => {
 /**
  * ⚑⚑ A BAR CHART HAS TWO AXES NOW, AND THEY MUST NOT POINT THE SAME WAY.
  *
- * There was nothing to guard until v2.4: a bar chart HAD one axis, so "these two
+ * There was nothing to guard until v2.3: a bar chart HAD one axis, so "these two
  * directions are independent" was not an assumption anyone could break. The
  * moment the category axis became two clicks of its own it became one, and
  * nothing was checking it.

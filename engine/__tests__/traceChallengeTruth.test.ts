@@ -671,7 +671,7 @@ describe('adopting a calibration with a REPEATING step', () => {
 
   it('⚑ leaves a FIXED-shape type at repeatCount 0, digits in its keys and all', () => {
     // A bar's anchors are `p1`/`p2` for the value axis and `c1`/`c2` for the
-    // CATEGORY axis (v2.4 - a bar chart has two axes and the truth file has to
+    // CATEGORY axis (v2.3 - a bar chart has two axes and the truth file has to
     // describe both). An earlier version read a trailing digit as a repeat count
     // and reported 2 for a type with no repeating step -- the loader would then
     // have grown a session that has nothing to grow. Four digit-suffixed keys

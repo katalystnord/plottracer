@@ -84,7 +84,7 @@ function barSession(config = BAR_AXES_CONFIG) {
   expect(s.runCalibration()).toBe(true);
   // ⚑⚑ THE AXIS IS THEN UNMARKED, DELIBERATELY - this whole file is about the
   // DERIVED frame: what a bar chart can say about position, pitch and extent
-  // from the INK ALONE, with nothing declared. Since v2.4 the walk always marks
+  // from the INK ALONE, with nothing declared. Since v2.3 the walk always marks
   // the axis, so that state is reached by withdrawing the declaration, which is
   // exactly what a WPD import presents on load.
   loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());

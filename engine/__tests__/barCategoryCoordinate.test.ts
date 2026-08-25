@@ -81,7 +81,7 @@ function withThreeCategories<S extends {
 }>(s: S) {
   // ⚑⚑ THE AXIS IS RE-PLACED THE WAY A USER RE-PLACES IT: the two category
   // handles are dragged, and the count is edited where it was declared. Since
-  // v2.4 the category axis IS calibration steps c1/c2, so `markCategoryAxis`
+  // v2.3 the category axis IS calibration steps c1/c2, so `markCategoryAxis`
   // moved the geometry while leaving the calibration record pointing at the old
   // ends - a state no gesture can produce.
   s.updateCalibPointPixel('c1', 100, 300);
@@ -216,7 +216,7 @@ describe('nothing is invented where nothing was measured', () => {
   // one bar's PITCH, and an empty category's existence.
   it('⚑⚑ one bar has a position but no pitch, so no extent is claimed', () => {
     const s = barSession();
-    // ⚑ The DERIVED frame: no declared bands, which since v2.4 means the
+    // ⚑ The DERIVED frame: no declared bands, which since v2.3 means the
     // declaration is withdrawn (a WPD import). The pitch is what one bar
     // cannot supply, and that is unchanged.
     loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());

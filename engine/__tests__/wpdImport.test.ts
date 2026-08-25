@@ -191,11 +191,11 @@ describe('a project folder name with regex metacharacters', () => {
  * ⚑⚑ AN IMPORTED BAR CHART HAS NO CATEGORY AXIS, AND MUST BE ABLE TO GET ONE.
  *
  * `WPD_AXES_TO_CONFIG` maps `BarAxes` to `bar`, and WebPlotDigitizer has no
- * category axis to bring with it. Since v2.4 ours is a REQUIREMENT calibrated in
+ * category axis to bring with it. Since v2.3 ours is a REQUIREMENT calibrated in
  * the walk, so an import lands calibrated on its value axis with the two
  * category steps unplaced - a state no walk produces and every import does.
  *
- * ⚠️ IT WAS ON THE OPEN LIST AS A DEFECT, filed as *"a pre-v2.4 project reopens
+ * ⚠️ IT WAS ON THE OPEN LIST AS A DEFECT, filed as *"a pre-v2.3 project reopens
  * with no category axis and no way to place one"*, parked under "no users yet".
  * Both halves were wrong: the state is an IMPORT (permanent, tenet 6) rather
  * than a legacy file, and the app already handles it - `getCurrentStep` asks

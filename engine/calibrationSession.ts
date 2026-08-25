@@ -874,7 +874,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * answer `null` for all of them - `if (this.axes) return null`. That was true
    * while every door produced either a complete walk or none, and it stopped
    * being true the moment a type gained a step: a WPD project imports as a bar
-   * chart with `p1`/`p2` and NO category axis, and a project saved before v2.4
+   * chart with `p1`/`p2` and NO category axis, and a project saved before v2.3
    * reopens the same way. MEASURED on both doors: `calibrated: true`,
    * `currentStep: null`, `hasGeometry: false`, with `c1`/`c2` sitting in the
    * step list unplaced.
@@ -1658,7 +1658,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const slots = entry.dataset.getSlotNames();
       if (hasErrorSlots(slots)) {
         const pixels = entry.dataset.getAllPixels();
-        // ⚑⚑ A BAR'S WHISKER STARTS AT THE BAR'S CENTRE, NOT AT A CORNER (v2.4).
+        // ⚑⚑ A BAR'S WHISKER STARTS AT THE BAR'S CENTRE, NOT AT A CORNER (v2.3).
         // David: *"The error bars need to be drawn on the center of the bar
         // however. Not from a corner point."* Every real figure draws them there
         // - ggplot, matplotlib, the published charts he sent - and a bar is
@@ -2942,7 +2942,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * calibrated - the amend case.
    *
    * ⚑⚑ WITHOUT THIS THE RESUMED WALK GOES NOWHERE. A figure can arrive
-   * calibrated with steps unplaced (a WPD import, a pre-v2.4 project), and
+   * calibrated with steps unplaced (a WPD import, a pre-v2.3 project), and
    * `getCurrentStep` now asks for them - but the `Calibrate` button belongs to
    * stage 1 and a calibrated card is past it, so the two clicks would land in
    * `placed` and nothing would read them.
@@ -4206,7 +4206,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * Put the calibrated category axis into the model: its two ends, and the count
    * declared on the second click.
    *
-   * ⚑⚑ THE WALK IS THE ONLY WAY IN NOW (v2.4). The axis used to be marked by a
+   * ⚑⚑ THE WALK IS THE ONLY WAY IN NOW (v2.3). The axis used to be marked by a
    * fold-out that SEEDED its first edge from P1 and took one free click for the
    * second, which is how a category axis came to run diagonally across a figure
    * with nothing able to refuse it. Both ends are calibration steps with their

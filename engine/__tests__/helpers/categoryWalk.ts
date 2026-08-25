@@ -1,6 +1,6 @@
 /**
  * The two category-axis clicks and the count that a bar-family calibration walk
- * requires since v2.4.
+ * requires since v2.3.
  *
  * ⚑⚑ WHY EVERY BAR FIXTURE NEEDED TOUCHING. Bar, Box Plot and categorical Line
  * used to calibrate in TWO clicks on the value axis; the category axis was a

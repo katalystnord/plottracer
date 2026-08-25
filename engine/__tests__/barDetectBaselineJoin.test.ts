@@ -158,7 +158,7 @@ describe('samples/bar-floating-temperature.png, traced end to end', () => {
  * ⚑⚑ THE CONFIGURATION THE APP ACTUALLY RUNS IN, which the tests above do not.
  *
  * Every case above takes the no-categories branch of `runBarDetect` - the one
- * that was the ordinary path while marking the axis was an offer. Since v2.4 the
+ * that was the ordinary path while marking the axis was an offer. Since v2.3 the
  * category axis is part of the calibration walk, so a real trace ALWAYS arrives
  * with declared dividers and takes the OTHER branch, where each blob is measured
  * against the bands and a merged run is cut at them.

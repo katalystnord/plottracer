@@ -91,7 +91,7 @@ export class CategoryAxis {
    * The user has said the ticks are where they want them - the stage's ENDING.
    *
    * ⚑⚑ NOT the same as "the ticks exist", and that difference is the whole
-   * reason it is stored. Since v2.4 the axis and its count arrive with the
+   * reason it is stored. Since v2.3 the axis and its count arrive with the
    * calibration walk, so ticks exist the instant the walk finishes - and a card
    * that folded on THAT would close itself at the exact moment the user was
    * about to drag a marker onto the figure's own rule. The heatmap has the same
@@ -222,7 +222,7 @@ export class CategoryAxis {
    *
    * It dropped the bands and the marks while keeping the names, for the two
    * session mutators `clearCategoryAxisGeometry` ("Re-place axis") and
-   * `removeCategoryTicks` ("Remove ticks"). Since v2.4 the category axis IS
+   * `removeCategoryTicks` ("Remove ticks"). Since v2.3 the category axis IS
    * calibration steps c1/c2: re-placing it is dragging those handles, and the
    * "Remove ticks" button no longer exists, so neither gesture reaches this.
    *
@@ -249,7 +249,7 @@ export class CategoryAxis {
 
   /**
    * ⚑ `undeclareCount` WAS HERE. Its only caller was `removeCategoryTicks`,
-   * the "Remove ticks" button, which the v2.4 card rebuild removed: there is no
+   * the "Remove ticks" button, which the v2.3 card rebuild removed: there is no
    * state with an axis and no ticks to get back to. Nothing withdraws a
    * declaration any more - the count is typed on the click that places the
    * second end, and correcting it means editing it there.

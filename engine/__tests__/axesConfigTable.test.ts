@@ -386,7 +386,7 @@ describe('the config table - how many clicks each type asks for', () => {
     const expected: Record<string, number> = {
       xy: 4,
       histogram: 4,
-      // ⚑⚑ FOUR, NOT TWO, SINCE v2.4 - and the extra pair is the point. Two of
+      // ⚑⚑ FOUR, NOT TWO, SINCE v2.3 - and the extra pair is the point. Two of
       // these clicks calibrate the VALUE axis, which is all `BarAxes` reads;
       // the other two calibrate the CATEGORY axis, which is not a
       // `CalibratedAxes` at all and has no pixel transform. The walk is the
@@ -547,7 +547,7 @@ describe('the shared corner is declared, not named at the call site', () => {
   });
 
   /**
-   * ⚑⚑ THE BAR FAMILY DECLARES ONE SINCE v2.4, and it is the same mechanism XY
+   * ⚑⚑ THE BAR FAMILY DECLARES ONE SINCE v2.3, and it is the same mechanism XY
    * uses rather than a second one. David: *"I think that we can offer to reuse
    * the lowest point on the Y axis as the first point for the Category axis as
    * well... It is the same mechanism as for XY-graphs."*

@@ -41,7 +41,7 @@ import {
 export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   xy: [[100, 400], [500, 400], [100, 400], [100, 100]],
   histogram: [[100, 400], [500, 400], [100, 400], [100, 100]],
-  // ⚑⚑ FOUR CLICKS SINCE v2.4: two on the VALUE axis, then the two ends of the
+  // ⚑⚑ FOUR CLICKS SINCE v2.3: two on the VALUE axis, then the two ends of the
   // CATEGORY axis. A bar chart has two axes and only one of them used to be
   // calibrated - the other was a fold-out seeded from P1.
   // ⚠️ The list must have an entry PER STEP: `clickHealthy` repeats the LAST

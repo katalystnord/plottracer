@@ -82,7 +82,7 @@ const IN_SCOPE = ALL_TYPES.filter(suppliesItsOwnRows);
  * below, where it is an ordinary green expectation and not a pin at all.
  */
 /**
- * ✅⚑⚑ EMPTY SINCE v2.4, AND THE PIN IS WHAT SAID SO. `categorical` was the last
+ * ✅⚑⚑ EMPTY SINCE v2.3, AND THE PIN IS WHAT SAID SO. `categorical` was the last
  * entry, and it went red the day the category axis became part of the
  * calibration walk: with the axis marked by construction, a Line's coordinate is
  * the BAND its reading sits in, so adding a point to its left no longer moves

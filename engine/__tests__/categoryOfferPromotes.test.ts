@@ -5,7 +5,7 @@ import type { BarAxes } from '../../core/axes/bar.js';
 import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
- * ⛔⛔ THE OFFER IS GONE, AND ITS PREMISE WITH IT (v2.4). This file used to open
+ * ⛔⛔ THE OFFER IS GONE, AND ITS PREMISE WITH IT (v2.3). This file used to open
  * by asserting that *"marking categories is not always needed, and the app knows
  * which is which"* - one series quiet, a second series promoted. David settled
  * that the other way: the category axis is a REQUIREMENT, calibrated in the walk
@@ -82,7 +82,7 @@ describe('C - the file stops claiming a coordinate the series do not share', () 
     const s = calibratedCategorical();
     // ⚑⚑ THE UNMARKED STATE IS REACHED THROUGH THE FILE DOOR, because the
     // walk can no longer produce it: a calibrated bar-family figure has its
-    // category axis by construction since v2.4. What it describes is a WPD
+    // category axis by construction since v2.3. What it describes is a WPD
     // IMPORT - permanent, not a legacy file - and the file door is the entrance
     // this project has been bitten through repeatedly.
     loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());

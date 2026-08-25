@@ -82,7 +82,7 @@ describe('the type declares a category axis', () => {
   });
 
   /**
-   * ⛔ THE SEED IS GONE (v2.4). This asserted `categoryTickOriginPixel()` is
+   * ⛔ THE SEED IS GONE (v2.3). This asserted `categoryTickOriginPixel()` is
    * `v1`, *"the click on the Y axis, which IS the left edge of the category
    * axis"*. It is not: V1's prompt is *"a known value on the Y axis (e.g.
    * Y=0)"*, which says nothing about where ALONG the axis to click. Bar proved
@@ -234,7 +234,7 @@ describe('what must NOT change', () => {
     // left-to-right reading of its own pixels - a faithful view of one series,
     // and the honest answer when nobody has said where the categories are.
     const s = lineSession();
-    // ⚑ "No axis marked" is reached by WITHDRAWING the declaration since v2.4 -
+    // ⚑ "No axis marked" is reached by WITHDRAWING the declaration since v2.3 -
     // a WPD import. The behaviour it guards is unchanged.
     loadWithoutCategoryAxis(s, s.getAxes()!, s.getDatasets());
     s.addDataPoint(350, 150);

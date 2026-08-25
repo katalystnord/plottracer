@@ -17,7 +17,7 @@ import { samplePixelRgb } from '../../algorithms/samplePixel.js';
  */
 
 /**
- * ⛔ THE CATEGORY-EDGE CLICK TESTS WENT WITH THE GESTURE (v2.4). They covered
+ * ⛔ THE CATEGORY-EDGE CLICK TESTS WENT WITH THE GESTURE (v2.3). They covered
  * `resolveCategoryEdgeClick` - which click is the first edge, which is the
  * second, and when the value-axis handle may stand in for the first. Both ends
  * of the category axis are calibration steps now, so a canvas click is never an

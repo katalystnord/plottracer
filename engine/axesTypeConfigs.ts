@@ -859,7 +859,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * This type's own slots are an unordered INTERVAL, and these are the names the
    * RECORD calls them by (v2.3).
    *
-   * ⚑⚑ THE SAME WORDS AS THE CAPTURE SLOTS, since v2.4. This field existed
+   * ⚑⚑ THE SAME WORDS AS THE CAPTURE SLOTS, since v2.3. This field existed
    * because the two disagreed: the capture said `Bar start`/`Bar end` and the
    * record said `Min`/`Max`, so one pair of readings wore two names and only
    * someone who had read the code knew they were the same number. David closed
@@ -1965,7 +1965,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // wrong (`CategoryAxis.setAxisEdges`'s own refusal, at the other entrance).
   distinctPixelSteps: [['p1', 'p2'], ['c1', 'c2']],
   /**
-   * ⚑⚑ THE TWO AXES MUST NOT POINT THE SAME WAY (v2.4), and until this release
+   * ⚑⚑ THE TWO AXES MUST NOT POINT THE SAME WAY (v2.3), and until this release
    * there was nothing to guard: a bar chart HAD one axis. The moment the
    * category axis became two clicks of its own, "these two directions are
    * independent" became an assumption nobody was checking.
@@ -2006,7 +2006,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     { key: 'isStacked', label: 'Stacked bars', kind: 'checkbox', default: false },
   ],
   /**
-   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.4). The value axis is
+   * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.3). The value axis is
    * calibrated by P1/P2; the CATEGORY axis is calibrated by its own two clicks,
    * exactly as a heatmap's category axis is. David, 2026-08-24: *"I think we
    * need to make the categories axis a two click from us users. Because
@@ -2061,7 +2061,7 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // never reaches `checkValues` or the axis.
   calibrationDimensions: 3,
   /**
-   * ⚑⚑ THE VALUE ORIGIN IS OFFERED AS THE CATEGORY AXIS'S FIRST END (v2.4).
+   * ⚑⚑ THE VALUE ORIGIN IS OFFERED AS THE CATEGORY AXIS'S FIRST END (v2.3).
    * David: *"I think that we can offer to reuse the lowest point on the Y axis
    * as the first point for the Category axis as well... It is the same mechanism
    * as for XY-graphs."*
@@ -2251,7 +2251,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
     message:
       'The category axis runs the same way as the value axis, so every reading would be filed by its value instead of its position. Click the two ends of the axis the CATEGORIES run along.',
   },
-  // ⚑⚑ THE CATEGORY AXIS IS CALIBRATED, NOT SEEDED (v2.4). This used to read
+  // ⚑⚑ THE CATEGORY AXIS IS CALIBRATED, NOT SEEDED (v2.3). This used to read
   // `originStep: 'v1'`, on the reasoning that V1 is a click on the Y axis and
   // therefore "IS the left edge of the category axis on an ordinary upright
   // figure, so the first edge comes for free exactly as Bar's does".

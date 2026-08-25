@@ -176,8 +176,8 @@ export function bandCoordinateForParam(t: number, dividers: readonly number[]): 
  *
  * ⚠️ THE THIRD SITE NEVER STATED A CHOICE - and its clamp is why a legend
  * swatch lands in a real category instead of being reported as unplaceable
- * (v2.4, parked). Behaviour there is UNCHANGED by this consolidation; what
- * changes is that the policy is now a word someone had to type, so the v2.4 fix
+ * (v2.3, parked). Behaviour there is UNCHANGED by this consolidation; what
+ * changes is that the policy is now a word someone had to type, so the v2.3 fix
  * is a one-word decision rather than an archaeology exercise.
  *
  * ⚑ `outside` has no default, deliberately. A default is how a policy gets taken

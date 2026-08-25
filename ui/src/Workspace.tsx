@@ -1082,7 +1082,7 @@ export function Workspace() {
   // axis crossing) -- the overwhelmingly common case. When ticked, placing X1
   // auto-reuses that pixel for Y1 so you never place or reuse it by hand.
   const [commonOrigin, setCommonOrigin] = useState(true);
-  // ⚑ THE CATEGORY STAGE HAS NO FOLD OF ITS OWN (v2.4). One card, one triangle:
+  // ⚑ THE CATEGORY STAGE HAS NO FOLD OF ITS OWN (v2.3). One card, one triangle:
   // `calibExpanded` governs both stages, exactly as it does on a heatmap. The
   // `categoryPanelOpen` flag went with the entry button that used to set it.
   /** The heatmap grid's fold-down on the calibration card. Closed to begin
@@ -2326,19 +2326,23 @@ export function Workspace() {
   /**
    * Record a grid the user just edited, and re-read the cells it moved.
    *
-   * ⚑⚑ DETECTION'S REPORT IS CLEARED, and a screenshot is what caught this: the
-   * card read *"Grid: 6 × 4 cells"* directly above *"5 columns, matching the 4
-   * boundaries found"*. The sentence was true when it was written and describes
-   * a proposal the user has since overruled - a panel contradicting itself about
-   * the same figure, which is the fourth-and-counting instance of the class
-   * `engine/guidanceTip.ts` exists to document. A report of a measurement that no
-   * longer describes the grid is not stale wording, it is a wrong statement.
+   * ⚑⚑ THE NOTE STAYS UNTIL `Read cells`. Adjusting a boundary used to clear
+   * it, on the reasoning that a report the user has overruled is a wrong
+   * statement rather than stale wording. David, seeing it go on the first drag:
+   * *"You are treating the users like idiots, which they are not otherwise. They
+   * can see clearly that something is amiss here, but the text should just stay
+   * until they click [Read cells]."*
+   *
+   * ▶ Dragging a handle IS the adjust-then-look loop. Deleting the sentence the
+   * moment it starts takes the reference away exactly when it is being used, and
+   * it treats one unfinished adjustment as a decision. `Read cells` is the
+   * gesture that means "I am done defining this grid", and that is where the
+   * card's guidance retires.
    */
   const applyHeatmapGridEdit = useCallback(
     (next: HeatmapState) => {
       const axesNow = sessionRef.current.getAxes();
       if (!axesNow) return;
-      setHeatmapGridNote(null);
       applyHeatmapGrid(next);
       // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
       // they drifted - this one re-read, the other emptied the table - so the
@@ -3524,7 +3528,7 @@ export function Workspace() {
 
   const handleImageClick = useCallback(
     (px: number, py: number) => {
-      // ⚑⚑ THE CANVAS HAS NO CATEGORY-MARKING MODE ANY MORE (v2.4). A branch
+      // ⚑⚑ THE CANVAS HAS NO CATEGORY-MARKING MODE ANY MORE (v2.3). A branch
       // stood here, ahead of every other route, hijacking any click anywhere in
       // the app while the fold-out was open - in Eraser and Select too - and
       // turning it into an axis edge. The two ends are calibration steps now, so
@@ -5840,7 +5844,7 @@ export function Workspace() {
         // captured bars put two entries in the shared list, and the folded line
         // then read `2 categories ✓` on a chart with four - a count nobody
         // typed, reported as finished work.
-        // ⚑⚑ THE ENDING WAS PRESSED, not merely "ticks exist" (v2.4). Since the
+        // ⚑⚑ THE ENDING WAS PRESSED, not merely "ticks exist" (v2.3). Since the
         // axis and its count arrive with the calibration walk, ticks exist the
         // instant the walk finishes - so the old test (`hasGeometry &&
         // hasDeclaredCount`) would fold the card at the exact moment the user
@@ -5935,7 +5939,7 @@ export function Workspace() {
   };
   const binGlyphs = useMemo(() => session.getHistogramBinGlyphs(), [session, version]);
   /**
-   * ⚑⚑ THE AXIS ENDS ARE NOT MARKED HERE ANY MORE (v2.4). They
+   * ⚑⚑ THE AXIS ENDS ARE NOT MARKED HERE ANY MORE (v2.3). They
    * used to be marked by this overlay - two violet dots labelled `Categories
    * start` and `Categories end` - because they were placed by a fold-out and
    * nothing else on screen owned them. They are CALIBRATION STEPS now (`Cat 1`,
@@ -7249,7 +7253,7 @@ export function Workspace() {
               {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
                 // ⚑ NOT `!axes`: a figure can arrive CALIBRATED with steps
-                // nobody placed (a WPD import, a pre-v2.4 project), and the chip
+                // nobody placed (a WPD import, a pre-v2.3 project), and the chip
                 // it is asking for has to light up like any other. A finished
                 // walk has no such step, so nothing changes for it.
                 const active = i === session.getStepIndex() && currentStep !== null;
@@ -7458,7 +7462,7 @@ export function Workspace() {
               })()}
             </label>
           )}
-          {/* ⚑⚑ STAGE 2, AND IT IS THE HEATMAP'S STAGE 2 (v2.4). David, with the
+          {/* ⚑⚑ STAGE 2, AND IT IS THE HEATMAP'S STAGE 2 (v2.3). David, with the
               two cards side by side: *"So it is a two stage fold out card,
               mirroring exactly heatmaps, and when we unfold from a calibrated
               state, then we show both card content at the same time, exact

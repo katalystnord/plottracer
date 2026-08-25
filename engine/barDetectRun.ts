@@ -419,7 +419,7 @@ export function runBarDetect(
   // an inline loop nobody had to think about. It is also the reason a legend's
   // colour swatch lands in a real category instead of being reported as
   // unplaceable: a shape past the last divider is assigned the nearest band.
-  // Deliberately UNCHANGED here - the phantom-bar defect is parked to v2.4 - but
+  // Deliberately UNCHANGED here - the phantom-bar defect is parked to v2.3 - but
   // the fix is now a one-word decision instead of an archaeology exercise.
   const bandOf = (b: DetectedBarBox): number => {
     const lo = categoryAxis === 'x' ? b.start.x : b.start.y;

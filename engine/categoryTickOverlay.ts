@@ -63,7 +63,7 @@ export interface CategoryOverlayInput {
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint] | null;
   tickPoints: readonly CategoryAxisPoint[];
   /**
-   * ⛔ `markEnds` IS GONE (v2.4), and its absence is the point.
+   * ⛔ `markEnds` IS GONE (v2.3), and its absence is the point.
    *
    * It drew the two axis ENDS as their own labelled marks, because on a bar
    * chart they were placed by a fold-out and nothing else on screen owned them.
@@ -276,7 +276,7 @@ export function categoryTickIndexFromId(id: string): number | null {
  * OFFER line that had to argue for opening the fold-out at all.
  *
  * All of it existed because the category axis was marked by a fold-out AFTER
- * calibration, seeded from a value-axis handle. Since v2.4 it is two steps of
+ * calibration, seeded from a value-axis handle. Since v2.3 it is two steps of
  * the calibration walk (`BAR_AXES_CONFIG.fixedSteps`), so:
  *
  *   · there is no phase - the stage exists exactly when the type declares one;
@@ -301,7 +301,7 @@ export function categoryTickIndexFromId(id: string): number | null {
 export function categoryStageLine(count: number, marked: boolean, declared = true): string {
   // ⚑⚑ NO COUNT NOBODY DECLARED. With the axis in the walk this line is only
   // reached undeclared on a figure whose walk is unfinished - a WPD import, a
-  // pre-v2.4 project - and it read `Categories - 0 categories` there: a number
+  // pre-v2.3 project - and it read `Categories - 0 categories` there: a number
   // presented as the figure's, that nobody typed.
   // ⚠️ This is the SAME defect the v2.3 card had (`2 categories` with the count
   // box empty), arriving through a door that did not exist when it was fixed.

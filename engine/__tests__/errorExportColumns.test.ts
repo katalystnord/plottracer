@@ -248,7 +248,7 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       // Position rather than a name-list index in capture order.
       'Position',
       'category',
-      // ⚑ THE BAR'S MEASURED CATEGORY EXTENT, present since v2.4 because every
+      // ⚑ THE BAR'S MEASURED CATEGORY EXTENT, present since v2.3 because every
       // bar chart now has a marked axis: the corners' separation along the
       // category direction IS the bar's width, and it used to be measured and
       // then discarded (F21/A2). It appears here for the same reason it appears

@@ -128,10 +128,10 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
     stage,
     foldedLine: {
       title: 'Calibration',
-      // ⚑⚑ THE WALK, NOT JUST THE AXES (v2.4). This asked only whether an axes
+      // ⚑⚑ THE WALK, NOT JUST THE AXES (v2.3). This asked only whether an axes
       // object existed, which was the same question as "is the walk finished"
       // right up until a figure could arrive calibrated with steps unplaced -
-      // a WPD import, a pre-v2.4 project. Caught on the bench: the card said
+      // a WPD import, a pre-v2.3 project. Caught on the bench: the card said
       // `Calibrated ✓` while the tips bar said `Calibration step 3/4`, two lines
       // on screen at once disagreeing about whether the job was done. The same
       // stale equivalence that had to be removed from `getCurrentStep`,

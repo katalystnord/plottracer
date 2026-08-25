@@ -380,7 +380,7 @@ export function BarTable({
         ))}
       </tbody>
     </table>
-    {/* ⚑⚑ NO READINGS YET, NOT "NO ROWS" (v2.4). This asked whether the table had
+    {/* ⚑⚑ NO READINGS YET, NOT "NO ROWS" (v2.3). This asked whether the table had
         any CATEGORY rows - which was the same question while a bar chart could be
         calibrated without its category axis. Since the axis is part of the walk,
         a freshly calibrated figure ALREADY has one row per declared category, so

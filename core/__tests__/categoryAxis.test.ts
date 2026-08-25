@@ -487,7 +487,7 @@ describe('bandIndexAt - what replaces the nearest-donor guess', () => {
  * ⚑⚑ DELETED WITH ITS SUBJECT: the `clearGeometry` block.
  *
  * `CategoryAxis.clearGeometry` existed for two session mutators - "Re-place
- * axis" and "Remove ticks" - and both are gone. Since v2.4 the category axis IS
+ * axis" and "Remove ticks" - and both are gone. Since v2.3 the category axis IS
  * calibration steps c1/c2: re-placing it is dragging those handles, which never
  * drops the geometry, and "Remove ticks" was removed with the card rebuild.
  *
