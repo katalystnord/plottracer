@@ -8778,7 +8778,16 @@ export function Workspace() {
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}
         // ⚑ A heatmap's record is CELLS, not points - see the prop.
-        showPointCount={config.outputPanel !== 'heatmap'}
+        // ⚑⚑ THE QUESTION IS "DOES THIS TYPE'S RECORD COUNT POINTS", not "is
+        // this a heatmap". Written as the name check in v2.3 it fixed the one
+        // type that had been looked at and left every other type whose datum is
+        // not a point: the histogram read `Series 1 (20)` over TEN bins and bar
+        // `Series 1 (30)` over FIFTEEN bars, because two corners make one
+        // reading. Found re-shooting the website gallery.
+        // ⚑ `getExportShape()` is the one thing that can answer it - the shape
+        // is DYNAMIC (a Bar session carrying box-plot groups exports as tuples),
+        // which is why its own doc says never to read the config field directly.
+        showPointCount={session.getExportShape() === 'flat'}
         nameDraft={nameDraft}
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}

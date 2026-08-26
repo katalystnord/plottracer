@@ -233,6 +233,43 @@ export function partitionSwatchSuspects(result: BarDetectSuccess): {
 }
 
 /**
+ * Would cutting this run produce a SLIVER - a piece far narrower than the bars
+ * this figure actually draws?
+ *
+ * ⚑⚑ A CUT THAT PRODUCES ONE IS A MISPLACED DIVIDER, NOT A BOUNDARY. `Cat 1` is
+ * OFFERED at the value origin, and a value axis's spine can sit outside where
+ * the categories start - measured at 23px, 37% of a band, on
+ * `samples/bar-floating-temperature.png`. Every divider then lands inside a bar
+ * and the splitter carves 4, 6 and 8 pixel pieces off bars of 38. Each is a
+ * reading the figure does not contain, filed with a category and a value.
+ *
+ * ⚑ THE COMPARISON IS THE ONE `swatchSuspectsIn` ALREADY MAKES: against the
+ * MEDIAN of the figure's own bars, never against a constant. "Narrow" has no
+ * absolute meaning in pixels - it depends on the figure's scale, its category
+ * count and how many series share a group. The reference here is the blobs that
+ * needed NO cutting, which are the bars this figure draws.
+ *
+ * ⚠️ NOTHING IS REFUSED WITH NOTHING TO COMPARE AGAINST. Where every blob is
+ * crossed there is no reference, and inventing one is exactly what the swatch
+ * test declines to do in the same position.
+ *
+ * ⚑ IT REFUSES THE CUT RATHER THAN DROPPING THE PIECE. Two touching bars read as
+ * one wide box is a VISIBLE failure; a sliver filed as a bar is an invisible
+ * one, and this project has already reverted a technique that won on the metric
+ * by trading the first for the second.
+ */
+function cutMakesASliver(
+  pieces: readonly { atFrom: number; atTo: number }[],
+  uncutExtents: readonly number[]
+): boolean {
+  if (uncutExtents.length === 0 || pieces.length < 2) return false;
+  const sorted = [...uncutExtents].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  if (!(median > 0)) return false;
+  return pieces.some((p) => Math.abs(p.atTo - p.atFrom) < median / 2);
+}
+
+/**
  * How much of the two shapes' CATEGORY extents have to coincide before they can
  * be two halves of one bar.
  *
@@ -419,6 +456,22 @@ export function runBarDetect(
   const along = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
     categoryAxis === 'x' ? { lo: b.minX, hi: b.maxX } : { lo: b.minY, hi: b.maxY };
   const boxes: DetectedBarBox[] = [];
+  // ⚑ THE BARS THIS FIGURE DRAWS, measured before anything is cut: the blobs no
+  // interior divider crosses. They are the reference `cutMakesASliver` judges a
+  // piece against, and they have to be collected up front because a run being
+  // cut cannot be its own yardstick.
+  const interiorAll = dividers.slice(1, -1);
+  const uncutExtents = whole
+    .filter((b) => {
+      const s2 = along(b.bbox);
+      return !interiorAll.some((d) => d > s2.lo && d < s2.hi);
+    })
+    .map((b) => {
+      const s2 = along(b.bbox);
+      return s2.hi - s2.lo;
+    });
+  /** Runs kept whole because cutting them would have produced a sliver. */
+  let refusedCuts = 0;
   for (const blob of whole) {
     const span = along(blob.bbox);
     // ⚑ INTERIOR dividers only. The first and last entries are the axis EDGES,
@@ -441,6 +494,16 @@ export function runBarDetect(
     const columns = runColumnsFromMembers(blob.members ?? [], width, categoryAxis);
     const cuts = [span.lo, ...crossed, span.hi];
     const report = splitRunAtDividers(columns, cuts);
+    if (cutMakesASliver(report.pieces, uncutExtents)) {
+      // The dividers are in the wrong place for this run, not the run in the
+      // wrong place for the dividers. Keep the bar the figure drew.
+      refusedCuts += 1;
+      boxes.push({
+        start: { x: blob.bbox.minX, y: blob.bbox.minY },
+        end: { x: blob.bbox.maxX, y: blob.bbox.maxY },
+      });
+      continue;
+    }
     for (const piece of report.pieces) {
       // ⚑ The INK's extent, not the band's. A bar is narrower than its band --
       // the gaps between bars are exactly that difference -- so boxing a piece
