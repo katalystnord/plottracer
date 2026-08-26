@@ -39,6 +39,19 @@ const ONLY = process.env['SHOT_ONLY'] ?? '';
 const ANCHOR_KEY: Record<string, string> = {
   cat1: 'c1',
   catn: 'c2',
+  // ⚑ A heatmap's step LABELS name the corner a user clicks ("where the FIRST
+  // column meets the FIRST row"), while the truth files key their anchors by the
+  // step's own key. The labels are the better thing to show a person and the
+  // keys the better thing to store, so the two differ on purpose and this is
+  // where they meet.
+  'c1×r1': 'x1',
+  'cn×r1': 'x2',
+  'c1×r1(y)': 'y1',
+  'c1×rn': 'y2',
+  keycorner: 'k1',
+  oppositecorner: 'k2',
+  keyvalue1: 'kv1',
+  keyvalue2: 'kv2',
 };
 const anchorKeyFor = (label: string) => {
   const k = label.toLowerCase().replace(/[\s.]/g, '');
@@ -53,6 +66,18 @@ interface Card {
   /** What the caption on the site claims this frame shows. Read the frame
    *  against THIS, not against "does it look nice". */
   claim: string;
+  /** Extra numbers a step asks for beyond the anchor's own, by anchor key. */
+  extra?: Record<string, readonly string[]>;
+  /**
+   * Steps whose PROMPT asks for a drag rather than a click, and where it ends.
+   *
+   * ⚑ A heatmap's colour key is calibrated by *"Drag across the colour key from
+   * one corner to the opposite one"*. Clicking it places nothing and the walk
+   * simply stops - which is what happened here, and is exactly the fourth gate's
+   * point: the harness may only do what the screen asks, so when the screen asks
+   * for a drag it has to drag.
+   */
+  drags?: Record<string, string>;
   /** Everything after the walk: capture, trace, fit. */
   after?: (d: Driver) => Promise<void>;
 }
@@ -96,16 +121,45 @@ const CARDS: Card[] = [
     type: 'xy',
     claim: 'Four dash-coded curves that cross, two traced from a handful of guide points, and the points land on the ink.',
     async after(d) {
-      // ⚑ ONE SERIES PER CURVE, which is what the figure is: four formulations.
-      // Their inks are near-greys of different value, so this is also the
-      // greyscale-ish case the site claims the tool handles.
-      const inks = ['#3f3f3f', '#5f5f5f', '#7f7f7f', '#1f4e79'];
-      for (let i = 0; i < inks.length; i += 1) {
-        if (i > 0) {
+      // ⚑⚑ GUIDE POINTS, WHICH IS THE MECHANISM THE CAPTION NAMES - and the only
+      // one that can work here. MEASURED: all four curves are the IDENTICAL ink
+      // (17,17,17) and are separated by DASH PATTERN, which the figure's own
+      // title says out loud. A By-colour trace therefore cannot tell them apart:
+      // one pass over the four returns points wandering BETWEEN them, 28.6% of
+      // which sit near no curve at all. That is not a defect, it is the case
+      // Guide points exists for - "curves that cross and share a colour" is the
+      // first phrase of the gallery's own intro.
+      // ⚠️ A first draft traced four made-up greys by colour and produced a frame
+      // that looked like a bug. The figure was right and the harness was wrong.
+      const truth = JSON.parse(
+        readFileSync(path.join(REPO_ROOT, 'samples', 'xy-dashed-release.truth.json'), 'utf8')
+      ) as {
+        calibration: { anchors: Record<string, { px: number; py: number }> };
+        series: { name: string; points: { x: number; y: number }[] }[];
+      };
+      const a = truth.calibration.anchors;
+      const toPx = (x: number, y: number): [number, number] => [
+        a['x1']!.px + (x / 12) * (a['x2']!.px - a['x1']!.px),
+        a['y1']!.py + (y / 100) * (a['y2']!.py - a['y1']!.py),
+      ];
+      const pressed = await d.testId('mode-auto-extract').getAttribute('aria-pressed');
+      if (pressed !== 'true') await d.testId('mode-auto-extract').click();
+      await d.testId('auto-extract-guide').click();
+      await d.page.locator('[data-testid="auto-extract-guide"][aria-pressed="true"]').waitFor();
+      await d.wait(250);
+      // Two of the four, as the caption says: a handful of anchors each, and the
+      // spline fills between them.
+      for (const idx of [0, 2]) {
+        if (idx > 0) {
           await d.testId('add-series').click();
           await d.wait(250);
         }
-        await traceColour(d, inks[i]!, 'curve', { tolerance: '28' });
+        const pts = truth.series[idx]!.points;
+        for (const k of [2, 8, 16, 26, 36, 46]) {
+          const p = pts[Math.min(k, pts.length - 1)]!;
+          await d.click(...toPx(p.x, p.y));
+        }
+        await d.wait(300);
       }
     },
   },
@@ -153,6 +207,21 @@ const CARDS: Card[] = [
     sample: 'heatmap-timecourse',
     type: 'heatmap',
     claim: 'Every cell read through a calibrated colour key, on boundaries measured from the figure - unequal columns come back unequal.',
+    // ⚑ Five columns and five rows, from the figure's own truth grid: its x
+    // boundaries are 0,1,2,4,8,24 - visibly UNEQUAL, which is the whole claim.
+    extra: { x2: ['24', '5'], y2: ['5', '5'] },
+    drags: { k1: 'k2' },
+    async after(d) {
+      await d.testId('heatmap-detect').click();
+      await d.wait(1200);
+      // ⚑ NAME THE ROWS, because the caption claims each one is named and the
+      // matrix otherwise reads R1..R5. The names are the figure's own printed
+      // treatments, top to bottom, which is the order the field asks for.
+      await d.testId('heatmap-y-labels').fill('Combination, High dose, Mid dose, Low dose, Vehicle');
+      await d.wait(300);
+      await d.testId('heatmap-read').click();
+      await d.wait(1200);
+    },
   },
   {
     name: 'shot-pie',
@@ -250,13 +319,28 @@ function driverFor(): Driver {
   };
 }
 
-/** Type a value into the step prompt, when the step asks for one. */
-async function confirmValue(v: string) {
+/**
+ * Answer the step's prompt, when it asks for anything.
+ *
+ * ⚑ A STEP CAN ASK FOR MORE THAN ONE NUMBER. A heatmap's `Cn x R1` wants the X
+ * value AND how many COLUMNS the figure has, on the same click - which is why
+ * this fills every field the step put on screen rather than the first.
+ */
+async function confirmValues(values: readonly string[]) {
   await page.mouse.move(5, 5);
   await page.waitForTimeout(120);
-  const input = page.locator('[data-testid="data-value-input"]');
-  if ((await input.count()) === 0) return false;
-  await input.first().fill(v, { timeout: 6000, force: true });
+  // ⚑ THE FIELDS ARE NOT ALL CALLED THE SAME THING. The first is
+  // `data-value-input`; the rest are `data-value-input-1`, `-2`, ... A heatmap's
+  // `Cn x R1` puts TWO on screen - the X value and how many COLUMNS - so a
+  // locator for the first name alone found one field, left the second empty, and
+  // the step refused to advance. The walk then re-asked for the same step
+  // thirteen times.
+  const inputs = page.locator('[data-testid^="data-value-input"]');
+  const n = await inputs.count();
+  if (n === 0) return false;
+  for (let i = 0; i < n; i += 1) {
+    await inputs.nth(i).fill(values[i] ?? '', { timeout: 6000, force: true });
+  }
   await page.locator('[data-testid="confirm-data-value"]').first().click({ timeout: 6000, force: true });
   await page.waitForTimeout(160);
   return true;
@@ -270,7 +354,14 @@ async function confirmValue(v: string) {
  * silently skipped. Returns the labels it answered, so a caller can say what
  * the figure actually asked.
  */
-async function walkCalibration(d: Driver, anchors: Record<string, { px: number; py: number; value?: unknown }>) {
+async function walkCalibration(
+  d: Driver,
+  anchors: Record<string, { px: number; py: number; value?: unknown }>,
+  /** Extra numbers a step asks for beyond the anchor's own, by anchor key. */
+  extra: Record<string, readonly string[]> = {},
+  /** Steps the prompt asks to DRAG, and the anchor the drag ends on. */
+  drags: Record<string, string> = {}
+) {
   const answered: string[] = [];
   for (let guard = 0; guard < 14; guard += 1) {
     // ⚑⚑ THE TIPS BAR, NOT THE STEP MATRIX. The matrix marks the live step with
@@ -290,9 +381,15 @@ async function walkCalibration(d: Driver, anchors: Record<string, { px: number; 
     // clicked again - the prompt says so in its own words, and clicking would
     // move a point the walk had already settled.
     const reused = /same corner again|already/i.test(tip);
-    if (!reused) await d.click(a.px, a.py);
-    if (a.value !== undefined) await confirmValue(String(a.value));
-    else await confirmValue('');
+    const dragTo = drags[key];
+    if (dragTo && anchors[dragTo]) {
+      const b = anchors[dragTo]!;
+      await d.drag([a.px, a.py], [b.px, b.py]);
+    } else if (!reused) {
+      await d.click(a.px, a.py);
+    }
+    const vals = extra[key] ?? (a.value !== undefined ? [String(a.value)] : ['']);
+    await confirmValues(vals);
     answered.push(label);
   }
   return answered;
@@ -322,7 +419,7 @@ describe.runIf(RUN)('website gallery shots', () => {
           readFileSync(path.join(REPO_ROOT, 'samples', `${card.sample}.truth.json`), 'utf8')
         ) as { calibration?: { anchors?: Record<string, { px: number; py: number; value?: unknown }> } };
         const anchors = truth.calibration?.anchors ?? {};
-        const answered = await walkCalibration(d, anchors);
+        const answered = await walkCalibration(d, anchors, card.extra ?? {}, card.drags ?? {});
         // eslint-disable-next-line no-console
         console.log(`${card.name}: walk asked for [${answered.join(', ')}]`);
         if (process.env['SHOT_PRECALIB'] === '1') {

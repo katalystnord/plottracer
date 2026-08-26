@@ -16,6 +16,33 @@
       "max": 1300
     }
   },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "x1": {
+        "px": 87.0,
+        "py": 636.5,
+        "value": 25.0
+      },
+      "x2": {
+        "px": 870.0,
+        "py": 636.5,
+        "value": 225.0
+      },
+      "y1": {
+        "px": 87.0,
+        "py": 636.5,
+        "value": 0.0
+      },
+      "y2": {
+        "px": 87.0,
+        "py": 84.5,
+        "value": 1200.0
+      }
+    },
+    "anchorNote": "MEASURED off the figure's own axis ticks, not off the plot box: the x ticks sit at px 87,185,283,...,870 for 25..225 and the y ticks at py 636.5,544,...,84.5 for 0..1200. x1 and y1 are the SAME pixel, so the common-origin offer applies. VERIFIED before being written down: all seven of this figure's markers land within 4px of where these anchors predict them. The file carried no calibration block at all until 2026-08-26, which is why its walk could not be driven."
+  },
   "series": [
     {
       "name": "time to failure",
