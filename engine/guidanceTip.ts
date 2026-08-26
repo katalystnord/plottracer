@@ -363,8 +363,18 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // wording once guarded against, 59f94a6), and never an assumed baseline --
       // so the SAME gesture and the SAME wording cover an ordinary zero-based bar
       // and a floating/offset one (a tornado chart, a temperature range) alike.
+      // ⚑⚑ AND IT NAMES NEITHER END. This clause used to interpolate the slot at
+      // the cursor - `filling Min` / `filling Max` - and `getCurrentSlotLabel`
+      // returns the slot by POSITION, slot 0 being `Min` whatever was clicked
+      // into it. So clicking the bar's top first made the tip say *"filling
+      // Max"* for a click that lands on the LOW end. The record never noticed
+      // (`core/barInterval.ts` sorts the pair on read); only this sentence could.
+      // ▶ David, 2026-08-26: *"It does not matter if it is the max or the min, we
+      // sort that out later. I think any other wording is not generalizable as
+      // tooltip."* Which end is still open is not a fact the gesture needs - HOW
+      // MANY are is - so the note says that instead.
       if (config.id === 'bar' && hasSlots)
-        return `Drag from one corner of the bar to the opposite corner - both ends are measured, so this reads a bar that floats above or below its baseline just as well as an ordinary one${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, filling ${currentGroupLabel})`}. A single click still works too, filling one end at a time.`;
+        return `Drag from one corner of the bar to the opposite corner - both ends are measured, so this reads a bar that floats above or below its baseline just as well as an ordinary one${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, one end still to fill)`}. A single click still works too, filling one end at a time.`;
       if (hasSlots)
         return `Click to add a point - filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
       // ⚑ Categorical Line is the one bar-family type that stays a plain point per

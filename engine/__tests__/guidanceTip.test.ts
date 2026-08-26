@@ -345,7 +345,52 @@ describe('guidanceTip - capture, per graph type', () => {
     );
     expect(tip).toContain('one corner of the bar to the opposite corner');
     expect(tip).toContain('both ends are measured');
-    expect(tip).toContain('bar 3, filling Min');
+    expect(tip).toContain('bar 3, one end still to fill');
+  });
+
+  it('⚑⚑ the bar tip names NEITHER end, because the slot at the cursor is a POSITION', () => {
+    // ⚠️ MEASURED, and it is why this wording changed. `getCurrentSlotLabel`
+    // returns the slot at the cursor's INDEX, and a bar's slots are `Min` then
+    // `Max` by position - so clicking the bar's TOP first fills slot 0 and the
+    // tip then said *"filling Max"* for a click that lands on the LOW end. The
+    // record is unaffected (`core/barInterval.ts` sorts the pair on read), so
+    // only the live sentence could mislead, and only ever about the end.
+    //
+    // ▶ David, 2026-08-26: *"Can we not just tell the user to click the start
+    // and end of the bar? It does not matter if it is the max or the min, we
+    // sort that out later. I think any other wording is not generalizable."*
+    // The instruction already was corner-to-opposite-corner; this is the one
+    // clause that named an end, and it did not have to.
+    for (const label of ['Min', 'Max']) {
+      const tip = guidanceTip(
+        base({
+          mode: 'place-point',
+          config: BAR_AXES_CONFIG,
+          hasSlots: true,
+          currentGroupLabel: label,
+          tupleNoun: 'bar',
+          currentTupleIndex: 0,
+        })
+      );
+      expect(tip).toContain('one end still to fill');
+      expect(tip).not.toContain('filling Min');
+      expect(tip).not.toContain('filling Max');
+    }
+  });
+
+  it('a bar not yet started says so, and still names no end', () => {
+    const tip = guidanceTip(
+      base({
+        mode: 'place-point',
+        config: BAR_AXES_CONFIG,
+        hasSlots: true,
+        currentGroupLabel: 'Min',
+        tupleNoun: 'bar',
+        currentTupleIndex: null,
+      })
+    );
+    expect(tip).toContain('starting a new bar');
+    expect(tip).not.toContain('one end still to fill');
   });
 
   it('Bar beats the generic slot line - Bar always has slots, so order decides', () => {
