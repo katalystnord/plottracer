@@ -468,7 +468,25 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     }
     if (mode === 'pan') return 'Pan and zoom only - pick a tool from the left rail to edit.';
   }
-  return 'Pick a graph type, then calibrate the axes to begin.';
+  // ⚑⚑ THE WALK HAS AN ENDING, AND THIS IS IT. `isCalibrating` is
+  // `currentStep !== null`, so the instant the last step is placed the
+  // calibration branch stops applying - and until `Calibrate` is pressed the
+  // axes do not exist either, so this state belonged to neither.
+  //
+  // ⚠️⚠️ WHAT STOOD HERE COULD NEVER BE TRUE. It read *"Pick a graph type, then
+  // calibrate the axes to begin."* and it is unreachable in both halves:
+  // `axesTypeId` is initialised to XY, so a graph type is ALWAYS chosen, and an
+  // uncaptured session is caught many branches above by the framing message. On
+  // the built app it appeared over four placed points, a chosen type and a
+  // button labelled `Calibrate` - the only state that reaches it, and the one
+  // state both its clauses deny. Same shape as the `calibrate()` that could not
+  // fail: a sentence written for a situation that cannot arrive here.
+  //
+  // ⚑ AND THE SAME FALL-THROUGH, THROUGH A THIRD DOOR - see the `error-bars`
+  // branch above, which landed on that identical sentence beside a card reading
+  // `Calibrated ✓`. That fix did not sweep the states BEFORE calibration.
+  // Found on the screenshot bench while re-shooting the website gallery.
+  return 'Every calibration point is placed - press Calibrate to build the axes. Or drag a handle to adjust one first.';
 }
 
 /**

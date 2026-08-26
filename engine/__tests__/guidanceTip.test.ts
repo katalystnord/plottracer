@@ -455,10 +455,13 @@ describe('guidanceTip - the branches that exist because they were MISSING', () =
     }
   });
 
-  it('still shows the fallback when nothing is calibrated', () => {
-    expect(guidanceTip(base({ isCalibrated: false, mode: 'pan' }))).toBe(
-      'Pick a graph type, then calibrate the axes to begin.'
-    );
+  it('⚠️ the old "pick a graph type" fallback is GONE - it could never be true', () => {
+    // ⚠️⚠️ THIS TEST USED TO ASSERT THAT SENTENCE, which is how the defect
+    // survived: a captured, uncalibrated session with no step in hand is the
+    // walk FINISHED, and the line told the user to pick a graph type (always
+    // already chosen - `axesTypeId` starts as XY) and begin calibrating (they
+    // just had). A test can encode a defect as firmly as code can.
+    expect(guidanceTip(base({ isCalibrated: false, mode: 'pan' }))).toMatch(/press Calibrate/i);
   });
 });
 
@@ -983,5 +986,75 @@ describe('the heatmap empty-cells hint follows the grid', () => {
     const hint = noPointsHint({ mode: 'place-point', config: heat, heatmapHasGrid: true });
     expect(hint).not.toContain('detect the grid');
     expect(hint).toContain('Read cells');
+  });
+});
+
+describe('the walk has an ENDING, and the tips bar says what it is', () => {
+  /**
+   * 🔴 FOUND ON THE SCREENSHOT BENCH, 2026-08-26, while re-shooting the website
+   * gallery. With all four XY points placed and valued, the graph type chosen,
+   * and a button labelled `Calibrate` sitting on the card, the tips bar read:
+   *
+   *     "Pick a graph type, then calibrate the axes to begin."
+   *
+   * Both halves false. `isCalibrating` IS `currentStep !== null`, so the moment
+   * the last step is placed the calibration branch stops applying - and nothing
+   * claimed the state, so it fell all the way through to the message for a
+   * session with no graph type at all.
+   *
+   * ⚑⚑ THE SAME FALL-THROUGH, THROUGH A THIRD DOOR. `mode === 'error-bars'` had
+   * no branch here and landed on the identical sentence beside a card saying
+   * `Calibrated ✓`; the comment recording that fix is a dozen lines above this
+   * one. A found bug is a search query, not a ticket closed - and the query was
+   * never run over the states BEFORE calibration.
+   *
+   * ⚑ PATTERN 5: does the flow have an ENDING? The user has done everything the
+   * walk asked and the one line whose job is to say what comes next was
+   * describing the beginning.
+   */
+  const walkComplete = () =>
+    base({
+      figureCaptured: true,
+      isCalibrated: false,
+      isCalibrating: false,
+      currentStep: null,
+      config: XY_AXES_CONFIG,
+      mode: 'calibrate',
+    });
+
+  it('every point placed and not yet calibrated: press Calibrate', () => {
+    const tip = guidanceTip(walkComplete());
+    expect(tip).toMatch(/press Calibrate/i);
+    expect(tip).not.toMatch(/Pick a graph type/);
+  });
+
+  it('and it does NOT claim the walk is unstarted', () => {
+    // The half that made the old sentence actively misleading: the type IS
+    // picked, and telling someone to pick one sends them to reset it.
+    expect(guidanceTip(walkComplete())).not.toMatch(/to begin/);
+  });
+
+  it('a session with no figure captured is caught long before this, by the framing line', () => {
+    // ⚑ MEASURED, and it is why the old sentence was unreachable rather than
+    // merely wrong: `!figureCaptured` returns the Capture instruction dozens of
+    // branches earlier, so nothing uncaptured ever fell to the bottom.
+    const tip = guidanceTip(base({ figureCaptured: false, isCalibrated: false, isCalibrating: false, currentStep: null }));
+    expect(tip).toMatch(/press Capture/);
+    expect(tip).not.toMatch(/Pick a graph type/);
+  });
+
+  it('a walk still in progress is untouched - the step keeps its own prompt', () => {
+    const tip = guidanceTip(
+      base({
+        figureCaptured: true,
+        isCalibrated: false,
+        isCalibrating: true,
+        currentStep: { label: 'X2', prompt: 'Click a second pixel position of a known, different X value' },
+        stepIndex: 1,
+        stepCount: 4,
+      })
+    );
+    expect(tip).toContain('Calibration step 2/4 - X2');
+    expect(tip).not.toMatch(/press Calibrate/i);
   });
 });
