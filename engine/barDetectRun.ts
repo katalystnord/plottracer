@@ -523,11 +523,16 @@ export function runBarDetect(
   // merged run, and the user needs it named either way. Computed from the boxes
   // finally produced, so it cannot disagree with what was returned.
   // ⚠️ `clamp` IS THE BEHAVIOUR THIS ALWAYS HAD, and it is now a word rather than
-  // an inline loop nobody had to think about. It is also the reason a legend's
-  // colour swatch lands in a real category instead of being reported as
-  // unplaceable: a shape past the last divider is assigned the nearest band.
-  // Deliberately UNCHANGED here - the phantom-bar defect is parked to v2.3 - but
-  // the fix is now a one-word decision instead of an archaeology exercise.
+  // an inline loop nobody had to think about. It is also why a shape past the
+  // last divider is assigned the NEAREST band rather than reported as
+  // unplaceable.
+  // ✅ THE PHANTOM-BAR DEFECT IS NO LONGER PARKED - this said "parked to v2.3"
+  // while shipping IN v2.3. A legend swatch is now measured against the declared
+  // baseline (`swatchSuspectsIn`), HELD BACK from the record rather than filed,
+  // and offered back in one click (`partitionSwatchSuspects`). So a swatch does
+  // not reach `bandOf` at all unless the user asks for it, and `clamp` is left
+  // as it is because the question it answers is a different one: where does a
+  // shape the user has ACCEPTED belong.
   const bandOf = (b: DetectedBarBox): number => {
     const lo = categoryAxis === 'x' ? b.start.x : b.start.y;
     const hi = categoryAxis === 'x' ? b.end.x : b.end.y;
