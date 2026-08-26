@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runBarDetect } from '../barDetectRun.js';
+import { runBarDetect, partitionSwatchSuspects } from '../barDetectRun.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
@@ -18,9 +18,16 @@ import { walkCategoryAxis } from './helpers/categoryWalk.js';
  * ▶ THE DISCRIMINATOR IS THE BASELINE ANCHOR, and it needs a SIZE test beside it
  * because a stacked figure's upper segments legitimately float too.
  *
- * ⚑ IT REPORTS AND DOES NOT ACT. Every box is still returned. The standing rule
- * for bar techniques is that one may only refuse or corroborate, never act alone,
- * and silently dropping a shape would delete a measurement without saying so.
+ * ⚑ THE DETECTOR REPORTS AND DOES NOT ACT. Every box is still returned; it names
+ * the suspects by index. The standing rule for bar techniques is that one may
+ * only refuse or corroborate, never act alone.
+ *
+ * ⚑⚑ THE CALLER THEN HOLDS THEM BACK AND OFFERS THEM (v2.3), which is the other
+ * half of that rule rather than a departure from it: a refusal is only allowed
+ * when the control that undoes it is on screen. Filing the phantom and printing
+ * a sentence left a wrong reading in the record that exports unless the reader
+ * goes and finds it; holding it back leaves a visible offer instead. The one
+ * that is visible is the one to prefer - see `partitionSwatchSuspects`.
  */
 
 const W = 200;
@@ -135,6 +142,99 @@ describe('a shape that neither reaches the baseline nor spans a category is repo
     );
     if ('error' in result) throw new Error(result.error);
     expect(result.swatchSuspects).toEqual([]);
+  });
+
+});
+
+describe('the suspects are HELD BACK from the record, and offered instead', () => {
+  /**
+   * ⚑⚑ WHY HOLDING BACK BEATS FILING-AND-SAYING-SO, which is what this did first.
+   * A phantom bar filed as data looks exactly like a measurement: it has a row,
+   * a category and a value, and it exports. The reader has to be told it is
+   * there, find it, and delete it. A shape held back with an offer beside it is
+   * visible by construction and costs one click to take back.
+   *
+   * ⚑ It is only a refusal because the control that undoes it exists. Without
+   * the offer this would be a silent drop, which is the worse half of the same
+   * defect.
+   */
+  it('the bars are filed and the swatch is not', () => {
+    const result = detect(
+      image([
+        { x0: 10, y0: 40, x1: 40, y1: 100 },
+        { x0: 60, y0: 20, x1: 90, y1: 100 },
+        { x0: 110, y0: 55, x1: 140, y1: 100 },
+        { x0: 170, y0: 10, x1: 181, y1: 21 }, // the legend swatch
+      ])
+    );
+    if ('error' in result) throw new Error(result.error);
+    const { file, holdBack } = partitionSwatchSuspects(result);
+    expect(file).toHaveLength(3);
+    expect(holdBack).toHaveLength(1);
+    // ⚑ IDENTITY, not arithmetic. Three-and-one is also what you get by holding
+    // back the wrong shape, so the held-back box has to BE the swatch.
+    expect(holdBack[0]!.start.x).toBeGreaterThan(160);
+    expect(file.every((b) => b.start.x < 160)).toBe(true);
+  });
+
+  it('a figure with no legend files every shape and offers nothing', () => {
+    const result = detect(
+      image([
+        { x0: 10, y0: 40, x1: 40, y1: 100 },
+        { x0: 60, y0: 20, x1: 90, y1: 100 },
+      ])
+    );
+    if ('error' in result) throw new Error(result.error);
+    const { file, holdBack } = partitionSwatchSuspects(result);
+    expect(file).toHaveLength(2);
+    expect(holdBack).toEqual([]);
+  });
+
+  it('⚑⚑ a STACKED figure files every segment - nothing is held back', () => {
+    // The case that makes holding back dangerous rather than merely wrong: an
+    // upper segment floats exactly like a swatch, and withholding it would
+    // delete a real reading. The size test is what stops it, and this asserts
+    // the whole chain rather than the detector half alone.
+    const result = detect(
+      image([
+        { x0: 10, y0: 60, x1: 40, y1: 100 },
+        { x0: 10, y0: 20, x1: 40, y1: 58 },
+        { x0: 60, y0: 50, x1: 90, y1: 100 },
+      ])
+    );
+    if ('error' in result) throw new Error(result.error);
+    const { file, holdBack } = partitionSwatchSuspects(result);
+    expect(holdBack).toEqual([]);
+    expect(file).toHaveLength(3);
+  });
+
+  it('⚑ a floating-bar figure files everything - there is no reference to judge "small" by', () => {
+    const result = detect(
+      image([
+        { x0: 10, y0: 20, x1: 40, y1: 60 },
+        { x0: 60, y0: 30, x1: 90, y1: 70 },
+        { x0: 170, y0: 10, x1: 181, y1: 21 },
+      ])
+    );
+    if ('error' in result) throw new Error(result.error);
+    const { file, holdBack } = partitionSwatchSuspects(result);
+    expect(holdBack).toEqual([]);
+    expect(file).toHaveLength(3);
+  });
+
+  it('⚑ with NO baseline declared nothing can be held back, which is the pre-v2.3 record exactly', () => {
+    const result = runBarDetect(
+      image([
+        { x0: 10, y0: 40, x1: 40, y1: 100 },
+        { x0: 170, y0: 10, x1: 181, y1: 21 },
+      ]),
+      W, H, BLACK, 30, 'foreground', undefined, { minDiameter: 3 }
+    );
+    if ('error' in result) throw new Error(result.error);
+    expect(result.swatchSuspects).toBeUndefined();
+    const { file, holdBack } = partitionSwatchSuspects(result);
+    expect(holdBack).toEqual([]);
+    expect(file).toHaveLength(2);
   });
 
   it('⚑ without a baseline the detector answers exactly as it did before', () => {

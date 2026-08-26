@@ -408,6 +408,18 @@ interface ImageCanvasProps {
   regionMode?: boolean;
   onRegionRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   regionRect?: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * Shapes the last bar trace found and HELD BACK, in image pixels.
+   *
+   * ⚑⚑ SO A REFUSAL IS SOMETHING THE READER CAN SEE. The card says how many
+   * shapes were kept out of the record; only the figure can say WHICH. Without
+   * this the user is asked to accept a count on trust, and "he can only use what
+   * he sees" is a hard rule, not a preference.
+   * ⚑ Drawn like `regionRect` - dashed, unlistening, no handle - because it is
+   * the same kind of mark: a rectangle the app is pointing at, not a datum.
+   * A different colour, because it means something else.
+   */
+  heldBackRects?: readonly { x: number; y: number; width: number; height: number }[] | null;
   /** Bar capture (v2.0): when true, a background drag draws a rectangle
    * reported (image-pixel space) via onBoxRect -- the SAME shared gesture as
    * crop/region/select-marquee (one drag mechanism, four destinations), but
@@ -554,7 +566,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2617,6 +2629,30 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                 {/* Auto-extract region (B1): the persistent restrict-to rectangle,
                     amber to distinguish it from the teal crop rect. The live drag
                     reuses the crop rect above; this is the committed region. */}
+                {heldBackRects?.map((r, i) => {
+                  const a = imageToScreen(view, r.x, r.y);
+                  const b = imageToScreen(view, r.x + r.width, r.y + r.height);
+                  const common = {
+                    x: a.x - 1,
+                    y: a.y - 1,
+                    width: b.x - a.x + 2,
+                    height: b.y - a.y + 2,
+                    listening: false,
+                  };
+                  // ⚑⚑ TWO STROKES, BECAUSE THE THING IT OUTLINES IS ALWAYS THE
+                  // SERIES INK. Read cold off a screenshot, a single crimson
+                  // dash on a magenta legend swatch was nearly invisible - and
+                  // the ONE shape this ever draws on is, by construction, a
+                  // shape in exactly the colour being traced. A light backing
+                  // stroke under a dark dash reads over any fill, which is what
+                  // every marching-ants selection does for the same reason.
+                  return (
+                    <Group key={`held-back-${i}`}>
+                      <Rect {...common} stroke="rgba(255,255,255,0.95)" strokeWidth={3.5} />
+                      <Rect {...common} stroke="#111827" strokeWidth={1.5} dash={[4, 3]} />
+                    </Group>
+                  );
+                })}
                 {regionRect && !cropDragRef.current && (() => {
                   const a = imageToScreen(view, regionRect.x, regionRect.y);
                   const b = imageToScreen(view, regionRect.x + regionRect.width, regionRect.y + regionRect.height);

@@ -39,7 +39,7 @@ import {
   spiderTraceReport,
   barTraceReport,
   categoryMissReport,
-  swatchSuspectReport,
+  swatchHoldBackOffer,
   emptyCategoryNames,
   blobTraceReport,
   curveTraceReport,
@@ -180,7 +180,7 @@ import { runColorTrace, calibrationBoxRegion, tracingADifferentColour } from '..
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
-import { runBarDetect } from '../../engine/barDetectRun.js';
+import { runBarDetect, partitionSwatchSuspects, type DetectedBarBox } from '../../engine/barDetectRun.js';
 import { formatLabelList, labelCoverage, parseLabelList } from '../../core/heatmapLabels.js';
 import { cellIndexAt, cellsOf } from '../../core/heatmapGrid.js';
 import type { SerializedHeatmapLayer } from '../../core/plotData.js';
@@ -1311,6 +1311,19 @@ export function Workspace() {
   const [colorTraceColor, setColorTraceColor] = useState('#000000');
   const [colorTraceTolerance, setColorTraceTolerance] = useState(60);
   const [colorTraceInfo, setColorTraceInfo] = useState<string | null>(null);
+  /**
+   * Shapes the last bar trace found and did NOT file - see
+   * `partitionSwatchSuspects`.
+   *
+   * ⚑ THE BOXES THEMSELVES, not a count, for two reasons that are the same
+   * reason: the offer has to be able to put them BACK in one gesture, and they
+   * are drawn on the figure so the reader can see WHICH shapes were refused. A
+   * count would make this a claim to be taken on trust.
+   * ⚑ Not re-derivable by re-running the trace, which is how the new-colour offer
+   * gets away with holding nothing: that one traces into a FRESH series, while
+   * re-running here would file every bar a second time.
+   */
+  const [heldBackBars, setHeldBackBars] = useState<readonly DetectedBarBox[]>([]);
   // What the coloured pixels ARE (checkpoint 122): a continuous 'curve' (averaging
   // window, one point per column) or 'scatter' markers (blob detector, one point
   // per connected marker = its centroid). Both share the colour filter + preview;
@@ -2807,6 +2820,11 @@ export function Workspace() {
     setGridRemovalError(null);
     setActivePointIndex(null); // the restored point set may differ -- clear the selection
     setSelectedPointIndices([]); // ...and the marquee selection: its indices refer to a point set that may no longer exist
+    // ⚑⚑ ...and the shapes a trace HELD BACK, for the identical reason: an undo
+    // rolls the trace itself back, and the offer would then file a legend swatch
+    // into a session that no longer holds the bars it was measured against -
+    // through the ordinary capture path, so nothing downstream would look wrong.
+    setHeldBackBars([]);
     const cf = getCurveFitState(s.getDataset());
     setCurveFitDegree(cf ? cf.degree : 1);
     setCurveFitModel(cf?.model ?? 'polynomial');
@@ -2877,6 +2895,10 @@ export function Workspace() {
       setActivePointIndex(null);
       setSelectedPointIndices([]);
       setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
+      // ⚑ ...and so are shapes the OUTGOING figure's trace held back. They are
+      // image pixels of a picture that is no longer on screen, and the offer
+      // that takes them back would file them into this figure's record.
+      setHeldBackBars([]);
       setProjectNotice(null); // ...and so is a notice about the figure we just left
       setProjectError(null);
       setDataValueInputs([]);
@@ -5487,7 +5509,14 @@ export function Workspace() {
         setColorTraceInfo(result.error);
         return;
       }
-      const added = session.addBarDetectBoxes(result.boxes);
+      // ⚑⚑ THE SWATCH SUSPECTS ARE HELD BACK RATHER THAN FILED. A phantom bar
+      // filed as data looks exactly like a measurement - it has a row, a
+      // category and a value, and it exports - so the reader has to be told it
+      // is there, find it and delete it. Held back, it is visible by
+      // construction and one click from being taken back.
+      const { file, holdBack } = partitionSwatchSuspects(result);
+      const added = session.addBarDetectBoxes(file);
+      setHeldBackBars(holdBack);
       adoptTracedColour();
       // ⚑ Name the categories that came back empty. The split reports them by
       // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
@@ -5498,10 +5527,12 @@ export function Workspace() {
         (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
         session.getCategoryAxis().getCategories()
       );
+      // ⚑ The held-back shapes are NOT reported here. They are an offer, and the
+      // offer says its own sentence beside the button that takes it - see
+      // `swatchHoldBackOffer`. Restating the arithmetic in two places is the
+      // "says one thing three times" defect through a new door.
       setColorTraceInfo(
-        barTraceReport(added, noun, result.matched, width, height) +
-          categoryMissReport(missing) +
-          swatchSuspectReport(result.swatchSuspects?.length ?? 0)
+        barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
       );
       commit();
       return;
@@ -5601,6 +5632,28 @@ export function Workspace() {
     setGeometryClosed(false);
     handleColorTrace();
   }, [session, handleColorTrace]);
+
+  /**
+   * File the shapes the trace held back, after all.
+   *
+   * ⚑⚑ THIS IS WHAT MAKES THE HOLD-BACK A REFUSAL RATHER THAN A SILENT DROP, and
+   * the standing rule for bar techniques allows one only while the control that
+   * undoes it is on screen. Without this button the same code would be deleting
+   * measurements without saying so.
+   *
+   * ⚑ THE SAME DOOR EVERY OTHER BOX WENT THROUGH - `addBarDetectBoxes`, the
+   * two-corner path a manual drag-box also uses - so a shape taken back is
+   * indistinguishable in the record from one that was never questioned. It is
+   * not marked, because "we nearly refused this" is not a measurement.
+   */
+  const addHeldBackBars = useCallback(() => {
+    if (heldBackBars.length === 0) return;
+    const added = session.addBarDetectBoxes(heldBackBars);
+    const noun = session.getConfig().tupleNoun ?? 'bar';
+    setHeldBackBars([]);
+    setColorTraceInfo(`Added ${added} held-back ${added === 1 ? noun : `${noun}s`}.`);
+    commit();
+  }, [session, heldBackBars, commit]);
 
   const handleAddDataset = useCallback(() => {
     session.addDataset();
@@ -8281,6 +8334,8 @@ export function Workspace() {
               onTrace={handleColorTrace}
               newColourForThisSeries={tracingANewColour}
               onTraceIntoNewSeries={traceIntoNewSeries}
+              heldBackOffer={swatchHoldBackOffer(heldBackBars.length)}
+              onAddHeldBackBars={addHeldBackBars}
               onArmEyedropper={setEyedropper}
             />
           )}
@@ -8405,6 +8460,19 @@ export function Workspace() {
           // with crop/select's identical guard -- see its endDrag comment.
           onRegionRect={(r) => setColorTraceRegion(r)}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
+          // ⚑ Only while the tool that produced them is open. The offer lives in
+          // the Auto-extract card, so outlines drawn with that card shut would
+          // point at something with nothing on screen to act on them.
+          heldBackRects={
+            mode === 'color-trace'
+              ? heldBackBars.map((b) => ({
+                  x: Math.min(b.start.x, b.end.x),
+                  y: Math.min(b.start.y, b.end.y),
+                  width: Math.abs(b.end.x - b.start.x),
+                  height: Math.abs(b.end.y - b.start.y),
+                }))
+              : null
+          }
           // Bar capture (v2.0): live whenever Add points is active on a plain Bar
           // series, except while the eyedropper is armed -- same exception
           // regionMode makes above, same reason (that click samples a colour).

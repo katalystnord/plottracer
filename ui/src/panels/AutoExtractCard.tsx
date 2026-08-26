@@ -48,6 +48,21 @@ export interface AutoExtractCardProps {
   /** Take the offer: add a series and trace into it, in one gesture. */
   onTraceIntoNewSeries: () => void;
 
+  /**
+   * The sentence for shapes the last bar trace HELD BACK, or '' when it held
+   * none back - see `swatchHoldBackOffer`.
+   *
+   * ⚑⚑ THE CARD IS WHERE A REFUSAL HAS TO BE UNDOABLE. The shapes are kept out
+   * of the record because they do not reach the baseline and are much smaller
+   * than the bars that do, which is what a legend swatch looks like - but that
+   * is a measurement, not a verdict, and only the person looking at the figure
+   * can take the last step. So the sentence and the control that reverses it
+   * sit together, and the held-back shapes are outlined ON the figure.
+   */
+  heldBackOffer: { sentence: string; action: string } | null;
+  /** Take them back: file the held-back shapes as ordinary bars. */
+  onAddHeldBackBars: () => void;
+
   onArmEyedropper: (target: 'trace') => void;
 }
 
@@ -87,6 +102,8 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
     onTrace,
   newColourForThisSeries,
   onTraceIntoNewSeries,
+  heldBackOffer,
+  onAddHeldBackBars,
     onArmEyedropper,
   } = props;
   return (
@@ -310,6 +327,30 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
                 title="Add a series and trace this colour into it"
               >
                 Trace into a new series
+              </button>
+            </div>
+          )}
+          {/* ⚑⚑ A REFUSAL WITH ITS OWN UNDO. The shapes are not in the record;
+              this says so and takes them back in one click. Drawn the same way
+              as the new-colour offer above, because it is the same kind of
+              thing - the app noticed something at the gesture and is offering,
+              not deciding. */}
+          {heldBackOffer && (
+            <div
+              data-testid="swatch-hold-back-offer"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                fontSize: theme.font.size.small, color: theme.color.text.legend,
+              }}
+            >
+              <span>{heldBackOffer.sentence}</span>
+              <button
+                type="button"
+                data-testid="add-held-back-bars"
+                onClick={onAddHeldBackBars}
+                title="Record them as bars after all"
+              >
+                {heldBackOffer.action}
               </button>
             </div>
           )}

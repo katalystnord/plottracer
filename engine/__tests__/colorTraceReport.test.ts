@@ -7,8 +7,7 @@ import {
   blobTraceReport,
   curveTraceReport,
   type ReportedReading,
-  type RefusalInput,
-} from '../colorTraceReport.js';
+  type RefusalInput, swatchHoldBackOffer } from '../colorTraceReport.js';
 
 const reading = (
   index: number,
@@ -193,5 +192,45 @@ describe('the bounding-box, blob and curve reports', () => {
       expect(out).toContain('matching pixels (90.0% of the image).');
       expect(out).toContain('lower the tolerance');
     }
+  });
+});
+
+describe('the held-back swatch offer', () => {
+  it('says nothing when nothing was held back', () => {
+    expect(swatchHoldBackOffer(0)).toBeNull();
+    expect(swatchHoldBackOffer(-1)).toBeNull();
+  });
+
+  it('⚑ names what was MEASURED and never calls the shape a swatch', () => {
+    // Whether it IS a legend swatch is a reading of the figure that only the
+    // person looking at it can take. The sentence reports the two measurements
+    // that put it in question and says what that usually means.
+    const one = swatchHoldBackOffer(1)!;
+    expect(one.sentence).toContain('One shape was held back');
+    expect(one.sentence).toContain('does not reach the baseline');
+    expect(one.sentence).toContain('much smaller than the bars that do');
+    expect(one.sentence).toContain('what a legend swatch looks like');
+    expect(one.sentence).not.toMatch(/is a legend swatch/);
+  });
+
+  it('counts, and agrees with itself about the plural', () => {
+    const many = swatchHoldBackOffer(3)!;
+    expect(many.sentence).toContain('3 shapes were held back');
+    expect(many.sentence).toContain('they do not reach');
+    expect(many.sentence).toContain('legend swatches look like');
+  });
+
+  it('⚠️ does NOT restate the count of bars placed - the trace line already does', () => {
+    // Two sentences reporting one arithmetic is the heatmap card's "says one
+    // thing three times" defect arriving through a new door.
+    expect(swatchHoldBackOffer(2)!.sentence).not.toMatch(/placed/i);
+    expect(swatchHoldBackOffer(2)!.sentence).not.toMatch(/\bbars?\b(?!\s+that\s+do)/i);
+  });
+
+  it('⚑⚑ the button and the sentence agree about the NUMBER', () => {
+    // Caught by reading a screenshot cold: "One shape was held back" beside a
+    // button saying "Add them anyway".
+    expect(swatchHoldBackOffer(1)!.action).toBe('Add it anyway');
+    expect(swatchHoldBackOffer(4)!.action).toBe('Add them anyway');
   });
 });

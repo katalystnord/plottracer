@@ -86,11 +86,18 @@ export interface BarDetectSuccess {
    * Which boxes look like a legend SWATCH rather than a bar - indices into
    * `boxes`. Present only when a baseline was supplied.
    *
-   * ⚑⚑ REPORTS; NEVER ACTS, which is this project's standing rule for any bar
-   * technique: *a technique may only REFUSE or CORROBORATE, never act alone.*
-   * Every box is still returned and still filed. Silently dropping one would
-   * delete a measurement without saying so, which is the worse half of the same
-   * defect.
+   * ⚑⚑ THIS FILE REPORTS AND NEVER ACTS. Every box is still returned; the
+   * suspects are named by index so a caller can point at them. That keeps the
+   * detector a measurement, and keeps `harness/score.mjs` measuring detection
+   * rather than product policy.
+   *
+   * ⚑⚑ THE CALLER HOLDS THEM BACK AND OFFERS THEM (v2.3) - see
+   * `partitionSwatchSuspects`. The standing rule is that a bar technique may
+   * only REFUSE or CORROBORATE, never act alone, and a refusal is a refusal only
+   * while the control that undoes it is on screen. Filing the phantom and
+   * printing a sentence beside it left a wrong reading in the record that
+   * exports unless the reader goes and finds it; holding it back puts the same
+   * fact on screen as something to act on.
    *
    * ⚑ TWO TESTS, BOTH NEEDED. The baseline test alone is not sufficient and this
    * is stated so nobody builds it believing it is: on a STACKED figure only the
@@ -186,6 +193,43 @@ function swatchSuspectsIn(
   return boxes.flatMap((b, i) =>
     gapToBaseline(b) > baseline.tolerancePx && alongCategory(b) < median / 2 ? [i] : []
   );
+}
+
+/**
+ * Split a detect result into what to FILE and what to HOLD BACK.
+ *
+ * ⚑⚑ WHY THE SPLIT IS HERE AND NOT IN `runBarDetect`. The detector is a
+ * measurement and stays one: it returns every shape it found and names the
+ * suspects. Which of them reach the record is a PRODUCT decision, and putting it
+ * in the detector would also change what `plottracer-benchmarks` measures, so a
+ * published recall number would move because of a UI policy.
+ *
+ * ⚑ NOTHING IS HELD BACK WITHOUT EVIDENCE. `swatchSuspects` is absent whenever no
+ * baseline was declared, and empty whenever no shape reaches the one that was -
+ * a floating-bar chart has no reference to call anything "small" against. Both
+ * come back here as "file everything", which is the pre-v2.3 record exactly.
+ *
+ * ⚠️ AND A STACKED FIGURE MUST COME BACK EMPTY, which is the case that makes this
+ * dangerous rather than merely wrong: an upper segment floats exactly like a
+ * swatch, and withholding it would delete a real reading. The SIZE test in
+ * `swatchSuspectsIn` is what stops it - a segment spans its bar's full category
+ * extent whatever its height - and `barDetectSwatch.test.ts` asserts the whole
+ * chain rather than the detector half alone.
+ */
+export function partitionSwatchSuspects(result: BarDetectSuccess): {
+  /** The shapes to record, in the order the detector returned them. */
+  file: DetectedBarBox[];
+  /** The shapes to keep off the record and offer back. */
+  holdBack: DetectedBarBox[];
+} {
+  const suspects = new Set(result.swatchSuspects ?? []);
+  if (suspects.size === 0) return { file: [...result.boxes], holdBack: [] };
+  const file: DetectedBarBox[] = [];
+  const holdBack: DetectedBarBox[] = [];
+  result.boxes.forEach((box, i) => {
+    (suspects.has(i) ? holdBack : file).push(box);
+  });
+  return { file, holdBack };
 }
 
 /**

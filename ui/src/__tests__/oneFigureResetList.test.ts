@@ -73,6 +73,7 @@ const PER_FIGURE_RESETS = [
   'setActivePointIndex',
   'setSelectedPointIndices',
   'setColorTraceRegion',
+  'setHeldBackBars', // shapes the outgoing figure's trace refused to file
   'setDataValueInputs',
   'setSegmentFillError',
   'setGeometryClosed',
@@ -167,5 +168,29 @@ describe('a new picture re-runs what was read off the old one', () => {
     expect(workspace).toContain('rereadCellsRef.current();');
     const effect = workspace.slice(workspace.indexOf('rereadCellsRef.current();'));
     expect(effect.slice(0, 120)).toContain('[imageEpoch]');
+  });
+});
+
+describe('the UNDO door clears what an undo can invalidate', () => {
+  /**
+   * ⚠️ The undo door deliberately keeps its OWN, shorter list - an undo is not a
+   * new figure - so the shared list above cannot cover it and this has to be
+   * asserted separately.
+   *
+   * ⚑⚑ HELD-BACK SHAPES ARE THE OUTPUT OF A TRACE, and an undo rolls traces
+   * back. Left standing, the offer would file a legend swatch into a session
+   * that no longer holds the bars it was measured against - and it would do it
+   * through the ordinary capture path, so nothing downstream would look wrong.
+   * Exactly the argument the two lines above it already make about a selection
+   * whose indices refer to a point set that may no longer exist.
+   */
+  it('an undo drops the shapes a trace held back', () => {
+    expect(callbackBody('syncAfterRestore')).toContain('setHeldBackBars');
+  });
+
+  it('and it drops the selections, which is the same argument', () => {
+    const body = callbackBody('syncAfterRestore');
+    expect(body).toContain('setActivePointIndex');
+    expect(body).toContain('setSelectedPointIndices');
   });
 });

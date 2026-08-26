@@ -173,16 +173,38 @@ export function curveTraceReport(points: number, matched: number, width: number,
  * the bundled grouped-bar figure.
  *
  * ⚑ THE SENTENCE SAYS WHAT WAS MEASURED AND WHAT IT USUALLY MEANS, and stops
- * there. The shapes are still in the table: the standing rule for bar techniques
- * is that one may only refuse or corroborate, never act alone, and a silent drop
- * would delete a measurement without saying so. Naming it is what turns an
- * invisible wrong reading into one the reader can see and remove.
+ * there. It never says the shape IS a swatch: that is a reading of the figure
+ * only the person looking at it can take.
+ *
+ * ⚑⚑ AND IT SITS BESIDE THE CONTROL THAT UNDOES IT, not in the trace line. The
+ * shapes are no longer filed (`partitionSwatchSuspects`), so this is a REFUSAL,
+ * and the standing rule for bar techniques permits one only while the thing that
+ * takes it back is on screen. Printed into the trace report it would be a
+ * paragraph about something already done; printed next to the button it is the
+ * offer itself. It was in the trace line for one release, when the shapes were
+ * still being filed and the sentence was all the reader got.
+ *
+ * ⚠️ SAID ONCE. The trace line already reports how many bars were placed, so a
+ * second sentence there restating the arithmetic is the heatmap card's
+ * "says one thing three times" defect through a new door.
  */
-export function swatchSuspectReport(suspects: number): string {
-  if (suspects === 0) return '';
-  return suspects === 1
-    ? ` - 1 shape does not reach the baseline and is much smaller than the others; a legend swatch looks like this. Check it before exporting.`
-    : ` - ${suspects} shapes do not reach the baseline and are much smaller than the others; legend swatches look like this. Check them before exporting.`;
+export function swatchHoldBackOffer(held: number): { sentence: string; action: string } | null {
+  if (held <= 0) return null;
+  // ⚑ ONE FUNCTION FOR BOTH STRINGS so they cannot disagree about the number.
+  // Read cold off a screenshot, the first version paired "One shape was held
+  // back" with a button saying "Add them anyway" - two halves of one offer
+  // counting differently, which is the smallest possible version of the
+  // panel-versus-file disagreements this release spent a week removing.
+  return held === 1
+    ? {
+        sentence:
+          'One shape was held back: it does not reach the baseline and is much smaller than the bars that do, which is what a legend swatch looks like.',
+        action: 'Add it anyway',
+      }
+    : {
+        sentence: `${held} shapes were held back: they do not reach the baseline and are much smaller than the bars that do, which is what legend swatches look like.`,
+        action: 'Add them anyway',
+      };
 }
 
 /**
