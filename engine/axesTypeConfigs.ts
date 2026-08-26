@@ -35,7 +35,7 @@ import { checkStripGeometry } from '../algorithms/colorBar.js';
 import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
 import { barInterval, nearEndIsFirst, BASELINE_TOLERANCE_PX } from '../core/barInterval.js';
-import { halfPixelResolution } from '../core/exportPrecision.js';
+import { halfPixelResolution, roundToResolution } from '../core/exportPrecision.js';
 import { CONVENTION_LABELS } from './categoryTickOverlay.js';
 
 /** The minimal surface every supported axes type's calibrated instance provides. */
@@ -2147,16 +2147,41 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       const resolution = halfPx * 2 * BASELINE_TOLERANCE_PX;
       const bar = barInterval(v1, v2, baseline, resolution);
       if (!bar) return null;
+      // ⚑⚑ ROUNDED AT ITS OWN PIXEL BEFORE ANY ARITHMETIC, so `Value` cannot
+      // disagree with the `Min`/`Max` beside it. Those two go through the export
+      // rounder; this went through none, so one measurement appeared twice in
+      // one row at two precisions - measured, `Max 3.273` beside `Value 3.2725`.
+      //
+      // ▶ David: *"we set the baseline axis now, so these should no longer be
+      // able to disagree."* With a baseline DECLARED, a bar's value is not an
+      // independent reading at all - it is the far end restated against a
+      // constant the user typed. Two numbers for one measurement is one too many.
+      //
+      // ⚑ AT THE POINT'S OWN PIXEL, not via `resolutionAtData`, which would go
+      // back through `axes.dataToPixel` - a stub for every non-invertible axes,
+      // and the reason the note above forbids re-rounding derived values at the
+      // EXPORT layer. Here the pixel is in hand, so the question never arises.
+      // Measured: both routes agree to the digit on a bar, and only this one is
+      // safe in general.
+      const roundAtPixel = (value: number, at: { px: number; py: number }): number => {
+        const res = halfPixelResolution(axes, at.px, at.py)[0];
+        return res === undefined ? value : roundToResolution(value, res);
+      };
+      const farPoint = nearEndIsFirst(v1, v2, baseline) ? end : start;
       // ⚑ A stacked segment's own height. Magnitude, not direction: a
       // contribution to a stack is never negative, and which corner was dragged
       // first is the operator's hand (see the 2026-08-03 decision below).
-      if (axes.isStacked()) return bar.max - bar.min;
+      // ⚑ Both ends rounded first, for the same reason: the height has to be
+      // the difference between the two numbers the panel is showing.
+      if (axes.isStacked()) {
+        return Math.abs(roundAtPixel(bar.max, farPoint) - roundAtPixel(bar.min, nearPoint));
+      }
       if (!axes.hasDeclaredBaseline() || !bar.onBaseline) return null;
       // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
       // position - a pixel rule ("smaller y = far end") is exactly backwards for
       // a bar below the baseline in an ordinary vertical figure, and
       // `pixelToData` already encodes orientation, direction and log scale.
-      return bar.far - baseline;
+      return roundAtPixel(bar.far, farPoint) - baseline;
     },
     /** The two ends, for the floating bars `compute` returns null for. Both were
      * measured; neither is worth discarding to manufacture a single number. */

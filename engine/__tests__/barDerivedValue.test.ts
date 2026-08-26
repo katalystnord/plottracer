@@ -272,8 +272,19 @@ describe('a log-scale bar reads its value through the log axis', () => {
     expect(s.runCalibration()).toBe(true);
 
     // Halfway up three decades is 10^1.5; against a baseline of 1 the span is
-    // that minus 1. A linear read would give ~500.
+    // that minus 1, about 30.6. A linear read would give ~500, which is what
+    // this test exists to rule out.
+    //
+    // ⚑⚑ ASSERTED AT THE FIGURE'S OWN RESOLUTION, not to three decimals. The
+    // value is now rounded at the far end's own pixel so it cannot disagree with
+    // the `Min`/`Max` beside it in the panel and the file - and on a LOG axis one
+    // pixel high in a decade spans a great deal of data, so 30.6 is the honest
+    // reading and 30.622776601683793 was never something these pixels could
+    // support. Asserting the analytic value to 3dp was incidental to what this
+    // case is about; the log-versus-linear distinction is 470 units wide and
+    // survives any rounding.
     const v = barValue(s, 150, 500, 300)!;
-    expect(v).toBeCloseTo(Math.pow(10, 1.5) - 1, 3);
+    expect(v).toBeCloseTo(Math.pow(10, 1.5) - 1, 0);
+    expect(v).toBeLessThan(100); // a linear read would be ~500
   });
 });
