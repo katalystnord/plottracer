@@ -787,7 +787,7 @@
       Share of elements recovered within the competition's tolerance, scored in image space
       by automatic extraction. PlotTracer <span class="data">2.3.0</span> at its
       default settings (tolerance 60, minimum blob diameter
-      3), measured 2026-08-23.
+      3), measured 2026-08-26.
     </p>
     <ol class="ev-refs">
       <li><span class="ev-refnum">[1]</span> K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, &ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001. doi:<a href="https://doi.org/10.1109/ICPR56361.2022.9956289">10.1109/ICPR56361.2022.9956289</a><span class="ev-refnote"> Charts from open-access PubMed Central papers. 799 figures scored.</span></li>
@@ -844,17 +844,23 @@
 
     <p class="ev-note">
       <b>Method.</b> These corpora score fully automatic recognition, while PlotTracer is
-      human-in-the-loop, so the two are adjacent rather than equivalent. The harness
-      supplies the two inputs a person supplies - the plot box, and one colour pick
-      per visible colour - and nothing else; everything after that is the
-      application's own shipped code at its default settings. Scoring is in image space at
-      the competition's tolerance of 5% of the smaller image dimension.
-      <b>Manual capture is measured separately</b>, in data space: driving the
-      application's own capture session across 262 bar figures from [1], with the
-      calibration recovered from each figure's own tick labels, 83.8% of 4,074 bars
-      read within 1% of the corpus value and 80.5% of figures had every bar within
-      that. 119 figures are excluded because their ground truth carries no two
-      numeric tick labels to calibrate from.
+      human-in-the-loop, so the two are adjacent rather than equivalent. The table above
+      is the <b>automatic</b> path: the harness supplies the two inputs a person supplies
+      - the plot box, and one colour pick per visible colour - and nothing else;
+      everything after that is the application's own shipped code at its default settings.
+      Scoring is in image space at the competition's tolerance of 5% of the smaller image
+      dimension.
+      <b>An assisted path is measured separately and reported apart</b>, never blended
+      into the table: the same bar figures with the two things a person declares in the
+      calibration walk, the marked category axis and the baseline the bars stand on. It is
+      a ceiling rather than a user's day, because those declarations come from the corpus
+      placed exactly, and it moves bar recall by half a point.
+      <b>Manual capture is measured separately too</b>, in data space: <!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->driving the
+      application's own capture session across 344 bar figures from [1], with the
+      calibration recovered from each figure's own tick labels, 80.9% of 5,778 bars
+      read within 1% of the corpus value and 79.4% of figures had every bar within
+      that. 40 figures are excluded, most for carrying no two numeric tick
+      labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->
       The harness and the exact image lists are at
       <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>.
     </p>
