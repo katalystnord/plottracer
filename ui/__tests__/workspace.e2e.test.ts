@@ -7607,14 +7607,29 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
         if (!/Frame the whole figure/i.test(await textOf('tips-bar'))) break;
         await page.waitForTimeout(100);
       }
-      // "Points placed" is FAMILY-AGNOSTIC via the active series' count in the
-      // dropdown ("Series 1 (N)") -- unlike a `point-row-` row, which only the
-      // XY/scatter table has (histogram/box use bin/tuple tables). The very first
-      // click of a round can race the async setup, so retry until one registers.
-      const pointCount = async () => {
-        const t = (await page.getByTestId('series-option-0').textContent()) ?? '';
-        return Number(t.match(/\((\d+)\)/)?.[1] ?? '0');
-      };
+      // "Points placed" is FAMILY-AGNOSTIC, counted from the ROWS THAT CARRY A
+      // READING: `point-row-` on XY/scatter, `tuple-derived-` on bar/pie/box,
+      // `bin-row-` on a histogram. The very first click of a round can race the
+      // async setup, so retry until one registers.
+      //
+      // ⚠️ IT USED TO READ THE SERIES DROPDOWN's "Series 1 (N)", and that count
+      // is GONE for every type whose record is not points (2026-08-26): a
+      // histogram said `Series 1 (20)` over ten bins and a bar `Series 1 (30)`
+      // over fifteen bars, because two corners make one reading. So this guard
+      // went red on the next full board - correctly, having lost its instrument
+      // rather than its subject.
+      //
+      // ⚑ A DECLARED CATEGORY IS NOT A READING, which is why this counts
+      // `tuple-derived-` and not table rows. Since v2.4 a calibrated bar chart
+      // has one row per declared category BEFORE anything is captured, so a row
+      // count would have made this guard pass without a single point being
+      // placed - the exact vacuity its own comment below is about.
+      const pointCount = async () =>
+        page
+          .locator(
+            '[data-testid^="point-row-"], [data-testid^="tuple-derived-"], [data-testid^="bin-row-"]'
+          )
+          .count();
       for (let attempt = 0; attempt < 12 && (await pointCount()) === 0; attempt++) {
         await clickAt(320 + attempt * 8, 300);
         await page.waitForTimeout(120);
