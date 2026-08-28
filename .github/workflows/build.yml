@@ -26,7 +26,7 @@ jobs:
   # tools/git-hooks/pre-commit is the fast local half; this is the half that
   # survives a fresh clone and `git commit --no-verify`.
   check:
-    name: Typecheck, lint and unit tests
+    name: Typecheck and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,25 +40,48 @@ jobs:
       - run: ./tools/no-em-dashes.sh
       - run: npm run typecheck
       - run: npm run lint
-      # ⚑⚑ UNTIL 2026-08-17 THIS PIPELINE NEVER RAN A TEST. A tag could be
-      # pushed, built and PUBLISHED with the whole board unexecuted anywhere but
-      # the maintainer's own machine - and the local pre-commit hook only
-      # typechecks, which `--no-verify` walks past. 3,600-odd tests in about a
-      # minute is the cheapest gate this project has ever been offered.
-      # ⚑ Unit only, and NOT because the rest does not matter: the e2e suites
-      # drive a real Electron app on a virtual display and take ~22 minutes.
-      # Running them here would trade a fast trustworthy gate for a slow flaky
-      # one. **So this proves the pure layers, not the app** - his hands on the
-      # built package remain the only instrument pointing outward, and the local
-      # `npm test` remains the only one that drives the real thing.
-      # ⚑ The split is `vitest.unit.config.ts`, which excludes by the pattern
-      # `*.e2e.test.ts` rather than by a list - and `e2eContainment.test.ts`
-      # enforces that every Electron-launching file is named that way, so a new
-      # one cannot escape the pattern the way it would escape a list.
+
+  # ⚑⚑ A SEPARATE JOB, AND THAT IS THE WHOLE POINT. This used to be the last
+  # step of `check`, after lint - so on 2026-08-26 one unused variable exited 1
+  # and the board did not execute in CI for a day, while the commit that
+  # introduced the lint error asserted "lint 0 errors" in its own message. A
+  # style failure must not be able to hide the state of the tests. Steps
+  # fail-fast within a job; jobs do not, so as a job it always runs and both
+  # verdicts are visible at once. `build` needs BOTH, so nothing ships past
+  # either.
+  #
+  # ⚑⚑ UNTIL 2026-08-17 THIS PIPELINE NEVER RAN A TEST. A tag could be pushed,
+  # built and PUBLISHED with the whole board unexecuted anywhere but the
+  # maintainer's own machine. 3,900-odd tests in about a minute is the cheapest
+  # gate this project has ever been offered - which is why it is worth making
+  # sure it actually runs. See feedback_check_the_instrument_ran: a check that
+  # never ran reports nothing, and nothing looks like success from a distance.
+  #
+  # ⚑ Unit only, and NOT because the rest does not matter: the e2e suites drive
+  # a real Electron app on a virtual display and take ~22 minutes. Running them
+  # here would trade a fast trustworthy gate for a slow flaky one. **So this
+  # proves the pure layers, not the app** - his hands on the built package
+  # remain the only instrument pointing outward, and the local `npm test`
+  # remains the only one that drives the real thing.
+  #
+  # ⚑ The split is `vitest.unit.config.ts`, which excludes by the pattern
+  # `*.e2e.test.ts` rather than by a list - and `e2eContainment.test.ts`
+  # enforces that every Electron-launching file is named that way, so a new one
+  # cannot escape the pattern the way it would escape a list.
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
       - run: npm run test:unit
 
   build:
-    needs: check
+    needs: [check, test]
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:

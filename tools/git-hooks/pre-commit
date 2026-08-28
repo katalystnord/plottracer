@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Refuse a commit that does not typecheck.
+# Refuse a commit that does not typecheck or does not lint.
 #
 # ⚑ WHY THIS EXISTS. On 2026-08-11 a commit went in with a failing typecheck:
 # `Object.hasOwn` and `Array.at` do not compile at this project's ES2020 target,
@@ -15,6 +15,17 @@
 #
 # Install (per clone, since git does not ship hooks):
 #     git config core.hooksPath tools/git-hooks
+#
+# ⚑⚑ AND WHY LINT IS HERE TOO, added 2026-08-28. On 2026-08-26 a commit went in
+# with one unused variable; its own message asserted "lint 0 errors" from a run
+# nobody did, because this hook checked types and em-dashes only. CI's `check`
+# job ran lint BEFORE the unit tests, so lint exited 1 and the board did not
+# execute in CI for a day. Two orderings were wrong at once - this is the local
+# half; splitting the tests into their own CI job is the other.
+#
+# ⚑ It costs a few seconds and it removes a class of commit message that lies.
+# If you are asserting "lint 0 errors" in a commit, something should have run
+# lint.
 #
 # Skipping is deliberate and visible: `git commit --no-verify`.
 
@@ -63,6 +74,25 @@ pre-commit: REFUSED - the tree does not typecheck.
   A green test run does not mean the code compiles: vitest strips types rather
   than checking them, and so does the production build. That is exactly how a
   broken commit got in before this hook existed.
+
+  Fix it, or commit deliberately with:  git commit --no-verify
+MSG
+  exit 1
+fi
+
+# ⚑ Lint AFTER the typecheck, deliberately: a type error is usually the cause of
+# the lint noise, so reporting it first is the more useful message. Unlike CI,
+# nothing here is hidden by the ordering - both run on every commit that touches
+# TypeScript, and a failure of either refuses the commit on its own.
+echo "pre-commit: linting…"
+if ! npm run --silent lint; then
+  cat >&2 <<'MSG'
+
+pre-commit: REFUSED - the tree does not lint.
+
+  A commit that does not lint blocks the CI `check` job, which blocks the
+  packaging and the release. On 2026-08-26 one unused variable did exactly
+  that, and the commit that introduced it said "lint 0 errors".
 
   Fix it, or commit deliberately with:  git commit --no-verify
 MSG
