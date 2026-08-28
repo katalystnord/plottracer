@@ -470,8 +470,6 @@ export function runBarDetect(
       const s2 = along(b.bbox);
       return s2.hi - s2.lo;
     });
-  /** Runs kept whole because cutting them would have produced a sliver. */
-  let refusedCuts = 0;
   for (const blob of whole) {
     const span = along(blob.bbox);
     // ⚑ INTERIOR dividers only. The first and last entries are the axis EDGES,
@@ -497,7 +495,6 @@ export function runBarDetect(
     if (cutMakesASliver(report.pieces, uncutExtents)) {
       // The dividers are in the wrong place for this run, not the run in the
       // wrong place for the dividers. Keep the bar the figure drew.
-      refusedCuts += 1;
       boxes.push({
         start: { x: blob.bbox.minX, y: blob.bbox.minY },
         end: { x: blob.bbox.maxX, y: blob.bbox.maxY },
