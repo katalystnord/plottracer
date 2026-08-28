@@ -1,4 +1,4 @@
-import { polylineRuns } from './seriesLine.js';
+import { polylineRuns, runCoverage } from './seriesLine.js';
 import type { CalibStepInfo } from './axesTypeConfigs.js';
 import type { PlacedCalibPoint, PointRole } from './calibrationSession.js';
 import type { CapHandle } from './calibrationSession.js';
@@ -396,19 +396,32 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
   allDatasetsData.forEach((ds) => {
     if (ds.active) return;
     // A dense series is drawn as a connecting line (checkpoint 131/132): the
-    // line carries the shape, so its per-point dots are dropped entirely --
-    // even tiny ones mush into a furry band, and an inactive series has no
-    // selection to preserve. Sparse series keep their normal dots.
-    if (runsForPoints(ds.points).length > 0) return;
+    // line carries the shape, so its per-point dots are dropped -- even tiny
+    // ones mush into a furry band, and an inactive series has no selection to
+    // preserve. Sparse series keep their normal dots.
+    //
+    // ⚑⚑ ...but only where there IS a line. A fragment shorter than two points
+    // is not a run, so a stray point is covered by nothing; dropping its dot too
+    // drew a reading the record HAS with nothing at all. See the shared-corner
+    // note above: unreadable is acceptable, invisible is not. Enforced by
+    // `a point the line cannot reach keeps its dot`.
+    const { dense, strays } = runCoverage(ds.points.map((p) => ({ x: p.px, y: p.py })));
     const color = rgb(ds.color);
     ds.points.forEach((point, i) => {
+      if (dense && !strays.has(i)) return;
       result.push({ id: `inactive-point-${ds.index}-${i}`, x: point.px, y: point.py, label: '', color, draggable: false });
     });
   });
 
   const activeColorRGB = datasetInfos.find((d) => d.active)?.color;
   const activeColor = activeColorRGB ? rgb(activeColorRGB) : fallbackColor;
-  const activeDense = runsForPoints(dataPoints).length > 0;
+  // ⚑⚑ The active series' strays, for the same reason as the inactive one's: a
+  // PLAIN point (not an anchor, not an interpolation sample) on a dense series
+  // is drawn only by the line, and the line does not reach a one-point fragment.
+  // Enforced by `a plain point the line cannot reach keeps its dot`.
+  const { dense: activeDense, strays: activeStrays } = runCoverage(
+    dataPoints.map((p) => ({ x: p.px, y: p.py }))
+  );
   // In Error-bars mode the markers that must be inert are exactly the ones a
   // link drag can START from -- and `errorLinkSnap` answers only for points of
   // the TARGET series. Scoping it that way is what keeps a CAP correctable:
@@ -439,7 +452,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     // -- except the SELECTED one, kept visible and grabbable so you can still
     // pick a point off the curve (click a table row to select it). Anchors and
     // interpolation samples always draw (they aren't the furry-band case).
-    const plainDense = activeDense && !isInterp && !isAnchor;
+    const plainDense = activeDense && !isInterp && !isAnchor && !activeStrays.has(i);
     if (plainDense && !selected) return;
     result.push({
       id: dataPointMarkerId(i),

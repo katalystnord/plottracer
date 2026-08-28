@@ -103,6 +103,17 @@ const sparse = (n: number, x0 = 0) =>
 /** A traced curve: ~1px median gap, which is what makes a series "dense". */
 const dense = (n: number) => Array.from({ length: n }, (_, i) => ({ px: i, py: 50 }));
 
+/** ⚑ A traced curve that the polyline CANNOT fully cover: dense enough to count
+ *  as a curve, but with strays far enough out that `polylineRuns` leaves each of
+ *  them in a fragment of one point, and a one-point fragment is not a run. Every
+ *  other fixture here is UNIFORMLY dense or UNIFORMLY sparse, which is exactly
+ *  why the case below went unnoticed. */
+const denseWithStrays = (n: number) => [
+  ...Array.from({ length: n }, (_, i) => ({ px: i, py: 50 })),
+  { px: n + 400, py: 90 },
+  { px: n + 800, py: 20 },
+];
+
 const info = (_index: number, active: boolean, color: [number, number, number]): OverlaySeriesInfo => ({
   color,
   active,
@@ -257,6 +268,21 @@ describe('inactive series are context, never a click target', () => {
     // selection to preserve.
     const m = buildCanvasMarkers(base({ allDatasetsData: [view(1, false, [1, 2, 3], dense(40))] }));
     expect(m.filter((x) => x.id.startsWith('inactive-point-'))).toHaveLength(0);
+  });
+
+  it('a point the line cannot reach keeps its dot', () => {
+    // ⚑ The dots are dropped because "the LINE carries the shape" -- so a point
+    // with no line through it must keep its own. `polylineRuns` discards any
+    // fragment shorter than two points, so a stray is in no run at all: drop its
+    // dot too and a reading the record HAS is drawn by nothing. This file already
+    // ruled on the class ("JOINED, not dropped ... a real reading invisible
+    // rather than merely unreadable"); unreadable is acceptable, invisible is not.
+    const m = buildCanvasMarkers(base({ allDatasetsData: [view(1, false, [1, 2, 3], denseWithStrays(40))] }));
+    const drawn = m.filter((x) => x.id.startsWith('inactive-point-'));
+    expect(drawn.map((d) => [d.x, d.y])).toEqual([
+      [440, 90],
+      [840, 20],
+    ]);
   });
 
   it('skip the ACTIVE series - its own points are pushed later, interactive', () => {
@@ -426,6 +452,20 @@ describe('a dense active series draws no dots except the selected one', () => {
   it('drops every plain dot', () => {
     const m = points(buildCanvasMarkers(base({ dataPoints: pts, dataPointRoles: roles })));
     expect(m).toHaveLength(0);
+  });
+
+  it('a plain point the line cannot reach keeps its dot', () => {
+    // ⚑ Same rule as the inactive series': a plain point is drawn ONLY by the
+    // line, and the line does not reach a fragment of one point. Without this
+    // the stray is in the table, in the export and on nothing at all.
+    const strayPts = denseWithStrays(40);
+    const m = points(
+      buildCanvasMarkers(base({ dataPoints: strayPts, dataPointRoles: strayPts.map(() => null) }))
+    );
+    expect(m.map((d) => [d.x, d.y])).toEqual([
+      [440, 90],
+      [840, 20],
+    ]);
   });
 
   it('keeps the selected one visible and grabbable, at the small radius', () => {
