@@ -3935,25 +3935,39 @@ export function Workspace() {
     });
   }, []);
 
-  const confirmDataValue = useCallback(() => {
-    if (session.confirmCalibrationValues(dataValueInputs)) {
-      // Common origin: on arriving at the reusing step, take the shared corner's
-      // pixel and prefill its value, so the user never places or reuses it by
-      // hand -- they just confirm. Which steps those are is the TYPE's to
-      // declare (config.commonOrigin), not this file's to name.
-      // ⚑⚑ FOLLOW THE CHAIN, because a type may share more than one pixel. A
-      // heatmap shares BOTH corners of its plot box, and the first share
-      // (X start & Y start) completes without a value on a category axis - so a
-      // single pass placed it and stopped, leaving the second share (X end & Y
-      // end) never offered. Each turn of this loop PLACES a point, so it cannot
-      // spin; it stops as soon as a step needs something typed, or nothing more
-      // is shared.
+  // Common origin: take the shared corner's pixel for whatever reusing step the
+  // walk is standing on, and prefill its value, so the user never places or
+  // reuses it by hand -- they just confirm. Which steps those are is the TYPE's
+  // to declare (config.commonOrigin), not this file's to name.
+  //
+  // ⚑⚑ IT TAKES `enabled` RATHER THAN READING THE STATE, because the checkbox
+  // calls it from its own onChange, where the `commonOrigin` state has not
+  // updated yet. Reading the state there would apply the PREVIOUS answer.
+  //
+  // ⚑⚑ AND IT IS A CALLBACK BECAUSE THERE ARE TWO ENTRANCES, which is the
+  // whole defect it fixes. This loop used to live inside `confirmDataValue`, so
+  // the only moment the checkbox was ever read was the instant the walk stepped
+  // FORWARD onto the reusing step. Tick the box while already standing on that
+  // step -- which is where the card puts you, and where David found it -- and
+  // nothing was listening: the label went on saying P1 and Cat 1 are the same
+  // point while the walk kept asking for the click. Unticking already had its
+  // entrance (`withdrawReusedPixels`); ticking had none.
+  //
+  // ⚑⚑ FOLLOW THE CHAIN, because a type may share more than one pixel. A
+  // heatmap shares BOTH corners of its plot box, and the first share
+  // (X start & Y start) completes without a value on a category axis - so a
+  // single pass placed it and stopped, leaving the second share (X end & Y
+  // end) never offered. Each turn of this loop PLACES a point, so it cannot
+  // spin; it stops as soon as a step needs something typed, or nothing more
+  // is shared.
+  const adoptCommonOrigin = useCallback(
+    (enabled: boolean): string[] => {
       let filled: string[] = [];
       for (let guard = 0; guard < 8; guard++) {
         const step = session.getCurrentStep();
         const reuse = commonOriginReuse(
           config,
-          commonOrigin,
+          enabled,
           step?.key,
           session.getPlacedPoints(),
           // ⚑ The step AS THE WALK CURRENTLY SHAPES IT - a heatmap's category
@@ -3967,10 +3981,17 @@ export function Workspace() {
           break;
         }
       }
-      setDataValueInputs(filled);
+      return filled;
+    },
+    [session, config]
+  );
+
+  const confirmDataValue = useCallback(() => {
+    if (session.confirmCalibrationValues(dataValueInputs)) {
+      setDataValueInputs(adoptCommonOrigin(commonOrigin));
       commit();
     }
-  }, [session, dataValueInputs, commit, commonOrigin, config]);
+  }, [session, dataValueInputs, commit, commonOrigin, adoptCommonOrigin]);
 
   const runCalibration = useCallback(() => {
     if (session.runCalibration()) {
@@ -7584,7 +7605,17 @@ export function Workspace() {
                   // has ruled against before.
                   // ⚑ Only what the OFFER placed: a pixel clicked by hand is
                   // never touched. See `withdrawReusedPixels`.
-                  if (!e.target.checked && session.withdrawReusedPixels()) commit();
+                  if (!e.target.checked) {
+                    if (session.withdrawReusedPixels()) commit();
+                  } else {
+                    // ⚑⚑ TICKING IT ON THE STEP ITSELF ADOPTS THE PIXEL NOW.
+                    // The walk does not step forward again on its own, so
+                    // without this the tick was inert wherever the user had
+                    // already arrived. Enforced by `ticking common origin while
+                    // standing on the reusing step adopts the pixel`.
+                    setDataValueInputs(adoptCommonOrigin(true));
+                    commit();
+                  }
                 }}
               />
               {/* ⚑ BUILT FROM THE PAIRINGS THE TYPE DECLARES, not written out

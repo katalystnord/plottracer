@@ -1105,6 +1105,27 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('tips-bar')).toContain('3/4 - Cat 1');
   });
 
+  it('ticking common origin while standing on the reusing step adopts the pixel', async () => {
+    // ⚑⚑ THE DEFECT THIS FIXES: the reuse used to run only inside
+    // `confirmDataValue`, so the checkbox was read once, at the instant the walk
+    // stepped FORWARD onto Cat 1. Tick it while already standing there -- which
+    // is where the card leaves you -- and nothing was listening, while the label
+    // went on saying P1 and Cat 1 are the same point. David, driving Box Plot:
+    // *"I ticked the box common origin, and it still wants the point."*
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    // Standing on Cat 1 with the offer declined: the walk wants a third click.
+    expect(await textOf('tips-bar')).toContain('3/4 - Cat 1');
+    // Now accept it, here, without stepping anywhere.
+    await page.getByTestId('common-origin').check();
+    expect(await textOf('calib-chip-c1')).toContain('placed');
+    expect(await textOf('tips-bar')).toContain('4/4 - Cat n');
+  });
+
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);
