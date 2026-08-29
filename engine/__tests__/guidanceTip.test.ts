@@ -452,6 +452,33 @@ describe('guidanceTip - capture, per graph type', () => {
     expect(tip).toContain('Q/W step points');
   });
 
+  it('⚑⚑ names the READING, not the pixel, when the series carries error caps', () => {
+    // David, 2026-08-29: after re-placing point 7 the figure labelled it 19
+    // while the table row stayed 7. Since B4 a cap is a pixel of its datum's own
+    // series, so seven readings with two caps each put the seventh at pixel
+    // index 18 - and this sentence is the THIRD place that number is printed.
+    // `readingOrdinals` is the one rule all three now ask.
+    const capRoles = [
+      null,
+      { role: 'upper' as const, line: null },
+      { role: 'lower' as const, line: null },
+      null,
+      { role: 'upper' as const, line: null },
+      { role: 'lower' as const, line: null },
+    ];
+    const tip = guidanceTip(base({ mode: 'place-point', dataPointCount: 6, activePointIndex: 3, capRoles }));
+    expect(tip).toContain('Point 2 selected');
+    expect(tip).not.toContain('Point 4 selected');
+  });
+
+  it('a cap has no ordinal, so selecting one announces no point number', () => {
+    // A cap is part of a reading rather than another reading - the same rule the
+    // figure label follows, where a cap is drawn with no number at all.
+    const capRoles = [null, { role: 'upper' as const, line: null }];
+    const tip = guidanceTip(base({ mode: 'place-point', dataPointCount: 2, activePointIndex: 1, capRoles }));
+    expect(tip).not.toContain('selected');
+  });
+
   it('⚑⚑ but never announces a point that is not there', () => {
     // David read `Point 3 selected` on a series holding ZERO points, directly
     // beside `Bar start - new bar (0 of 2 filled)`: two lines about the same bar,

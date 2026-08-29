@@ -1,5 +1,7 @@
 import type { AxesTypeConfig, CalibratedAxes } from './calibrationSession.js';
 import type { ToolMode } from './toolMode.js';
+import type { CapHandle } from './calibrationSession.js';
+import { readingOrdinals } from './canvasOverlays.js';
 
 /**
  * The two sentences that tell a first-run user what to do next: the tips bar
@@ -127,6 +129,14 @@ export interface GuidanceTipInput {
   selectedPointCount: number;
   dataPointCount: number;
   activePointIndex: number | null;
+  /**
+   * Which of the active series' pixels are error CAPS, positionally.
+   *
+   * ⚑ Needed for one word of one sentence, and it is the word that was wrong: a
+   * cap is a pixel of its datum's own series (B4), so the selected pixel's INDEX
+   * stopped being its reading's number. See `readingOrdinals`.
+   */
+  capRoles?: readonly (CapHandle | null)[];
   /** The selected data point's role is 'anchor' (interpolate). */
   activePointIsAnchor: boolean;
   /** A calibration handle is selected. */
@@ -183,6 +193,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     selectedPointCount,
     dataPointCount,
     activePointIndex,
+    capRoles,
     activePointIsAnchor,
     hasActiveHandle,
     hasSlots,
@@ -368,8 +379,13 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // ⚑ The guard is here rather than only at every setter: this is the one
       // place the claim is MADE, and a claim nobody can substantiate should not
       // be printed however it came to be true.
-      if (activePointIndex != null && activePointIndex < dataPointCount)
-        return `Point ${activePointIndex + 1} selected - ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
+      // ⚑⚑ THE READING'S NUMBER, NOT THE PIXEL'S - the same rule the figure
+      // label obeys, asked of the same function so the two cannot disagree. A
+      // cap has no ordinal, so selecting one announces no point at all rather
+      // than a number that belongs to something else.
+      const ordinal = activePointIndex == null ? null : readingOrdinals(capRoles)(activePointIndex);
+      if (activePointIndex != null && activePointIndex < dataPointCount && ordinal !== null)
+        return `Point ${ordinal} selected - ↑ ↓ ← → nudge (Shift = coarse), Q/W step points, Del removes it. Or click to add another.`;
       // ⚑ Spider, for the same reason the bar branch below exists: WHERE you
       // click decides the number. On a spider the value is how far out along
       // THAT axis's ray the click sits, so the generic slot line ("click

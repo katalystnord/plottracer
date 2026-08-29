@@ -485,6 +485,54 @@ describe('data points - selection and size', () => {
     expect('radius' in m[2]!).toBe(false);
   });
 
+  /**
+   * ⚑⚑ ONE DATUM, ONE NUMBER, AND IT IS THE SAME NUMBER THE TABLE PRINTS.
+   *
+   * David, 2026-08-29, driving the asymmetric error-bar example: after
+   * re-placing point 7 its on-figure label read **19** while the table row
+   * stayed **7**. The label counted PIXELS, and since B4 an error cap is a pixel
+   * of its datum's own series - so seven readings each carrying two caps put the
+   * seventh datum at pixel index 18, and it printed 19.
+   *
+   * ⚑ The rule was already written directly above the label, and only half
+   * applied: *"a cap carries no ordinal ... a cap is part of a reading rather
+   * than another reading - numbering it told the user a one-point series had
+   * three points"*. The cap's own label was blanked; the COUNTER it advanced was
+   * left alone, so every cap still pushed every later reading's number up.
+   * `datumCount` states the same thing on the model side and is what the series
+   * list already counts by.
+   *
+   * ⛔ NOT the Box Plot case, which is not a defect: there the figure numbers
+   * POINTS and the table numbers INTERVALS (row N = points 2N-1, 2N), which is
+   * the 1.5D record being honest. Here both are naming ONE reading.
+   */
+  it('number a reading by readings, not by pixels, when it carries error caps', () => {
+    const m = points(
+      buildCanvasMarkers(
+        base({
+          dataPoints: [
+            { px: 10, py: 10 }, // reading 1
+            { px: 10, py: 4 }, //  its upper cap
+            { px: 10, py: 16 }, // its lower cap
+            { px: 50, py: 10 }, // reading 2
+            { px: 50, py: 4 },
+            { px: 50, py: 16 },
+          ],
+          dataPointRoles: [null, null, null, null, null, null],
+          capRoles: [
+            null,
+            { role: 'upper', line: null },
+            { role: 'lower', line: null },
+            null,
+            { role: 'upper', line: null },
+            { role: 'lower', line: null },
+          ] as (CapHandle | null)[],
+        })
+      )
+    );
+    expect(m.map((x) => x.label)).toEqual(['1', '', '', '2', '', '']);
+  });
+
   it('label an interpolated sample with nothing - the anchors are the record', () => {
     const m = points(buildCanvasMarkers(base({ dataPoints: sparse(2), dataPointRoles: ['anchor', 'interpolated'] })));
     expect(m[0]!.label).toBe('1');

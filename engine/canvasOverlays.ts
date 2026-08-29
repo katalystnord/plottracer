@@ -158,6 +158,30 @@ export interface OverlaySeriesInfo {
 export const SELECTED_DOT_RADIUS = 3.5;
 
 /**
+ * Each pixel's READING number, or null where the pixel is not a reading.
+ *
+ * ⚑⚑ ONE DATUM, ONE NUMBER, WHEREVER IT IS PRINTED. Since B4 an error cap is a
+ * pixel of its datum's own series, so a pixel index is no longer a reading's
+ * ordinal: seven readings carrying two caps each put the seventh at pixel index
+ * 18. It printed **19** on the figure while its table row said 7, and the
+ * selection tip called it Point 19 - three names for one datum, and nothing on
+ * screen to say which was its number.
+ *
+ * ⚑ It is the same subtraction `datumCount` makes on the model side, which is
+ * what the series list has counted by since v2.3. Exported so the figure label
+ * and the tip cannot answer differently.
+ */
+export function readingOrdinals(
+  capRoles: readonly (CapHandle | null)[] | undefined
+): (index: number) => number | null {
+  let seen = 0;
+  const ordinals = (capRoles ?? []).map((cap) => (cap ? null : ++seen));
+  // A series with no cap information at all is all readings, so the ordinal is
+  // the index - which is what every type without error bars has always shown.
+  return (index: number) => (capRoles ? (ordinals[index] ?? null) : index + 1);
+}
+
+/**
  * How big a data dot is drawn - ONE rule, and every series obeys it.
  *
  * ⚑⚑ IT EXISTS BECAUSE THERE WERE TWO. The active path chose deliberately while
@@ -479,11 +503,26 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
   // showed. Caught by the v1.3 release-gate audit.
   const isErrorLinkAnchorSeries = mode === 'error-bars' && activeDatasetIndex === errorTargetIndex;
 
+  // ⚑⚑ THE ORDINAL COUNTS READINGS, NOT PIXELS. Since B4 an error cap is a pixel
+  // of its datum's own series, so a series of seven readings with two caps each
+  // holds 21 pixels - and the seventh reading, at pixel index 18, printed 19 on
+  // the figure while its table row said 7. Two names for one datum, and nothing
+  // on screen to say which was the reading's number.
+  //
+  // ⚑ The rule was already stated at the label below and only half applied: a
+  // cap's own label was blanked, but the counter it advanced was not. It is the
+  // same subtraction `datumCount` makes on the model side, which is what the
+  // series list has counted by since v2.3.
+  //
+  // Resolved for every pixel up front, so a dot the dense rule drops later does
+  // not silently renumber the readings after it.
+  const ordinalOf = readingOrdinals(capRoles);
   dataPoints.forEach((point, i) => {
     // ⚑⚑ IS THIS PIXEL A CAP? Under B4 a datum's error caps live on its own
     // tuple, so they are pixels of the series they belong to - which changes two
     // answers below, and both were wrong the moment the record moved.
     const capRole = capRoles?.[i] ?? null;
+    const ordinal = ordinalOf(i);
     // Interpolation-assist (checkpoint 120): anchors are the RECORD, drawn big
     // and labelled; the derived samples between them are small unlabelled dots,
     // and not hand-draggable (a drag would just be wiped on the next rebuild).
@@ -509,11 +548,11 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
       // user a one-point series had three points, the same claim the series list
       // was making before `datumCount`.
       label:
-        isInterp || capRole
+        isInterp || capRole || ordinal === null
           ? ''
           : i === ringClosingIndex
-            ? `${i + 1} - click to close the ring`
-            : String(i + 1),
+            ? `${ordinal} - click to close the ring`
+            : String(ordinal),
       color: activeColor,
       ...(labelAway ? { labelAway } : {}),
       // Inert in Measure mode (v1.1): a measurement click must pass THROUGH a

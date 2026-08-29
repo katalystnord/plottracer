@@ -6996,6 +6996,10 @@ export function Workspace() {
     selectedPointCount: selectedPointIndices.length,
     dataPointCount: dataPoints.length,
     activePointIndex,
+    // ⚑ So the tip names the READING, not the pixel - a cap is a pixel of its
+    // datum's own series (B4), and this sentence prints the same number the
+    // figure label does.
+    capRoles: activeCapRoles,
     activePointIsAnchor: activePointIndex != null && dataPointRoles[activePointIndex] === 'anchor',
     // Boolean(), not `!== null`: the branch this feeds was written as
     // `if (activeHandleKey)`, and the two answers differ on the empty string.
