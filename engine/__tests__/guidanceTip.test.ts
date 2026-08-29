@@ -194,6 +194,42 @@ describe('guidanceTip - calibration', () => {
     expect(tip).toContain('Calibration step 1/4 - X1: click the first x tick');
   });
 
+  it('a calibration step says to pick the Calibrate tool when another tool is active', () => {
+    // ⚠️ David, 2026-08-29, stuck at step 2/4 of a bar walk: *"now I cannot place
+    // the second calibration point at all"*, *"the only way forward for me is to
+    // redo the calibration from the beginning"*. Pan was active - the rail's
+    // number shortcuts are global, and he typed a value with the cell unfocused,
+    // so `0` selected Pan. The walk went on saying "click", the click did Pan's
+    // job, and nothing said why. It was recoverable by picking the tool again,
+    // which is exactly what the line now says.
+    const tip = guidanceTip(
+      base({
+        mode: 'pan',
+        isCalibrating: true,
+        currentStep: { label: 'P2', prompt: 'Click a second pixel position of a known, different bar value' },
+        stepIndex: 1,
+        stepCount: 4,
+      })
+    );
+    expect(tip).toContain('Pick the Calibrate tool first');
+  });
+
+  it('and says nothing of the sort once the Calibrate tool is active', () => {
+    // ⚑ The companion assertion: a guard that fires when it should not is the
+    // same defect wearing the other face, and this line is on screen for the
+    // whole of every calibration.
+    const tip = guidanceTip(
+      base({
+        mode: 'calibrate',
+        isCalibrating: true,
+        currentStep: { label: 'P2', prompt: 'Click a second pixel position of a known, different bar value' },
+        stepIndex: 1,
+        stepCount: 4,
+      })
+    );
+    expect(tip).toBe('Calibration step 2/4 - P2: Click a second pixel position of a known, different bar value');
+  });
+
   it('agrees with itself about plurality when a step asks for two values', () => {
     const one = guidanceTip(
       base({ isCalibrating: true, hasPendingPixel: true, currentStep: { label: 'X1', prompt: 'p' }, pendingValueFieldCount: 1 })
@@ -496,6 +532,13 @@ describe('guidanceTip - the slot-aim suffix', () => {
     // bogus "- Bar start - new bar (0 of 2 filled)" tacked onto it.
     const tip = guidanceTip(
       withSlots({
+        // ⚑ `mode: 'calibrate'` because that is the state a calibration step is
+        // actually in. The fixture inherited the base's `pan`, and once the tip
+        // learned to say "Pick the Calibrate tool first" in any other mode
+        // (2026-08-29, David stuck at step 2/4 with Pan active) this exact-match
+        // assertion started failing on a sentence that belongs there. The
+        // suffix this test guards against is unaffected either way.
+        mode: 'calibrate',
         isCalibrated: false,
         isCalibrating: true,
         currentStep: { label: 'P1', prompt: 'click the baseline' },

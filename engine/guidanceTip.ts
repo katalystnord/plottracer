@@ -317,6 +317,31 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       return `${at}: ${said}.${confirm}`;
     }
     if (hasPendingPixel) return `${at}: ${currentStep!.prompt}.${confirm}`;
+    // ⚑⚑ DO NOT INSTRUCT A CLICK THE ACTIVE TOOL WILL DROP. Only the Calibrate
+    // tool routes a canvas click into `handleCalibrationClick`; in any other
+    // mode the click does that mode's job and the walk simply does not advance.
+    //
+    // ⚠️ David, 2026-08-29, stuck at step 2/4 of a bar walk: *"now I cannot place
+    // the second calibration point at all... the only way forward for me is to
+    // redo the calibration from the beginning."* It was recoverable - *"if I
+    // click calibration point I can then place the second calibration point
+    // again"* - but nothing on screen said so, which is the keystone rule
+    // failing: the one line that answers "what do I do now?" was telling him to
+    // click while the mode threw the click away.
+    //
+    // ⚑ HOW HE GOT THERE, because the tool switch was not deliberate: the rail's
+    // number shortcuts are global, guarded only while a text input HAS FOCUS
+    // (`targetIsTextField`). He re-placed P1, lost focus on the value cell, and
+    // typed the value - so the digit reached the shortcut instead of the box,
+    // and `0` is Pan. The guard is right as far as it goes; this is the half
+    // that tells the user what happened.
+    //
+    // ⚑ It NAMES the tool rather than refusing the mode. Panning and zooming
+    // mid-walk is legitimate and often necessary to see a tick, so the fix is to
+    // say what is needed, not to take the tool away. Pattern 5: the refusal
+    // fires at the gesture, in the place the user is already looking.
+    if (mode !== 'calibrate')
+      return `${at}: ${currentStep!.prompt}. Pick the Calibrate tool first - the active tool does not place calibration points.`;
     return `${at}: ${currentStep!.prompt}`;
   }
   if (isCalibrated) {
