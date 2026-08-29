@@ -135,6 +135,17 @@ export interface OverlaySeries {
   color: readonly [number, number, number];
   active: boolean;
   points: readonly { px: number; py: number }[];
+  /**
+   * Each point's interpolation role, positionally - the same parallel-array
+   * shape `dataPointRoles` already uses for the active series, so the two paths
+   * read the record the same way rather than each inventing an access pattern.
+   *
+   * ⚑ It is a DRAWING concern, which is why it belongs on a type whose header
+   * says nothing here depends on what a point MEANS: an anchor and the sample
+   * derived between two anchors are different KINDS of mark, and were drawn
+   * identically on every series but the one in front of you.
+   */
+  roles?: readonly (string | null | undefined)[];
 }
 
 /** What the overlay needs from the series list: which one is active, and its colour. */
@@ -145,6 +156,30 @@ export interface OverlaySeriesInfo {
 
 /** The radius a plain dense series' one visible (selected) dot is drawn at. */
 export const SELECTED_DOT_RADIUS = 3.5;
+
+/**
+ * How big a data dot is drawn - ONE rule, and every series obeys it.
+ *
+ * ⚑⚑ IT EXISTS BECAUSE THERE WERE TWO. The active path chose deliberately while
+ * the inactive push carried no `radius` at all, so the same interpolated sample
+ * was 2.5 on the series you were working on and ImageCanvas's default 5 on every
+ * other one - the series you are NOT looking at drawn twice as heavy as the one
+ * you are, covering the ink the trace has to be checked against. A size rule
+ * that lives in one place cannot disagree with itself.
+ *
+ * Returns a SPREADABLE object, absent-not-undefined: an ordinary dot has no key
+ * at all, so ImageCanvas's default applies (exactOptionalPropertyTypes, the same
+ * convention `labelAway` follows).
+ */
+export function dotRadius(
+  role: string | null | undefined,
+  plainDense: boolean
+): { radius?: number } {
+  if (role === 'anchor') return { radius: 6.5 };
+  if (role === 'interpolated') return { radius: 2.5 };
+  if (plainDense) return { radius: SELECTED_DOT_RADIUS };
+  return {};
+}
 
 /** Split a series into contiguous runs - the "is this dense enough to draw as a
  * line?" question. No runs means a scatter, which stays dots. */
@@ -409,7 +444,18 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     const color = rgb(ds.color);
     ds.points.forEach((point, i) => {
       if (dense && !strays.has(i)) return;
-      result.push({ id: `inactive-point-${ds.index}-${i}`, x: point.px, y: point.py, label: '', color, draggable: false });
+      // ⚑ The SAME size rule the active series obeys - reuse, not a second
+      // opinion. A dense series' strays are the points the line cannot reach,
+      // which is not the plain-dense case, so `false` is the honest argument.
+      result.push({
+        id: `inactive-point-${ds.index}-${i}`,
+        x: point.px,
+        y: point.py,
+        label: '',
+        color,
+        draggable: false,
+        ...dotRadius(ds.roles?.[i], false),
+      });
     });
   });
 
@@ -520,13 +566,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         !isInterp,
       selected,
       // Absent, not undefined - an ordinary dot takes ImageCanvas's default of 5.
-      ...(isAnchor
-        ? { radius: 6.5 }
-        : isInterp
-          ? { radius: 2.5 }
-          : plainDense
-            ? { radius: SELECTED_DOT_RADIUS }
-            : {}),
+      ...dotRadius(role, plainDense),
     });
   });
 

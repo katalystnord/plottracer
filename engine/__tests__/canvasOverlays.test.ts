@@ -123,8 +123,9 @@ const view = (
   index: number,
   active: boolean,
   color: [number, number, number],
-  points: { px: number; py: number }[]
-): OverlaySeries => ({ index, color, active, points });
+  points: { px: number; py: number }[],
+  roles?: (string | null)[]
+): OverlaySeries => ({ index, color, active, points, ...(roles ? { roles } : {}) });
 
 function base(over: Partial<CanvasMarkerInput> = {}): CanvasMarkerInput {
   return {
@@ -293,6 +294,52 @@ describe('inactive series are context, never a click target', () => {
     );
     expect(m.filter((x) => x.id.startsWith('inactive-point-'))).toHaveLength(0);
     expect(points(m)).toHaveLength(3);
+  });
+
+  /**
+   * ⚑⚑ THE SAME POINT MUST NOT CHANGE SIZE WHEN YOU LOOK AWAY FROM IT.
+   *
+   * The inactive push carried no `radius` at all, so every one of its dots took
+   * ImageCanvas's default of 5 - while the ACTIVE path four lines below chooses
+   * deliberately: anchor 6.5, interpolated 2.5, a plain dense point 3.5. So an
+   * interpolated sample was drawn at DIAMETER 10 when its series was inactive
+   * and 5 when it was active: the series you are NOT working on drawn twice as
+   * heavy as the one you are, the circles overlapping into exactly the "furry
+   * band" the dot-drop rule three lines above exists to prevent.
+   *
+   * ⚑⚑ AND IT HIDES THE INK, WHICH IS THE VERIFICATION LOOP ITSELF. The only way
+   * anyone checks a trace is by seeing the original curve through it; on David's
+   * four-curve dashed figure the inactive blue band covered the curve it had been
+   * traced from. Pattern 4 - the picture lies while the record is perfectly
+   * correct - and it is what disqualified that frame as the website hero shot.
+   *
+   * ⚑ The fix is REUSE, not invention: one `dotRadius` rule, both callers.
+   */
+  it('draw an interpolated sample at the same size the active series would', () => {
+    const m = buildCanvasMarkers(
+      base({ allDatasetsData: [view(1, false, [1, 2, 3], sparse(2), ['anchor', 'interpolated'])] })
+    );
+    const drawn = m.filter((x) => x.id.startsWith('inactive-point-'));
+    expect(drawn[1]!.radius, 'an interpolated sample is small on any series').toBe(2.5);
+  });
+
+  it('keep the anchor / interpolated distinction an active series draws', () => {
+    // Without the size rule both roles rendered identically at 5: two different
+    // things looking the same, and one thing looking like two, from one missing
+    // property. The table italicises the derived rows either way.
+    const m = buildCanvasMarkers(
+      base({ allDatasetsData: [view(1, false, [1, 2, 3], sparse(2), ['anchor', 'interpolated'])] })
+    );
+    const drawn = m.filter((x) => x.id.startsWith('inactive-point-'));
+    expect(drawn[0]!.radius, 'an anchor is the record, and drawn big').toBe(6.5);
+    expect(drawn[0]!.radius).not.toBe(drawn[1]!.radius);
+  });
+
+  it('leave an ordinary dot to the default, exactly as the active series does', () => {
+    const m = buildCanvasMarkers(base({ allDatasetsData: [view(1, false, [1, 2, 3], sparse(2))] }));
+    const drawn = m.filter((x) => x.id.startsWith('inactive-point-'));
+    // ⚑ ABSENT, not undefined - ImageCanvas's own default of 5 applies.
+    expect(drawn.every((d) => !('radius' in d))).toBe(true);
   });
 
   it('render BEFORE the active series, so the active points layer on top', () => {

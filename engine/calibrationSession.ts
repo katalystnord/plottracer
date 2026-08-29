@@ -485,6 +485,8 @@ export interface DatasetPointsView {
   color: [number, number, number];
   active: boolean;
   points: DataPointView[];
+  /** Each point's interpolation role, positionally - see `OverlaySeries.roles`. */
+  roles: (PointRole | null)[];
 }
 
 // A small, standard qualitative palette (matplotlib's default "tab10"
@@ -2119,6 +2121,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
         py: p.y,
         data: this.axes ? this.axes.pixelToData(p.x, p.y) : null,
       })),
+      // ⚑ An INACTIVE series' interpolation roles, which the overlay needs for
+      // the same reason the active one does: an anchor is the record and the
+      // samples between anchors are derived, and they are drawn at different
+      // sizes. Without this every series but the active one drew both at the
+      // default, so a derived sample was the heaviest mark on the canvas.
+      //
+      // ⚑ Read through `getDataPointRolesFor`, whose own header already promises
+      // "the role of each point of ANY dataset, index-aligned with that
+      // dataset's points (getAllDatasetsData ...)". A second inline read of the
+      // same metadata is how two answers to one question start.
+      roles: this.getDataPointRolesFor(index),
     }));
   }
 
