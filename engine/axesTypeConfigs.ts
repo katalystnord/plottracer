@@ -785,6 +785,35 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * throws.
    */
   autoExtractRefusal?: string;
+
+  /**
+   * Why this type refuses the ERROR BARS tool, or absent if it accepts it.
+   *
+   * ⚑⚑ DECLARED, MIRRORING `autoExtractRefusal`, for the reason that field's own
+   * note gives: a `config.id === ...` cascade lets a NEW type join whichever
+   * branch is the default, silently. A type says for itself whether it can carry
+   * error, and says why when it cannot.
+   *
+   * ⚠️ WHY THE BAR FAMILY REFUSES IT IN v2.3. A bar, a histogram bin and a box
+   * are captured as two OPPOSITE CORNERS, so neither stored point is at the
+   * centre - and every real figure draws the whisker at the centre. v2.3 fixed
+   * the ADJUST path (`errorCapDragLine` shares one anchor with the drawing), but
+   * the CAPTURE path constrains the new cap against `opts.datumPixel`, which is
+   * the corner the drag started from. Anchoring there needs the tuple, which
+   * `captureErrorCap` only resolves later, so it is a reordering of that method
+   * rather than a substitution. David, seeing the whisker still lean on a
+   * floating bar: *"This is a bigger fix... I think we should just block error
+   * bars on bar graphs for this release."*
+   *
+   * ▶ It comes back in v2.5 with the Span chart, where the question is answered
+   * by the model rather than patched: a span's outward extents are MEASURED ends
+   * of the interval, not an error attached to one corner of it. See
+   * `project_v25_bar_family_questions`.
+   *
+   * ⚑ XY, spider, pie and categorical Line are UNAFFECTED - their datum is a
+   * point, so there is no centre to disagree with.
+   */
+  errorBarsRefusal?: string;
   /**
    * The SHAPE this type's data takes in an export file - declared, because the
    * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
@@ -1245,6 +1274,8 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   // Same steps as XY (it shares the array), so the same shared corner.
   commonOrigin: XY_COMMON_ORIGIN,
   defaultSlots: HISTOGRAM_SLOTS,
+  errorBarsRefusal:
+    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
   tupleNoun: 'bin',
   // Same axes, same steps, same options -> same guards. Sharing the arrays
   // rather than re-declaring keeps them from drifting apart. See borrowFrom
@@ -2054,6 +2085,8 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
+  errorBarsRefusal:
+    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
   intervalSlots: ['Min', 'Max'],
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot a heatmap's column and row counts use, for the same reason.
@@ -2353,6 +2386,8 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   defaultSlots: BOX_PLOT_SLOTS,
+  errorBarsRefusal:
+    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
   // Shares Bar's fixedSteps (below), so the same two category clicks.
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot a heatmap's column and row counts use, for the same reason.

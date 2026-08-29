@@ -8262,8 +8262,12 @@ export function Workspace() {
             label="Error bars (add to a traced series)"
             shortcut="6"
             pressed={mode === 'error-bars'}
-            disabled={!datasetInfos.some((d) => d.pointCount > 0)}
-            disabledReason="Add data points first"
+            // ⚑ The TYPE says whether it can carry error, and says why when it
+            // cannot - the same shape as `autoExtractRefusal` three buttons up,
+            // and for the same reason: an id cascade lets a new type join the
+            // default branch silently.
+            disabled={config.errorBarsRefusal !== undefined || !datasetInfos.some((d) => d.pointCount > 0)}
+            disabledReason={config.errorBarsRefusal ?? 'Add data points first'}
             onClick={toggleErrorBars}
             foldout
           />

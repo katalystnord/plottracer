@@ -363,9 +363,9 @@
     <div class="rels-head">
       <span class="eyebrow">Releases</span>
       <h1>What changed, and why.</h1>
-      <p>A running log, newest first. PlotTracer is developed in the open and every
-         release says what it fixed as plainly as what it added, including the numbers
-         that were wrong before it.</p>
+      <p>A running log, newest first. PlotTracer is developed in the open, and each
+         release here is a theme rather than a patch note: what the tool learned to
+         read, and what it stopped getting wrong.</p>
     </div>
       <article class="rel">
         <div class="rel-head">
@@ -414,36 +414,6 @@
         <li>A spider chart's marker radius was being over-read, which was a live wrong reading rather than a cosmetic fault.</li>
           </ul>
           <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.1.0">Full release notes for 2.1.0</a></p>
-        </div>
-      </article>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.0.2</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>An error cap that jumped to the bar next to it</h2>
-          <p class="rel-lede">A single-fix patch release, and it undoes a regression introduced in 2.0.1.</p>
-          <ul>
-        <li>Adjusting an error cap could snap it sideways onto the neighbouring bar, and the recorded number went with it: the cap's delta was then measured against the wrong data point.</li>
-        <li>Ordinary on a decaying curve with wide error at its left-hand end, which is to say whenever a whisker is longer than the gap to the next point.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.2">Full release notes for 2.0.2</a></p>
-        </div>
-      </article>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.0.1</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>Three numbers that were quietly wrong</h2>
-          <p class="rel-lede">A patch release, and worth reading rather than skipping: three of these were producing wrong values on screen and in exported files, on figures the app otherwise handled perfectly.</p>
-          <ul>
-        <li>Every one was found the same way, by using the app on real figures and checking the result against the bundled ground truth, rather than by any test.</li>
-        <li>Error bars arrive as a first-class capture rather than a second series you relate by hand.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.1">Full release notes for 2.0.1</a></p>
         </div>
       </article>
       <article class="rel">

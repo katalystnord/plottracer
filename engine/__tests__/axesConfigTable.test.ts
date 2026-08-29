@@ -141,6 +141,43 @@ describe('the config table - cross-cutting invariants', () => {
     }
   });
 
+  it('the bar family refuses error bars in this release, and says why', () => {
+    // ⚠️ v2.3, David: *"This is a bigger fix... I think we should just block
+    // error bars on bar graphs for this release."* A bar, a histogram bin and a
+    // box are captured as two OPPOSITE corners, so neither stored point is at
+    // the centre where every real figure draws the whisker. The ADJUST path was
+    // fixed (one shared anchor); the CAPTURE path anchors the new cap to the
+    // corner the drag started from, and moving it needs a reordering of
+    // captureErrorCap rather than a substitution.
+    //
+    // ⚑ It returns in v2.5 with Span charts, where the model answers it: a
+    // span's outward extents are MEASURED ends of the interval, not an error
+    // attached to one of its corners.
+    const refusing = ['bar', 'histogram', 'boxplot'];
+    for (const c of ALL) {
+      if (!refusing.includes(c.id)) {
+        expect(
+          c.errorBarsRefusal,
+          `${c.id} accepts error bars, so it must not explain a refusal`
+        ).toBeUndefined();
+        continue;
+      }
+      const reason = c.errorBarsRefusal;
+      expect(reason, `${c.id} refuses error bars without saying why`).toBeTruthy();
+      // "Refuse with the REQUIREMENT" - the same bar the auto-extract refusals
+      // are held to, one test up.
+      expect(reason!.length, `${c.id}'s reason is too short to be a reason`).toBeGreaterThan(40);
+    }
+  });
+
+  it('⚑ and XY still accepts them - the card the website leads with', () => {
+    // The companion assertion: a block that spreads past what it was aimed at is
+    // the same defect wearing the other face, and XY error bars are a shipped
+    // capability with their own website card.
+    const xy = ALL.find((c) => c.id === 'xy');
+    expect(xy?.errorBarsRefusal).toBeUndefined();
+  });
+
   it('⚑ every value column is named: valueLabels matches dataDim exactly', () => {
     // These labels ARE the on-screen table headers and the export headers. A
     // short list silently drops a column's name from every file.
