@@ -1126,6 +1126,70 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('tips-bar')).toContain('4/4 - Cat n');
   });
 
+  it('unticking common origin puts back a step that takes a value', async () => {
+    // ⚑⚑ THE HALF 0d92407 MISSED. `reuseStepPixel` recorded the reuse only on
+    // the VALUELESS branch, so on XY - where the shared step Y1 takes a typed
+    // value - `withdrawReusedPixels` found nothing, returned false, and the
+    // untick left Y1 sitting on X1's pixel with a prefilled value nobody placed
+    // while the checkbox read unticked. `Reset calibration` was the only exit.
+    await resetWorkspace('xy');
+    await clickAt(200, 400);
+    await confirmValue('0');
+    await clickAt(400, 400);
+    await confirmValue('10');
+    // The offer has taken X1's pixel for Y1 and prefilled it.
+    expect(await textOf('tips-bar')).toContain('3/4 - Y1');
+    expect(await textOf('calib-chip-y1')).not.toContain('click image');
+    // Take it back.
+    await page.getByTestId('common-origin').uncheck();
+    expect(await textOf('tips-bar')).toContain('3/4 - Y1');
+    expect(await textOf('calib-chip-y1')).toContain('click image');
+  });
+
+  it('ticking common origin does not discard a pixel you placed by hand', async () => {
+    // ⚑⚑ The offer's own guard tests `placed[to]`, and a hand-clicked pixel that
+    // has not been confirmed yet is NOT in `placed` - it is pending. The forward
+    // entrance was safe by construction; the checkbox entrance was not, and it
+    // threw the click and the typed value away with no way back: undo cannot
+    // restore a pending pixel, because a pending pixel is never committed.
+    await resetWorkspace('xy');
+    await declineCommonOrigin();
+    await clickAt(200, 400);
+    await confirmValue('0');
+    await clickAt(400, 400);
+    await confirmValue('10');
+    // Place Y1 BY HAND, somewhere the offer would never have put it, and start
+    // typing its value.
+    await clickAt(200, 200);
+    await page.locator('[data-testid="data-value-input"]').click({ timeout: 5000 });
+    await page.keyboard.type('5');
+    await page.getByTestId('common-origin').check();
+    // ⚑ The prefill is the tell: adopting X1's pixel would overwrite the box
+    // with X1's own value. The user's typed 5 must survive, and so must the
+    // pixel under it.
+    expect(await page.locator('[data-testid="data-value-input"]').inputValue()).toBe('5');
+    expect(await textOf('tips-bar')).toContain('3/4 - Y1');
+  });
+
+  it('ticking common origin where nothing is shared leaves your typed value alone', async () => {
+    // ⚑⚑ The tick branch used to write unconditionally. On a step where no pair
+    // applies it blanked the value box, and Confirm then went silently inert
+    // because confirmCalibrationValues refuses a values array shorter than the
+    // step's fields. It also pushed a history entry for a document that had not
+    // changed, clearing the redo branch and marking the project dirty.
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await page.locator('[data-testid="data-value-input"]').click({ timeout: 5000 });
+    await page.keyboard.type('7');
+    // P1 shares nothing - the pair is p1 -> c1 - so this tick must be a no-op.
+    await page.getByTestId('common-origin').check();
+    expect(await page.locator('[data-testid="data-value-input"]').inputValue()).toBe('7');
+    await page.locator('[data-testid="confirm-data-value"]').click({ timeout: 5000 });
+    await page.waitForTimeout(100);
+    expect(await textOf('tips-bar')).toContain('2/4 - P2');
+  });
+
   it('is absent on a graph type with no categories', async () => {
     await resetWorkspace('xy');
     expect(await page.getByTestId('category-ticks-panel').count()).toBe(0);

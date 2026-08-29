@@ -4872,11 +4872,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Reuse an already-placed step's pixel as the pending pixel for the current step,
    * instead of requiring a fresh click at the same physical location. */
-  reuseStepPixel(fromKey: string): boolean {
+  reuseStepPixel(fromKey: string, fromOffer = false): boolean {
     if (this.axes) return false;
     const step = this.getCurrentStep();
     const source = this.placed[fromKey];
     if (!step || !source) return false;
+    // ⚑⚑ THE OFFER NEVER CLOBBERS A PIXEL THE USER IS HOLDING. A pixel clicked
+    // by hand but not yet confirmed lives in `pendingPixel`, and `pendingPixel`
+    // is not in `placed` - so `commonOriginReuse`'s own guard, which tests
+    // `placed[to]`, does not see it. The forward entrance was safe by
+    // construction (it runs immediately after the walk advances, so nothing is
+    // pending); the checkbox entrance added in 0d92407 was not, and it discarded
+    // the click AND the typed value with no way back: undo cannot restore a
+    // pending pixel, because a pending pixel is deliberately never committed.
+    // The guard lives here because the offer now has two entrances, which is
+    // this codebase's standing defect shape. Enforced by
+    // `ticking common origin does not discard a pixel you placed by hand`.
+    if (fromOffer && this.pendingPixel) return false;
     // ⚑⚑ A STEP WITH NOTHING TO TYPE COMPLETES HERE, exactly as a CLICK on it
     // does. Leaving it pending instead is what made "common origin" appear to do
     // nothing on a heatmap's CATEGORY axis: the shared pixel was taken, the walk
@@ -4884,11 +4896,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // exists to give it one - so the calibration simply stopped. David: *"the
     // common origin does not work when you have a categorial axis."* See
     // completeValuelessStep for why the rule lives in one place now.
+    // ⚑ Remembered so it can be TAKEN BACK - see `withdrawReusedPixels`. Only
+    // what the OFFER placed: the manual `reuse-<step>` button is the user's own
+    // deliberate act, and unticking the offer must not undo it.
     if (this.completeValuelessStep(source.px, source.py)) {
-      // ⚑ Remembered so it can be TAKEN BACK - see `withdrawReusedPixels`.
-      this.reusedStepKeys.add(step.key);
+      if (fromOffer) this.reusedStepKeys.add(step.key);
       return true;
     }
+    // ⚑⚑ TRACKED ON THIS BRANCH TOO, WHICH IS THE BUG 0d92407 SHIPPED. A step
+    // WITH value fields does not complete here - it leaves the pixel pending for
+    // the user to type a value against - and it used to be recorded nowhere. So
+    // on XY and Histogram, where the shared step (`y1`) takes a typed value,
+    // `withdrawReusedPixels` found nothing, returned false, and unticking the
+    // box left Y1 sitting on X1's pixel with a prefilled value nobody placed,
+    // while the checkbox read unticked. Only `Reset calibration` got out - the
+    // exact "way out that loses your work" this mechanism exists to prevent.
+    // Enforced by `unticking common origin puts back a step that takes a value`.
+    if (fromOffer) this.reusedStepKeys.add(step.key);
     this.pendingPixel = { px: source.px, py: source.py };
     return true;
   }
@@ -4914,10 +4938,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const steps = this.getSteps();
     let earliest = -1;
     for (const key of this.reusedStepKeys) {
-      if (this.placed[key] === undefined) continue;
-      delete this.placed[key];
       const at = steps.findIndex((st) => st.key === key);
-      if (at >= 0 && (earliest < 0 || at < earliest)) earliest = at;
+      if (this.placed[key] !== undefined) {
+        delete this.placed[key];
+        if (at >= 0 && (earliest < 0 || at < earliest)) earliest = at;
+        continue;
+      }
+      // ⚑⚑ A REUSE CAN STILL BE PENDING rather than placed - a step that takes a
+      // typed value holds the offered pixel in `pendingPixel` until it is
+      // confirmed. Withdrawing that one means dropping the pixel and staying on
+      // the step, which is what the user asked for by unticking the box.
+      if (this.pendingPixel && at >= 0 && at === this.stepIndex) {
+        this.pendingPixel = null;
+        if (earliest < 0 || at < earliest) earliest = at;
+      }
     }
     this.reusedStepKeys.clear();
     if (earliest < 0) return false;

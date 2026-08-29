@@ -3961,8 +3961,9 @@ export function Workspace() {
   // spin; it stops as soon as a step needs something typed, or nothing more
   // is shared.
   const adoptCommonOrigin = useCallback(
-    (enabled: boolean): string[] => {
+    (enabled: boolean): { adopted: boolean; filled: string[] } => {
       let filled: string[] = [];
+      let adopted = false;
       for (let guard = 0; guard < 8; guard++) {
         const step = session.getCurrentStep();
         const reuse = commonOriginReuse(
@@ -3975,20 +3976,23 @@ export function Workspace() {
           step ?? undefined
         );
         if (!reuse) break;
-        session.reuseStepPixel(reuse.from);
+        // ⚑⚑ `fromOffer` - so unticking takes back what the OFFER placed and
+        // nothing the user reused by hand with the `reuse-<step>` button.
+        if (!session.reuseStepPixel(reuse.from, true)) break;
+        adopted = true;
         if ((step?.valueFields.length ?? 0) > 0) {
           filled = reuse.prefill;
           break;
         }
       }
-      return filled;
+      return { adopted, filled };
     },
     [session, config]
   );
 
   const confirmDataValue = useCallback(() => {
     if (session.confirmCalibrationValues(dataValueInputs)) {
-      setDataValueInputs(adoptCommonOrigin(commonOrigin));
+      setDataValueInputs(adoptCommonOrigin(commonOrigin).filled);
       commit();
     }
   }, [session, dataValueInputs, commit, commonOrigin, adoptCommonOrigin]);
@@ -7613,8 +7617,22 @@ export function Workspace() {
                     // without this the tick was inert wherever the user had
                     // already arrived. Enforced by `ticking common origin while
                     // standing on the reusing step adopts the pixel`.
-                    setDataValueInputs(adoptCommonOrigin(true));
-                    commit();
+                    //
+                    // ⚑⚑ AND IT MIRRORS THE UNTICK BRANCH: nothing is written
+                    // unless something was actually adopted. Unconditional was
+                    // wrong twice over - on a step where no pair applies it
+                    // blanked the value box, so Confirm went silently inert
+                    // (`confirmCalibrationValues` refuses a values array shorter
+                    // than the step's fields), and it pushed a history entry for
+                    // a document that had not changed, which cleared the redo
+                    // branch and marked the project dirty from a checkbox.
+                    // Enforced by `ticking common origin where nothing is shared
+                    // leaves your typed value alone`.
+                    const { adopted, filled } = adoptCommonOrigin(true);
+                    if (adopted) {
+                      setDataValueInputs(filled);
+                      commit();
+                    }
                   }
                 }}
               />
