@@ -1105,6 +1105,34 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('tips-bar')).toContain('3/4 - Cat 1');
   });
 
+  /**
+   * ⚑⚑ THE ANSWER BELONGS TO THE FIGURE YOU ANSWERED IT ABOUT.
+   *
+   * David, 2026-08-29, driving Box Plot for the website shot: *"I think we need
+   * to review this common origin checkbox for all graphs. Because it is
+   * inconsistent ... Sometimes it is offered checked, and sometimes unchecked."*
+   *
+   * MEASURED: it was one session-wide boolean, `useState(true)`, whose only
+   * writer was the checkbox's own onChange. No per-type default, no reset on a
+   * graph-type change or a new figure - so the box opened showing whatever you
+   * last left it at on a DIFFERENT chart, which is exactly what "sometimes
+   * checked, sometimes unchecked" describes. Whether two axes meet is a fact
+   * about the figure in front of you, and an answer about another one is not a
+   * default, it is a leftover.
+   */
+  it('⚑⚑ a declined common origin does not follow you to the next graph type', async () => {
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    expect(await page.getByTestId('common-origin').isChecked()).toBe(false);
+    // Switch graph type on the same image, which is the door David came through.
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-xy').click();
+    expect(
+      await page.getByTestId('common-origin').isChecked(),
+      'the new type offers its own default, not the last one you declined'
+    ).toBe(true);
+  });
+
   it('ticking common origin while standing on the reusing step adopts the pixel', async () => {
     // ⚑⚑ THE DEFECT THIS FIXES: the reuse used to run only inside
     // `confirmDataValue`, so the checkbox was read once, at the instant the walk

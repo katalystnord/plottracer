@@ -92,6 +92,15 @@ const PER_FIGURE_RESETS = [
   'setMode',
   'setCalibExpanded',
   'setAxesTypeId',
+  // ⚑⚑ THE COMMON-ORIGIN ANSWER BELONGS TO THE FIGURE YOU ANSWERED IT ABOUT.
+  // David, 2026-08-29, driving Box Plot: *"it is inconsistent ... Sometimes it
+  // is offered checked, and sometimes unchecked."* It was one session-wide
+  // boolean initialised to `true` whose only writer was the checkbox's own
+  // onChange - so no figure and no graph type ever reset it, and the box opened
+  // showing whatever you last left it at on a DIFFERENT chart. Whether two axes
+  // meet is a fact about the figure in front of you, so the answer cannot
+  // outlive it.
+  'setCommonOrigin',
   // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.3), and the list is the
   // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
   // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and

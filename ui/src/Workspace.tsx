@@ -2904,6 +2904,14 @@ export function Workspace() {
       setDataValueInputs([]);
       setSegmentFillError(null);
       setGeometryClosed(false);
+      // ⚑⚑ WHETHER TWO AXES MEET IS A FACT ABOUT THE FIGURE IN FRONT OF YOU, so
+      // the answer cannot outlive it. This was one session-wide boolean whose
+      // only writer was the checkbox itself, so the box opened showing whatever
+      // you last left it at on a different chart - David, driving Box Plot:
+      // *"it is inconsistent ... Sometimes it is offered checked, and sometimes
+      // unchecked."* Back to the offered default with every figure, exactly as
+      // the rest of this list does.
+      setCommonOrigin(true);
       // Curve Fit's controls are the figure's own, read back off its dataset.
       const cf = getCurveFitState(s.getDataset());
       setCurveFitDegree(cf ? cf.degree : 1);
@@ -3264,6 +3272,9 @@ export function Workspace() {
       setHeatmapError(null);
       setDataValueInputs([]);
       setSegmentFillError(null);
+      // ⚑ The same rule at the GRAPH-TYPE door: a Box Plot's answer about its
+      // own corners says nothing about the XY figure you switch to.
+      setCommonOrigin(true);
       setCurveFitDegree(1);
       setCurveFitModel('polynomial');
       setCurveFitRestrict(false);
