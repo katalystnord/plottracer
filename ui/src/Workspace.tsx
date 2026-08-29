@@ -8640,7 +8640,7 @@ export function Workspace() {
             // this offered "Edit value…" on a histogram, set the edit state, and
             // nothing appeared. One function answers for the menu and for the
             // table, so they cannot disagree about which cells are editable.
-            ...(editsValuesInTable(config.axesKind, config.outputPanel) &&
+            ...(editsValuesInTable(config.axesKind, config.outputPanel, hasSlots) &&
             dataPointRoles[ctxMenu.index] !== 'interpolated'
               ? [
                   <MenuItem
@@ -9175,6 +9175,7 @@ export function Workspace() {
               axesKind={config.axesKind}
               outputPanel={config.outputPanel}
               showCategoryColumn={showCategoryColumn}
+              hasSlots={hasSlots}
               valueLabels={tableValueLabels}
               dateFormats={tableDateFormats}
               mode={mode}

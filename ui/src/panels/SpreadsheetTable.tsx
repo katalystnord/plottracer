@@ -17,6 +17,12 @@ export interface SpreadsheetTableProps {
    *  half of "does this type edit values in a table" (see `editsValuesInTable`). */
   outputPanel: string | undefined;
   showCategoryColumn: boolean;
+  /** Whether the active series has SLOTS - a tuple table, not a value table.
+   *  ⚑ Passed explicitly rather than inferred from `showCategoryColumn`: the two
+   *  happen to agree on bar-kind today, and two meanings for one flag is a
+   *  defect waiting for the first type where they differ (`setDataPointValue`'s
+   *  `dim` argument records the same lesson). */
+  hasSlots: boolean;
   valueLabels: readonly string[];
   /** Per-column date format, where an axis is date-calibrated. */
   dateFormats: readonly (string | null | undefined)[];
@@ -111,6 +117,7 @@ export function SpreadsheetTable({
   axesKind,
   outputPanel,
   showCategoryColumn,
+  hasSlots,
   valueLabels,
   dateFormats,
   mode,
@@ -345,7 +352,7 @@ export function SpreadsheetTable({
                   // It reads muted + italic and refuses the edit, pointing at the
                   // anchors -- which ARE editable, and which the curve follows.
                   const derived = isDerivedAt(s.roles, i);
-                  const editable = isCellEditable(axesKind, outputPanel, s.active, derived);
+                  const editable = isCellEditable(axesKind, outputPanel, s.active, derived, hasSlots);
                   const isErrorCap = s.deltas.length > 0;
                   if (isErrorCap) {
                     const delta = s.deltas[i];

@@ -5892,6 +5892,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
       next[dim] = value;
       pixel = (this.axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } })
         .dataToPixel(next[0]!, next[1]!);
+    } else if (this.config.axesKind === 'bar') {
+      // ⚑⚑ STEP ALONG THE VALUE AXIS, FROM WHERE THE POINT ALREADY IS (B1).
+      // A bar is 1.5D: a category coordinate and ONE value. `BarAxes.dataToPixel`
+      // inverts onto the CALIBRATION LINE, so handing it the typed value
+      // directly would teleport the corner sideways onto that line and throw
+      // away both the category position and the width A2 records. What is
+      // wanted is the DISPLACEMENT between the old value and the new one, which
+      // is the same vector on every parallel - so it is added to the point's own
+      // pixel and the perpendicular coordinate is untouched by construction.
+      //
+      // ⚑ Reuse, not a new transform: the axes' own inverse is asked twice and
+      // the difference taken. That keeps a LOG value axis correct for free (the
+      // spacing is unequal, but both ends are computed by the thing that owns
+      // the scale), and it follows a ROTATED chart's tilt without knowing that
+      // rotation exists - the same probe `capFreeDirection` runs to constrain a
+      // cap, which is the other gesture that moves along this axis.
+      const data = this.axes.pixelToData(point.x, point.y);
+      const current = data?.[0];
+      if (current === undefined || !Number.isFinite(current) || dim !== 0) return false;
+      const from = (this.axes as unknown as { dataToPixel(v: number, u?: number): { x: number; y: number } })
+        .dataToPixel(current);
+      const to = (this.axes as unknown as { dataToPixel(v: number, u?: number): { x: number; y: number } })
+        .dataToPixel(value);
+      if (!Number.isFinite(from.x) || !Number.isFinite(from.y)) return false;
+      pixel = { x: point.x + (to.x - from.x), y: point.y + (to.y - from.y) };
     } else {
       // No other type offers a typed value yet. Refusing is the honest answer:
       // a stubbed `dataToPixel` would land the point at the image's top-left

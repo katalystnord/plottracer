@@ -215,8 +215,24 @@ export function isDerivedAt(roles: readonly (PointRole | null)[], row: number): 
  * and the table cannot answer differently - the drift `getErrorColumns` already
  * documents one floor down.
  */
-export function editsValuesInTable(axesKind: string, outputPanel: string | undefined): boolean {
-  return axesKind === 'xy' && outputPanel === undefined;
+export function editsValuesInTable(
+  axesKind: string,
+  outputPanel: string | undefined,
+  hasSlots = false
+): boolean {
+  // ⚑⚑ BAR-KIND JOINS IT (v2.4, B1) - and `hasSlots` is why the question needs
+  // three answers rather than two, exactly as `showsCategoryColumn` above needs
+  // them. Bar-kind covers three types that render three different things: Line
+  // renders this value table, Box Plot renders the TUPLE table (hasSlots), and
+  // Bar has replaced the table with a panel of its own. Only the first has a
+  // value cell to type into, so only the first may say yes here.
+  //
+  // ⚑ The MODEL half is wider than this gate: `setDataPointValue` now moves a
+  // bar-kind datum along its value axis, so Bar's and Box Plot's own panels can
+  // offer the edit as soon as they grow an editor - the way the spider panel
+  // already does. This function answers where the generic TABLE is concerned.
+  if (outputPanel !== undefined) return false;
+  return axesKind === 'xy' || (axesKind === 'bar' && !hasSlots);
 }
 
 /**
@@ -233,7 +249,8 @@ export function isCellEditable(
   axesKind: string,
   outputPanel: string | undefined,
   seriesActive: boolean,
-  derived: boolean
+  derived: boolean,
+  hasSlots = false
 ): boolean {
-  return editsValuesInTable(axesKind, outputPanel) && seriesActive && !derived;
+  return editsValuesInTable(axesKind, outputPanel, hasSlots) && seriesActive && !derived;
 }

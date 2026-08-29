@@ -141,10 +141,37 @@ describe('derived rows and editability', () => {
     expect(isCellEditable('xy', undefined, false, false)).toBe(false);
   });
 
-  it('refuses every non-XY kind, whose values are not free numbers', () => {
-    expect(isCellEditable('bar', undefined, true, false)).toBe(false);
+  it('refuses the kinds whose values are not free numbers', () => {
     expect(isCellEditable('polar', undefined, true, false)).toBe(false);
     expect(isCellEditable('ternary', undefined, true, false)).toBe(false);
+  });
+
+  /**
+   * ⚑⚑ B1 (v2.4): BAR-KIND EDITS A VALUE, AND THE THREE BAR-KIND TYPES DIFFER.
+   *
+   * They render three different things, so one answer cannot serve all three:
+   * Line renders this value table, Box Plot renders the TUPLE table (hasSlots),
+   * and Bar has replaced the table with a panel of its own. Only the first has a
+   * cell to type into. `showsCategoryColumn` needed exactly this distinction for
+   * exactly this reason, which is why `hasSlots` is asked here too.
+   *
+   * ⚑ The MODEL is wider than this gate: `setDataPointValue` moves a bar-kind
+   * datum along its value axis whatever renders it, so Bar's and Box Plot's own
+   * panels can offer the edit as soon as they grow an editor, the way the spider
+   * panel already does.
+   */
+  it('a categorical LINE edits its value in the table - it renders one', () => {
+    expect(editsValuesInTable('bar', undefined, false)).toBe(true);
+    expect(isCellEditable('bar', undefined, true, false, false)).toBe(true);
+  });
+
+  it('a BOX PLOT does not - its rows are tuples, in a table of their own', () => {
+    expect(editsValuesInTable('bar', undefined, true)).toBe(false);
+    expect(isCellEditable('bar', undefined, true, false, true)).toBe(false);
+  });
+
+  it('a BAR does not either - its panel has replaced the value table', () => {
+    expect(editsValuesInTable('bar', 'bar', false)).toBe(false);
   });
 
   /**
