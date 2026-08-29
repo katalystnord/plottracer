@@ -1234,10 +1234,21 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // driving the real app: with the bail first, the one press the tool exists
       // for was the one press it ignored.
       //
-      // Safe to pre-empt: linkSnap only answers for a point of the TARGET
-      // series, so pressing a cap (which lives in a *different*, related series)
+      // Safe to pre-empt: linkSnap answers only for a DATUM, so pressing a cap
       // returns null and falls through to that cap's own marker drag -- which is
-      // how caps stay freely adjustable, once that cap series is the active one.
+      // how caps stay freely adjustable.
+      //
+      // ⚠️⚑⚑ THIS SENTENCE WAS FALSE FOR A WHOLE RELEASE, and it is why the
+      // defect below survived. It used to justify itself with "a cap lives in a
+      // *different*, related series", which stopped being true at v2.3 B4: a cap
+      // is now a pixel of its datum's OWN series. `nearestDatumPixel` went on
+      // returning caps, so pressing one armed a link drag AND Konva's marker
+      // drag, both fired on release, and each committed. One undo then restored
+      // half the change, and the link path's direction-derived role wrote the
+      // OPPOSITE cap. David found it on an asymmetric error figure, 2026-08-29.
+      // Fixed in `nearestDatumPixel`, which now excludes caps, so this comment
+      // describes the code again. Gate 3: a comment asserting an invariant
+      // nothing enforced.
       // ⚑ Workspace's `draggable` gate must stay scoped to the target series for
       // that fall-through to have anywhere to land; a blanket mode check froze
       // every cap (v1.3 gate). Pressing empty canvas also falls through, to a

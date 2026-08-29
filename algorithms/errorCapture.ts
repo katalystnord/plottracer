@@ -253,11 +253,20 @@ export function mirrorCap(datumPixel: Point2D, capPixel: Point2D): Point2D {
 export function nearestPixel(
   candidates: readonly Point2D[],
   pixel: Point2D,
-  maxDistance: number
+  maxDistance: number,
+  /**
+   * ⚑ Indices to pass over. Added so `nearestDatumPixel` can mean its name: since
+   * v2.3 B4 an error cap is a pixel of its datum's OWN series, so "the nearest
+   * pixel" started offering caps to a caller that only ever wanted datums. A
+   * predicate rather than a filtered array, because the INDEX is the answer and
+   * filtering would renumber it.
+   */
+  skip?: (index: number) => boolean
 ): { index: number; point: Point2D } | null {
   let bestIndex = -1;
   let bestDistance = Infinity;
   for (let i = 0; i < candidates.length; i++) {
+    if (skip?.(i)) continue;
     const c = candidates[i]!;
     const distance = Math.hypot(c.x - pixel.x, c.y - pixel.y);
     if (distance < bestDistance) {

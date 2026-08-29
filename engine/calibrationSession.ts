@@ -1481,7 +1481,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
     : { index: number; point: { x: number; y: number } } | null {
     const entry = this.datasetEntries[index];
     if (!entry) return null;
-    return nearestPixel(entry.dataset.getAllPixels(), pixel, maxDistance);
+    // ⚑⚑ DATUMS ONLY - the name is the contract, and it stopped being true.
+    // Since v2.3 B4 an error cap is a pixel of its datum's OWN series, so this
+    // returned caps to a caller that wants the point a whisker starts FROM.
+    //
+    // ⚠️ THE COST, measured 2026-08-29. `errorLinkSnap` is this call with a 14px
+    // radius, and ImageCanvas tests it BEFORE the landed-on-a-marker bail: so
+    // pressing a cap armed a link drag AND Konva's own marker drag, and on
+    // release both fired, each with its own commit. That is why one undo
+    // restored only half of David's damaged row. Worse, the link path's
+    // `roleFromDrag` names the slot from drag DIRECTION, so dragging the lower
+    // cap inward resolved to 'upper' and wrote the REAL upper cap to the drop
+    // point - a measured 113 replaced by 50, silently.
+    //
+    // ⚑ ImageCanvas's own comment already stated this contract - "pressing a cap
+    // returns null and falls through to that cap's own marker drag" - and had
+    // been false since B4. Restoring the behaviour is what makes the comment
+    // true again, rather than adding a second gate beside it.
+    const caps = this.getCapPixelRoles(index);
+    return nearestPixel(entry.dataset.getAllPixels(), pixel, maxDistance, (i) => caps[i] != null);
   }
 
   /**
