@@ -1675,21 +1675,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // ⚑ It follows the ORIENTATION rather than the screen: on a horizontal
         // bar chart the categories run down and the value across, so the two
         // roles swap. `isRotated` is the axes' own answer, not a guess here.
-        const barShaped = this.isBarIntervalShape(entry.dataset);
-        const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
-        const anchorFor = (tuple: readonly (number | null | undefined)[], cap: { x: number; y: number }) => {
-          const a = tuple[0] == null ? null : pixels[tuple[0]];
-          const b = tuple[1] == null ? null : pixels[tuple[1]];
-          if (!a) return null;
-          // A half-dragged bar has one corner and no centre to speak of: the one
-          // point it has is the honest anchor.
-          if (!barShaped || !b) return { x: a.x, y: a.y };
-          const midCategory = rotated ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
-          const ends = rotated ? [a.x, b.x] : [a.y, b.y];
-          const along = cap[rotated ? 'x' : 'y'];
-          const nearEnd = Math.abs(ends[0]! - along) <= Math.abs(ends[1]! - along) ? ends[0]! : ends[1]!;
-          return rotated ? { x: nearEnd, y: midCategory } : { x: midCategory, y: nearEnd };
-        };
+        // ⚑ `errorAnchorFor` - the SAME definition the cap's drag constraint uses,
+        // so the picture and the record cannot disagree about where a whisker
+        // starts. They did until 2026-08-29; see that method's note.
+        const anchorFor = (tuple: readonly (number | null | undefined)[], cap: { x: number; y: number }) =>
+          this.errorAnchorFor(entry.dataset, tuple, cap);
         for (const tuple of entry.dataset.getAllTuples()) {
           const datumIndex = tuple[0];
           if (datumIndex == null) continue;
@@ -1858,17 +1848,62 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private capRoleInTuples(
     ds: Dataset,
     pixelIndex: number
-  ): { role: ErrorRole; datumPixelIndex: number } | null {
+  ): { role: ErrorRole; datumPixelIndex: number; tuple: readonly (number | null | undefined)[] } | null {
     const slots = ds.getSlotNames();
     if (!hasErrorSlots(slots)) return null;
     for (const tuple of ds.getAllTuples()) {
       const datumPixelIndex = tuple[0];
       if (datumPixelIndex == null) continue;
       for (const role of ERROR_ROLES) {
-        if (tuple[slotForRole(role, slots.length)] === pixelIndex) return { role, datumPixelIndex };
+        // ⚑ The TUPLE comes back too, because a bar's whisker is anchored at the
+        // bar's CENTRE and the centre needs both corners. See `errorAnchorFor`.
+        if (tuple[slotForRole(role, slots.length)] === pixelIndex) return { role, datumPixelIndex, tuple };
       }
     }
     return null;
+  }
+
+  /**
+   * Where a whisker STARTS: the bar's centre across the categories, at whichever
+   * end lies nearer the cap. On anything that is not a bar interval, and on a
+   * half-dragged bar with one corner, the datum itself.
+   *
+   * ⚑⚑ ONE DEFINITION, TWO CALLERS, AND THAT IS THE WHOLE POINT. v2.3 moved the
+   * DRAWING to the bar's centre and left the cap's DRAG CONSTRAINT on the corner
+   * (`errorCapDragLine` locked to `datum`, which for a bar is a corner). So the
+   * cap sat on the corner's vertical while the whisker was drawn from the
+   * centre, and every bar error bar leaned by exactly half a bar width. David,
+   * 2026-08-29, placing one on a floating bar: the whisker ran diagonally across
+   * two neighbouring bars.
+   *
+   * ⚑ It is also what makes a FLOATING bar behave the way David asked - *"the
+   * floating bars carry meaning on BOTH ends, and therefore the error bars
+   * should be pointing out from the centre of the bar on either side"*. Picking
+   * the end NEARER the cap does exactly that: a cap above the top anchors at the
+   * top centre, a cap below the bottom anchors at the bottom centre. No second
+   * mechanism is needed, and none is added.
+   *
+   * ⚑ It follows the ORIENTATION rather than the screen: on a horizontal bar
+   * chart the categories run down and the value across, so the two roles swap.
+   */
+  private errorAnchorFor(
+    ds: Dataset,
+    tuple: readonly (number | null | undefined)[],
+    cap: { x: number; y: number }
+  ): { x: number; y: number } | null {
+    const pixels = ds.getAllPixels();
+    const a = tuple[0] == null ? null : pixels[tuple[0]];
+    const b = tuple[1] == null ? null : pixels[tuple[1]];
+    if (!a) return null;
+    const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
+    // A half-dragged bar has one corner and no centre to speak of: the one point
+    // it has is the honest anchor.
+    if (!this.isBarIntervalShape(ds) || !b) return { x: a.x, y: a.y };
+    const midCategory = rotated ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
+    const ends = rotated ? [a.x, b.x] : [a.y, b.y];
+    const along = cap[rotated ? 'x' : 'y'];
+    const nearEnd = Math.abs(ends[0]! - along) <= Math.abs(ends[1]! - along) ? ends[0]! : ends[1]!;
+    return rotated ? { x: nearEnd, y: midCategory } : { x: midCategory, y: nearEnd };
   }
 
   /**
@@ -1894,7 +1929,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (own) {
       const datum = entry.dataset.getPixel(own.datumPixelIndex);
       if (!datum) return null;
-      const origin = { x: datum.x, y: datum.y };
+      const cap = entry.dataset.getPixel(pointIndex);
+      // ⚑⚑ THE SAME ANCHOR THE WHISKER IS DRAWN FROM. Locking the cap to a line
+      // through the DATUM was right for a point and wrong for a bar, whose datum
+      // is a CORNER - so the cap sat half a bar width off the line the whisker
+      // was drawn along, and every bar error bar leaned. Enforced by
+      // `a bar's error cap is constrained to the line its whisker is drawn along`.
+      const origin = (cap ? this.errorAnchorFor(entry.dataset, own.tuple, cap) : null) ?? {
+        x: datum.x,
+        y: datum.y,
+      };
       const direction = capFreeDirection(this.axes, origin, own.role);
       return direction ? { origin, direction } : null;
     }

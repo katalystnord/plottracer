@@ -2911,7 +2911,11 @@ describe('withdrawing the reused pixel', () => {
     s.handleCalibrationClick(300, 100);
     s.confirmCalibrationValues(['10']);
     // What the card does on arriving at `Cat 1` with the box ticked.
-    expect(s.reuseStepPixel('p1')).toBe(true);
+    // ⚑ `fromOffer` - 2026-08-29. `reuseStepPixel` grew that flag so unticking
+    // the box takes back what the OFFER placed and never what the user reused by
+    // hand with the `reuse-<step>` button, which calls the same method. This
+    // fixture is the offer, so it says so.
+    expect(s.reuseStepPixel('p1', true)).toBe(true);
     return s;
   }
 
