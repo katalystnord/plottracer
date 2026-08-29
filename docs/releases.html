@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Releases - PlotTracer - turn any graph back into data</title>
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers - across XY, log, bar, histogram, box-plot, line, pie/donut, heatmap, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PlotTracer - turn any graph back into data">
+<meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
+<meta property="og:image" content="https://plottracer.com/assets/shot-hero.png">
+<meta property="og:url" content="https://plottracer.com/">
+<link rel="canonical" href="https://plottracer.com/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23f1f6f7'/%3E%3Cg transform='translate(11,11) scale(1.22)' stroke-linecap='round'%3E%3Ccircle cx='26' cy='27' r='17' fill='none' stroke='%23167782' stroke-width='4.2'/%3E%3Cpath d='M16 35 C 21 33 24 21 36 18.5' fill='none' stroke='%23167782' stroke-width='3.5'/%3E%3Ccircle cx='26.3' cy='25.2' r='3.9' fill='%23fff' stroke='%23167782' stroke-width='2.5'/%3E%3Cline x1='40' y1='41' x2='54' y2='55' stroke='%23167782' stroke-width='5.4'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    /* The plotting sheet - cool, teal-biased neutrals on graph-paper white. */
+    --paper: #f1f6f7;
+    --card: #ffffff;
+    --ink: #12292e;
+    --ink-soft: #4d666c;
+    --ink-faint: #7c959b;
+    --teal: #167782;
+    /* the foreground that rides ON a teal fill -- see .btn-primary */
+    --on-teal: #ffffff;
+    --teal-deep: #0f5a63;
+    --amber: #cf7a1e;
+    --grid: #d7e4e6;
+    --line: #d8e5e7;
+    --shadow: 20px 20px 60px rgba(18, 60, 68, 0.08);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0a191d;
+      --card: #10262b;
+      --ink: #e7f1f2;
+      --ink-soft: #9cb6bb;
+      --ink-faint: #6c8990;
+      --teal: #37b6c3;
+      /* ⛑ dark teal is PALE: #fff on it is 2.43:1 (1.94:1 hovered) and FAILS WCAG.
+         Dark ink on the same fill is 7.39:1. */
+      --on-teal: #0a191d;
+      --teal-deep: #55cad6;
+      --amber: #f0a94a;
+      --grid: rgba(120, 185, 195, 0.10);
+      --line: rgba(140, 195, 205, 0.16);
+      --shadow: 20px 20px 60px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f1f6f7; --card: #ffffff; --ink: #12292e; --ink-soft: #4d666c; --ink-faint: #7c959b;
+    --on-teal: #ffffff; --teal: #167782; --teal-deep: #0f5a63; --amber: #cf7a1e; --grid: #d7e4e6; --line: #d8e5e7;
+    --shadow: 20px 20px 60px rgba(18, 60, 68, 0.08);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0a191d; --card: #10262b; --ink: #e7f1f2; --ink-soft: #9cb6bb; --ink-faint: #6c8990;
+    --on-teal: #0a191d; --teal: #37b6c3; --teal-deep: #55cad6; --amber: #f0a94a; --grid: rgba(120,185,195,0.10); --line: rgba(140,195,205,0.16);
+    --shadow: 20px 20px 60px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--paper);
+    /* Faint engineering grid, drawn on the paper. */
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--teal-deep); }
+
+  /* ---- typographic system ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--teal-deep);
+    margin: 0 0 14px;
+    display: block;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.025em; line-height: 1.08; margin: 0; }
+  h1 { font-size: clamp(2.5rem, 6.4vw, 4.6rem); font-weight: 800; }
+  h2 { font-size: clamp(1.7rem, 3.6vw, 2.6rem); font-weight: 780; }
+  h3 { font-size: 1.12rem; font-weight: 720; letter-spacing: -0.01em; }
+  p.lede { font-size: clamp(1.05rem, 1.9vw, 1.28rem); color: var(--ink-soft); max-width: 34em; }
+  .data { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---- top bar ---- */
+  header.bar {
+    position: sticky; top: 0; z-index: 40;
+    background-color: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 62px; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 760; letter-spacing: -0.02em; font-size: 1.06rem; text-decoration: none; color: var(--ink); }
+  .brand svg { width: 30px; height: 30px; display: block; }
+  nav.top { display: flex; align-items: center; gap: 26px; }
+  nav.top a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--ink-soft); text-decoration: none; }
+  nav.top a:hover { color: var(--teal-deep); }
+  @media (max-width: 720px) { nav.top a.hideable { display: none; } }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--sans); font-size: 0.95rem; font-weight: 640;
+    padding: 12px 20px; border-radius: 9px; text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  .btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .btn-primary { background: var(--teal); color: var(--on-teal); box-shadow: 0 2px 10px rgba(22, 119, 130, 0.28); }
+  .btn-primary:hover { background: var(--teal-deep); transform: translateY(-1px); }
+  /* ⚑ A button sitting INSIDE the bar lost its colour to the nav's own link rule:
+     `nav.top a` is specificity (0,1,2) and beats `.btn-primary` (0,1,0), so the
+     header's Download drew the nav's dark ink on its teal fill and the label was
+     unreadable -- while the identical button in the hero, outside nav.top, kept
+     its white. The bar may own its typography; a button's COLOURS are the
+     button's own. Hover is listed too, or it would fall back to teal-on-teal. */
+  nav.top a.btn-primary,
+  nav.top a.btn-primary:hover { color: var(--on-teal); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--teal); color: var(--teal-deep); }
+  @media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
+
+  /* ---- hero ---- */
+  section.hero { padding: clamp(48px, 8vw, 96px) 0 clamp(40px, 6vw, 72px); }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+  .hero-note { font-family: var(--mono); font-size: 0.76rem; color: var(--ink-faint); margin-top: 18px; letter-spacing: 0.01em; }
+  .hero-figure { position: relative; }
+  .hero-figure svg { width: 100%; height: auto; display: block; filter: drop-shadow(var(--shadow)); }
+
+  /* animated point reveal (respects reduced motion via the media query below) */
+  .pt { opacity: 0; transform-box: fill-box; transform-origin: center; animation: pop 0.5s ease forwards; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+  .trace { stroke-dasharray: 220; stroke-dashoffset: 220; animation: draw 1.5s ease forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .pt { opacity: 1; animation: none; }
+    .trace { stroke-dashoffset: 0; animation: none; }
+  }
+
+  /* ---- generic section ---- */
+  section { padding: clamp(52px, 8vw, 92px) 0; }
+  .sec-head { max-width: 40em; margin-bottom: clamp(32px, 5vw, 52px); }
+  .sec-head p { color: var(--ink-soft); font-size: 1.06rem; margin: 16px 0 0; }
+
+  /* ---- thesis band ---- */
+  .thesis { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .thesis .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 60px); align-items: center; }
+  @media (max-width: 820px) { .thesis .wrap { grid-template-columns: 1fr; } }
+
+  /* ---- what's new in 2.3 ---- */
+  .whatsnew { background: var(--paper); border-top: 1px solid var(--line); }
+  .whatsnew .wrap { padding-top: clamp(48px, 7vw, 76px); padding-bottom: clamp(48px, 7vw, 76px); }
+  .wn-head { max-width: 44em; margin-bottom: clamp(26px, 4vw, 40px); }
+  .wn-head .eyebrow { margin-bottom: 12px; }
+  .wn-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); }
+  .wn-head p { color: var(--ink-soft); margin: 12px 0 0; max-width: 42em; }
+  .wn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 880px) { .wn-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .wn-grid { grid-template-columns: 1fr; } }
+  .wn { background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px 19px 18px; }
+  .wn h3 { font-size: 1rem; margin: 0 0 6px; }
+  .wn p { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
+  .wn-foot { margin-top: clamp(22px, 3vw, 32px); color: var(--ink-soft); font-size: 0.94rem; max-width: 46em; }
+  .wn-foot b { color: var(--ink); }
+
+  /* ---- how it works (Calibrate -> Trace -> Export) ---- */
+  .how { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .how .wrap { padding-top: clamp(48px, 7vw, 76px); padding-bottom: clamp(48px, 7vw, 76px); }
+  .how-head { max-width: 40em; margin-bottom: clamp(30px, 4vw, 46px); }
+  .how-head .eyebrow { margin-bottom: 12px; }
+  .how-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: 14px; } }
+  .step { display: flex; flex-direction: column; gap: 12px; }
+  .step .illus { width: 100%; height: 118px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); display: block; }
+  .step .num { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; color: var(--teal-deep); }
+  .step h3 { font-size: 1.08rem; margin-top: 2px; }
+  .step p { color: var(--ink-soft); font-size: 0.94rem; margin: 0; }
+  .il-axis { stroke: var(--ink-faint); stroke-width: 1.5; fill: none; }
+  .il-teal { stroke: var(--teal); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .il-amber { fill: var(--amber); }
+
+  /* ---- graph-type gallery ---- */
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 14px; }
+  .glyph {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 16px 13px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.14s ease, transform 0.14s ease;
+  }
+  .glyph:hover { border-color: var(--teal); transform: translateY(-2px); }
+  @media (prefers-reduced-motion: reduce) { .glyph:hover { transform: none; } }
+  .glyph svg { width: 100%; height: 74px; display: block; }
+  .glyph .label { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.03em; color: var(--ink-soft); }
+  .g-axis { stroke: var(--ink-faint); stroke-width: 1.4; fill: none; }
+  .g-teal { stroke: var(--teal); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .g-teal-f { fill: var(--teal); opacity: 0.85; }
+  .g-amber { fill: var(--amber); }
+
+  /* ---- capability cards ---- */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 820px) { .features { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 540px) { .features { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 28px 22px 26px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  }
+  .feature:hover { border-color: var(--teal); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(22, 119, 130, 0.10); }
+  @media (prefers-reduced-motion: reduce) { .feature:hover { transform: none; } }
+  .feature .ico { width: 38px; height: 38px; color: var(--teal); margin-bottom: 4px; }
+  .feature h3 { font-size: 1.04rem; }
+  .feature p { color: var(--ink-soft); font-size: 0.9rem; margin: 0; max-width: 27ch; }
+
+  /* ---- export chips ---- */
+  .export .wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(28px, 5vw, 56px); align-items: center; }
+  @media (max-width: 820px) { .export .wrap { grid-template-columns: 1fr; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font-family: var(--mono); font-size: 0.86rem; font-weight: 600; padding: 9px 15px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+  .chip:hover { border-color: var(--teal); color: var(--teal-deep); }
+
+
+  /* ---- evidence band (v2.0): measured, not asserted ---- */
+  .evidence { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .ev-note { margin-top: 28px; color: var(--ink-soft); font-size: 0.95rem; max-width: 46em; }
+  .ev-note code { font-family: var(--mono); font-size: 0.88em; }
+  /* ⛑ These panels sit ON the .evidence band, which is --card. They are inset
+     with --paper, NOT the `var(--bg)` the first version of this band used --
+     there is no --bg variable on this page, so that declaration was invalid and
+     the panels were falling back to transparent. It only looked right because
+     the band behind them happens to be white in the light scheme. */
+  /* A plain comparative results table with numbered references - the form is
+     a paper's results section, not a pair of marketing cards. */
+  .ev-scroll { overflow-x: auto; margin-top: 30px; }
+  table.ev-results { border-collapse: collapse; min-width: 420px; font-size: 0.95rem; }
+  table.ev-results th, table.ev-results td { text-align: left; padding: 10px 30px 10px 0; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  table.ev-results thead th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 650; border-bottom-width: 2px; }
+  table.ev-results tbody th { font-weight: 600; color: var(--ink); }
+  .ev-val { font-family: var(--mono); font-weight: 700; color: var(--teal); }
+  .ev-n { display: block; font-family: var(--mono); font-size: 0.76rem; color: var(--ink-soft); margin-top: 2px; }
+  .ev-na { color: var(--ink-soft); }
+  .ev-refs { list-style: none; margin: 22px 0 0; padding: 0; max-width: 60em; }
+  .ev-refs li { position: relative; padding-left: 2.4em; margin-bottom: 10px; font-size: 0.85rem; line-height: 1.6; color: var(--ink-soft); }
+  .ev-refnum { position: absolute; left: 0; font-family: var(--mono); color: var(--ink-soft); }
+  /* --ink-soft, not --ink-faint: faint on the card is 3.17:1 in the light
+     scheme, below WCAG AA for text this size. Caught twice in one session. */
+  .ev-refnote { color: var(--ink-soft); }
+  .ev-fail { margin-top: 34px; border-left: 3px solid var(--teal); padding-left: 18px; max-width: 52em; }
+  .ev-fail h3 { font-size: 1.05rem; margin: 0 0 10px; }
+  .ev-fail li { color: var(--ink-soft); font-size: 0.95rem; line-height: 1.6; margin-bottom: 9px; }
+  .ev-stamp { margin-top: 16px; color: var(--ink-soft); font-size: 0.86rem; line-height: 1.6; max-width: 52em; }
+  .ev-stamp .data { font-family: var(--mono); }
+
+  /* ---- download ---- */
+  .download { text-align: center; }
+  .download .wrap { max-width: 760px; }
+  .os-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 30px; }
+  .os { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px 30px; min-width: 168px; text-decoration: none; color: var(--ink); transition: border-color 0.14s ease, transform 0.14s ease; }
+  .os:hover { border-color: var(--teal); transform: translateY(-2px); }
+  @media (prefers-reduced-motion: reduce) { .os:hover { transform: none; } }
+  .os svg { width: 30px; height: 30px; color: var(--teal); margin-bottom: 6px; }
+  .os b { font-weight: 700; letter-spacing: -0.01em; }
+  .os span { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-faint); }
+  .free-note { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-soft); margin-top: 26px; letter-spacing: 0.02em; }
+
+  /* ---- footer ---- */
+  footer { border-top: 1px solid var(--line); background: var(--card); padding: 40px 0; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; align-items: flex-start; }
+  footer .col { max-width: 40em; }
+  footer p { color: var(--ink-soft); font-size: 0.86rem; margin: 6px 0 0; }
+  footer .attrib { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-faint); }
+  footer a { color: var(--teal-deep); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ---- product screenshots ---- */
+  .shot {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); background: var(--card);
+  }
+  .hero-shot { padding-top: 0; padding-bottom: clamp(52px, 8vw, 92px); }
+  .hero-shot .frame { position: relative; }
+  .hero-shot .cap {
+    font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.04em;
+    color: var(--ink-faint); text-transform: uppercase; margin: 16px 0 0; text-align: center;
+  }
+  .showcase { background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .shots { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(16px, 2.6vw, 28px); }
+  @media (max-width: 760px) { .shots { grid-template-columns: 1fr; } }
+  .shot-card { display: flex; flex-direction: column; gap: 13px; }
+  .shot-card figcaption { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); letter-spacing: 0.01em; margin: 0; }
+  .shot-card figcaption b { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; }
+</style>
+</head>
+<body>
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <rect x="1" y="1" width="510" height="510" rx="113" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
+        <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
+          <path d="M5 48 C 19 46 30 31 59 15" fill="none" stroke="var(--ink-faint)" stroke-width="2.3"/>
+          <circle cx="26" cy="27" r="15" fill="var(--card)"/>
+          <path d="M16 35 C 21 33 24 21 36 18.5" fill="none" stroke="var(--teal)" stroke-width="3.5"/>
+          <circle cx="26.3" cy="25.2" r="3.9" fill="var(--card)" stroke="var(--teal)" stroke-width="2.5"/>
+          <circle cx="26" cy="27" r="17" fill="none" stroke="var(--teal)" stroke-width="4.2"/>
+          <line x1="40" y1="41" x2="54" y2="55" stroke="var(--teal)" stroke-width="5.4"/>
+        </g>
+      </svg>
+      PlotTracer
+    </a>
+    <nav class="top">
+      <a class="hideable" href="index.html#how">How it works</a>
+      <a class="hideable" href="index.html#types">Graph types</a>
+      <a href="releases.html" aria-current="page">Releases</a>
+      <a href="https://github.com/katalystnord/plottracer">GitHub</a>
+      <a href="index.html#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .rels { background: var(--paper); }
+  .rels .wrap { padding-top: clamp(40px, 6vw, 68px); padding-bottom: clamp(48px, 7vw, 80px); }
+  .rels-head { max-width: 46em; margin-bottom: clamp(28px, 4vw, 44px); }
+  .rels-head .eyebrow { margin-bottom: 12px; }
+  .rels-head h1 { font-size: clamp(1.7rem, 3.4vw, 2.5rem); }
+  .rels-head p { color: var(--ink-soft); margin: 14px 0 0; }
+  .rel { display: grid; grid-template-columns: 150px 1fr; gap: clamp(16px, 3vw, 34px);
+         padding: clamp(24px, 3vw, 34px) 0; border-top: 1px solid var(--line); }
+  @media (max-width: 720px) { .rel { grid-template-columns: 1fr; gap: 10px; } }
+  .rel-head { display: flex; flex-direction: column; gap: 4px; }
+  .rel-ver { font-size: 1.15rem; font-weight: 700; color: var(--teal-deep); }
+  .rel-when { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); letter-spacing: 0.04em; }
+  .rel-body h2 { font-size: 1.22rem; margin: 0 0 8px; }
+  .rel-lede { color: var(--ink); margin: 0 0 14px; }
+  .rel-body ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); }
+  .rel-body li { margin-bottom: 7px; }
+  .rel-more { margin: 14px 0 0; font-family: var(--mono); font-size: 0.84rem; }
+</style>
+
+<section class="rels">
+  <div class="wrap">
+    <div class="rels-head">
+      <span class="eyebrow">Releases</span>
+      <h1>What changed, and why.</h1>
+      <p>A running log, newest first. PlotTracer is developed in the open and every
+         release says what it fixed as plainly as what it added, including the numbers
+         that were wrong before it.</p>
+    </div>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.3.0</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>The release where the bar chart grew up</h2>
+          <p class="rel-lede">A bar chart now says where its categories are before it lets you capture one, the error-bar model was rebuilt around the datum that owns it, one click and two clicks became the same gesture on every output panel, and the release was audited until it stopped finding things.</p>
+          <ul>
+        <li>A bar chart is calibrated in one walk, and the categories are part of it: two clicks for the value axis, two for the outer edges of the first and last category, and the count typed on the last one. Capture refuses until the walk is finished, and says which step is waiting.</li>
+        <li>A bar whose near end does not sit on the baseline reports both of its measured ends, Min and Max, instead of a single Value that would silently mean the low end on one row and the high end on the next.</li>
+        <li>A cap is now a member of its datum's own row, so the drawing and the record cannot disagree about which cap belongs to which reading. Caps are always draggable, and the handle end is the cap.</li>
+        <li>A value you typed rather than measured reads in square brackets on screen and carries its own source column into the file.</li>
+        <li>Then it was audited twice, once by hand and once by a fleet, and forty findings were fixed before the tag.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.3.0">Full release notes for 2.3.0</a></p>
+        </div>
+      </article>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.2.0</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>Heatmaps</h2>
+          <p class="rel-lede">Heatmaps, the commonest figure in the literature and the first coherent digitizer workflow for one, plus the colour key's own extent on screen, and the release where CI started running the tests.</p>
+          <ul>
+        <li>A heatmap is the most common figure in the scientific literature, with 406,986 articles containing one, and the one no digitizer had handled coherently.</li>
+        <li>Every cell is read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly, so unequal columns come back unequal.</li>
+        <li>The colour key is calibrated as a third axis, with its own kind, scale, ticks and refusals.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.2.0">Full release notes for 2.2.0</a></p>
+        </div>
+      </article>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.1.0</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>Category ticks</h2>
+          <p class="rel-lede">Category ticks for bar charts, a corrected spider reading, and a large amount of work on the parts of the app that write your numbers into a file.</p>
+          <ul>
+        <li>A bar's category stops being guessed from where it landed relative to its neighbours and becomes the band its own pixel falls in.</li>
+        <li>A spider chart's marker radius was being over-read, which was a live wrong reading rather than a cosmetic fault.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.1.0">Full release notes for 2.1.0</a></p>
+        </div>
+      </article>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.0.2</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>An error cap that jumped to the bar next to it</h2>
+          <p class="rel-lede">A single-fix patch release, and it undoes a regression introduced in 2.0.1.</p>
+          <ul>
+        <li>Adjusting an error cap could snap it sideways onto the neighbouring bar, and the recorded number went with it: the cap's delta was then measured against the wrong data point.</li>
+        <li>Ordinary on a decaying curve with wide error at its left-hand end, which is to say whenever a whisker is longer than the gap to the next point.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.2">Full release notes for 2.0.2</a></p>
+        </div>
+      </article>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.0.1</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>Three numbers that were quietly wrong</h2>
+          <p class="rel-lede">A patch release, and worth reading rather than skipping: three of these were producing wrong values on screen and in exported files, on figures the app otherwise handled perfectly.</p>
+          <ul>
+        <li>Every one was found the same way, by using the app on real figures and checking the result against the bundled ground truth, rather than by any test.</li>
+        <li>Error bars arrive as a first-class capture rather than a second series you relate by hand.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.1">Full release notes for 2.0.1</a></p>
+        </div>
+      </article>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.0.0</span>
+          <span class="rel-when">2026-08</span>
+        </div>
+        <div class="rel-body">
+          <h2>Bar charts become a first-class record</h2>
+          <p class="rel-lede">Every digitizer treats a bar chart as a scatter plot you happen to click on the top of each bar. That is not what a bar is.</p>
+          <ul>
+        <li>A bar is an interval. It runs from somewhere to somewhere, and both ends carry meaning.</li>
+        <li>Read as a single point, a floating bar loses its lower end, a stacked segment reports the total instead of its own contribution, and a bar below the baseline comes back positive.</li>
+        <li>So a bar is captured corner to corner, and both ends reach the record.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.0">Full release notes for 2.0.0</a></p>
+        </div>
+      </article>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="col">
+      <a class="brand" href="#top" style="margin-bottom:10px;">
+        <svg viewBox="0 0 512 512" aria-hidden="true">
+          <rect x="1" y="1" width="510" height="510" rx="113" fill="var(--paper)" stroke="var(--line)" stroke-width="2"/>
+          <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
+            <path d="M5 48 C 19 46 30 31 59 15" fill="none" stroke="var(--ink-faint)" stroke-width="2.3"/>
+            <circle cx="26" cy="27" r="15" fill="var(--paper)"/>
+            <path d="M16 35 C 21 33 24 21 36 18.5" fill="none" stroke="var(--teal)" stroke-width="3.5"/>
+            <circle cx="26.3" cy="25.2" r="3.9" fill="var(--paper)" stroke="var(--teal)" stroke-width="2.5"/>
+            <circle cx="26" cy="27" r="17" fill="none" stroke="var(--teal)" stroke-width="4.2"/>
+            <line x1="40" y1="41" x2="54" y2="55" stroke="var(--teal)" stroke-width="5.4"/>
+          </g>
+        </svg>
+        PlotTracer
+      </a>
+      <p>An actively-developed, cross-platform desktop digitizer for scientific figures.
+         Built by Katalyst Nord, Stockholm.</p>
+      <p class="attrib" style="margin-top:14px;">
+        Distributed under the AGPL-3.0. PlotTracer started from the open-source
+        WebPlotDigitizer by Ankit Rohatgi; some algorithms are clean-room
+        reimplementations of Engauge Digitizer ideas. It also reads
+        StarryDigitizer projects (MATO Tomoya, MIT) - the format only.
+        Acknowledged with thanks.
+      </p>
+    </div>
+    <div class="col" style="text-align:right;min-width:180px;">
+      <p><a href="https://github.com/katalystnord/plottracer">Source &amp; releases →</a></p>
+      <p><a href="https://github.com/katalystnord/plottracer/releases">Download →</a></p>
+      <p><a href="https://github.com/katalystnord/plottracer/blob/master/LICENSE">Licence →</a></p>
+    </div>
+  </div>
+</footer>
+<script>
+  // Keep "Current release" in step with the actual Latest GitHub release, so the
+  // version never has to be hand-edited on each tag. The baked-in text above is
+  // the fallback (shown if the fetch fails or JS is off); on success it updates
+  // to the real latest NON-prerelease tag. `releases/latest` already excludes
+  // pre-releases (rc's), which is exactly what we want to advertise.
+  (function () {
+    var el = document.getElementById('release-tag');
+    if (!el || !window.fetch) return;
+    fetch('https://api.github.com/repos/katalystnord/plottracer/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.tag_name) el.textContent = d.tag_name; })
+      .catch(function () { /* keep the baked-in fallback */ });
+  })();
+</script>
+</body>
+</html>
