@@ -1126,6 +1126,41 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('tips-bar')).toContain('4/4 - Cat n');
   });
 
+  it("selecting a cell in another series' column and pressing Del deletes THAT series' point", async () => {
+    // ⚑⚑ THE DEFECT, from the 2026-08-29 pre-tag audit. `selectCell`'s
+    // Select-mode branch passed the clicked cell's pixel index into the marquee
+    // set WITHOUT its series, and everything that reads that set - the canvas
+    // ring, arrow-nudge, Del - interprets it against the ACTIVE series. So
+    // clicking a non-active column and pressing Del deleted the active series'
+    // point at the same index, and the ring landed on a real point, so nothing
+    // looked wrong. The block comment two lines above claimed this was fixed; it
+    // was fixed on the other branch only.
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    // Series 1: two points.
+    await clickAt(150, 150);
+    await clickAt(180, 180);
+    // Series 2: two points.
+    await page.getByTestId('add-series').click();
+    await clickAt(220, 220);
+    await clickAt(250, 250);
+    // Work on Series 1 again, so the ACTIVE series is not the one we click.
+    await page.getByTestId('series-select').selectOption('0');
+    expect(await page.getByTestId('series-select').inputValue()).toBe('0');
+
+    await page.getByTestId('mode-select').click();
+    // Click Series 2's first cell, then delete.
+    await page.getByTestId('data-cell-1-0-0').click();
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(120);
+
+    // Series 2 lost the point; Series 1 kept both.
+    await page.getByTestId('series-select').selectOption('1');
+    expect(await textOf('series-select')).toContain('Series 2 (1)');
+    await page.getByTestId('series-select').selectOption('0');
+    expect(await textOf('series-select')).toContain('Series 1 (2)');
+  });
+
   it('unticking common origin puts back a step that takes a value', async () => {
     // ⚑⚑ THE HALF 0d92407 MISSED. `reuseStepPixel` recorded the reuse only on
     // the VALUELESS branch, so on XY - where the shared step Y1 takes a typed

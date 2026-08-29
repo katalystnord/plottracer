@@ -35,7 +35,14 @@ export interface SpreadsheetTableProps {
    * a canvas click and a keyboard step mean.
    */
   onSelectPoint: (index: number | null, seriesIndex?: number) => void;
-  onSelectMarquee: (indices: number[]) => void;
+  /**
+   * ⚑⚑ IT CARRIES THE SERIES for the same reason `onSelectPoint` does (A2). The
+   * marquee set is interpreted against the ACTIVE series by everything that
+   * reads it - the canvas ring, arrow-nudge, Del - so a marquee holding another
+   * series' indices deletes and moves the wrong points, silently, because the
+   * ring lands on a real point either way.
+   */
+  onSelectMarquee: (indices: number[], seriesIndex?: number) => void;
   /** ⚑ `supplied` rides with the value because the CELL decides how it reads,
    * editable or not (A4): the same number wears the same brackets in every
    * column of the table, not only in the series that happens to be active. */
@@ -267,7 +274,13 @@ export function SpreadsheetTable({
                 return;
               }
               if (mode === 'select') {
-                if (i < s.values.length) onSelectMarquee([pixel]);
+                // ⚑⚑ `s.index` - the CELL'S OWN SERIES, which the block comment
+                // above has always claimed and only the other branch did. In
+                // Select mode this passed a foreign series' pixel index into a
+                // set read against the active one, so clicking a non-active
+                // column and pressing Del deleted the ACTIVE series' point at
+                // that index. Found by the 2026-08-29 pre-tag audit.
+                if (i < s.values.length) onSelectMarquee([pixel], s.index);
                 return;
               }
               onSelectPoint(pixel, s.index);

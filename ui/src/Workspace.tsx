@@ -9190,7 +9190,15 @@ export function Workspace() {
                 setActivePointIndex(index);
                 if (index !== null) setPickedPointIndex(index);
               }}
-              onSelectMarquee={setSelectedPointIndices}
+              onSelectMarquee={(indices, seriesIndex) => {
+                // ⚑⚑ SWITCH FIRST, THEN SELECT - the same order and the same
+                // reason as `onSelectPoint` above: `handleSelectDataset` clears
+                // the selection, because a selection belongs to one series.
+                if (seriesIndex !== undefined && seriesIndex !== activeDatasetIndex) {
+                  handleSelectDataset(seriesIndex);
+                }
+                setSelectedPointIndices(indices);
+              }}
               renderValue={renderEditableValue}
               // ⚑ The SAME `EditableName` Spider's axis, Bar's category and
               // Pie/Box Plot's label already use - one click selects the row, a
