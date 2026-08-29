@@ -755,6 +755,60 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (this.pendingPixel) {
       this.completeValuelessStep(this.pendingPixel.px, this.pendingPixel.py);
     }
+    // ⚑⚑ AN OPTION CAN CHANGE HOW MANY VALUES A STEP CARRIES, AND THE VALUES ARE
+    // READ POSITIONALLY. `runCalibration` walks `step.valueFields` and takes
+    // `point.values[fi]` in order, so a step whose field list was reshaped AFTER
+    // it was placed hands its old values to the new fields.
+    //
+    // ⚠️ Measured by the 2026-08-29 pre-tag audit, on a heatmap: X2 holds the X
+    // coordinate `120` and Columns `8`. Switch X to Categories and its fields
+    // become just [Columns], so `values[0]` = '120' is read as the COLUMN COUNT.
+    // `countProblem` accepts 120 happily, the card prints the values as bare
+    // unlabelled chips, and the figure is calibrated as 120 columns with nothing
+    // on screen wrong. The reverse direction leaves the count empty and the grid
+    // silently absent.
+    //
+    // ⚑ THE PIXEL IS KEPT AND ONLY THE VALUES ARE GIVEN BACK, which is the same
+    // choice the pending-pixel branch above makes and for the same reason:
+    // reshaping mid-walk is legitimate, the user is telling us what the figure
+    // is, so the click is not thrown away. The walk returns to the earliest
+    // reshaped step with its pixel pending, so the answer is retyped in place.
+    //
+    // ⚑ Nothing is guessed or carried across. A value typed for one question is
+    // not an answer to a different question, however well the digits fit.
+    // Enforced by `changing an axis to categories gives back the values that
+    // were typed for the old fields`.
+    {
+      const all = this.getSteps();
+      let earliest = -1;
+      let earliestPoint: PlacedCalibPoint | null = null;
+      all.forEach((st, at) => {
+        const point = this.placed[st.key];
+        if (!point || point.values.length === st.valueFields.length) return;
+        // ⚑⚑ A STEP THAT NOW TAKES NOTHING IS SIMPLY FINISHED, not given back.
+        // Turning X categorical leaves the heatmap's first corner with no value
+        // fields at all, and sending the walk back to it would strand the user
+        // on a step with nothing to type and no confirm to press - the same
+        // stall the pending-pixel branch above exists to prevent. Its pixel is
+        // still a measurement; only the answer it no longer asks for is dropped.
+        if (st.valueFields.length === 0) {
+          this.placed[st.key] = { px: point.px, py: point.py, values: [] };
+          return;
+        }
+        delete this.placed[st.key];
+        this.reusedStepKeys.delete(st.key);
+        if (earliest < 0 || at < earliest) {
+          earliest = at;
+          earliestPoint = point;
+        }
+      });
+      if (earliest >= 0) {
+        this.stepIndex = earliest;
+        const kept = earliestPoint as PlacedCalibPoint | null;
+        this.pendingPixel = kept ? { px: kept.px, py: kept.py } : null;
+        return;
+      }
+    }
     // ⚑⚑ AN OPTION CAN INVALIDATE VALUES ALREADY TYPED. Switching the colour key
     // to Log makes a 0 that was legitimate a moment ago impossible - and with
     // nothing re-checking, the walk carried on and refused at Calibrate. The
@@ -5119,6 +5173,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
 
     const cal = new Calibration(this.config.calibrationDimensions ?? 2);
+    // ⚑⚑ THE SAME QUESTION AT THE OTHER ENTRANCE. The values below are taken
+    // POSITIONALLY against `step.valueFields`, so a stored point carrying a
+    // different number of them cannot be read at all - the digits would land in
+    // whichever field happened to be at that index. `setOption` gives such
+    // values back interactively; a file arriving with the mismatch has no walk
+    // to return to, so it is refused rather than misread. Guards belong in the
+    // model, and the model has more than one entrance.
+    const mismatch = steps.find((st, i) => (points[i]?.values.length ?? 0) !== st.valueFields.length);
+    if (mismatch) {
+      this.calibrationError = `The values recorded for ${mismatch.label} do not match what that step asks for - re-enter them.`;
+      return false;
+    }
     steps.forEach((step, i) => {
       const point = points[i]!;
       let dx = '0';
