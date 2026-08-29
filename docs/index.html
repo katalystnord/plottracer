@@ -421,9 +421,9 @@
   <div class="wrap">
     <div class="frame">
       <img class="shot" src="assets/shot-hero.png" width="3040" height="1934"
-        alt="The PlotTracer desktop app tracing a cumulative-release figure: four dash-coded formulations that cross, two of them already traced with the extracted points sitting on the ink, a handful of numbered guide points along the live curve, the cursor loupe magnifying the selected anchor, and 175 extracted values in the right-hand panel with the selected row ringed both in the table and on the figure.">
+        alt="The PlotTracer desktop app tracing a cumulative-release figure: four dash-coded formulations fanning out from the origin, two of them already traced with the extracted points sitting on the ink, numbered guide points along the live curve, and 182 extracted values in the right-hand panel with the selected point ringed on the figure.">
     </div>
-    <p class="cap">Four dash-coded curves that cross - two traced from a handful of guide points, and you can see the points land on the ink.</p>
+    <p class="cap">Four dash-coded curves running close together - two traced from a handful of guide points, and you can see the points land on the ink.</p>
   </div>
 </section>
 
@@ -462,17 +462,18 @@
 
       <div class="wn">
         <h3>One click selects, two edit</h3>
-        <p>On every output panel. Click a row and it rings on the figure. Bar, box plot, pie
-          and the histogram's bins could not do that at all before, so a table of twenty bars
-          could not tell you which bar it meant.</p>
+        <p>Click a row on any output panel and it rings on the figure; double click to edit the
+          fields that type offers. Bar, box plot, pie and the histogram's bins could not do the
+          first half at all before, so a table of twenty bars could not tell you which bar it
+          meant.</p>
       </div>
 
       <div class="wn">
         <h3>Which numbers came off the pixels</h3>
-        <p>A value you typed rather than measured reads in
-          <span class="data">[square brackets]</span> on screen and carries its own source
-          column into the file. Your eye is an instrument too; the record says which one took
-          the reading.</p>
+        <p>On XY charts, spider profiles and heatmap cells, a value you typed rather than
+          measured reads in <span class="data">[square brackets]</span> on screen and carries its
+          own source column into the file. Your eye is an instrument too; the record says which
+          one took the reading.</p>
       </div>
 
       <div class="wn">
@@ -486,8 +487,8 @@
     <p class="wn-foot">Then it was audited twice, once by hand and once by a fleet, and
       <b>forty findings were fixed before the tag</b> - among them a stacked bar chart that
       valued one series by the wrong rule depending on what was selected at export, and a
-      spider chart that dropped every spoke but the first from all nine export formats while
-      the panel went on showing them all.</p>
+      spider chart where one error cap dropped every reading but the first spoke from all nine
+      export formats while the panel went on showing them all.</p>
   </div>
 </section>
 
@@ -566,19 +567,19 @@
     <div class="sec-head">
       <span class="eyebrow">See it on real figures</span>
       <h2>Built for the graphs papers actually publish.</h2>
-      <p>Curves that cross and share a colour, heatmaps read cell by cell, floating
+      <p>Curves that run together and share a colour, heatmaps read cell by cell, floating
         bars measured end to end, asymmetric error bars, true histogram bins, box
         plots, pie and donut charts - the same tool, on the plots you meet in practice.</p>
     </div>
     <div class="shots">
       <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-heatmap.png" width="2980" height="1894"
-          alt="The PlotTracer desktop app reading a heatmap: a five-by-five grid of treatment against time, its column boundaries detected from the figure's own rules and visibly unequal, all 25 cells read through the calibrated colour key, and the extracted matrix in the right panel with each row named and each column showing the range it spans.">
-        <figcaption><b>Heatmaps - the type no other digitizer reads.</b> Every cell read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly - so unequal columns come back unequal. The matrix is tinted with the figure&rsquo;s own colours, and a picked cell shows all three of its coordinates.</figcaption>
+          alt="The PlotTracer desktop app reading a heatmap: peak temperature across a weld cross-section, distance against depth, its column boundaries measured from the figure's own rules and visibly unequal, all 20 cells read through the calibrated colour key, and the extracted matrix in the right panel tinted with the figure's own colours, each row and column showing the range it spans.">
+        <figcaption><b>Heatmaps - no other digitizer reads them coherently.</b> Every cell read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly - so unequal columns come back unequal. The matrix is tinted with the figure&rsquo;s own colours, and a picked cell shows all three of its coordinates.</figcaption>
       </figure>
       <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-bar.png" width="2980" height="1894"
-          alt="A floating bar chart in PlotTracer being captured - monthly temperature ranges, each bar recorded by dragging corner to corner so both of its ends are measured, bars that cross zero kept whole, the categories named down the right panel beside each bar's span, and the ninth bar half-dragged.">
+          alt="A floating bar chart in PlotTracer being captured - monthly temperature ranges, each bar recorded by dragging corner to corner so both of its ends are measured, bars that cross zero kept whole, and the categories named down the right panel beside each bar's Min and Max.">
         <figcaption><b>Floating bars, measured end to end.</b> Both corners are recorded, so a bar reports its own span rather than a single baseline-relative number - and a range that crosses zero stays one bar instead of being split at the axis.</figcaption>
       </figure>
       <figure class="shot-card">
@@ -714,7 +715,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 20v-3M12 20v-6M16 20v-9M20 20v-12"/></svg>
         <h3>Linear, log &amp; date axes</h3>
-        <p>Log (base-10 and natural) and date/time scales, chosen per side - exactly what the figure uses.</p>
+        <p>Log (base-10) and date/time scales, chosen per side - exactly what the figure uses.</p>
       </div>
 
       <div class="feature">
@@ -792,7 +793,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
         <h3>Export everywhere</h3>
-        <p>CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R - or straight to the clipboard, at the figure's real precision. Every format says up front what it cannot carry.</p>
+        <p>CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R - or straight to the clipboard, at the figure's real precision. Every export states what the format cannot carry.</p>
       </div>
 
       <div class="feature">
@@ -971,7 +972,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v2.1.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v2.3.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 

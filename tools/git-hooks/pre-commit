@@ -43,9 +43,28 @@ if [ -x "$(git rev-parse --show-toplevel)/tools/no-em-dashes.sh" ]; then
   fi
 fi
 
-# Only TypeScript can break a typecheck, so a docs- or notes-only commit pays
-# nothing. Uses the STAGED list, which is what is about to be committed.
-if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.tsx?$'; then
+# ⚑⚑ TWO GATES, NOT ONE, BECAUSE THE TWO CHECKS COVER DIFFERENT FILES. Only
+# TypeScript can break a typecheck, so a docs-only commit pays nothing for that.
+# But `eslint.config.mjs` applies js.configs.recommended REPO-WIDE - it ignores
+# only wpd-core/, electron/app/, ui-patches/ and dist* - so .cjs, .mjs and .js
+# are linted by CI too.
+#
+# ⚠️ THIS IS A FIX TO A FIX, and worth reading before touching. The lint step was
+# added on 2026-08-28 to close the 2026-08-26 incident where one unused variable
+# held CI red for a day. It was appended BELOW this gate, which was written for
+# the typecheck and says so in its own comment. So an unused variable in
+# ui/electron-main.cjs, -preload, -ipc, -menu, tools/eslint-rules/*.mjs or
+# eslint.config.mjs still committed clean and still reddened CI: the same
+# incident, one file extension over. Found by the 2026-08-29 audit, which
+# demonstrated it by staging exactly that defect and watching the hook exit 0.
+#
+# Uses the STAGED list, which is what is about to be committed.
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+NEEDS_TYPECHECK=0
+NEEDS_LINT=0
+printf '%s\n' "$STAGED" | grep -qE '\.tsx?$' && NEEDS_TYPECHECK=1
+printf '%s\n' "$STAGED" | grep -qE '\.([cm]?jsx?|tsx?)$' && NEEDS_LINT=1
+if [ "$NEEDS_TYPECHECK" -eq 0 ] && [ "$NEEDS_LINT" -eq 0 ]; then
   exit 0
 fi
 
@@ -57,10 +76,11 @@ if ! command -v npm >/dev/null 2>&1; then
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
 fi
 if ! command -v npm >/dev/null 2>&1; then
-  echo "pre-commit: npm not found - cannot typecheck. Fix your PATH, or commit with --no-verify." >&2
+  echo "pre-commit: npm not found - cannot typecheck or lint. Fix your PATH, or commit with --no-verify." >&2
   exit 1
 fi
 
+if [ "$NEEDS_TYPECHECK" -eq 1 ]; then
 echo "pre-commit: typechecking (~10s)…"
 # ⚠️ This checks the WORKING TREE, not the staged snapshot. Stashing to check the
 # index exactly is its own hazard (it can lose work when a hook is interrupted),
@@ -79,11 +99,13 @@ pre-commit: REFUSED - the tree does not typecheck.
 MSG
   exit 1
 fi
+fi
 
 # ⚑ Lint AFTER the typecheck, deliberately: a type error is usually the cause of
 # the lint noise, so reporting it first is the more useful message. Unlike CI,
-# nothing here is hidden by the ordering - both run on every commit that touches
-# TypeScript, and a failure of either refuses the commit on its own.
+# nothing here is hidden by the ordering - each runs on every commit that touches
+# the files IT covers, and a failure of either refuses the commit on its own.
+if [ "$NEEDS_LINT" -eq 1 ]; then
 echo "pre-commit: linting…"
 if ! npm run --silent lint; then
   cat >&2 <<'MSG'
@@ -98,4 +120,6 @@ pre-commit: REFUSED - the tree does not lint.
 MSG
   exit 1
 fi
+fi
+
 exit 0
