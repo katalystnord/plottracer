@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import Konva from 'konva';
 import { Stage, Layer, Group, Circle, Line, Rect, Image as KonvaImage, Text as KonvaText } from 'react-konva';
 
@@ -617,6 +617,19 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
    * live position is only available from the marker's own `onDragMove`.
    */
   const [capDrag, setCapDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  /**
+   * Which caps are selected, by marker id - so the whisker layer can draw the
+   * selection where the cap actually IS.
+   *
+   * ⚑ Read off the markers rather than tracked separately: "selected" already
+   * has an owner, and a second copy of it is how two answers to one question
+   * start. Built once per render instead of per whisker, which is the same
+   * reason `runCoverage` is hoisted out of its own loop.
+   */
+  const selectedCapIds = useMemo(
+    () => new Set((points ?? []).filter((p) => p.kind === 'cap' && p.selected).map((p) => p.id)),
+    [points]
+  );
   /**
    * The aid mark currently under the cursor, in SCREEN coordinates.
    *
@@ -1882,8 +1895,20 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     //
                     // ⚑ The invisible hit disc is the same trick the reticle and
                     // the `aid` square already use, so a thin mark is still easy
-                    // to grab. The selection ring is kept: it is how you see
-                    // which point Del would remove, and a cap is deletable.
+                    // to grab.
+                    //
+                    // ⚑⚑ AND THE SELECTION IS DRAWN ON THE WHISKER, NOT HERE.
+                    // A ring survived B1's sweep, so a selected cap was announced
+                    // by a CIRCLE while a cap is a BAR - David: *"Why do we mark
+                    // it with a sphere when we are dragging, and then a handlebar
+                    // once it is set? It should always be a handle bar, no?"* It
+                    // was round only because every other selectable thing is. The
+                    // convention this file already keeps is that the highlight
+                    // takes the SHAPE of the thing it highlights: a dot gets a
+                    // ring at radius + 4, the aid's square grip gets a square at
+                    // r + 3. So a cap gets a heavier bar along its own tick, and
+                    // it is drawn where the cap is drawn - which is the only
+                    // place that follows the drag live.
                     const interactive = point.draggable ?? false;
                     // ⚑⚑ BOUND TO ITS AXIS ON SCREEN, not only in the record.
                     // The model already puts a cap back on its datum's value
@@ -1939,14 +1964,6 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         }}
                       >
                         <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
-                        {point.selected && (
-                          <Circle
-                            radius={10}
-                            stroke={theme.color.primary.main}
-                            strokeWidth={2.5}
-                            listening={false}
-                          />
-                        )}
                       </Group>
                     );
                   }
@@ -2188,6 +2205,9 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   );
                 })}
                 {errorBarGlyphs?.map((whisker, glyphIndex) => {
+                  // Which cap the selection belongs to, read off the marker that
+                  // IS that cap - one source for "selected", not a second copy.
+                  const capSelected = !!whisker.capMarkerId && selectedCapIds.has(whisker.capMarkerId);
                   // ⚑⚑ THE LIVE POSITION, AND THIS IS THE WHOLE OF B1. Konva
                   // moves a dragged marker and nothing else, so anything drawn
                   // from the model is frozen until release - which is exactly why
@@ -2229,6 +2249,22 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           goes to them a colour". Still listening={false}: the
                           hit area is the marker sitting over it, which is what
                           the drag machinery already knows how to move. */}
+                      {capSelected && (
+                        /* The selection, in the cap's own form. Drawn under the
+                           cap so the black tick stays on top and reads as the
+                           measurement, with the highlight around it - the same
+                           layering the data dot's ring uses. A round line cap
+                           extends by half the stroke, so this stands 4px proud
+                           at each end without any geometry of its own: the bar's
+                           spelling of the ring's radius + 4. */
+                        <Line
+                          points={seg(live.cap)}
+                          stroke={theme.color.primary.main}
+                          strokeWidth={8}
+                          lineCap="round"
+                          listening={false}
+                        />
+                      )}
                       <Line
                         points={seg(live.cap)}
                         stroke={theme.color.overlay.capStroke}
