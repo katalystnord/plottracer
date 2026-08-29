@@ -174,11 +174,24 @@ export const SELECTED_DOT_RADIUS = 3.5;
 export function readingOrdinals(
   capRoles: readonly (CapHandle | null)[] | undefined
 ): (index: number) => number | null {
+  // A reading's number is its position MINUS the caps that came before it. Said
+  // that way round, a pixel nobody has told us about is a READING - which is the
+  // safe direction, and the first cut had it the other way: it looked the index
+  // up in a table built only from `capRoles`, so an EMPTY capRoles (a type with
+  // no error bars, or a dataset index that answered `[]`) made every lookup miss
+  // and blanked EVERY point number on the figure. A fix that fails silently and
+  // totally is worse than the defect it replaces.
+  const caps = capRoles ?? [];
+  const before: number[] = [];
   let seen = 0;
-  const ordinals = (capRoles ?? []).map((cap) => (cap ? null : ++seen));
-  // A series with no cap information at all is all readings, so the ordinal is
-  // the index - which is what every type without error bars has always shown.
-  return (index: number) => (capRoles ? (ordinals[index] ?? null) : index + 1);
+  for (let i = 0; i < caps.length; i++) {
+    before.push(seen);
+    if (caps[i]) seen += 1;
+  }
+  return (index: number) => {
+    if (caps[index]) return null;
+    return index + 1 - (index < before.length ? before[index]! : seen);
+  };
 }
 
 /**

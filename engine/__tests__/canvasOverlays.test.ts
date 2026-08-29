@@ -533,6 +533,18 @@ describe('data points - selection and size', () => {
     expect(m.map((x) => x.label)).toEqual(['1', '', '', '2', '', '']);
   });
 
+  it('⚑ numbers every point when the series has no caps at all', () => {
+    // ⚠️ A FIX THAT FAILS SILENTLY AND TOTALLY. The first cut looked each index
+    // up in a table built only from `capRoles`, so an EMPTY one - a type with no
+    // error bars, or a dataset index that answered `[]` - made every lookup miss
+    // and blanked EVERY number on the figure. A reading's ordinal is its
+    // position minus the caps BEFORE it, which makes an unknown pixel a reading.
+    const m = points(
+      buildCanvasMarkers(base({ dataPoints: sparse(3), dataPointRoles: [null, null, null], capRoles: [] }))
+    );
+    expect(m.map((x) => x.label)).toEqual(['1', '2', '3']);
+  });
+
   it('label an interpolated sample with nothing - the anchors are the record', () => {
     const m = points(buildCanvasMarkers(base({ dataPoints: sparse(2), dataPointRoles: ['anchor', 'interpolated'] })));
     expect(m[0]!.label).toBe('1');
