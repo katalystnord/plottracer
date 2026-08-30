@@ -24,11 +24,35 @@
 
 const path = require('path')
 
-// ⚑ LSTM only. It is the accurate engine, it is what the spike measured, and it
-// is the reason the packaged app can carry ONE core build: `getCore` only ever
-// requires a `*-lstm` variant at this OEM, so the five non-LSTM builds are
-// excluded in the packaging rules and can never be reached.
+// ⚑ LSTM only - the accurate engine, and what every measurement here was taken
+// with.
+//
+// ⚠️ IT DOES NOT DECIDE WHICH WASM BUILD IS LOADED, and a comment here once said
+// it did. In tesseract.js 7.0.0 `worker-script/index.js` hands
+// `getCore(lstmOnly, ...)` a BOOLEAN while `getCore` branches on
+// `[OEM.DEFAULT, OEM.LSTM_ONLY].includes(oem)`, so that test is always false and
+// the node worker always loads a NON-LSTM core. Which builds the package must
+// therefore carry is worked out in build/electron-builder-ui.yml, where the
+// evidence for it lives.
 const OEM_LSTM_ONLY = 1
+
+/**
+ * ⚠️⚑⚑ A READER THAT NEVER ANSWERS MUST BECOME A REFUSAL, and without this it
+ * could hang for ever.
+ *
+ * `tesseract.js` reports a worker-level failure by assigning `worker.onerror` -
+ * which is the BROWSER Worker API. A node `worker_threads` Worker has no such
+ * property, so the assignment does nothing, the error is never delivered, and
+ * the promise `createWorker` returned is never settled either way.
+ *
+ * ▶ MEASURED, not deduced: a packaged build missing one transitive module made
+ * its worker die with `Cannot find module 'bmp-js'` - the raw worker emitted
+ * `error` and `exit 1`, and `createWorker`'s promise stayed pending for as long
+ * as the app was left running. The missing module is fixed in the packaging
+ * rules; this exists so that the NEXT cause of a dead worker is a sentence on
+ * screen instead of a control that never comes back.
+ */
+const READ_TIMEOUT_MS = 30000
 
 let workerPromise = null
 
@@ -89,18 +113,41 @@ function startWorker() {
  * must never see is a region that silently produced nothing, because an absent
  * proposal is indistinguishable from a label that genuinely read as blank.
  */
-async function readText(pngBase64) {
+async function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+  let timer = null
   try {
     if (!workerPromise) workerPromise = startWorker()
-    const worker = await workerPromise
-    const { data } = await worker.recognize(Buffer.from(pngBase64, 'base64'))
-    return { text: data.text, confidence: data.confidence }
+    // ⚑ The bound covers the WHOLE operation - starting the engine and reading -
+    // because both halves are promises from the same library and either can be
+    // left pending by the mechanism described above.
+    const read = (async () => {
+      const worker = await workerPromise
+      const { data } = await worker.recognize(Buffer.from(pngBase64, 'base64'))
+      return { text: data.text, confidence: data.confidence }
+    })()
+    const answer = await Promise.race([
+      read,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs)
+      }),
+    ])
+    if (answer.timedOut) {
+      // ⚑ The worker is dropped, so a later attempt starts a fresh one rather
+      // than joining the dead one for ever.
+      workerPromise = null
+      return {
+        error: `The text reader did not answer within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped. Try again, and if it keeps happening the OCR engine did not start.`,
+      }
+    }
+    return answer
   } catch (e) {
     // ⚑ The worker is dropped so the NEXT read starts one cleanly. A half-built
     // worker cached here would turn one bad start into a permanently dead
     // feature with nothing on screen saying why.
     workerPromise = null
     return { error: `Could not read the text: ${e && e.message ? e.message : String(e)}` }
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 

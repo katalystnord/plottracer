@@ -38,7 +38,10 @@ const require_ = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 interface OcrModule {
-  readText(pngBase64: string): Promise<{ text?: string; confidence?: number; error?: string }>;
+  readText(
+    pngBase64: string,
+    timeoutMs?: number
+  ): Promise<{ text?: string; confidence?: number; error?: string }>;
   shutdownOcr(): Promise<void>;
 }
 
@@ -90,6 +93,26 @@ describe('OCR: a label is read with the network removed', () => {
       existsSync(path.join(process.cwd(), 'eng.traineddata')),
       'reading a label wrote language data into the working directory'
     ).toBe(false);
+  });
+
+  it('gives up with a sentence rather than waiting for ever', async () => {
+    // ⚠️⚑⚑ THE HANG IS REAL AND IT WAS MEASURED. `tesseract.js` reports a
+    // worker-level failure by assigning `worker.onerror`, which is the BROWSER
+    // Worker API - a node `worker_threads` Worker has no such property, so the
+    // error is never delivered and `createWorker`'s promise is never settled.
+    // A packaged build missing one transitive module (`bmp-js`) hit exactly
+    // this: the raw worker emitted `error` and `exit 1` while the app waited
+    // for ever, and no timeout anywhere in the app would fire.
+    // ▶ So the reader is BOUNDED. The bound is passed in here rather than waited
+    // out: a read of this fixture takes single-digit milliseconds, so 1ms is
+    // reliably too short, and what is asserted is that the answer is a sentence
+    // rather than a promise nobody ever settles.
+    const png = readFileSync(path.join(here, 'fixtures/ocr/label-flax.png')).toString('base64');
+    const result = await ocr.readText(png, 1);
+    expect(result.error, 'a read that ran out of time must come back as a refusal').toMatch(
+      /did not answer/
+    );
+    expect(result.text).toBeUndefined();
   });
 
   it('answers with a sentence rather than killing the process when the bytes are not an image', async () => {
