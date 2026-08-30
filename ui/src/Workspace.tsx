@@ -2929,6 +2929,16 @@ export function Workspace() {
       // unchecked."* Back to the offered default with every figure, exactly as
       // the rest of this list does.
       setCommonOrigin(true);
+      // ⚑⚑ AND SO IS A READING TAKEN OFF THE OUTGOING FIGURE'S PIXELS (v2.4). An
+      // armed band would eat the first drag on the NEW figure; proposals and
+      // their thumbnails are crops of a picture that is no longer on screen, and
+      // Apply would write the old figure's names onto this one's categories.
+      // The whole of OCR's state is per-figure by construction, which is why all
+      // four go here rather than one being reset where it happens to be noticed.
+      setOcrArmed(false);
+      setOcrProposals(null);
+      setOcrBusyIndex(null);
+      setOcrError(null);
       // Curve Fit's controls are the figure's own, read back off its dataset.
       const cf = getCurveFitState(s.getDataset());
       setCurveFitDegree(cf ? cf.degree : 1);

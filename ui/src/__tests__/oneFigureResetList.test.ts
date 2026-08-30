@@ -101,6 +101,14 @@ const PER_FIGURE_RESETS = [
   // meet is a fact about the figure in front of you, so the answer cannot
   // outlive it.
   'setCommonOrigin',
+  // ⚑⚑ A READING IS TAKEN OFF ONE FIGURE'S PIXELS (v2.4). An armed band would
+  // eat the first drag on the next figure; a proposal's thumbnail is a crop of a
+  // picture no longer on screen, and Apply would write the outgoing figure's
+  // names onto the incoming one's categories.
+  'setOcrArmed',
+  'setOcrProposals',
+  'setOcrBusyIndex',
+  'setOcrError',
   // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.3), and the list is the
   // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
   // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and
