@@ -33,4 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   confirmClose: (allow) => ipcRenderer.send('app:close-response', Boolean(allow)),
   notifyCloseGuardReady: () => ipcRenderer.send('app:close-guard-ready'),
+
+  // Read text off one region of the figure (v2.4). `pngBase64` is a crop the
+  // renderer has already taken and turned; the answer is `{ text, confidence }`
+  // or `{ error }`. See ui/electron-ocr.cjs.
+  readText: (pngBase64) => ipcRenderer.invoke('ocr:readText', pngBase64),
 })

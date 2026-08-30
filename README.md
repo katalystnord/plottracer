@@ -178,6 +178,12 @@ PlotTracer also reads **StarryDigitizer** projects (MATO Tomoya; MIT). Its licen
 
 The icon set is derived from **Ketcher** by EPAM Systems (Apache-2.0).
 
+Reading text off a figure (category names, axis labels) uses **Tesseract.js** (Apache-2.0) and the **Tesseract** English training data (Apache-2.0 engine, MIT-licensed data package). Both are **bundled**, and the engine is configured against local files only: no part of a figure, and no request of any kind, leaves the machine to read a label. That is verified rather than asserted - the test removes `fetch`, `http.request` and `https.request` outright and the labels still read.
+
+> Tesseract.js - Copyright (c) 2015 Kevin Kwok, Guillermo Webster and contributors
+> Licensed under the Apache License 2.0
+> <https://github.com/naptha/tesseract.js>
+
 ---
 
 ## Contributing

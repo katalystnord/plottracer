@@ -208,8 +208,10 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                 <strong>WebPlotDigitizer</strong> by Ankit Rohatgi, distributed under
                 AGPL-3.0. Several algorithms are clean-room reimplementations of{' '}
                 <strong>Engauge Digitizer</strong> ideas (GPL-2.0); the icon set derives
-                from <strong>Ketcher</strong> by EPAM Systems (Apache-2.0). Developed by
-                Katalyst Nord AB, Stockholm.
+                from <strong>Ketcher</strong> by EPAM Systems (Apache-2.0). Text is read
+                off figures with <strong>Tesseract.js</strong> (Apache-2.0) and the
+                Tesseract English training data (MIT), both bundled so that reading a
+                label needs no network. Developed by Katalyst Nord AB, Stockholm.
               </div>
             </>
           )}

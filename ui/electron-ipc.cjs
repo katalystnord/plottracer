@@ -112,6 +112,31 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
     }
     return filePath
   })
+
+  // ⚑⚑ READ TEXT OFF THE FIGURE (v2.4). One channel, one shape: the renderer
+  // hands over a PNG of the region it cropped and turned, and gets back the
+  // transcription and its confidence. Nothing about WHERE it read crosses this
+  // boundary, because the region gesture is the renderer's and the geometry is
+  // engine/ocrRegion.ts's - see ui/electron-ocr.cjs's header for why the split
+  // is there rather than anywhere else.
+  //
+  // ⚑ `require`d lazily, inside the handler: the OCR engine is ~9MB of wasm and
+  // language data, and a user who never reads a label should never pay to load
+  // it. The first read is the one that starts the worker.
+  ipcMain.handle('ocr:readText', async (_event, pngBase64) => {
+    const { readText } = require('./electron-ocr.cjs')
+    return readText(pngBase64)
+  })
+
+  // ⚑ The OCR engine runs in a worker THREAD, which keeps the event loop alive.
+  // Released here rather than in each entry point, for the reason this whole
+  // file exists: main and dev cannot drift apart if they share the registration.
+  // ⚠️ It matters in the e2e harness too - a live worker thread is a test run
+  // that hangs on teardown rather than a feature that misbehaves on screen.
+  require('electron').app.on('will-quit', () => {
+    const { shutdownOcr } = require('./electron-ocr.cjs')
+    void shutdownOcr()
+  })
 }
 
 module.exports = { registerIpcHandlers }

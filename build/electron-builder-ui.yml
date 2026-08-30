@@ -57,6 +57,36 @@ files:
   - icons/NOTICE
   - "!**/*.map"
   - "!**/node_modules/.bin"
+  # ⚑⚑ OCR SHIPS ONE ENGINE BUILD, NOT SIX (v2.4). `npm i tesseract.js` pulls
+  # ~44MB of `tesseract.js-core` alone: the same engine compiled six ways
+  # (plain / simd / relaxedsimd, each with and without LSTM) plus a single-file
+  # `.wasm.js` copy of each with the wasm inlined. Without these rules
+  # electron-builder ships all of it, and the two-installer question David
+  # already answered with measurements would become real when it is not.
+  #
+  # ⚠️⚠️ WHICH VARIANT IS LOADED WAS MEASURED, NOT ASSUMED, AND THE ASSUMPTION
+  # WAS WRONG. The spike's note said "ship tesseract-core-simd-lstm"; but
+  # `getCore` prefers RELAXED simd, and Electron 43's main process (Chromium
+  # 150) reports `relaxedSimd: true`, so it requires
+  # `tesseract-core-relaxedsimd-lstm`. Shipping only the simd build would have
+  # produced a package that starts, offers the feature, and fails on the first
+  # read. ▶ Both LSTM builds are kept: relaxed is what loads here, plain simd is
+  # the fallback if a machine ever answers otherwise, and 2.8MB is cheap
+  # insurance against a failure that only appears in the packaged app.
+  #
+  # ⚑ The five NON-LSTM builds can never be reached: ui/electron-ocr.cjs asks
+  # for OEM 1 (LSTM only), and `getCore`'s every branch at that OEM ends in a
+  # `*-lstm` variant.
+  - "!node_modules/tesseract.js-core/*.wasm.js"
+  - "!node_modules/tesseract.js-core/tesseract-core.*"
+  - "!node_modules/tesseract.js-core/tesseract-core-simd.*"
+  - "!node_modules/tesseract.js-core/tesseract-core-relaxedsimd.*"
+  - "!node_modules/tesseract.js-core/tesseract-core-lstm.*"
+  # ⚑ And ONE language set. `@tesseract.js-data/eng` carries both the 10.9MB
+  # `4.0.0` data (which its own index.js points at) and the compact 2.95MB
+  # `4.0.0_best_int`. We ask for the compact one by path in electron-ocr.cjs;
+  # this is what stops the other one riding along.
+  - "!node_modules/@tesseract.js-data/eng/4.0.0/**"
 
 linux:
   target:
