@@ -436,6 +436,29 @@ interface ImageCanvasProps {
    * {x,y,width,height} would destroy. */
   boxMode?: boolean;
   onBoxRect?: (start: { x: number; y: number }, end: { x: number; y: number }) => void;
+  /**
+   * Read text (v2.4): when true, a background drag draws a rectangle reported
+   * (image-pixel space) via `onBandRect` - the FIFTH destination of this one
+   * gesture, after crop, the auto-extract region, bar box-capture and the Select
+   * marquee.
+   *
+   * ⚑ It commits nothing. What the band becomes is one region per category, cut
+   * at the category axis's own dividers (`engine/ocrRegion.ts`), each read
+   * separately and OFFERED in the review card - so the rectangle itself is a
+   * question, which is why it wears the same dashed live outline as crop and
+   * region rather than box-capture's solid one.
+   *
+   * ⚑ NOT the Select tool's marquee, deliberately. That gesture's destination is
+   * a set of data-point indices in the active series; this one usually runs when
+   * nothing is captured at all, so there is no selection for it to mean.
+   *
+   * ⚠️ IT OUTRANKS `boxMode`, and the order in `endDrag` is what enforces that -
+   * not a rule about when each is armed. Bar capture is live all through Add
+   * points, which is precisely when someone wants the names read, so the two ARE
+   * live together and the band has to win.
+   */
+  bandMode?: boolean;
+  onBandRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
   /** Select tool sub-mode (v1.1 #6, Ketcher's select multi-tool), or null when the
    * Select tool isn't active. Only the gesture-bearing sub-modes touch the canvas
    * background here: 'rectangle' drags a marquee box (-> onSelectRect), 'lasso'
@@ -566,7 +589,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1291,7 +1314,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
         setLassoCurrent([p]);
         return;
       }
-      if ((cropMode || regionMode || selectMode === 'rectangle' || boxMode) && canvas) {
+      if ((cropMode || regionMode || bandMode || selectMode === 'rectangle' || boxMode) && canvas) {
         // Start a rectangle drag instead of a pan: a crop selection (checkpoint 63),
         // an auto-extract region (B1), the Select tool's marquee, or a bar capture
         // (v2.0). Same gesture; endDrag routes by mode. (A press ON a marker
@@ -1310,7 +1333,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       dragStartRef.current = { x: e.evt.clientX, y: e.evt.clientY, offsetX: view.offsetX, offsetY: view.offsetY, panning: leftButtonPans };
       setIsDragging(true);
     },
-    [view, cropMode, regionMode, selectMode, boxMode, linkSnap, onLinkDragMove, leftButtonPans]
+    [view, cropMode, regionMode, bandMode, selectMode, boxMode, linkSnap, onLinkDragMove, leftButtonPans]
   );
 
   const onMouseMove = useCallback(
@@ -1391,7 +1414,24 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           const endP = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
           const a = screenToImage(view, startP.x, startP.y);
           const b = screenToImage(view, endP.x, endP.y);
-          if (boxMode) {
+          // ⚠️⚑⚑ THE BAND IS TESTED FIRST, AND IT HAS TO BE. `boxMode` is live
+          // throughout Add points on a bar chart, which is exactly when a user
+          // wants to read the labels - so with this branch second, the band drag
+          // was swallowed by bar capture and drew a BAR across the label row
+          // instead of reading it. Found by driving the real app; the first
+          // version of this file's own comment claimed the collision was
+          // impossible, which is why the claim is now a routing order rather
+          // than a sentence.
+          if (bandMode) {
+            if (!isClick(startP.x, startP.y, endP.x, endP.y)) {
+              onBandRect?.({
+                x: Math.min(a.x, b.x),
+                y: Math.min(a.y, b.y),
+                width: Math.abs(b.x - a.x),
+                height: Math.abs(b.y - a.y),
+              });
+            }
+          } else if (boxMode) {
             // Raw press->release order, NOT normalized -- see onBoxRect's own doc.
             // No click-vs-drag guard here, unlike the branch below: a plain
             // click IS a meaningful Bar gesture (one corner placed), handled
@@ -1409,7 +1449,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             //
             // Route the finished rectangle by mode: select marquee, region-
             // restrict (B1), or crop -- all three want a normalized box.
-            const report = selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
+            const report =
+              selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
             report?.({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
           }
         }
@@ -1465,7 +1506,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       const imagePoint = screenToImage(view, screenX, screenY);
       onImageClick(imagePoint.x, imagePoint.y);
     },
-    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso]
+    [onImageClick, view, onCropRect, onLinkDrag, regionMode, onRegionRect, bandMode, onBandRect, boxMode, onBoxRect, selectMode, onSelectRect, onSelectLasso]
   );
 
   const cancelDrag = useCallback(() => {

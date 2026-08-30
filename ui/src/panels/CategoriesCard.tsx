@@ -64,6 +64,18 @@ export interface CategoriesCardProps {
    */
   seriesInput: string;
   onSeriesInputChange: (value: string) => void;
+  /**
+   * Arm the label-band drag (v2.4) - or absent where there is no axis to read
+   * against yet.
+   *
+   * ⚑ THE OFFER LIVES BESIDE THE COUNT IT WILL FILL. A category's name and its
+   * place on the axis are the same card's business, so the button that reads the
+   * names sits where the axis is already being described - not in the rail,
+   * where it would be a capability with no visible connection to what it fills.
+   */
+  onReadLabels?: () => void;
+  /** True while the next drag is the label band, so the button says so. */
+  readingArmed?: boolean;
 }
 
 export function CategoriesCard({
@@ -73,6 +85,8 @@ export function CategoriesCard({
   regenerateWarning,
   seriesInput,
   onSeriesInputChange,
+  onReadLabels,
+  readingArmed = false,
 }: CategoriesCardProps) {
   return (
     <div
@@ -141,6 +155,22 @@ export function CategoriesCard({
           style={{ width: 56 }}
         />
       </label>
+      {/* ⚑⚑ THE BIG WIN, AND IT HAS TO BE VISIBLE TO BE ONE (v2.4). Typing
+          twelve category names is the tedious half of a bar chart, and a
+          capability nobody can see does not exist - so the offer is a plain
+          button on the card that describes the axis, and its own label says what
+          the gesture will be. */}
+      {onReadLabels && declared !== null && (
+        <button
+          type="button"
+          data-testid="ocr-read-labels"
+          onClick={onReadLabels}
+          style={{ alignSelf: 'flex-start' }}
+          title="Read the category names off the figure instead of typing them"
+        >
+          {readingArmed ? 'Drag a box round the labels...' : 'Read labels from the figure'}
+        </button>
+      )}
       {regenerateWarning && (
         <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>
           {regenerateWarning}

@@ -23,6 +23,9 @@ import {
   categoryTickMarkers,
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
+import { OcrReviewCard } from './panels/OcrReviewCard.js';
+import { readLabelBand, readRegionAt, isOcrFailure, type OcrProposal } from './ocrClient.js';
+import { axisRunsAlong, type QuarterTurn } from '../../engine/ocrRegion.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
@@ -1379,6 +1382,20 @@ export function Workspace() {
   const [editingCell, setEditingCell] = useState<
     { index: number; axis: number; value: string; seed: string } | null
   >(null);
+  /**
+   * Reading category names off the figure (v2.4).
+   *
+   * ⚑⚑ THREE PIECES OF TRANSIENT STATE AND NOT ONE FIELD IN THE RECORD, which
+   * is the whole provenance answer: `ocrArmed` is whether the next drag is a
+   * label band, `ocrProposals` is what came back, and neither reaches a
+   * category until Apply. A name in the record has therefore always been read
+   * and approved by a person (David, 2026-08-30), so there is nothing to mark.
+   */
+  const [ocrArmed, setOcrArmed] = useState(false);
+  const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
+  const [ocrBusyIndex, setOcrBusyIndex] = useState<number | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+
   // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
   // state, never part of the record. Every capture click overwrites it (with null
   // when the click was fine), and the effect below clears it whenever the tool or
@@ -4189,6 +4206,77 @@ export function Workspace() {
     },
     [session, bump]
   );
+
+  /**
+   * ONE BAND DRAG BECOMES ONE PROPOSAL PER CATEGORY (v2.4).
+   *
+   * ⚑ The band is never read as a whole - a strip is not a region, measured. It
+   * is cut at the CATEGORY AXIS's own dividers, which is the half of the answer
+   * we measured (their two clicks and their declared count) while the band is
+   * the half only they can give (where the labels are printed).
+   */
+  const readCategoryLabels = useCallback(
+    async (band: { x: number; y: number; width: number; height: number }) => {
+      setOcrArmed(false);
+      setOcrError(null);
+      const image = imageCanvasRef.current?.getImageData();
+      const edges = session.getCategoryAxis().getAxisEdges();
+      if (!image || !edges) {
+        setOcrError('Mark the category axis first - its dividers are what split the box you drew.');
+        return;
+      }
+      const dividers = session.getCategoryAxis().getDividerPoints();
+      const answer = await readLabelBand(image, band, dividers, axisRunsAlong(edges[0], edges[1]));
+      if (isOcrFailure(answer)) {
+        setOcrError(answer.error);
+        return;
+      }
+      setOcrProposals(answer.proposals);
+    },
+    [session]
+  );
+
+  /** Read ONE row again, a quarter turn further round - the card's `Rotate`. */
+  const rotateProposal = useCallback(
+    async (categoryIndex: number) => {
+      const current = ocrProposals?.find((p) => p.categoryIndex === categoryIndex);
+      const image = imageCanvasRef.current?.getImageData();
+      if (!current || !image) return;
+      setOcrBusyIndex(categoryIndex);
+      const turn = (((current.turn + 1) % 4) as QuarterTurn);
+      const answer = await readRegionAt(image, current.rect, categoryIndex, turn);
+      setOcrBusyIndex(null);
+      if (isOcrFailure(answer)) {
+        setOcrError(answer.error);
+        return;
+      }
+      setOcrProposals((rows) =>
+        rows ? rows.map((r) => (r.categoryIndex === categoryIndex ? answer : r)) : rows
+      );
+    },
+    [ocrProposals]
+  );
+
+  /**
+   * Apply the vetted names - the ONE place a reading becomes a record.
+   *
+   * ⚑ AN EMPTY ROW IS LEFT ALONE, never written through: an empty proposal means
+   * "no reading", not "erase the name". A user who clears a row is declining
+   * that one, and the category keeps whatever it had.
+   * ⚑ ONE undo step for the whole card, because one press was one decision.
+   */
+  const applyOcrNames = useCallback(() => {
+    const rows = ocrProposals ?? [];
+    let wrote = false;
+    for (const row of rows) {
+      const name = row.text.trim();
+      if (name === '') continue;
+      if (session.renameCategory(row.categoryIndex, name)) wrote = true;
+    }
+    setOcrProposals(null);
+    setOcrError(null);
+    if (wrote) commit();
+  }, [ocrProposals, session, commit]);
 
   // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
   // categorical-line counterpart of setTupleLabel above, and it commits the same
@@ -7757,6 +7845,11 @@ export function Workspace() {
                   regenerateWarning={categoryStage.regenerateWarning}
                   seriesInput={categorySeriesInput}
                   onSeriesInputChange={setCategorySeriesInput}
+                  onReadLabels={() => {
+                    setOcrError(null);
+                    setOcrArmed((armed) => !armed);
+                  }}
+                  readingArmed={ocrArmed}
                 />
               )}
             </div>
@@ -8563,6 +8656,12 @@ export function Workspace() {
             isDraggingKeyCorners
           }
           onBoxRect={isDraggingKeyCorners ? handleKeyCornerDrag : handleBoxRect}
+          // ⚑ Reading category names (v2.4). Armed only from the Categories
+          // card's own button - but `boxMode` above IS live at the same time on
+          // a bar chart, so which one wins is settled by the routing order in
+          // ImageCanvas's `endDrag`, where it cannot be got wrong by a caller.
+          bandMode={ocrArmed}
+          onBandRect={(r) => void readCategoryLabels(r)}
           selectMode={mode === 'select' ? selectSubMode : null}
           // v2.0 pre-launch audit: same consolidated guard as onRegionRect
           // above -- a tiny drag is a click, and handleImageClick already
@@ -9318,6 +9417,29 @@ export function Workspace() {
       />
       </RightSidebar>
 
+      {/* ⚑⚑ THE OFFER WINDOW (v2.4). Proposals live here and nowhere else until
+          Apply, so the record only ever receives names a person has read and
+          approved - see OcrReviewCard's header for why that answers the
+          provenance question rather than deferring it. */}
+      {ocrProposals && (
+        <OcrReviewCard
+          proposals={ocrProposals}
+          currentNames={session.getCategoryAxis().getCategories()}
+          busyIndex={ocrBusyIndex}
+          onEditText={(categoryIndex, text) =>
+            setOcrProposals((rows) =>
+              rows ? rows.map((r) => (r.categoryIndex === categoryIndex ? { ...r, text } : r)) : rows
+            )
+          }
+          onRotate={(categoryIndex) => void rotateProposal(categoryIndex)}
+          onApply={applyOcrNames}
+          onCancel={() => {
+            setOcrProposals(null);
+            setOcrError(null);
+          }}
+        />
+      )}
+
       {/* Full-width status bar (checkpoint 47/50). Left: the one constant place
           for contextual guidance ("what do I do now?") -- calibration steps,
           mode hints, eyedropper/segment-fill prompts -- so the user always
@@ -9326,7 +9448,14 @@ export function Workspace() {
       <BottomBar>
         <span data-testid="tips-bar" style={{ display: 'flex', alignItems: 'center', gap: 6, color: theme.color.text.primary, minWidth: 0 }}>
           <span aria-hidden style={{ opacity: 0.7 }}>💡</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{guidanceTip}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {/* ⚑⚑ THE GESTURE IS PROMPTED WHERE EVERY OTHER GESTURE IS (v2.4).
+                Gate 4: a walkthrough may only click what a prompt on screen
+                tells it to click, so arming the band read has to say what to
+                drag and where. A refusal replaces it in the same place, because
+                a refusal is about the gesture just made. */}
+            {ocrError ?? (ocrArmed ? 'Drag a box round the row of category labels on the figure' : guidanceTip)}
+          </span>
         </span>
         {/* ⚑ THE KEY-TIPS' OWN AFFORDANCE (v1.6). Badges that appear on Alt are only
             discoverable if something on screen says Alt does anything -- otherwise the
