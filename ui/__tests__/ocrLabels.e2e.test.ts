@@ -119,6 +119,35 @@ describe('OCR: reading category names off the figure', () => {
     }
 
     if (process.env['OCR_SHOT']) await page.screenshot({ path: process.env['OCR_SHOT'] });
+    // ⚑⚑ ROTATE TURNS THE PICTURE AND THE WORDS CHANGE UNDER IT. These labels
+    // are printed horizontally, so a quarter turn must make the reading WORSE -
+    // which is the observable that proves the control reaches the reader at all,
+    // and four presses must bring the row back to where it started.
+    const before = await page.getByTestId('ocr-text-0').inputValue();
+    await page.getByTestId('ocr-rotate-0').click();
+    await expect
+      .poll(() => page.getByTestId('ocr-text-0').inputValue(), { timeout: 20000 })
+      .not.toBe(before);
+    for (let i = 0; i < 3; i++) {
+      await page.getByTestId('ocr-rotate-0').click();
+      await page.waitForTimeout(400);
+    }
+    await expect
+      .poll(() => page.getByTestId('ocr-text-0').inputValue(), { timeout: 20000 })
+      .toBe(before);
+
+    // ⚑ Escape backs out and writes nothing - and it has to work with nothing in
+    // the card focused, which is the state it opens in.
+    await page.keyboard.press('Escape');
+    await expect.poll(() => page.getByTestId('ocr-review-card').count(), { timeout: 5000 }).toBe(0);
+    await page.getByTestId('ocr-read-labels').click();
+    await refresh();
+    await page.mouse.move(box.x + x0, box.y + y0);
+    await page.mouse.down();
+    await page.mouse.move(box.x + x1, box.y + y1, { steps: 12 });
+    await page.mouse.up();
+    await page.getByTestId('ocr-review-card').waitFor({ timeout: 60000 });
+
     // ⚑ NOTHING HAS REACHED THE RECORD YET - the whole provenance answer.
     expect(await page.getByTestId('bar-cell-0-0').textContent()).not.toContain('Flax');
 

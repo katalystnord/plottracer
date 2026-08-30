@@ -1,4 +1,4 @@
-import type React from 'react';
+import React from 'react';
 import { theme } from '../theme.js';
 import type { OcrProposal } from '../ocrClient.js';
 
@@ -75,20 +75,35 @@ export function OcrReviewCard({
   onCancel,
   busyIndex,
 }: OcrReviewCardProps) {
+  // ⚑ Esc backs out and writes nothing - the same meaning the key has everywhere
+  // else in this app (the global ladder, and F40's fix to the name editor).
+  //
+  // ⚠️⚑⚑ ON THE WINDOW, CAPTURING, WHICH IS THE ONLY VERSION THAT WORKS. The
+  // first draft put `onKeyDown` on the backdrop div with `tabIndex={-1}` and a
+  // comment saying Escape backed out. Nothing ever focuses that div, so the
+  // handler fired only once the user had clicked into a name field - the key
+  // did nothing at the moment the card opened, which is exactly when someone
+  // reaches for it. `HelpOverlay` had already solved this and says so in its own
+  // words: *"Captured on the window so it works regardless of what has focus
+  // inside the card."* Mirrored rather than re-invented.
+  //
+  // ⚑ A click on the backdrop deliberately does NOT dismiss, and that is the one
+  // place this differs from `HelpOverlay`: there is typing in here, and losing a
+  // card of corrected names to a stray click outside it is the expensive kind of
+  // accident. Help has nothing to lose.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCancel();
+    }
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onCancel]);
+
   return (
-    <div
-      style={backdrop}
-      data-testid="ocr-review-backdrop"
-      // ⚑ Esc backs out and writes nothing - the same meaning the key has
-      // everywhere else in this app (the global ladder, and F40's fix to the
-      // name editor). A click on the backdrop does NOT dismiss: there is typing
-      // in here, and losing a card of corrected names to a stray click outside
-      // it would be the expensive kind of accident.
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onCancel();
-      }}
-      tabIndex={-1}
-    >
+    <div style={backdrop} data-testid="ocr-review-backdrop">
       <div style={card} data-testid="ocr-review-card">
         <div style={{ fontWeight: 600, marginBottom: 4 }}>Names read from the figure</div>
         {/* ⚑ SAYS WHAT WILL HAPPEN, in the words of the thing about to happen.
