@@ -113,3 +113,78 @@ export function axisQuarterTurn(
   }
   return best;
 }
+
+export interface LabelRegion {
+  categoryIndex: number;
+  rect: CropRect;
+}
+
+/**
+ * ⚑⚑ THE USER DRAWS THE BAND; THE AXIS DECIDES THE CUTS.
+ *
+ * One drag round the row of category labels, cut into one region per category at
+ * the category axis's own N+1 dividers.
+ *
+ * ⚑ WHY NOT HAND THE BAND STRAIGHT TO THE READER: measured in the spike, a whole
+ * axis in one box read `30 | 20 | ) | V | 5 10` at confidence 54, while the same
+ * numbers read perfectly one tick at a time. A strip is not a region. So the
+ * band is never OCR'd; only its pieces are.
+ *
+ * ⚑⚑ WHY NOT OFFER k RECTANGLES INSTEAD, which the design first proposed: we
+ * would then be DRAWING where the labels are, which we have not measured, on a
+ * figure that may put them anywhere. One drag says where the labels are (the
+ * user can see them) and the axis says where one ends and the next begins (we
+ * measured that, from their own two clicks and their declared count). Each half
+ * comes from whoever actually knows.
+ *
+ * ⚑ Direction-agnostic, so a chart with horizontal bars works without this code
+ * knowing that rotation exists: `along` names the dimension the categories run
+ * in, and the other dimension is left exactly as the user drew it.
+ */
+export function labelRegionsInBand(
+  band: CropRect,
+  dividers: readonly { x: number; y: number }[],
+  along: 'x' | 'y'
+): LabelRegion[] {
+  if (dividers.length < 2) return [];
+  const bandStart = along === 'x' ? band.x : band.y;
+  const bandEnd = bandStart + (along === 'x' ? band.width : band.height);
+  const out: LabelRegion[] = [];
+  for (let i = 0; i + 1 < dividers.length; i++) {
+    const a = along === 'x' ? dividers[i]!.x : dividers[i]!.y;
+    const b = along === 'x' ? dividers[i + 1]!.x : dividers[i + 1]!.y;
+    // ⚑ min/max rather than a-then-b: the two axis ends are the user's clicks IN
+    // THE ORDER THEY MADE THEM, so a right-to-left marking gives descending
+    // dividers. Which category a band IS must not depend on the direction of the
+    // hand that marked it.
+    const from = Math.max(Math.min(a, b), bandStart);
+    const to = Math.min(Math.max(a, b), bandEnd);
+    const size = to - from;
+    // ⚑ A band the drag does not reach gets NO proposal, and is not stretched to
+    // meet one: a box drawn over half the axis means the user pointed at half
+    // the labels, and the rest are left exactly as they were.
+    if (size < 1) continue;
+    out.push({
+      categoryIndex: i,
+      rect:
+        along === 'x'
+          ? { x: from, y: band.y, width: size, height: band.height }
+          : { x: band.x, y: from, width: band.width, height: size },
+    });
+  }
+  return out;
+}
+
+/**
+ * Which dimension an axis runs in, from the two ends the user clicked.
+ *
+ * ⚑ MEASURED off their own clicks rather than declared by an option: the
+ * `Horizontal bars` checkbox says how the BARS are drawn, and reading it here
+ * would be a second source for a fact the geometry already carries.
+ */
+export function axisRunsAlong(
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): 'x' | 'y' {
+  return Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? 'x' : 'y';
+}

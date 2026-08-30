@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 
-import { cropForOcr, normalizeOcrText, axisQuarterTurn } from '../ocrRegion.js';
+import {
+  cropForOcr,
+  normalizeOcrText,
+  axisQuarterTurn,
+  labelRegionsInBand,
+  axisRunsAlong,
+} from '../ocrRegion.js';
 
 /**
  * The pure half of reading a label off the figure (v2.4, OCR phase 1).
@@ -137,5 +143,90 @@ describe('OCR region: the AXIS decides the angle, not one label', () => {
     // A partial sweep would compare a turn against turns nobody tried, which is
     // exactly the shape of a confident wrong answer.
     expect(axisQuarterTurn([[90], [10], [10]])).toBeNull();
+  });
+});
+
+describe('OCR region: one drag round the labels, split where the axis says', () => {
+  /**
+   * ⚑⚑ THE USER DRAWS THE BAND; THE AXIS DECIDES THE CUTS.
+   *
+   * A tall or wide strip is NOT a region - measured in the spike, where a whole
+   * value axis in one box read `30 | 20 | ) | V | 5 10` at confidence 54 while
+   * the same numbers read perfectly one tick at a time. So the band the user
+   * drags is never handed to the reader; it is cut into one region per category
+   * first.
+   *
+   * ▶ And the cuts are MEASURED, not guessed: they are the category axis's own
+   * N+1 dividers, from the two ends the user clicked in the walk and the count
+   * they declared. That is what makes one gesture legitimate where offering k
+   * rectangles would have been us drawing something we did not measure.
+   */
+  const dividers = (xs: number[]) => xs.map((x) => ({ x, y: 200 }));
+
+  it('cuts the band into one region per category', () => {
+    const regions = labelRegionsInBand(
+      { x: 0, y: 200, width: 300, height: 30 },
+      dividers([0, 100, 200, 300]),
+      'x'
+    );
+    expect(regions.map((r) => r.categoryIndex)).toEqual([0, 1, 2]);
+    expect(regions[1]!.rect).toEqual({ x: 100, y: 200, width: 100, height: 30 });
+  });
+
+  it('keeps the height the user drew, because only the axis knows about the cuts', () => {
+    const regions = labelRegionsInBand(
+      { x: 0, y: 640, width: 300, height: 44 },
+      dividers([0, 150, 300]),
+      'x'
+    );
+    expect(regions.every((r) => r.rect.y === 640 && r.rect.height === 44)).toBe(true);
+  });
+
+  it('proposes nothing for a category the band does not reach', () => {
+    // ⚑ A band drawn over half the axis is not an error and is not silently
+    // stretched: the categories it covers get a proposal and the rest are left
+    // exactly as they were.
+    const regions = labelRegionsInBand(
+      { x: 0, y: 200, width: 120, height: 30 },
+      dividers([0, 100, 200, 300]),
+      'x'
+    );
+    expect(regions.map((r) => r.categoryIndex)).toEqual([0, 1]);
+    expect(regions[1]!.rect.width).toBe(20);
+  });
+
+  it('reads an axis the user clicked right to left the same way', () => {
+    // The two ends are the user's clicks, in the order they made them, so the
+    // dividers can descend. Which category a band IS must not depend on the
+    // direction of the hand that marked it.
+    const regions = labelRegionsInBand(
+      { x: 0, y: 200, width: 300, height: 30 },
+      dividers([300, 200, 100, 0]),
+      'x'
+    );
+    expect(regions.map((r) => r.categoryIndex)).toEqual([0, 1, 2]);
+    expect(regions[0]!.rect).toEqual({ x: 200, y: 200, width: 100, height: 30 });
+  });
+
+  it('cuts down the band on a chart whose categories run vertically', () => {
+    // Horizontal bars: the category axis is the vertical one, and the labels sit
+    // in a column beside it. Same cut, other dimension.
+    const regions = labelRegionsInBand(
+      { x: 10, y: 0, width: 60, height: 300 },
+      [0, 100, 200, 300].map((y) => ({ x: 80, y })),
+      'y'
+    );
+    expect(regions.map((r) => r.categoryIndex)).toEqual([0, 1, 2]);
+    expect(regions[2]!.rect).toEqual({ x: 10, y: 200, width: 60, height: 100 });
+  });
+
+  it('says nothing when the axis has no bands to cut at', () => {
+    expect(labelRegionsInBand({ x: 0, y: 0, width: 10, height: 10 }, [], 'x')).toEqual([]);
+    expect(labelRegionsInBand({ x: 0, y: 0, width: 10, height: 10 }, dividers([5]), 'x')).toEqual([]);
+  });
+
+  it('knows which way the axis runs from the two ends the user clicked', () => {
+    expect(axisRunsAlong({ x: 10, y: 500 }, { x: 800, y: 502 })).toBe('x');
+    expect(axisRunsAlong({ x: 80, y: 20 }, { x: 82, y: 600 })).toBe('y');
   });
 });

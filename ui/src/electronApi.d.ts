@@ -45,6 +45,16 @@ declare global {
       /** Tell the main process the close-request handler is mounted, so it only
        * intercepts a close once the renderer is actually handling it. */
       notifyCloseGuardReady: () => void;
+      /**
+       * Read the text in an already-cropped, already-turned region (v2.4).
+       *
+       * ⚑ The renderer takes the crop, because it holds the figure's pixels and
+       * because `engine/ocrRegion.ts` can be tested without an OCR engine. This
+       * hands over PNG bytes and nothing about WHERE they came from: the region
+       * gesture, the axis's quarter turn and which category the answer belongs
+       * to all stay on this side. See ui/electron-ocr.cjs.
+       */
+      readText: (pngBase64: string) => Promise<{ text?: string; confidence?: number; error?: string }>;
     };
   }
 }
