@@ -389,6 +389,23 @@ npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
   the screenshot bench) asks whether the code agrees with itself. A stale package
   silently disables the best check the project has, so "I'll rebuild when you're
   ready" is the wrong answer - build it and say where it is.
+  ⚑⚑ **AND AFTER A PACKAGING CHANGE, DRIVE THE PACKAGE ITSELF**:
+  `PACKAGED_APP=1 npx vitest run ui/__tests__/packagedApp.e2e.test.ts` launches
+  the BUILT BINARY and exercises the features whose libraries a `files` rule
+  might have dropped. It exists because v2.4 stopped shipping 96MB of
+  `node_modules` nothing could reach, and a missing transitive dependency shows
+  up **only** in the packaged app, **only** when a feature is used, while every
+  test in the repo stays green.
+  ⚠️⚠️ **A `node` CHECK RUN INSIDE THE CHECKOUT CANNOT SETTLE THIS, AND IT WILL
+  TELL YOU THE OPPOSITE.** Node resolves modules UP the directory tree, so a
+  package missing from `dist-ui/...` is quietly found in the repo's own
+  `node_modules` and the check passes. That false pass cost an hour: `bmp-js` was
+  "verified present" by a node probe and was absent from the real app.
+  ⚠️ And the failure did not look like a failure - it HUNG, because
+  `tesseract.js` reports worker faults through `worker.onerror`, a browser API a
+  node `worker_threads` Worker does not have, so the error was never delivered
+  and the promise never settled. **Anything awaiting a third-party worker needs a
+  bound**, or a broken dependency becomes a control that never comes back.
 - **Commits:** small, self-contained, and verified (typecheck + lint + relevant
   tests) before committing. ⚑ **A pre-commit hook enforces the typecheck** -
   install it once per clone with `git config core.hooksPath tools/git-hooks`.
