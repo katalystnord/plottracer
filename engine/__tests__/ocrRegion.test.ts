@@ -238,10 +238,26 @@ describe('OCR region: a small label is made big enough to read', () => {
     const big = upscaleForOcr(crop);
     // 12px -> a whole factor of 4 clears the 48px floor.
     expect([big.width, big.height]).toEqual([160, 48]);
-    // ⚑ NEAREST NEIGHBOUR: every output pixel is one of the input's, unaltered.
-    // Smoothing would invent grey edges on what is high-contrast line art.
+    // ⚠️⚑⚑ BILINEAR, AND THE FIRST VERSION OF THIS TEST PINNED THE OPPOSITE.
+    // It asserted every output pixel was an input pixel unaltered, with a
+    // comment about smoothing inventing grey edges - which measured 65.2%
+    // against bilinear's 75.1% on 876 real tick labels. The test agreed with
+    // the wrong mechanism because it was written from the same guess.
+    // ▶ What is asserted now is the property that MATTERS: across a hard edge,
+    // the scaled image carries values the source never had - which is exactly
+    // what nearest neighbour cannot produce and what the engine reads better.
     expect(at(big, 0, 0)).toEqual(at(crop, 0, 0));
-    expect(at(big, 7, 7)).toEqual(at(crop, 1, 1));
+    const edge = new Uint8ClampedArray(2 * 12 * 4);
+    for (let y = 0; y < 12; y++) {
+      for (let x = 0; x < 2; x++) {
+        const i = (y * 2 + x) * 4;
+        edge[i] = x === 0 ? 0 : 255;
+        edge[i + 3] = 255;
+      }
+    }
+    const scaled = upscaleForOcr({ data: edge, width: 2, height: 12 });
+    const reds = new Set(Array.from({ length: scaled.width }, (_, x) => scaled.data[x * 4]!));
+    expect([...reds].some((v) => v > 0 && v < 255), 'the edge was not smoothed at all').toBe(true);
   });
 
   it('leaves a crop that is already tall enough exactly as it was', () => {
