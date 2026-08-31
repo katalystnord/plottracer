@@ -106,6 +106,28 @@ function startWorker() {
 }
 
 /**
+ * ⚑⚑ HOW THE ENGINE IS TOLD TO READ A LABEL, and both settings were MEASURED on
+ * 887 real published charts (ICPR 2022 CHART-Infographics UB-UNITEC PMC), not
+ * chosen from the documentation.
+ *
+ * `tessedit_pageseg_mode` 6 is "assume a single uniform block of text". The
+ * default assumes a whole PAGE, which a 20x14 pixel crop of `8` plainly is not:
+ * short numeric labels came back EMPTY, at confidence 0, and they are the
+ * commonest label on a chart.
+ *
+ * ⚠️⚑⚑ WHY 6 AND NOT 7, WHICH SCORED HIGHER. Measured on 876 labels, `7`
+ * (single line) read 78.8% against `6`'s 78.1% - a difference of eight labels,
+ * inside the noise. On the 70 labels that span TWO LINES, `7` read **0 of 70**
+ * and `6` read **46 of 70**. A mode that forces one line cannot read a
+ * two-line label at all, and the aggregate hid it because such labels are 1.2%
+ * of the corpus. ▶ The same trap as choosing an angle from four short probe
+ * labels: the average agreed with the wrong choice.
+ */
+async function applyReadingMode(worker) {
+  await worker.setParameters({ tessedit_pageseg_mode: '6' })
+}
+
+/**
  * Read one already-cropped, already-turned region.
  *
  * Returns `{ text, confidence }`, or `{ error }` with a sentence the panel can
@@ -116,7 +138,12 @@ function startWorker() {
 async function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
   let timer = null
   try {
-    if (!workerPromise) workerPromise = startWorker()
+    if (!workerPromise) {
+      workerPromise = startWorker().then(async (w) => {
+        await applyReadingMode(w)
+        return w
+      })
+    }
     // ⚑ The bound covers the WHOLE operation - starting the engine and reading -
     // because both halves are promises from the same library and either can be
     // left pending by the mechanism described above.

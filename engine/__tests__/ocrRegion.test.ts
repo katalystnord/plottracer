@@ -6,6 +6,7 @@ import {
   axisQuarterTurn,
   labelRegionsInBand,
   axisRunsAlong,
+  upscaleForOcr,
 } from '../ocrRegion.js';
 
 /**
@@ -228,5 +229,23 @@ describe('OCR region: one drag round the labels, split where the axis says', () 
   it('knows which way the axis runs from the two ends the user clicked', () => {
     expect(axisRunsAlong({ x: 10, y: 500 }, { x: 800, y: 502 })).toBe('x');
     expect(axisRunsAlong({ x: 80, y: 20 }, { x: 82, y: 600 })).toBe('y');
+  });
+});
+
+describe('OCR region: a small label is made big enough to read', () => {
+  it('scales a short label up to the height the reader wants', () => {
+    const crop = cropForOcr(ramp(40, 12), 40, 12, { x: 0, y: 0, width: 40, height: 12 }, 0)!;
+    const big = upscaleForOcr(crop);
+    // 12px -> a whole factor of 4 clears the 48px floor.
+    expect([big.width, big.height]).toEqual([160, 48]);
+    // ⚑ NEAREST NEIGHBOUR: every output pixel is one of the input's, unaltered.
+    // Smoothing would invent grey edges on what is high-contrast line art.
+    expect(at(big, 0, 0)).toEqual(at(crop, 0, 0));
+    expect(at(big, 7, 7)).toEqual(at(crop, 1, 1));
+  });
+
+  it('leaves a crop that is already tall enough exactly as it was', () => {
+    const crop = cropForOcr(ramp(40, 60), 40, 60, { x: 0, y: 0, width: 40, height: 60 }, 0)!;
+    expect(upscaleForOcr(crop)).toBe(crop);
   });
 });
