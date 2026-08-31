@@ -136,3 +136,66 @@ describe('a hatched bar is put back together before anything reads it', () => {
     expect(joinAcrossHatch(shredded(MIN_HATCH_PIECES), 'x').joined).toBe(1);
   });
 });
+
+describe('a DIAGONAL hatch, whose pieces overlap instead of stacking', () => {
+  /**
+   * ⚑⚑ THE SECOND SHAPE OF THE SAME PROBLEM, and the 1D rule above cannot see
+   * it. matplotlib's `/`, `\`, `x` and `+` cut a bar into parallelogram STRIPS -
+   * Adobe `2003.json` is 5px black bands at 45 degrees every ~32px - and
+   * consecutive strips have different extents but bounding boxes that overlap
+   * almost entirely. Two separate bars never overlap at all: they sit side by
+   * side, or stack with a clear gap.
+   */
+  /** Strips of a bar cut diagonally: each spans most of the bar's box. */
+  function diagonalStrips(count: number): Blob[] {
+    return Array.from({ length: count }, (_, i) => {
+      const b = blob(100 + i * 4, 100 + i * 4, 200 + i * 4, 300 + i * 4);
+      // The ink is the strip itself, not the box it spans.
+      return { ...b, area: 100 * 200 * 0.8 / count };
+    });
+  }
+
+  it('⚑⚑ joins strips whose boxes overlap', () => {
+    const out = joinAcrossHatch(diagonalStrips(5), 'x');
+    expect(out.joined).toBe(1);
+    expect(out.blobs).toHaveLength(1);
+  });
+
+  it('⛔ refuses a cluster that does not FILL the box it spans', () => {
+    // ⚠️ THE CHAINING GUARD, and it was measured the hard way: linking every
+    // overlapping pair and taking the transitive closure welded whole figures
+    // together on a noisy mask, costing 204 real bars over 48 PMC figures.
+    // `PMC3762776___g004` went from 148 predictions to TEN - its ground-truth
+    // count - while its matches went from 10 to ZERO. The right number of wrong
+    // shapes. A hatched bar keeps most of its area; chained noise does not.
+    // ⚠️ THE FIRST VERSION OF THIS FIXTURE WAS VACUOUS and passed with the guard
+    // REMOVED: its boxes overlapped by only a third, below the threshold that
+    // links two pieces at all, so no cluster ever formed and the refusal was
+    // never exercised. These overlap by 90% - so they certainly link - and carry
+    // almost no ink, so only the fill test can refuse them.
+    const sparse = Array.from({ length: 5 }, (_, i) => {
+      const b = blob(100 + i * 10, 100 + i * 10, 300 + i * 10, 300 + i * 10);
+      return { ...b, area: 20 };
+    });
+    expect(joinAcrossHatch(sparse, 'x').joined).toBe(0);
+  });
+
+  it('⛔ refuses a merge that would cross a declared band boundary', () => {
+    // ⚑⚑ ONE CATEGORY HOLDS ONE BAR OF A GIVEN COLOUR, so a cluster spanning a
+    // divider is two bars being welded together - a plausible wrong number
+    // rather than a visible miss. This is the gate that took the cost on real
+    // published figures from 204 bars to two.
+    const strips = diagonalStrips(5);
+    // Axis ends at 50 and 400, with a real boundary at 150 - inside the strips.
+    expect(joinAcrossHatch(strips, 'x', [50, 150, 400]).joined).toBe(0);
+    // The same strips with the boundary moved clear of them are joined.
+    expect(joinAcrossHatch(strips, 'x', [50, 350, 400]).joined).toBe(1);
+  });
+
+  it('lets a bar touch the OUTER dividers, which are the axis ends', () => {
+    // ⚑ The first and last entries bound the whole axis rather than separating
+    // two bands, and a bar legitimately reaches them.
+    const strips = diagonalStrips(5);
+    expect(joinAcrossHatch(strips, 'x', [110, 400]).joined).toBe(1);
+  });
+});

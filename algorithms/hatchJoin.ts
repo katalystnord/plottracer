@@ -69,7 +69,78 @@ export interface HatchJoinResult {
   joined: number;
 }
 
-export function joinAcrossHatch(blobs: readonly Blob[], categoryAxis: 'x' | 'y'): HatchJoinResult {
+/**
+ * How much of the smaller box must lie inside the other before two pieces are
+ * called one shape.
+ *
+ * ⚑ MEASURED: a DIAGONAL hatch (matplotlib's `/`, `\\`, `x`, `+`) cuts a bar
+ * into parallelogram strips whose bounding boxes overlap almost entirely -
+ * Adobe `2003.json` is 5px black bands at 45 degrees every ~32px - while two
+ * genuinely separate bars never overlap at all: they sit side by side, or stack
+ * with a clear gap. So any substantial overlap is evidence of one shape, and the
+ * threshold only has to sit above the incidental.
+ */
+const OVERLAP_IS_ONE_SHAPE = 0.5;
+
+/**
+ * How much of a merged shape's own box its ink must fill.
+ *
+ * ⚠️⚑⚑ THE GUARD AGAINST CHAINING, and it was measured the hard way. Linking
+ * every pair of overlapping boxes and taking the transitive closure is
+ * single-link clustering, and on a noisy mask it welds the whole figure
+ * together: A overlaps B overlaps C merges A with C though they share nothing.
+ * On the PMC corpus that cost 204 bars over 48 figures, with a tell that names
+ * the fault exactly - `PMC3762776___g004` went from 148 predictions to TEN,
+ * which is its ground-truth count, while its matches went from 10 to ZERO. The
+ * right number of wrong shapes.
+ * ▶ So a merged cluster has to look like a BAR: its pieces must fill most of the
+ * box they span. A hatched bar loses only the width of its own lines - about 5px
+ * in 32 on the measured figures, so 80% or more remains - while chained noise
+ * spans a large box and fills almost none of it.
+ */
+const MIN_MERGED_FILL = 0.5;
+
+/** Does this box straddle a declared band boundary? */
+function crossesADivider(
+  box: { minX: number; minY: number; maxX: number; maxY: number },
+  categoryAxis: 'x' | 'y',
+  dividers?: readonly number[]
+): boolean {
+  if (!dividers || dividers.length < 3) return false;
+  const lo = categoryAxis === 'x' ? box.minX : box.minY;
+  const hi = categoryAxis === 'x' ? box.maxX : box.maxY;
+  // ⚑ The OUTER two dividers are the axis ends, not boundaries between bands -
+  // a bar legitimately touches those.
+  return dividers.slice(1, -1).some((d) => d > lo && d < hi);
+}
+
+/** Do these two boxes overlap enough that they cannot be separate bars? */
+function overlapsSubstantially(a: Blob, b: Blob): boolean {
+  const w = Math.min(a.bbox.maxX, b.bbox.maxX) - Math.max(a.bbox.minX, b.bbox.minX);
+  const h = Math.min(a.bbox.maxY, b.bbox.maxY) - Math.max(a.bbox.minY, b.bbox.minY);
+  if (w <= 0 || h <= 0) return false;
+  const smaller = Math.min(
+    (a.bbox.maxX - a.bbox.minX) * (a.bbox.maxY - a.bbox.minY),
+    (b.bbox.maxX - b.bbox.minX) * (b.bbox.maxY - b.bbox.minY)
+  );
+  return smaller > 0 && (w * h) / smaller >= OVERLAP_IS_ONE_SHAPE;
+}
+
+export function joinAcrossHatch(
+  blobs: readonly Blob[],
+  categoryAxis: 'x' | 'y',
+  /**
+   * The user's declared band boundaries along the category axis, ascending.
+   *
+   * ⚠️⚑⚑ A REBUILT BAR MAY NOT CROSS ONE, and this is the gate that made the
+   * overlap rule safe. One category holds one bar of a given colour, so a
+   * cluster spanning a divider is not a shredded bar - it is two bars being
+   * welded together, which is a plausible wrong number rather than a visible
+   * miss. Measured before it existed: the overlap rule cost 204 real bars over
+   * 48 PMC figures, with a 46-bar figure collapsing to 22.
+   */
+  dividers?: readonly number[]
+): HatchJoinResult {
   const valueLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minY : b.bbox.minX);
   const valueHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxY : b.bbox.maxX);
   const catLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minX : b.bbox.minY);
@@ -84,33 +155,26 @@ export function joinAcrossHatch(blobs: readonly Blob[], categoryAxis: 'x' | 'y')
   const out: Blob[] = [];
   let joined = 0;
 
-  blobs.forEach((seed, i) => {
-    if (taken.has(i)) return;
-    // Everything sharing this seed's slice of the category axis, in value order.
-    const group = blobs
-      .map((b, k) => ({ b, k }))
-      .filter(({ b, k }) => !taken.has(k) && (k === i || sameCategoryExtent(seed, b)))
-      .sort((p, q) => valueLo(p.b) - valueLo(q.b));
-    if (group.length < MIN_HATCH_PIECES) return;
-
-    // ⚑ THE GATE, and all of it is arithmetic on what the detector returned:
-    // every gap small, and the pitch steady. A hatch repeats; three shapes that
-    // happen to stack with assorted gaps are three shapes.
-    const gaps: number[] = [];
-    const pitches: number[] = [];
-    for (let n = 1; n < group.length; n++) {
-      gaps.push(valueLo(group[n]!.b) - valueHi(group[n - 1]!.b));
-      pitches.push(valueLo(group[n]!.b) - valueLo(group[n - 1]!.b));
+  /** Everything reachable from `seed` by overlapping boxes - a DIAGONAL hatch. */
+  const overlapCluster = (seedIndex: number): number[] => {
+    const members = [seedIndex];
+    const queue = [seedIndex];
+    while (queue.length) {
+      const cur = blobs[queue.pop()!]!;
+      blobs.forEach((b, k) => {
+        if (taken.has(k) || members.includes(k)) return;
+        if (!overlapsSubstantially(cur, b)) return;
+        members.push(k);
+        queue.push(k);
+      });
     }
-    if (gaps.some((g) => g < 0 || g > MAX_HATCH_GAP_PX)) return;
-    const sorted = [...pitches].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)]!;
-    if (!(median > 0)) return;
-    if (pitches.some((p) => Math.abs(p - median) / median > PITCH_TOLERANCE)) return;
+    return members;
+  };
 
-    for (const { k } of group) taken.add(k);
+  const merge = (indices: readonly number[]): void => {
+    for (const k of indices) taken.add(k);
     joined += 1;
-    const parts = group.map(({ b }) => b);
+    const parts = indices.map((k) => blobs[k]!);
     // ⚑ THE AREA IS THE INK WE SAW, NOT THE BOX WE SPAN. The gaps are the
     // figure's own hatch lines - nothing matched there - and claiming the box's
     // full area would assert pixels nobody measured, to size filters that read
@@ -143,6 +207,54 @@ export function joinAcrossHatch(blobs: readonly Blob[], categoryAxis: 'x' | 'y')
       },
       ...(members ? { members } : {}),
     });
+  };
+
+  // ⚑⚑ TWO SHAPES OF EVIDENCE, because a hatch comes in two shapes. A
+  // HORIZONTAL hatch slices a bar into slabs that stack with small regular gaps
+  // and never overlap; a DIAGONAL one cuts it into parallelogram strips whose
+  // boxes overlap almost entirely. Neither rule sees the other's case, and both
+  // describe something two separate bars cannot do.
+  blobs.forEach((_, i) => {
+    if (taken.has(i)) return;
+    const cluster = overlapCluster(i);
+    if (cluster.length < 2) return;
+    const parts = cluster.map((k) => blobs[k]!);
+    const box = {
+      minX: Math.min(...parts.map((b) => b.bbox.minX)),
+      minY: Math.min(...parts.map((b) => b.bbox.minY)),
+      maxX: Math.max(...parts.map((b) => b.bbox.maxX)),
+      maxY: Math.max(...parts.map((b) => b.bbox.maxY)),
+    };
+    const boxArea = (box.maxX - box.minX) * (box.maxY - box.minY);
+    const ink = parts.reduce((n, b) => n + b.area, 0);
+    if (!(boxArea > 0) || ink / boxArea < MIN_MERGED_FILL) return;
+    if (crossesADivider(box, categoryAxis, dividers)) return;
+    merge(cluster);
+  });
+
+  blobs.forEach((seed, i) => {
+    if (taken.has(i)) return;
+    const group = blobs
+      .map((b, k) => ({ b, k }))
+      .filter(({ b, k }) => !taken.has(k) && (k === i || sameCategoryExtent(seed, b)))
+      .sort((p, q) => valueLo(p.b) - valueLo(q.b));
+    if (group.length < MIN_HATCH_PIECES) return;
+
+    // ⚑ THE GATE, and all of it is arithmetic on what the detector returned:
+    // every gap small, and the pitch steady. A hatch repeats; three shapes that
+    // happen to stack with assorted gaps are three shapes.
+    const gaps: number[] = [];
+    const pitches: number[] = [];
+    for (let n = 1; n < group.length; n++) {
+      gaps.push(valueLo(group[n]!.b) - valueHi(group[n - 1]!.b));
+      pitches.push(valueLo(group[n]!.b) - valueLo(group[n - 1]!.b));
+    }
+    if (gaps.some((g) => g < 0 || g > MAX_HATCH_GAP_PX)) return;
+    const sorted = [...pitches].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)]!;
+    if (!(median > 0)) return;
+    if (pitches.some((p) => Math.abs(p - median) / median > PITCH_TOLERANCE)) return;
+    merge(group.map(({ k }) => k));
   });
 
   blobs.forEach((b, i) => {

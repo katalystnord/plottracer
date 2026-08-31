@@ -449,7 +449,7 @@ export function runBarDetect(
   // app computes from what the USER said, so the population it cannot help is
   // provably untouched. Without a declared category axis this does nothing.
   const hatch = categories
-    ? joinAcrossHatch(blobs, categories.categoryAxis)
+    ? joinAcrossHatch(blobs, categories.categoryAxis, categories.dividers)
     : { blobs: [...blobs], joined: 0 };
   const join = baseline
     ? joinAcrossBaseline(hatch.blobs, categories?.categoryAxis ?? 'x', baseline)
