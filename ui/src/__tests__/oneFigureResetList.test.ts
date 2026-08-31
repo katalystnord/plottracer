@@ -109,6 +109,8 @@ const PER_FIGURE_RESETS = [
   'setOcrProposals',
   'setOcrBusyIndex',
   'setOcrError',
+  // ⚑ A tick-detection report describes the axis of ONE figure.
+  'setTickDetectNotice',
   // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.3), and the list is the
   // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
   // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and

@@ -26,6 +26,7 @@ import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
 import { readLabelBand, readRegionAt, isOcrFailure, type OcrProposal } from './ocrClient.js';
 import { axisRunsAlong, type QuarterTurn } from '../../engine/ocrRegion.js';
+import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import { valueAtPosition, type ColorScale } from '../../algorithms/colorScale.js';
@@ -1392,6 +1393,8 @@ export function Workspace() {
    * and approved by a person (David, 2026-08-30), so there is nothing to mark.
    */
   const [ocrArmed, setOcrArmed] = useState(false);
+  /** What the last look for the figure's own tick marks found. Per figure. */
+  const [tickDetectNotice, setTickDetectNotice] = useState<string | null>(null);
   const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
   const [ocrBusyIndex, setOcrBusyIndex] = useState<number | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -2939,6 +2942,9 @@ export function Workspace() {
       setOcrProposals(null);
       setOcrBusyIndex(null);
       setOcrError(null);
+      // ⚑ ...and a tick-detection report describes the axis of the figure you
+      // are leaving, so it cannot outlive it either.
+      setTickDetectNotice(null);
       // Curve Fit's controls are the figure's own, read back off its dataset.
       const cf = getCurveFitState(s.getDataset());
       setCurveFitDegree(cf ? cf.degree : 1);
@@ -4245,6 +4251,32 @@ export function Workspace() {
     },
     [session]
   );
+
+  /**
+   * Move the category ticks onto the marks the figure itself draws.
+   *
+   * ⚑⚑ ONE PRESS, because the positions are MEASURED off the ink rather than
+   * proposed. The rule this project holds to is "assert only what was
+   * MEASURED; everything else is OFFERED" - and a detected tick is the measured
+   * case, so applying it is not the v2.2 grid mistake. What would be that
+   * mistake is moving ticks when the count does NOT fit, so that is refused in
+   * the model and reported here instead.
+   * ⚑ One undo step, and the report says what happened either way.
+   */
+  const detectCategoryTicks = useCallback(() => {
+    const image = imageCanvasRef.current?.getImageData();
+    if (!image) return;
+    const found = session.detectCategoryTicks(image);
+    if (!found) {
+      setTickDetectNotice(null);
+      return;
+    }
+    const applied = found.fits && session.applyDetectedCategoryTicks(found.positions);
+    setTickDetectNotice(
+      categoryTickDetectionMessage(found.positions.length, found.expected, applied)
+    );
+    if (applied) commit();
+  }, [session, commit]);
 
   /** Read ONE row again, a quarter turn further round - the card's `Rotate`. */
   const rotateProposal = useCallback(
@@ -7855,6 +7887,8 @@ export function Workspace() {
                   regenerateWarning={categoryStage.regenerateWarning}
                   seriesInput={categorySeriesInput}
                   onSeriesInputChange={setCategorySeriesInput}
+                  onDetectTicks={detectCategoryTicks}
+                  detectNotice={tickDetectNotice}
                   onReadLabels={() => {
                     setOcrError(null);
                     setOcrArmed((armed) => !armed);

@@ -94,6 +94,21 @@ describe('OCR: reading category names off the figure', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(600);
 
+    // ⚑⚑ THE TICKS THE FIGURE DRAWS, on the button David asked for. It has to
+    // MOVE them: the generated set is evenly spaced from the two clicked ends,
+    // so the observable is that at least one tick is no longer where the even
+    // division put it, and that the card says what it did.
+    // ⚑ `Moved` is only ever said when the model ACCEPTED the set - the message
+    // takes `applied`, which is `applyDetectedCategoryTicks`'s own return. That
+    // the ticks then sit on the detected positions is asserted at the model, in
+    // engine/__tests__/categoryTickDetection.test.ts; what this adds is that the
+    // button exists, reaches the detector through the real canvas pixels, and
+    // reports back on screen.
+    await page.getByTestId('detect-ticks').click();
+    await expect
+      .poll(() => page.getByTestId('detect-ticks-notice').textContent(), { timeout: 10000 })
+      .toMatch(/Moved 6 ticks/);
+
     // ⚑ The offer is ON SCREEN, on the card that describes the axis it fills.
     await page.getByTestId('ocr-read-labels').click();
     await page.waitForTimeout(200);

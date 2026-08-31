@@ -191,6 +191,10 @@ import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes } from '../core/plotData.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
+import { tickCountFor } from '../core/bandedAxis.js';
+import { detectAxisTicks } from '../algorithms/axisTicks.js';
+import type { PixelSource } from '../algorithms/samplePixel.js';
+import { outwardNormal } from './categoryTickOverlay.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
 import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
@@ -557,6 +561,26 @@ export interface CapHandle {
 export interface WhiskerGlyph extends WhiskerShape {
   color: [number, number, number];
   capMarkerId?: string;
+}
+
+/**
+ * What the figure's own tick marks say about an axis we already have.
+ *
+ * ⚑ `fits` is the session's contribution: the detector reports what it saw, and
+ * only something that knows the CONVENTION and the category count can say
+ * whether that set can be used. It is reported rather than acted on, so the card
+ * can show a count that does not fit instead of silently doing nothing.
+ */
+export interface CategoryTickDetection {
+  /** Along the axis, 0 at the first clicked end and 1 at the second. */
+  positions: number[];
+  /** The largest departure from a constant pitch, or null under three marks.
+   *  ⛔ REPORTED, never a refusal - a log axis is uneven on purpose. */
+  evenness: number | null;
+  pitch: number | null;
+  /** How many marks this axis's convention and count require. */
+  expected: number;
+  fits: boolean;
 }
 
 export class CalibrationSession<A extends CalibratedAxes> {
@@ -4020,6 +4044,69 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Whether this graph type has categories the user can mark out. */
   supportsCategoryTicks(): boolean {
     return this.config.categoryTicks !== undefined;
+  }
+
+  /**
+   * ⚑⚑ THE TICK MARKS THE FIGURE ITSELF DRAWS, on the axis the user marked.
+   *
+   * David, driving the built app: *"The ticks were not auto detected properly...
+   * I have to move them by hand. Was there a button for that?"* There was not,
+   * and nothing detected anything: `algorithms/axisTicks.ts` was groundwork with
+   * no callers, so every tick on screen was GENERATED evenly from the two
+   * clicked ends and the count, and dragging was the only way to meet the ink.
+   *
+   * ⚑ THIS LAYER IS THIN ON PURPOSE. The detector never sees an axis, a
+   * convention or a category count; the session knows all three, so it is the
+   * only place that can say whether what was found FITS - which is the question
+   * that lets detection be OFFERED instead of applied.
+   *
+   * ⚑ REUSE, NOT A SECOND CONVENTION: the outward direction comes from
+   * `categoryTickOverlay`'s own `outwardNormal`, the same one that decides which
+   * way the marks are drawn. The detector's header asks the caller for it
+   * precisely so there is one copy of that rule.
+   *
+   * Null where there is no axis to scan - not an error and not an empty list:
+   * with no axis there is no question.
+   */
+  detectCategoryTicks(image: PixelSource): CategoryTickDetection | null {
+    const edges = this.categoryAxis.getAxisEdges();
+    if (!edges || !this.supportsCategoryTicks()) return null;
+    const outward = outwardNormal(edges);
+    if (!outward) return null;
+    const found = detectAxisTicks(image, edges[0], edges[1], outward);
+    return {
+      positions: found.candidates.map((c) => c.position),
+      evenness: found.evenness,
+      pitch: found.pitch,
+      // ⚑ What the CONVENTION needs, not what the figure happens to print: a
+      // centred axis wants one mark per category, a boundary one wants n+1.
+      expected: tickCountFor(this.categoryAxis.getConvention(), this.categoryAxis.getCategoryCount()),
+      fits: found.candidates.length ===
+        tickCountFor(this.categoryAxis.getConvention(), this.categoryAxis.getCategoryCount()),
+    };
+  }
+
+  /**
+   * Move the ticks onto positions that were MEASURED off the figure.
+   *
+   * ⚠️⚑⚑ THE FIT IS CHECKED BEFORE THE MODEL IS TOUCHED, and that is the whole
+   * of this method. `restoreTickParams` REPAIRS a wrong-length list by
+   * regenerating evenly - correct for a loaded file, and wrong here, because a
+   * detection the user asked for must never silently discard the ticks they had
+   * already dragged. So a set that does not fit is refused and nothing moves.
+   *
+   * ⚑ Applied as ADJUSTMENTS, exactly like a dragged tick: these are the user's
+   * own marks now, so changing the tick convention warns before regenerating
+   * over them rather than quietly doing it.
+   */
+  applyDetectedCategoryTicks(positions: readonly number[]): boolean {
+    if (!this.supportsCategoryTicks()) return false;
+    const expected = tickCountFor(
+      this.categoryAxis.getConvention(),
+      this.categoryAxis.getCategoryCount()
+    );
+    if (positions.length !== expected) return false;
+    return this.categoryAxis.restoreTickParams([...positions], true);
   }
 
   /**

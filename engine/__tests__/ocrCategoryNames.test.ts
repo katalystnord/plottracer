@@ -1,9 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 
 import {
   cropForOcr,
@@ -14,6 +11,7 @@ import {
   type QuarterTurn,
 } from '../ocrRegion.js';
 import { encodePng } from './helpers/encodePng.js';
+import { readPng } from './helpers/readPng.js';
 
 /**
  * ⚑⚑ THE WHOLE FEATURE, ON REAL INK, AGAINST COMMITTED GROUND TRUTH (v2.4).
@@ -30,13 +28,15 @@ import { encodePng } from './helpers/encodePng.js';
  * `series[0].points`. A test that invented its geometry would prove
  * self-consistency ([[feedback_ground_truth_is_the_instrument]]).
  *
- * ⚑ The fixture is the sample's pixels as raw RGBA, gzipped (25KB) - so no PNG
- * DECODER is needed anywhere, and a decoder bug cannot masquerade as an OCR
- * finding. See helpers/encodePng.ts for why only the encoder exists.
+ * ⚑ It reads `samples/bar-tensile-strength.png` through the SAME `readPng` the
+ * tick detector's tests use. An earlier version of this test carried the sample
+ * as a 25KB gzipped RGBA fixture of its own, on the reasoning that a PNG decoder
+ * is the risky half - which was true and beside the point, because a tested
+ * decoder was already sitting in this very directory. One decoder, one sample
+ * file, no committed copy of pixels that are already in the repo.
  */
 
 const require_ = createRequire(import.meta.url);
-const here = path.dirname(fileURLToPath(import.meta.url));
 
 interface OcrModule {
   readText(pngBase64: string): Promise<{ text?: string; confidence?: number; error?: string }>;
@@ -50,12 +50,7 @@ afterAll(async () => {
 
 describe('OCR: one band drag names every category', () => {
   it('reads all six names off the figure, at the turn the axis agrees on', async () => {
-    const meta = JSON.parse(
-      readFileSync(path.join(here, 'fixtures/ocr/bar-tensile-strength.rgba.json'), 'utf8')
-    ) as { width: number; height: number };
-    const pixels = new Uint8ClampedArray(
-      gunzipSync(readFileSync(path.join(here, 'fixtures/ocr/bar-tensile-strength.rgba.gz')))
-    );
+    const figure = readPng('samples/bar-tensile-strength.png');
     const truth = JSON.parse(readFileSync('samples/bar-tensile-strength.truth.json', 'utf8')) as {
       calibration: { anchors: Record<string, { px: number; py: number; value?: number }> };
       series: { points: { category: string }[] }[];
@@ -88,7 +83,7 @@ describe('OCR: one band drag names every category', () => {
     const readAll = async (turn: QuarterTurn) => {
       const rows: { text: string; confidence: number }[] = [];
       for (const region of regions) {
-        const crop = cropForOcr(pixels, meta.width, meta.height, region.rect, turn);
+        const crop = cropForOcr(figure.data, figure.width, figure.height, region.rect, turn);
         expect(crop, 'a region cut from the band had no pixels').not.toBeNull();
         const answer = await ocr.readText(encodePng(crop!).toString('base64'));
         expect(answer.error).toBeUndefined();

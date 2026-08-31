@@ -9,10 +9,10 @@ import { deflateSync } from 'node:zlib';
  * real Electron app, and the one test that proves the whole feature against real
  * ink and committed ground truth could not exist at all.
  *
- * ⚑ ENCODE ONLY, and the fixtures are raw RGBA rather than PNG for exactly that
- * reason: a DECODER is the half with filters, interlacing and colour types in
- * it, and a bug in one would look like an OCR finding rather than a test-harness
- * fault. Nothing here is reachable from the app.
+ * ⚑ ENCODE ONLY, because the DECODER already exists beside it: `readPng.ts`,
+ * which the tick detector's tests have used all along. This is the missing
+ * direction, not a second copy of the existing one. Nothing here is reachable
+ * from the app.
  *
  * Filter type 0 on every scanline, 8-bit RGBA, non-interlaced.
  */

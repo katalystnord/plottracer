@@ -76,6 +76,18 @@ export interface CategoriesCardProps {
   onReadLabels?: () => void;
   /** True while the next drag is the label band, so the button says so. */
   readingArmed?: boolean;
+  /**
+   * Look for the tick marks the FIGURE draws, and move the ticks onto them.
+   *
+   * ⚑ David, driving the built app: *"The ticks were not auto detected
+   * properly... I have to move them by hand. Was there a button for that?"*
+   * There was not - the detector existed with no callers and no surface, which
+   * is a capability that does not exist as far as anyone using the app is
+   * concerned.
+   */
+  onDetectTicks?: () => void;
+  /** What the last look found, in one sentence, or null before one was made. */
+  detectNotice?: string | null;
 }
 
 export function CategoriesCard({
@@ -87,6 +99,8 @@ export function CategoriesCard({
   onSeriesInputChange,
   onReadLabels,
   readingArmed = false,
+  onDetectTicks,
+  detectNotice = null,
 }: CategoriesCardProps) {
   return (
     <div
@@ -170,6 +184,26 @@ export function CategoriesCard({
         >
           {readingArmed ? 'Drag a box round the labels...' : 'Read labels from the figure'}
         </button>
+      )}
+      {/* ⚑ BESIDE THE CONVENTION IT CORRECTS. The radios above generate ticks
+          EVENLY from the two clicked ends; this is how you replace that guess
+          with the positions the figure actually prints, so the two controls
+          belong next to each other and in that order. */}
+      {onDetectTicks && declared !== null && (
+        <button
+          type="button"
+          data-testid="detect-ticks"
+          onClick={onDetectTicks}
+          style={{ alignSelf: 'flex-start' }}
+          title="Look just outside the axis for the tick marks the figure draws, and move the ticks onto them"
+        >
+          Find the figure&apos;s own ticks
+        </button>
+      )}
+      {detectNotice && (
+        <span data-testid="detect-ticks-notice" style={{ color: theme.color.text.secondary }}>
+          {detectNotice}
+        </span>
       )}
       {regenerateWarning && (
         <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>

@@ -47,7 +47,7 @@ export const CATEGORY_TICK_COLOR = '#7c3aed';
 /** The unit vector perpendicular to the axis, pointing away from the plot: down
  * for an upright chart, and rotating with the axis for anything else. Null for a
  * degenerate axis, which the model refuses to create in the first place. */
-function outwardNormal(
+export function outwardNormal(
   edges: readonly [CategoryAxisPoint, CategoryAxisPoint]
 ): { x: number; y: number } | null {
   const dx = edges[1].x - edges[0].x;
@@ -353,3 +353,32 @@ export const CONVENTION_LABELS: Record<TickConvention, string> = {
   centred: 'Centres',
   edge: 'Boundaries',
 };
+
+/**
+ * What to say after looking for the marks a figure draws on its category axis.
+ *
+ * ⚑ ONE FUNCTION FOR EVERY OUTCOME, so the count in the sentence and the count
+ * that was applied cannot disagree - the lesson `swatchHoldBackOffer` was
+ * consolidated for, where "One shape was held back" sat next to a button saying
+ * "Add them anyway".
+ *
+ * ⛔ A REFUSAL CARRIES ITS REQUIREMENT. "Found 5" on its own tells the user
+ * nothing they can act on; what they need is that this axis wants one mark per
+ * category, and that the two places to look are the declared count and the tick
+ * convention.
+ */
+export function categoryTickDetectionMessage(
+  found: number,
+  expected: number,
+  applied: boolean
+): string {
+  if (found === 0) {
+    return 'No tick marks were found just outside the axis. If the figure draws none, drag the ticks onto the positions you want.';
+  }
+  if (applied) {
+    return found === 1
+      ? 'Moved 1 tick onto the mark the figure draws.'
+      : `Moved ${found} ticks onto the marks the figure draws.`;
+  }
+  return `Found ${found} ${found === 1 ? 'mark' : 'marks'} just outside the axis, but this axis needs ${expected}. Nothing was moved - check the number of categories in the calibration, and whether the figure prints its ticks at the category centres or at the boundaries between them.`;
+}
