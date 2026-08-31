@@ -21,6 +21,7 @@
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type Blob, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
 import {
   reconcileWithExpected,
   runColumnsFromMembers,
@@ -117,6 +118,13 @@ export interface BarDetectSuccess {
    * and "this build cannot join".
    */
   joinedAcrossBaseline?: number;
+  /**
+   * How many bars were rebuilt from pieces a HATCH FILL had shredded (v2.4).
+   *
+   * ⚑ Absent when none were, like `joinedAcrossBaseline` - a figure that needed
+   * nothing should not be told a number about it.
+   */
+  joinedAcrossHatch?: number;
 }
 
 /** Declared category geometry, when the user has marked it (v2.1). Absent =
@@ -418,11 +426,39 @@ export function runBarDetect(
   // ⚑ The category axis defaults to `x` for the same reason the swatch test
   // does: an unmarked figure is the upright chart the caller drew its baseline
   // for, and that default is stated in `BarDetectCategories.categoryAxis`.
-  const join = baseline
-    ? joinAcrossBaseline(blobs, categories?.categoryAxis ?? 'x', baseline)
+  // ⚑⚑ THE HATCH JOIN RUNS FIRST, and the order is not arbitrary: a hatched bar
+  // that also crosses the baseline arrives as TWO shredded stacks, so each stack
+  // has to be rebuilt before the baseline join can recognise the two halves it
+  // is meant to reunite. Reversed, the baseline join would be offered thirty
+  // fragments and match none of them.
+  //
+  // ⚠️⚑⚑ IT RUNS ONLY WHERE THE CATEGORY AXIS IS DECLARED, and the first version
+  // did not - it defaulted the axis to `x` the way the swatch test does. That
+  // cost real bars and the measurement is worth keeping: on the PMC corpus the
+  // ungated join made FIVE figures worse and none better, 24 bars lost and 0
+  // gained, including `PMC6603941___5` where detection had been PERFECT (21 of
+  // 21) and came back 9 of 12.
+  // ▶ THE REASON IS GEOMETRY, not tuning. That figure is a HORIZONTAL bar chart:
+  // every bar is 20px tall at a pitch of 26, so the gaps are 6px and perfectly
+  // regular, and the bars all start at the same x - overlapping by 98% along the
+  // axis the default wrongly assumed was the category one. Consecutive bars in a
+  // dense horizontal chart are indistinguishable from hatch fragments unless you
+  // know which way the categories run.
+  // ⚑ So the gate is the app's standing rule for every bar technique, the one
+  // `joinAcrossBaseline` above already obeys: it must be gated by something the
+  // app computes from what the USER said, so the population it cannot help is
+  // provably untouched. Without a declared category axis this does nothing.
+  const hatch = categories
+    ? joinAcrossHatch(blobs, categories.categoryAxis)
     : { blobs: [...blobs], joined: 0 };
+  const join = baseline
+    ? joinAcrossBaseline(hatch.blobs, categories?.categoryAxis ?? 'x', baseline)
+    : { blobs: [...hatch.blobs], joined: 0 };
   const whole = join.blobs;
-  const joinReport = baseline ? { joinedAcrossBaseline: join.joined } : {};
+  const joinReport = {
+    ...(baseline ? { joinedAcrossBaseline: join.joined } : {}),
+    ...(hatch.joined > 0 ? { joinedAcrossHatch: hatch.joined } : {}),
+  };
   const plainBoxes = whole.map((b) => ({
     start: { x: b.bbox.minX, y: b.bbox.minY },
     end: { x: b.bbox.maxX, y: b.bbox.maxY },
