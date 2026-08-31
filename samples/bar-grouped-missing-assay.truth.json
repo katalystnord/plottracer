@@ -26,16 +26,16 @@
         "value": 60
       },
       "c1": {
-        "px": 63.33,
+        "px": 89.13,
         "py": 660.28
       },
       "c2": {
-        "px": 888.67,
+        "px": 862.88,
         "py": 660.28,
-        "value": 4
+        "value": 5
       }
     },
-    "categoryAxisNote": "c1/c2 are the two ends of the CATEGORY axis: the OUTER EDGE of the first and last category band. MEASURED off the figure from the bars themselves - the first and last bar (or group) centre, extended by half the pitch - NOT the plot box. They differ: on this figure the plot spines sit outside the category extent, and using them puts every band boundary far enough off to cut through a bar. c2 carries how many categories the figure draws."
+    "categoryAxisNote": "c1/c2 are the two ends of the CATEGORY axis: the OUTER EDGE of the first and last category band. MEASURED off the figure from the bars themselves - the first and last bar (or group) centre, extended by half the pitch - NOT the plot box. They differ: on this figure the plot spines sit outside the category extent, and using them puts every band boundary far enough off to cut through a bar. c2 carries how many categories the figure draws. CORRECTED 2026-08-31: this file declared FOUR categories where the figure draws FIVE (Buffer, Glucose, Lactose, Sucrose, Maltose) - the count of GAPS BETWEEN categories rather than of categories. The wrong pitch was then baked into both ends: 166.5 - 206.3/2 = 63.33 and 785.4 + 206.3/2 = 888.67, which is exactly what was stored. Re-measured off the ink at py 655: group centres 166.5, 321.5, 630.5, 785.5 (Lactose is a lone Treated bar at 506.5, offset right within its own band), pitch 154.75, so the outer edges are 89.13 and 862.88. Control genuinely has no Lactose reading - that is the figure's subject, not a missing category."
   },
   "series": [
     {

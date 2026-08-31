@@ -25,7 +25,7 @@ const FLOORS: Record<string, number> = {
   'bar-tensile-strength': 6,
   'bar-box-plot-tensile-strength': 5,
   'bar-floating-temperature': 12,
-  'bar-grouped-missing-assay': 2,
+  'bar-grouped-missing-assay': 5,
   'bar-grouped-viability': 4,
   'bar-stacked-cost': 3,
 };
@@ -50,16 +50,35 @@ const FLOORS: Record<string, number> = {
  * one tried (matplotlib's own 45-degree gallery chart) read **0 of 16**. So this
  * number is a regression floor, not a claim about the world.
  *
- * ▶ MEASURED 2026-08-31: **32 of 35**, with two failure classes worth naming.
- *   · `bar-grouped-missing-assay` 2/4 - `Glucose` and `Sucrose` are WIDER than
- *     their category band, so a vertical slice catches its own label plus a
- *     piece of its neighbour's (`"Glucose Lact"`, `"ose Sucrose"`). The region
- *     follows the BAND and the label does not respect it. Same root cause as the
- *     45-degree failure, but on an ordinary horizontal figure, which makes it
- *     the more important half.
- *   · `bar-stacked-cost` 3/4 - `Q1` read as `Ql`, confidence 73. Character-level
- *     OCR noise with nothing for us to fix: it is what the offer window exists
- *     for, and a person corrects it in seconds.
+ * ▶ MEASURED 2026-08-31: **35 of 36**, and getting there corrected two
+ * instruments before it corrected any code.
+ *
+ * ⚠️⚑⚑ THE FIRST RUN SAID 32 OF 35, AND I DIAGNOSED IT WRONG. Two figures
+ * looked like feature failures and neither was:
+ *
+ *   1. `bar-grouped-missing-assay` read 2/4 as `"Glucose Lact"`, `"ose
+ *      Sucrose"` - which I read as "labels wider than their band" and nearly
+ *      built a fix for. **The TRUTH FILE was wrong.** It declared FOUR
+ *      categories where the figure draws FIVE: the count of GAPS BETWEEN
+ *      categories rather than of categories, with the resulting wrong pitch
+ *      then baked into both axis ends (166.5 - 206.3/2 = 63.33 and
+ *      785.4 + 206.3/2 = 888.67, exactly what was stored). Every band was 25%
+ *      too wide, so of course each slice caught its neighbour.
+ *   2. With that fixed the reads came back perfect - `Lactose` 94, `Sucrose` 96,
+ *      `Maltose` 91 - and still scored 2/5, because **this harness built its
+ *      expected list by first appearance across series**. `Control` has no
+ *      Lactose (that is the figure's subject), so Lactose was appended LAST and
+ *      every position after it compared against the wrong name.
+ *
+ * ▶ **A wrong instrument does not look wrong; it looks like a broken feature.**
+ * Both faults pointed at the same figure and both produced plausible-looking
+ * evidence for a bug that did not exist. That is why the ground truth is checked
+ * against the ink when it disagrees with a reading, rather than the reading
+ * being assumed at fault.
+ *
+ * ⚑ THE ONE REAL MISS: `bar-stacked-cost` reads `Q1` as `Ql`, confidence 73.
+ * Character-level OCR noise with nothing for us to fix - it is exactly what the
+ * offer window exists for, and a person corrects it in seconds.
  */
 describe('reading the category names on every figure we ship', () => {
   it('holds its corpus score', { timeout: 600000 }, async () => {
@@ -74,7 +93,17 @@ describe('reading the category names on every figure we ship', () => {
       };
       const c1 = truth.calibration.anchors['c1']!, c2 = truth.calibration.anchors['c2']!;
       const N = c2.value!;
+      // ⚑⚑ AXIS ORDER, NOT FIRST-APPEARANCE ORDER. A series lists its categories
+      // along the axis, but a series may be MISSING one - which is the whole
+      // subject of `bar-grouped-missing-assay`, where Control has no Lactose. A
+      // naive merge across series appends the missing one at the END, so every
+      // later position is compared against the wrong name and three perfect
+      // readings (`Lactose` 94, `Sucrose` 96, `Maltose` 91) score as failures.
+      // ▶ The series that carries the MOST categories is the one that saw the
+      // whole axis; anything it still lacks is appended after it.
+      const longest = truth.series.reduce((a, b) => (b.points.length > a.points.length ? b : a));
       const names: string[] = [];
+      for (const p of longest.points) if (p.category && !names.includes(p.category)) names.push(p.category);
       for (const s of truth.series) for (const p of s.points) if (p.category && !names.includes(p.category)) names.push(p.category);
       const dividers = Array.from({ length: N + 1 }, (_, i) => ({ x: c1.px + ((c2.px - c1.px) * i) / N, y: c1.py + ((c2.py - c1.py) * i) / N }));
       const along = axisRunsAlong({ x: c1.px, y: c1.py }, { x: c2.px, y: c2.py });
@@ -118,8 +147,8 @@ describe('reading the category names on every figure we ship', () => {
       expect(scores[name], `${name} read ${scores[name]} of its category names, floor ${floor}\n${out.join('\n')}`)
         .toBeGreaterThanOrEqual(floor);
     }
-    expect(totalHit, `corpus total\n${out.join('\n')}`).toBeGreaterThanOrEqual(32);
-    expect(totalAll).toBe(35);
+    expect(totalHit, `corpus total\n${out.join('\n')}`).toBeGreaterThanOrEqual(35);
+    expect(totalAll).toBe(36);
   });
 });
 
