@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Releases - PlotTracer - turn any graph back into data</title>
-<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers - across XY, log, bar, histogram, box-plot, line, pie/donut, heatmap, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
+<title>Accuracy - PlotTracer - measured on public corpora</title>
+<meta name="description" content="How accurately PlotTracer reads a figure, scored against two public corpora from the CHART-Infographics competition series using the competition's own metric - automatic extraction, assisted extraction and label reading reported apart, with the harness and image lists public.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="PlotTracer - turn any graph back into data">
+<meta property="og:title" content="PlotTracer accuracy - measured on public corpora">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
 <meta property="og:image" content="https://plottracer.com/assets/shot-hero.png">
-<meta property="og:url" content="https://plottracer.com/">
-<link rel="canonical" href="https://plottracer.com/">
+<meta property="og:url" content="https://plottracer.com/accuracy.html">
+<link rel="canonical" href="https://plottracer.com/accuracy.html">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23f1f6f7'/%3E%3Cg transform='translate(11,11) scale(1.22)' stroke-linecap='round'%3E%3Ccircle cx='26' cy='27' r='17' fill='none' stroke='%23167782' stroke-width='4.2'/%3E%3Cpath d='M16 35 C 21 33 24 21 36 18.5' fill='none' stroke='%23167782' stroke-width='3.5'/%3E%3Ccircle cx='26.3' cy='25.2' r='3.9' fill='%23fff' stroke='%23167782' stroke-width='2.5'/%3E%3Cline x1='40' y1='41' x2='54' y2='55' stroke='%23167782' stroke-width='5.4'/%3E%3C/g%3E%3C/svg%3E">
 <style>
@@ -164,7 +164,7 @@
   .thesis .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 60px); align-items: center; }
   @media (max-width: 820px) { .thesis .wrap { grid-template-columns: 1fr; } }
 
-  /* ---- what's new in 2.3 ---- */
+  /* ---- what's new ---- */
   .whatsnew { background: var(--paper); border-top: 1px solid var(--line); }
   .whatsnew .wrap { padding-top: clamp(48px, 7vw, 76px); padding-bottom: clamp(48px, 7vw, 76px); }
   .wn-head { max-width: 44em; margin-bottom: clamp(26px, 4vw, 40px); }
@@ -308,7 +308,6 @@
   .shot-card figcaption { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-soft); letter-spacing: 0.01em; margin: 0; }
   .shot-card figcaption b { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; }
 </style>
-</head>
 <body>
 
 <!-- ===================== TOP BAR ===================== -->
@@ -331,135 +330,138 @@
     <nav class="top">
       <a class="hideable" href="index.html#how">How it works</a>
       <a class="hideable" href="index.html#types">Graph types</a>
-      <a href="accuracy.html">Accuracy</a>
-      <a href="releases.html" aria-current="page">Releases</a>
+      <a href="accuracy.html" aria-current="page">Accuracy</a>
+      <a href="releases.html">Releases</a>
       <a href="https://github.com/katalystnord/plottracer">GitHub</a>
       <a href="index.html#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
     </nav>
   </div>
 </header>
 
-<style>
-  .rels { background: var(--paper); }
-  .rels .wrap { padding-top: clamp(40px, 6vw, 68px); padding-bottom: clamp(48px, 7vw, 80px); }
-  .rels-head { max-width: 46em; margin-bottom: clamp(28px, 4vw, 44px); }
-  .rels-head .eyebrow { margin-bottom: 12px; }
-  .rels-head h1 { font-size: clamp(1.7rem, 3.4vw, 2.5rem); }
-  .rels-head p { color: var(--ink-soft); margin: 14px 0 0; }
-  .rel { display: grid; grid-template-columns: 150px 1fr; gap: clamp(16px, 3vw, 34px);
-         padding: clamp(24px, 3vw, 34px) 0; border-top: 1px solid var(--line); }
-  @media (max-width: 720px) { .rel { grid-template-columns: 1fr; gap: 10px; } }
-  .rel-head { display: flex; flex-direction: column; gap: 4px; }
-  .rel-ver { font-size: 1.15rem; font-weight: 700; color: var(--teal-deep); }
-  .rel-when { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); letter-spacing: 0.04em; }
-  .rel-body h2 { font-size: 1.22rem; margin: 0 0 8px; }
-  .rel-lede { color: var(--ink); margin: 0 0 14px; }
-  .rel-body ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); }
-  .rel-body li { margin-bottom: 7px; }
-  .rel-more { margin: 14px 0 0; font-family: var(--mono); font-size: 0.84rem; }
-</style>
+<span id="top"></span>
 
-<section class="rels">
+<!-- ===================== PAGE HEAD ===================== -->
+<section class="hero" style="padding-bottom:0;">
   <div class="wrap">
-    <div class="rels-head">
-      <span class="eyebrow">Releases</span>
-      <h1>What changed, and why.</h1>
-      <p>A running log, newest first. PlotTracer is developed in the open, and each
-         release here is a theme rather than a patch note: what the tool learned to
-         read, and what it stopped getting wrong.</p>
-    </div>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.4.0</span>
-          <span class="rel-when">2026-09</span>
-        </div>
-        <div class="rel-body">
-          <h2>The release that stopped making you type</h2>
-          <p class="rel-lede">Category names are read off the figure instead of typed, bars filled with a hatch come back as bars rather than stripes, a bar is measured to the outside of its own outline, and the download got smaller while all of that was added to it.</p>
-          <ul>
-        <li>Drag one box round the row of labels under an axis and every category name comes back at once. The band is cut at the category boundaries you already marked, so each label is read on its own rather than the whole axis being read as one strip.</li>
-        <li>Nothing is written until you say so: the readings arrive in an offer window, one row per category, and each row shows the pixels it was read from beside the name made of them. A row left empty is left alone.</li>
-        <li>Labels printed sideways are read too. Every region is tried at all four quarter turns, and the axis decides which way its labels run rather than each label deciding for itself.</li>
-        <li>A hatch cuts a bar into stripes, and colour alone hands back the stripes. The pieces are rejoined using the category boundaries you marked as the evidence that a pile of fragments is one bar.</li>
-        <li>A figure that strokes its bars used to read every bar low by about a pixel, because the fill stops just inside the stroke. The stroke is now measured and crossed; a figure that draws no outline is untouched.</li>
-        <li>The Linux .deb went from 106.3 MB to 93.2 MB while gaining an OCR engine and its language data. Every release until now packaged about 107 MB of library code nothing in the app could reach.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.4.0">Full release notes for 2.4.0</a></p>
-        </div>
-      </article>
-
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.3.0</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>The release where the bar chart grew up</h2>
-          <p class="rel-lede">A bar chart now says where its categories are before it lets you capture one, the error-bar model was rebuilt around the datum that owns it, one click and two clicks became the same gesture on every output panel, and the release was audited until it stopped finding things.</p>
-          <ul>
-        <li>A bar chart is calibrated in one walk, and the categories are part of it: two clicks for the value axis, two for the outer edges of the first and last category, and the count typed on the last one. Capture refuses until the walk is finished, and says which step is waiting.</li>
-        <li>A bar whose near end does not sit on the baseline reports both of its measured ends, Min and Max, instead of a single Value that would silently mean the low end on one row and the high end on the next.</li>
-        <li>A cap is now a member of its datum's own row, so the drawing and the record cannot disagree about which cap belongs to which reading. Caps are always draggable, and the handle end is the cap.</li>
-        <li>A value you typed rather than measured reads in square brackets on screen and carries its own source column into the file.</li>
-        <li>Then it was audited twice, once by hand and once by a fleet, and forty findings were fixed before the tag.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.3.0">Full release notes for 2.3.0</a></p>
-        </div>
-      </article>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.2.0</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>Heatmaps</h2>
-          <p class="rel-lede">Heatmaps, the commonest figure in the literature and the first coherent digitizer workflow for one, plus the colour key's own extent on screen, and the release where CI started running the tests.</p>
-          <ul>
-        <li>A heatmap is the most common figure in the scientific literature, with 406,986 articles containing one, and the one no digitizer had handled coherently.</li>
-        <li>Every cell is read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly, so unequal columns come back unequal.</li>
-        <li>The colour key is calibrated as a third axis, with its own kind, scale, ticks and refusals.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.2.0">Full release notes for 2.2.0</a></p>
-        </div>
-      </article>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.1.0</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>Category ticks</h2>
-          <p class="rel-lede">Category ticks for bar charts, a corrected spider reading, and a large amount of work on the parts of the app that write your numbers into a file.</p>
-          <ul>
-        <li>A bar's category stops being guessed from where it landed relative to its neighbours and becomes the band its own pixel falls in.</li>
-        <li>A spider chart's marker radius was being over-read, which was a live wrong reading rather than a cosmetic fault.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.1.0">Full release notes for 2.1.0</a></p>
-        </div>
-      </article>
-      <article class="rel">
-        <div class="rel-head">
-          <span class="rel-ver data">2.0.0</span>
-          <span class="rel-when">2026-08</span>
-        </div>
-        <div class="rel-body">
-          <h2>Bar charts become a first-class record</h2>
-          <p class="rel-lede">Every digitizer treats a bar chart as a scatter plot you happen to click on the top of each bar. That is not what a bar is.</p>
-          <ul>
-        <li>A bar is an interval. It runs from somewhere to somewhere, and both ends carry meaning.</li>
-        <li>Read as a single point, a floating bar loses its lower end, a stacked segment reports the total instead of its own contribution, and a bar below the baseline comes back positive.</li>
-        <li>So a bar is captured corner to corner, and both ends reach the record.</li>
-          </ul>
-          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.0.0">Full release notes for 2.0.0</a></p>
-        </div>
-      </article>
+    <span class="eyebrow">Measured</span>
+    <h1 style="max-width:22ch;">How well it reads a figure.</h1>
+    <p class="lede">Every number on this page comes from running PlotTracer's own shipped
+      code over public corpora that someone else built and someone else transcribed,
+      scored with the competition's own metric. The harness and the exact image lists are
+      public, so anyone can run it again and disagree with us.</p>
   </div>
 </section>
 
+<!-- ===================== EVIDENCE ===================== -->
+<section id="evidence" class="evidence">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Automatic extraction</span>
+      <h2>Benchmark results</h2>
+      <p>
+        PlotTracer's automatic extraction, scored against two public corpora from the
+        CHART-Infographics competition series using the competition's own metric.
+        Box plots appear in both corpora and are excluded: PlotTracer captures them by
+        hand but does not auto-extract them.
+      </p>
+    </div>
+
+    <!-- BENCHMARK-TABLES:START (generated by scripts/update-benchmark-table.mjs - do not edit by hand) -->
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Chart type</th><th scope="col">[1] Real figures</th><th scope="col">[2] Synthetic figures</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Bar</th><td><span class="ev-val">76.1%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">35.3%</span><span class="ev-n">n = 6,739</span></td></tr>
+            <tr><th scope="row">Line</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">92.0%</span><span class="ev-n">n = 2,236</span></td></tr>
+            <tr><th scope="row">Scatter</th><td><span class="ev-val">91.3%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">32.1%</span><span class="ev-n">n = 11,996</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Share of elements recovered within the competition's tolerance, scored in image space
+      by automatic extraction. PlotTracer <span class="data">2.4.0</span> at its
+      default settings (tolerance 60, minimum blob diameter
+      3), measured 2026-09-01.
+    </p>
+    <ol class="ev-refs">
+      <li><span class="ev-refnum">[1]</span> K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, &ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001. doi:<a href="https://doi.org/10.1109/ICPR56361.2022.9956289">10.1109/ICPR56361.2022.9956289</a><span class="ev-refnote"> Charts from open-access PubMed Central papers. 799 figures scored.</span></li>
+      <li><span class="ev-refnum">[2]</span> K. Davila, B. U. Kota, S. Setlur, V. Govindaraju, C. Tensmeyer, S. Shekhar and R. Chaudhry, &ldquo;ICDAR 2019 Competition on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>Int. Conf. on Document Analysis and Recognition</i>, 2019, pp. 1594&ndash;1599. doi:<a href="https://doi.org/10.1109/ICDAR.2019.00203">10.1109/ICDAR.2019.00203</a><span class="ev-refnote"> Generated with matplotlib from real data sources. 808 figures scored.</span></li>
+    </ol>
+    <!-- BENCHMARK-TABLES:END -->
+
+    <div class="ev-fail">
+      <!-- ⚑ "Current", deliberately. These are measurements of one build on one
+           day, not properties of the problem - and several are actively being
+           worked on. "Limitations" alone reads as permanent. It does NOT promise
+           a fix for each.
+           ⚑⚑ This comment USED to say greyscale was "close to a scope boundary,
+           since colour-keyed extraction has nothing to key on". That was
+           inherited, repeated, and never measured - and it is FALSE: 81% of
+           greyscale figures carry as many distinct shades as they have series,
+           so the signal is there and our ruler was too coarse for it. The
+           visible bullet was corrected on 2026-08-01; this comment was not, and
+           went on telling the next editor to preserve the refuted claim. Fixed
+           2026-08-03. Grade the comments against the measurements too, not just
+           the prose a reader sees. -->
+      <h3>Current limitations</h3>
+      <ul>
+        <li>
+          <b>Greyscale.</b> About 10 points on bars and 37 on lines in [1]. Not for
+          the reason we first assumed: monochrome figures do carry the signal -
+          across 101 greyscale bar figures the number of distinct grey shades matches
+          the number of series 81% of the time. The loss is that a third of the gaps
+          between adjacent shades are narrower than the colour tolerance, so two
+          series match as one. Normalising a figure's contrast before matching
+          recovers part of it, and is being worked on.
+        </li>
+        <li>
+          <b>Adjacent same-coloured bars.</b> Bars of one colour with no gap merge into a
+          single region. Across 384 bar figures in [1]: 82.2% where bars are separated,
+          71.1% where they touch (89.2% and 73.6% on colour figures alone).
+        </li>
+        <li>
+          <b>Dense scatter.</b> Overlapping markers are over-detected in [1] and
+          under-detected in [2]. In [1] roughly half the surplus detections are other ink
+          inside the plot area - grid lines, error bars and trend lines.
+        </li>
+      </ul>
+    </div>
+
+    <p class="ev-note">
+      <b>Method.</b> These corpora score fully automatic recognition, while PlotTracer is
+      human-in-the-loop, so the two are adjacent rather than equivalent. The table above
+      is the <b>automatic</b> path: the harness supplies the two inputs a person supplies
+      - the plot box, and one colour pick per visible colour - and nothing else;
+      everything after that is the application's own shipped code at its default settings.
+      Scoring is in image space at the competition's tolerance of 5% of the smaller image
+      dimension.
+      <b>An assisted path is measured separately and reported apart</b>, never blended
+      into the table: the same bar figures with the two things a person declares in the
+      calibration walk, the marked category axis and the baseline the bars stand on. It is
+      a ceiling rather than a user's day, because those declarations come from the corpus
+      placed exactly. It moves bar recall by 1.2 points on [1] and by 26.7 on [2], where
+      hatched fills are common.
+      <b>Reading a chart's own words is measured the same way</b>, against the corpus's
+      own transcription: <!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->79.8% of 12,751 tick labels across 887 figures
+      from [1] came back exactly right, matched against the corpus's own transcription of
+      each one. Those are the labels printed level, 95.4% of every tick label in that corpus.<!-- BENCHMARK-OCR:END -->
+      <b>Manual capture is measured separately too</b>, in data space: <!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->driving the
+      application's own capture session across 344 bar figures from [1], with the
+      calibration recovered from each figure's own tick labels, 80.9% of 5,778 bars
+      read within 1% of the corpus value and 79.4% of figures had every bar within
+      that. 40 figures are excluded, most for carrying no two numeric tick
+      labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->
+      The harness and the exact image lists are at
+      <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
 <footer>
   <div class="wrap">
     <div class="col">
-      <a class="brand" href="#top" style="margin-bottom:10px;">
+      <a class="brand" href="index.html" style="margin-bottom:10px;">
         <svg viewBox="0 0 512 512" aria-hidden="true">
           <rect x="1" y="1" width="510" height="510" rx="113" fill="var(--paper)" stroke="var(--line)" stroke-width="2"/>
           <g transform="translate(56,56) scale(6.25)" stroke-linecap="round">
@@ -490,22 +492,5 @@
     </div>
   </div>
 </footer>
-<script>
-  // Keep "Current release" in step with the actual Latest GitHub release, so the
-  // version never has to be hand-edited on each tag. The baked-in text above is
-  // the fallback (shown if the fetch fails or JS is off); on success it updates
-  // to the real latest NON-prerelease tag. `releases/latest` already excludes
-  // pre-releases (rc's), which is exactly what we want to advertise.
-  (function () {
-    var el = document.getElementById('release-tag');
-    if (!el || !window.fetch) return;
-    fetch('https://api.github.com/repos/katalystnord/plottracer/releases/latest', {
-      headers: { Accept: 'application/vnd.github+json' },
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.tag_name) el.textContent = d.tag_name; })
-      .catch(function () { /* keep the baked-in fallback */ });
-  })();
-</script>
 </body>
 </html>

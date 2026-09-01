@@ -5708,7 +5708,13 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // named treatments against real time, so its two axes are captured by
     // opposite means in one figure. The first two shipped as value × value only
     // until David read the calibration card and said so.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(27);
+    // 27 -> 28 with v2.4's hatched bar chart. It is here to be practised on: a
+    // hatch parts a bar's fill into fragments, and no other example ships a
+    // figure where that happens, so without it the join has nothing a person
+    // can try it against. ⚑ This count is why the example's Help entry exists
+    // at all - it was added without updating this number, and the board caught
+    // it before the tag rather than a user finding an invisible example.
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(28);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();

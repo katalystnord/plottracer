@@ -164,7 +164,7 @@
   .thesis .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 60px); align-items: center; }
   @media (max-width: 820px) { .thesis .wrap { grid-template-columns: 1fr; } }
 
-  /* ---- what's new in 2.3 ---- */
+  /* ---- what's new ---- */
   .whatsnew { background: var(--paper); border-top: 1px solid var(--line); }
   .whatsnew .wrap { padding-top: clamp(48px, 7vw, 76px); padding-bottom: clamp(48px, 7vw, 76px); }
   .wn-head { max-width: 44em; margin-bottom: clamp(26px, 4vw, 40px); }
@@ -331,6 +331,7 @@
     <nav class="top">
       <a class="hideable" href="#how">How it works</a>
       <a class="hideable" href="#types">Graph types</a>
+      <a href="accuracy.html">Accuracy</a>
       <a href="releases.html">Releases</a>
       <a href="https://github.com/katalystnord/plottracer">GitHub</a>
       <a href="#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
@@ -427,68 +428,71 @@
   </div>
 </section>
 
-<!-- ===================== WHAT'S NEW IN 2.3 ===================== -->
+<!-- ===================== WHAT'S NEW IN 2.4 ===================== -->
 <section class="whatsnew">
   <div class="wrap">
     <div class="wn-head">
-      <span class="eyebrow">New in 2.3</span>
-      <h2>The release where the bar chart grew up.</h2>
-      <p>Categories are calibrated, not guessed. Error caps belong to the reading they
-        qualify. Every output panel answers a click the same way. And the whole thing was
-        audited twice before it was tagged.</p>
+      <span class="eyebrow">New in 2.4</span>
+      <h2>The release that stopped making you type.</h2>
+      <p>Category names are read off the figure. Bars filled with a hatch come back as
+        bars rather than stripes. A bar is measured to the outside of its own outline.
+        And the download got smaller while all of that was added to it.</p>
     </div>
     <div class="wn-grid">
 
       <div class="wn">
-        <h3>A bar chart is calibrated in one walk</h3>
-        <p>Two clicks for the value axis, two for the outer edges of the first and last
-          category, and the count typed on the last one. Capture refuses until the walk is
-          finished, and says which step is waiting.</p>
+        <h3>Read the category names off the figure</h3>
+        <p>Drag one box round the row of labels under the axis and every name comes back at
+          once. The band is cut at the category boundaries you already marked, so each label
+          is read on its own rather than the whole axis being read as one strip - which does
+          not work, and was measured not working.</p>
       </div>
 
       <div class="wn">
-        <h3>A floating bar reports both ends</h3>
-        <p><span class="data">Min</span> and <span class="data">Max</span> in two columns,
-          decided by measuring whether the bar touches the baseline rather than assuming it
-          does. A bar drawn across zero stays one bar instead of arriving as two.</p>
+        <h3>Nothing is written until you say so</h3>
+        <p>The readings arrive in an offer window, one row per category, and
+          <b>each row shows the pixels it was read from</b> beside the name made of them.
+          Correct anything wrong, then apply. A row left empty is left alone: an empty
+          reading means nothing was read, never erase this name.</p>
       </div>
 
       <div class="wn">
-        <h3>A cap belongs to its datum's row</h3>
-        <p>Upper, lower, left and right are slots on the reading itself, so the drawing and
-          the record cannot disagree about which cap belongs to which point. Caps are always
-          draggable, and the handle end <em>is</em> the cap.</p>
+        <h3>Labels printed sideways are handled</h3>
+        <p>Every region is read at all four quarter turns, and the <em>axis</em> decides which
+          way its labels run rather than each label deciding for itself. Any row can still be
+          turned by hand, and its picture turns with it, so you can see what the reader is
+          looking at.</p>
       </div>
 
       <div class="wn">
-        <h3>One click selects, two edit</h3>
-        <p>Click a row on any output panel and it rings on the figure; double click to edit the
-          fields that type offers. Bar, box plot, pie and the histogram's bins could not do the
-          first half at all before, so a table of twenty bars could not tell you which bar it
-          meant.</p>
+        <h3>A hatched bar is one bar</h3>
+        <p>A hatch cuts a bar into stripes, and colour alone hands back the stripes.
+          PlotTracer joins them, using the category boundaries you marked as the evidence that
+          a pile of pieces is a single bar - so patterned and print-ready figures read like
+          any other.</p>
       </div>
 
       <div class="wn">
-        <h3>Which numbers came off the pixels</h3>
-        <p>On XY charts, spider profiles and heatmap cells, a value you typed rather than
-          measured reads in <span class="data">[square brackets]</span> on screen and carries its
-          own source column into the file. Your eye is an instrument too; the record says which
-          one took the reading.</p>
+        <h3>A bar is measured to the outside of its outline</h3>
+        <p>A figure that strokes its bars draws that stroke in a colour the trace does not
+          match, so every outlined bar used to read low by about a pixel - the kind of bias a
+          person cannot see and cannot correct. The stroke is now measured and crossed. A
+          figure that draws no outline is untouched.</p>
       </div>
 
       <div class="wn">
-        <h3>A categorical line measures its category</h3>
-        <p>It used to work out its category from left-to-right capture order, so a category
-          with no point silently moved every later one up. It now sits on a banded axis and
-          reads the band its own pixel falls in.</p>
+        <h3>A smaller download, with OCR added</h3>
+        <p>The Linux <span class="data">.deb</span> went from
+          <span class="data">106.3 MB</span> to <span class="data">93.2 MB</span> while
+          gaining an OCR engine and its language data. Every release until now packaged about
+          107 MB of library code nothing in the app could reach.</p>
       </div>
 
     </div>
-    <p class="wn-foot">Then it was audited twice, once by hand and once by a fleet, and
-      <b>forty findings were fixed before the tag</b> - among them a stacked bar chart that
-      valued one series by the wrong rule depending on what was selected at export, and a
-      spider chart where one error cap dropped every reading but the first spoke from all nine
-      export formats while the panel went on showing them all.</p>
+    <p class="wn-foot">All of it runs on your machine. The reader and its English data are
+      <b>bundled in the app</b>, and no part of a figure leaves it to have a label read -
+      which is tested rather than asserted: the test removes the network functions outright
+      and the labels still read.</p>
     <p class="wn-foot" style="margin-top:14px;"><a href="releases.html">Every release, newest first</a>
       - what each one fixed, as plainly as what it added.</p>
   </div>
@@ -580,6 +584,11 @@
         <figcaption><b>Heatmaps - no other digitizer reads them coherently.</b> Every cell read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly - so unequal columns come back unequal. The matrix is tinted with the figure&rsquo;s own colours, and a picked cell shows all three of its coordinates.</figcaption>
       </figure>
       <figure class="shot-card" style="grid-column: 1 / -1;">
+        <img class="shot" src="assets/shot-hatched.png" width="1999" height="1307"
+          alt="A bar chart of extraction yield by solvent in PlotTracer, every bar filled with a diagonal hatch, each one captured whole with a point at its top and its baseline, the loupe magnifying a bar's stroked top-left corner, and the six solvent names - Water, Ethanol, Methanol, Acetone, Hexane, Ethyl acetate - listed down the right panel beside their yields, having been read off the axis rather than typed.">
+        <figcaption><b>Hatched and patterned fills, read as whole bars.</b> A hatch cuts a bar into stripes, and a tracer that goes on colour alone hands back the stripes. PlotTracer puts them back together, using the category boundaries you already marked as the evidence that a pile of pieces is one bar. The six solvent names came off the axis in a single drag - read from the figure, shown to you with the pixels they came from, and typed nowhere.</figcaption>
+      </figure>
+      <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-bar.png" width="2980" height="1894"
           alt="A floating bar chart in PlotTracer being captured - monthly temperature ranges, each bar recorded by dragging corner to corner so both of its ends are measured, bars that cross zero kept whole, and the categories named down the right panel beside each bar's Min and Max.">
         <figcaption><b>Floating bars, measured end to end.</b> Both corners are recorded, so a bar reports its own span rather than a single baseline-relative number - and a range that crosses zero stays one bar instead of being split at the axis.</figcaption>
@@ -595,9 +604,14 @@
         <figcaption><b>True histogram bins.</b> Records the interval each bar spans and its height - genuine bin edges, not just centres.</figcaption>
       </figure>
       <figure class="shot-card">
+        <img class="shot" src="assets/shot-donut.png" width="1999" height="1307"
+          alt="A donut chart in PlotTracer titled Most popular donut flavours, its centre marked inside the hole where nothing can be clicked, points placed around the outer rim, and six flavours listed in the right panel with their measured percentages: Glazed 32.83, Chocolate 24.43, Boston cream 17.12, Jelly 11.62, Old-fashioned 8.39, Maple bar 5.61.">
+        <figcaption><b>A donut has nothing at its centre to click.</b> (Pun intended.) So the centre is <em>fitted</em> from points placed around the rim - which is what makes a donut, and a tilted 3D top face, readable at all. Every flavour here lands within <b>0.08 percentage points</b> of the number the figure prints beside it, and you can check every one of them from the picture.</figcaption>
+      </figure>
+      <figure class="shot-card">
         <img class="shot" src="assets/shot-pie.png" width="2980" height="1894"
           alt="A pie chart in PlotTracer - biopolymer film market share - with one slice pulled away from the centre and captured about its own apex, the pie's centre fitted from points placed around the outline rather than clicked, and each sector's name and measured percentage listed in the right panel.">
-        <figcaption><b>Pie &amp; donut - including the slice pulled out.</b> The centre is <em>fitted</em> from the outline rather than clicked, which is what makes a donut, an exploded slice and a tilted 3D top face readable at all. Sectors are reported as measured - these five sum to 99.88%, not a tidied 100.</figcaption>
+        <figcaption><b>Pie - including the slice pulled out.</b> An exploded slice is captured about its own apex, so pulling one away from the centre costs nothing and changes no other sector. Sectors are reported as measured - these five sum to 99.88%, not a tidied 100.</figcaption>
       </figure>
       <figure class="shot-card">
         <img class="shot" src="assets/shot-spider.png" width="2980" height="1894"
@@ -750,6 +764,12 @@
       </div>
 
       <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="1.5" stroke-dasharray="3 2.4"/><path d="M6.5 14.5l2.6-6 2.6 6M7.4 12.6h3.4"/><path d="M15 14.5V9.5M15 11.2c1.4-1.6 3.2-.9 3.2.9v2.4"/></svg>
+        <h3>Reads the labels for you</h3>
+        <p>Drag one box round the category labels and the names come back read off the figure - each shown beside the pixels it was read from, for you to approve or correct before anything lands. Sideways labels included, and the reader is bundled in the app, so nothing leaves your machine.</p>
+      </div>
+
+      <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V4"/><path d="M3 20h18"/><rect x="6" y="12" width="3.4" height="8"/><rect x="10.3" y="8" width="3.4" height="12"/><rect x="14.6" y="14" width="3.4" height="6"/></svg>
         <h3>True histogram bins</h3>
         <p>Records genuine bin edges and heights - the interval a bar spans, not just its centre.</p>
@@ -853,108 +873,25 @@
 </section>
 
 
-<!-- ===================== EVIDENCE ===================== -->
+<!-- ===================== EVIDENCE (teaser; the numbers live on accuracy.html) =====================
+     ⚑ The full band moved to its own page on 2026-09-01. The home page says WHAT the tool
+     does; the second page says HOW WELL, which is where measured numbers belong and where a
+     reader who wants them will go looking. Nothing was dropped in the move - the table, the
+     method, the assisted and label-reading figures and the residue all went across whole,
+     and scripts/update-benchmark-table.mjs now regenerates them there. -->
 <section id="evidence" class="evidence">
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Measured</span>
-      <h2>Benchmark results</h2>
-      <p>
-        PlotTracer's automatic extraction, scored against two public corpora from the
-        CHART-Infographics competition series using the competition's own metric.
-        Box plots appear in both corpora and are excluded: PlotTracer captures them by
-        hand but does not auto-extract them.
-      </p>
+      <h2>We publish our accuracy.</h2>
+      <p>Scored against two public corpora from the CHART-Infographics competition series,
+        with the competition's own metric and someone else's transcriptions: on real
+        published figures, <b>91.3% of scatter points</b> and <b>76.1% of bars</b> recovered
+        with no human in the loop at all. Automatic capture, assisted capture and reading a
+        chart's own words are reported apart, never blended together, and the harness and the
+        exact image lists are public so anyone can run it again.</p>
+      <p style="margin-top:20px;"><a class="btn btn-primary" href="accuracy.html">See the numbers</a></p>
     </div>
-
-    <!-- BENCHMARK-TABLES:START (generated by scripts/update-benchmark-table.mjs - do not edit by hand) -->
-    <div class="ev-scroll">
-      <table class="ev-results">
-        <thead><tr><th scope="col">Chart type</th><th scope="col">[1] Real figures</th><th scope="col">[2] Synthetic figures</th></tr></thead>
-        <tbody>
-            <tr><th scope="row">Bar</th><td><span class="ev-val">76.1%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">35.3%</span><span class="ev-n">n = 6,739</span></td></tr>
-            <tr><th scope="row">Line</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">92.0%</span><span class="ev-n">n = 2,236</span></td></tr>
-            <tr><th scope="row">Scatter</th><td><span class="ev-val">91.3%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">32.1%</span><span class="ev-n">n = 11,996</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="ev-stamp">
-      Share of elements recovered within the competition's tolerance, scored in image space
-      by automatic extraction. PlotTracer <span class="data">2.4.0</span> at its
-      default settings (tolerance 60, minimum blob diameter
-      3), measured 2026-09-01.
-    </p>
-    <ol class="ev-refs">
-      <li><span class="ev-refnum">[1]</span> K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, &ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001. doi:<a href="https://doi.org/10.1109/ICPR56361.2022.9956289">10.1109/ICPR56361.2022.9956289</a><span class="ev-refnote"> Charts from open-access PubMed Central papers. 799 figures scored.</span></li>
-      <li><span class="ev-refnum">[2]</span> K. Davila, B. U. Kota, S. Setlur, V. Govindaraju, C. Tensmeyer, S. Shekhar and R. Chaudhry, &ldquo;ICDAR 2019 Competition on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>Int. Conf. on Document Analysis and Recognition</i>, 2019, pp. 1594&ndash;1599. doi:<a href="https://doi.org/10.1109/ICDAR.2019.00203">10.1109/ICDAR.2019.00203</a><span class="ev-refnote"> Generated with matplotlib from real data sources. 808 figures scored.</span></li>
-    </ol>
-    <!-- BENCHMARK-TABLES:END -->
-
-    <div class="ev-fail">
-      <!-- ⚑ "Current", deliberately. These are measurements of one build on one
-           day, not properties of the problem - and several are actively being
-           worked on. "Limitations" alone reads as permanent. It does NOT promise
-           a fix for each.
-           ⚑⚑ This comment USED to say greyscale was "close to a scope boundary,
-           since colour-keyed extraction has nothing to key on". That was
-           inherited, repeated, and never measured - and it is FALSE: 81% of
-           greyscale figures carry as many distinct shades as they have series,
-           so the signal is there and our ruler was too coarse for it. The
-           visible bullet was corrected on 2026-08-01; this comment was not, and
-           went on telling the next editor to preserve the refuted claim. Fixed
-           2026-08-03. Grade the comments against the measurements too, not just
-           the prose a reader sees. -->
-      <h3>Current limitations</h3>
-      <ul>
-        <li>
-          <b>Greyscale.</b> About 10 points on bars and 37 on lines in [1]. Not for
-          the reason we first assumed: monochrome figures do carry the signal -
-          across 101 greyscale bar figures the number of distinct grey shades matches
-          the number of series 81% of the time. The loss is that a third of the gaps
-          between adjacent shades are narrower than the colour tolerance, so two
-          series match as one. Normalising a figure's contrast before matching
-          recovers part of it, and is being worked on.
-        </li>
-        <li>
-          <b>Adjacent same-coloured bars.</b> Bars of one colour with no gap merge into a
-          single region. Across 384 bar figures in [1]: 82.2% where bars are separated,
-          71.1% where they touch (89.2% and 73.6% on colour figures alone).
-        </li>
-        <li>
-          <b>Dense scatter.</b> Overlapping markers are over-detected in [1] and
-          under-detected in [2]. In [1] roughly half the surplus detections are other ink
-          inside the plot area - grid lines, error bars and trend lines.
-        </li>
-      </ul>
-    </div>
-
-    <p class="ev-note">
-      <b>Method.</b> These corpora score fully automatic recognition, while PlotTracer is
-      human-in-the-loop, so the two are adjacent rather than equivalent. The table above
-      is the <b>automatic</b> path: the harness supplies the two inputs a person supplies
-      - the plot box, and one colour pick per visible colour - and nothing else;
-      everything after that is the application's own shipped code at its default settings.
-      Scoring is in image space at the competition's tolerance of 5% of the smaller image
-      dimension.
-      <b>An assisted path is measured separately and reported apart</b>, never blended
-      into the table: the same bar figures with the two things a person declares in the
-      calibration walk, the marked category axis and the baseline the bars stand on. It is
-      a ceiling rather than a user's day, because those declarations come from the corpus
-      placed exactly. It moves bar recall by 1.2 points on [1] and by 26.7 on [2], where
-      hatched fills are common.
-      <b>Reading a chart's own words is measured the same way</b>, against the corpus's
-      own transcription: <!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->79.8% of 12,751 tick labels across 887 figures
-      from [1] came back exactly right, matched against the corpus's own transcription of
-      each one. Those are the labels printed level, 95.4% of every tick label in that corpus.<!-- BENCHMARK-OCR:END -->
-      <b>Manual capture is measured separately too</b>, in data space: <!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->driving the
-      application's own capture session across 344 bar figures from [1], with the
-      calibration recovered from each figure's own tick labels, 80.9% of 5,778 bars
-      read within 1% of the corpus value and 79.4% of figures had every bar within
-      that. 40 figures are excluded, most for carrying no two numeric tick
-      labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->
-      The harness and the exact image lists are at
-      <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>.
-    </p>
   </div>
 </section>
 
@@ -981,7 +918,7 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v2.3.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v2.4.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
