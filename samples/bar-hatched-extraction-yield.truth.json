@@ -1,0 +1,70 @@
+{
+  "source": {
+    "imagePath": "bar-hatched-extraction-yield.png",
+    "note": "Synthetic ground truth - per-bar value. The bars are HATCHED, so a colour trace returns each one in pieces until they are rejoined."
+  },
+  "graphType": "bar",
+  "axes": {
+    "y": {
+      "label": "Extraction yield (%)",
+      "min": 0,
+      "max": 50
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 67.78,
+        "py": 660.28,
+        "value": 0
+      },
+      "p2": {
+        "px": 67.78,
+        "py": 39.33,
+        "value": 50
+      },
+      "c1": {
+        "px": 78.39,
+        "py": 660.28
+      },
+      "c2": {
+        "px": 874.39,
+        "py": 660.28,
+        "value": 6
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "extraction yield",
+      "points": [
+        {
+          "category": "Water",
+          "value": 18.4
+        },
+        {
+          "category": "Ethanol",
+          "value": 46.2
+        },
+        {
+          "category": "Methanol",
+          "value": 41.7
+        },
+        {
+          "category": "Acetone",
+          "value": 33.9
+        },
+        {
+          "category": "Hexane",
+          "value": 12.1
+        },
+        {
+          "category": "Ethyl acetate",
+          "value": 28.6
+        }
+      ]
+    }
+  ]
+}

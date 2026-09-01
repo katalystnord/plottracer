@@ -117,6 +117,36 @@ def _value_calibration(fig, ax, vmin, vmax):
     }
 
 
+def _category_calibration(fig, ax, count):
+    """The 2 CATEGORY-axis anchors (c1/c2) for a bar-family figure, plus the
+    declared count that the walk's second click carries.
+
+    ⚠️⚑⚑ THESE WERE ADDED BY HAND UNTIL NOW, outside this seeded generator, and
+    that is exactly how an off-by-one reached a committed truth file:
+    `bar-grouped-missing-assay` declared FOUR categories for a figure drawing
+    FIVE - the count of GAPS BETWEEN categories rather than of categories - with
+    the resulting wrong pitch baked into both ends. A file nobody can regenerate
+    is a file nobody can check.
+
+    ⚑ THE CONVENTION, in the truth files' own words: c1 and c2 are the OUTER EDGE
+    of the first and last category band, which for matplotlib's categorical
+    positions (0 .. count-1, one data unit apart) is x = -0.5 and count-0.5. The
+    count rides on c2, because the walk types it on the second click.
+    """
+    fig.canvas.draw()
+    h = fig.get_figheight() * fig.dpi
+    y0 = ax.get_ylim()[0]
+
+    def anchor(x):
+        sx, sy = ax.transData.transform((x, y0))
+        return {"px": round(float(sx), 2), "py": round(float(h - sy), 2)}
+
+    return {
+        "c1": anchor(-0.5),
+        "c2": {**anchor(count - 0.5), "value": count},
+    }
+
+
 def gen_scatter():
     """Compressive modulus vs. crosslinker concentration - 26 separated markers
     (rejection-sampled so none touch -> the Blob Detector finds exactly one
@@ -229,6 +259,47 @@ def gen_bar():
         "axes": {"y": {"label": "Tensile strength (MPa)", "min": 0, "max": 450}},
         "calibration": calib,
         "series": [{"name": "tensile strength", "points": [{"category": c, "value": v} for c, v in zip(cats, vals)]}],
+    })
+
+
+def gen_bar_hatched():
+    """Extraction yield by solvent - bars filled with a DIAGONAL HATCH, which is
+    what a figure does when it cannot rely on colour.
+
+    ⚑⚑ WHY THIS EXAMPLE EXISTS. A hatch is drawn in a colour the trace drops, so
+    a colour fill returns the bar as a pile of fragments rather than one shape -
+    measured on the ICPR/Adobe benchmark corpus at ~34 pieces per bar, where a
+    perfectly drawn bar scored ZERO and the corpus read 35.3% against 76.1% on
+    unhatched published figures. `algorithms/hatchJoin.ts` puts them back
+    together, and this is the figure to see it happen on.
+
+    ⚑ A DIAGONAL hatch on purpose: it is the case the first version of that join
+    could not see. Horizontal hatching cuts a bar into slabs that stack, and
+    diagonal hatching into strips whose boxes overlap - two different shapes of
+    the same problem, and this exercises the harder one.
+    """
+    name = "bar-hatched-extraction-yield"
+    cats = ["Water", "Ethanol", "Methanol", "Acetone", "Hexane", "Ethyl acetate"]
+    vals = [18.4, 46.2, 41.7, 33.9, 12.1, 28.6]
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    ax.bar(cats, vals, color=NAVY, width=0.6, hatch="//", edgecolor="black", linewidth=1.0)
+    ax.set_axisbelow(True)
+    ax.set_ylim(0, 50)
+    ax.set_ylabel("Extraction yield (%)", fontsize=13)
+    ax.set_title("Extraction yield by solvent", fontsize=15)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, 0, 50)
+    calib["anchors"].update(_category_calibration(fig, ax, len(cats)))
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - per-bar value. The bars are HATCHED, so a colour trace returns each one in pieces until they are rejoined."},
+        "graphType": "bar",
+        "axes": {"y": {"label": "Extraction yield (%)", "min": 0, "max": 50}},
+        "calibration": calib,
+        "series": [{"name": "extraction yield", "points": [{"category": c, "value": v} for c, v in zip(cats, vals)]}],
     })
 
 
@@ -1599,6 +1670,7 @@ if __name__ == "__main__":
     gen_bar_grouped_missing()
     gen_bar_stacked()
     gen_bar_floating()
+    gen_bar_hatched()
     gen_histogram()
     gen_categorical()
     gen_stress_strain()

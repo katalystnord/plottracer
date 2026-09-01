@@ -18,6 +18,7 @@ import histogramSample from '../../samples/histogram-pore-size.png';
 import errorBarSample from '../../samples/errorbar-tensile-cure.png';
 import errorBarAsymSample from '../../samples/errorbar-failure-time-asymmetric.png';
 import barSample from '../../samples/bar-tensile-strength.png';
+import barHatchedSample from '../../samples/bar-hatched-extraction-yield.png';
 import barGroupedSample from '../../samples/bar-grouped-viability.png';
 import barGroupedMissingSample from '../../samples/bar-grouped-missing-assay.png';
 import barStackedSample from '../../samples/bar-stacked-cost.png';
@@ -111,6 +112,15 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   //
   // Grouped: two series sharing one category axis, side by side per category
   // -- ordinary zero-baseline bars, just two of them per row.
+  // ⚑⚑ HATCHED bars, which is what a figure does when it cannot rely on colour.
+  // A hatch is drawn in a colour the trace DROPS, so a colour fill returns each
+  // bar as a pile of fragments - 167 of them on this figure - until
+  // `algorithms/hatchJoin.ts` puts them back together. Measured on the ICPR and
+  // Adobe benchmark corpora, hatching was the single largest cause of bar
+  // failure there: 35.3% recall against 76.1% on unhatched published figures.
+  // ⚑ Diagonal on purpose - it is the harder of the two shapes a hatch takes,
+  // and the one a stack-based join cannot see.
+  { id: 'bar-hatched', name: 'Extraction yield - hatched bars', src: barHatchedSample, axes: 'bar' },
   { id: 'bar-grouped', name: 'Cell viability - control vs. treatment', src: barGroupedSample, axes: 'bar' },
   // ⚑ The figure category TICKS exist for (v2.1): the FIRST series has no
   // Lactose bar. Without declared categories the second series' Lactose bar
