@@ -22,6 +22,10 @@
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type Blob, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
+import {
+  measureCategoryAxisFromFragments,
+  fragmentEdgeTolerancePx,
+} from '../algorithms/categoryAxisFromFragments.js';
 import { extendAcrossOutline } from '../algorithms/barOutline.js';
 import {
   reconcileWithExpected,
@@ -446,14 +450,33 @@ export function runBarDetect(
   // dense horizontal chart are indistinguishable from hatch fragments unless you
   // know which way the categories run.
   // ⚑ So the gate is the app's standing rule for every bar technique, the one
-  // `joinAcrossBaseline` above already obeys: it must be gated by something the
-  // app computes from what the USER said, so the population it cannot help is
-  // provably untouched. Without a declared category axis this does nothing.
-  const hatch = categories
-    ? joinAcrossHatch(blobs, categories.categoryAxis, categories.dividers)
+  // `joinAcrossBaseline` above already obeys: the axis may never be ASSUMED.
+  //
+  // ⚑⚑ v2.5: IT MAY, HOWEVER, BE MEASURED - which is a different thing, and the
+  // distinction is the whole point. A declared axis is still preferred and still
+  // wins outright when present. When there is none, the fragments are asked, and
+  // they answer or they refuse; a refusal leaves this doing exactly nothing, so
+  // the population it cannot read stays provably untouched.
+  // ▶ WHO THIS IS FOR. A HISTOGRAM has no category ticks in its axes type, so
+  // nothing can ever declare one for it and a hatched histogram could not be
+  // rejoined at all. Same for any bar chart auto-extracted before its
+  // calibration walk is finished. See `categoryAxisFromFragments.ts` for the
+  // rule, the refuted alternative, and the corpus numbers.
+  const measured = categories
+    ? null
+    : measureCategoryAxisFromFragments(
+        blobs.map((b) => b.bbox),
+        fragmentEdgeTolerancePx(width, height)
+      );
+  const hatchAxis = categories?.categoryAxis ?? measured?.categoryAxis ?? null;
+  // ⚑ A measured axis brings NO dividers, and that is correct rather than a
+  // shortfall: dividers come from a declaration, and `joinAcrossHatch` already
+  // treats them as optional.
+  const hatch = hatchAxis
+    ? joinAcrossHatch(blobs, hatchAxis, categories?.dividers)
     : { blobs: [...blobs], joined: 0 };
   const join = baseline
-    ? joinAcrossBaseline(hatch.blobs, categories?.categoryAxis ?? 'x', baseline)
+    ? joinAcrossBaseline(hatch.blobs, hatchAxis ?? 'x', baseline)
     : { blobs: [...hatch.blobs], joined: 0 };
   const joined = join.blobs;
   const joinReport = {
