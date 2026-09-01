@@ -3551,7 +3551,10 @@ export function Workspace() {
       closePdf: () => closePdf(),
       clearFiguresToSingle: () => clearFiguresToSingle(),
       confirmDiscardIfDirty: () => confirmDiscardIfDirty(),
-      loadImage: (dataURL, name) => imageCanvasRef.current?.loadImageFromSrc(dataURL, name),
+      // ⚑ Awaited by the challenge, so a round cannot begin before the figure
+      // has decoded. A missing canvas ref resolves rather than hanging.
+      loadImage: (dataURL, name) =>
+        imageCanvasRef.current?.loadImageFromSrc(dataURL, name) ?? Promise.resolve(),
       clearImage: () => imageCanvasRef.current?.clearImage(),
       setFigureCaptured: (captured) => setFigureCaptured(captured),
       setCalibrationExpanded: (expanded) => setCalibExpanded(expanded),

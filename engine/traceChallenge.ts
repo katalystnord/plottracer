@@ -629,3 +629,26 @@ export function challengeRevealFor(
       : truthBoxValues(ex.truth).map((v) => hline(v[2]!)); // box: median line
   return { curves, markers: [] };
 }
+
+/**
+ * A deterministic random source, so a game can be replayed exactly.
+ *
+ * ⚑⚑ THIS EXISTED ONLY INSIDE `traceChallengeTruth.test.ts` UNTIL 2026-09-01,
+ * which is why `drawGradedRounds`'s `rng` parameter was tested and never used.
+ * The app drew with `Math.random`, so the Trace Challenge's own e2e played a
+ * DIFFERENT game every run while clicking fixed coordinates - and the pool spans
+ * curve, scatter, histogram, bar and box-plot families, each needing a different
+ * click pattern. That test could pass or fail on the draw, and it did both: the
+ * same assertion went red in `fcad2ca` and again on the v2.5 board.
+ *
+ * ⚑ A LINEAR CONGRUENTIAL GENERATOR is enough here and deliberately so. Nothing
+ * about a shuffle of at most a few dozen examples needs statistical quality; it
+ * needs to be the SAME shuffle twice, and to be readable by whoever comes next.
+ */
+export function seededRng(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s * 1103515245 + 12345) % 2147483648;
+    return s / 2147483648;
+  };
+}

@@ -22,6 +22,7 @@ import {
   spiderPointAt,
   truthPieValues,
   pieRevealRays,
+  seededRng,
 } from '../traceChallenge.js';
 import { SCATTER_MATCH_THRESHOLD } from '../../algorithms/challengeScore.js';
 
@@ -349,11 +350,9 @@ describe('the WEIGHTED round draw (v2.1)', () => {
     { id: 'h1', grade: 'hard' }, { id: 'h2', grade: 'hard' },
   ];
   const gradeOf = (r: R) => r.grade;
-  /** A deterministic rng, so a draw is reproducible. */
-  const seeded = (seed: number) => () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
+  // ⚑ The shared one from the engine. It used to be defined here, which is
+  // exactly why the app never used it and its own e2e drew a random game.
+  const seeded = seededRng;
   const counts = (rs: R[]) => ({
     easy: rs.filter((r) => r.grade === 'easy').length,
     medium: rs.filter((r) => r.grade === 'medium').length,

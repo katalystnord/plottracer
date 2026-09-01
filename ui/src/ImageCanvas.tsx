@@ -543,7 +543,17 @@ export interface ImageCanvasHandle {
    * internal "Choose Image…" button uses -- exposed so Workspace.tsx's
    * "Open Project" action can load a project file's embedded image
    * programmatically instead of through a native file-pick dialog. */
-  loadImageFromSrc: (src: string, fileName?: string) => void;
+  /**
+   * Load an image programmatically.
+   *
+   * ⚑⚑ IT RESOLVES WHEN THE IMAGE HAS ACTUALLY DECODED, and callers that need
+   * the picture to be THERE must await it. It used to return `void` while the
+   * decode ran on, which is how the Trace Challenge started a round's clock and
+   * accepted clicks before the figure existed - the player losing time they
+   * never had, and every click in that window landing on an empty canvas.
+   * Callers that genuinely do not care may still ignore the promise.
+   */
+  loadImageFromSrc: (src: string, fileName?: string) => Promise<void>;
   /** Unload the image -> blank "Open an image" state (Trace Challenge reset). */
   clearImage: () => void;
   /** The currently loaded image's original src -- null if none is loaded. */
@@ -699,6 +709,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   // redraw at the new size, preserving scale/offset. Reset when a new image
   // loads.
   const didInitialFitRef = useRef(false);
+  /**
+   * Whoever is waiting for this image to be ON SCREEN.
+   *
+   * ⚑⚑ DECODED IS NOT FITTED, and the difference is a real window of wrong
+   * answers. `img.onload` deliberately does not fit (see below): the fit runs in
+   * an effect, after the container has been laid out. Between the two, the
+   * picture exists at a view that has not been sized to it, so a click converts
+   * to the wrong image pixel. `loadImageFromSrc` resolves at the FIT for that
+   * reason - its callers want a picture they can click on, not a decoded blob.
+   */
+  const awaitingFitRef = useRef<(() => void) | null>(null);
 
   const [openError, setOpenError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false); // drag-and-drop hint (checkpoint 45)
@@ -710,7 +731,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   const lastImageRef = useRef<HTMLImageElement | null>(null);
   const imageEpochRef = useRef(0);
 
-  const loadImageFromSrc = useCallback((src: string, fileName?: string) => {
+  const loadImageFromSrc = useCallback((src: string, fileName?: string) => new Promise<void>((resolve) => {
     // Update the synchronous src mirror up-front so getImageDataURL() is correct
     // the instant this returns (state below lags to img.onload). Reverted on a
     // decode error so a failed open doesn't leave a bad src behind.
@@ -728,7 +749,9 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // below. onload can fire before the canvas-dominant grid cell has laid
       // out, so fitting against the container here gave a wrong (often 100%)
       // size; doing it in an effect guarantees the container is measured after
-      // layout.
+      // layout. ⚑ And that fit is what `resolve` waits for - parked here and
+      // called by the initial-fit effect below.
+      awaitingFitRef.current = resolve;
     };
     // PDF/TIFF are routed to their decoders by content before <img> ever sees
     // them (B7); this net catches a genuinely undecodable / corrupt file so the
@@ -736,9 +759,15 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     img.onerror = () => {
       imageSrcRef.current = prevSrc; // a failed decode never became the current image
       setOpenError(unsupportedFileMessage(fileName ? `"${fileName}"` : 'that file'));
+      // ⚑ RESOLVES rather than rejects: the message above is the report, and a
+      // caller awaiting this wants to stop waiting, not to handle an exception
+      // for a case already surfaced on screen. No fit is coming, so it resolves
+      // here rather than parking a waiter nothing will ever call.
+      awaitingFitRef.current = null;
+      resolve();
     };
     img.src = src;
-  }, []);
+  }), []);
 
   // Load an image File/Blob (checkpoint 45) -- shared by drag-and-drop onto
   // the canvas and paste (Ctrl+V). Reads it to a data URL (same shape
@@ -1123,6 +1152,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     if (!container || container.clientWidth === 0) return;
     didInitialFitRef.current = true;
     setView(fitToContainer(image.width, image.height, container.clientWidth, container.clientHeight));
+    // ⚑ The picture is now sized to its container, which is the first moment a
+    // click on it means what the clicker intended. Anyone awaiting
+    // `loadImageFromSrc` has been waiting for exactly this.
+    const waiting = awaitingFitRef.current;
+    awaitingFitRef.current = null;
+    waiting?.();
   }, [image]);
 
   // Re-fit (fallback for the not-yet-sized case above) or redraw when the

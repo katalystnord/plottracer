@@ -25,6 +25,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   drawGradedRounds,
+  DEFAULT_GRADE_PLAN,
+  seededRng,
   calibrationInputsFromAnchors,
   scoreCompletedRound,
   challengeRevealFor,
@@ -60,7 +62,8 @@ export interface TraceChallengeHost {
   clearFiguresToSingle(): void;
   /** False if the player declined to discard unsaved work - the game must abort. */
   confirmDiscardIfDirty(): boolean;
-  loadImage(dataURL: string, name: string): void;
+  /** Resolves when the picture has decoded - a round may not start before it. */
+  loadImage(dataURL: string, name: string): Promise<void>;
   clearImage(): void;
   setFigureCaptured(captured: boolean): void;
   setCalibrationExpanded(expanded: boolean): void;
@@ -103,6 +106,28 @@ async function imageAsDataURL(src: string): Promise<string> {
   });
 }
 
+/**
+ * Where a replayable game's seed is stored.
+ *
+ * ⚑ Beside the high scores, which already live in localStorage under the same
+ * prefix - one place a reader looks for what this game remembers.
+ */
+export const CHALLENGE_SEED_KEY = 'plottracer.challenge.seed';
+
+/** The seed a replayable game was asked for, or `undefined` for a fresh one. */
+function storedSeed(): (() => number) | undefined {
+  try {
+    const raw = window.localStorage.getItem(CHALLENGE_SEED_KEY);
+    if (raw === null) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? seededRng(n) : undefined;
+  } catch {
+    // ⚑ Private browsing and blocked site data both throw on read; a game that
+    // cannot look up a seed is simply a fresh one.
+    return undefined;
+  }
+}
+
 export function useTraceChallenge(
   pool: readonly ChallengeExample[],
   host: TraceChallengeHost,
@@ -140,12 +165,20 @@ export function useTraceChallenge(
       // (`getCalibrationError`) folded away otherwise.
       const adopted = host.session().adoptCalibration(inputs);
       host.setCalibrationExpanded(!adopted);
-      host.loadImage(dataURL, ex.name);
+      // ⚑⚑ AWAITED, AND THE ORDER BELOW IS THE WHOLE FIX. `loadImage` used to
+      // return while the decode ran on, so everything after it happened against
+      // a canvas with no picture in it: the round went to place-point and THE
+      // CLOCK STARTED before the figure existed. A player on a slower machine or
+      // a larger figure lost time they never had, and any click landing in that
+      // window hit an empty canvas. The e2e caught it as a one-in-three flake
+      // and it was read as flakiness for two releases.
+      await host.loadImage(dataURL, ex.name);
       // The example IS the whole figure-of-record: capture it (a no-op crop) so the
       // player can place points -- without this, capture stays pending and every
       // click is blocked ("Frame the whole figure... press Capture").
       host.setFigureCaptured(true);
       host.setMode('place-point');
+      // ⚑ The clock starts LAST, and only now that there is something to trace.
       setRoundStartMs(Date.now());
       host.bump();
     },
@@ -158,7 +191,12 @@ export function useTraceChallenge(
     // hard. The pool spans a factor of ten in clicks -- 61 for the stress-strain
     // curve against 6 for a spider -- and the scoring currency is TIME, so a
     // uniform draw made one playthrough's score incomparable with another's.
-    const rounds = drawGradedRounds(pool, (r) => r.grade);
+    // ⚑⚑ A STORED SEED MAKES A GAME REPRODUCIBLE, and until 2026-09-01 nothing
+    // used `drawGradedRounds`'s rng at all - so the challenge's own e2e played a
+    // different game every run while clicking fixed coordinates, and went red on
+    // the draw rather than on a defect. Absent, this is exactly the old
+    // behaviour: a fresh random game.
+    const rounds = drawGradedRounds(pool, (r) => r.grade, DEFAULT_GRADE_PLAN, storedSeed());
     if (rounds.length === 0) return;
     setQueue(rounds);
     setRoundIndex(0);

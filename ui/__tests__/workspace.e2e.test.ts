@@ -356,6 +356,22 @@ async function clickAt(lx: number, ly: number) {
   await page.waitForTimeout(100);
 }
 
+
+/**
+ * Click at a FRACTION of the canvas rather than an absolute offset.
+ *
+ * ⚑⚑ An image is FITTED to its container, so where the figure's ink lands
+ * depends on the container's size. A fixed `clickAt(320, 300)` therefore aims at
+ * a different part of the picture whenever the window differs, which is how the
+ * Trace Challenge's guard failed on some runs and not others with everything
+ * else identical. A fraction aims at the same part of the figure at any size.
+ */
+async function clickFrac(fx: number, fy: number) {
+  await refreshCanvasBox();
+  await page.mouse.click(canvasBox.x + canvasBox.width * fx, canvasBox.y + canvasBox.height * fy);
+  await page.waitForTimeout(100);
+}
+
 // Enter Measure mode and wait until the card is actually mounted before any
 // canvas click. Clicking mode-measure only queues setMode('measure'); a clickAt
 // fired before React flushes that state is routed as the previous mode and the
@@ -7734,6 +7750,16 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
     // Electron persists localStorage across launches, so clear the high-score
     // board first -> this run's fresh total always qualifies (deterministic).
     await page.evaluate(() => window.localStorage.removeItem('plottracer.challenge.highscores'));
+    // ⚑⚑ SEED THE DRAW, or this test plays a DIFFERENT GAME every run. The pool
+    // spans curve, scatter, histogram, bar and box-plot families and each needs
+    // its own click pattern, while the clicks below are fixed coordinates - so
+    // an unseeded draw made this pass or fail on luck. It did both: the same
+    // assertion went red in `fcad2ca` and again on the v2.5 board, each time
+    // with nothing wrong in the app.
+    // ⚠️ The seed only fixes WHICH figures are drawn. The coordinates below are
+    // still not aimed at anything a prompt names, which is a separate defect
+    // this does not pretend to fix.
+    await page.evaluate(() => window.localStorage.setItem('plottracer.challenge.seed', '20260901'));
 
     // The app launches with no image; the challenge starts from a clean slate.
     await page.getByTestId('help-trigger').click();
@@ -7743,7 +7769,9 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
     await page.getByTestId('challenge-intro').waitFor({ state: 'visible' });
     await page.getByTestId('challenge-confirm').click();
 
-    // Rounds. The pool is 4 XY examples (Phase A), so this is a 4-round game.
+    // Rounds. ⚠️ The pool was 4 XY examples when this was written and is not any
+    // more - it spans curve, scatter, histogram, bar and box-plot families - so
+    // the round count is read off the HUD rather than assumed.
     await page.getByTestId('challenge-hud').waitFor({ state: 'visible' });
     const roundText = await textOf('challenge-round'); // "Round 1/4"
     const rounds = Number(roundText.match(/\/(\d+)/)?.[1] ?? '0');
@@ -7754,13 +7782,24 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
       // the round is genuinely pre-calibrated before we place points.
       await page.waitForTimeout(300);
       await waitForImageFitted();
-      // Wait until the round is actually READY to place points -- i.e. the figure
-      // is CAPTURED (the pre-capture "Frame the whole figure" prompt is gone),
-      // family-agnostic -- so clicks aren't dropped by a setup race.
-      for (let t = 0; t < 25; t++) {
-        if (!/Frame the whole figure/i.test(await textOf('tips-bar'))) break;
-        await page.waitForTimeout(100);
-      }
+      // ⚑⚑ WAIT FOR THE ROUND'S OWN CLOCK TO START, which is the app's real
+      // readiness signal rather than a guess about it. `loadRound` awaits the
+      // image decode and only then enters place-point and stamps
+      // `roundStartMs`, so a running clock means the figure is genuinely on
+      // screen and clicks will land.
+      //
+      // ⚠️ IT USED TO WATCH THE TIPS BAR for "Frame the whole figure" going
+      // away, and that prompt clears when capture is set - which happened BEFORE
+      // the picture existed. So the test proceeded to click at an empty canvas
+      // about one run in three, and it was read as flakiness rather than as the
+      // defect it was: the round's clock started before the player had anything
+      // to trace.
+      await expect
+        .poll(async () => await textOf('challenge-timer'), {
+          timeout: 15000,
+          message: 'the round clock never started, so the figure never arrived',
+        })
+        .not.toMatch(/0:00\s*$/);
       // "Points placed" is FAMILY-AGNOSTIC, counted from the ROWS THAT CARRY A
       // READING: `point-row-` on XY/scatter, `tuple-derived-` on bar/pie/box,
       // `bin-row-` on a histogram. The very first click of a round can race the
@@ -7784,12 +7823,17 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
             '[data-testid^="point-row-"], [data-testid^="tuple-derived-"], [data-testid^="bin-row-"]'
           )
           .count();
+      // ⚑ FRACTIONS OF THE CANVAS, not absolute pixels: the figure is fitted to
+      // the container, so a fixed offset lands on a different part of the
+      // picture whenever the window size differs. That was the last of this
+      // guard's three nondeterminisms, after the unseeded draw and the
+      // decode/fit race.
       for (let attempt = 0; attempt < 12 && (await pointCount()) === 0; attempt++) {
-        await clickAt(320 + attempt * 8, 300);
+        await clickFrac(0.36 + attempt * 0.012, 0.46);
         await page.waitForTimeout(120);
       }
-      await clickAt(430, 280);
-      await clickAt(540, 260);
+      await clickFrac(0.52, 0.42);
+      await clickFrac(0.64, 0.38);
 
       if (r === 0) {
         // Pre-calibration proof: the round is already calibrated (the player never
