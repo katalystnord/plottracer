@@ -197,6 +197,16 @@ const CARDS: Card[] = [
     },
   },
   {
+    name: 'shot-hatched',
+    sample: 'bar-hatched-extraction-yield',
+    type: 'bar',
+    claim:
+      'Hatched bars read as whole bars - the fill our trace drops is put back together, and measured to the outside of the bar own stroke.',
+    async after(d) {
+      await traceColour(d, '#1f4e79', undefined, { minBlob: '3' });
+    },
+  },
+  {
     name: 'shot-boxplot',
     sample: 'bar-box-plot-tensile-strength',
     type: 'boxplot',

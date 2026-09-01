@@ -47,6 +47,8 @@ const END = '<!-- BENCHMARK-TABLES:END -->';
  * around a number is judgement and stays hand-written, but the NUMBER is a
  * measurement and must be generated.
  */
+const O_START = '<!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->';
+const O_END = '<!-- BENCHMARK-OCR:END -->';
 const M_START = '<!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->';
 const M_END = '<!-- BENCHMARK-MANUAL:END -->';
 
@@ -139,6 +141,22 @@ const manualBlock = m
       labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->`
   : null;
 
+/**
+ * Reading a chart's own WORDS, as one generated sentence.
+ *
+ * ⚑ ITS OWN NUMBER, never folded into the table above: every figure there is
+ * about recovering VALUES, and this is about recovering NAMES. A tool can be
+ * good at one and poor at the other, and one blended percentage would hide both.
+ */
+const o = results.ocr;
+const ocrBlock = o
+  ? `${O_START}${pct(o.pct)} of ${num(o.labels)} tick labels across ${num(o.charts)} figures
+      from [1] came back exactly right, matched against the corpus's own transcription of
+      each one. Those are the labels printed level, ${pct(
+        Math.round((1000 * o.labels) / (o.labels + o.anglesSkipped)) / 10
+      )} of every tick label in that corpus.${O_END}`
+  : null;
+
 const page = readFileSync(PAGE, 'utf8');
 const a = page.indexOf(START);
 const b = page.indexOf(END);
@@ -155,6 +173,15 @@ if (manualBlock) {
     process.exit(1);
   }
   out = out.slice(0, c) + manualBlock + out.slice(d + M_END.length);
+}
+if (ocrBlock) {
+  const e = out.indexOf(O_START);
+  const f = out.indexOf(O_END);
+  if (e === -1 || f === -1) {
+    console.error(`OCR markers not found in ${PAGE}`);
+    process.exit(1);
+  }
+  out = out.slice(0, e) + ocrBlock + out.slice(f + O_END.length);
 }
 writeFileSync(PAGE, out);
 
