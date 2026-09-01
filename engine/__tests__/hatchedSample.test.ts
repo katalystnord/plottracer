@@ -73,7 +73,20 @@ describe('the hatched example is traced as six bars, not as confetti', () => {
       .map((b) => (p1.py - Math.min(b.start.y, b.end.y)) / perUnit);
     const want = truth.series[0]!.points.map((p) => p.value);
     read.forEach((v, i) => {
-      expect(Math.abs(v - want[i]!), `bar ${i + 1}: read ${v.toFixed(2)}, truth ${want[i]}`).toBeLessThan(0.5);
+      expect(Math.abs(v - want[i]!), `bar ${i + 1}: read ${v.toFixed(2)}, truth ${want[i]}`).toBeLessThan(0.05);
     });
+
+    // ⚑⚑ AND NO SYSTEMATIC BIAS, which is the property a person cannot check by
+    // eye and therefore the one worth asserting. These bars carry a 1px black
+    // stroke; the colour trace matches the FILL, which stops just inside it, so
+    // before `extendAcrossOutline` every bar read LOW - a mean of -0.99px with
+    // all six negative. Scatter either side of zero is what "unbiased" looks
+    // like, and a mean error is the only way to tell the two apart.
+    const errors = read.map((v, i) => v - want[i]!);
+    const mean = errors.reduce((s, e) => s + e, 0) / errors.length;
+    const perPixel = 1 / perUnit;
+    expect(Math.abs(mean), `mean error ${(mean / perPixel).toFixed(2)}px - a bias, not scatter`).toBeLessThan(
+      perPixel * 0.25
+    );
   });
 });

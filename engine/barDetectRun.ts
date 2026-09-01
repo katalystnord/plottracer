@@ -22,6 +22,7 @@
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type Blob, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
+import { extendAcrossOutline } from '../algorithms/barOutline.js';
 import {
   reconcileWithExpected,
   runColumnsFromMembers,
@@ -454,11 +455,31 @@ export function runBarDetect(
   const join = baseline
     ? joinAcrossBaseline(hatch.blobs, categories?.categoryAxis ?? 'x', baseline)
     : { blobs: [...hatch.blobs], joined: 0 };
-  const whole = join.blobs;
+  const joined = join.blobs;
   const joinReport = {
     ...(baseline ? { joinedAcrossBaseline: join.joined } : {}),
     ...(hatch.joined > 0 ? { joinedAcrossHatch: hatch.joined } : {}),
   };
+  // ⚑⚑ A BAR IS MEASURED TO THE OUTSIDE OF ITS OWN OUTLINE. A figure that
+  // strokes its bars draws that stroke in a colour we do not match, so the fill
+  // stops just inside it and every bar reads LOW - measured at a mean of 0.99px
+  // on `bar-hatched-extraction-yield`, every bar negative, against +0.01px once
+  // the stroke is included. A systematic bias is the kind nobody can see.
+  // ⚑ Ungated, because it is self-limiting: a stroke is DARKER than the fill and
+  // an antialiased edge against paper is LIGHTER, so an unoutlined figure finds
+  // no band and is untouched. Measured at 0px on every bar of two of them.
+  // ⚠️ APPLIED TO THE BLOBS, not to one path's boxes. The first version extended
+  // `plainBoxes` and measured NO CHANGE AT ALL, because a figure with declared
+  // categories takes the divider-splitting path below and rebuilds its boxes
+  // from `whole` - so the correction was computed and thrown away on exactly the
+  // figures that have it. Correcting the shapes themselves is what puts it in
+  // front of every consumer.
+  const fillLuma = 0.299 * target[0] + 0.587 * target[1] + 0.114 * target[2];
+  const axisForOutline = categories?.categoryAxis ?? 'x';
+  const whole = joined.map((b) => ({
+    ...b,
+    bbox: extendAcrossOutline(data, width, height, b.bbox, axisForOutline, fillLuma),
+  }));
   const plainBoxes = whole.map((b) => ({
     start: { x: b.bbox.minX, y: b.bbox.minY },
     end: { x: b.bbox.maxX, y: b.bbox.maxY },
