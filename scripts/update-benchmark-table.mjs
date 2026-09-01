@@ -52,6 +52,11 @@ const END = '<!-- BENCHMARK-TABLES:END -->';
  */
 const O_START = '<!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->';
 const O_END = '<!-- BENCHMARK-OCR:END -->';
+// ⚑⚑ The assisted numbers were HAND-TYPED in prose until 2026-09-01, which is
+// the one thing this script exists to prevent: latest.json already carried
+// deltaPts, and the page carried a copy of it that nothing kept in step.
+const A_START = '<!-- BENCHMARK-ASSISTED:START (generated - do not edit by hand) -->';
+const A_END = '<!-- BENCHMARK-ASSISTED:END -->';
 const M_START = '<!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->';
 const M_END = '<!-- BENCHMARK-MANUAL:END -->';
 
@@ -132,32 +137,91 @@ ${refs}
     </ol>
     ${END}`;
 
-/** The manual-capture numbers, as one generated sentence. */
+/**
+ * ⚑⚑ EVERY MEASURED PATH IS PRESENTED AS A RESULT, not as a sentence inside the
+ * method note. Until 2026-09-01 only the automatic table was, and the assisted,
+ * manual and label-reading numbers sat 900 characters into a single paragraph of
+ * prose. David went to the published page looking for the label-reading number he
+ * had commissioned that morning, and could not find it. A measurement a reader
+ * cannot locate has not been reported, whatever the page technically contains.
+ */
+
+/** What the two declarations in the calibration walk are worth, as a table. */
+const assistedRows = corpora
+  .filter((c) => c.assisted)
+  .map((c, i) => {
+    const a = c.assisted;
+    return `            <tr><th scope="row">[${i + 1}] ${esc(REFERENCES[c.id]?.short ?? c.name)}</th>` +
+      `<td><span class="ev-val">${pct(a.autoPct)}</span><span class="ev-n">automatic</span></td>` +
+      `<td><span class="ev-val">${pct(a.assistedPct)}</span><span class="ev-n">assisted</span></td>` +
+      `<td><span class="ev-val">+${a.deltaPts}</span><span class="ev-n">points, n = ${num(a.bars)} bars</span></td></tr>`;
+  })
+  .join('\n');
+
+const assistedBlock = assistedRows
+  ? `${A_START}
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Corpus</th><th scope="col">Automatic</th><th scope="col">Assisted</th><th scope="col">Difference</th></tr></thead>
+        <tbody>
+${assistedRows}
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Bar recall, with and without the two things a person declares in the calibration
+      walk: the marked category axis, and the baseline the bars stand on. Nothing else
+      differs. This is a ceiling rather than a user's day, because those declarations come
+      from the corpus placed exactly. The second corpus is where hatched fills are common.
+    </p>
+    ${A_END}`
+  : null;
+
+/** Reading the chart's own WORDS. Its own result, never folded into the table. */
+const o = results.ocr;
+const ocrBlock = o
+  ? `${O_START}
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Read</th><th scope="col">Exactly right</th><th scope="col">Figures</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Tick labels [1]</th><td><span class="ev-val">${pct(o.pct)}</span><span class="ev-n">${num(o.exact)} of ${num(o.labels)}</span></td><td><span class="ev-val">${num(o.charts)}</span><span class="ev-n">real published figures</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Matched character for character against the corpus's own transcription of each
+      label, with no partial credit. Those are the labels printed level, ${pct(
+        Math.round((1000 * o.labels) / (o.labels + o.anglesSkipped)) / 10
+      )} of every
+      tick label in that corpus. Recovering a chart's NAMES is a different question from
+      recovering its VALUES, so it is reported on its own: a tool can be good at one and
+      poor at the other, and a single blended percentage would hide both.
+    </p>
+    ${O_END}`
+  : null;
+
+/** The manual path: the application's own capture session, scored in DATA space. */
 const m = results.manual;
 const excluded = Object.values(m?.excluded ?? {}).reduce((x, y) => x + y, 0);
 const manualBlock = m
-  ? `${M_START}driving the
-      application's own capture session across ${num(m.figures)} bar figures from [1], with the
-      calibration recovered from each figure's own tick labels, ${pct(m.barsPct)} of ${num(m.bars)} bars
-      read within 1% of the corpus value and ${pct(m.figuresPct)} of figures had every bar within
-      that. ${num(excluded)} figures are excluded, most for carrying no two numeric tick
-      labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->`
-  : null;
-
-/**
- * Reading a chart's own WORDS, as one generated sentence.
- *
- * ⚑ ITS OWN NUMBER, never folded into the table above: every figure there is
- * about recovering VALUES, and this is about recovering NAMES. A tool can be
- * good at one and poor at the other, and one blended percentage would hide both.
- */
-const o = results.ocr;
-const ocrBlock = o
-  ? `${O_START}${pct(o.pct)} of ${num(o.labels)} tick labels across ${num(o.charts)} figures
-      from [1] came back exactly right, matched against the corpus's own transcription of
-      each one. Those are the labels printed level, ${pct(
-        Math.round((1000 * o.labels) / (o.labels + o.anglesSkipped)) / 10
-      )} of every tick label in that corpus.${O_END}`
+  ? `${M_START}
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Captured by hand</th><th scope="col">Within 1%</th><th scope="col">Figures</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Bars [1]</th><td><span class="ev-val">${pct(m.barsPct)}</span><span class="ev-n">${num(m.barsWithin)} of ${num(m.bars)} bars</span></td><td><span class="ev-val">${pct(m.figuresPct)}</span><span class="ev-n">${num(m.figuresFullyWithin)} of ${num(m.figures)} with every bar within</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Driving the application's own capture session, with the calibration recovered from
+      each figure's own tick labels and two corners clicked per bar. Scored in DATA space,
+      in the figure's own units, at 1% of the value range - the only one of these paths
+      measured in the units a user actually reads. ${num(excluded)} figures are excluded,
+      most for carrying no two numeric tick labels to calibrate from.
+    </p>
+    ${M_END}`
   : null;
 
 const page = readFileSync(PAGE, 'utf8');
@@ -168,27 +232,43 @@ if (a === -1 || b === -1) {
   process.exit(1);
 }
 let out = page.slice(0, a) + block + page.slice(b + END.length);
-if (manualBlock) {
-  const c = out.indexOf(M_START);
-  const d = out.indexOf(M_END);
+
+/**
+ * Splice each generated region in by its own markers.
+ *
+ * ⚑ A MISSING MARKER IS A HARD FAILURE, never a skip: the whole point of
+ * generating these is that the page cannot quietly hold a stale number, and a
+ * silent skip would restore exactly that.
+ */
+for (const [name, s0, s1, body] of [
+  ['assisted', A_START, A_END, assistedBlock],
+  ['OCR', O_START, O_END, ocrBlock],
+  ['manual-capture', M_START, M_END, manualBlock],
+]) {
+  if (!body) continue;
+  const c = out.indexOf(s0);
+  const d = out.indexOf(s1);
   if (c === -1 || d === -1) {
-    console.error(`Manual-capture markers not found in ${PAGE}`);
+    console.error(`${name} markers not found in ${PAGE}`);
     process.exit(1);
   }
-  out = out.slice(0, c) + manualBlock + out.slice(d + M_END.length);
-}
-if (ocrBlock) {
-  const e = out.indexOf(O_START);
-  const f = out.indexOf(O_END);
-  if (e === -1 || f === -1) {
-    console.error(`OCR markers not found in ${PAGE}`);
-    process.exit(1);
-  }
-  out = out.slice(0, e) + ocrBlock + out.slice(f + O_END.length);
+  out = out.slice(0, c) + body + out.slice(d + s1.length);
 }
 writeFileSync(PAGE, out);
 
-console.log(`Updated ${path.relative(process.cwd(), PAGE)} from ${RESULTS}`);
-corpora.forEach((c, i) =>
-  console.log(`  [${i + 1}] ${c.name}: ${c.types.map((t) => `${t.family} ${pct(t.all.pct)}`).join(' · ')}`)
-);
+// ⚑ SAY WHAT WAS WRITTEN. An earlier rewrite of this file dropped the summary and
+// the script became silent, so a run and a no-op looked identical from the
+// terminal - the exact failure this project has a standing rule about.
+console.log(`Updated ${PAGE} from ${RESULTS}`);
+for (const [i, c] of corpora.entries()) {
+  const t = (f) => {
+    const x = c.types.find((y) => y.family === f);
+    return x ? `${f} ${pct(x.all.pct)}` : null;
+  };
+  console.log(`  [${i + 1}] ${c.name}: ${ROW_ORDER.map(t).filter(Boolean).join(' \u00b7 ')}`);
+  if (c.assisted) {
+    console.log(`      assisted bars ${pct(c.assisted.autoPct)} -> ${pct(c.assisted.assistedPct)} (+${c.assisted.deltaPts} pts)`);
+  }
+}
+if (results.ocr) console.log(`  labels read: ${pct(results.ocr.pct)} of ${num(results.ocr.labels)}`);
+if (results.manual) console.log(`  manual capture: ${pct(results.manual.barsPct)} of ${num(results.manual.bars)} bars in data space`);

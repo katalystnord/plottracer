@@ -389,6 +389,81 @@
     </ol>
     <!-- BENCHMARK-TABLES:END -->
 
+    <div class="sec-head" style="margin-top:64px;">
+      <h2>What a human declaration is worth</h2>
+      <p>PlotTracer is human-in-the-loop, so the honest question is not only what it
+        recovers alone but what one declaration buys. This is the same bar figures with
+        the two things a person states in the calibration walk, and nothing else changed.</p>
+    </div>
+    <!-- BENCHMARK-ASSISTED:START (generated - do not edit by hand) -->
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Corpus</th><th scope="col">Automatic</th><th scope="col">Assisted</th><th scope="col">Difference</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">[1] Real figures</th><td><span class="ev-val">75.7%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">76.9%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+1.2</span><span class="ev-n">points, n = 5,778 bars</span></td></tr>
+            <tr><th scope="row">[2] Synthetic figures</th><td><span class="ev-val">35.3%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">62.0%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+26.7</span><span class="ev-n">points, n = 6,739 bars</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Bar recall, with and without the two things a person declares in the calibration
+      walk: the marked category axis, and the baseline the bars stand on. Nothing else
+      differs. This is a ceiling rather than a user's day, because those declarations come
+      from the corpus placed exactly. The second corpus is where hatched fills are common.
+    </p>
+    <!-- BENCHMARK-ASSISTED:END -->
+
+    <div class="sec-head" style="margin-top:64px;">
+      <h2>Reading the chart's own words</h2>
+      <p>Recovering a figure's names is a separate question from recovering its numbers,
+        and it is measured against the same corpus's own transcription.</p>
+    </div>
+    <!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Read</th><th scope="col">Exactly right</th><th scope="col">Figures</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Tick labels [1]</th><td><span class="ev-val">79.8%</span><span class="ev-n">10,169 of 12,751</span></td><td><span class="ev-val">887</span><span class="ev-n">real published figures</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Matched character for character against the corpus's own transcription of each
+      label, with no partial credit. Those are the labels printed level, 95.4% of every
+      tick label in that corpus. Recovering a chart's NAMES is a different question from
+      recovering its VALUES, so it is reported on its own: a tool can be good at one and
+      poor at the other, and a single blended percentage would hide both.
+    </p>
+    <!-- BENCHMARK-OCR:END -->
+
+    <div class="sec-head" style="margin-top:64px;">
+      <h2>Capturing by hand, in the figure's own units</h2>
+      <p>Everything above is scored in image space, because that is what the competition
+        metric measures. This one is scored in data space: the numbers a user would
+        actually read off the panel and paste into a spreadsheet.</p>
+    </div>
+    <!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Captured by hand</th><th scope="col">Within 1%</th><th scope="col">Figures</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Bars [1]</th><td><span class="ev-val">80.9%</span><span class="ev-n">4,674 of 5,778 bars</span></td><td><span class="ev-val">79.4%</span><span class="ev-n">273 of 344 with every bar within</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Driving the application's own capture session, with the calibration recovered from
+      each figure's own tick labels and two corners clicked per bar. Scored in DATA space,
+      in the figure's own units, at 1% of the value range - the only one of these paths
+      measured in the units a user actually reads. 40 figures are excluded,
+      most for carrying no two numeric tick labels to calibrate from.
+    </p>
+    <!-- BENCHMARK-MANUAL:END -->
+
+    <div class="sec-head" style="margin-top:64px;">
+      <h2>Where it does worst</h2>
+    </div>
+
     <div class="ev-fail">
       <!-- ⚑ "Current", deliberately. These are measurements of one build on one
            day, not properties of the problem - and several are actively being
@@ -403,7 +478,6 @@
            went on telling the next editor to preserve the refuted claim. Fixed
            2026-08-03. Grade the comments against the measurements too, not just
            the prose a reader sees. -->
-      <h3>Current limitations</h3>
       <ul>
         <li>
           <b>Greyscale.</b> About 10 points on bars and 37 on lines in [1]. Not for
@@ -429,30 +503,20 @@
 
     <p class="ev-note">
       <b>Method.</b> These corpora score fully automatic recognition, while PlotTracer is
-      human-in-the-loop, so the two are adjacent rather than equivalent. The table above
-      is the <b>automatic</b> path: the harness supplies the two inputs a person supplies
-      - the plot box, and one colour pick per visible colour - and nothing else;
-      everything after that is the application's own shipped code at its default settings.
-      Scoring is in image space at the competition's tolerance of 5% of the smaller image
-      dimension.
-      <b>An assisted path is measured separately and reported apart</b>, never blended
-      into the table: the same bar figures with the two things a person declares in the
-      calibration walk, the marked category axis and the baseline the bars stand on. It is
-      a ceiling rather than a user's day, because those declarations come from the corpus
-      placed exactly. It moves bar recall by 1.2 points on [1] and by 26.7 on [2], where
-      hatched fills are common.
-      <b>Reading a chart's own words is measured the same way</b>, against the corpus's
-      own transcription: <!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->79.8% of 12,751 tick labels across 887 figures
-      from [1] came back exactly right, matched against the corpus's own transcription of
-      each one. Those are the labels printed level, 95.4% of every tick label in that corpus.<!-- BENCHMARK-OCR:END -->
-      <b>Manual capture is measured separately too</b>, in data space: <!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->driving the
-      application's own capture session across 344 bar figures from [1], with the
-      calibration recovered from each figure's own tick labels, 80.9% of 5,778 bars
-      read within 1% of the corpus value and 79.4% of figures had every bar within
-      that. 40 figures are excluded, most for carrying no two numeric tick
-      labels to calibrate from.<!-- BENCHMARK-MANUAL:END -->
-      The harness and the exact image lists are at
-      <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>.
+      human-in-the-loop, so the two are adjacent rather than equivalent. That is why each
+      path is reported on its own above and never blended: the <b>automatic</b> table is
+      the harness supplying the two inputs a person supplies, the plot box and one colour
+      pick per visible colour, and nothing else, with everything after that the
+      application's own shipped code at its default settings. Scoring is in image space at
+      the competition's tolerance of 5% of the smaller image dimension, except for manual
+      capture, which is in data space at 1% of the value range.
+      Every digitiser draws the line between what the human supplies and what the program
+      does somewhere, and a number without that line drawn is not comparable to anything,
+      so ours is written out in full rather than summarised.
+      The harness, the exact image lists and the scoring code are at
+      <a href="https://github.com/katalystnord/plottracer-benchmarks">github.com/katalystnord/plottracer-benchmarks</a>,
+      and every number on this page is generated from its results file rather than typed
+      here by hand.
     </p>
   </div>
 </section>
