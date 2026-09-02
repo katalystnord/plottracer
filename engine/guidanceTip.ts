@@ -36,6 +36,23 @@ export type GuidanceMeasureTool = 'distance' | 'angle' | 'area' | 'slope' | 'col
 export interface GuidanceTipInput {
   canvasHasImage: boolean;
   /**
+   * Every overlay mark is hidden, so the canvas is inert (v2.5).
+   *
+   * ⚑⚑ THE TIPS BAR HAS TO SAY SO, AND FINDING OUT WHY IS THE STORY. The rail
+   * greys its tools the moment the marks go, but the tips bar went on reading
+   * *"Point 2 selected - arrows nudge, Q/W step points, Del removes it. Or click
+   * to add another"* over a figure where not one of those does anything. That is
+   * the same defect the greying exists to prevent, leaking out through the one
+   * surface nobody thought to check - and it is WORSE here, because the rail
+   * merely looked available while this actively instructs.
+   *
+   * ⚠️ Found by LOOKING at a screenshot of the finished feature, not by any test
+   * in this suite: every assertion was about the canvas and the rail, which were
+   * both correct. A surface that is not named in the design is not covered by
+   * tests written from that design.
+   */
+  marksHidden?: boolean;
+  /**
    * The figure has a category axis to place, and the walk has not placed it.
    *
    * ⚑ While that is true, capture STANDS DOWN - a bar-family figure cannot be
@@ -154,6 +171,15 @@ export interface GuidanceTipInput {
  * `guidanceTip` is what `ui/` renders.
  */
 export function guidanceTipBase(input: GuidanceTipInput): string {
+  // ⚑⚑ CHECKED BEFORE EVERYTHING, including the category-axis override below,
+  // and for a stronger version of that same reason: while the marks are hidden
+  // no click does anything AT ALL, so every other sentence this function can
+  // produce is describing a gesture the app will ignore. It also carries the way
+  // out, because a state you cannot leave is the one thing worse than a state
+  // that surprises you.
+  if (input.marksHidden === true) {
+    return 'Marks are hidden - the figure is shown on its own. Press the eye button, top right, to bring them back.';
+  }
   // Checked first: it overrides every capture message, because for as long as it
   // is true no click can capture anything.
   if (input.categoryAxisUnplaced === true) {

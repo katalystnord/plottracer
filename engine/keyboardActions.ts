@@ -38,6 +38,22 @@ export interface KeyboardState {
   measureTool: string | null;
   figureCaptured: boolean;
   canvasHasImage: boolean;
+  /**
+   * Every overlay mark is hidden, so the canvas is inert (v2.5).
+   *
+   * ⚑⚑ THE KEYBOARD IS A THIRD DOOR INTO THE SAME ROOM, and it does not go
+   * through the canvas at all. The rail greys its tools and the stage ignores
+   * presses, but this handler is wired straight to the window - so without this
+   * field the arrow keys went on nudging a point you cannot see and Del went on
+   * deleting it. Silent data mutation with nothing on screen to show for it,
+   * which is strictly worse than the visible half it accompanies.
+   *
+   * ⚠️ Found by asking what ELSE reaches the model while the marks are off,
+   * after a screenshot caught the tips bar doing the same thing. Two surfaces
+   * missed by the same omission: the design named the canvas and the rail, so
+   * the tests did too.
+   */
+  marksHidden?: boolean;
   /** The axes are built - `session.getAxes()` is non-null. */
   isCalibrated: boolean;
   /** A crop rectangle has been drawn and awaits Apply. */
@@ -96,6 +112,7 @@ export type KeyAction =
   | { type: 'toggle-auto-extract' }
   | { type: 'toggle-error-bars' }
   | { type: 'toggle-measure' }
+  | { type: 'toggle-marks' }
   /** Fire a rail/panel button by test id - the fly-outs open through their own
    * button so a disabled one cannot be triggered by key. */
   | { type: 'click'; selector: string }
@@ -219,6 +236,24 @@ export function resolveKeyDown(e: KeyPress, s: KeyboardState): ResolvedKey | nul
   // would fall through to the bare-digit tool chain below (Ctrl+1 -> Calibrate,
   // Ctrl+3 -> delete a point). Guarding here fixes both.
   if (primaryMod(e)) return null;
+
+  // ⚑⚑ H HIDES AND SHOWS EVERY MARK (v2.5). A bare letter, which is this app's
+  // convention for a tool key (q/w already are), and it is DISCOVERABLE because
+  // the button names it in its own tooltip - a shortcut whose only home is the
+  // keyboard fails the "can only use what he sees" rule outright.
+  // ⚑ Placed above the inert gate below so it is the one key that always works:
+  // the way OUT of a state must never be the thing the state disables.
+  if (e.key === 'h' || e.key === 'H') {
+    return s.canvasHasImage ? { action: { type: 'toggle-marks' }, preventDefault: true } : null;
+  }
+
+  // ⚑⚑ WHILE THE MARKS ARE HIDDEN, NOTHING ELSE ACTS. Consume rather than return
+  // null, so no branch below can claim the key: the arrows, Del, the digits and
+  // Enter all reach the model without touching the canvas, and every one of them
+  // would change a figure the user cannot currently see. Undo/redo are already
+  // handled above and stay live, matching their top-bar buttons, which this
+  // feature does not grey.
+  if (s.marksHidden === true) return { action: { type: 'consume' }, preventDefault: false };
 
   // Enter = accept/confirm the current step's primary action (David, mouse+
   // keyboard theme). Value-in-a-box Enter is handled by each input's own

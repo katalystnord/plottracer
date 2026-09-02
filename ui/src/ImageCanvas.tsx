@@ -386,6 +386,25 @@ interface ImageCanvasProps {
    * tool, or nothing) - panning then lives on Ctrl+Left and the middle button,
    * which pan from ANY tool regardless of this flag. */
   leftButtonPans?: boolean;
+  /**
+   * Every overlay mark is off the figure (v2.5, David 2026-09-02: *"a separate
+   * button on the canvas that can turn off/on ALL marks on there at once"*).
+   *
+   * ⚑⚑ IT TAKES TWO HALVES AND BOTH LIVE HERE. `visible` on the one overlay
+   * Layer is what the user sees; `listening` on the same Layer is what stops a
+   * mark they CANNOT see being grabbed. Konva hit-tests a hidden shape happily,
+   * so `visible` alone leaves every handle exactly where it was, draggable and
+   * invisible - the picture lying while the model is correct, which
+   * `canvasOverlays.ts`'s header memo names as the worst pairing.
+   *
+   * ⚑ The third half is the STAGE, and it is not covered by either: a press on
+   * bare canvas never touches a layer's hit graph, so without the gate in
+   * `onStageMouseDown` you could hide every mark and go on stippling invisible
+   * points across the figure. That gate reuses the existing pan arming rather
+   * than adding a branch of its own -- while the marks are off, a plain left
+   * press LOOKS (pans) instead of working, which is the whole intent.
+   */
+  marksHidden?: boolean;
   /** Right-click a data-point marker → the caller shows a context menu at the
    * given viewport coordinates. The caller decides what the id means and what it
    * offers (keeping this canvas ignorant of series/points), exactly like linkSnap. */
@@ -599,7 +618,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1292,7 +1311,18 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       const middle = e.evt.button === 1;
       const ctrlLeft = e.evt.button === 0 && e.evt.ctrlKey && !IS_MAC;
       const spaceLeft = e.evt.button === 0 && spaceHeldRef.current;
-      if (middle || ctrlLeft || spaceLeft) {
+      // ⚑⚑ AND SO DOES A PLAIN LEFT PRESS WHILE THE MARKS ARE HIDDEN (v2.5).
+      // David settled that hiding them makes the canvas inert - "no placing, no
+      // grabbing, no selecting" - but NOT frozen: panning places nothing and
+      // grabs nothing, and a look mode you cannot move around in would be worse
+      // than no button at all. Folded into this branch rather than given one of
+      // its own because it wants exactly these three lines; a second branch
+      // arming the same drag is the parallel mechanism the REUSE rule forbids.
+      // ⚠️ It must sit HERE, above every tool gesture below (crop, region, band,
+      // select, box, link) - each of those arms before the pan fallback at the
+      // end, so a gate placed lower would leave them live with nothing on screen
+      // to show for it.
+      if (middle || ctrlLeft || spaceLeft || marksHidden) {
         e.evt.preventDefault(); // suppress middle-button autoscroll
         dragStartRef.current = { x: e.evt.clientX, y: e.evt.clientY, offsetX: view.offsetX, offsetY: view.offsetY, panning: true };
         setIsDragging(true);
@@ -1368,7 +1398,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       dragStartRef.current = { x: e.evt.clientX, y: e.evt.clientY, offsetX: view.offsetX, offsetY: view.offsetY, panning: leftButtonPans };
       setIsDragging(true);
     },
-    [view, cropMode, regionMode, bandMode, selectMode, boxMode, linkSnap, onLinkDragMove, leftButtonPans]
+    [view, cropMode, regionMode, bandMode, selectMode, boxMode, linkSnap, onLinkDragMove, leftButtonPans, marksHidden]
   );
 
   const onMouseMove = useCallback(
@@ -1787,7 +1817,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   pixel-by-pixel (graphicsWidget.js:566-579) because its data
                   layer isn't separable; ours is, which makes the same feature
                   cheaper for us than for the reference. */}
-              <Layer ref={overlayLayerRef}>
+              <Layer ref={overlayLayerRef} visible={!marksHidden} listening={!marksHidden}>
                 {/* Colour-match preview (ckpt 121) - FIRST so it sits UNDER every
                     handle/point/glyph: it is context for what a trace would grab,
                     never a hit target (`listening={false}`). The offscreen canvas

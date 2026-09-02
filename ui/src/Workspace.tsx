@@ -89,6 +89,8 @@ import {
   SaveIcon,
   CameraIcon,
   ChevronDownIcon,
+  MarksVisibleIcon,
+  MarksHiddenIcon,
   MeasureIcon,
   ImageEditIcon,
   ErrorBarsIcon,
@@ -137,6 +139,7 @@ import {
 // exercise the multi-figure flow (open -> capture -> Extract another -> flip page
 // -> capture) directly. `?url` forces Vite to emit an asset URL we fetch as bytes.
 import { ZoomControls } from './ZoomControls.js';
+import { inertWhileMarksHidden, marksToggleLabel, MARKS_HIDDEN_REASON } from '../../engine/marksVisibility.js';
 import {
   serializeProject,
   deserializeProject,
@@ -1380,6 +1383,21 @@ export function Workspace() {
    * so merely looking at a value stamped it as typed, and a seed rounded to
    * three decimals moved the point while doing it (F23).
    */
+  /**
+   * Every overlay mark is off the figure (v2.5, David 2026-09-02).
+   *
+   * ⚑⚑ A VIEW STATE, NOT A MODE. It is orthogonal to `mode` on purpose: you do
+   * not leave Add points to hide the marks, you hide them, look, and come back
+   * to the tool you were already in. That is why it lives beside the zoom
+   * control in the top bar's View group rather than in the rail, whose buttons
+   * are a radio group of mutually exclusive modes - see `engine/marksVisibility`.
+   */
+  const [marksHidden, setMarksHidden] = useState(false);
+
+  const marksHiddenIn = (toolMode: string) => inertWhileMarksHidden(toolMode, marksHidden);
+  const toolDisabled = (toolMode: string, own: boolean) => own || marksHiddenIn(toolMode);
+  const toolReason = (toolMode: string, own: string | undefined) =>
+    marksHiddenIn(toolMode) ? MARKS_HIDDEN_REASON : own;
   const [editingCell, setEditingCell] = useState<
     { index: number; axis: number; value: string; seed: string } | null
   >(null);
@@ -2945,6 +2963,12 @@ export function Workspace() {
       // ⚑ ...and a tick-detection report describes the axis of the figure you
       // are leaving, so it cannot outlive it either.
       setTickDetectNotice(null);
+      // ⚑⚑ AND THE MARKS COME BACK WITH A NEW FIGURE. Hiding them is a look at
+      // THIS picture; carrying it across a figure switch would open the next one
+      // with every mark missing and most of the rail greyed, which reads as a
+      // broken app rather than as a setting you left on. Same rule as
+      // `commonOrigin` above, for the same reason.
+      setMarksHidden(false);
       // Curve Fit's controls are the figure's own, read back off its dataset.
       const cf = getCurveFitState(s.getDataset());
       setCurveFitDegree(cf ? cf.degree : 1);
@@ -3138,6 +3162,9 @@ export function Workspace() {
           measureTool,
           figureCaptured,
           canvasHasImage,
+          // ⚑ The keyboard reaches the model without touching the canvas - see
+          // the field's own memo in engine/keyboardActions.
+          marksHidden,
           isCalibrated: axes !== null,
           hasCropRect: cropRect !== null,
           cropMode,
@@ -3251,6 +3278,7 @@ export function Workspace() {
         case 'toggle-auto-extract': toggleAutoExtract(); return;
         case 'toggle-error-bars': toggleErrorBars(); return;
         case 'toggle-measure': toggleMeasure(); return;
+        case 'toggle-marks': setMarksHidden((v) => !v); return;
         case 'click': {
           const btn = document.querySelector(action.selector) as HTMLElement | null;
           if (!btn) return;
@@ -3273,7 +3301,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -7083,6 +7111,9 @@ export function Workspace() {
   // pops in and out of the right panel.
   const guidanceTip = buildGuidanceTip({
     canvasHasImage,
+    // ⚑ The tips bar is an instruction, so it must not instruct while nothing
+    // can be done - see the input's own memo.
+    marksHidden,
     heatmapHasGrid: heatmapShownGrid !== null,
     heatmapHasCells: heatmapCells.length > 0,
     // ⚑ The caliper is drawn only for a SINGLE picked cell, and the tip names it
@@ -7366,6 +7397,27 @@ export function Workspace() {
             onZoomFit={() => imageCanvasRef.current?.zoomFit()}
             onZoom100={() => imageCanvasRef.current?.zoom100()}
             onZoomTo={(s) => imageCanvasRef.current?.zoomTo(s)}
+          />
+          {/* ⚑⚑ HIDE ALL MARKS (v2.5, David 2026-09-02: *"a separate button ...
+              that can turn off/on ALL marks on there at once"*). It sits with
+              ZOOM because zoom is the other orthogonal VIEW control: neither
+              changes what a click does, both change what you see, and neither is
+              a mode. Put in the rail it would have had to be either a checkbox
+              among radios or renumber the 0-9 run, and the rail's own greying is
+              what tells you it is not one of them.
+              ⚑ Teal is the app's own emphasis colour, straight off `pressed` -
+              the same treatment every active tool wears, so "on" looks like "on"
+              everywhere (David: use our existing colour scheme). The ICON swaps
+              too: the slash is the half that reads without hovering. */}
+          <IconButton
+            testId="toggle-marks"
+            icon={marksHidden ? <MarksHiddenIcon /> : <MarksVisibleIcon />}
+            label={`${marksToggleLabel(marksHidden)} (H)`}
+            keyTip={keyTips ? keyTipLabel('H') : undefined}
+            pressed={marksHidden}
+            disabled={!canvasHasImage}
+            disabledReason="Open an image first"
+            onClick={() => setMarksHidden((v) => !v)}
           />
         </TopBarGroup>
         <TopBarGroup>
@@ -8285,6 +8337,17 @@ export function Workspace() {
               to the top bar; per-point delete is the Eraser (unnumbered: it's
               destructive and Del already does it, so it stays out of the 0-9 run).
               Each tool greys until it can do its job (a toolbox, not a catch-all). */}
+          {/* ⚑⚑ ONE RULE, EIGHT BUTTONS. While the marks are hidden every tool but
+              Pan is inert, and David asked for that to SHOW: *"and non active
+              buttons"*. A tool that silently ignores you is the invisible-
+              precondition failure - it looks armed, you press it, nothing
+              happens, and you conclude the app ignored you. Greying it and
+              naming the reason is what the rail already does for every other
+              precondition ("Calibrate the axes first"), so this reuses that
+              rather than inventing a second way to say "not now".
+              ⚑ The rule itself lives in `engine/marksVisibility` so the rail and
+              the canvas cannot answer differently - the drift that once left a
+              live "Edit value…" menu item with no editor behind it. */}
           <div ref={railColRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
           {/* View & set up: Pan · Calibrate · Edit image. Image prep is available
               BEFORE capture too (rotate a sideways scan, crop, fine-deskew) and
@@ -8304,8 +8367,8 @@ export function Workspace() {
             label="Calibrate"
             shortcut="1"
             pressed={mode === 'calibrate'}
-            disabled={!figureCaptured}
-            disabledReason={canvasHasImage ? 'Capture the figure first' : 'Open an image first'}
+            disabled={toolDisabled('calibrate', !figureCaptured)}
+            disabledReason={toolReason('calibrate', canvasHasImage ? 'Capture the figure first' : 'Open an image first')}
             onClick={() => setMode('calibrate')}
           />
           <IconButton
@@ -8314,8 +8377,8 @@ export function Workspace() {
             label="Edit image (rotate / flip)"
             shortcut="2"
             pressed={mode === 'image-edit'}
-            disabled={!canvasHasImage}
-            disabledReason="Open an image first"
+            disabled={toolDisabled('image-edit', !canvasHasImage)}
+            disabledReason={toolReason('image-edit', 'Open an image first')}
             onClick={toggleImageEdit}
             foldout
           />
@@ -8330,8 +8393,8 @@ export function Workspace() {
             label="Add points"
             shortcut="3"
             pressed={mode === 'place-point'}
-            disabled={!axes}
-            disabledReason="Calibrate the axes first"
+            disabled={toolDisabled('place-point', !axes)}
+            disabledReason={toolReason('place-point', 'Calibrate the axes first')}
             onClick={() => setMode('place-point')}
           />
           <IconButton
@@ -8365,9 +8428,11 @@ export function Workspace() {
             // letter-values; an ordinal click; a cell whose value IS its colour;
             // a slice measured by its two edges). ⚑ Each says so ITSELF now, via
             // `autoExtractRefusal` -- this comment is description, not the gate.
-            disabled={!axes || (config.autoExtractKind ?? 'curve') === 'none'}
+            disabled={toolDisabled('auto-extract', !axes || (config.autoExtractKind ?? 'curve') === 'none')}
             disabledReason={
-              !axes
+              marksHiddenIn('auto-extract')
+                ? MARKS_HIDDEN_REASON
+                : !axes
                 ? 'Calibrate the axes first'
                 : // The type says why it refuses -- see `autoExtractRefusal`. This
                   // was a `config.id === …` cascade in which a new type joined the
@@ -8391,8 +8456,8 @@ export function Workspace() {
                 label={`Select - ${active.label}: ${active.hint}. Click for more modes; Del removes, arrows nudge.`}
                 shortcut="5"
                 pressed={mode === 'select'}
-                disabled={!axes}
-                disabledReason="Calibrate the axes first"
+                disabled={toolDisabled('select', !axes)}
+                disabledReason={toolReason('select', 'Calibrate the axes first')}
                 foldout
                 onClick={() => {
                   // Ketcher's two-stage face: a first click ACTIVATES the current
@@ -8421,8 +8486,8 @@ export function Workspace() {
             // cannot - the same shape as `autoExtractRefusal` three buttons up,
             // and for the same reason: an id cascade lets a new type join the
             // default branch silently.
-            disabled={config.errorBarsRefusal !== undefined || !datasetInfos.some((d) => d.pointCount > 0)}
-            disabledReason={config.errorBarsRefusal ?? 'Add data points first'}
+            disabled={toolDisabled('error-bars', config.errorBarsRefusal !== undefined || !datasetInfos.some((d) => d.pointCount > 0))}
+            disabledReason={toolReason('error-bars', config.errorBarsRefusal ?? 'Add data points first')}
             onClick={toggleErrorBars}
             foldout
           />
@@ -8434,8 +8499,8 @@ export function Workspace() {
             icon={<EraseIcon />}
             label="Erase a point - click a point to remove it"
             pressed={mode === 'eraser'}
-            disabled={dataPoints.length === 0}
-            disabledReason="Add data points first"
+            disabled={toolDisabled('eraser', dataPoints.length === 0)}
+            disabledReason={toolReason('eraser', 'Add data points first')}
             onClick={() => setMode('eraser')}
           />
           </RailGroup>
@@ -8448,8 +8513,8 @@ export function Workspace() {
             label="Measure"
             shortcut="7"
             pressed={mode === 'measure'}
-            disabled={!figureCaptured}
-            disabledReason={canvasHasImage ? 'Capture the figure first' : 'Open an image first'}
+            disabled={toolDisabled('measure', !figureCaptured)}
+            disabledReason={toolReason('measure', canvasHasImage ? 'Capture the figure first' : 'Open an image first')}
             onClick={toggleMeasure}
             foldout
           />
@@ -8643,6 +8708,7 @@ export function Workspace() {
           onMarkerDragEnd={handleMarkerDragEnd}
           onMarkerClick={handleMarkerClick}
           leftButtonPans={mode === 'pan' && eyedropper === null}
+          marksHidden={marksHidden}
           onPointContextMenu={handlePointContextMenu}
           onMeasureContextMenu={handleMeasureContextMenu}
           onCanvasContextMenu={handleCanvasContextMenu}

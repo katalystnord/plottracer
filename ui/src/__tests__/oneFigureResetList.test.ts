@@ -92,6 +92,11 @@ const PER_FIGURE_RESETS = [
   'setMode',
   'setCalibExpanded',
   'setAxesTypeId',
+  // ⚑⚑ HIDDEN MARKS BELONG TO THE FIGURE YOU HID THEM ON (v2.5). Carried across
+  // a switch, the next figure opens with every mark missing and most of the rail
+  // greyed - which reads as a broken app, not as a setting you left on. The
+  // whole point of the toggle is a look at THIS picture.
+  'setMarksHidden',
   // ⚑⚑ THE COMMON-ORIGIN ANSWER BELONGS TO THE FIGURE YOU ANSWERED IT ABOUT.
   // David, 2026-08-29, driving Box Plot: *"it is inconsistent ... Sometimes it
   // is offered checked, and sometimes unchecked."* It was one session-wide

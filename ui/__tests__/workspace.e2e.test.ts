@@ -10446,3 +10446,159 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-detect-message')).toMatch(/by hand/);
   });
 });
+
+/**
+ * ⚑⚑ HIDING EVERY MARK AT ONCE (v2.5, David 2026-09-02).
+ *
+ * It began as defect #4 - the heatmap divider grips sit over the figure's own
+ * ticks - which David closed as a NON-defect: our mark REPLACES the figure's,
+ * and the slight overlap onto the label costs nothing because OCR still reads
+ * it. What he asked for instead was *"a separate button ... that can turn off/on
+ * ALL marks on there at once"*, so the figure underneath can be seen whole.
+ *
+ * ⚑ Named for the CASES, not the mechanism (gate 2). Each `it` below is one
+ * "given X, the screen shows Y" from that conversation: the marks come off, the
+ * tools that cannot act SAY so (David: *"and non active buttons"*), a click
+ * places nothing, panning still works, and everything comes back.
+ *
+ * ⚑ Gate 4 holds: every click here is on a control the screen shows, and the
+ * greyed tools carry their own hover sentence naming the way out.
+ */
+describe('hiding every mark on the figure', () => {
+  /**
+   * A SMALL PATCH OF THE FIGURE, not the whole canvas - and the reason is a test
+   * that would otherwise pass for the wrong reason.
+   *
+   * ⚠️ The canvas container has the RAIL and the calibration card sitting on top
+   * of it, and the rail GREYS when the marks go. So a whole-container shot
+   * differs between shown and hidden even if every mark stayed exactly where it
+   * was: the assertion would be satisfied by the side effect instead of by the
+   * thing it claims to test. Clipping to a patch that holds the two data points
+   * and nothing else (the rail ends at x~54; the card sits far to the right)
+   * makes "the marks came off" the only thing that can move these pixels.
+   *
+   * ⚑ The mouse is parked off the canvas first: the cursor readout renders only
+   * while the pointer is over the figure, so a shot taken after a canvas click
+   * carries it and one taken after a top-bar press does not.
+   */
+  async function figurePatch(): Promise<Buffer> {
+    await page.mouse.move(4, 4);
+    await page.waitForTimeout(120);
+    await refreshCanvasBox();
+    return await page.screenshot({
+      clip: { x: canvasBox.x + 150, y: canvasBox.y + 120, width: 180, height: 130 },
+    });
+  }
+
+  async function placeTwoPoints() {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-place-point').click();
+    await clickAt(200, 200);
+    await clickAt(260, 170);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(0);
+  }
+
+  it('takes every mark off the figure, and puts them all back', async () => {
+    await placeTwoPoints();
+    const withMarks = await figurePatch();
+
+    await page.getByTestId('toggle-marks').click();
+    const bare = await figurePatch();
+    // The figure's own ink is untouched, so the only thing that can have changed
+    // in this patch is ours.
+    expect(bare.equals(withMarks)).toBe(false);
+
+    await page.getByTestId('toggle-marks').click();
+    // ⚑⚑ AND BACK EXACTLY - not merely "something is drawn again". A toggle that
+    // restores an APPROXIMATION of what it removed is the drift this catches.
+    expect((await figurePatch()).equals(withMarks)).toBe(true);
+  });
+
+  it('says which state it is in, on the button itself', async () => {
+    await placeTwoPoints();
+    const btn = page.getByTestId('toggle-marks');
+    expect(await btn.getAttribute('aria-pressed')).toBe('false');
+    await btn.click();
+    expect(await btn.getAttribute('aria-pressed')).toBe('true');
+    // The way OUT is on the control, not in anyone's head.
+    expect(await btn.getAttribute('title')).toMatch(/show/i);
+  });
+
+  /**
+   * ⚠️ DAVID'S OWN ADDITION, and the reason it matters: a tool that silently
+   * ignores you is the invisible-precondition failure. It looks armed, you press
+   * it, nothing happens, and you conclude the app ignored you.
+   */
+  it('greys the tools that cannot act, and each says why', async () => {
+    await placeTwoPoints();
+    await page.getByTestId('toggle-marks').click();
+    for (const tool of ['mode-calibrate', 'mode-place-point', 'mode-select', 'mode-eraser', 'mode-measure']) {
+      expect(await page.getByTestId(tool).isDisabled()).toBe(true);
+    }
+    // The sentence naming the way out rides on the wrapping span (a disabled
+    // <button> suppresses its own title in Chromium - IconButton's own memo).
+    const reason = await page.getByTestId('mode-place-point').locator('xpath=..').getAttribute('title');
+    expect(reason).toMatch(/marks are hidden/i);
+    expect(reason).toMatch(/show/i);
+
+    await page.getByTestId('toggle-marks').click();
+    for (const tool of ['mode-calibrate', 'mode-place-point', 'mode-select', 'mode-eraser', 'mode-measure']) {
+      expect(await page.getByTestId(tool).isDisabled()).toBe(false);
+    }
+  });
+
+  it('places nothing when the figure is clicked while the marks are hidden', async () => {
+    await placeTwoPoints();
+    const before = await page.getByTestId('points-table').locator('tbody tr').count();
+    await page.getByTestId('toggle-marks').click();
+    await clickAt(320, 220);
+    await clickAt(340, 240);
+    await page.waitForTimeout(150);
+    // ⚑⚑ THE HALF THE HIT GRAPH DOES NOT COVER. `listening={false}` stops a
+    // hidden mark being GRABBED; a press on bare stage never touches a layer's
+    // hit graph at all, so without the gate in onStageMouseDown you could hide
+    // every mark and go on stippling invisible points across the figure.
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(before);
+  });
+
+  /**
+   * ⚑⚑ THE ONE THING THAT MUST STILL WORK. Hiding the marks is how you LOOK at
+   * the figure; a look mode you cannot move around in would be worse than no
+   * button at all. Pan places nothing and grabs nothing, so it is not "working
+   * on it" in the sense David's "inert" answer excluded.
+   */
+  it('H hides and shows the marks from the keyboard', async () => {
+    await placeTwoPoints();
+    const withMarks = await figurePatch();
+    await page.keyboard.press('h');
+    expect((await figurePatch()).equals(withMarks)).toBe(false);
+    await page.keyboard.press('h');
+    expect((await figurePatch()).equals(withMarks)).toBe(true);
+  });
+
+  /**
+   * ⚠️⚑⚑ THE THIRD DOOR. The rail greys and the stage ignores presses, but the
+   * key handler is wired straight to the window - so the arrows went on nudging
+   * a point nobody can see. Silent data mutation is worse than the visible half.
+   */
+  it('the arrow keys cannot move a point you cannot see', async () => {
+    await placeTwoPoints();
+    const before = await textOf('data-value-x-1');
+    await page.getByTestId('toggle-marks').click();
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+    await page.getByTestId('toggle-marks').click();
+    expect(await textOf('data-value-x-1')).toBe(before);
+  });
+
+  it('still lets you pan, because looking is the point', async () => {
+    await placeTwoPoints();
+    await page.getByTestId('toggle-marks').click();
+    const [ox, oy] = await viewOffset();
+    await dragMarker(300, 300, 360, 340);
+    await page.waitForTimeout(100);
+    const [nx, ny] = await viewOffset();
+    expect(nx !== ox || ny !== oy).toBe(true);
+  });
+});

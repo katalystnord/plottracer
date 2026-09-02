@@ -47,6 +47,16 @@ import eraseSvg from '../../icons/erase.svg?raw';
 import openSvg from '../../icons/open.svg?raw';
 import placePointSvg from '../../icons/custom/place-point.svg?raw';
 import chevronDownSvg from '../../icons/custom/chevron-down.svg?raw';
+// Marks visibility (v2.5, David 2026-09-02): ONE control that takes every
+// overlay mark off the figure at once, so what the paper actually printed can be
+// seen whole. Two NEW originals rather than a reuse -- an eye is the symbol every
+// tool uses for show/hide, on the same reasoning the paint bucket was chosen for
+// flood-fill above, and nothing in this set already means "visibility"
+// (custom/droplet.svg means "Display Color"). The icon SWAPS with the state
+// rather than relying on the teal pressed treatment alone: the slash is the half
+// that survives being looked at without hovering for a tooltip.
+import marksVisibleSvg from '../../icons/custom/marks-visible.svg?raw';
+import marksHiddenSvg from '../../icons/custom/marks-hidden.svg?raw';
 // Eyedropper (David, 2026-07-27): the "Pick from image" buttons wore a bare ⌖
 // glyph, which is the reticle Place Point already means. A pipette is the symbol
 // every image editor uses for "sample a colour from the picture", and it is a NEW
@@ -165,6 +175,8 @@ export const OpenIcon = () => <Icon svg={openSvg} />;
 // calibration point).
 export const CalibrateIcon = () => <Icon svg={placePointSvg} />;
 export const ChevronDownIcon = () => <Icon svg={chevronDownSvg} />;
+export const MarksVisibleIcon = () => <Icon svg={marksVisibleSvg} />;
+export const MarksHiddenIcon = () => <Icon svg={marksHiddenSvg} />;
 export const EyedropperIcon = () => <Icon svg={eyedropperSvg} />;
 export const UndoIcon = () => <Icon svg={undoSvg} />;
 export const RedoIcon = () => <Icon svg={redoSvg} />;
