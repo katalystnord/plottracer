@@ -136,7 +136,12 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // Floating: neither end is the chart's baseline, and several bars cross
   // zero -- the case the two-corner drag-box exists for (no baseline to
   // assume, unlike an ordinary bar).
-  { id: 'bar-floating', name: 'Monthly temperature range', src: barFloatingSample, axes: 'bar' },
+  // ⚑⚑ MOVED TO SPAN (v2.5). This figure is the reason the type exists: every
+  // bar floats, so none of them is measured from a baseline, and Bar now means
+  // what its name says. The RECORD does not change - two corners in a two-slot
+  // tuple, the same as before - so its committed .truth.json still applies,
+  // which is the cleanest evidence that this was a REGROUPING and not a rebuild.
+  { id: 'bar-floating', name: 'Monthly temperature range', src: barFloatingSample, axes: 'span' },
   // Line needs an example of its own so a first-time user can see what "X is
   // a category, not a number" means (David) -- a line over discrete fibre
   // types, the shape the type exists for (checkpoint 101). Name dropped its

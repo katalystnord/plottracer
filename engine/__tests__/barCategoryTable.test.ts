@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
@@ -361,7 +361,12 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
 
 });
 
-describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one', () => {
+/**
+ * ⚑⚑ MOVED TO SPAN CHART (v2.5). The two-column reading is the SPAN's record -
+ * both ends measured, neither a baseline. Bar keeps one Value column, because
+ * that is what a bar measured from a baseline has.
+ */
+describe('⚑⚑ a SPAN takes two columns in the shared table, not one', () => {
   /**
    * David: *"For the floating bars output window, I think we will add another
    * row below #, Category, Series N, that says Min, Max in two separate
@@ -374,7 +379,7 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
    * assert an emptiness nobody looked for.
    */
   function markedFourBands(): CalibrationSession<BarAxes> {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    const session = new CalibrationSession<BarAxes>(SPAN_AXES_CONFIG);
     calibratedBar(session);
     // ⚑⚑ WIDENED BY DRAGGING THE HANDLES. `calibratedBar` has already
     // walked the category axis; this fixture wants it to span x 100..900
@@ -386,8 +391,18 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
     return session;
   }
 
-  it('a bar that sits on the baseline reports a value and NO interval', () => {
-    const session = markedFourBands();
+  /** The same fixture on a BAR session, for the half of this block that is
+   *  about a bar measured from its baseline rather than about a span. */
+  function markedFourBandsBar(): CalibrationSession<BarAxes> {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    session.updateCalibPointPixel('c1', 100, 500);
+    session.updateCalibPointPixel('c2', 900, 500);
+    return session;
+  }
+
+  it('a BAR on the baseline reports a value and NO interval', () => {
+    const session = markedFourBandsBar();
     session.addDataPoint(140, 500); // value 0 - the baseline
     session.addDataPoint(220, 300); // value 5
     const col = session.getBarCategoryTable().columns[0]!;
@@ -395,7 +410,7 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
     expect(col.intervals[0]).toBeNull();
   });
 
-  it('⚑⚑ a bar that floats reports an interval and NO value', () => {
+  it('⚑⚑ a SPAN reports an interval and NO value', () => {
     const session = markedFourBands();
     session.addDataPoint(140, 400); // value 2.5
     session.addDataPoint(220, 300); // value 5 - neither end is the baseline
@@ -406,7 +421,7 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
   });
 
   it('⚑ an empty cell has neither, so the row still reads as empty', () => {
-    const session = markedFourBands();
+    const session = markedFourBandsBar();
     session.addDataPoint(140, 400);
     session.addDataPoint(220, 300);
     const col = session.getBarCategoryTable().columns[0]!;
@@ -414,17 +429,31 @@ describe('⚑⚑ a FLOATING bar takes two columns in the shared table, not one',
     expect(col.intervals.slice(1)).toEqual([null, null, null]);
   });
 
-  it('⚑ the two are per SERIES, so one may float while another sits down', () => {
-    // The columns grow a block per series, which is how this table already grows.
+  /**
+   * ⚑⚑ THE MIXTURE IS GONE, AND THAT IS THE POINT OF THE SPLIT (v2.5).
+   *
+   * This used to read *"the two are per SERIES, so one may float while another
+   * sits down"* - one figure carrying value rows and interval rows at once,
+   * decided per bar by whether its near end happened to touch the baseline.
+   * That is exactly the hidden mode Span chart exists to remove: the TYPE now
+   * says which record you get, so a reader never has to ask a column what it
+   * means this time.
+   *
+   * ⚑ Nothing is lost. A figure whose bars mostly sit on the baseline and one of
+   * which floats is a Span chart; the seated ones simply report a Min that
+   * happens to be the baseline value.
+   */
+  it('⚑⚑ every row of a SPAN is an interval - the type decides, not the bar', () => {
     const session = markedFourBands();
-    session.addDataPoint(140, 500); // series 1: on the baseline
+    session.addDataPoint(140, 500); // one end ON the old baseline value
     session.addDataPoint(220, 300);
-    session.addDataset('Range');
-    session.setActiveDataset(1);
-    session.addDataPoint(340, 400); // series 2: floating
+    session.addDataPoint(340, 400); // and one clear of it
     session.addDataPoint(420, 300);
-    const [first, second] = session.getBarCategoryTable().columns;
-    expect(first!.intervals.every((iv) => iv === null)).toBe(true);
-    expect(second!.intervals.some((iv) => iv !== null)).toBe(true);
+    const col = session.getBarCategoryTable().columns[0]!;
+    expect(col.values[0], 'a span never reports a single value').toBeNull();
+    expect(col.values[1]).toBeNull();
+    expect(col.intervals[0], 'even the one touching the baseline').not.toBeNull();
+    expect(col.intervals[1]).not.toBeNull();
   });
+
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, BAR_AXES_CONFIG, SPAN_AXES_CONFIG } from '../calibrationSession.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
@@ -30,6 +30,26 @@ import { walkCategoryAxis } from './helpers/categoryWalk.js';
 /** Value axis: 0 at py 500, 10 at py 100 - so 40 px per unit. */
 function barSession() {
   const s = new CalibrationSession(BAR_AXES_CONFIG);
+  s.handleCalibrationClick(100, 500);
+  expect(s.confirmCalibrationValues(['0'])).toBe(true);
+  s.handleCalibrationClick(100, 100);
+  expect(s.confirmCalibrationValues(['10'])).toBe(true);
+  walkCategoryAxis(s);
+  expect(s.runCalibration()).toBe(true);
+  return s;
+}
+
+/**
+ * ⚑⚑ THE INTERVAL RECORD MOVED TYPES IN v2.5, AND SO DO THE TESTS THAT PROVE IT.
+ *
+ * Everything below about `Min`/`Max` describes a SPAN, not a bar: two measured
+ * ends, neither of them a baseline. Bar kept only what its name says. The record
+ * itself did not change by one field, which is why these tests needed a
+ * different session and not different expectations - the cleanest evidence that
+ * this was a REGROUPING rather than a rebuild.
+ */
+function spanSession() {
+  const s = new CalibrationSession(SPAN_AXES_CONFIG);
   s.handleCalibrationClick(100, 500);
   expect(s.confirmCalibrationValues(['0'])).toBe(true);
   s.handleCalibrationClick(100, 100);
@@ -76,11 +96,11 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
   it('⚑⚑ and the SMALLER reading is in Min, whichever corner was dragged first', () => {
     // The whole point of the rename: two people capturing the identical bar must
     // produce the identical file.
-    const forwards = barSession();
+    const forwards = spanSession();
     forwards.addDataPoint(150, 420); // value 2
     forwards.addDataPoint(200, 300); // value 5
 
-    const backwards = barSession();
+    const backwards = spanSession();
     backwards.addDataPoint(150, 300); // value 5, the same bar the other way
     backwards.addDataPoint(200, 420); // value 2
 
@@ -96,7 +116,7 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
 
   it('⚑ the JSON says the same words in the same order', () => {
     // A reader who switches format must not meet a different model.
-    const s = barSession();
+    const s = spanSession();
     s.addDataPoint(150, 300); // value 5 first
     s.addDataPoint(200, 420); // value 2
     const tuple = jsonFor(s).series[0].tuples[0];
@@ -165,7 +185,10 @@ describe("⚑⚑ the figure David measured it on - samples/bar-floating-temperat
     p1.py + ((value - p1.value) * (p2.py - p1.py)) / (p2.value - p1.value);
 
   function calibratedFromTruth() {
-    const s = new CalibrationSession(BAR_AXES_CONFIG);
+    // ⚑ `samples/bar-floating-temperature` is a SPAN chart as of v2.5 - every
+    // bar floats, which is the whole reason the type exists. Its committed
+    // .truth.json is unchanged.
+    const s = new CalibrationSession(SPAN_AXES_CONFIG);
     s.handleCalibrationClick(p1.px, p1.py);
     expect(s.confirmCalibrationValues([String(p1.value)])).toBe(true);
     s.handleCalibrationClick(p2.px, p2.py);

@@ -10464,6 +10464,24 @@ describe('heatmap capture (v2.2)', () => {
  * ⚑ Gate 4 holds: every click here is on a control the screen shows, and the
  * greyed tools carry their own hover sentence naming the way out.
  */
+describe('SPANSHOT', () => {
+  it('shot', async () => {
+    const fs = await import('fs');
+    const OUT='/home/david/Pictures';
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('axes-type-trigger').click();
+    await page.waitForTimeout(400);
+    const box = await page.getByTestId('axes-option-xy').boundingBox();
+    const last = await page.getByTestId('axes-option-ccr').boundingBox();
+    if (box && last) {
+      fs.writeFileSync(`${OUT}/plottracer-picker-bar-vs-span.png`, await page.screenshot({
+        clip: { x: box.x - 14, y: box.y - 14, width: (last.width * 3) + 60, height: (last.y + last.height) - box.y + 28 },
+      }));
+    }
+  });
+});
+
 describe('hiding every mark on the figure', () => {
   /**
    * A SMALL PATCH OF THE FIGURE, not the whole canvas - and the reason is a test

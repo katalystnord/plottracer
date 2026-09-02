@@ -51,6 +51,9 @@ export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   bar: [[300, 500], [300, 100], [100, 500], [500, 500]],
   categorical: [[300, 500], [300, 100], [100, 500], [500, 500]],
   boxplot: [[300, 500], [300, 100], [100, 500], [500, 500]],
+  // ⚑ Span shares Bar's fixedSteps exactly, so it shares Bar's layout: two on
+  // the VALUE axis, then the two ends of the CATEGORY axis.
+  span: [[300, 500], [300, 100], [100, 500], [500, 500]],
   // The frame's three corners (x1 and y1 share the first), then the colour
   // key's strip -- two opposite corners of a bar standing clear of the plot
   // box, then two points ON that strip carrying its values. Kept off the plot

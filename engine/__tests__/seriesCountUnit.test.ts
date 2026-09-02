@@ -49,6 +49,7 @@ const RECORDS_POINTS: Record<string, boolean> = {
   histogram: false, // bins
   heatmap: false, // cells, read from the image
   bar: false, // two corners per bar
+  span: false, // two MEASURED ends per span - the interval IS the datum
   boxplot: false, // five per box
   pie: false, // two edges per sector
 };

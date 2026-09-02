@@ -3974,7 +3974,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * prefill from, and Histogram bins aren't named at all (see
    * isHistogramBinShape below for the ONE thing they DO share with Bar). */
   private isBarIntervalShape(dataset: Dataset): boolean {
-    return this.config.id === 'bar' && this.ownSlots(dataset).length === BAR_INTERVAL_SLOTS.length;
+    // ⚑⚑ SPAN CHART JOINS BAR HERE (v2.5), and the list is deliberately explicit
+    // rather than a capability probe. `intervalSlots` would have read as the
+    // natural question, but it is a DISPLAY declaration - which columns the
+    // panel shows - and Bar no longer declares it while still capturing this
+    // exact two-corner tuple. Asking it would have quietly dropped Bar out of
+    // its own category table.
+    //
+    // ⚠️ Both ids are named because they are the two types whose datum IS a
+    // dragged rectangle; a 5-slot Box Plot and a Histogram bin are not, for the
+    // reasons in the memo above. If a third arrives (Candlestick), it is added
+    // here, and the `ownSlots` length check is what keeps a Box Plot living on a
+    // Bar session from slipping through.
+    return (
+      (this.config.id === 'bar' || this.config.id === 'span') &&
+      this.ownSlots(dataset).length === BAR_INTERVAL_SLOTS.length
+    );
   }
 
   /** True for a genuine 2-slot Histogram bin (HISTOGRAM_SLOTS). v2.0, 2026-07-30:

@@ -55,6 +55,13 @@ import chevronDownSvg from '../../icons/custom/chevron-down.svg?raw';
 // (custom/droplet.svg means "Display Color"). The icon SWAPS with the state
 // rather than relying on the teal pressed treatment alone: the slash is the half
 // that survives being looked at without hovering for a tooltip.
+// Span chart (v2.5): a plain FLOATING bar chart - bars at different heights,
+// none of them touching the faint baseline, which is the one thing the type is
+// about (David: *"All three chart types reject a fixed zero baseline"*).
+// ⚑ THE FAMILY IS VISIBLE IN THE PICKER WITHOUT A CAPTION: this same bar gains
+// wicks to become a candlestick and a median plus whiskers to become a box plot.
+// The same shape with more marks in it, which is the MIRROR rule doing real work.
+import graphSpanSvg from '../../icons/custom/graph-span.svg?raw';
 import marksVisibleSvg from '../../icons/custom/marks-visible.svg?raw';
 import marksHiddenSvg from '../../icons/custom/marks-hidden.svg?raw';
 // Eyedropper (David, 2026-07-27): the "Pick from image" buttons wore a bare ⌖
@@ -208,6 +215,7 @@ export const GraphHeatmapIcon = ({ size }: GraphIconProps = {}) => <Icon svg={gr
 export const GraphBarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphBarSvg} size={size} />;
 export const GraphCategoricalLineIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphCategoricalLineSvg} size={size} />;
 export const GraphBoxPlotIcon = ({ size }: GraphIconProps = {}) => <Icon svg={boxPlotSvg} size={size} />;
+export const GraphSpanIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphSpanSvg} size={size} />;
 export const GraphPolarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphPolarSvg} size={size} />;
 export const GraphSpiderIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphSpiderSvg} size={size} />;
 export const GraphPieIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphPieSvg} size={size} />;
@@ -231,6 +239,7 @@ export const GRAPH_TYPE_ICONS: Record<string, (props?: GraphIconProps) => React.
   bar: GraphBarIcon,
   categorical: GraphCategoricalLineIcon,
   boxplot: GraphBoxPlotIcon,
+  span: GraphSpanIcon,
   polar: GraphPolarIcon,
   spider: GraphSpiderIcon,
   pie: GraphPieIcon,

@@ -153,10 +153,22 @@ describe("a bar's value - the sign convention", () => {
     // so it does not sit on the baseline and there is nothing to sign against.
     // The old rule reported the far end anyway - which is how a floating figure
     // came to report a minimum on some rows and a maximum on others.
+    //
+    // ⚑⚑ AND SINCE v2.5 BAR REPORTS NOTHING AT ALL HERE, WHICH IS THE POINT.
+    // It used to fall back to an INTERVAL - the floating record living inside
+    // Bar, decided per bar by whether its near end happened to touch the
+    // baseline. That hidden mode is what Span chart took away: this figure is a
+    // Span chart, and there it reports {min: 0, max: 5} (see
+    // barIntervalRecord.test.ts and barCategoryTable.test.ts, which own that
+    // case now). Bar answers for what it can measure from its baseline, and is
+    // silent about what it cannot.
     const s = calibratedBar();
     s.setOption('baselineValue', '2');
     expect(barValue(s, 150, 500, 300)).toBeNull();
-    expect(s.getTupleRows()[0]!.interval).toEqual({ min: 0, max: 5 });
+    expect(
+      s.getTupleRows()[0]!.interval,
+      'a Bar has no interval to fall back on any more - that is a Span'
+    ).toBeNull();
   });
 
   it('⚑⚑ a FLOATING bar has no single value at all - it is an INTERVAL', () => {

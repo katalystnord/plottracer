@@ -153,7 +153,26 @@ describe('the config table - cross-cutting invariants', () => {
     // ⚑ It returns in v2.5 with Span charts, where the model answers it: a
     // span's outward extents are MEASURED ends of the interval, not an error
     // attached to one of its corners.
-    const refusing = ['bar', 'histogram', 'boxplot'];
+    // ⚑⚑ SPAN REFUSES FOR A DIFFERENT REASON FROM THE OTHER THREE, and that
+    // difference is the point of the type. Theirs is a capture problem this
+    // release set aside; a span's is a MODEL fact that does not go away: it has
+    // TWO measured values, so `upper` cannot say which end it belongs to. The
+    // answer is not four slots but the type that already carries them - a
+    // candlestick's {open, high, low, close}. So this one is permanent until
+    // Candlestick ships, and its reason names that rather than a release.
+    // ⚑⚑ BAR AND HISTOGRAM ACCEPT ERROR BARS AGAIN (v2.5), and the reason the
+    // refusal existed is gone in both halves. The stated cause - *"the capture
+    // path anchors it to the corner you dragged from"* - was fixed in `d411a30`
+    // and is enforced by four named tests in `errorBarGlyph.test.ts`. The
+    // UNSTATED cause was the ambiguity a floating bar created: with two measured
+    // values, `upper` could not say which end it belonged to. Span chart takes
+    // the floating case away, so a Bar now has ONE measured value and a
+    // baseline, and `upper` means what it says again.
+    //
+    // ⚑ The two that still refuse do so on MODEL grounds, which do not expire:
+    // a box has five measured values and a span two, so neither has a single
+    // value for an error to be measured FROM.
+    const refusing = ['boxplot', 'span'];
     for (const c of ALL) {
       if (!refusing.includes(c.id)) {
         expect(
@@ -450,6 +469,8 @@ describe('the config table - how many clicks each type asks for', () => {
       // `undefined` and this invariant never ran on the largest type in the
       // release.
       heatmap: 8,
+      // Shares Bar's fixedSteps by reference, so it asks the same four.
+      span: 4,
     };
     // ⚑ NO SILENT PASS FOR AN UNLISTED TYPE. `toBe(undefined)` would quietly
     // succeed for any type missing from the table above - which is exactly how

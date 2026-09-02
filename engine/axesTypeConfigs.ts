@@ -1274,8 +1274,6 @@ export const HISTOGRAM_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   // Same steps as XY (it shares the array), so the same shared corner.
   commonOrigin: XY_COMMON_ORIGIN,
   defaultSlots: HISTOGRAM_SLOTS,
-  errorBarsRefusal:
-    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
   tupleNoun: 'bin',
   // Same axes, same steps, same options -> same guards. Sharing the arrays
   // rather than re-declaring keeps them from drifting apart. See borrowFrom
@@ -2085,9 +2083,11 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
   defaultSlots: BAR_INTERVAL_SLOTS,
-  errorBarsRefusal:
-    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
-  intervalSlots: ['Min', 'Max'],
+  // ⚑⚑ NO `intervalSlots` ANY MORE (v2.5). A Bar is measured FROM A BASELINE -
+  // that is what the name says, and now all it does. An interval belongs to the
+  // Span chart, where BOTH ends are measurements rather than one end plus a
+  // reference line. David: *"floating bars needs to go to a new group and not
+  // stay in bars, and we have been treating it wrong."*
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot a heatmap's column and row counts use, for the same reason.
   // Without this the Calibration drops the third field silently and the count
@@ -2215,15 +2215,6 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // a bar below the baseline in an ordinary vertical figure, and
       // `pixelToData` already encodes orientation, direction and log scale.
       return roundAtPixel(bar.far, farPoint) - baseline;
-    },
-    /** The two ends, for the floating bars `compute` returns null for. Both were
-     * measured; neither is worth discarding to manufacture a single number. */
-    interval(points, axes) {
-      const [start, end] = points;
-      if (!start?.data || !end?.data) return null;
-      if (BAR_AXES_CONFIG.derivedTupleValue!.compute(points, axes, { apex: null }) !== null) return null;
-      const bar = barInterval(start.data[0]!, end.data[0]!, axes.getBaselineValue(), NaN);
-      return bar ? { min: bar.min, max: bar.max } : null;
     },
   },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
@@ -2386,8 +2377,24 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   defaultSlots: BOX_PLOT_SLOTS,
+  /**
+   * ⚑⚑ A BOX ALREADY REPORTS ITS OWN SPREAD, and that is why this refusal is
+   * PERMANENT rather than scoped to a release.
+   *
+   * The old text blamed the whisker anchor - *"the capture path anchors it to
+   * the corner you dragged from"* - and that was fixed in `d411a30`, verified
+   * by four named tests in `errorBarGlyph.test.ts`. Leaving the sentence
+   * standing meant a user hovering a greyed tool read a cause our own code
+   * contradicts, which is gate 3 pointing outward at the user instead of inward
+   * at the reviewer.
+   *
+   * ⚑ The real reason is the model: a box has FIVE measured values, so there is
+   * no single value for an `upper` or a `lower` to be measured from. The spread
+   * IS the datum here, the same fact that gives a span its own refusal one type
+   * along.
+   */
   errorBarsRefusal:
-    'Error bars on a bar, a bin or a box are refused in this release: the whisker must start at the shape\u2019s centre and the capture path anchors it to the corner you dragged from. Returning with Span charts.',
+    'A box plot already reports its own spread: it has five measured values (Min, Q1, Median, Q3, Max), so there is no single value for an error bar to be measured from.',
   // Shares Bar's fixedSteps (below), so the same two category clicks.
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot a heatmap's column and row counts use, for the same reason.
@@ -2432,6 +2439,136 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'boxplot' });
+    return { axes };
+  },
+};
+
+/**
+ * ⭐⭐ SPAN CHART (v2.5) - the simplest member of the span family.
+ *
+ * David, 2026-08-29: *"I think that floating bars needs to go to a new group and
+ * not stay in bars, and we have been treating it wrong. It needs to be with
+ * boxplots and candle sticks."* And on the family itself: *"They all belong to
+ * the broader family of Range, Span, or High-Low charts... All three chart types
+ * reject a fixed zero baseline. Instead, they focus on intervals."*
+ *
+ * ⚑⚑ ONE PRIMITIVE, AND THE TYPE SAYS HOW MANY VALUES RIDE IN IT.
+ *
+ *     Span         Min .. Max                    2 values
+ *     Candlestick  + a wick outward at each end   4   (later)
+ *     Box Plot     + median and quartiles         5   (ships)
+ *
+ * That is not our invention, it is what the generators do, lifted in reverse per
+ * tenet 11(b): Highcharts' boxplot point `{low, q1, median, q3, high}` IS
+ * `columnrange`'s `{low, high}` with three inserted; Vega-Lite's `boxplot` is a
+ * COMPOSITE mark whose box is a ranged bar; `geom_crossbar` is a linerange with
+ * a middle line. And `geom_col` cannot express a floating bar at all - which is
+ * the cleanest evidence that this never belonged to Bar.
+ *
+ * ⚑ It lands on the dimensional taxonomy as the **1.5D INTERVAL RECORD**: a
+ * category coordinate plus a value with EXTENT. Candlestick and box plot are
+ * that SAME record with more values on the SAME axis, not a new dimension - so
+ * the taxonomy predicts the family rather than describing it.
+ *
+ * ⚑ The name is the published taxonomy's own (Data Visualisation Catalogue:
+ * *"Span Chart, also known as Range Bar/Column Graph, Floating Bar Graph"*), so
+ * it is recognised rather than coined.
+ */
+export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
+  id: 'span',
+  label: 'Span chart',
+  axesKind: 'bar',
+  exportShape: 'tuples',
+  // ⚑ Bar's own mechanism, and it fits BETTER here than it does there: a
+  // bounding box records the two OPPOSITE CORNERS of a filled shape, which for a
+  // span IS the whole datum. On a baseline bar the same box has to be reduced to
+  // one tip, which is where the midpoint defect lived.
+  autoExtractKind: 'bounding-box',
+  dataDim: 1,
+  valueLabels: ['value'],
+  globalFields: [],
+  // The two dragged corners - the SAME two-slot tuple a floating bar was already
+  // captured into, which is why no record has to be re-recorded to move here.
+  defaultSlots: BAR_INTERVAL_SLOTS,
+  intervalSlots: ['Min', 'Max'],
+  /**
+   * ⚑⚑ A SPAN IS *ONLY* EVER AN INTERVAL, and that is the whole difference from
+   * Bar. `compute` answers null unconditionally: there is no baseline to measure
+   * from and no single number to report, so a span never has a `Value` column
+   * for one to hide in.
+   *
+   * ⚑ Bar's version of this had to ASK - *"does this bar's near end sit on the
+   * declared baseline?"* - and returned an interval only when the answer was no.
+   * That question is what moved out. Here both ends are measurements by
+   * definition, which is why the answer is a constant rather than a test.
+   *
+   * ⚑ The ends are sorted, so `Min` holds the smaller reading whichever corner
+   * the hand dragged from first. Two people capturing the identical span must
+   * produce the identical file; the record discarded drag ORDER deliberately in
+   * 2026-08-03, so a label implying one would be a label over a column that does
+   * not carry it.
+   */
+  derivedTupleValue: {
+    label: 'Value',
+    compute() {
+      return null;
+    },
+    interval(points) {
+      const [start, end] = points;
+      if (!start?.data || !end?.data) return null;
+      const a = start.data[0];
+      const b = end.data[0];
+      if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+      return { min: Math.min(a, b), max: Math.max(a, b) };
+    },
+  },
+  /**
+   * ⚑⚑ A SPAN THAT CARRIES UNCERTAINTY AT EACH END IS A CANDLESTICK, and that
+   * DISSOLVES the four-slot problem rather than solving it.
+   *
+   * Our error model gives a tuple ONE datum and four role slots (upper / lower /
+   * left / right). That is right for a point, where `upper` means above *the*
+   * value. A span has TWO values, so `upper` cannot say WHICH end it belongs to,
+   * and expressing a candlestick would need four: a low and a high for `Min`, a
+   * low and a high for `Max`. Rather than bolt those on, the user picks the type
+   * that already carries them - `{open, high, low, close}` is a century old and
+   * first-class in every financial library.
+   */
+  errorBarsRefusal:
+    'A span with uncertainty at each end is a Candlestick, which is a type of its own - a span has TWO measured values, so "upper" cannot say which end it belongs to. Coming in a later release.',
+  // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
+  // - the same slot Bar, Box Plot and the heatmap's counts use.
+  calibrationDimensions: 3,
+  categoryTicks: { startStep: 'c1', endStep: 'c2' },
+  secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
+  tupleNoun: 'span',
+  // Shares Bar's calibration walk and guards, as Box Plot does - reusing the
+  // arrays is what keeps them from drifting apart.
+  fixedSteps: BAR_AXES_CONFIG.fixedSteps,
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
+  /**
+   * ⚑⚑ NO BASELINE OPTIONS, AND THAT IS THE POINT OF THE TYPE. David: *"All
+   * three chart types reject a fixed zero baseline. Instead, they focus on
+   * intervals."* Bar's array carries `hasBaseline`/`baselineValue`; borrowing it
+   * by reference is exactly the bug Box Plot's own comment records - controls
+   * that appear and change nothing. A span is measured end to end, so a baseline
+   * has nothing to contribute and must not be offered.
+   */
+  options: [
+    { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
+    { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
+  ],
+  extractOptions(axes) {
+    return { isLog: String(axes.isLog()), isRotated: String(axes.isRotated()) };
+  },
+  checkValues(cal, options) {
+    return barCalibrationValueCheck(cal, options);
+  },
+  buildAxes(cal, ctx) {
+    const axes = new BarAxes();
+    const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
+    axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'span' });
     return { axes };
   },
 };
@@ -3127,36 +3264,40 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
 // engine/calibrationSession.ts for why that covariance holds.
 export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
   XY_AXES_CONFIG,
-  // Sits next to XY because it *is* XY underneath (checkpoint 66) -- and
-  // directly above Bar because that adjacency is the point: a histogram looks
-  // like bars, so Bar is the tempting pick, but BarAxes yields a typed label
-  // plus one magnitude and no numeric x, silently losing the axis that makes a
-  // histogram a histogram. Offering the right entry by name is what stops that
-  // choice being a trap.
-  HISTOGRAM_AXES_CONFIG,
   // Error bars are rail tool 6, not a graph type (checkpoint 79): you trace a
   // curve and THEN add error to it. As a graph type the choice came *before* you
   // started -- trace an XY curve, then want error, and you started over -- the
   // first of the four problems docs/error-bars-design.md lists against the tuple
   // model. The retired config was deleted outright in v1.5; see that commit.
-  BAR_AXES_CONFIG,
-  // Categorical-X line/scatter (checkpoint 101): BarAxes underneath (value-only
-  // calibration = "X is not numeric"), captured as points. Sits by Bar because
-  // it shares Bar's calibration; differs in that it plots points, not bars.
+  // ⚑⚑ THE PICKER IS A 3-WIDE GRID, SO THIS ORDER *IS* THE LAYOUT - and the
+  // layout is doing real work here. David, after seeing Span land under Bar
+  // rather than beside it: *"it would be better to put histogram, bar and span
+  // next to each other on one line... Then they are more easily different."*
+  //
+  // ▶ A picker is a DISCRIMINATION task. The three bar-shaped types are the ones
+  // most easily confused with one another, so they go side by side where they
+  // can be compared directly, rather than scattered down a column where each is
+  // judged against a memory of the others. The icons differ by design (bars from
+  // a baseline / bars floating over one / bins that touch); adjacency is what
+  // makes that difference legible instead of merely present.
+  //
+  // ⚑ HISTOGRAM KEEPS ITS OLD JOB IN THE NEW POSITION. It sat next to XY because
+  // it IS XY underneath, and directly beside Bar because that adjacency is the
+  // point: a histogram LOOKS like bars, so Bar is the tempting pick, but BarAxes
+  // yields a typed label plus one magnitude and no numeric x - silently losing
+  // the axis that makes a histogram a histogram. Leading this row keeps it
+  // beside Bar, which is the adjacency that was doing the work.
+  //
+  // Row 1: XY - Line - Box Plot        Row 2: Histogram - Bar - Span chart
+  // ⚑ Box Plot ends row 1 so it sits DIRECTLY ABOVE Span chart: the span family
+  // stays adjacent (span 2 values, box plot 5) without breaking the row David
+  // asked for. Heatmap keeps its documented slot - last of the rectangular
+  // charts, first before the radial ones - at the head of row 3.
   CATEGORICAL_LINE_CONFIG,
-  // Box Plot as a first-class type (checkpoint 107). BarAxes underneath, like
-  // the two above, and grouped with them for that reason. Was a hidden "Box Plot
-  // Groups" toggle on Bar (checkpoints 21-23) -- invisible to a first-time user,
-  // which CLAUDE.md flags as a keystone failure; promoting it to a named entry is
-  // correctness, not polish. Datasets auto-carry the Min/Q1/Median/Q3/Max groups.
   BOX_PLOT_AXES_CONFIG,
-  // Heatmap (v2.2), closing the rectangular group rather than joining the bar
-  // family. The picker answers "what does my figure look like?", and a heatmap
-  // looks like neither a bar chart nor a scatter -- it is a grid of coloured
-  // cells. What it shares with everything above it is the FRAME: two ordinary
-  // axes at right angles, which is what it calibrates. So it sits last among
-  // the rectangular charts and first before the radial ones, which is exactly
-  // where a reader scanning for "mine has a colour key" stops looking.
+  HISTOGRAM_AXES_CONFIG,
+  BAR_AXES_CONFIG,
+  SPAN_AXES_CONFIG,
   HEATMAP_AXES_CONFIG,
   POLAR_AXES_CONFIG,
   // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a

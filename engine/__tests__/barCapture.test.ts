@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
@@ -108,7 +108,13 @@ describe('a baseline-anchored bar (the default: hasBaseline true, value 0)', () 
   });
 });
 
-describe('a floating bar has no single VALUE - its record is the interval', () => {
+/**
+ * ⚑⚑ THIS BLOCK MOVED TO SPAN CHART IN v2.5, HELPER AND ALL. The behaviour it
+ * describes did not change by one assertion - two measured ends, sorted, no
+ * Value column - it simply stopped being something Bar does. Bar now means what
+ * its name says: measured from a baseline.
+ */
+describe('a span has no single VALUE - its record IS the interval', () => {
   /**
    * ⚑⚑ REWRITTEN v2.3, AND THE OLD ANSWER WAS THE DEFECT. These used to assert
    * that a floating bar reports its SPAN. Measured against
@@ -121,7 +127,7 @@ describe('a floating bar has no single VALUE - its record is the interval', () =
    * `Max` rather than inventing one number out of two.
    */
   function floatingBar(): CalibrationSession<BarAxes> {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    const session = new CalibrationSession<BarAxes>(SPAN_AXES_CONFIG);
     session.setOption('hasBaseline', 'false');
     calibratedBar(session);
     return session;
@@ -189,7 +195,7 @@ describe('a floating bar has no single VALUE - its record is the interval', () =
     // THE MEASURED DISCRIMINATOR, which is the whole fix. `bar-floating-temperature`
     // declares a baseline of 0 and every one of its bars floats above or below
     // it. Asking "was a baseline declared" got this wrong for every row.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    const session = new CalibrationSession<BarAxes>(SPAN_AXES_CONFIG);
     calibratedBar(session); // hasBaseline true, baseline 0, by default
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5
