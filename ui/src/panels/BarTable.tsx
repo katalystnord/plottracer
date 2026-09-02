@@ -22,6 +22,49 @@ export function crowdedMessage(
   return `${crowded.length} more ${tupleNoun}${crowded.length === 1 ? '' : 's'} fall${crowded.length === 1 ? 's' : ''} in a category that already has one${where}, so ${crowded.length === 1 ? 'it is' : 'they are'} not shown above. Check the category count, or whether a ${tupleNoun} sits outside the marked axis.`;
 }
 
+/**
+ * What to say when a captured bar has no value to report.
+ *
+ * ⚑⚑ WRITTEN TO `crowdedMessage`'S SHAPE, deliberately: how many, WHICH ones,
+ * and what to do about it. That trio is what turns "a number is missing" into
+ * something a user can act on, and the panel already speaks it.
+ *
+ * ⚑ TWO REASONS, TWO REMEDIES, and they are not variations of one sentence. A
+ * bar that misses the baseline is a fact about THAT bar and the answer is a
+ * different chart type; no baseline declared at all is one fact about the whole
+ * figure and the answer is a tick box. Naming the categories in the second case
+ * would send the user hunting for bars that are drawn perfectly well.
+ *
+ * ⚑ IT SAYS THE ENDS ARE KEPT, because they are: both corners were measured and
+ * they ride in the record and in every export whatever this column shows. The
+ * user is being told a READING is not reportable, not that their work is gone.
+ *
+ * ⚑⚑ AND IT OFFERS THE MIS-CLICK FIRST, because that is the likelier cause and
+ * because asserting the other one would be wrong. A bar's near end is a REAL
+ * CLICKED PIXEL - never a baseline assumed for it (Workspace's bar drag says so
+ * in as many words) - and "sits on the baseline" is answered within
+ * `BASELINE_TOLERANCE_PX`, two IMAGE pixels, which is a finer target than two
+ * screen pixels on any figure shown smaller than 1:1. So a hand that missed the
+ * axis and a figure that genuinely floats arrive here identically, and only the
+ * user can see which. Same shape as `crowdedMessage`: name both, decide neither.
+ */
+export function unreadableMessage(
+  unreadable: readonly { categoryIndex: number; reason: 'off-baseline' | 'no-baseline' }[],
+  categoryNames: readonly string[],
+  tupleNoun: string
+): string {
+  if (unreadable.length === 0) return '';
+  if (unreadable.some((u) => u.reason === 'no-baseline')) {
+    return `No baseline is declared, so no ${tupleNoun} on this figure has a value to report - a ${tupleNoun} is measured FROM its baseline. Tick "Bars share a baseline" and give its value, or capture this figure as a Span chart if its ${tupleNoun}s do not share one.`;
+  }
+  const off = unreadable.filter((u) => u.reason === 'off-baseline');
+  const names = [...new Set(off.map((u) => categoryNames[u.categoryIndex] ?? `#${u.categoryIndex + 1}`))];
+  const list = names.filter((n) => n !== '').join(', ');
+  const where = list === '' ? '' : ` (${list})`;
+  const one = off.length === 1;
+  return `${off.length} ${tupleNoun}${one ? '' : 's'}${where} ${one ? 'does' : 'do'} not reach the baseline, so ${one ? 'it has' : 'they have'} no value to report - a ${tupleNoun} is measured FROM its baseline. Both measured ends are still in the record and in every export. Check whether the near end was clicked short of the baseline; if ${one ? 'this bar really does' : 'these bars really do'} float, the figure is a Span chart, where both ends are reported as Min and Max.`;
+}
+
 /** One series' column of the bar table, index-aligned with the categories. */
 export interface BarColumn {
   seriesIndex: number;
@@ -37,6 +80,17 @@ export interface BarCategoryTable {
   columns: readonly BarColumn[];
   categoryNames: readonly string[];
   categoryRawNames: readonly string[];
+  /**
+   * Bars that were fully captured and still have no number in the table, with
+   * the reason the TYPE gave - see `CalibrationSession.getBarCategoryTable`.
+   *
+   * ⚑⚑ THE SAME DEFECT AS `crowded`, ONE ROW OVER. A bar that misses the
+   * baseline computes to null, and a null prints as the dash a category with NO
+   * BAR prints, so the two are indistinguishable on screen while both of the
+   * bar's ends sit in the record and in every export. Surfacing it here is
+   * mirroring, not a second mechanism: same source, same panel, same shape.
+   */
+  unreadable?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number; reason: 'off-baseline' | 'no-baseline' }[];
   /**
    * Readings that could not be shown, because another one of the same series
    * already occupies that category.
@@ -406,6 +460,9 @@ export function BarTable({
    */
   const isInterval = table.columns.map((col) => col.intervals.some((iv) => iv !== null));
   const anyInterval = isInterval.some(Boolean);
+  // ⚑ Which cells hold a bar that HAS no number - so the dash can say why on
+  // hover instead of claiming the category is empty, which it is not.
+  const unreadableAt = new Set((table.unreadable ?? []).map((u) => `${u.seriesIndex}:${u.categoryIndex}`));
   const headRowSpan = anyError || anyInterval ? 2 : 1;
   return (
     <>
@@ -544,8 +601,14 @@ export function BarTable({
                   title={
                     aimable
                       ? `Click to fill this bar's missing corner next`
+                      : // ⚑ A CELL WITH A BAR IN IT DOES NOT SAY "no bar". The
+                        // dash is the same glyph either way, so the only thing
+                        // that could tell the two apart said the wrong one of
+                        // them - see `unreadableMessage` below the table.
+                        unreadableAt.has(`${col.seriesIndex}:${categoryIndex}`)
+                      ? `This ${tupleNoun} was measured, but it has no value to report - see the note below the table`
                       : empty
-                      ? `${col.seriesName} has no ${categoryName} bar`
+                      ? `${col.seriesName} has no ${categoryName} ${tupleNoun}`
                       : isActive
                       ? 'Click to select this bar on the figure'
                       : undefined
@@ -653,6 +716,19 @@ export function BarTable({
     {table.columns.every((c) => c.tupleIndices.every((t) => t === null)) && (
       <div data-testid="no-points" style={{ padding: 8, color: theme.color.text.legend, fontSize: 12.5 }}>
         {noPointsHint}
+      </div>
+    )}
+    {/* ⚑⚑ WHAT WAS MEASURED AND STILL HAS NO NUMBER, said in the panel that
+        showed the dash. It sits above `crowded` because the two answer the same
+        question in the reader's head - *why is that cell empty?* - and a reader
+        who has just seen a dash should not have to scroll past a different
+        notice to find out. */}
+    {(table.unreadable?.length ?? 0) > 0 && (
+      <div
+        data-testid="bar-unreadable"
+        style={{ padding: 8, fontSize: 12.5, color: theme.color.error }}
+      >
+        {unreadableMessage(table.unreadable!, table.categoryNames, tupleNoun)}
       </div>
     )}
     {(table.crowded?.length ?? 0) > 0 && (

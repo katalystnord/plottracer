@@ -267,6 +267,7 @@ import {
   type CalibStepInfo,
   type RepeatingStepInfo,
   type DataPointView,
+  type UnreadableReason,
   defaultOptionValues,
   checkGuards,
   mustDiffer,
@@ -4909,6 +4910,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
        * against another series' dataset, so this is per-column, not global. */
       tupleIndices: (number | null)[];
     }[];
+    /**
+     * Bars that were fully captured and still have no value to report, with the
+     * type's own reason (v2.5).
+     *
+     * ⚑⚑ THE SECOND HALF OF `crowded`'S LESSON. A bar whose near end misses the
+     * baseline computes to null, and null prints as the same dash a category
+     * with NO BAR prints - so a measured bar and an absent one looked identical
+     * and nothing on screen said which. The corners are in the record and in the
+     * export the whole time; it is the REPORT that went missing, which is
+     * exactly the failure `crowded` exists to prevent, in a second place.
+     *
+     * ⚑ Mirroring `crowded` deliberately - same shape, same route, surfaced by
+     * the same panel - rather than a second mechanism for "something is not
+     * shown above".
+     */
+    unreadable: { seriesIndex: number; categoryIndex: number; tupleIndex: number; reason: UnreadableReason }[];
     /** Bars that could not be shown because another bar of the same series
      * already fills that category's cell. Empty in every ordinary figure.
      *
@@ -4919,7 +4936,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
     if (!this.axes || !this.isBarIntervalShape(this.activeEntry.dataset)) {
-      return { categoryNames: [], categoryRawNames: [], columns: [], crowded: [] };
+      return { categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] };
     }
     const axes = this.axes;
     const categories = this.categoryAxis.getCategories();
@@ -4928,6 +4945,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const derive = this.config.derivedTupleValue;
 
     const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
+    const unreadable: {
+      seriesIndex: number;
+      categoryIndex: number;
+      tupleIndex: number;
+      reason: UnreadableReason;
+    }[] = [];
     const columns = this.datasetEntries.map((entry, seriesIndex) => {
       const dataset = entry.dataset;
       const tuples = dataset.getAllTuples();
@@ -4975,12 +4998,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const derived =
           derive?.compute(points, axes, { apex: null }) ?? null;
         values.push(derived);
-        intervals.push(derive?.interval?.(points, axes) ?? null);
+        const interval = derive?.interval?.(points, axes) ?? null;
+        intervals.push(interval);
         tupleIndices.push(tupleIndex);
+        // ⚑ Only where NEITHER column can answer. A type that falls back to an
+        // interval has reported its reading, however it is spelled, and there is
+        // nothing for a notice to be about.
+        if (derived === null && interval === null) {
+          const reason = derive?.unreadable?.(points, axes) ?? null;
+          if (reason !== null) unreadable.push({ seriesIndex, categoryIndex, tupleIndex, reason });
+        }
       });
       return { seriesIndex, seriesName: dataset.name, values, intervals, tupleIndices };
     });
-    return { categoryNames, categoryRawNames, columns, crowded };
+    return { categoryNames, categoryRawNames, columns, crowded, unreadable };
   }
 
   /** Renames a category directly by its canonical CategoryAxis index - the

@@ -12,6 +12,7 @@ import {
   HISTOGRAM_AXES_CONFIG,
   HEATMAP_AXES_CONFIG,
   BAR_AXES_CONFIG,
+  SPAN_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
   POLAR_AXES_CONFIG,
@@ -384,6 +385,48 @@ describe('guidanceTip - capture, per graph type', () => {
     expect(tip).toContain('bar 3, one end still to fill');
   });
 
+  it('⚑⚑ tells a Bar user the near end must land ON the baseline (v2.5)', () => {
+    // ⚠️ THE TIP USED TO PROMISE THE OPPOSITE, and it was true until v2.5:
+    // *"this reads a bar that floats above or below its baseline just as well as
+    // an ordinary one"*. Floating moved to the Span chart, so a user following
+    // that sentence captures two real ends and gets no value at all - the tip
+    // guaranteeing exactly the outcome the panel then has to apologise for.
+    const tip = guidanceTip(
+      base({
+        mode: 'place-point',
+        config: BAR_AXES_CONFIG,
+        hasSlots: true,
+        currentGroupLabel: 'Min',
+        tupleNoun: 'bar',
+        currentTupleIndex: null,
+      })
+    );
+    expect(tip).toContain('must land ON it');
+    expect(tip).toContain('Span chart');
+    expect(tip).not.toContain('floats above or below');
+  });
+
+  it('⚑ a Span gets the SAME gesture and is offered no baseline, because it has none', () => {
+    const tip = guidanceTip(
+      base({
+        mode: 'place-point',
+        config: SPAN_AXES_CONFIG,
+        hasSlots: true,
+        currentGroupLabel: 'Min',
+        tupleNoun: 'span',
+        currentTupleIndex: null,
+      })
+    );
+    expect(tip).toContain('one corner of the span to the opposite corner');
+    expect(tip).toContain('both ends are measured');
+    expect(tip).not.toMatch(/baseline must|land ON it/);
+    // ⚑⚑ AND IT NAMES NEITHER END, for the reason the bar branch was written:
+    // the generic slotted line interpolates the slot AT THE CURSOR, which is a
+    // POSITION - so a span clicked from the top down said "filling Min" for the
+    // high end. Span fell through to that line until this branch took it in.
+    expect(tip).not.toMatch(/filling (Min|Max)/);
+  });
+
   it('⚑⚑ the bar tip names NEITHER end, because the slot at the cursor is a POSITION', () => {
     // ⚠️ MEASURED, and it is why this wording changed. `getCurrentSlotLabel`
     // returns the slot at the cursor's INDEX, and a bar's slots are `Min` then
@@ -606,6 +649,15 @@ describe('noPointsHint', () => {
     );
     expect(noPointsHint({ mode: 'interpolate', config: XY_AXES_CONFIG })).toBe(
       'No points yet - click a few guide points along one curve.'
+    );
+  });
+
+  it('⚑ tells a Span user to DRAG too, never to click one end (v2.5)', () => {
+    // A span is `axesKind: 'bar'` without being `id: 'bar'`, so it fell through
+    // to the bar-family one-click wording - the categorical-Line defect at a new
+    // site, in the release that added the type. Half a span is no span.
+    expect(noPointsHint({ mode: 'place-point', config: SPAN_AXES_CONFIG })).toBe(
+      'No points yet - drag from one corner of a span to the opposite corner (or click twice) to record it.'
     );
   });
 

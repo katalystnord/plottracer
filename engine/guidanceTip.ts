@@ -440,8 +440,20 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // sort that out later. I think any other wording is not generalizable as
       // tooltip."* Which end is still open is not a fact the gesture needs - HOW
       // MANY are is - so the note says that instead.
-      if (config.id === 'bar' && hasSlots)
-        return `Drag from one corner of the bar to the opposite corner - both ends are measured, so this reads a bar that floats above or below its baseline just as well as an ordinary one${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, one end still to fill)`}. A single click still works too, filling one end at a time.`;
+      // ⚠️ THE SENTENCE THIS REPLACES WAS TRUE UNTIL v2.5 AND FALSE AFTER IT. It
+      // promised the gesture *"reads a bar that floats above or below its
+      // baseline just as well as an ordinary one"* - which is precisely what Bar
+      // stopped doing when floating moved to the Span chart. A tip that promises
+      // a capability the type no longer has is the worst kind of wrong: the user
+      // follows it, the bar records both ends, and the Value column says nothing.
+      // ⚑ The two types share ONE sentence with its middle clause swapped,
+      // because they share one gesture. Two paragraphs would drift.
+      if ((config.id === 'bar' || config.id === 'span') && hasSlots)
+        return `Drag from one corner of the ${tupleNoun} to the opposite corner - ${
+          config.id === 'bar'
+            ? 'both ends are measured, and the end nearer the baseline must land ON it, because that is what a bar is measured from (a bar that floats belongs in a Span chart)'
+            : 'both ends are measured, and neither of them is a baseline: a span IS its two ends'
+        }${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, one end still to fill)`}. A single click still works too, filling one end at a time.`;
       if (hasSlots)
         return `Click to add a point - filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
       // ⚑ Categorical Line is the one bar-family type that stays a plain point per
@@ -644,9 +656,15 @@ export function noPointsHint({
     return mode === 'place-point'
       ? 'No points yet - click each category’s marker in turn to record its value.'
       : 'No points yet - pick Add points (3) from the tool rail and click each category’s marker.';
+  // ⚑⚑ A SPAN IS DRAGGED, EXACTLY AS A BAR IS (v2.5), and it fell through to the
+  // one-click wording because it is `axesKind: 'bar'` without being `id: 'bar'`.
+  // That is the categorical-Line note directly above, at a new site and in the
+  // same release the type was added: a hint naming a gesture the type does not
+  // have. A span captured with one click per end still works, but a user told to
+  // *"click the end of each bar"* records one end, and half a span is no span.
   if (mode === 'place-point')
-    return config.id === 'bar'
-      ? 'No points yet - drag from one corner of a bar to the opposite corner (or click twice) to record it.'
+    return config.id === 'bar' || config.id === 'span'
+      ? `No points yet - drag from one corner of a ${config.id === 'span' ? 'span' : 'bar'} to the opposite corner (or click twice) to record it.`
       : config.axesKind === 'bar'
         ? 'No points yet - click the end of each bar to record its value.'
         : 'No points yet - click on the image to add data points.';
@@ -661,7 +679,10 @@ export function noPointsHint({
   // chart of either type. Bar itself is the exception (v2.0 Phase 7): its
   // own Auto-extract now finds bars by colour correctly, so this hint
   // names it again for Bar specifically, same as the generic fallback does.
-  if (config.id === 'bar') return 'No points yet - drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.';
+  // ⚑ Span has Auto-extract too - `bounding-box`, which fits it better than it
+  // fits Bar (a box IS the datum for a span) - so it gets the same two offers.
+  if (config.id === 'bar' || config.id === 'span')
+    return `No points yet - drag each ${config.id === 'span' ? 'span' : 'bar'} corner to corner (Add points, 3), or pick Auto-extract (4) to find ${config.id === 'span' ? 'them' : 'bars'} by colour.`;
   if (config.axesKind === 'bar') return 'No points yet - pick Add points (3) from the tool rail and click the end of each bar.';
   // ⚑ Only offer Auto-extract where the type HAS it. Pie declares
   // autoExtractKind 'none', so its rail button is disabled and hotkey 4 is a

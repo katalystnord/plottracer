@@ -164,7 +164,13 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   bar: {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace the bar chart - click the top of each bar, left to right.',
+    // ⚑⚑ THE GESTURE, NOT JUST THE TARGET (v2.5). This said *"click the top of
+    // each bar"* - one click - while a bar has been TWO measured corners since
+    // v2.0, and since v2.5 the near one must sit on the baseline or the bar has
+    // no value at all. A player following the old sentence recorded bars that
+    // spanned two categories and reported nothing, and nothing on screen said
+    // why. Gate 4: the walkthrough may only click what a prompt names.
+    instruction: 'Trace the bar chart - drag each bar from its top corner down to the baseline, left to right.',
     truth: barTruth as unknown as ChallengeTruth,
   },
   boxplot: {
@@ -180,7 +186,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-grouped': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the Control bars - the dark blue ones, left to right.',
+    instruction: 'Trace just the Control bars - the dark blue ones. Drag each from its top corner down to the baseline, left to right.',
     truth: {
       ...(barGroupedTruth as unknown as ChallengeTruth),
       series: [(barGroupedTruth as unknown as ChallengeTruth).series[0]!],
@@ -192,7 +198,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-grouped-missing': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the Control bars - the dark blue ones, left to right.',
+    instruction: 'Trace just the Control bars - the dark blue ones. Drag each from its top corner down to the baseline, left to right.',
     truth: {
       ...(barMissingTruth as unknown as ChallengeTruth),
       series: [(barMissingTruth as unknown as ChallengeTruth).series[0]!],
@@ -203,7 +209,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   'bar-stacked': {
     family: 'bar',
     grade: 'easy',
-    instruction: 'Trace just the bottom segment of each bar - Materials.',
+    instruction: 'Trace just the bottom segment of each bar - Materials. Drag each from the top of that segment down to the baseline.',
     truth: {
       ...(barStackedTruth as unknown as ChallengeTruth),
       series: [(barStackedTruth as unknown as ChallengeTruth).series[0]!],

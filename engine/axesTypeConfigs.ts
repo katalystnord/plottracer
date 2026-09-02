@@ -34,7 +34,7 @@ import { binFromCorners } from '../algorithms/histogram.js';
 import { checkStripGeometry } from '../algorithms/colorBar.js';
 import { DECLARED_CATEGORY_KEY_REFUSAL, STRIP_NOT_A_LINE_REFUSAL } from './heatmapRefusals.js';
 import { checkColorScaleValues } from '../algorithms/colorScale.js';
-import { barInterval, nearEndIsFirst, BASELINE_TOLERANCE_PX } from '../core/barInterval.js';
+import { barSeating, nearEndIsFirst } from '../core/barInterval.js';
 import { halfPixelResolution, roundToResolution } from '../core/exportPrecision.js';
 import { CONVENTION_LABELS } from './categoryTickOverlay.js';
 
@@ -622,6 +622,18 @@ export function commonOriginReuse(
  */
 export const GRAPH_TYPE_METADATA_KEY = 'graphType';
 
+/**
+ * Why a fully captured tuple still has no value to report.
+ *
+ * ⚑ `off-baseline` - this bar's near end does not sit on the declared baseline,
+ * so there is no quantity to state: a Bar is measured FROM a baseline, and since
+ * v2.5 it has no interval to fall back to (that is the Span chart).
+ * ⚑ `no-baseline` - the FIGURE declares no baseline at all, so no bar on it has
+ * a value. One fact about the whole chart, not a fact about each bar, and the
+ * panel says it once.
+ */
+export type UnreadableReason = 'off-baseline' | 'no-baseline';
+
 export interface AxesTypeConfig<A extends CalibratedAxes> {
   /** Identifies the *graph type* (the dropdown entry), not the axes class --
    * see GRAPH_TYPE_METADATA_KEY. */
@@ -738,6 +750,27 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
      * answers, so the two can never both be present on one row.
      */
     interval?(points: (DataPointView | null)[], axes: A): { min: number; max: number } | null;
+    /**
+     * WHY a COMPLETE tuple still has no value - the sentence the panel owes the
+     * user when `compute` answers null and nothing else will (v2.5).
+     *
+     * ⚑⚑ IT LIVES BESIDE `compute` BECAUSE IT IS THE SAME DECISION. `compute`
+     * returning null is the whole of what the table sees, and a null renders as
+     * the same dash a category with NO BAR AT ALL renders as - so a real
+     * measurement and an absence look identical, which is
+     * `crowded`'s defect in a second place: a complete-LOOKING table with a
+     * reading silently missing. Asking the type WHY keeps the answer with the
+     * code that produced it instead of re-deriving it in the panel.
+     *
+     * ⚠️ ONLY FOR A COMPLETE CAPTURE. A half-dragged tuple has no value YET,
+     * which the table already says with its aim-the-missing-corner cell; saying
+     * it twice, in two registers, would be worse than saying it once.
+     *
+     * ⚑ Returns a REASON CODE, not prose: the wording belongs to the panel that
+     * has the room for it, and a code is what a test can name.
+     * Undeclared - Span, Pie, XY - means "there is nothing to explain".
+     */
+    unreadable?(points: (DataPointView | null)[], axes: A): UnreadableReason | null;
   };
   /**
    * What auto-extract MEANS on this graph type - a declared capability, because
@@ -2155,8 +2188,9 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
      *     drawn DOWN from zero to -20 is worth -20; its span is 20 and has
      *     thrown the sign away, which is why "always use the span" is wrong.
      *   · declared STACKED      -> its own height, the segment's contribution.
-     *   · anything else FLOATS  -> it has no single value. `null`, and the
-     *     panel and the file report the interval as `Min` and `Max` instead.
+     *   · anything else FLOATS  -> it has no single value, and since v2.5 a Bar
+     *     has no interval to fall back to either. `null`, and `unreadable`
+     *     below is what says SO ON SCREEN rather than leaving a bare dash.
      */
     compute(points, axes) {
       const [start, end] = points;
@@ -2166,19 +2200,18 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // ⚑ An undeclared baseline is not a baseline AT zero: with nothing to be
       // signed against, every bar is an interval and takes the branch below.
       const baseline = axes.getBaselineValue();
-      // ⚑ Resolution is read at the NEAR end's own pixel - the end the question
-      // is about - through the same `halfPixelResolution` the panels and the
-      // exports round with, so "within resolution" means the same thing here as
-      // it does everywhere else on screen.
-      const nearPoint = nearEndIsFirst(v1, v2, baseline) ? start : end;
       // ⚑⚑ THE BASELINE TOLERANCE, NOT THE READING RESOLUTION - they are different
       // questions and this asked the wrong one. `halfPixelResolution` is how
       // precisely a VALUE can be stated; "does this end sit on the baseline" is
       // answered at `BASELINE_TOLERANCE_PX`, which the detector has always used.
-      // `halfPixelResolution` returns HALF a pixel, so a whole pixel is twice it.
-      const halfPx = halfPixelResolution(axes, nearPoint.px, nearPoint.py)[0] ?? NaN;
-      const resolution = halfPx * 2 * BASELINE_TOLERANCE_PX;
-      const bar = barInterval(v1, v2, baseline, resolution);
+      // ⚑ One call, because the bar table asks the same question to say WHY a
+      // bar has no value - see `barSeating`.
+      const bar = barSeating(
+        { value: v1, px: start.px, py: start.py },
+        { value: v2, px: end.px, py: end.py },
+        baseline,
+        axes
+      );
       if (!bar) return null;
       // ⚑⚑ ROUNDED AT ITS OWN PIXEL BEFORE ANY ARITHMETIC, so `Value` cannot
       // disagree with the `Min`/`Max` beside it. Those two go through the export
@@ -2200,7 +2233,9 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
         const res = halfPixelResolution(axes, at.px, at.py)[0];
         return res === undefined ? value : roundToResolution(value, res);
       };
-      const farPoint = nearEndIsFirst(v1, v2, baseline) ? end : start;
+      const nearIsFirst = nearEndIsFirst(v1, v2, baseline);
+      const nearPoint = nearIsFirst ? start : end;
+      const farPoint = nearIsFirst ? end : start;
       // ⚑ A stacked segment's own height. Magnitude, not direction: a
       // contribution to a stack is never negative, and which corner was dragged
       // first is the operator's hand (see the 2026-08-03 decision below).
@@ -2215,6 +2250,45 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // a bar below the baseline in an ordinary vertical figure, and
       // `pixelToData` already encodes orientation, direction and log scale.
       return roundAtPixel(bar.far, farPoint) - baseline;
+    },
+    /**
+     * ⚑⚑ THE DASH THAT MEANT TWO THINGS (v2.5). A bar whose near end misses the
+     * baseline computes to null, and a null prints as `-` - the same dash a
+     * category with NO BAR prints. Both corners were MEASURED and are in the
+     * record and in the export; only the report was missing, and it was missing
+     * in the one way this project has learnt to fear: a complete-looking table
+     * with a real reading not shown - the same shape as `crowded`.
+     *
+     * ⚑ ASKED THROUGH `barSeating`, the same call `compute` makes, so the two
+     * cannot disagree about which bars these are.
+     */
+    unreadable(points, axes) {
+      const [start, end] = points;
+      // Not yet captured is not unreadable - the table already aims at the
+      // missing corner, and that cell must keep saying so.
+      if (!start?.data || !end?.data) return null;
+      // A stacked segment's value is its own height, measured from neither the
+      // baseline nor anything else the user has to declare.
+      if (axes.isStacked()) return null;
+      // ⚑ ASKED OF THE FIGURE, ONCE. With no baseline declared there is nothing
+      // for any bar to sit on, so this is not N floating bars - it is one
+      // missing declaration, and saying it per bar would send the user hunting
+      // for bars that are drawn perfectly well.
+      if (!axes.hasDeclaredBaseline()) return 'no-baseline';
+      const v1 = start.data[0]!;
+      const v2 = end.data[0]!;
+      const baseline = axes.getBaselineValue();
+      const bar = barSeating(
+        { value: v1, px: start.px, py: start.py },
+        { value: v2, px: end.px, py: end.py },
+        baseline,
+        axes
+      );
+      // An unanswerable measurement (a degenerate calibration) is not a claim
+      // that the bar floats - `compute` returns null there too, and there is
+      // nothing true to say about it.
+      if (!bar) return null;
+      return bar.onBaseline ? null : 'off-baseline';
     },
   },
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same

@@ -33,14 +33,14 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
 describe('getBarCategoryTable: gating', () => {
   it('is empty before calibration', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] });
   });
 
   it('is empty for a 5-slot Box Plot session -- no "opposite corners" a bbox could mean there either', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
     session.applyBoxPlotGroups();
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] });
   });
 });
 

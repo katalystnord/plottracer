@@ -366,6 +366,25 @@ async function clickAt(lx: number, ly: number) {
  * Trace Challenge's guard failed on some runs and not others with everything
  * else identical. A fraction aims at the same part of the figure at any size.
  */
+/**
+ * Where an IMAGE pixel currently sits on the canvas, read off the app's own
+ * `view-state` readout (`scale: 1.000, offset: (200.0, 105.0)`).
+ *
+ * ⚑⚑ THE THIRD WAY OF AIMING, AND THE ONLY ONE THAT KNOWS WHAT IT IS POINTING
+ * AT. `clickAt` is canvas-local pixels, which move with the fit; `clickFrac` is
+ * a fraction of the container, which at least survives a resize but still aims
+ * at nothing in particular. A figure's own ink is in IMAGE coordinates, and the
+ * committed `.truth.json` files state exactly where the ink is - so a test that
+ * converts through the view can click a bar's baseline instead of hoping.
+ */
+async function imagePoint(ix: number, iy: number): Promise<{ lx: number; ly: number }> {
+  const read = await textOf('view-state');
+  const m = read.match(/scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/);
+  if (!m) throw new Error(`could not read the view state: ${read}`);
+  const scale = Number(m[1]);
+  return { lx: Number(m[2]) + ix * scale, ly: Number(m[3]) + iy * scale };
+}
+
 async function clickFrac(fx: number, fy: number) {
   await refreshCanvasBox();
   await page.mouse.click(canvasBox.x + canvasBox.width * fx, canvasBox.y + canvasBox.height * fy);
@@ -907,6 +926,47 @@ describe('Workspace: Bar axes', () => {
     expect(tip).toMatch(/opposite corner/i);
     expect(tip).toMatch(/both ends are measured/i);
     expect(tip).not.toMatch(/anywhere on the image/i);
+  });
+
+  /**
+   * ⚑⚑ A BAR THAT MISSES THE BASELINE SAYS SO (v2.5).
+   *
+   * Bar lost its interval when floating moved to the Span chart, and the
+   * interval was the only thing that put a NUMBER in such a row. What was left
+   * was a null - printed as the same dash a category with NO BAR prints - so a
+   * measured bar and an absent one were indistinguishable while both of the
+   * bar's corners sat in the record and in every export.
+   *
+   * ⚑ THE ENGINE HALF IS UNIT-TESTED (`barUnreadableBars.test.ts`); what only an
+   * e2e can show is that the sentence actually reaches the panel, which is
+   * exactly where `crowded` was lost for three releases - computed, handed over,
+   * and declared out of the component's own props.
+   */
+  it('a bar that does not reach the baseline is explained, not left as a bare dash', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    // Baseline is y=400 (value 0). This bar runs 1.25 to 5.00 and touches
+    // nothing - the floating capture that used to report Min and Max.
+    // ⚑ x=350 sits inside category 3 (bands of 100px from x=100), not on a
+    // divider - a bar straddling one is a different test.
+    await dragMarker(350, 350, 350, 250);
+    const notice = await textOf('bar-unreadable');
+    expect(notice).toMatch(/does not reach the baseline/);
+    // Both causes, neither asserted - a hand can miss a two-pixel target.
+    expect(notice).toMatch(/clicked short of the baseline/);
+    expect(notice).toMatch(/Span chart/);
+    // ⚑⚑ AND THE CELL NO LONGER CLAIMS THE CATEGORY IS EMPTY. The dash is the
+    // same glyph either way, so the only thing that could tell a measured bar
+    // from an absent one said the wrong one of them: "Series 1 has no bar".
+    expect(await page.getByTestId('bar-cell-0-2').getAttribute('title')).toMatch(
+      /no value to report/
+    );
+
+    // A bar dragged from the baseline reports as it always did, and does not
+    // pick up the notice meant for its neighbour.
+    await dragMarker(150, 400, 150, 250);
+    expect(await derivedValue(1)).toBeCloseTo(5, 2);
+    expect(await textOf('bar-unreadable')).toMatch(/1 bar/);
   });
 
   // v2.0 Phase 7: Auto-extract is now a REAL option for Bar (a bar blob's own
@@ -6647,6 +6707,14 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // radial scale with a measured angle, versus N independent axes and no angle at
     // all -- is a question the user should be asked next to the alternative, not
     // left to discover after calibrating the wrong one.
+    // ⚑⚑ v2.5 REGROUPED THE RECTANGLES, and this expectation is where the
+    // regrouping is recorded. Histogram, Bar and Span chart now sit together
+    // because they are the three types captured corner to corner, with XY, Line
+    // and Box Plot above them. David: *"Then they are more easily different."*
+    // The point is unchanged - a picker that puts near-neighbours side by side
+    // asks the user the question that actually separates them - but the
+    // near-neighbours are now grouped by the GESTURE rather than by the axes
+    // class underneath, which is the half a first-time user can see.
     // "Heatmap" (v2.2) closes the rectangular group: it shares the FRAME with
     // everything above it -- two ordinary axes at right angles -- and shares the
     // look of none of them, so it goes last among the rectangles rather than
@@ -6654,7 +6722,7 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // decision rather than an accident: adding a type without deciding where it
     // belongs fails here, which is what happened when this one was first
     // dropped in beside Box Plot with a comment claiming it sat with XY.
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Histogram', 'Bar', 'Line', 'Box Plot', 'Heatmap', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Line', 'Box Plot', 'Histogram', 'Bar', 'Span chart', 'Heatmap', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {
@@ -7756,9 +7824,10 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
     // an unseeded draw made this pass or fail on luck. It did both: the same
     // assertion went red in `fcad2ca` and again on the v2.5 board, each time
     // with nothing wrong in the app.
-    // ⚠️ The seed only fixes WHICH figures are drawn. The coordinates below are
-    // still not aimed at anything a prompt names, which is a separate defect
-    // this does not pretend to fix.
+    // ⚠️ The seed only fixes WHICH figures are drawn. The BAR rounds now aim at
+    // the baseline their own prompt names, through the figure's image
+    // coordinates; the other families' coordinates are still aimed at nothing in
+    // particular, which is a separate defect this does not pretend to fix.
     await page.evaluate(() => window.localStorage.setItem('plottracer.challenge.seed', '20260901'));
 
     // The app launches with no image; the challenge starts from a clean slate.
@@ -7823,17 +7892,44 @@ describe('Workspace: Trace Challenge (v1.2 game)', () => {
             '[data-testid^="point-row-"], [data-testid^="tuple-derived-"], [data-testid^="bin-row-"]'
           )
           .count();
-      // ⚑ FRACTIONS OF THE CANVAS, not absolute pixels: the figure is fitted to
-      // the container, so a fixed offset lands on a different part of the
-      // picture whenever the window size differs. That was the last of this
-      // guard's three nondeterminisms, after the unseeded draw and the
-      // decode/fit race.
-      for (let attempt = 0; attempt < 12 && (await pointCount()) === 0; attempt++) {
-        await clickFrac(0.36 + attempt * 0.012, 0.46);
-        await page.waitForTimeout(120);
+      // ⚑⚑ A BAR ROUND IS DRAGGED TO THE BASELINE, BECAUSE THAT IS WHAT THE
+      // ROUND'S OWN PROMPT SAYS (v2.5). Bar lost floating to the Span chart, so
+      // a bar whose near end misses the baseline has no value at all - and this
+      // loop's fractional clicks, aimed at nothing in particular, produced
+      // exactly that: four rounds of two-ended bars and a `Points placed` guard
+      // reading zero. The old pattern only ever passed because the interval
+      // fallback caught it, which is a fixture proving less than its name.
+      //
+      // ⚑ THE BASELINE IS AT IMAGE y 660.28 on every bar example in the pool -
+      // read from their committed `.truth.json` anchors (`p1.py`), which are the
+      // instrument this project already trusts, not a number found by nudging.
+      // A future bar figure drawn to another layout fails this guard loudly
+      // instead of silently recording nothing, which is the right way round.
+      //
+      // ⚠️ THE UPPER END IS A POINT ON THE BAR, NOT ITS MEASURED TOP. This guard
+      // asks whether a reading REGISTERS, never whether it is accurate (the
+      // scoring tests do that), and pretending otherwise would be the vacuity
+      // its own neighbours warn about.
+      const barRound = /baseline/.test(await textOf('challenge-hud'));
+      if (barRound) {
+        for (const ix of [170, 380, 590]) {
+          const top = await imagePoint(ix, 500);
+          const foot = await imagePoint(ix, 660.28);
+          await dragMarker(top.lx, top.ly, foot.lx, foot.ly);
+        }
+      } else {
+        // ⚑ FRACTIONS OF THE CANVAS, not absolute pixels: the figure is fitted to
+        // the container, so a fixed offset lands on a different part of the
+        // picture whenever the window size differs. That was the last of this
+        // guard's three nondeterminisms, after the unseeded draw and the
+        // decode/fit race.
+        for (let attempt = 0; attempt < 12 && (await pointCount()) === 0; attempt++) {
+          await clickFrac(0.36 + attempt * 0.012, 0.46);
+          await page.waitForTimeout(120);
+        }
+        await clickFrac(0.52, 0.42);
+        await clickFrac(0.64, 0.38);
       }
-      await clickFrac(0.52, 0.42);
-      await clickFrac(0.64, 0.38);
 
       if (r === 0) {
         // Pre-calibration proof: the round is already calibrated (the player never
@@ -10464,24 +10560,6 @@ describe('heatmap capture (v2.2)', () => {
  * ⚑ Gate 4 holds: every click here is on a control the screen shows, and the
  * greyed tools carry their own hover sentence naming the way out.
  */
-describe('SPANSHOT', () => {
-  it('shot', async () => {
-    const fs = await import('fs');
-    const OUT='/home/david/Pictures';
-    await page.getByTestId('open-image-button').click();
-    await waitForImageFitted();
-    await page.getByTestId('axes-type-trigger').click();
-    await page.waitForTimeout(400);
-    const box = await page.getByTestId('axes-option-xy').boundingBox();
-    const last = await page.getByTestId('axes-option-ccr').boundingBox();
-    if (box && last) {
-      fs.writeFileSync(`${OUT}/plottracer-picker-bar-vs-span.png`, await page.screenshot({
-        clip: { x: box.x - 14, y: box.y - 14, width: (last.width * 3) + 60, height: (last.y + last.height) - box.y + 28 },
-      }));
-    }
-  });
-});
-
 describe('hiding every mark on the figure', () => {
   /**
    * A SMALL PATCH OF THE FIGURE, not the whole canvas - and the reason is a test
@@ -10620,3 +10698,4 @@ describe('hiding every mark on the figure', () => {
     expect(nx !== ox || ny !== oy).toBe(true);
   });
 });
+

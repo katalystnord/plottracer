@@ -26,6 +26,8 @@
  * so it is the tolerance here too rather than an epsilon of our own.
  */
 
+import { halfPixelResolution, type PixelReadableAxes } from './exportPrecision.js';
+
 /** The two measured ends of one bar, read as an interval rather than as a
  * start and an end. */
 export interface BarInterval {
@@ -107,4 +109,38 @@ export function barInterval(
     far,
     onBaseline: usable && Math.abs(near - baseline) <= resolution,
   };
+}
+
+/** One captured end of a bar: its reading, and the pixel it was read at. */
+export interface BarEnd {
+  value: number;
+  px: number;
+  py: number;
+}
+
+/**
+ * THE SEATING MEASUREMENT, in one place (v2.5).
+ *
+ * ⚑⚑ EXTRACTED BECAUSE A SECOND CALLER ARRIVED. The derived value asked
+ * "does the near end sit on the baseline?" by picking the near end, reading
+ * `halfPixelResolution` at that end's own pixel and doubling it to
+ * `BASELINE_TOLERANCE_PX`; the bar table now has to ask the SAME question to
+ * say WHY a bar has no value. Written twice, the two would answer differently
+ * on exactly the bars where it matters - which is the fork this module was
+ * created to close in the first place (see the header).
+ *
+ * ⚑ THE TOLERANCE IS READ AT THE NEAR END'S OWN PIXEL, because that is the end
+ * the question is about, and because a log axis's resolution is not the same
+ * number at the two ends of one bar.
+ */
+export function barSeating(
+  a: BarEnd,
+  b: BarEnd,
+  baseline: number,
+  axes: PixelReadableAxes
+): BarInterval | null {
+  const near = nearEndIsFirst(a.value, b.value, baseline) ? a : b;
+  // `halfPixelResolution` returns HALF a pixel, so a whole pixel is twice it.
+  const halfPx = halfPixelResolution(axes, near.px, near.py)[0] ?? NaN;
+  return barInterval(a.value, b.value, baseline, halfPx * 2 * BASELINE_TOLERANCE_PX);
 }
