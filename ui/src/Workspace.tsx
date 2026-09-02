@@ -5153,6 +5153,11 @@ export function Workspace() {
         // restoreFigure installs the active figure's session, image, measurements,
         // provenance and (retained) source, and resets undo/dirty (loaded == clean).
         if (install.restore) restoreFigure(install.restore, true); // opened from a file
+        // ⚑ A relabelled figure inside a MULTI-figure project is named, because
+        // the notice is about one figure of several and the reader is looking at
+        // whichever was active. Same surface, same ordering as the single path.
+        const relabelled = multi.figures.flatMap((f) => (f.notice ? [`${f.name}: ${f.notice}`] : []));
+        if (relabelled.length > 0) setProjectNotice(relabelled.join(' '));
         return;
       }
       result = deserializeProjectZip(bytes);
@@ -5197,6 +5202,14 @@ export function Workspace() {
       measureScale: result.measureScale,
       provenance: result.provenance, // where this figure came from (checkpoint 95)
     });
+    // ⚑⚑ AFTER THE LOAD, for the reason the import notice above states in full:
+    // installing a figure clears the notice about the one being left, so a
+    // notice set BEFORE the load is wiped in the same batch and never reaches
+    // the eye. Same surface, same ordering, same trap.
+    // ⚑ This is what keeps a Bar chart quietly opening as a Span chart from
+    // being the app disagreeing with the file in silence - see
+    // `relabelAllFloatingBarsAsSpan`.
+    if (result.notice) setProjectNotice(result.notice);
     // Restore a bundled source document AFTER loadCalibratedFigure (which calls
     // closePdf, clearing the ref), so a project that carried its source PDF keeps
     // carrying it on the next Save (checkpoint 104).

@@ -871,3 +871,57 @@ describe('a file whose points claim to be derived from anchors that are not ther
     ]);
   });
 });
+
+
+/**
+ * ⚑⚑ WHAT THE FIGURE DECLARES ABOUT ITSELF HAS TO SURVIVE A SAVE (v2.5).
+ *
+ * Bar carries three declarations that are not calibration values and cannot be
+ * re-measured from the pixels: is there a shared baseline, at what value, and
+ * are the bars STACKED. Two of them travelled; `isStacked` was written nowhere
+ * and read nowhere, sitting between the other two under a comment about losing
+ * "the ONE number the whole bar model exists to produce".
+ *
+ * ⚠️ THE SYMPTOM GOT WORSE WITHOUT THE DEFECT CHANGING. A stack's segments do
+ * not sit on the baseline, so a reopened stacked figure used to report every
+ * segment as a Min/Max interval; from v2.5, when Bar lost floating to the Span
+ * chart, the same reopen reports NOTHING - and the panel's notice would then
+ * advise a Span chart, which is exactly the wrong remedy for a stacked bar.
+ *
+ * ⚑ Named for the CASE. `hasBaseline`/`baselineValue` are asserted beside it as
+ * the companion: this door carries three declarations or it carries none, and a
+ * test that only names the one that broke would not notice the next one.
+ */
+describe('a bar figure keeps what it declares about itself across a save', () => {
+  function stackedBarProject(options: Record<string, string>) {
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    for (const [k, v] of Object.entries(options)) session.setOption(k, v);
+    calibrateStandardBar(session);
+    walkCategoryAxis(session, { count: 2 });
+    expect(session.runCalibration()).toBe(true);
+    // One segment of a stack: it floats clear of the baseline by construction.
+    session.addDataPoint(150, 400);
+    session.addDataPoint(150, 300);
+    const file = serializeProject(session, 'data:image/png;base64,AA==', 'figure.png');
+    if ('error' in file) throw new Error(file.error);
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    return back.axes as BarAxes;
+  }
+
+  it('⚑ a STACKED chart reopens stacked, so its segments still report their own height', () => {
+    expect(stackedBarProject({ isStacked: 'true' }).isStacked()).toBe(true);
+  });
+
+  it('and an ordinary chart reopens unstacked - the companion assertion', () => {
+    expect(stackedBarProject({ isStacked: 'false' }).isStacked()).toBe(false);
+  });
+
+  it('the baseline declaration travels with it, value and all', () => {
+    const axes = stackedBarProject({ hasBaseline: 'true', baselineValue: '-5' });
+    expect(axes.hasDeclaredBaseline()).toBe(true);
+    expect(axes.getBaselineValue()).toBe(-5);
+    const none = stackedBarProject({ hasBaseline: 'false' });
+    expect(none.hasDeclaredBaseline()).toBe(false);
+  });
+});

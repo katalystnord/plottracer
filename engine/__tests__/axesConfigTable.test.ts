@@ -86,23 +86,40 @@ describe('the config table - cross-cutting invariants', () => {
     }
   });
 
-  it('⚑ every bespoke data panel is claimed by exactly one type', () => {
-    // ⚑⚑ A PANEL WITH TWO OWNERS IS A CASCADE BUG WAITING TO HAPPEN, and a panel
-    // with none is dead code. The cascade in Workspace.tsx is ordered, so two
-    // types claiming 'bar' would silently give the second one the first's table
-    // - the same shape as the v1.4 export defect, where a spider fell into the
+  it('⚑ every bespoke data panel is claimed by the types NAMED here, and no others', () => {
+    // ⚑⚑ A PANEL WITH AN UNDECLARED SECOND OWNER IS A CASCADE BUG, and a panel
+    // with none is dead code. The cascade in Workspace.tsx is ordered, so a type
+    // that claims 'bar' without meaning to silently gets the bar table - the
+    // same shape as the v1.4 export defect, where a spider fell into the
     // tuple-table branch and read values off the nearest ray.
+    //
+    // ⚠️ IT USED TO SAY "EXACTLY ONE", AND v2.5 SHOWED THAT WAS THE WRONG RULE.
+    // Bar and Span are one capture model with one record, split by what the
+    // NEAR END means; they mark the same category axis in the same walk, and
+    // `getBarCategoryTable` has served both from the day Span existed. Sharing
+    // the table is the MIRROR rule doing its job - a span's rows are categories,
+    // and a reader who has met one table has met the other. What must not
+    // happen is a type arriving in that branch unnoticed, so the sharers are
+    // named and anything else still fails.
+    const EXPECTED: Record<string, string[]> = {
+      bar: ['bar', 'span'],
+      bins: ['histogram'],
+      heatmap: ['heatmap'],
+      spider: ['spider'],
+    };
     const owners = new Map<string, string[]>();
     for (const c of ALL) {
       if (!c.outputPanel) continue;
       owners.set(c.outputPanel, [...(owners.get(c.outputPanel) ?? []), c.id]);
     }
     for (const [panel, ids] of owners) {
-      expect(ids, `panel '${panel}' is claimed by ${ids.join(' and ')}`).toHaveLength(1);
+      expect([...ids].sort(), `panel '${panel}' is claimed by ${ids.join(' and ')}`).toEqual(
+        EXPECTED[panel]
+      );
     }
     // Every value the union offers is actually used -- a panel nothing renders
     // is a branch that cannot be reached.
-    expect([...owners.keys()].sort()).toEqual(['bar', 'bins', 'heatmap', 'spider']);
+    expect([...owners.keys()].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
   it('⚑ a type declaring no panel falls to the GENERIC pair, and that is a series question', () => {

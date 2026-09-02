@@ -45,6 +45,8 @@
 import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
 import type { Dataset } from '../core/dataset.js';
+import { BarAxes } from '../core/axes/bar.js';
+import { barSeating } from '../core/barInterval.js';
 import { GRAPH_TYPE_METADATA_KEY } from './calibrationSession.js';
 import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js';
 
@@ -210,6 +212,16 @@ export interface DeserializedProject {
    * them or none were recorded. */
   measurements: SerializedMeasurement[];
   measureScale: SerializedMeasureScale | null;
+  /**
+   * What the app did to this project on the way in, in plain words - shown, not
+   * logged. Absent for the ordinary open, which is nearly every open.
+   *
+   * ⚑ It borrows the surface a foreign IMPORT already uses (`projectNotice`,
+   * *"what an import could not carry across ... NOT an error - the figure
+   * opened"*), because it is the same kind of sentence about our own files:
+   * the figure opened, and something about it is not what the file said.
+   */
+  notice?: string;
   /** Where the figure came from (checkpoint 95); `{}` when the file predates it
    * or nothing was recorded. */
   provenance: Provenance;
@@ -327,6 +339,80 @@ export function serializeProject<A extends CalibratedAxes>(
  * throwing -- the caller (a file picked via a native "Open Project"
  * dialog) can't assume the file's contents any more than a real file-open
  * flow ever can. */
+/**
+ * ⚑⚑ A SAVED BAR CHART WHOSE BARS ALL FLOAT OPENS AS A SPAN CHART - AND SAYS SO
+ * (v2.5, David's call).
+ *
+ * Bar lost floating to the Span chart, so a file full of floating bars declares
+ * a type that can no longer report it: every row would come back with no value.
+ * The RECORD needs nothing - a span stores the same two measured corners a bar
+ * always did, which is why `samples/bar-floating-temperature` changed type with
+ * its committed truth file untouched - so the honest move is to open it as what
+ * it is.
+ *
+ * ⚠️ AND TO SAY SO, WHICH IS THE HALF THAT IS EASY TO SKIP. This reads the type
+ * off the PIXELS' arrangement rather than off what the file declares, and that
+ * is a judgement the app is making on the user's behalf. I flagged exactly that
+ * when it was decided; David chose it anyway, so the notice is not decoration -
+ * it is the part that keeps an inference from passing as a fact. A silent
+ * relabel would be the app quietly disagreeing with the file.
+ *
+ * ⚑ ONE SEATED BAR AND IT STAYS A BAR CHART. A figure where most bars sit down
+ * and one floats is a bar chart with one unreadable bar, which the panel's own
+ * notice already explains; only ALL of them floating says the file was written
+ * under a model that has since split.
+ *
+ * ⚑ A STACKED figure is excluded, and it matters more since v2.5: a stack's
+ * segments do not touch the baseline BY CONSTRUCTION, so every stacked bar chart
+ * would otherwise be relabelled on open. (Its `isStacked` only survives the save
+ * as of this same release - see `core/plotData.ts`.)
+ *
+ * ⚑ HALF-DRAGGED BARS ARE PASSED OVER rather than counted either way: a tuple
+ * with one corner says nothing about where the other one would have landed.
+ *
+ * ⚑ THE WPD IMPORT DOOR NEEDS NO COPY OF THIS, and the reason is the model, not
+ * an oversight: WPD's bar record is ONE value per bar, so an imported bar
+ * arrives with a single corner and cannot express a float at all. Such tuples
+ * are passed over here, so that door reaches `bars === 0` and declares nothing.
+ */
+export function relabelAllFloatingBarsAsSpan(
+  configId: string,
+  axes: AnyAxes,
+  datasets: readonly Dataset[]
+): { configId: string; notice: string } | null {
+  if (configId !== 'bar' || !(axes instanceof BarAxes)) return null;
+  if (axes.isStacked()) return null;
+  const baseline = axes.getBaselineValue();
+  let bars = 0;
+  for (const dataset of datasets) {
+    for (const tuple of dataset.getAllTuples()) {
+      const [first, second] = tuple;
+      if (first == null || second == null) continue;
+      bars++;
+      // With nothing declared there is nothing to sit ON, so every bar in the
+      // figure is an interval - which is what the file was recording.
+      if (!axes.hasDeclaredBaseline()) continue;
+      const a = dataset.getPixel(first);
+      const b = dataset.getPixel(second);
+      const seating = barSeating(
+        { value: axes.pixelToData(a.x, a.y)[0] ?? NaN, px: a.x, py: a.y },
+        { value: axes.pixelToData(b.x, b.y)[0] ?? NaN, px: b.x, py: b.y },
+        baseline,
+        axes
+      );
+      // ⚑ An unanswerable measurement leaves the file's own declaration
+      // standing: a degenerate calibration is not evidence of anything.
+      if (!seating || seating.onBaseline) return null;
+    }
+  }
+  if (bars === 0) return null;
+  return {
+    configId: 'span',
+    notice:
+      'Saved as a Bar chart, and every bar in it floats clear of the baseline - so it has opened as a Span chart, where both ends are reported as Min and Max. Nothing in the record changed: a span stores the same two measured corners a bar always did. If it really is a bar chart, its bars were captured clear of the baseline and would have to be recaptured from it.',
+  };
+}
+
 export function deserializeProject(raw: unknown): ProjectResult<DeserializedProject> {
   if (typeof raw !== 'object' || raw === null) {
     return { error: 'Not a valid project file.' };
@@ -365,8 +451,13 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   }
   for (const dataset of datasets) dropOrphanedDerivedRole(dataset);
 
+  // ⚑ AT THE LOAD DOOR, where every open path converges (the `.zip` reader and
+  // the multi-figure reader both come through here), so no entrance can miss it.
+  const relabel = relabelAllFloatingBarsAsSpan(configId, axes, datasets);
+
   return {
-    configId,
+    configId: relabel?.configId ?? configId,
+    ...(relabel ? { notice: relabel.notice } : {}),
     axes,
     datasets,
     // Falls back to a fresh empty one for any file predating this (every

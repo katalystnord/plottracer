@@ -2553,6 +2553,28 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   label: 'Span chart',
   axesKind: 'bar',
   exportShape: 'tuples',
+  /**
+   * ⚑⚑ THE SAME TWO DECLARATIONS BAR MAKES, AND THE SPLIT LEFT BOTH BEHIND
+   * (v2.5). Measured, not reasoned: on a Span chart a corner-to-corner drag
+   * recorded NOTHING - zero rows - while the tips bar told the user to make
+   * exactly that gesture, and its readings never reached the category table the
+   * session was already computing for it.
+   *
+   * ⚑ `capturesAsBox` is not a gesture preference, it is the type saying its two
+   * points are OPPOSITE CORNERS - which is more plainly true of a span than of a
+   * bar (a span's whole datum IS the box, which is why its `autoExtractKind` is
+   * `bounding-box`). It also gates `tuplePositionSpan`, so without it a span's
+   * measured extent along the category axis was dropped on the floor: a
+   * COORDINATE DERIVED where it should have been MEASURED, which is one of the
+   * two failure modes tenet 11 exists to catch.
+   *
+   * ⚑ `outputPanel` files those readings under the categories the walk just
+   * marked, one row per category and one column-pair per series, exactly as Bar
+   * does - the same table, since `getBarCategoryTable` has named `span` from the
+   * day the type existed.
+   */
+  capturesAsBox: true,
+  outputPanel: 'bar',
   // ⚑ Bar's own mechanism, and it fits BETTER here than it does there: a
   // bounding box records the two OPPOSITE CORNERS of a filled shape, which for a
   // span IS the whole datum. On a baseline bar the same box has to be reduced to

@@ -88,6 +88,18 @@ export interface SerializedAxesData {
    * came back as 7.5 with nothing to say it had changed. */
   hasBaseline?: boolean;
   baselineValue?: number;
+  /**
+   * Whether the figure's bars are STACKED (v2.3 declaration, carried v2.5).
+   *
+   * ⚠️ IT WAS WRITTEN NOWHERE AND READ NOWHERE, sitting between two keys that
+   * are both, under a comment about losing "the ONE number the whole bar model
+   * exists to produce". A stacked figure reopened as an ordinary one, and since
+   * a stack's segments do not touch the baseline, every segment then reported
+   * an interval - and from v2.5, when Bar lost floating, NOTHING AT ALL. The
+   * declaration is a fact about the figure, exactly as `hasBaseline` and
+   * `isRotated` are, so it travels with them.
+   */
+  isStacked?: boolean;
   isDegrees?: boolean;
   isClockwise?: boolean;
   isRange100?: boolean;
@@ -639,6 +651,9 @@ export class PlotData {
               ? axData.baselineValue
               : 0
           );
+          // Absent in every file written before v2.5 - and false is what those
+          // files were read as, so the fallback changes nothing for them.
+          axes.setStacked(Boolean(axData.isStacked));
         } else if (axData.type === 'PolarAxes') {
           axes = new PolarAxes();
           axes.calibrate(calibration!, Boolean(axData.isDegrees), Boolean(axData.isClockwise), Boolean(axData.isLog));
@@ -988,6 +1003,7 @@ export class PlotData {
         axData.isRotated = axes.isRotated();
         axData.hasBaseline = axes.hasDeclaredBaseline();
         axData.baselineValue = axes.getBaselineValue();
+        axData.isStacked = axes.isStacked();
       } else if (axes instanceof PolarAxes) {
         axData.type = 'PolarAxes';
         axData.isDegrees = axes.isThetaDegrees();

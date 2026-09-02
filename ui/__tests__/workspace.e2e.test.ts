@@ -270,7 +270,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -2018,6 +2018,61 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
     }, targetPath);
   }
+
+  /**
+   * ⚑⚑ THE RELABEL HAS TO REACH THE EYE (v2.5).
+   *
+   * A Bar project whose bars all float opens as a Span chart - the app reading
+   * the type off the pixels' arrangement rather than off what the file declares,
+   * which is a judgement made on the user's behalf. The engine half is unit
+   * tested (`floatingBarProjectOpensAsSpan.test.ts`); what only an e2e can show
+   * is that the SENTENCE appears, and it is the half with the precedent for
+   * being lost: `crowded` was computed and handed over for three releases while
+   * the panel never rendered it, and this same notice surface has twice been set
+   * in the wrong order and wiped before anyone saw it.
+   */
+  it('a saved Bar chart whose bars all float reopens as a Span chart, and says so', async () => {
+    // A local bar calibration: the original lives inside another describe's
+    // scope, the same reason the histogram block keeps its own copies.
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    // Two bars clear of the baseline (y=400 is value 0, 30 px to the unit):
+    // 1.67 to 5.00 and 2.33 to 5.67.
+    await dragMarker(150, 350, 150, 250);
+    await dragMarker(350, 330, 350, 230);
+
+    const savePath = tempFilePath('zip');
+    await stubSaveDialog(savePath);
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(300);
+
+    try {
+      await stubOpenProjectDialog(savePath);
+      await page.getByTestId('open-project').click();
+      await expect
+        .poll(async () => (await page.getByTestId('project-notice').textContent().catch(() => null)) ?? '', { timeout: 8000 })
+        .toMatch(/opened as a Span chart/);
+      // ⚑ And the app AGREES WITH ITSELF about it: the graph type on the toolbar
+      // is the Span chart, not a Bar chart wearing a notice.
+      expect(await textOf('axes-type-trigger')).toMatch(/Span/);
+      // The reading the relabel exists for: both ends, as Min and Max.
+      expect(await textOf('bar-cell-0-0')).toMatch(/1\.6|1\.7/);
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+      fs.unlinkSync(savePath);
+    }
+  }, 40000);
 
   it('saves a calibrated project to disk with the expected shape', async () => {
     await resetWorkspace('xy');
@@ -10699,3 +10754,51 @@ describe('hiding every mark on the figure', () => {
   });
 });
 
+
+/**
+ * ⚑⚑ THE SPAN CHART'S OWN CAPTURE (v2.5).
+ *
+ * Split out of Bar, it inherited the walk and the record and was left without
+ * the two declarations that make the gesture work: `capturesAsBox` (its two
+ * points are OPPOSITE CORNERS) and `outputPanel` (its readings are filed under
+ * categories). Measured before it was fixed: a corner-to-corner drag on a Span
+ * chart recorded NOTHING - zero rows - while the tips bar told the user to make
+ * exactly that gesture, and the session was already computing a category table
+ * nothing rendered.
+ *
+ * ⚑ Every click below is one the screen asks for: the calibration steps by name,
+ * then the drag the tips bar describes.
+ */
+describe('Workspace: Span chart capture (v2.5)', () => {
+  async function calibrateSpan() {
+    await resetWorkspace('span');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+  }
+
+  it('records a span from ONE drag, corner to opposite corner - the gesture the tips bar names', async () => {
+    await calibrateSpan();
+    expect(await textOf('tips-bar')).toMatch(/opposite corner/i);
+    // Value axis: 0 at y=400, 10 at y=100, so 30 px to the unit. This span runs
+    // 3.33 (y=300) to 5.00 (y=250).
+    await dragMarker(150, 300, 150, 250);
+    // ⚑ Filed under its CATEGORY, in the same table a bar chart uses - one row
+    // per category, `Min` and `Max` under the series name.
+    expect(await textOf('bar-cell-0-0')).toMatch(/3\.3/);
+    expect(await textOf('bar-cell-0-0-max')).toMatch(/5/);
+  }, 30000);
+
+  it('⚑ and neither end is a baseline, so nothing is ever unreadable here', async () => {
+    await calibrateSpan();
+    await dragMarker(150, 300, 150, 250);
+    expect(await page.getByTestId('bar-unreadable').count()).toBe(0);
+  }, 30000);
+});

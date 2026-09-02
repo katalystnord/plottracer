@@ -122,6 +122,34 @@ describe('a bar figure with no baseline declared', () => {
 });
 
 
+/**
+ * ⚑⚑ A SPAN IS CAPTURED THE WAY A BAR IS, AND THE SPLIT LEFT THAT BEHIND (v2.5).
+ *
+ * `capturesAsBox` is the type saying its two points are OPPOSITE CORNERS. Bar
+ * declared it; Span, whose whole datum IS the box, did not - so two things went
+ * missing at once, and only one of them was visible.
+ *
+ * ⚠️ MEASURED IN THE BUILT APP, not reasoned about: a corner-to-corner drag on a
+ * Span chart recorded NOTHING - zero rows - while the tips bar told the user to
+ * make exactly that gesture. The invisible half is below.
+ */
+describe('a span records what it measured along the category axis', () => {
+  it('⚑⚑ its EXTENT is kept, not derived from where two clicks happened to land', () => {
+    const s = new CalibrationSession<BarAxes>(SPAN_AXES_CONFIG);
+    calibratedBar(s, 2);
+    // A span drawn across a band, corner to opposite corner: the two clicks are
+    // at different category coordinates, and that distance is a READING.
+    s.addDataPoint(120, 400);
+    s.addDataPoint(180, 200);
+    const row = s.getTupleRows()[0]!;
+    // ⚑ Without `capturesAsBox` this is null, and the width the user measured is
+    // dropped on the floor - a COORDINATE DERIVED where it should have been
+    // MEASURED, which is one of tenet 11's two named failure modes.
+    expect(row.positionSpan).not.toBeNull();
+    expect(row.positionSpan![0]).toBeLessThan(row.positionSpan![1]);
+  });
+});
+
 describe('what the notice PROMISES has to be true', () => {
   /**
    * ⚑⚑ THE PANEL SAYS *"both measured ends are still in the record and in every
