@@ -23,9 +23,14 @@ fit the view with `Ctrl+0`.
 Pick the graph type from the **card picker** in the top bar - each type shows its
 own icon, so a bar chart and a histogram are told apart by their shape rather than
 by reading two similar names. The types are **XY** (linear/log/date),
-**Bar**, **Polar**, **Spider / Radar**, **Pie / Donut**, **Heatmap**, **Ternary**,
-**Map**, **Circular chart recorder**, **Histogram**, **Box plot**, or **Line**
-(categorical X)**.
+**Bar**, **Span chart**, **Polar**, **Spider / Radar**, **Pie / Donut**,
+**Heatmap**, **Ternary**, **Map**, **Circular chart recorder**, **Histogram**,
+**Box plot**, **Candlestick**, or **Line** (categorical X).
+
+The picker is grouped by what the data **is**, not by what the chart looks like:
+a pie sits beside a bar because both record a category and one magnitude, while a
+histogram sits with the box plot and the candlestick because all three describe a
+distribution.
 
 Error bars are not a graph type - they are **rail tool 6**, captured on top of
 whichever series they belong to.
@@ -179,13 +184,14 @@ next. A reading you placed by hand is never overwritten.
   along the category axis, so it lands on the right category however you click and
   whatever you skip. Where the app can't tell which category you meant, it leaves
   the cell **blank** rather than guess.
-- **Mark category ticks (optional, v2.1).** Once a Bar or Box Plot figure is
-  calibrated, the calibration card offers **Mark category ticks?**. Open it, click
-  where the categories end (**P1** - the amber calibration handle - is already the
-  start), and say how many there are. Tick marks appear along the category axis;
-  drag any of them if the figure isn't evenly spaced. Choose whether the figure
-  prints its ticks **under each category** or **between them** - flip the setting
-  and watch the marks move to see which matches.
+- **Mark category ticks (optional, v2.1).** Once a Bar, Span chart, Box Plot or
+  Candlestick figure is calibrated, the calibration card offers **Mark category
+  ticks?**. Open it, click where the categories end (**P1** - the amber
+  calibration handle - is already the start), and say how many there are. Tick
+  marks appear along the category axis; drag any of them if the figure isn't
+  evenly spaced. Choose whether the figure prints its ticks **under each
+  category** or **between them** - flip the setting and watch the marks move to
+  see which matches.
   If P1 isn't where the categories start - you calibrated on a gridline part-way
   up the value axis, say - press **Re-place axis** and click *both* ends yourself.
   **Read categories** ends the step and keeps everything, folding the card to a
@@ -266,6 +272,13 @@ whichever series they belong to.
   meaning PlotTracer records; it never decides what your bars represent.
 
 **Capture.** Drag from a data point out to its cap.
+
+On a **Span chart** each end carries its own error: drag from the low end out to
+its cap, then from the high end out to its own. The end you start the drag on is
+the end the cap belongs to, and each gets its own columns - **Min SD upper**,
+**Max SD upper**. A **Box plot** and a **Candlestick** take no error bars at all:
+their five and four values already are the spread, so there is no single value
+for a cap to be measured from.
 
 - The **start** of the drag snaps onto a point you already placed, so the bar is
   anchored to a real reading rather than to wherever you pressed.
