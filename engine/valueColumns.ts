@@ -47,6 +47,10 @@ export interface ValueColumnConfig<A extends CalibratedAxes> {
     label: string;
     compute(points: (DataPointView | null)[], axes: A, ctx: { apex: null }): number | null;
     interval?(points: (DataPointView | null)[], axes: A): { min: number; max: number } | null;
+    /** The names when the FIGURE changes the answer - see the declaration. */
+    namesFor?(axes: A): readonly string[];
+    /** The readings for those names, aligned. */
+    cellsFor?(points: (DataPointView | null)[], axes: A): (number | null)[];
   };
 }
 
@@ -59,12 +63,20 @@ export interface ValueColumnConfig<A extends CalibratedAxes> {
  */
 export function valueColumnNames<A extends CalibratedAxes>(
   config: ValueColumnConfig<A>,
-  slotNames: readonly string[]
+  slotNames: readonly string[],
+  /** The figure's own axes, where it has been calibrated. Some answers depend on
+   * what the FIGURE declares - a STACKED bar's segment has a `Base` as well as a
+   * contribution - and a type that does not care simply ignores it. */
+  axes?: A
 ): readonly string[] {
   // 1. an INTERVAL record: its two ends are its values.
   if (config.intervalSlots) return config.intervalSlots;
-  // 2. a DERIVED record: one number, under its own heading.
-  if (config.derivedTupleValue) return [config.derivedTupleValue.label];
+  if (config.derivedTupleValue) {
+    // 2. a DERIVED record. The type may name more than one when the figure says
+    //    so - `bar(x, height, bottom)` on a stacked chart.
+    if (axes && config.derivedTupleValue.namesFor) return config.derivedTupleValue.namesFor(axes);
+    return [config.derivedTupleValue.label];
+  }
   // 3. otherwise the datum's own SLOTS are its values - a box plot's five.
   return slotNames;
 }
@@ -88,7 +100,9 @@ export function valueCells<A extends CalibratedAxes>(
     return [interval?.min ?? null, interval?.max ?? null];
   }
   if (config.derivedTupleValue) {
-    return [config.derivedTupleValue.compute(points, axes, { apex: null }) ?? null];
+    const derive = config.derivedTupleValue;
+    if (derive.cellsFor) return derive.cellsFor(points, axes);
+    return [derive.compute(points, axes, { apex: null }) ?? null];
   }
   return points.map((p) => p?.data?.[0] ?? null);
 }

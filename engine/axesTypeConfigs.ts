@@ -797,6 +797,24 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
      * XY - means there is nothing to say.
      */
     advisory?(points: (DataPointView | null)[], axes: A): TupleAdvisory | null;
+    /**
+     * ⚑⚑ WHAT THIS DATUM'S VALUES ARE CALLED WHEN THE FIGURE CHANGES THE ANSWER
+     * (v2.5). Declared, and absent for every type whose answer is fixed.
+     *
+     * A bar reports ONE number over the figure's origin - unless the figure says
+     * its bars are STACKED, and then a segment's near end is not the origin at
+     * all but the top of the segment below it. That is a real reading with no
+     * other home, and it is the second thing a generator asks for:
+     * `bar(x, height, bottom)`. Stacking is a fact about the FIGURE, so the type
+     * cannot answer this from its own declarations alone.
+     */
+    namesFor?(axes: A): readonly string[];
+    /**
+     * The readings for `namesFor`, aligned index-for-index with it. Declared
+     * beside it for the reason the whole module exists: the names and the
+     * readings have to be one answer, not two.
+     */
+    cellsFor?(points: (DataPointView | null)[], axes: A): (number | null)[];
   };
   /**
    * What auto-extract MEANS on this graph type - a declared capability, because
@@ -2290,7 +2308,24 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // ⚑ Both ends rounded first, for the same reason: the height has to be
       // the difference between the two numbers the panel is showing.
       if (axes.isStacked()) {
-        return Math.abs(roundAtPixel(bar.max, farPoint) - roundAtPixel(bar.min, nearPoint));
+        // ⚑⚑ MAGNITUDE FROM THE EXTENT, SIGN FROM THE FIGURE (v2.5). David:
+        // *"The AREA of a part of a stacked chart cannot be negative... but its
+        // points can definitely sit on a negative scale."* Both are true and
+        // they are different facts: the extent is how tall the segment is, and
+        // WHICH SIDE OF THE ORIGIN the figure drew it on says whether that is a
+        // contribution or a loss.
+        //
+        // ⚠️ IT WAS `Math.abs` ALONE, under a comment asserting *"a contribution
+        // to a stack is never negative"*. A stacked chart of profit by state
+        // refutes it at a glance - a loss stacks DOWNWARD - and the old rule
+        // reported it as a gain of the same size. `barmode='stack'` takes the
+        // signed number and draws the direction from it, so an unsigned record
+        // cannot regenerate the figure.
+        //
+        // ⚑ The sign is read at the FAR end, in DATA space, so it is right on a
+        // log or reversed axis where a pixel rule would not be.
+        const height = Math.abs(roundAtPixel(bar.max, farPoint) - roundAtPixel(bar.min, nearPoint));
+        return bar.far < baseline ? -height : height;
       }
       // ⚑⚑ THE NEAR END'S VALUE IS NOT AN ARGUMENT TO THIS NUMBER (v2.5, David).
       // It is still the user's input - clicked, stored, drawn and draggable, and
@@ -2334,6 +2369,36 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
      * ⚑ ASKED THROUGH `barSeating`, the same call `compute` makes for the width
      * and the sign, so the two cannot disagree about which bars these are.
      */
+    /**
+     * ⚑ `Base` FIRST, then the contribution - the order `bar(x, height, bottom)`
+     * reads in, and the order the reader meets on the figure: where the segment
+     * starts, then how far it goes.
+     */
+    namesFor(axes) {
+      return axes.isStacked() ? ['Base', 'Value'] : ['Value'];
+    },
+    /**
+     * ⚑ The readings for those names. A stacked segment's BASE is the end
+     * NEARER the origin - the top of the segment below it - which is the number
+     * `bar(x, height, bottom)` wants and the one thing a partly captured stack
+     * ("trace just the Materials segments") cannot otherwise recover.
+     */
+    cellsFor(points, axes) {
+      const value = this.compute(points, axes, { apex: null }) ?? null;
+      if (!axes.isStacked()) return [value];
+      const [start, end] = points;
+      if (!start?.data || !end?.data) return [null, value];
+      const v1 = start.data[0]!;
+      const v2 = end.data[0]!;
+      const baseline = axes.getBaselineValue();
+      const bar = barSeating(
+        { value: v1, px: start.px, py: start.py },
+        { value: v2, px: end.px, py: end.py },
+        baseline,
+        axes
+      );
+      return [bar ? bar.near : null, value];
+    },
     advisory(points, axes) {
       const [start, end] = points;
       // A half-dragged bar is a different state with its own cell.

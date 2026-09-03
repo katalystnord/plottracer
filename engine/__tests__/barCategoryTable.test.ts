@@ -33,14 +33,14 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
 describe('getBarCategoryTable: gating', () => {
   it('is empty before calibration', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [], derivedColumnIndex: null });
   });
 
   it('is empty for a 5-slot Box Plot session -- no "opposite corners" a bbox could mean there either', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
     session.applyBoxPlotGroups();
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [], derivedColumnIndex: null });
   });
 });
 
@@ -208,7 +208,12 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5 -- unsigned span 3, not baseline-relative
     const table = session.getBarCategoryTable();
-    expect(table.columns[0]!.cells[0]![0]).toBeCloseTo(3, 9);
+    // ⚑ A STACKED figure names TWO values per segment (v2.5) - where it starts
+    // and what it contributes - which is what `bar(x, height, bottom)` asks for
+    // and the only way a partly captured stack keeps its position.
+    expect(table.valueColumns).toEqual(['Base', 'Value']);
+    expect(table.columns[0]!.cells[0]![0]).toBeCloseTo(2, 9); // Base: the segment's own foot
+    expect(table.columns[0]!.cells[0]![1]).toBeCloseTo(3, 9); // Value: its contribution
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
   });
 });

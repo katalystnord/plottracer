@@ -392,6 +392,19 @@ export interface TupleRow {
    */
   derived: number | null;
   /**
+   * ⚑⚑ THE ROW'S VALUES UNDER THE TYPE'S OWN NAMES, aligned with
+   * `getValueColumns()` - `engine/valueColumns.ts` (v2.5).
+   *
+   * ⚑ IT EXISTS SO THE FILE AND THE PANEL ASK ONE MODULE. The table has read
+   * its columns from there since this morning while the EXPORTER still derived
+   * its own from `pointGroupNames`/`intervalSlots`/`derivedLabel` - two
+   * derivations of one fact, which is the drift that module was created to stop.
+   * A stacked bar is where they parted: the panel names `Base` and `Value` and
+   * the file wrote only `Value`, dropping the one reading a partly captured
+   * stack cannot recover.
+   */
+  cells: (number | null)[];
+  /**
    * The row's two measured ends, read as an INTERVAL - the record a tuple keeps
    * when it has no single value (v2.3).
    *
@@ -4368,6 +4381,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.categoryAxis.bandIndexAt({ x: px, y: py });
   }
 
+  /**
+   * What this figure calls a datum's values, in order - one name per cell of
+   * every `TupleRow` (v2.5). See `engine/valueColumns.ts`.
+   *
+   * ⚑ It takes the AXES because some answers are a fact about the FIGURE rather
+   * than the type: a stacked bar's segment has a `Base` as well as a `Value`.
+   */
+  getValueColumns(): readonly string[] {
+    return valueColumnNames(this.config, this.getSlotNames(), this.axes ?? undefined);
+  }
+
   getSlotNames(): string[] {
     return this.ownSlots(this.activeEntry.dataset);
   }
@@ -4805,6 +4829,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
         position: this.categoryPositionOfTuple(dataset, tupleIndex),
         positionFrame: this.positionFrameKind(dataset),
         positionSpan: this.tuplePositionSpan(dataset, tuple),
+        // ⚑ The same answer the table shows - one module, asked twice, never
+        // re-derived. Empty before calibration, when nothing can be read.
+        cells: this.axes ? valueCells(this.config, points, this.axes) : [],
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
         // tuple's own apex, and the whole the values are read against.
@@ -4944,6 +4971,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
      * of the type - which is how every plotting library treats it.
      */
     valueColumns: readonly string[];
+    /**
+     * Which of `valueColumns` holds the type's DERIVED value, or null where it
+     * derives none (a Span reports two measured ends and nothing else).
+     *
+     * ⚑ It exists because "the number this row reports" stopped being the FIRST
+     * column when a stacked bar gained a `Base` in front of its `Value`. A
+     * consumer that assumed position - the panel's own `tuple-derived-N` handle
+     * among them - then pointed at the wrong number, which is the quiet kind of
+     * wrong. The table says which column it is rather than anyone counting.
+     */
+    derivedColumnIndex: number | null;
     columns: {
       seriesIndex: number;
       seriesName: string;
@@ -4992,7 +5030,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
     if (!this.axes || !this.capturedAsCorners(this.activeEntry.dataset)) {
-      return { categoryNames: [], categoryRawNames: [], valueColumns: [], columns: [], crowded: [], advisory: [] };
+      return { categoryNames: [], categoryRawNames: [], valueColumns: [], derivedColumnIndex: null, columns: [], crowded: [], advisory: [] };
     }
     const axes = this.axes;
     const categories = this.categoryAxis.getCategories();
@@ -5002,7 +5040,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ Asked ONCE for the whole table: the names are a fact about the TYPE, not
     // about a series or a row, so a per-column answer would be a fourth place
     // for them to disagree.
-    const columnNames = valueColumnNames(this.config, this.ownSlots(this.activeEntry.dataset));
+    const columnNames = valueColumnNames(this.config, this.ownSlots(this.activeEntry.dataset), axes);
 
     const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
     const advisory: {
@@ -5065,7 +5103,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
       });
       return { seriesIndex, seriesName: dataset.name, cells, tupleIndices };
     });
-    return { categoryNames, categoryRawNames, valueColumns: columnNames, columns, crowded, advisory };
+    const derivedAt = derive ? columnNames.indexOf(derive.label) : -1;
+    return {
+      categoryNames,
+      categoryRawNames,
+      valueColumns: columnNames,
+      derivedColumnIndex: derivedAt < 0 ? null : derivedAt,
+      columns,
+      crowded,
+      advisory,
+    };
   }
 
   /** Renames a category directly by its canonical CategoryAxis index - the

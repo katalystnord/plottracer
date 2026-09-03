@@ -358,7 +358,12 @@ export function tupleDataSection(
   /** This type measures its datum FROM a figure-level origin, so its slots are
    * not two readings on the value axis - see
    * `AxesTypeConfig.measuredFromFigureOrigin`. */
-  measuredFromFigureOrigin?: boolean
+  measuredFromFigureOrigin?: boolean,
+  /** What this FIGURE calls a datum's values, from
+   * `CalibrationSession.getValueColumns()`. Given and longer than one, they
+   * REPLACE the member and derived columns and are filled from
+   * `TupleRow.cells` - so the file and the panel say the same words. */
+  valueColumns?: readonly string[]
 ): TableSection {
   // ⚑⚑ THE COLUMNS ARE THE TYPE'S NAMED VALUES, and the order of these two
   // questions IS the rule (`engine/valueColumns.ts`): a type whose record is an
@@ -384,7 +389,20 @@ export function tupleDataSection(
   // every bar was still half-dragged - silently exported the slot columns
   // instead. The type knows; the rows only know what has been done so far.
   const reportsInterval = intervalSlots !== undefined;
-  const memberNames = reportsInterval ? intervalSlots : measuredFromFigureOrigin ? [] : pointGroupNames;
+  // ⚑⚑ THE TYPE'S OWN VALUE NAMES WIN WHEN THE FIGURE GIVES IT MORE THAN ONE
+  // (v2.5). A STACKED bar's segment has two - `Base` and `Value` - because its
+  // near end is NOT the figure's origin but the top of the segment below it: a
+  // real reading with no other home, and the second argument
+  // `bar(x, height, bottom)` asks for. These are the SAME names the panel shows
+  // (`CalibrationSession.getValueColumns`), which is the point: this file used
+  // to derive its columns independently, and a stacked bar is exactly where the
+  // two answers parted.
+  const derivedColumns = valueColumns && valueColumns.length > 1 ? valueColumns : null;
+  const memberNames = reportsInterval
+    ? intervalSlots
+    : derivedColumns || measuredFromFigureOrigin
+      ? []
+      : pointGroupNames;
   // ⚑ PRESENCE STAYS THE SIGNAL for the derived column itself - this file's own
   // rule, and the one the error and position columns follow: no column where
   // nothing was measured. What changed above is only WHICH columns a type is
@@ -418,7 +436,7 @@ export function tupleDataSection(
       'category',
       ...(hasSpan ? ['Position min', 'Position max'] : []),
       ...memberNames,
-      ...(hasDerived ? [derivedLabel] : []),
+      ...(derivedColumns ?? (hasDerived ? [derivedLabel] : [])),
       ...(err ? err.labels : []),
       ...(err ? err.labels.map((l) => `${l} delta`) : []),
     ],
@@ -450,6 +468,7 @@ export function tupleDataSection(
       ...(memberNames.length === 0
         ? []
         : memberValues(row, pointGroupNames.length, rounder, reportsInterval).map((v) => v ?? '')),
+      ...(derivedColumns ? row.cells.map((v) => (v == null ? '' : v)) : []),
       // ⚠️ NOT ROUNDED HERE, DELIBERATELY - see the note on `row.derived` above,
       // and do not 'fix' this without reading it. `compute` has already rounded
       // to the TYPE's own precision, and re-rounding needs `axes.dataToPixel`,
@@ -463,7 +482,11 @@ export function tupleDataSection(
       // by different rounding RULES (the type's own, and the export's), not that
       // either is applied wrongly here. Raised for David rather than papered
       // over, because picking which rule wins is a record decision.
-      ...(hasDerived ? [row.derived ?? ''] : []),
+      // ⚑ Only when the figure did NOT name its own value columns - those
+      // already carry the derived number, in their own place. Emitting both put
+      // seven cells under a six-column header, which is the one way a table can
+      // be wrong that nobody reads as wrong: every number under the wrong word.
+      ...(derivedColumns ? [] : hasDerived ? [row.derived ?? ''] : []),
       // Blank, never 0, where a side was never captured - see flatDataSection.
       ...(err ? err.labels.map((_l, c) => err.values[i]?.[c] ?? '') : []),
       ...(err ? err.labels.map((_l, c) => err.deltas[i]?.[c] ?? '') : []),
@@ -1361,7 +1384,10 @@ export function buildTupleSeriesJSON(
   intervalSlots?: readonly [string, string],
   /** See `AxesTypeConfig.measuredFromFigureOrigin` - the same rule as the table
    * above, so a reader who switches format meets the same columns. */
-  measuredFromFigureOrigin?: boolean
+  measuredFromFigureOrigin?: boolean,
+  /** See `tupleDataSection`'s own parameter - the same names, so a reader who
+   * switches format meets the same model. */
+  valueColumns?: readonly string[]
 ): string {
   const doc: Record<string, unknown> = {
     series: series.map(({ name, rows: tupleRows, error }) => (
@@ -1382,15 +1408,28 @@ export function buildTupleSeriesJSON(
             // ⚑ THE SAME RULE AS THE TABLE ABOVE, so a reader who switches
             // format meets the same columns: a type reports EITHER its named
             // ends OR one derived value, never both. See `tupleDataSection`.
+            // ⚑ The same rule as the table: a figure that names more than one
+            // value per datum (a STACKED bar's `Base` and `Value`) reports those
+            // and nothing else, so a reader who switches format meets one model.
+            ...(valueColumns && valueColumns.length > 1
+              ? Object.fromEntries(valueColumns.map((label, i) => [label, row.cells[i] ?? null]))
+              : {}),
             ...Object.fromEntries(
-              (intervalSlots ?? (measuredFromFigureOrigin ? [] : pointGroupNames)).map((label, slot) => [
+              (valueColumns && valueColumns.length > 1
+                ? []
+                : intervalSlots ?? (measuredFromFigureOrigin ? [] : pointGroupNames)
+              ).map((label, slot) => [
                 label,
                 memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined)[slot] ??
                   null,
               ])
             ),
           };
-          if (derivedLabel != null && row.derived != null) {
+          if (
+            !(valueColumns && valueColumns.length > 1) &&
+            derivedLabel != null &&
+            row.derived != null
+          ) {
             entry[derivedLabel] = row.derived;
           }
           // ⚑⚑ THE EXTENTS, in the format that used to be the only one without

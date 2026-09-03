@@ -138,7 +138,10 @@ describe('a bar that does not reach the origin is REPORTED, not refused', () => 
     calibratedBar(s, 2, { isStacked: 'true' });
     floatingBar(s);
     const table = s.getBarCategoryTable();
-    expect(table.columns[0]!.cells[1]![0]).toBeCloseTo(5, 6); // its own height
+    // ⚑ Two named values on a stacked figure: `Base` then `Value`.
+    expect(table.valueColumns).toEqual(['Base', 'Value']);
+    expect(table.columns[0]!.cells[1]![0]).toBeCloseTo(2.5, 6); // where it stands
+    expect(table.columns[0]!.cells[1]![1]).toBeCloseTo(5, 6); // its own height
     expect(table.advisory).toEqual([]);
   });
 

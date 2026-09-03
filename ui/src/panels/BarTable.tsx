@@ -88,6 +88,9 @@ export interface BarCategoryTable {
    * how every plotting library asks for them.
    */
   valueColumns: readonly string[];
+  /** Which of `valueColumns` holds the derived value, or null when the type
+   * derives none - see `CalibrationSession.getBarCategoryTable`. */
+  derivedColumnIndex?: number | null;
   /**
    * Bars the panel should say something ABOUT, though their number stands - see
    * `CalibrationSession.getBarCategoryTable`.
@@ -648,7 +651,11 @@ export function BarTable({
                           that helper to be reading. */}
                       <span
                         data-testid={
-                          sub === 0 && isActive && tupleIndex != null
+                          // ⚑ The column that HOLDS the derived value, which the
+                          // table names rather than anyone counting: a stacked
+                          // bar puts `Base` in front of `Value`, so the first
+                          // cell stopped being the number this row reports.
+                          sub === (table.derivedColumnIndex ?? 0) && isActive && tupleIndex != null
                             ? `tuple-derived-${tupleIndex}`
                             : undefined
                         }
