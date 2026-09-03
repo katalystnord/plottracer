@@ -951,7 +951,7 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * because the two disagreed: the capture said `Bar start`/`Bar end` and the
    * record said `Min`/`Max`, so one pair of readings wore two names and only
    * someone who had read the code knew they were the same number. David closed
-   * it by renaming the capture (`BAR_INTERVAL_SLOTS`).
+   * it by renaming the capture (`OPPOSITE_CORNER_SLOTS`).
    * ▶ What the field still DOES is the half that was never about wording: the
    * panel and the exports SORT the pair, so the smaller reading is always under
    * `Min` however the box was dragged. A rename without the sort would have been
@@ -1959,25 +1959,36 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
 };
 
 /**
- * ⚑⚑ `Min` / `Max`, IN THE CAPTURE TOO - David, 2026-08-24: *"Can we stop using
- * bar start / stop and -> min / max instead."*
+ * ⚑⚑ THE TWO CLICKS THAT CAPTURE A RECTANGLE, named for the GESTURE (v2.5).
  *
- * These used to read `Bar start` / `Bar end` on the grounds that they name the
- * GESTURE - the tips bar prints them to say which corner is next - while the
- * record calls the pair `Min`/`Max` because it discards drag direction. That
- * split gave one pair of readings two names depending on which surface you were
- * looking at, which is exactly the "matching, not mirroring" failure this
- * project keeps finding: the user has to be TOLD that `Bar end` and `Max` are
- * the same number.
+ * A bar and a span are both captured by marking two OPPOSITE CORNERS of a box.
+ * That is what these name, and all they name: neither corner must be clicked
+ * first, neither is the smaller, and neither is the top.
  *
- * ⚑ IT DOES NOT INSTRUCT AN ORDER, and that was the objection when this was
- * first raised. Neither slot has to be clicked first: a bar is captured as two
- * OPPOSITE CORNERS and the pair is sorted on read (`core/barInterval.ts`), so
- * two people dragging the same bar in opposite directions still produce the
- * identical file. The names say what the two readings ARE, and the capture
- * prompt says what to do with them.
+ * ⚠️ THEY WERE `Min`/`Max` (David, 2026-08-24: *"Can we stop using bar start /
+ * stop and -> min / max instead"*) AND THE JUSTIFICATION HAS SINCE LEFT. That
+ * rename was made so one pair of readings would not wear two names on two
+ * surfaces - *"the user has to be TOLD that `Bar end` and `Max` are the same
+ * number"* - which held while a bar's two ends WERE its two reported columns.
+ * Since v2.5 a bar reports ONE value over the figure's origin and writes no
+ * `Min`/`Max` at all, so the capture was naming a record the type no longer has.
+ * A span still reports `Min`/`Max`, but through `intervalSlots` - the RECORD's
+ * own declaration. These are the CAPTURE's, and the two are now different
+ * questions with different answers.
+ *
+ * ⚑⚑ AND `Max` WAS ACTIVELY WRONG ON SCREEN. The cursor names the slot by
+ * POSITION, so clicking a bar's TOP corner first made the status bar read
+ * *"Next: Max"* for the click that lands on the LOW end. `guidanceTip` works
+ * around that by refusing to name the slot at all; a name that cannot be wrong
+ * either way round is the fix rather than the workaround.
+ *
+ * ⚑ DIRECTION-NEUTRAL ON PURPOSE. David: *"Remember that bar charts can also be
+ * negative! But they always come back to a common baseline. If not, then they
+ * are a floating bar chart -> span chart."* A bar drawn DOWN from the origin has
+ * its far corner at the BOTTOM, so any name implying up, first or smaller is
+ * wrong on half the figures ever published.
  */
-export const BAR_INTERVAL_SLOTS = ['Min', 'Max'] as const;
+export const OPPOSITE_CORNER_SLOTS = ['Corner', 'Opposite corner'] as const;
 
 /**
  * Shared by every config that calibrates a `BarAxes` (Bar, Categorical Line,
@@ -2151,8 +2162,8 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click where the category axis ENDS - the outer edge of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
-  // shape as pie's sector / histogram's bin -- see BAR_INTERVAL_SLOTS.
-  defaultSlots: BAR_INTERVAL_SLOTS,
+  // shape as pie's sector / histogram's bin -- see OPPOSITE_CORNER_SLOTS.
+  defaultSlots: OPPOSITE_CORNER_SLOTS,
   // ⚑⚑ NO `intervalSlots` ANY MORE (v2.5). A Bar is measured FROM A BASELINE -
   // that is what the name says, and now all it does. An interval belongs to the
   // Span chart, where BOTH ends are measurements rather than one end plus a
@@ -2637,7 +2648,7 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   globalFields: [],
   // The two dragged corners - the SAME two-slot tuple a floating bar was already
   // captured into, which is why no record has to be re-recorded to move here.
-  defaultSlots: BAR_INTERVAL_SLOTS,
+  defaultSlots: OPPOSITE_CORNER_SLOTS,
   intervalSlots: ['Min', 'Max'],
   /**
    * ⚑⚑ A SPAN IS *ONLY* EVER AN INTERVAL, and that is the whole difference from
@@ -2671,19 +2682,33 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     },
   },
   /**
-   * ⚑⚑ A SPAN THAT CARRIES UNCERTAINTY AT EACH END IS A CANDLESTICK, and that
-   * DISSOLVES the four-slot problem rather than solving it.
+   * ⚑⚑ A SPAN THAT CARRIES UNCERTAINTY AT EACH END IS A CANDLESTICK, and the
+   * reason is DIRECTION - not, as this said until v2.5, an ambiguity in our
+   * error roles.
    *
-   * Our error model gives a tuple ONE datum and four role slots (upper / lower /
-   * left / right). That is right for a point, where `upper` means above *the*
-   * value. A span has TWO values, so `upper` cannot say WHICH end it belongs to,
-   * and expressing a candlestick would need four: a low and a high for `Min`, a
-   * low and a high for `Max`. Rather than bolt those on, the user picks the type
-   * that already carries them - `{open, high, low, close}` is a century old and
-   * first-class in every financial library.
+   * ⚠️ THE OLD REASON WAS WRONG AND IT IS WORTH RECORDING WHY. It argued that a
+   * span has TWO values so `upper` cannot say which end it belongs to. For an
+   * INTERVAL that is false: above-the-max and below-the-min are each unique, so
+   * a body with one cap at each end is perfectly expressible. David saw it
+   * immediately - *"in our model, are candlestick graphs not just floating bars
+   * + errorbars?"* Geometrically, yes.
+   *
+   * ▶ WHAT ACTUALLY REFUSES IT IS THE RECORD, and the generators say so
+   * (tenet 11b, measured 2026-09-03). `plotly.graph_objects.Candlestick` takes
+   * `open, high, low, close` and carries first-class `increasing` / `decreasing`
+   * properties; `mplfinance` REFUSES a frame with `Close` missing and decides
+   * direction as `close > open`. A candle's colour IS which way the period
+   * moved - and our span record SORTS its two ends, deliberately, so that two
+   * people capturing one span produce one file. Sorting discards precisely the
+   * fact a candlestick is about. Four NAMED values carry it by construction,
+   * which is also how `bxp` grew its optional `mean` / `cilo` / `cihi` rather
+   * than borrowing `errorbar`.
+   *
+   * ⚑ So the conclusion stands and the reasoning is now the checkable one. See
+   * `project_bar_family_generator_sweep`.
    */
   errorBarsRefusal:
-    'A span with uncertainty at each end is a Candlestick, which is a type of its own - a span has TWO measured values, so "upper" cannot say which end it belongs to. Coming in a later release.',
+    'A span with uncertainty at each end is a Candlestick, which is a type of its own: a candle records open, high, low and close, and which end is the OPEN is what its colour shows - a span sorts its two ends, so that direction cannot be kept. Coming in a later release.',
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot Bar, Box Plot and the heatmap's counts use.
   calibrationDimensions: 3,

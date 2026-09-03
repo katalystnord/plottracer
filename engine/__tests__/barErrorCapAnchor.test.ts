@@ -21,7 +21,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
-import { BAR_INTERVAL_SLOTS } from '../axesTypeConfigs.js';
+import { OPPOSITE_CORNER_SLOTS } from '../axesTypeConfigs.js';
 import { errorSlotNames, slotForRole } from '../../algorithms/errorExtent.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
@@ -43,7 +43,7 @@ function floatingBarWithCap(s: CalibrationSession<BarAxes>, capY: number) {
   // ⚑ THE BAR'S OWN SLOTS, not the default ['Value']. With the default the
   // dataset is XY-shaped, `isBarIntervalShape` is correctly false, and the test
   // measures a code path bars never take - [[feedback_fixture_blind_by_construction]].
-  const slots = errorSlotNames('SD', BAR_INTERVAL_SLOTS);
+  const slots = errorSlotNames('SD', OPPOSITE_CORNER_SLOTS);
   ds.adoptSlots(slots);
   // The bar's two measured corners: Min low-left, Max high-right.
   const lo = ds.addPixel(200, 400);

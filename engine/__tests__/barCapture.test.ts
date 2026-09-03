@@ -6,7 +6,7 @@ import { walkCategoryAxis } from './helpers/categoryWalk.js';
 /**
  * Capturing a bar - two clicks, opposite corners (v2.0).
  *
- * A bar is a 2-slot OBJECT tuple (`BAR_INTERVAL_SLOTS`), same shape as pie's
+ * A bar is a 2-slot OBJECT tuple (`OPPOSITE_CORNER_SLOTS`), same shape as pie's
  * sector / histogram's bin - see `BAR_AXES_CONFIG` in calibrationSession.ts.
  * These tests exercise the sign convention specifically: a baseline-anchored
  * bar signs by comparing calibrated VALUES to the declared baseline (never
@@ -30,7 +30,7 @@ function calibratedBar(session: CalibrationSession<BarAxes>): void {
 describe('the record shape itself', () => {
   it('is a 2-slot OBJECT tuple, exportShape tuples, from the moment the session exists', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
+    expect(session.getSlotNames()).toEqual(['Corner', 'Opposite corner']);
     expect(session.hasSlots()).toBe(true);
     expect(session.getExportShape()).toBe('tuples');
   });

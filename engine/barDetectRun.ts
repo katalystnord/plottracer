@@ -20,8 +20,9 @@
  */
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
-import { detectBlobs, type Blob, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
+import { joinAcrossRule, type SeveringRule } from '../algorithms/ruleJoin.js';
 import {
   measureCategoryAxisFromFragments,
   fragmentEdgeTolerancePx,
@@ -282,121 +283,6 @@ function cutMakesASliver(
   return pieces.some((p) => Math.abs(p.atTo - p.atFrom) < median / 2);
 }
 
-/**
- * How much of the two shapes' CATEGORY extents have to coincide before they can
- * be two halves of one bar.
- *
- * ⚑ A FRACTION, NOT A PIXEL COUNT, so it means the same thing on a 900px figure
- * and a 4000px one. Two halves of a severed rectangle have identical extents;
- * the tenth of slack is for the anti-aliased column or two the filter drops at
- * the cut, and nothing more. It is deliberately tight: the cost of joining two
- * shapes that are not one bar is a reading that never existed.
- */
-const SAME_CATEGORY_OVERLAP = 0.9;
-
-/**
- * Put back together the bars that were severed by whatever the figure draws
- * along its baseline - the zero rule, the axis spine, a target line.
- *
- * ⚑⚑ WHY THIS IS NEEDED AT ALL. A bar drawn ACROSS the baseline has the rule
- * painted over its middle in the rule's own colour, so the colour filter drops
- * those rows and the connected component is cut in two. Both halves are then
- * filed as bars: on `samples/bar-floating-temperature.png` twelve months came
- * back as seventeen readings, with January reading `0.11 .. 2` on one row and
- * `-8 .. -0.04` on the next. Every number plausible, five bars that do not
- * exist, and nothing on screen wrong - the failure class this project treats as
- * the worst one.
- *
- * ⚑⚑ THE GATE IS THE USER'S OWN DECLARATION, which is the standing rule for
- * every bar technique here: it must be gated by something the app computes from
- * what the user said, so the population it cannot help is provably untouched.
- * That gate is the DECLARED BASELINE, and the test reuses the tolerance the
- * caller already states for "does this shape sit on the baseline" rather than
- * inventing a thickness of its own:
- *
- *   · the two shapes lie on OPPOSITE sides of the baseline;
- *   · BOTH reach it, within that tolerance - so the gap between them is the
- *     rule, not a gap the figure drew; and
- *   · their CATEGORY extents coincide - they are the same bar's width.
- *
- * ⚑ IT CANNOT FIRE ON A STACKED FIGURE, which is the case worth naming because
- * it is the one that looks similar: only the bottom segment of a stack touches
- * the baseline, so no pair ever satisfies the second clause. Two same-coloured
- * segments straddling the baseline is not a figure anyone draws - a stack is
- * legible only when its segments differ in colour, and same-colour segments that
- * touch have already flooded into one blob long before this.
- */
-function joinAcrossBaseline(
-  blobs: readonly Blob[],
-  categoryAxis: 'x' | 'y',
-  baseline: BarDetectBaseline
-): { blobs: Blob[]; joined: number } {
-  const valueLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minY : b.bbox.minX);
-  const valueHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxY : b.bbox.maxX);
-  const catLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minX : b.bbox.minY);
-  const catHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxX : b.bbox.maxY);
-  /** Do these two occupy the same slice of the category axis? */
-  const sameCategoryExtent = (a: Blob, b: Blob): boolean => {
-    const overlap = Math.min(catHi(a), catHi(b)) - Math.max(catLo(a), catLo(b));
-    const widest = Math.max(catHi(a) - catLo(a), catHi(b) - catLo(b));
-    return widest > 0 && overlap / widest >= SAME_CATEGORY_OVERLAP;
-  };
-  const at = baseline.atPixel;
-  const tol = baseline.tolerancePx;
-  /** Wholly above the baseline and touching it - the piece drawn upwards. */
-  const above = (b: Blob) => valueHi(b) <= at && at - valueHi(b) <= tol;
-  /** Wholly below it and touching it - the piece drawn downwards. */
-  const below = (b: Blob) => valueLo(b) >= at && valueLo(b) - at <= tol;
-
-  const taken = new Set<number>();
-  const out: Blob[] = [];
-  let joined = 0;
-  blobs.forEach((a, i) => {
-    if (taken.has(i)) return;
-    if (!above(a)) return;
-    // ⚑ The FIRST match wins and both are then spent. A bar has one piece on
-    // each side of the baseline, so a second candidate below the same width
-    // would be a different shape entirely and joining it would invent an extent
-    // spanning both.
-    const j = blobs.findIndex((b, k) => k !== i && !taken.has(k) && below(b) && sameCategoryExtent(a, b));
-    if (j < 0) return;
-    const b = blobs[j]!;
-    taken.add(i);
-    taken.add(j);
-    joined += 1;
-    const area = a.area + b.area;
-    const members =
-      a.members && b.members
-        ? (() => {
-            const m = new Int32Array(a.members.length + b.members.length);
-            m.set(a.members, 0);
-            m.set(b.members, a.members.length);
-            return m;
-          })()
-        : undefined;
-    out.push({
-      // ⚑ Recomputed, not inherited from the larger half: an area-weighted mean
-      // of the two centroids IS the centroid of the union, and a diameter that
-      // still described one half would misreport the joined shape to the size
-      // filters and to anything reading it later.
-      centroid: {
-        x: (a.centroid.x * a.area + b.centroid.x * b.area) / area,
-        y: (a.centroid.y * a.area + b.centroid.y * b.area) / area,
-      },
-      area,
-      diameter: 2 * Math.sqrt(area / Math.PI),
-      bbox: {
-        minX: Math.min(a.bbox.minX, b.bbox.minX),
-        minY: Math.min(a.bbox.minY, b.bbox.minY),
-        maxX: Math.max(a.bbox.maxX, b.bbox.maxX),
-        maxY: Math.max(a.bbox.maxY, b.bbox.maxY),
-      },
-      ...(members ? { members } : {}),
-    });
-  });
-  // Everything untouched keeps its place; the joined pairs follow.
-  return { blobs: [...blobs.filter((_, i) => !taken.has(i)), ...out], joined };
-}
 
 export function runBarDetect(
   data: Uint8ClampedArray | Uint8Array,
@@ -410,7 +296,18 @@ export function runBarDetect(
   categories?: BarDetectCategories,
   /** Where the chart's baseline runs - see `BarDetectBaseline`. Absent = exactly
    * the pre-v2.3 behaviour, and no swatch report. */
-  baseline?: BarDetectBaseline
+  baseline?: BarDetectBaseline,
+  /**
+   * The rule the figure draws ACROSS the plot, which can cut a datum in two -
+   * a span chart's zero rule. Absent for a type that stands ON its origin and
+   * therefore cannot be severed by it; see `algorithms/ruleJoin.ts`.
+   *
+   * ⚠️ LAST ON PURPOSE. Slotted in beside `baseline` it would have taken the
+   * tenth position from it, and both are `{ atPixel, tolerancePx }` - so every
+   * existing positional call would have kept compiling while quietly handing its
+   * baseline to the join and nothing to the swatch test. Typecheck said nothing.
+   */
+  severedBy?: SeveringRule
 ): BarDetectResult {
   const { mask, count } = colorFilter(data, width, height, target, tolerance, mode, region);
   if (count < MIN_MATCHED_PIXELS) {
@@ -475,12 +372,18 @@ export function runBarDetect(
   const hatch = hatchAxis
     ? joinAcrossHatch(blobs, hatchAxis, categories?.dividers)
     : { blobs: [...blobs], joined: 0 };
-  const join = baseline
-    ? joinAcrossBaseline(hatch.blobs, hatchAxis ?? 'x', baseline)
+  // ⚑⚑ THE JOIN IS GATED ON THE RULE, NOT ON THE BASELINE (v2.5). They were one
+  // parameter, and that quietly made the join a BAR feature: a bar stands ON the
+  // origin, so the origin can never cut it in two, while a SPAN straddles the
+  // zero rule and is severed by it. David: *"I do not think it should be in bars
+  // at all."* Two questions, two answers - the baseline still tells a bar from a
+  // legend swatch, and the rule is what a datum can be cut by.
+  const join = severedBy
+    ? joinAcrossRule(hatch.blobs, hatchAxis ?? 'x', severedBy)
     : { blobs: [...hatch.blobs], joined: 0 };
   const joined = join.blobs;
   const joinReport = {
-    ...(baseline ? { joinedAcrossBaseline: join.joined } : {}),
+    ...(severedBy ? { joinedAcrossBaseline: join.joined } : {}),
     ...(hatch.joined > 0 ? { joinedAcrossHatch: hatch.joined } : {}),
   };
   // ⚑⚑ A BAR IS MEASURED TO THE OUTSIDE OF ITS OWN OUTLINE. A figure that

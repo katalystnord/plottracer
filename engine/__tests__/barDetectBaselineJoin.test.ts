@@ -54,7 +54,7 @@ const BASELINE = { atPixel: 70, tolerancePx: 2 };
  * "no baseline was declared" case below silently ran WITH one and passed the
  * wrong assertion. [[feedback_fixture_blind_by_construction]] in miniature. */
 const detect = (data: Uint8ClampedArray, baseline: typeof BASELINE | undefined) =>
-  runBarDetect(data, W, H, BLACK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, baseline);
+  runBarDetect(data, W, H, BLACK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, undefined, baseline);
 
 describe('a bar severed by the rule drawn along the baseline', () => {
   it('⚑⚑ comes back as ONE bar spanning both sides, not two', () => {
@@ -125,10 +125,14 @@ describe('samples/bar-floating-temperature.png, traced end to end', () => {
   /** The figure's own value transform, from its own calibration anchors. */
   const valueAt = (py: number) => p1.value + ((py - p1.py) * (p2.value - p1.value)) / (p2.py - p1.py);
   const BAR_INK: [number, number, number] = [31, 78, 121];
+  /** ⚑ v2.5: this is the SEVERING RULE - the line the figure draws at zero -
+   * and it is handed to the detector's last parameter, not to the baseline it
+   * used to share. A bar stands ON its origin and cannot be cut by it; a span
+   * straddles it. See `algorithms/ruleJoin.ts`. */
   const baseline = { atPixel: p1.py + ((0 - p1.value) * (p2.py - p1.py)) / (p2.value - p1.value), tolerancePx: 2 };
 
   it('⚑⚑ finds TWELVE bars - one per month - and five of them cross zero', () => {
-    const result = runBarDetect(img.data, img.width, img.height, BAR_INK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, baseline);
+    const result = runBarDetect(img.data, img.width, img.height, BAR_INK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, undefined, baseline);
     expect('error' in result).toBe(false);
     if ('error' in result) return;
     expect(result.boxes).toHaveLength(12);
@@ -136,7 +140,7 @@ describe('samples/bar-floating-temperature.png, traced end to end', () => {
   });
 
   it('⚑ and every bar reads its two ends to within a tenth of a degree', () => {
-    const result = runBarDetect(img.data, img.width, img.height, BAR_INK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, baseline);
+    const result = runBarDetect(img.data, img.width, img.height, BAR_INK, 30, 'foreground', undefined, { minDiameter: 3 }, undefined, undefined, baseline);
     if ('error' in result) throw new Error(result.error);
     const found = result.boxes
       .map((b) => ({
@@ -178,6 +182,10 @@ describe('the same figure, traced the way the app now always traces it', () => {
   const img = readPng(fileURLToPath(new URL('../../samples/bar-floating-temperature.png', import.meta.url)));
   const { p1, p2, c1, c2 } = truth.calibration.anchors;
   const valueAt = (py: number) => p1.value + ((py - p1.py) * (p2.value - p1.value)) / (p2.py - p1.py);
+  /** ⚑ v2.5: this is the SEVERING RULE - the line the figure draws at zero -
+   * and it is handed to the detector's last parameter, not to the baseline it
+   * used to share. A bar stands ON its origin and cannot be cut by it; a span
+   * straddles it. See `algorithms/ruleJoin.ts`. */
   const baseline = { atPixel: p1.py + ((0 - p1.value) * (p2.py - p1.py)) / (p2.value - p1.value), tolerancePx: 2 };
   /** The twelve bands the walk declares, as the session hands them to detection:
    * N+1 dividers evenly spaced between the two clicked ends. */
@@ -186,7 +194,7 @@ describe('the same figure, traced the way the app now always traces it', () => {
   it('⚑⚑ finds twelve bars with the categories DECLARED, not just without them', () => {
     const result = runBarDetect(
       img.data, img.width, img.height, [31, 78, 121], 30, 'foreground', undefined,
-      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, baseline
+      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, undefined, baseline
     );
     expect('error' in result).toBe(false);
     if ('error' in result) return;
@@ -201,7 +209,7 @@ describe('the same figure, traced the way the app now always traces it', () => {
   it('⚑ and each band\u2019s bar still reads its two ends off the ink', () => {
     const result = runBarDetect(
       img.data, img.width, img.height, [31, 78, 121], 30, 'foreground', undefined,
-      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, baseline
+      { minDiameter: 3 }, { dividers, categoryAxis: 'x', expected: 12 }, undefined, baseline
     );
     if ('error' in result) throw new Error(result.error);
     const found = result.boxes

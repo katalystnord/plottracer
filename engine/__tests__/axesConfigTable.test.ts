@@ -122,6 +122,33 @@ describe('the config table - cross-cutting invariants', () => {
     expect([...owners.keys()].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
+  it('⚑⚑ a type captured as OPPOSITE CORNERS is served by the shared category table', () => {
+    // ⚑ The two declarations have to agree, and until v2.5 nothing said so: the
+    // session decided which types get that table by NAMING them
+    // (`config.id === 'bar' || config.id === 'span'`), so a third type could
+    // declare the gesture and silently not get the panel - or get the panel with
+    // no gesture. `capturesAsBox` is the capability the session asks now, and
+    // this is the invariant that keeps the pair honest when Candlestick arrives.
+    const corners = ALL.filter((c) => c.capturesAsBox).map((c) => c.id);
+    const barPanel = ALL.filter((c) => c.outputPanel === 'bar').map((c) => c.id);
+    expect(corners.sort()).toEqual(barPanel.sort());
+    // ⚑ Not vacuous: there are two of them today.
+    expect(corners).toHaveLength(2);
+  });
+
+  it('⚑⚑ ...and it is the type that STANDS on its origin which offers a baseline', () => {
+    // ⚠️ TWO QUESTIONS THAT WERE ONE NUMBER FOR A MORNING. `measuredFromFigureOrigin`
+    // says a datum's near end is fixed by the figure's origin - so that type is
+    // ANCHORED (which is how a bar is told from a legend swatch) and cannot be
+    // SEVERED by the rule at zero. A type without it is the mirror image: it
+    // floats, so the swatch test has nothing to discriminate, and it straddles
+    // the rule, so it needs the join. See `algorithms/ruleJoin.ts`.
+    const anchored = ALL.filter((c) => c.measuredFromFigureOrigin).map((c) => c.id);
+    expect(anchored).toEqual(['bar']);
+    // The span is captured the same way and declares the opposite.
+    expect(ALL.find((c) => c.id === 'span')?.measuredFromFigureOrigin).toBeUndefined();
+  });
+
   it('⚑ a type declaring no panel falls to the GENERIC pair, and that is a series question', () => {
     // The types without `outputPanel` get the tuple table when the SERIES has
     // slots and the flat spreadsheet otherwise. That is question 1 of the three

@@ -275,7 +275,7 @@ import {
   mustDiffer,
   PIE_RIM_SNAP_FRACTION,
   HISTOGRAM_SLOTS,
-  BAR_INTERVAL_SLOTS,
+  OPPOSITE_CORNER_SLOTS,
   BOX_PLOT_SLOTS,
 } from './axesTypeConfigs.js';
 
@@ -1999,7 +1999,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
     // A half-dragged bar has one corner and no centre to speak of: the one point
     // it has is the honest anchor.
-    if (!this.isBarIntervalShape(ds) || !b) return { x: a.x, y: a.y };
+    if (!this.capturedAsCorners(ds) || !b) return { x: a.x, y: a.y };
     const midCategory = rotated ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
     const ends = rotated ? [a.x, b.x] : [a.y, b.y];
     const along = cap[rotated ? 'x' : 'y'];
@@ -3239,7 +3239,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // hands back a new one -- which is precisely why it belongs in the
         // model: this is the third time a guard has sat in the session while
         // the model had another entrance.
-        if (this.config.tupleMembers === 'independent' || this.isBarIntervalShape(dataset)) {
+        if (this.config.tupleMembers === 'independent' || this.capturedAsCorners(dataset)) {
           newTupleIndex = dataset.getAllTuples().length;
           dataset.addEmptyTupleAt(newTupleIndex);
           dataset.addToTupleAt(newTupleIndex, groupIndex, index);
@@ -3406,7 +3406,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // capture like any other. See `categoryAxisIncomplete`.
     if (this.categoryAxisIncomplete()) return 0;
     const dataset = this.activeEntry.dataset;
-    const isBar = this.isBarIntervalShape(dataset);
+    const isBar = this.capturedAsCorners(dataset);
     const isHistogramBin = this.isHistogramBinShape(dataset);
     if (!isBar && !isHistogramBin) return 0;
     // ⚑ Sorted into READING ORDER along the category axis before filing --
@@ -3968,37 +3968,32 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return [Math.min(...coordinates) + 1, Math.max(...coordinates) + 1];
   }
 
-  /** True only for a genuine bar-INTERVAL tuple (BAR_INTERVAL_SLOTS), never a
-   * 5-slot Box Plot (its own config, or the legacy toggle on a Bar session).
-   * Gates the auto-category-PREFILL convenience (wantsAutoCategoryPrefill
-   * below) and the CategoryAxis-backed bar table (getBarCategoryTable) --
-   * neither has a Box Plot or Histogram counterpart: a box's five letter
-   * values have no "one repeated category set across series" pattern to
-   * prefill from, and Histogram bins aren't named at all (see
-   * isHistogramBinShape below for the ONE thing they DO share with Bar). */
-  private isBarIntervalShape(dataset: Dataset): boolean {
-    // ⚑⚑ SPAN CHART JOINS BAR HERE (v2.5), and the list is deliberately explicit
-    // rather than a capability probe. `intervalSlots` would have read as the
-    // natural question, but it is a DISPLAY declaration - which columns the
-    // panel shows - and Bar no longer declares it while still capturing this
-    // exact two-corner tuple. Asking it would have quietly dropped Bar out of
-    // its own category table.
-    //
-    // ⚠️ Both ids are named because they are the two types whose datum IS a
-    // dragged rectangle; a 5-slot Box Plot and a Histogram bin are not, for the
-    // reasons in the memo above. If a third arrives (Candlestick), it is added
-    // here, and the `ownSlots` length check is what keeps a Box Plot living on a
-    // Bar session from slipping through.
+  /**
+   * Is this dataset's datum a RECTANGLE captured by its two opposite corners?
+   *
+   * ⚑⚑ THE CAPABILITY, NOT A LIST OF NAMES (v2.5). This read
+   * `config.id === 'bar' || config.id === 'span'`, with a comment saying a
+   * capability probe was wanted and that `intervalSlots` was the wrong one - true,
+   * because that is a DISPLAY declaration and Bar does not set it.
+   * `capturesAsBox` is the right one and says exactly this in its own words -
+   * *"the type saying its two points are OPPOSITE CORNERS"* - and Span declares
+   * it as of v2.5, which is what made the probe possible. A third such type
+   * (Candlestick) now needs no edit here.
+   *
+   * ⚑ The slot COUNT still guards it: a Box Plot living on a Bar session has
+   * five, and an error-bearing dataset has more, so neither slips through.
+   */
+  private capturedAsCorners(dataset: Dataset): boolean {
     return (
-      (this.config.id === 'bar' || this.config.id === 'span') &&
-      this.ownSlots(dataset).length === BAR_INTERVAL_SLOTS.length
+      this.config.capturesAsBox === true &&
+      this.ownSlots(dataset).length === OPPOSITE_CORNER_SLOTS.length
     );
   }
 
   /** True for a genuine 2-slot Histogram bin (HISTOGRAM_SLOTS). v2.0, 2026-07-30:
-   * split out from isBarIntervalShape rather than folded into it, because the two
+   * split out from capturedAsCorners rather than folded into it, because the two
    * shapes are NOT interchangeable everywhere -- a histogram bin has no category
-   * name to prefill or share (isBarIntervalShape's other two uses stay Bar-only),
+   * name to prefill or share (capturedAsCorners's other two uses stay Bar-only),
    * but it DOES have a genuine bounding box a colour trace can find: see
    * addBarDetectBoxes, which is the one place this predicate is used. */
   private isHistogramBinShape(dataset: Dataset): boolean {
@@ -4006,10 +4001,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /** Gates the auto-PREFILL convenience specifically (not category storage
-   * generally, see usesCategoryAxis above) -- see isBarIntervalShape for why
+   * generally, see usesCategoryAxis above) -- see capturedAsCorners for why
    * this is Bar-2-slot-interval only. */
   private wantsAutoCategoryPrefill(dataset: Dataset): boolean {
-    return this.isBarIntervalShape(dataset);
+    return this.capturedAsCorners(dataset);
   }
 
   /** The active dataset's registered per-pixel metadata keys (e.g. "label"
@@ -4297,6 +4292,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * baseline", not "is its edge the same pixel".
    */
   baselinePixelForDetect(): { atPixel: number; tolerancePx: number } | null {
+    // ⚑⚑ ONLY FOR A TYPE THAT STANDS ON ITS ORIGIN (v2.5). The one question this
+    // answers downstream is the swatch test - *"a bar is anchored at the
+    // baseline and a swatch floats"* - and a SPAN floats by definition, so the
+    // discriminator has nothing to discriminate there. Same shape as the join
+    // moving the other way: two questions, two types, one declaration
+    // (`measuredFromFigureOrigin`) that says which is which.
+    if (!this.config.measuredFromFigureOrigin) return null;
     const axes = this.axes as unknown as {
       hasDeclaredBaseline?: () => boolean;
       getBaselineValue?: () => number;
@@ -4309,6 +4311,46 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // detector assumes the upright chart, which is what its own default says.
     const atPixel = declared?.categoryAxis === 'y' ? point.x : point.y;
     // ⚑ The SAME constant the derived value asks with - see `BASELINE_TOLERANCE_PX`.
+    return Number.isFinite(atPixel) ? { atPixel, tolerancePx: BASELINE_TOLERANCE_PX } : null;
+  }
+
+  /**
+   * ⚑⚑ WHERE THE RULE RUNS THAT CAN CUT ONE OF THIS FIGURE'S DATA IN TWO (v2.5).
+   *
+   * A figure draws a heavier line across the plot at ZERO, and anything whose
+   * ends lie on both sides of it has that line painted over its middle in a
+   * colour the trace drops - so the shape comes back as two. See
+   * `algorithms/ruleJoin.ts`.
+   *
+   * ⚑⚑ IT IS A SPAN'S QUESTION, NOT A BAR'S. A bar STANDS on its origin, so the
+   * rule abuts its near end and cannot sever it; only a datum with ends on both
+   * sides is cut. David: *"I do not think it should be in bars at all."*
+   *
+   * ⚠️ AND IT IS NOT `baselinePixelForDetect`, though it was for one morning.
+   * That answers a different question - where a bar is ANCHORED, so a legend
+   * swatch can be told from a bar - and since the origin became the measured
+   * category axis the two lines are nowhere near each other: on
+   * `samples/bar-floating-temperature` the category axis sits at -15 and the
+   * zero rule 198px away, so the join was aimed at empty paper and silently
+   * stopped firing. Two questions, two answers.
+   *
+   * ⚑ ZERO, because it is the line we can LOCATE rather than guess: the
+   * calibration puts it on a pixel. A figure that draws no rule there simply
+   * offers the join no pair to act on, which is the standing rule for every
+   * technique here - it may corroborate, never assume.
+   */
+  severingRulePixelForDetect(): { atPixel: number; tolerancePx: number } | null {
+    // ⚑ Only where a datum can straddle it. `intervalSlots` is the type saying
+    // its record IS two measured ends - which is exactly the shape a rule can
+    // cut in half - so the capability answers, not the name.
+    if (!this.config.intervalSlots) return null;
+    const axes = this.axes as unknown as {
+      dataToPixel?: (v: number, u?: number) => { x: number; y: number };
+    } | null;
+    if (!axes?.dataToPixel) return null;
+    const declared = this.categoryDividersForDetect();
+    const point = axes.dataToPixel(0);
+    const atPixel = declared?.categoryAxis === 'y' ? point.x : point.y;
     return Number.isFinite(atPixel) ? { atPixel, tolerancePx: BASELINE_TOLERANCE_PX } : null;
   }
 
@@ -4348,7 +4390,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    *
    * ⚑ v2.0: relaxed from "declines whenever `hasSlots()`" to "declines only
    * when a tuple actually exists" -- Bar now declares `defaultSlots`
-   * (`BAR_INTERVAL_SLOTS`) unconditionally, so EVERY Bar dataset has slots
+   * (`OPPOSITE_CORNER_SLOTS`) unconditionally, so EVERY Bar dataset has slots
    * from the moment it's created, before anything is captured. Under the
    * old guard, `applyBoxPlotGroups()` (this method's only caller) would
    * silently no-op on every fresh Bar session -- a UI button that stopped
@@ -4452,7 +4494,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * "a half-dragged bar has no value yet" case), and with two or more
    * missing categories the cursor can only default to the FIRST gap -- the
    * same reachability problem this method exists to solve for Spider,
-   * v2.0 pre-launch audit. `isBarIntervalShape` is the same predicate this
+   * v2.0 pre-launch audit. `capturedAsCorners` is the same predicate this
    * file already uses to gate Bar-2-slot-specific behaviour elsewhere.
    *
    * `tupleIndex` null aims at a NEW tuple, starting at `groupIndex`.
@@ -4461,7 +4503,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const entry = this.activeEntry;
     const dataset = entry.dataset;
     if (!dataset.hasSlots()) return false;
-    if (this.config.tupleMembers !== 'independent' && !this.isBarIntervalShape(dataset)) return false;
+    if (this.config.tupleMembers !== 'independent' && !this.capturedAsCorners(dataset)) return false;
     // ⚑ The type's OWN slots: aiming the cursor at an error slot would make the
     // next click fill it, which is the same defect nextSlot and
     // computeSlotCursorFor were fixed for - this is the entrance the TABLE uses.
@@ -4949,7 +4991,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
      * built to remove, so the omission is handed back to be surfaced. */
     crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
-    if (!this.axes || !this.isBarIntervalShape(this.activeEntry.dataset)) {
+    if (!this.axes || !this.capturedAsCorners(this.activeEntry.dataset)) {
       return { categoryNames: [], categoryRawNames: [], valueColumns: [], columns: [], crowded: [], advisory: [] };
     }
     const axes = this.axes;

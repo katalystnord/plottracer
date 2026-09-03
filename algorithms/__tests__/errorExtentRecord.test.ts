@@ -18,7 +18,7 @@
  * bar is a category coordinate plus a value with EXTENT, captured as a tuple of
  * two corner pixels. A datum with error bars is a 2-D coordinate plus an extent,
  * captured as a tuple of up to five pixels. Same primitive, same table, no new
- * concept - see BAR_INTERVAL_SLOTS / BOX_PLOT_SLOTS for the precedent.
+ * concept - see OPPOSITE_CORNER_SLOTS / BOX_PLOT_SLOTS for the precedent.
  */
 import { describe, it, expect } from 'vitest';
 import { ERROR_ROLES, matchCapToDatum, resolveErrorBars, type ErrorRole } from '../errorBar.js';

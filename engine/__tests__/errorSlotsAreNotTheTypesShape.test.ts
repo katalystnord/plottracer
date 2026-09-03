@@ -21,7 +21,7 @@
  *     slot - so a point at (5, 5) with caps at 7 and 3 exported as
  *     `Value 5 · SD upper 5 · SD lower 5`. **The y coordinate and both readings
  *     were gone, silently, and the record underneath was correct all along.**
- *   · `isBarIntervalShape` compares the slot COUNT to `BAR_INTERVAL_SLOTS.length`,
+ *   · `isBarIntervalShape` compares the slot COUNT to `OPPOSITE_CORNER_SLOTS.length`,
  *     so a bar chart lost its category table the moment one error bar was added.
  *   · `computeSlotCursorFor` scans for the first empty member, which after a
  *     one-sided capture is 'SD left' - so reloading a project aimed the next
@@ -39,7 +39,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import {
   BOX_PLOT_SLOTS,
-  BAR_INTERVAL_SLOTS,
+  OPPOSITE_CORNER_SLOTS,
   HISTOGRAM_SLOTS,
   PIE_SECTOR_SLOTS,
 } from '../axesTypeConfigs.js';
@@ -99,7 +99,7 @@ describe("the type's own slots, with the error tail removed", () => {
   });
 
   it("a slotted type's own slots survive the error tail", () => {
-    expect(ownSlotNames(errorSlotNames('SD', BAR_INTERVAL_SLOTS))).toEqual([...BAR_INTERVAL_SLOTS]);
+    expect(ownSlotNames(errorSlotNames('SD', OPPOSITE_CORNER_SLOTS))).toEqual([...OPPOSITE_CORNER_SLOTS]);
     expect(ownSlotNames(errorSlotNames('95% CI', BOX_PLOT_SLOTS))).toEqual([...BOX_PLOT_SLOTS]);
   });
 
@@ -117,7 +117,7 @@ describe("the type's own slots, with the error tail removed", () => {
     // rather than silently losing its table.
     const shipped: readonly (readonly string[])[] = [
       BOX_PLOT_SLOTS,
-      BAR_INTERVAL_SLOTS,
+      OPPOSITE_CORNER_SLOTS,
       HISTOGRAM_SLOTS,
       PIE_SECTOR_SLOTS,
     ];
@@ -252,13 +252,13 @@ describe('a BAR series that gained error slots is still a bar', () => {
       capPixel: { x: 200, y: 180 },
       baseName: 'SD',
     });
-    expect(s.getSlotNames()).toEqual([...BAR_INTERVAL_SLOTS]);
+    expect(s.getSlotNames()).toEqual([...OPPOSITE_CORNER_SLOTS]);
     expect(s.hasSlots(), 'a bar IS tuple-shaped, error or not').toBe(true);
     expect(s.getExportShape()).toBe('tuples');
   });
 
   it('⚑ it keeps its category table', () => {
-    // `isBarIntervalShape` compared the slot COUNT to BAR_INTERVAL_SLOTS.length,
+    // `isBarIntervalShape` compared the slot COUNT to OPPOSITE_CORNER_SLOTS.length,
     // so one error bar took the bar chart's whole category table away.
     const s = barSession();
     s.addDataPoint(200, 300);

@@ -17,7 +17,7 @@
  *
  * ⚑ IT IS THE BAR MODEL ONE DIMENSION OVER. The dimensional taxonomy calls a bar
  * **1.5D** - a category coordinate plus a value with EXTENT - and it is captured
- * as a tuple of two corner pixels (`BAR_INTERVAL_SLOTS`). A datum with error
+ * as a tuple of two corner pixels (`OPPOSITE_CORNER_SLOTS`). A datum with error
  * bars is a 2-D coordinate plus an extent, so it is the same primitive with more
  * members. Nothing new is invented here: `_tuples` in `core/dataset.ts`, the
  * tuple table, and the tuple export shape all already exist and all already do
@@ -41,7 +41,7 @@ import { ERROR_ROLES, ROLE_FIELD, type ErrorBarPoint, type ErrorRole } from './e
  * case. Adding a fifth role to `ERROR_ROLES` extends this automatically.
  *
  * ⚑ Slot names are Title Case because they become COLUMN HEADERS in the data
- * table and the export, alongside `BAR_INTERVAL_SLOTS` ('Bar start', 'Bar end')
+ * table and the export, alongside `OPPOSITE_CORNER_SLOTS` ('Bar start', 'Bar end')
  * and `BOX_PLOT_SLOTS`.
  */
 export const ERROR_EXTENT_SLOTS: readonly string[] = [

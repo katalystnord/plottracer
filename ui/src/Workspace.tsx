@@ -5714,7 +5714,15 @@ export function Workspace() {
       // published figures, so a plot-box gate excludes nothing; what separates
       // them is that a bar is anchored at the baseline and a swatch floats.
       const baseline = session.baselinePixelForDetect();
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined);
+      // ⚑⚑ AND WHERE A RULE CAN CUT A DATUM IN TWO, which is a different line and
+      // a different question (v2.5). A span straddles the figure's zero rule and
+      // is severed by it; a bar stands ON its origin and cannot be. Handing the
+      // detector one number for both made the join a bar feature by accident -
+      // and this morning, when the origin became the measured category axis, it
+      // aimed the join 198px off the rule on David's own floating-temperature
+      // figure and it silently stopped firing.
+      const severedBy = session.severingRulePixelForDetect();
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;

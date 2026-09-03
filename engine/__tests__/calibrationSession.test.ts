@@ -965,7 +965,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
   });
 
   it('clearPoints resets the cursor and reverts to the graph type\'s OWN default slots', () => {
-    // v2.0: Bar's own default is now 2 slots (BAR_INTERVAL_SLOTS), not none.
+    // v2.0: Bar's own default is now 2 slots (OPPOSITE_CORNER_SLOTS), not none.
     // applyBoxPlotGroups's 5-slot upgrade is the OPT-IN state clearPoints
     // always drops; the type's OWN shape is what survives a clear -- exactly
     // what clearPoints's own comment already says ("Only the graph type's OWN
@@ -978,7 +978,7 @@ describe('CalibrationSession (Point Groups / Box Plot)', () => {
 
     session.clearPoints();
     expect(session.hasSlots()).toBe(true);
-    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
+    expect(session.getSlotNames()).toEqual(['Corner', 'Opposite corner']);
     expect(session.getCurrentTupleIndex()).toBeNull();
     expect(session.getCurrentSlotIndex()).toBe(0);
   });
@@ -1644,7 +1644,7 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
 
     session.addDataset(); // Series 2, active -- starts with Bar's own 2 default slots
     expect(session.hasSlots()).toBe(true);
-    expect(session.getSlotNames()).toEqual(['Min', 'Max']);
+    expect(session.getSlotNames()).toEqual(['Corner', 'Opposite corner']);
     session.applyBoxPlotGroups();
     expect(session.getCurrentSlotLabel()).toBe('Min'); // fresh cursor, unaffected by Series 1's
 
