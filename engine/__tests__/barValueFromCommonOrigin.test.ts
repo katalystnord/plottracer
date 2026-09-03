@@ -100,7 +100,10 @@ describe('a bar reports its value whatever its near end did', () => {
     expect(s.runCalibration()).toBe(true);
     s.addDataPoint(150, 420); // ON the axis the bars stand on
     s.addDataPoint(150, 300); // value 5
-    expect(s.getBarCategoryTable().columns[0]!.cells[0]![0]).toBeCloseTo(3, 6);
+    // ⚑ FIVE: the point at the top of the bar reads 5 on this axis, and that is
+    // the number. The origin decides WHICH corner is the far one and whether the
+    // bar reaches the axis - it is not subtracted from the reading.
+    expect(s.getBarCategoryTable().columns[0]!.cells[0]![0]).toBeCloseTo(5, 6);
   });
 });
 

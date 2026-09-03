@@ -108,7 +108,12 @@ describe('a baseline-anchored bar (every bar: the origin is the figure\u2019s, v
     expect(session.runCalibration()).toBe(true);
     session.addDataPoint(150, 420); // value 2 -- ON the axis the bars stand on
     session.addDataPoint(150, 300); // value 5
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // 5 - 2
+    // ⚑ FIVE, not three. The bar's top sits at 5 on this axis, so 5 is what it
+    // reads: the point has a value and that value is the number. Subtracting the
+    // origin used to report its LENGTH (3), which is not what anyone takes off a
+    // figure - and on an ordinary chart, where the origin is zero, the two are
+    // identical, which is why it went unnoticed for so long.
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(5, 9);
   });
 
   it('⚑ there is no typed baseline left to refuse - it cannot be mistyped', () => {

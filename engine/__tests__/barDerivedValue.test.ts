@@ -174,8 +174,9 @@ describe("a bar's value - the sign convention", () => {
     // bar chart looks like. The value axis maps py 500 -> 0 and py 100 -> 10,
     // so py 420 IS the value 2.
     const s = calibratedBarWithAxisAt(420);
-    // A bar from that axis up to py 300 (value 5) is worth 3.
-    expect(barValue(s, 150, 420, 300)).toBeCloseTo(3, 6);
+    // ⚑ Its top is at 5, so it reads 5 - the point's own value, whatever the
+    // axis happens to start at. (It reported its LENGTH, 3, until v2.5.)
+    expect(barValue(s, 150, 420, 300)).toBeCloseTo(5, 6);
   });
 
   it('⚑⚑ and a bar that does NOT start at that baseline is STILL measured from it', () => {
@@ -195,10 +196,9 @@ describe("a bar's value - the sign convention", () => {
     // origin, minus the origin" is one rule that never flips.
     //
     // This bar runs 0..5 on a chart whose x-axis - and so whose origin - is at
-    // 2. The far end is 5, so the bar is worth 3: the number
-    // `bar(x, height, bottom=2)` draws.
+    // 2. Its far end is at 5, so it reads 5.
     const s = calibratedBarWithAxisAt(420);
-    expect(barValue(s, 150, 500, 300)).toBeCloseTo(3, 6);
+    expect(barValue(s, 150, 500, 300)).toBeCloseTo(5, 6);
     expect(
       s.getTupleRows()[0]!.interval,
       'a Bar has no interval to fall back on any more - that is a Span'
@@ -311,20 +311,21 @@ describe('a log-scale bar reads its value through the log axis', () => {
     walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
 
-    // Halfway up three decades is 10^1.5; against a baseline of 1 the span is
-    // that minus 1, about 30.6. A linear read would give ~500, which is what
-    // this test exists to rule out.
+    // Halfway up three decades is 10^1.5, about 31.6 - and that is simply what
+    // the top of the bar reads, because `pixelToData` has already done the log.
+    // A linear read would give ~500, which is what this test exists to rule out.
+    // ⚑ It expected 30.6 until v2.5, when the value stopped having the axis
+    // origin subtracted from it: on a log scale that difference is neither the
+    // value nor the length, and on any scale it is not what the point says.
     //
     // ⚑⚑ ASSERTED AT THE FIGURE'S OWN RESOLUTION, not to three decimals. The
-    // value is now rounded at the far end's own pixel so it cannot disagree with
-    // the `Min`/`Max` beside it in the panel and the file - and on a LOG axis one
-    // pixel high in a decade spans a great deal of data, so 30.6 is the honest
-    // reading and 30.622776601683793 was never something these pixels could
-    // support. Asserting the analytic value to 3dp was incidental to what this
-    // case is about; the log-versus-linear distinction is 470 units wide and
-    // survives any rounding.
+    // value is rounded at the far end's own pixel, and on a LOG axis one pixel
+    // high in a decade spans a great deal of data - so 31.6 is the honest
+    // reading and 31.622776601683793 was never something these pixels could
+    // support. The log-versus-linear distinction is 470 units wide and survives
+    // any rounding.
     const v = barValue(s, 150, 500, 300)!;
-    expect(v).toBeCloseTo(Math.pow(10, 1.5) - 1, 0);
+    expect(v).toBeCloseTo(Math.pow(10, 1.5), 0);
     expect(v).toBeLessThan(100); // a linear read would be ~500
   });
 });

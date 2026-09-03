@@ -2351,11 +2351,23 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       // ⚑ Stacked stays above, and the same signature says why: a stack IS the
       // `bottom`-as-array case, so its segments' bases are real measurements.
       
-      // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
-      // position - a pixel rule ("smaller y = far end") is exactly backwards for
-      // a bar below the baseline in an ordinary vertical figure, and
-      // `pixelToData` already encodes orientation, direction and log scale.
-      return roundAtPixel(bar.far, farPoint) - baseline;
+      // ⚑⚑ THE POINT'S OWN VALUE, AND NOTHING DONE TO IT. David: *"We set a
+      // point on an axis. That point has a value... How is this not recorded as
+      // a simple number? Why the song and dance?"*
+      //
+      // ⚠️ IT USED TO SUBTRACT THE ORIGIN, and on every ordinary chart that
+      // changed nothing, because the origin IS zero there - which is exactly why
+      // it went unnoticed. It only showed on a figure whose axis does not start
+      // at zero: a log chart calibrated 1..1000 reported a bar topping out at
+      // 31.6 as 30.6, and a truncated chart's bar drawn 20..35 as 15. Neither is
+      // a reading anyone takes off the figure.
+      //
+      // ⚑ `pixelToData` has already done all the work - orientation, direction,
+      // and the log scale - so there is no arithmetic left to do. The origin is
+      // still measured and still used, for the two things it is actually for:
+      // deciding WHICH corner is the far one, and reporting a bar that does not
+      // reach it.
+      return roundAtPixel(bar.far, farPoint);
     },
     /**
      * ⚑⚑ A BAR THAT DOES NOT REACH THE COMMON ORIGIN IS WORTH SAYING OUT LOUD -
