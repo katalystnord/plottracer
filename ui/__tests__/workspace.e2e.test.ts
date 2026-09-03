@@ -270,7 +270,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'categorical' | 'boxplot' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'categorical' | 'boxplot' | 'candlestick' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -1503,6 +1503,115 @@ describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
     await page.getByTestId('series-color-button').click();
     expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');
   }, 30000);
+});
+
+describe('Workspace: Candlestick', () => {
+  /**
+   * ⚑⚑ A WALKTHROUGH TEST MAY ONLY CLICK WHAT A PROMPT ON SCREEN TELLS IT TO
+   * CLICK (CLAUDE.md, gate 4). So this reads the tips bar at every step and
+   * clicks the slot it NAMES, rather than a pixel list the author already knew
+   * the meaning of. If the prompt ever stops naming the next slot, this fails at
+   * the click rather than eight steps later.
+   */
+  async function calibrateCandlestick(categories = 4) {
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue(String(categories));
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+  }
+
+  it('asks for four marks by name, and draws the candle only when all four are placed', async () => {
+    await resetWorkspace('candlestick');
+    await declineCommonOrigin();
+    await calibrateCandlestick();
+
+    // The card names the first slot before any mark is placed - the walk is
+    // discoverable without knowing that a candle has four points.
+    expect(await textOf('tips-bar')).toMatch(/Open.*new candle/);
+    expect(await textOf('candlestick-glyph-count')).toBe('0');
+
+    // Open at 2, High at 4, Low at 1, Close at 3 - a RISING candle.
+    const pys = [340, 280, 370, 310];
+    const nextLabels = ['High', 'Low', 'Close', 'Open'];
+    for (let i = 0; i < pys.length; i++) {
+      // ⚑ The prompt says which slot this click fills; the test follows it
+      // rather than asserting from its own knowledge of the order.
+      expect(await textOf('tips-bar')).toContain(i === 0 ? 'Open' : nextLabels[i - 1]!);
+      await clickAt(300, pys[i]!);
+      expect(await textOf('tips-bar')).toContain(nextLabels[i]!);
+      // ⚑ Three of four draws nothing: a body between two marks and a wick to
+      // nowhere would be a picture of a reading nobody took.
+      expect(await textOf('candlestick-glyph-count')).toBe(i < pys.length - 1 ? '0' : '1');
+    }
+  });
+
+  it('⚑⚑ shows which way the period moved, so a wrong click order looks wrong', async () => {
+    // The whole reason the overlay is a CHECK rather than a decoration: open and
+    // close are both body edges, so the two orders draw an IDENTICAL box and the
+    // fill is the only thing that separates them.
+    await resetWorkspace('candlestick');
+    await declineCommonOrigin();
+    await calibrateCandlestick();
+
+    // Open low, close high: the period rose.
+    await clickAt(300, 340); // Open
+    await clickAt(300, 280); // High
+    await clickAt(300, 370); // Low
+    await clickAt(300, 310); // Close
+    expect(await textOf('candlestick-directions')).toBe('rising');
+
+    // The same four marks with open and close swapped: the same body, the
+    // opposite claim, and the overlay says so.
+    await resetWorkspace('candlestick');
+    await declineCommonOrigin();
+    await calibrateCandlestick();
+    await clickAt(300, 310); // Open, the higher of the two now
+    await clickAt(300, 280); // High
+    await clickAt(300, 370); // Low
+    await clickAt(300, 340); // Close
+    expect(await textOf('candlestick-directions')).toBe('falling');
+  });
+
+  it('files its four values under a category, in the table the rest of the family uses', async () => {
+    await resetWorkspace('candlestick');
+    await declineCommonOrigin();
+    await calibrateCandlestick();
+    await clickAt(300, 340);
+    await clickAt(300, 280);
+    await clickAt(300, 370);
+    await clickAt(300, 310);
+
+    // ⚑ The SHARED category table, not a panel of its own - the same one Bar,
+    // Span and Box Plot fill. Its headings are the type's four named values.
+    const table = await textOf('points-table');
+    for (const heading of ['Open', 'High', 'Low', 'Close']) {
+      expect(table, `the table does not name ${heading}`).toContain(heading);
+    }
+    // (400 - py) / 30 * 10: 2, 4, 1, 3.
+    for (const reading of ['2', '4', '1', '3']) expect(table).toContain(reading);
+  });
+
+  it('refuses error bars at the tool, naming what it already reports', async () => {
+    await resetWorkspace('candlestick');
+    await declineCommonOrigin();
+    await calibrateCandlestick();
+    await clickAt(300, 340);
+    await clickAt(300, 280);
+    await clickAt(300, 370);
+    await clickAt(300, 310);
+    // ⚑ Greyed WITH ITS REASON on hover, rather than silently ignoring a drag -
+    // the refusal fires at the gesture, not eight steps later.
+    const tool = page.getByTestId('mode-error-bars');
+    expect(await tool.isDisabled()).toBe(true);
+    // ⚑ A disabled <button> suppresses its own tooltip in Chromium, so the
+    // reason rides on `aria-label` - which is what a screen reader gets too.
+    expect(await tool.getAttribute('aria-label')).toMatch(/four measured values/);
+  });
 });
 
 describe('Workspace: Box Plot / Point Groups', () => {

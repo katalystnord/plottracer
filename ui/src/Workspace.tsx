@@ -9209,6 +9209,17 @@ export function Workspace() {
               <span data-testid="box-plot-glyph-count" style={{ display: 'none' }}>
                 {boxPlotGlyphs.length}
               </span>
+              {/* ⚑ The candle count AND its direction, because direction is the
+                  half a segment list cannot carry: a candle clicked open-first
+                  and one clicked close-first draw the same body, and only the
+                  fill tells them apart. An e2e that could see the shape but not
+                  the fill would pass on the mistake the fill exists to reveal. */}
+              <span data-testid="candlestick-glyph-count" style={{ display: 'none' }}>
+                {candlestickGlyphs.length}
+              </span>
+              <span data-testid="candlestick-directions" style={{ display: 'none' }}>
+                {candlestickGlyphs.map((g) => (g.rising ? 'rising' : 'falling')).join(' | ')}
+              </span>
               {/* Same reason, for the calibrated axis rays a spider is aimed at:
                   Konva draws them, so nothing else can assert they are on screen. */}
               <span data-testid="calib-preview-segments" style={{ display: 'none' }}>
