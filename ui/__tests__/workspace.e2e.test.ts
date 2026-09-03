@@ -979,6 +979,33 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('bar-off-baseline')).toMatch(/1 bar/);
   }, 30000);
 
+  /**
+   * ⚑⚑ THE BAR TABLE WAS THE LAST ONE THAT COULD NOT BE EDITED (v2.5).
+   *
+   * XY, spider and the heatmap have edited through the shared `EditableValue`
+   * since v2.3. The blocker here was the MODEL rather than the widget: while a
+   * bar's value depended on both corners, typing 7 had no single answer. With
+   * the origin owned by the figure there is exactly one - the far corner moves -
+   * and the engine half is covered by `barValueEditMovesACorner.test.ts`.
+   * What only an e2e can show is that the cell is reachable and says so.
+   */
+  it('a bar value is edited in place, and the reading is marked as the user\u2019s', async () => {
+    await resetWorkspace('bar');
+    await calibrateBarStandard();
+    await dragMarker(150, 400, 190, 250); // a bar worth 5
+    expect(await textOf('bar-cell-0-0')).toMatch(/5/);
+
+    await page.getByTestId('bar-value-0-0-0').dblclick();
+    await page.getByTestId('bar-edit-0-0-0').fill('7');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+
+    // ⚑ The number changed because the DATUM moved: the panel reads it back
+    // through the axes, so `7` here means the corner is now at 7.
+    // ⚑ And it wears the `[ ]` mark - the user's reading, not the pixels'.
+    expect(await textOf('bar-cell-0-0')).toMatch(/\[7\]/);
+  }, 30000);
+
   // v2.0 Phase 7: Auto-extract is now a REAL option for Bar (a bar blob's own
   // bounding box is its two ends), so the empty-table hint names it again --
   // the opposite of the pre-Phase-7 rule this test used to guard (Auto-extract
@@ -10828,5 +10855,6 @@ describe('Workspace: Span chart capture (v2.5)', () => {
     expect(await page.getByTestId('bar-unreadable').count()).toBe(0);
   }, 30000);
 });
+
 
 

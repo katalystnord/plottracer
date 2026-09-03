@@ -71,6 +71,9 @@ export interface BarColumn {
    * shape that says all of them.
    */
   cells: readonly (readonly (number | null)[])[];
+  /** Whether each cell's number came from the USER rather than off the pixels -
+   * what the `[ ]` mark reads. Aligned with `cells`. */
+  supplied?: readonly (readonly boolean[])[];
   tupleIndices: readonly (number | null)[];
 }
 
@@ -410,6 +413,26 @@ export interface BarTableProps {
    * so the same index answers "which bar is this cell" and "which cap is its".
    */
   errorForSeries: (seriesIndex: number) => ErrorColumns | undefined;
+  /**
+   * Draw one cell's number as an editable field (v2.5).
+   *
+   * ⚑⚑ THE LAST TABLE WITHOUT ONE. XY, spider and the heatmap have edited
+   * through the shared `EditableValue` since v2.3; this table had no
+   * `renderValue` at all, and the reason was the MODEL rather than the widget:
+   * while a bar's value depended on both corners, typing 7 had no single answer.
+   * With the origin owned by the figure there is exactly one - the far corner
+   * moves - and on a stacked figure `Base` moves the near one.
+   *
+   * ⚑ Given `columnIndex`, because a column names a POINT: that is the whole of
+   * rule 3 of this family's panel framework, one column, one editable thing.
+   */
+  renderValue?: (
+    seriesIndex: number,
+    tupleIndex: number,
+    columnIndex: number,
+    value: number,
+    supplied: boolean
+  ) => ReactNode;
   noPointsHint: string;
 }
 
@@ -442,6 +465,7 @@ export function BarTable({
   onRemoveTupleIn,
   renderCategoryName,
   errorForSeries,
+  renderValue,
   noPointsHint,
 }: BarTableProps) {
   // ⚑ Asked ONCE per render, not once per cell: the accessor walks the series'
@@ -637,6 +661,27 @@ export function BarTable({
                 >
                   {shown == null ? (
                     <span style={{ color: theme.color.text.legend }}>-</span>
+                  ) : renderValue && isActive && tupleIndex != null ? (
+                    <>
+                      {/* ⚑ The same handle the other tables carry, on the column
+                          that HOLDS the value - see `derivedColumnIndex`. */}
+                      <span
+                        data-testid={
+                          sub === (table.derivedColumnIndex ?? 0) ? `tuple-derived-${tupleIndex}` : undefined
+                        }
+                      >
+                        {renderValue(
+                          col.seriesIndex,
+                          tupleIndex,
+                          sub,
+                          shown,
+                          col.supplied?.[categoryIndex]?.[sub] === true
+                        )}
+                      </span>
+                      {sub === slotLabels.length - 1 && (
+                        <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
+                      )}
+                    </>
                   ) : (
                     <>
                       {/* `tuple-derived-N`, not just this cell's own bar-cell-S-C

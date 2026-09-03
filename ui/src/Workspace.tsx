@@ -6750,6 +6750,49 @@ export function Workspace() {
     />
   );
 
+  /**
+   * A bar-family cell, editable (v2.5).
+   *
+   * ⚑⚑ AN EDIT MOVES THE DATUM, it never overwrites the number - the rule every
+   * other table here already follows. Typing a `Value` moves the corner AWAY
+   * from the figure's origin along the value axis; on a stacked figure typing a
+   * `Base` moves the near corner. `valuePointIndexFor` says which point a column
+   * names, so the cell being typed into and the point that moves cannot drift
+   * apart.
+   *
+   * ⚑ It was the last table without one, and the blocker was the MODEL: while a
+   * bar's value depended on both corners, typing 7 had no single answer. The
+   * common origin gave it one.
+   */
+  const renderEditableBarValue = (
+    seriesIndex: number,
+    tupleIndex: number,
+    columnIndex: number,
+    value: number,
+    supplied: boolean
+  ) => {
+    const pointIndex = session.valuePointIndexFor(tupleIndex, columnIndex);
+    if (pointIndex === null) return <>{valueText(fmtValue(displayRounder.atData([value], 0)), supplied)}</>;
+    return (
+      <EditableValue
+        editing={editingCell?.index === pointIndex && editingCell.axis === 0}
+        editValue={editingCell?.value ?? ''}
+        display={valueText(fmtValue(displayRounder.atData([value], 0)), supplied)}
+        testIdEdit={`bar-edit-${seriesIndex}-${tupleIndex}-${columnIndex}`}
+        testIdValue={`bar-value-${seriesIndex}-${tupleIndex}-${columnIndex}`}
+        title={valueTitle('Double-click to edit - moves that corner along the value axis', supplied)}
+        width={64}
+        align="right"
+        onStartEdit={() =>
+          setEditingCell({ index: pointIndex, axis: 0, value: editSeed(value), seed: editSeed(value) })
+        }
+        onChange={(v) => setEditingCell((c) => (c ? { ...c, value: v } : c))}
+        onCommit={commitDataPointEdit}
+        onCancel={() => setEditingCell(null)}
+      />
+    );
+  };
+
   // One click-to-edit name field, shared by every "name this row" column in the
   // app: plain text at rest (a dash when unnamed), an input only while it's the
   // cell being typed into. Three call sites used to each hand-roll this exact
@@ -9380,6 +9423,7 @@ export function Workspace() {
               // chart is the type that most often carries error bars, and this
               // was the panel that would not show them (F44).
               errorForSeries={(seriesIndex) => errorColumnsByTuple(session, seriesIndex).error}
+              renderValue={renderEditableBarValue}
               noPointsHint={noPointsHint}
             />
           ) : hasSlots ? (

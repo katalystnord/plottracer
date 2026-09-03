@@ -262,7 +262,7 @@ export * from './axesTypeConfigs.js';
 // checkGuards/mustDiffer/PIE_RIM_SNAP_FRACTION are shared between the graph-type
 // declarations and this state machine, so they are part of that module's
 // surface rather than private to a file the two no longer share.
-import { BASELINE_TOLERANCE_PX } from '../core/barInterval.js';
+import { BASELINE_TOLERANCE_PX, nearEndIsFirst } from '../core/barInterval.js';
 import {
   type CalibratedAxes,
   type AxesTypeConfig,
@@ -4996,6 +4996,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
        * place, so a column can never shift into its neighbour.
        */
       cells: (number | null)[][];
+      /**
+       * Whether each cell's number came from the USER rather than off the
+       * pixels, aligned with `cells` - what the `[ ]` mark reads (v2.5).
+       *
+       * ⚑ Per CELL, not per row, because a stacked segment's `Base` and `Value`
+       * are two different points and either may have been re-read by eye.
+       */
+      supplied: boolean[][];
       /** Which tuple (in that series' OWN dataset) fills each row, so a
        * click can select/delete it -- one series' tupleIndex is meaningless
        * against another series' dataset, so this is per-column, not global. */
@@ -5074,6 +5082,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         tupleForCategory.set(idx, tupleIndex);
       });
       const cells: (number | null)[][] = [];
+      const supplied: boolean[][] = [];
       const tupleIndices: (number | null)[] = [];
       categories.forEach((_, categoryIndex) => {
         const tupleIndex = tupleForCategory.get(categoryIndex);
@@ -5081,6 +5090,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
           // ⚑ A row with no datum still has one cell PER COLUMN, so every row is
           // the same width and a reader never has to ask which column is which.
           cells.push(columnNames.map(() => null));
+          supplied.push(columnNames.map(() => false));
           tupleIndices.push(null);
           return;
         }
@@ -5091,6 +5101,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
         cells.push(valueCells(this.config, points, axes));
+        // ⚑ Asked of the POINT each column names, through the same map the
+        // editor moves - so the mark and the edit cannot disagree about which
+        // corner a cell is.
+        supplied.push(
+          columnNames.map((_name, columnIndex) => {
+            if (seriesIndex !== this.activeDatasetIndex) return false;
+            const at = this.valuePointIndexFor(tupleIndex, columnIndex);
+            return at === null ? false : this.suppliedDimsAt(dataset, at).length > 0;
+          })
+        );
         tupleIndices.push(tupleIndex);
         // ⚑⚑ ASKED OF EVERY COMPLETE TUPLE, not only of the ones with no number.
         // It used to be gated on `derived === null && interval === null`, which
@@ -5101,7 +5121,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const kind = derive?.advisory?.(points, axes) ?? null;
         if (kind !== null) advisory.push({ seriesIndex, categoryIndex, tupleIndex, kind });
       });
-      return { seriesIndex, seriesName: dataset.name, cells, tupleIndices };
+      return { seriesIndex, seriesName: dataset.name, cells, supplied, tupleIndices };
     });
     const derivedAt = derive ? columnNames.indexOf(derive.label) : -1;
     return {
@@ -5113,6 +5133,60 @@ export class CalibrationSession<A extends CalibratedAxes> {
       crowded,
       advisory,
     };
+  }
+
+  /**
+   * ⚑⚑ WHICH CAPTURED POINT A VALUE COLUMN NAMES (v2.5).
+   *
+   * The panel's rule is that every column is ONE editable thing: typing into a
+   * cell moves the point that column names, along the value axis, and nothing
+   * else. This is the map from column to point, and it lives here because it
+   * asks the same three questions in the same order as `valueColumnNames` - the
+   * names and the points they move must be one answer.
+   *
+   *   · an INTERVAL record (`Min`/`Max`): the smaller end, then the larger;
+   *   · a DERIVED record: the far corner - and on a STACKED figure `Base` names
+   *     the near one, because that is the reading it reports;
+   *   · anything else: its own slots, in order (a box plot's five).
+   *
+   * ⚑ NEAR and FAR are read through `barSeating`, the same call the value itself
+   * is computed with, so the cell a user edits is the corner whose number they
+   * are looking at.
+   *
+   * Returns the PIXEL index in the active dataset, or null where the column
+   * names nothing movable (a half-captured tuple).
+   */
+  valuePointIndexFor(tupleIndex: number, columnIndex: number): number | null {
+    const dataset = this.activeEntry.dataset;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple || !this.axes) return null;
+    const columns = this.getValueColumns();
+    if (columnIndex < 0 || columnIndex >= columns.length) return null;
+    const indices = tuple.filter((i): i is number => i !== null && i !== undefined);
+    if (indices.length === 0) return null;
+
+    // 3. slots, in order - the fallback, and the box plot's answer.
+    if (!this.config.intervalSlots && !this.config.derivedTupleValue) {
+      return tuple[columnIndex] ?? null;
+    }
+    if (indices.length < 2) return null;
+    const valueOf = (i: number) => {
+      const p = dataset.getPixel(i);
+      return this.axes!.pixelToData(p.x, p.y)[0] ?? NaN;
+    };
+    const [a, b] = [indices[0]!, indices[1]!];
+    // 1. an INTERVAL: smaller end first, which is what `Min`/`Max` mean.
+    if (this.config.intervalSlots) {
+      const [lo, hi] = valueOf(a) <= valueOf(b) ? [a, b] : [b, a];
+      return columnIndex === 0 ? lo : hi;
+    }
+    // 2. DERIVED: the far corner carries the value; `Base`, where the figure
+    //    declares one, is the near one.
+    const baseline = (this.axes as unknown as { getBaselineValue?: () => number }).getBaselineValue?.() ?? 0;
+    const nearIsA = nearEndIsFirst(valueOf(a), valueOf(b), baseline);
+    const near = nearIsA ? a : b;
+    const far = nearIsA ? b : a;
+    return columns.length > 1 && columnIndex === 0 ? near : far;
   }
 
   /** Renames a category directly by its canonical CategoryAxis index - the
