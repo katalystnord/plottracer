@@ -34,6 +34,7 @@ import os from 'node:os';
 // browser just to produce a file to open.
 import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG, BAR_AXES_CONFIG } from '../../engine/calibrationSession.js';
 import { serializeProject } from '../../engine/projectFile.js';
+import { ALL_AXES_TYPE_CONFIGS } from '../../engine/axesTypeConfigs.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
 import { ozoneArgs } from './e2eContainment.js';
@@ -1729,65 +1730,107 @@ describe('Workspace: Box Plot / Point Groups', () => {
     expect(await textOf('box-plot-glyph-count')).toBe('0');
   });
 
-  it('leaves a new tuple unnamed (dash at rest), and lets the category name be edited inline (v2.0)', async () => {
+  /** Which category row actually carries a reading - found from the table
+   *  rather than assumed, since the figure's geometry decides it. */
+  async function bandWithAReading(): Promise<number> {
+    const rows = page.getByTestId('points-table').locator('tbody tr');
+    const count = await rows.count();
+    for (let i = 0; i < count; i++) {
+      const text = await rows.nth(i).textContent();
+      if (text && /\d/.test(text.replace(/^\s*\d+/, ''))) return i;
+    }
+    throw new Error('no category row carries a reading');
+  }
+
+  it('leaves a new box unnamed (dash at rest), and lets its category be named inline (v2.0)', async () => {
     // ⚑ v2.0, 2026-07-30: no more WPD-ported "Bar0" default -- David caught the
     // same fake-name defect live on Pie ("Slice0"/"Slice1") and settled it for
     // every tuple type at once (tenet 9: a name is the user's to type, never
-    // invented). The category cell is also click-to-edit now (dash-at-rest span,
-    // input only while focused), matching Spider's own axis-name cell exactly.
+    // invented). The cell is click-to-edit (dash-at-rest span, input only while
+    // focused), matching Spider's own axis-name cell exactly.
+    //
+    // ⚑⚑ v2.5 MOVED THE BOX PLOT ONTO THE FAMILY'S SHARED CATEGORY TABLE, so
+    // the name is edited in `bar-category-name-N` rather than `tuple-label-N`.
+    // The MECHANISM did not change: a box plot has marked a category axis in
+    // this same walk since v2.3, and `setTupleLabel` has routed through the
+    // CategoryAxis for it ever since - the old panel simply displayed that name
+    // per tuple, in click order, while its neighbours displayed it per band.
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
-    await clickAt(300, 385); // starts tuple 0 (Min)
-    expect(await textOf('tuple-label-0')).toBe('-');
+    await clickAt(300, 385); // starts a box - the position this block's other
+                             // tests prove lands in its own band
+    // ⚑ WHICH band it landed in is FOUND, not assumed: the figure's own
+    // geometry decides that, and a test that hard-codes it is asserting the
+    // fixture rather than the behaviour.
+    const band = await bandWithAReading();
+    expect(await textOf(`bar-category-name-${band}`)).toBe('-');
 
-    await page.getByTestId('tuple-label-0').dblclick();
-    await page.getByTestId('tuple-label-0').fill('Sample A');
-    await page.getByTestId('tuple-label-0').blur();
+    await page.getByTestId(`bar-category-name-${band}`).dblclick();
+    await page.getByTestId(`bar-category-name-${band}`).fill('Sample A');
+    await page.getByTestId(`bar-category-name-${band}`).blur();
     await page.waitForTimeout(120);
-    expect(await textOf('tuple-label-0')).toBe('Sample A');
+    expect(await textOf(`bar-category-name-${band}`)).toBe('Sample A');
 
-    // The custom name survives filling the rest of the tuple, and a second
-    // tuple stays unnamed too -- its own independent dash, not "Bar1".
+    // The name survives filling the rest of the box, and the SECOND band stays
+    // unnamed -- its own independent dash, not "Box 2".
     for (const py of [355, 325, 295, 265]) await clickAt(300, py);
-    expect(await textOf('tuple-label-0')).toBe('Sample A');
-
-    await clickAt(500, 385); // starts tuple 1
-    expect(await textOf('tuple-label-1')).toBe('-');
+    expect(await textOf(`bar-category-name-${band}`)).toBe('Sample A');
+    // Every OTHER band stays unnamed - its own independent dash, not "Box 2".
+    for (let i = 0; i < 4; i++) {
+      if (i !== band) expect(await textOf(`bar-category-name-${i}`)).toBe('-');
+    }
   });
 
-  it('deletes a whole box with the row ✕, the label rides the box, and undo restores it (checkpoint 129)', async () => {
+  it('⚑ files its five values under the categories, in the family\'s own table (v2.5)', async () => {
+    // ⚠️ THE STRUCTURAL INCONSISTENCY THIS CLOSED: a box plot marked a category
+    // axis in the same walk Bar and Span do, then listed its boxes in CLICK
+    // ORDER in a panel of its own, so the user had to learn a second table for
+    // no reason. The gate asked "is this captured as opposite corners" when the
+    // question it meant was "does this type file its readings under categories".
+    await resetWorkspace('boxplot');
+    await calibrateBarStandard();
+    for (const py of [385, 355, 325, 295, 265]) await clickAt(300, py);
+
+    // The shared table, and its headings are the type's five named values.
+    const table = await textOf('points-table');
+    for (const heading of ['Min', 'Q1', 'Median', 'Q3', 'Max']) {
+      expect(table, `the table does not name ${heading}`).toContain(heading);
+    }
+    // (400 - py) / 30 * 10 for the five clicks above.
+    for (const reading of ['0.5', '1.5', '2.5', '3.5', '4.5']) expect(table).toContain(reading);
+    // One row per CATEGORY, not one per box - which is the whole change.
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(4);
+  });
+
+  it('deletes a whole box with the row ✕, and undo restores it (checkpoint 129)', async () => {
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
 
-    // Box 0, named Sample A. Category cell is click-to-edit (v2.0) -- click it
-    // into an input before filling, same as Spider's own axis-name cell.
+    // ⚑ The two x positions this block's own tests prove land in DIFFERENT
+    // bands. Two boxes sharing one band is a crowded reading, not a delete test.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(300, py);
-    await page.getByTestId('tuple-label-0').dblclick();
-    await page.getByTestId('tuple-label-0').fill('Sample A');
-    await page.getByTestId('tuple-label-0').blur();
-    // Box 1 to the right, named Sample B.
     for (const py of [385, 355, 325, 295, 265]) await clickAt(500, py);
-    await page.getByTestId('tuple-label-1').dblclick();
-    await page.getByTestId('tuple-label-1').fill('Sample B');
-    await page.getByTestId('tuple-label-1').blur();
     await page.waitForTimeout(50);
-    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(2);
     expect(await textOf('box-plot-glyph-count')).toBe('2'); // both tuples complete
 
-    // Delete box 0 outright -- not one point at a time (the trash button's job).
-    await page.getByTestId('tuple-remove-0').click();
+    // Delete the first box outright -- not one point at a time (the trash
+    // button's job). ⚑ The SAME `tuple-remove-N` control the rest of the family
+    // uses; it came with the shared table rather than being rebuilt.
+    // ⚑ Scoped to the table: the crowded panel below it offers the SAME control
+    // for a held-back reading, which is the mechanism being shared rather than
+    // duplicated - so the locator has to say which one it means.
+    await page.getByTestId('points-table').getByTestId('tuple-remove-0').click();
     await page.waitForTimeout(50);
-    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
     expect(await textOf('box-plot-glyph-count')).toBe('1');
-    // Sample B shifted down to row 0 -- the label rides the box, not the index --
-    // and it kept its own points (proof box 1 survived, not box 0).
-    expect(await textOf('tuple-label-0')).toBe('Sample B');
+    // ⚑⚑ THE ROW STAYS AND EMPTIES, which is the difference the move makes: a
+    // row is a CATEGORY the figure has, not a box we happen to have captured.
+    // Its neighbour does not shift up to fill the gap and quietly take its name.
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(4);
 
     // One undo brings the whole box back.
     await page.getByTestId('undo').click();
     await page.waitForTimeout(50);
-    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(2);
     expect(await textOf('box-plot-glyph-count')).toBe('2');
   });
 });
@@ -6917,22 +6960,29 @@ describe('Workspace: Histogram graph type (checkpoint 66)', () => {
     // radial scale with a measured angle, versus N independent axes and no angle at
     // all -- is a question the user should be asked next to the alternative, not
     // left to discover after calibrating the wrong one.
-    // ⚑⚑ v2.5 REGROUPED THE RECTANGLES, and this expectation is where the
-    // regrouping is recorded. Histogram, Bar and Span chart now sit together
-    // because they are the three types captured corner to corner, with XY, Line
-    // and Box Plot above them. David: *"Then they are more easily different."*
-    // The point is unchanged - a picker that puts near-neighbours side by side
-    // asks the user the question that actually separates them - but the
-    // near-neighbours are now grouped by the GESTURE rather than by the axes
-    // class underneath, which is the half a first-time user can see.
-    // "Heatmap" (v2.2) closes the rectangular group: it shares the FRAME with
-    // everything above it -- two ordinary axes at right angles -- and shares the
-    // look of none of them, so it goes last among the rectangles rather than
-    // beside a chart it resembles. ⚑ This assertion is why the list is a
-    // decision rather than an accident: adding a type without deciding where it
-    // belongs fails here, which is what happened when this one was first
-    // dropped in beside Box Plot with a comment claiming it sat with XY.
-    expect(labels.map((l) => l.trim())).toEqual(['XY', 'Line', 'Box Plot', 'Histogram', 'Bar', 'Span chart', 'Heatmap', 'Polar', 'Spider / Radar', 'Pie / Donut', 'Ternary', 'Map', 'Circular Chart Recorder']);
+    // ⚑⚑ v2.5 REGROUPED THE PICKER, and the rule changed with it. David:
+    // *"Just because pies are round does not make them more aligned with polar
+    // or others. The data represented in bars are sometimes shown as a pie and
+    // vice versa. Histograms, the odd one out, even though it looks like a bar,
+    // is actually more aligned with a box or candlestick, as it describes an
+    // absolute distribution, a statistical measurement."* So the grouping is by
+    // WHAT THE DATA IS, not by what the chart looks like.
+    //
+    // ⚠️ THE EXPECTED ORDER IS NO LONGER WRITTEN OUT HERE, and that is the fix
+    // for a real hazard rather than a tidy-up: a hand-copied list beside
+    // `ALL_AXES_TYPE_CONFIGS` is a SECOND REGISTRY of the same fact, free to
+    // agree with itself while disagreeing with the app. What this test is
+    // uniquely able to prove is that THE PICKER RENDERS WHAT THE REGISTRY SAYS -
+    // the DOM half, which no unit test can reach.
+    //
+    // ⚑ The agreed LAYOUT - which type sits in which row - is pinned by
+    // `engine/__tests__/pickerLayout.test.ts`, in rows, where a diff reads the
+    // way the screen does. One fact, two properties, neither duplicated.
+    expect(labels.map((l) => l.trim())).toEqual(ALL_AXES_TYPE_CONFIGS.map((c) => c.label));
+    // ⚑ Not vacuous: the picker really did render every card, including the two
+    // that arrived in v2.5.
+    expect(labels).toHaveLength(ALL_AXES_TYPE_CONFIGS.length);
+    expect(labels.map((l) => l.trim())).toContain('Candlestick');
   });
 
   it('captures a bin from a bar\'s two top corners -- both edges and the height', async () => {
