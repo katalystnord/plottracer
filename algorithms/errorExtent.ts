@@ -41,8 +41,11 @@ import { ERROR_ROLES, ROLE_FIELD, type ErrorBarPoint, type ErrorRole } from './e
  * case. Adding a fifth role to `ERROR_ROLES` extends this automatically.
  *
  * ⚑ Slot names are Title Case because they become COLUMN HEADERS in the data
- * table and the export, alongside `OPPOSITE_CORNER_SLOTS` ('Bar start', 'Bar end')
- * and `BOX_PLOT_SLOTS`.
+ * table and the export, alongside `OPPOSITE_CORNER_SLOTS` and `BOX_PLOT_SLOTS`.
+ * ⚑ v2.5 renamed the former to `('Corner', 'Opposite corner')` - the capture
+ * names the GESTURE now, not the record, and stays direction-neutral because a
+ * bar can be negative. The mapping below is unaffected: it works off POSITION
+ * in the slot list, not the words.
  */
 export const ERROR_EXTENT_SLOTS: readonly string[] = [
   'Value',
@@ -54,13 +57,14 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
  *
  * Error bars are not an XY feature - `captureErrorCap`'s own header says the
  * gesture *"works on all 7 graph types, including error on a bar plot"*. A bar
- * series ALREADY has tuples (`['Bar start', 'Bar end']`), so a fixed role→slot
- * table of 1..4 would have written an upper cap straight over 'Bar end' and
- * reported the bar's far corner as its error. Appending instead means the
- * offset is derivable from the slot list itself:
+ * series ALREADY has tuples (`['Corner', 'Opposite corner']` since v2.5, `['Bar
+ * start', 'Bar end']` before it), so a fixed role→slot table of 1..4 would have
+ * written an upper cap straight over the second slot and reported the bar's far
+ * corner as its error. Appending instead means the offset is derivable from the
+ * slot list itself:
  *
  *     XY   ['Value', 'Upper', 'Lower', 'Left', 'Right']           roles at 1..4
- *     Bar  ['Bar start', 'Bar end', 'Upper', 'Lower', … ]         roles at 2..5
+ *     Bar  ['Corner', 'Opposite corner', 'Upper', 'Lower', … ]   roles at 2..5
  *
  * ⚑ Derivable, so nothing new has to be stored or serialized - the alternative
  * was a per-dataset "where do my error slots begin" field, which is state that

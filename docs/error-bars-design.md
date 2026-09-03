@@ -49,7 +49,11 @@ type rather than only the ones with an invertible `dataToPixel`.
 A cap is a member of the datum's own tuple, appended after the type's own slots:
 
     XY   ['Value', 'Upper', 'Lower', 'Left', 'Right']       roles at 1..4
-    Bar  ['Bar start', 'Bar end', 'Upper', 'Lower', ... ]   roles at 2..5
+    Bar  ['Corner', 'Opposite corner', 'Upper', 'Lower', ... ]   roles at 2..5
+
+*(Bar's own two slots were renamed `Corner`/`Opposite corner` in v2.5, from
+`Bar start`/`Bar end` - the capture names the gesture, not the record. The
+offset below is unaffected: it works off position in the slot list.)*
 
 **The offset is derivable from the slot list itself**, so nothing extra is stored
 and nothing can disagree with the thing it describes. The test is the NAMES, not

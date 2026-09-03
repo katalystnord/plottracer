@@ -2620,6 +2620,9 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // settings panel showed "Bars share a baseline" / "Baseline value"
   // controls that DID NOTHING -- buildAxes below never reads them, and Box
   // Plot has no derivedTupleValue that would use them anyway (it shows the
+  // ⚠️ HISTORICAL: v2.5 removed both fields from Bar's own `options` array too
+  // (the origin is measured off the category axis now, never typed) -- but the
+  // WARNING stands unchanged for whatever Bar's array carries next.
   // five raw letter values, not a computed extent). A control that changes
   // nothing when changed is exactly the defect class this project treats as
   // a real bug, not cosmetic. Found auditing this file for Phase 6, not by
@@ -2787,10 +2790,13 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   /**
    * ⚑⚑ NO BASELINE OPTIONS, AND THAT IS THE POINT OF THE TYPE. David: *"All
    * three chart types reject a fixed zero baseline. Instead, they focus on
-   * intervals."* Bar's array carries `hasBaseline`/`baselineValue`; borrowing it
-   * by reference is exactly the bug Box Plot's own comment records - controls
-   * that appear and change nothing. A span is measured end to end, so a baseline
-   * has nothing to contribute and must not be offered.
+   * intervals."* Bar's array used to carry `hasBaseline`/`baselineValue`;
+   * borrowing it by reference was exactly the bug Box Plot's own comment
+   * records - controls that appear and change nothing. A span is measured end
+   * to end, so a baseline has nothing to contribute and must not be offered.
+   * ⚠️ Bar's own array no longer carries either field (v2.5: the origin is
+   * measured off the category axis), but the WARNING against sharing by
+   * reference still applies to whatever it carries next.
    */
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
