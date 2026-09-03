@@ -94,15 +94,17 @@ describe('the config table - cross-cutting invariants', () => {
     // tuple-table branch and read values off the nearest ray.
     //
     // ⚠️ IT USED TO SAY "EXACTLY ONE", AND v2.5 SHOWED THAT WAS THE WRONG RULE.
-    // Bar and Span are one capture model with one record, split by what the
-    // NEAR END means; they mark the same category axis in the same walk, and
-    // `getBarCategoryTable` has served both from the day Span existed. Sharing
-    // the table is the MIRROR rule doing its job - a span's rows are categories,
-    // and a reader who has met one table has met the other. What must not
-    // happen is a type arriving in that branch unnoticed, so the sharers are
-    // named and anything else still fails.
+    // Bar, Span and Box Plot mark the same category axis in the same walk, so
+    // their readings file under categories the same way. Sharing the table is
+    // the MIRROR rule doing its job - a reader who has met one has met the
+    // others. What must not happen is a type arriving in that branch unnoticed,
+    // so the sharers are named and anything else still fails.
+    //
+    // ⚑ BOX PLOT JOINED IN v2.5, and its absence was the last structural
+    // inconsistency in the family: it fell to the generic tuple table and listed
+    // its boxes in CLICK ORDER while its neighbours listed theirs by category.
     const EXPECTED: Record<string, string[]> = {
-      bar: ['bar', 'span'],
+      bar: ['bar', 'boxplot', 'span'],
       bins: ['histogram'],
       heatmap: ['heatmap'],
       spider: ['spider'],
@@ -122,18 +124,29 @@ describe('the config table - cross-cutting invariants', () => {
     expect([...owners.keys()].sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
-  it('⚑⚑ a type captured as OPPOSITE CORNERS is served by the shared category table', () => {
+  it('⚑⚑ a type that FILES UNDER CATEGORIES is served by the shared category table', () => {
     // ⚑ The two declarations have to agree, and until v2.5 nothing said so: the
     // session decided which types get that table by NAMING them
     // (`config.id === 'bar' || config.id === 'span'`), so a third type could
     // declare the gesture and silently not get the panel - or get the panel with
     // no gesture. `capturesAsBox` is the capability the session asks now, and
     // this is the invariant that keeps the pair honest when Candlestick arrives.
-    const corners = ALL.filter((c) => c.capturesAsBox).map((c) => c.id);
+    // ⚠️ THE PAIRING WAS `capturesAsBox`, AND THAT WAS THE CAPTURE GESTURE
+    // ANSWERING A QUESTION ABOUT THE PANEL. A box plot is five separate clicks,
+    // not a dragged box, and it files its readings under categories exactly as
+    // its neighbours do - so keying the table to the gesture kept it out for a
+    // whole release. The question the panel asks is "does this type file under
+    // categories", which is `usesCategoryAxis` in the session: a bar-kind axes
+    // with slots of its own. Categorical Line is bar-kind and never slotted, so
+    // it is excluded by the same rule rather than by name.
+    const filesUnderCategories = ALL.filter(
+      (c) => c.axesKind === 'bar' && (c.defaultSlots?.length ?? 0) > 0
+    ).map((c) => c.id);
     const barPanel = ALL.filter((c) => c.outputPanel === 'bar').map((c) => c.id);
-    expect(corners.sort()).toEqual(barPanel.sort());
-    // ⚑ Not vacuous: there are two of them today.
-    expect(corners).toHaveLength(2);
+    expect(filesUnderCategories.sort()).toEqual(barPanel.sort());
+    // ⚑ Not vacuous: there are three of them today, and a Candlestick's four
+    // named values will make four without this line changing.
+    expect(barPanel).toHaveLength(3);
   });
 
   it('⚑⚑ ...and it is the type that STANDS on its origin which offers a baseline', () => {

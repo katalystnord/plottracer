@@ -49,6 +49,17 @@ import type { CalibratedAxes, DataPointView } from './axesTypeConfigs.js';
 /** The part of a type's config these questions need - narrow on purpose, so a
  * caller cannot reach past it into unrelated declarations. */
 export interface ValueColumnConfig<A extends CalibratedAxes> {
+  /**
+   * The slots this type captures into when nothing has reshaped it.
+   *
+   * ⚑⚑ IT IS HERE TO CATCH A RESHAPED DATASET (v2.5). A type's `intervalSlots`
+   * and `derivedTupleValue` describe ITS OWN capture shape, and a session can be
+   * reshaped out of that shape at runtime - `applyBoxPlotGroups` turns a Bar's
+   * two corners into a box plot's five letter values. Answering from the config
+   * then reports one `Value` derived from five slots it was never written for.
+   * ⚑ "Guards belong in the model, and the model has more than one entrance."
+   */
+  defaultSlots?: readonly string[];
   /** This type's record IS an interval, and these are its ends' names. */
   intervalSlots?: readonly [string, string];
   /** This type reads ONE number per datum, under this heading. */
@@ -78,6 +89,9 @@ export function valueColumnNames<A extends CalibratedAxes>(
    * contribution - and a type that does not care simply ignores it. */
   axes?: A
 ): readonly string[] {
+  // 0. a RESHAPED dataset answers from its SLOTS, whatever the type says: the
+  //    type's own shape is no longer what is on the record.
+  if (isReshaped(config, slotNames)) return slotNames;
   // 1. an INTERVAL record: its two ends are its values.
   if (config.intervalSlots) return config.intervalSlots;
   if (config.derivedTupleValue) {
@@ -102,8 +116,21 @@ export function valueColumnNames<A extends CalibratedAxes>(
 export function valueCells<A extends CalibratedAxes>(
   config: ValueColumnConfig<A>,
   points: (DataPointView | null)[],
-  axes: A
+  axes: A,
+  /**
+   * The dataset's OWN slot names - what `valueColumnNames` was asked, so the two
+   * cannot answer from different premises.
+   *
+   * ⚠️ It is not `points.length`. A series carrying error has cap points too, so
+   * counting the points read a bar with error bars as a RESHAPED dataset and
+   * reported its first corner where its measured value belongs - measured, 0
+   * instead of 5. Optional so an uninterested caller reads unchanged.
+   */
+  slotNames?: readonly string[]
 ): (number | null)[] {
+  if (slotNames && isReshaped(config, slotNames)) {
+    return points.map((p) => p?.data?.[0] ?? null);
+  }
   if (config.intervalSlots) {
     const interval = config.derivedTupleValue?.interval?.(points, axes) ?? null;
     return [interval?.min ?? null, interval?.max ?? null];
@@ -114,4 +141,20 @@ export function valueCells<A extends CalibratedAxes>(
     return [derive.compute(points, axes, { apex: null }) ?? null];
   }
   return points.map((p) => p?.data?.[0] ?? null);
+}
+
+/**
+ * Has this dataset been reshaped away from the type's own capture shape?
+ *
+ * ⚑ A COUNT, not a name comparison: the reshape that exists today
+ * (`applyBoxPlotGroups`) replaces two slots with five, and a future one that
+ * merely RENAMED the same number of slots would still be the type's own record.
+ * ⚑ Unknowable without `defaultSlots`, so a config that does not declare them is
+ * taken at its word - which is every type that cannot be reshaped.
+ */
+function isReshaped<A extends CalibratedAxes>(
+  config: ValueColumnConfig<A>,
+  slotNames: readonly string[]
+): boolean {
+  return config.defaultSlots !== undefined && slotNames.length !== config.defaultSlots.length;
 }

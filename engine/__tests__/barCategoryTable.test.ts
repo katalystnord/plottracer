@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { calibratedHealthy } from './fixtures/anyType.js';
+import { BOX_PLOT_AXES_CONFIG } from '../axesTypeConfigs.js';
 
 /**
  * getBarCategoryTable / renameCategory (v2.0) -- the shared Bar table's own
@@ -36,11 +38,40 @@ describe('getBarCategoryTable: gating', () => {
     expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [], derivedColumnIndex: null });
   });
 
-  it('is empty for a 5-slot Box Plot session -- no "opposite corners" a bbox could mean there either', () => {
+  it('⚑⚑ SERVES a 5-slot Box Plot too - it marks a category axis in the same walk', () => {
+    // ⚠️ THIS TEST USED TO PIN THE OPPOSITE, and pinning it is how it survived a
+    // release: the table refused a box plot, which then fell to the generic
+    // tuple table and listed its boxes in CLICK ORDER while the rest of the
+    // family filed theirs under categories. The gate asked "is this captured as
+    // opposite corners" when the question it meant was "does this type file its
+    // readings under categories".
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(session);
+    calibratedBar(session, 2);
     session.applyBoxPlotGroups();
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [], derivedColumnIndex: null });
+    const table = session.getBarCategoryTable();
+    // ⚑ Reached through the LEGACY door - a Bar session reshaped by
+    // `applyBoxPlotGroups` - which is the entrance most likely to be forgotten.
+    // Five named values, in the order the record answers them - no bespoke
+    // declaration, just the type's own slots (`valueColumnNames`' third case).
+    expect(table.valueColumns).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    // A box plot derives nothing: every one of the five was measured.
+    expect(table.derivedColumnIndex).toBeNull();
+    expect(table.categoryNames.length).toBeGreaterThan(0);
+  });
+});
+
+describe('getBarCategoryTable: the Box Plot, first-class', () => {
+  it('files its five letter values under the categories its own walk marked', () => {
+    // ⚑ The other Box Plot test reaches the 5-slot shape through the LEGACY door
+    // (a Bar session plus `applyBoxPlotGroups`). This is the type's own config,
+    // which is the door a user actually comes through - "the model has more than
+    // one entrance", so both are driven.
+    const session = calibratedHealthy('boxplot', BOX_PLOT_AXES_CONFIG);
+    const table = session.getBarCategoryTable();
+    expect(table.valueColumns).toEqual(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    // ⚑ Nothing is DERIVED: a box plot's five values are five measurements, so
+    // no cell carries the `[ ]` mark that means "not read off the pixels".
+    expect(table.derivedColumnIndex).toBeNull();
   });
 });
 

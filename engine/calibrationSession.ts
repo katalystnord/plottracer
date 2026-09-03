@@ -4975,7 +4975,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
         positionSpan: this.tuplePositionSpan(dataset, tuple),
         // ⚑ The same answer the table shows - one module, asked twice, never
         // re-derived. Empty before calibration, when nothing can be read.
-        cells: this.axes ? valueCells(this.config, points, this.axes) : [],
+        cells: this.axes
+          ? valueCells(this.config, points, this.axes, this.ownSlots(this.activeEntry!.dataset))
+          : [],
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
         // tuple's own apex, and the whole the values are read against.
@@ -5181,7 +5183,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
      * built to remove, so the omission is handed back to be surfaced. */
     crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
-    if (!this.axes || !this.capturedAsCorners(this.activeEntry.dataset)) {
+    // ⚑⚑ THE GATE IS "DOES THIS TYPE FILE ITS READINGS UNDER CATEGORIES", not
+    // "is it captured as a box" (v2.5). It asked `capturedAsCorners`, which is
+    // Bar's and Span's two-corner shape - so a BOX PLOT, which marks a category
+    // axis in the very same walk, fell through to the generic tuple table and
+    // listed its boxes in CLICK ORDER. Same family, same walk, two different
+    // panels, and the user had to learn the second one for no reason.
+    //
+    // ⚑ `usesCategoryAxis` is the question that was already being asked
+    // everywhere else about this family (`getTupleLabel`, `setTupleLabel`), so
+    // this is the reuse rule rather than a widened special case - and a
+    // Candlestick's four values will arrive here without touching this line.
+    if (!this.axes || !this.usesCategoryAxis(this.activeEntry.dataset)) {
       return { categoryNames: [], categoryRawNames: [], valueColumns: [], derivedColumnIndex: null, columns: [], crowded: [], advisory: [] };
     }
     const axes = this.axes;
@@ -5192,7 +5205,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ Asked ONCE for the whole table: the names are a fact about the TYPE, not
     // about a series or a row, so a per-column answer would be a fourth place
     // for them to disagree.
-    const columnNames = valueColumnNames(this.config, this.ownSlots(this.activeEntry.dataset), axes);
+    const ownSlotsForCells = this.ownSlots(this.activeEntry.dataset);
+    const columnNames = valueColumnNames(this.config, ownSlotsForCells, axes);
 
     const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
     const advisory: {
@@ -5244,7 +5258,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
           const p = dataset.getPixel(pixelIndex);
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
-        cells.push(valueCells(this.config, points, axes));
+        cells.push(valueCells(this.config, points, axes, ownSlotsForCells));
         // ⚑ Asked of the POINT each column names, through the same map the
         // editor moves - so the mark and the edit cannot disagree about which
         // corner a cell is.

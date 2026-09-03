@@ -2628,6 +2628,18 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
    */
   errorBarsRefusal:
     'A box plot already reports its own spread: it has five measured values (Min, Q1, Median, Q3, Max), so there is no single value for an error bar to be measured from.',
+  /**
+   * ⚑⚑ THE SAME TABLE AS BAR AND SPAN (v2.5). A box plot marks a category axis
+   * in the same walk they do, and until now its readings still fell to the
+   * generic tuple table and listed boxes in CLICK ORDER - the one structural
+   * inconsistency left in the family.
+   *
+   * ⚑ Nothing had to be built for it: `valueColumnNames`' third case already
+   * says a type's own SLOTS are its values, which for a box plot is its five.
+   * The table was gated on Bar's two-corner capture shape rather than on the
+   * question it was really asking.
+   */
+  outputPanel: 'bar',
   // Shares Bar's fixedSteps (below), so the same two category clicks.
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot a heatmap's column and row counts use, for the same reason.
