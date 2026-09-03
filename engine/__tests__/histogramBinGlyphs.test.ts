@@ -6,7 +6,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
- * `getHistogramBinGlyphs()` - what the canvas draws so a captured bin reads as
+ * `getTupleGlyphs()` - what the canvas draws so a captured bin reads as
  * an INTERVAL rather than two loose dots.
  *
  * ⚑ WHY THIS FILE EXISTS. `computeBinGlyph` (the geometry) has had its own
@@ -40,7 +40,7 @@ function histogramWithBins(corners: Array<[number, number]>): CalibrationSession
   return session;
 }
 
-describe('getHistogramBinGlyphs', () => {
+describe('getTupleGlyphs', () => {
   it('draws one glyph per COMPLETE bin', () => {
     const session = histogramWithBins([
       [150, 200],
@@ -48,19 +48,19 @@ describe('getHistogramBinGlyphs', () => {
       [250, 240],
       [350, 240],
     ]);
-    expect(session.getHistogramBinGlyphs()).toHaveLength(2);
+    expect(session.getTupleGlyphs()).toHaveLength(2);
   });
 
   it('draws nothing at all before any bin is captured', () => {
     const session = histogramWithBins([]);
-    expect(session.getHistogramBinGlyphs()).toEqual([]);
+    expect(session.getTupleGlyphs()).toEqual([]);
   });
 
   it('⚑ draws NOTHING for a half-captured bin - the rule getBoxPlotGlyphs uses', () => {
     // One corner down is not an interval yet: which edge it is is unknown until
     // the second corner decides the ordering, so there is no honest span to draw.
     const session = histogramWithBins([[150, 200]]);
-    expect(session.getHistogramBinGlyphs()).toEqual([]);
+    expect(session.getTupleGlyphs()).toEqual([]);
   });
 
   it('skips an incomplete bin without dropping the complete one after it', () => {
@@ -70,7 +70,7 @@ describe('getHistogramBinGlyphs', () => {
       [250, 200], // complete
       [300, 260], // left alone, half-captured
     ]);
-    expect(session.getHistogramBinGlyphs()).toHaveLength(1);
+    expect(session.getTupleGlyphs()).toHaveLength(1);
   });
 
   it('builds each glyph from BOTH captured corners, in capture order', () => {
@@ -78,18 +78,24 @@ describe('getHistogramBinGlyphs', () => {
       [150, 200],
       [250, 210],
     ]);
-    const [glyph] = session.getHistogramBinGlyphs();
+    const [glyph] = session.getTupleGlyphs();
     // Delegates to the geometry rather than re-deriving it - same call, same
     // pixels, so the canvas and the export cannot disagree about a bin's span.
     expect(glyph).toEqual(computeBinGlyph({ x: 150, y: 200 }, { x: 250, y: 210 }));
   });
 
-  it('⚑ refuses on every OTHER graph type - including one holding COMPLETE tuples', () => {
+  it('⚑⚑ no type wears another type\u2019s mark - a Bar gets ITS OWN, not a bin\u2019s', () => {
     // ⚑ The interesting case is Bar, not XY. XY has no slots, so its tuple rows
-    // are empty and it would draw nothing even WITHOUT the graph-type guard -
-    // testing only that proves nothing about the guard. Bar is tuple-shaped and
-    // its captured bar IS a complete two-corner tuple, so without the guard this
-    // renders bin glyphs over every bar on the chart.
+    // are empty and it would draw nothing even WITHOUT a guard - testing only
+    // that proves nothing. Bar is tuple-shaped and its captured bar IS a
+    // complete two-corner tuple, so a careless accessor renders bin staples over
+    // every bar on the chart.
+    //
+    // ⚠️ UNTIL v2.5 THE ANSWER HERE WAS "nothing at all", and that was the
+    // defect hiding behind the guard: a Bar had no mark of its own, so the type
+    // whose datum most obviously IS a rectangle rendered as two numbered dots.
+    // It now draws a staple standing ON the declared origin - which is NOT the
+    // bin's staple, and that is what this asserts.
     const bar = new CalibrationSession(BAR_AXES_CONFIG) as unknown as CalibrationSession<BarAxes>;
     bar.handleCalibrationClick(300, 500);
     bar.confirmCalibrationValues(['0']);
@@ -100,16 +106,20 @@ describe('getHistogramBinGlyphs', () => {
     bar.addDataPoint(200, 400);
     bar.addDataPoint(260, 500);
     expect(bar.getTupleRows()[0]!.points.every((p) => p !== null)).toBe(true);
-    expect(bar.getHistogramBinGlyphs()).toEqual([]);
+    const [barGlyph] = bar.getTupleGlyphs();
+    expect(barGlyph).not.toEqual(computeBinGlyph({ x: 200, y: 400 }, { x: 260, y: 500 }));
+    // ⚑ Both legs reach the origin's pixel (value 0 at py 500), which is the
+    // whole point of the mark: the measurement made visible.
+    expect(barGlyph!.filter((seg) => seg.to.y === 500)).toHaveLength(2);
 
     const xy = new CalibrationSession(XY_AXES_CONFIG);
     calibrateXY(xy as unknown as CalibrationSession<XYAxes>);
     xy.addDataPoint(150, 200);
-    expect(xy.getHistogramBinGlyphs()).toEqual([]);
+    expect(xy.getTupleGlyphs()).toEqual([]);
   });
 
   it('returns nothing before the axes exist', () => {
     const session = new CalibrationSession(HISTOGRAM_AXES_CONFIG);
-    expect(session.getHistogramBinGlyphs()).toEqual([]);
+    expect(session.getTupleGlyphs()).toEqual([]);
   });
 });

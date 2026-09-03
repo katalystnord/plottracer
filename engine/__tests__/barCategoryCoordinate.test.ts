@@ -169,8 +169,14 @@ describe('a bar carries the category it was measured in', () => {
       'category',
       'Position min',
       'Position max',
-      'Min',
-      'Max',
+      // ⚠️ NO `Min`/`Max` SINCE v2.5. A bar is measured FROM the figure's common
+      // origin, so its near corner's reading is not a value on this axis: the
+      // origin is written once in the file's `Figure` block, the far corner is
+      // `Value`, and BOTH corners' category coordinates are the position span
+      // above. Publishing `Min`/`Max` beside those stated one measurement twice,
+      // under names implying an interval a Bar does not have - and a per-datum
+      // base is how every plotting library encodes a FLOATING bar. See
+      // `AxesTypeConfig.measuredFromFigureOrigin`.
       'Value',
     ]);
   });

@@ -228,12 +228,12 @@ interface ImageCanvasProps {
   /** Histogram bin glyphs (checkpoint 66), image-pixel space -- see
    * engine/histogramGlyph.ts. Same decorative, listening={false} treatment as
    * boxPlotGlyphs: they mark what was captured, they aren't hit targets. */
-  binGlyphs?: GlyphSegment[][];
+  tupleGlyphs?: GlyphSegment[][];
   /**
    * The adjustable AIDS - category ticks, heatmap grid boundaries - each one
    * mark and its grip as a SINGLE object that knows which handle it is.
    *
-   * ⚑⚑ ITS OWN PROP, not more entries in `binGlyphs`. They were merged into that
+   * ⚑⚑ ITS OWN PROP, not more entries in `tupleGlyphs`. They were merged into that
    * list, which meant they were painted in the bin layer's BLACK and with
    * `listening={false}` - so the violet handle beside them was a different
    * colour and the only grabbable thing. Two pieces for one mark. See `AidGlyph`.
@@ -618,7 +618,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, binGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2228,7 +2228,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   })
                 )}
-                {binGlyphs?.map((segments, glyphIndex) =>
+                {tupleGlyphs?.map((segments, glyphIndex) =>
                   segments.map((segment, segmentIndex) => {
                     const from = imageToScreen(view, segment.from.x, segment.from.y);
                     const to = imageToScreen(view, segment.to.x, segment.to.y);

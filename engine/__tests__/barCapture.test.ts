@@ -48,9 +48,13 @@ describe('a baseline-anchored bar (every bar: the origin is the figure\u2019s, v
     // ⚑ v2.5: there is no longer a tick box asking WHETHER the bars share an
     // origin, only a field asking where it is. A figure whose bars do not share
     // one is a Span chart.
+    // ⚑⚑ v2.5: NOTHING is asked about the origin. The walk's third click -
+    // `Cat 1` - is a point on the line the bars stand on, and the value axis
+    // says what value that line has, so the origin is measured. David: *"baseline
+    // value == x axis position."*
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getOptions()).toMatchObject({ baselineValue: '0' });
     expect(session.getOptions()).not.toHaveProperty('hasBaseline');
+    expect(session.getOptions()).not.toHaveProperty('baselineValue');
   });
 
   it('reads a POSITIVE bar above the baseline', () => {
@@ -90,25 +94,32 @@ describe('a baseline-anchored bar (every bar: the origin is the figure\u2019s, v
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(-5, 9);
   });
 
-  it('honours a non-zero declared baseline', () => {
+  it('⚑⚑ honours a non-zero origin - a truncated axis, MEASURED off the axis line', () => {
+    // The figure this describes is a bar chart whose x-axis is drawn at 2
+    // rather than at 0. It used to be expressed by typing `baselineValue: 2`;
+    // since v2.5 the fixture draws it instead, by clicking the category axis
+    // where that figure has it. py 420 IS the value 2 on this scale.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    session.setOption('baselineValue', '2');
-    calibratedBar(session);
-    session.addDataPoint(150, 420); // value 2 -- the declared baseline
-    session.addDataPoint(150, 300); // value 5
-    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // 5 - 2
-  });
-
-  it('checkValues refuses a non-numeric declared baseline, on the interactive door', () => {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    session.setOption('baselineValue', 'abc');
     session.handleCalibrationClick(300, 500);
     session.confirmCalibrationValues(['0']);
     session.handleCalibrationClick(300, 100);
     session.confirmCalibrationValues(['10']);
-    walkCategoryAxis(session);
-    expect(session.runCalibration()).toBe(false);
-    expect(session.getCalibrationError()).toMatch(/baseline/i);
+    walkCategoryAxis(session, { from: { x: 100, y: 420 }, to: { x: 500, y: 420 } });
+    expect(session.runCalibration()).toBe(true);
+    session.addDataPoint(150, 420); // value 2 -- ON the axis the bars stand on
+    session.addDataPoint(150, 300); // value 5
+    expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9); // 5 - 2
+  });
+
+  it('⚑ there is no typed baseline left to refuse - it cannot be mistyped', () => {
+    // ⚠️ THIS ASSERTED A REFUSAL for a non-numeric `Baseline value`. The field
+    // is gone: the walk already clicks the line the bars stand on, so asking
+    // for its value was asking the user to type something measured two steps
+    // earlier. David: *"For fuck sake!"* - and he was right.
+    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+    calibratedBar(session);
+    expect(session.getCalibrationError()).toBeNull();
+    expect(session.getOptions()).not.toHaveProperty('baselineValue');
   });
 });
 
@@ -235,8 +246,9 @@ describe('a stacked-bar segment (declared on the AXES since v2.3)', () => {
     // stacked!"* - beside the two questions of the same kind already there.
     const keys = BAR_AXES_CONFIG.options?.map((o) => o.key) ?? [];
     expect(keys).toContain('isStacked');
-    expect(keys).toContain('baselineValue');
     expect(keys).toContain('isRotated');
+    // ⚑ And NOT the origin, which is measured off the category axis (v2.5).
+    expect(keys).not.toContain('baselineValue');
   });
 
   it('defaults to not stacked, which is the ordinary bar chart', () => {

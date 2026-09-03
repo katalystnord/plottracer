@@ -416,7 +416,7 @@ describe('the config table - the per-type defaults, pinned', () => {
     expect(optionDefault(XY_AXES_CONFIG, 'skipRotation')).toBe(false);
   });
 
-  it('Bar defaults to linear, vertical, and SHARING a baseline at zero', () => {
+  it('Bar defaults to linear and vertical, and asks NOTHING about its origin', () => {
     // v2.0: the ordinary zero-based bar chart is what the user walks past.
     expect(optionDefault(BAR_AXES_CONFIG, 'isLog')).toBe(false);
     expect(optionDefault(BAR_AXES_CONFIG, 'isRotated')).toBe(false);
@@ -426,7 +426,11 @@ describe('the config table - the per-type defaults, pinned', () => {
     // origin but WHERE it is. David: *"They all NEED (for bars) to come to the
     // same common axis."*
     expect(BAR_AXES_CONFIG.options?.map((o) => o.key)).not.toContain('hasBaseline');
-    expect(optionDefault(BAR_AXES_CONFIG, 'baselineValue')).toBe('0');
+    // ⚑⚑ ...AND NOT THE VALUE EITHER (v2.5). The walk's third click is a point
+    // ON the line the bars stand on, and the value axis says what value that
+    // line has, so the origin is measured rather than asked for. David:
+    // *"baseline value == x axis position."*
+    expect(BAR_AXES_CONFIG.options?.map((o) => o.key)).not.toContain('baselineValue');
   });
 
   it('Polar defaults to degrees, anticlockwise, linear radial', () => {

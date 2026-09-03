@@ -200,6 +200,7 @@ import { binsFromCorners, type HistogramBin } from '../algorithms/histogram.js';
 import { interpolateCurveOrdered } from '../algorithms/interpolate.js';
 import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segmentFill.js';
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
+import { computeBarGlyph } from './barGlyph.js';
 import { computeWhiskerGlyph, type WhiskerShape } from './errorBarGlyph.js';
 import { dataPointMarkerId } from './canvasOverlays.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
@@ -5055,17 +5056,44 @@ export class CalibrationSession<A extends CalibratedAxes> {
     );
   }
 
-  /** Bin glyph segments (image-pixel space) for every *complete* bin of the
-   * active series -- what the canvas draws so a captured bin reads as an
-   * interval rather than two loose dots. Incomplete bins draw nothing, the
-   * same rule getBoxPlotGlyphs uses for a half-filled tuple. */
-  getHistogramBinGlyphs(): GlyphSegment[][] {
-    if (this.config.id !== 'histogram') return [];
+  /**
+   * THE MARK THAT MAKES A CAPTURED TUPLE READ AS A SHAPE, for every complete
+   * tuple of the active series, in image-pixel space. Incomplete tuples draw
+   * nothing - the same rule `getBoxPlotGlyphs` uses for a half-filled one.
+   *
+   * ⚑⚑ ONE ACCESSOR, AND THE TYPE DECIDES THE SHAPE (v2.5). It was
+   * `getHistogramBinGlyphs`, named for the one type that had a mark - and a Bar
+   * had none at all, so the type whose datum most obviously IS a rectangle
+   * rendered as two numbered dots. A second accessor beside this one would have
+   * been the special case again: what the canvas needs is *the marks for this
+   * figure's tuples*, and which shape they take is the type's own business.
+   *
+   * ⚑ A bin draws a staple that stops short of the axis, because its foot is a
+   * guess; a bar draws one that stands ON the declared origin, because its value
+   * is measured from there. Same vocabulary, and the difference between them
+   * says something true.
+   */
+  getTupleGlyphs(): GlyphSegment[][] {
     const glyphs: GlyphSegment[][] = [];
+    // ⚑ A BAR'S MARK STANDS ON THE FIGURE'S ORIGIN, which is why it needs one
+    // number a bin's does not: the pixel the declared baseline sits at.
+    // `baselinePixelForDetect` already answers that - and already knows which
+    // way round a rotated figure is - so this asks it rather than working it out
+    // a second time.
+    const bar = this.config.id === 'bar' && !(this.axes as { isStacked?: () => boolean })?.isStacked?.()
+      ? this.baselinePixelForDetect()
+      : null;
+    const rotated = this.axes instanceof BarAxes && this.axes.isRotated();
     for (const row of this.getTupleRows()) {
       const [a, b] = row.points;
       if (!a || !b) continue;
-      glyphs.push(computeBinGlyph({ x: a.px, y: a.py }, { x: b.px, y: b.py }));
+      if (this.config.id === 'histogram') {
+        glyphs.push(computeBinGlyph({ x: a.px, y: a.py }, { x: b.px, y: b.py }));
+      } else if (bar) {
+        glyphs.push(
+          computeBarGlyph({ x: a.px, y: a.py }, { x: b.px, y: b.py }, bar.atPixel, rotated)
+        );
+      }
     }
     return glyphs;
   }

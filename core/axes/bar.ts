@@ -259,7 +259,36 @@ export class BarAxes {
     return this._isStacked;
   }
 
+  /**
+   * ⚑⚑ THE BARS' COMMON ORIGIN, MEASURED - it is the CATEGORY AXIS (v2.5).
+   *
+   * David: *"We set the calibration on the value axis (y-axis), and THEN! we
+   * also set the x-axis with a value. baseline value == x axis position."*
+   *
+   * The walk's third click - `Cat 1`, the outer edge of the first category - is
+   * a point ON the line the bars stand on, and the value axis calibrated in the
+   * first two clicks says what value that line has. So the origin is already in
+   * this calibration and always was: on the ordinary figure `pixelToData` at
+   * that pixel reads 0, and on a chart whose axis is truncated it reads the
+   * truncation. Nothing has to be typed and nothing has to be stored.
+   *
+   * ⚠️ WHAT THIS REPLACES, and asking for it was the whole mistake: a typed
+   * `Baseline value` field, walked past at its default, plus a tick box asking
+   * WHETHER the bars shared an origin at all - a declaration of something the
+   * user had already clicked twice, two steps earlier in the same walk. Tenet 9
+   * in its plainest form: if it can be measured off the pixels, it is not a
+   * setting.
+   *
+   * ⚑ The stored value survives as the fallback for a calibration with no
+   * category axis - a file written before the axis was part of the walk, and
+   * the load path that still reads `baselineValue` off such a file.
+   */
   getBaselineValue(): number {
+    const categoryStart = this.calibration?.getPoint(2);
+    if (categoryStart) {
+      const atAxis = this.pixelToData(categoryStart.px, categoryStart.py)[0];
+      if (atAxis !== undefined && Number.isFinite(atAxis)) return atAxis;
+    }
     return this._baselineValue;
   }
 

@@ -6287,7 +6287,7 @@ export function Workspace() {
     lineHeight: 1,
     padding: '6px 8px',
   };
-  const binGlyphs = useMemo(() => session.getHistogramBinGlyphs(), [session, version]);
+  const tupleGlyphs = useMemo(() => session.getTupleGlyphs(), [session, version]);
   /**
    * ⚑⚑ THE AXIS ENDS ARE NOT MARKED HERE ANY MORE (v2.3). They
    * used to be marked by this overlay - two violet dots labelled `Categories
@@ -6608,7 +6608,7 @@ export function Workspace() {
    * bin's glyph and wrong for something the user is meant to grab. They have
    * their own layer now (`allAidGlyphs`), in their own colour, with their grips
    * attached. */
-  const allBinGlyphs = useMemo(() => binGlyphs, [binGlyphs]);
+  const allTupleGlyphs = useMemo(() => tupleGlyphs, [tupleGlyphs]);
   /** ⚑ ONE AID LAYER, two contributors - a bar chart's marked category axis and
    * a heatmap's grid - because they are the same thing fed a different axis. */
   const allAidGlyphs = useMemo<AidGlyph[]>(
@@ -8690,7 +8690,7 @@ export function Workspace() {
           seriesLines={seriesLines}
           calibrationPreview={calibPreview}
           boxPlotGlyphs={boxPlotGlyphs}
-          binGlyphs={allBinGlyphs}
+          tupleGlyphs={allTupleGlyphs}
           aidGlyphs={allAidGlyphs}
           errorBarGlyphs={errorWhiskers}
           curveFitLine={curveFitOverlay}

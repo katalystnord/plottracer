@@ -70,12 +70,15 @@ describe('the bar export reports every measured column at one resolution', () =>
     const { header, row } = rowOf(barWithAwkwardNumbers() as never, 1);
     const lo = row[header.indexOf('Position min')];
     const hi = row[header.indexOf('Position max')];
-    // The precise digits depend on the figure; what must be true is that these
-    // carry no more than the readings beside them.
-    const readings = [row[header.indexOf('Min')], row[header.indexOf('Max')]];
-    const most = Math.max(...readings.map(dp));
-    expect(dp(lo)).toBeLessThanOrEqual(most);
-    expect(dp(hi)).toBeLessThanOrEqual(most);
+    // ⚠️ THE YARDSTICK CHANGED IN v2.5 AND THE DEFECT DID NOT. This compared the
+    // extent against the `Min`/`Max` columns beside it, and a Bar no longer
+    // writes those - it reports one number over the figure's origin. The
+    // regression being fenced is the extent reaching the file as
+    // `2.0999999999999996`: sixteen significant digits claimed from a pixel
+    // measurement, in a column beside numbers reported at the figure's own
+    // resolution. A rounded reading cannot be anywhere near that wide.
+    expect(dp(lo)).toBeLessThanOrEqual(6);
+    expect(dp(hi)).toBeLessThanOrEqual(6);
   });
 
   it('⚑ no column carries float noise - nothing reaches the file at 16 digits', () => {
@@ -121,16 +124,28 @@ function barWhoseValueNeedsRounding() {
 }
 
 describe('a bar value cannot disagree with the end it is measured from', () => {
-  it('⚑⚑ Value equals Max on a baseline bar - the same reading, once', () => {
+  /**
+   * ⚠️ REWRITTEN IN v2.5, AND THE INVARIANT IS UNCHANGED. These read `Value`
+   * against `Max` in the same row - the two numbers that had been one
+   * measurement reported twice at two precisions (`Max 3.273` beside
+   * `Value 3.2725`). A Bar no longer writes `Max` at all: it is measured from
+   * the figure's origin, so the far corner IS the value and there is nothing
+   * beside it to disagree with. The rule survives as the reason the column is
+   * gone, and what is still worth asserting is that the one number it does write
+   * is rounded at the figure's own resolution.
+   */
+  it('⚑⚑ the value is stated at the figure\u2019s own resolution, not the float\u2019s', () => {
     const { header, row } = rowOf(barWhoseValueNeedsRounding() as never, 0);
-    expect(row[header.indexOf('Value')]).toEqual(row[header.indexOf('Max')]);
+    const value = row[header.indexOf('Value')];
+    expect(value).not.toBe('');
+    // Half a pixel on this figure is ~0.0187 data units, so a reading claiming
+    // more than three decimals is claiming precision the pixels do not have.
+    expect(dp(value)).toBeLessThanOrEqual(3);
   });
 
-  it('⚑ and it never carries more precision than the reading it comes from', () => {
-    // ⚑ The invariant, rather than "rounding changed something": on a figure
-    // whose far end is already clean the two are simply equal, and a test that
-    // demanded a difference would be asserting the fixture, not the rule.
-    const { header, row } = rowOf(barWhoseValueNeedsRounding() as never, 0);
-    expect(dp(row[header.indexOf('Value')])).toBeLessThanOrEqual(dp(row[header.indexOf('Max')]));
+  it('⚑ and a BAR no longer carries the end it was measured from', () => {
+    const { header } = rowOf(barWhoseValueNeedsRounding() as never, 0);
+    expect(header).not.toContain('Max');
+    expect(header).not.toContain('Min');
   });
 });

@@ -210,7 +210,10 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       s.handleCalibrationClick(px, py);
       s.confirmCalibrationValues([v]);
     }
-    walkCategoryAxis(s);
+    // ⚑ The category axis at py 300, where this figure's zero is - since v2.5
+    // that line IS the origin the bars are measured from, so a fixture has to
+    // put it where the bars stand rather than take the helper's default.
+    walkCategoryAxis(s, { from: { x: 100, y: 300 }, to: { x: 500, y: 300 } });
     s.runCalibration();
     s.renameDataset(0, 'Sample');
     s.addDataPoint(200, 300); // bar start, value 0
@@ -254,8 +257,14 @@ describe('a TUPLE type carrying error - the bar chart', () => {
       // everywhere else - the axis is marked.
       'Position min',
       'Position max',
-      'Min',
-      'Max',
+      // ⚠️ NO `Min`/`Max` SINCE v2.5. A bar is measured FROM the figure's common
+      // origin, so its near corner's reading is not a value on this axis: the
+      // origin is written once in the file's `Figure` block, the far corner is
+      // `Value`, and BOTH corners' category coordinates are the position span
+      // above. Publishing `Min`/`Max` beside those stated one measurement twice,
+      // under names implying an interval a Bar does not have - and a per-datum
+      // base is how every plotting library encodes a FLOATING bar. See
+      // `AxesTypeConfig.measuredFromFigureOrigin`.
       'Value',
       'SD upper',
       'SD lower',
@@ -273,7 +282,9 @@ describe('a TUPLE type carrying error - the bar chart', () => {
     // them through the projection instead. Assert the numbers.
     const [data] = sectionsFor(barWithError() as never, 'active');
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
-    expect(at('Max')).toBeCloseTo(5, 6);
+    // ⚑ Against `Value` now, not `Max`: a bar reports one number over the
+    // figure's origin, and that is the number an SD qualifies.
+    expect(at('Value')).toBeCloseTo(5, 6);
     expect(at('SD upper')).toBeCloseTo(2, 6); // the cap at py 260
     expect(at('SD upper delta')).toBeCloseTo(2, 6); // measured from the bar's base
   });

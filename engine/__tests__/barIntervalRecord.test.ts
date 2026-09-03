@@ -83,7 +83,7 @@ const jsonFor = (s: ReturnType<typeof barSession>) =>
 
 describe('the two ends of a bar reach the file as Min and Max', () => {
   it('⚑⚑ the columns are named for the INTERVAL, not for the hand', () => {
-    const s = barSession();
+    const s = spanSession();
     s.addDataPoint(150, 500);
     s.addDataPoint(200, 300);
     const [data] = sectionsFor(s);
@@ -91,6 +91,25 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
     expect(data!.header).toContain('Max');
     expect(data!.header).not.toContain('Bar start');
     expect(data!.header).not.toContain('Bar end');
+  });
+
+  it('⚑⚑ ...and a BAR has neither, because it is measured from the figure\u2019s origin', () => {
+    // ⚠️ IT USED TO WRITE BOTH, and the pair was wrong twice over: one column
+    // held the near end's own reading - hand jitter a pixel or two either side
+    // of the axis, published as a measurement - and the other restated `Value`
+    // against it. Which was which FLIPPED with the sign of the bar, so a chart
+    // with bars above and below the axis mixed minima and maxima down one
+    // column: the v2.3 defect surviving in the file after the panel was fixed.
+    // ▶ Nothing measured is lost. The origin is written once in the `Figure`
+    // block, the far corner is `Value`, and both corners' category coordinates
+    // are the position span.
+    const s = barSession();
+    s.addDataPoint(150, 500);
+    s.addDataPoint(200, 300);
+    const [data] = sectionsFor(s);
+    expect(data!.header).toContain('Value');
+    expect(data!.header).not.toContain('Min');
+    expect(data!.header).not.toContain('Max');
   });
 
   it('⚑⚑ and the SMALLER reading is in Min, whichever corner was dragged first', () => {
@@ -125,15 +144,16 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
     expect(tuple).not.toHaveProperty('Bar start');
   });
 
-  it('⚑ a bar that sits on the baseline still carries its Value beside them', () => {
-    const s = barSession();
-    s.addDataPoint(150, 500); // value 0 - on the baseline
+  it('⚑ a SPAN that happens to touch the origin still reports both ends', () => {
+    // ⚑ The type decides, not the geometry: a span whose lower end lands on
+    // zero is still a span, and reports its two ends like every other.
+    const s = spanSession();
+    s.addDataPoint(150, 500); // value 0
     s.addDataPoint(200, 300); // value 5
     const [data] = sectionsFor(s);
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
     expect(at('Min')).toBeCloseTo(0, 6);
     expect(at('Max')).toBeCloseTo(5, 6);
-    expect(at('Value')).toBeCloseTo(5, 6);
   });
 
   it('⚑⚑ a floating bar in a BAR chart still carries its Value (v2.5)', () => {
@@ -152,10 +172,10 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
     expect(at('Value')).toBeCloseTo(5, 6);
   });
 
-  it('⚑ a half-dragged bar is not sorted into a Min it does not have', () => {
+  it('⚑ a half-dragged span is not sorted into a Min it does not have', () => {
     // One corner placed. Moving the single reading into `Min` would assert which
-    // end of a bar nobody has finished drawing it is.
-    const s = barSession();
+    // end of a span nobody has finished drawing it is.
+    const s = spanSession();
     s.addDataPoint(150, 300); // value 5, one corner only
     const [data] = sectionsFor(s);
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
@@ -221,9 +241,14 @@ describe("⚑⚑ the figure David measured it on - samples/bar-floating-temperat
     }
   });
 
-  it('⚑ and the baseline IS declared throughout - that was never the question', () => {
+  it('⚑ and an origin plays NO part in it - that was never the question', () => {
+    // ⚠️ THIS USED TO ASSERT `getBaselineValue() === 0`, back when the origin was
+    // a typed field defaulting to zero. It is measured off the category axis
+    // now, so on this figure it reads whatever the axis line is worth - and a
+    // Span does not consult it either way. What the original was really about
+    // survives: the floating record is not caused by a missing baseline.
     const s = calibratedFromTruth();
-    expect(s.getAxes()!.hasDeclaredBaseline()).toBe(true);
-    expect(s.getAxes()!.getBaselineValue()).toBe(0);
+    const rows = s.getTupleRows();
+    expect(rows.every((r) => r.derived === null)).toBe(true);
   });
 });

@@ -9,6 +9,8 @@ import {
 import { buildExportJson, buildExportSections, type ExportAssemblyInput } from '../exportAssembly.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
+
+
 /**
  * Export assembly for the two shapes that are NOT a flat series: `bins`
  * (Histogram) and `tuples` (Bar, Box Plot, Pie).
@@ -85,7 +87,7 @@ describe('a Bar export takes the TUPLE shape, not the flat one', () => {
     captureBar(s, 150, 300, 'Flax'); // 5
     captureBar(s, 250, 100, 'Hemp'); // 10
 
-    const sections = buildExportSections(inputFor(s, 'bar'));
+    const sections = (buildExportSections(inputFor(s, 'bar')));
     expect(sections).toHaveLength(1);
     const table = sections[0]!;
     // A category column, the slot columns, and the derived value.
@@ -159,7 +161,7 @@ describe('a Histogram export takes the BIN shape', () => {
   it('⚑ writes bin start / bin end / value, not a flat point list', () => {
     const s = histogramSession();
     twoBins(s);
-    const sections = buildExportSections(inputFor(s, 'histogram'));
+    const sections = (buildExportSections(inputFor(s, 'histogram')));
     expect(sections).toHaveLength(1);
     expect(sections[0]!.header.slice(0, 3)).toEqual(['bin start', 'bin end', 'value']);
     expect(sections[0]!.rows).toHaveLength(2);
@@ -220,7 +222,7 @@ describe('measurements ride alongside every shape', () => {
     const s = histogramSession();
     s.addDataPoint(150, 300);
     s.addDataPoint(250, 300);
-    const sections = buildExportSections(inputFor(s, 'histogram', { measures }));
+    const sections = (buildExportSections(inputFor(s, 'histogram', { measures })));
     expect(sections.map((x) => x.title)).toContain('Measurements');
   });
 
@@ -277,7 +279,7 @@ describe('a grouped Bar chart exports all of its series', () => {
   }
 
   it('⚑ writes one titled block per series in the section export', () => {
-    const sections = buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'all' }));
+    const sections = (buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'all' })));
     expect(sections).toHaveLength(2);
     expect(sections.map((x) => x.title)).toEqual(['Series 1', 'Series 2']);
     const values = sections.map((x) => Number(x.rows[0]![x.header.indexOf('Value')]));
@@ -296,7 +298,7 @@ describe('a grouped Bar chart exports all of its series', () => {
   it('scope "active" still exports only the active series, untitled', () => {
     // The old behaviour is still available and still the default for a
     // single-series figure - this is a widening, not a change of meaning.
-    const sections = buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'active' }));
+    const sections = (buildExportSections(inputFor(twoSeriesBar(), 'bar', { scope: 'active' })));
     expect(sections).toHaveLength(1);
     expect(sections[0]!.title).toBeUndefined();
     expect(Number(sections[0]!.rows[0]![sections[0]!.header.indexOf('Value')])).toBeCloseTo(10, 6);
@@ -305,7 +307,7 @@ describe('a grouped Bar chart exports all of its series', () => {
   it('a single-series figure is byte-identical to before - no title appears', () => {
     const s = barSession();
     captureBar(s, 150, 300, 'Flax');
-    const sections = buildExportSections(inputFor(s, 'bar', { scope: 'all' }));
+    const sections = (buildExportSections(inputFor(s, 'bar', { scope: 'all' })));
     expect(sections).toHaveLength(1);
     expect(sections[0]!.title).toBeUndefined();
   });

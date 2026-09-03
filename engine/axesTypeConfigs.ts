@@ -727,6 +727,29 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   chainTuples?: boolean;
   /**
+   * ⚑⚑ THIS TYPE'S DATUM IS MEASURED FROM A FIGURE-LEVEL ORIGIN (v2.5), so its
+   * captured slots are not two readings on the value axis.
+   *
+   * ▶ THE RULE IT EXPRESSES: publish each measured coordinate ONCE, under the
+   * name that says what it is. A bar's far corner is published as `Value`; its
+   * near corner sits on the origin, which is published once in the file's
+   * `Figure` block; and BOTH corners' category coordinates are published as the
+   * position span, which is what the near one is really for. Writing `Min` and
+   * `Max` beside that states one measurement twice, under names implying an
+   * interval the type does not have - and a per-datum base is exactly how every
+   * plotting library encodes a FLOATING bar (`bottom` as an array), so the file
+   * said "span" while the type said Bar.
+   *
+   * ⚠️ IT IS NOT "a type that derives a value drops its slots", which was the
+   * first cut and was too broad. A PIE derives a proportion AND measures two
+   * boundary angles that have no other home - dropping them would lose the
+   * closure error the record keeps on purpose. The narrower question is whether
+   * a slot's value-axis reading is FIXED BY A DECLARATION rather than measured,
+   * and only a type with an origin can answer yes.
+   */
+  measuredFromFigureOrigin?: boolean;
+
+  /**
    * A per-TUPLE derived value, shown as one column instead of one-per-slot (v1.6).
    *
    * ⚑ For most tuple types each member IS a number the reader wants -- a box plot's
@@ -2013,6 +2036,9 @@ function barCalibrationValueCheck(
 export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'bar',
   outputPanel: 'bar',
+  // ⚑ The only type with a declared origin, and therefore the only one whose
+  // captured slots are not both readings - see the declaration's own note.
+  measuredFromFigureOrigin: true,
   capturesAsBox: true,
   label: 'Bar',
   axesKind: 'bar',
@@ -2058,20 +2084,18 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
     { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
-    // ⚑⚑ THE CHECKBOX IS GONE (v2.5), AND ONLY THE VALUE IS ASKED. David: *"They
-    // all NEED (for bars) to come to the same common axis."* A bar chart whose
-    // bars do NOT share an origin is not a bar chart - it is a Span chart, and
-    // that is now a type of its own to pick. So the question is no longer
-    // WHETHER there is a common origin but WHERE it is, which is the one thing
-    // the figure cannot tell us.
+    // ⚑⚑ NOTHING IS ASKED ABOUT THE ORIGIN AT ALL (v2.5), because the walk has
+    // already clicked it. David: *"We set the calibration on the value axis
+    // (y-axis), and THEN! we also set the x-axis with a value. baseline value ==
+    // x axis position."* `Cat 1` is a point ON the line the bars stand on and
+    // the value axis says what value that line has, so the origin is measured -
+    // see `BarAxes.getBaselineValue`.
     //
-    // ⚠️ AND LEAVING IT WOULD HAVE BEEN WORSE THAN USELESS after the value
-    // stopped being gated on it: unticked, every bar would have been measured
-    // from 0 regardless, so the control would have changed nothing while
-    // appearing to. That is the defect this codebase names in three other
-    // places, and it would have been introduced by the same edit that removed
-    // its own justification.
-    { key: 'baselineValue', label: 'Baseline value', kind: 'text', default: '0' },
+    // ⚠️ TWO CONTROLS DIED HERE IN ONE MORNING, and both were asking for
+    // something already measured: a tick box "Bars share a baseline" (a bar
+    // chart whose bars do not share an origin is a Span chart, a type of its
+    // own), and then the typed `Baseline value` beside it. Tenet 9 in its
+    // plainest form: if it can be measured off the pixels, it is not a setting.
     // ⚑⚑ v2.3: THIS IS WHERE THE STACK QUESTION BELONGS, and it replaces the
     // Series card's `Stack group` free-text field entirely. David, having got
     // that field working and then asked what it did that a series name did not:
@@ -2325,26 +2349,18 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
   // refusal a click does (same reasoning as pie's checkValues above it).
   checkValues(cal, options) {
-    // ⚑ Always asked now, because a bar chart always has an origin - the refusal
-    // is no longer behind a tick box that could turn it off.
-    // ⚑ AN ABSENT KEY IS THE DECLARED DEFAULT (0), not a refusal: `options` is
-    // filled from `defaultOptionValues` in the app, so the only way to arrive
-    // here without it is a hand-made or older file, and those meant zero. A key
-    // that IS present must parse - clearing the box is a question, not a shrug.
-    const raw = options['baselineValue'];
-    if (raw !== undefined && !Number.isFinite(parseFloat(raw))) {
-      return 'The baseline value must be a number (0 for an ordinary zero-based bar chart).';
-    }
+    // ⚑ Nothing to check about the origin any more: it is read off the category
+    // axis the walk already placed, so there is no typed value to refuse.
     return barCalibrationValueCheck(cal, options);
   },
   buildAxes(cal, ctx) {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
-    // ⚑ Declared unconditionally: a Bar HAS a common origin (v2.5). The axes
-    // keeps `hasDeclaredBaseline` because the LOAD path still meets files
-    // written before the checkbox went, and the span relabel reads it.
-    axes.setBaseline(true, parseFloat(ctx.options.baselineValue ?? '0'));
+    // ⚑ A Bar HAS a common origin, and `getBaselineValue` measures it off the
+    // category axis. The stored number stays 0 as the fallback for a
+    // calibration that has no category axis - a file older than the walk.
+    axes.setBaseline(true, 0);
     axes.setStacked(optionBool(ctx.options, 'isStacked'));
     return { axes };
   },
@@ -2352,7 +2368,6 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     return {
       isLog: String(axes.isLog()),
       isRotated: String(axes.isRotated()),
-      baselineValue: String(axes.getBaselineValue()),
       isStacked: String(axes.isStacked()),
     };
   },

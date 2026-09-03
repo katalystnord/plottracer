@@ -84,10 +84,21 @@ describe('a bar reports its value whatever its near end did', () => {
     expect(s.getBarCategoryTable().columns[0]!.cells[0]![0]).toBeCloseTo(-2.5, 6);
   });
 
-  it('⚑ and the origin is the one the FIGURE declares, not zero by habit', () => {
+  it('⚑⚑ and the origin is MEASURED off the category axis, not typed or assumed', () => {
+    // David: *"We set the calibration on the value axis (y-axis), and THEN! we
+    // also set the x-axis with a value. baseline value == x axis position."*
+    // The walk's third click is a point ON the line the bars stand on, so a
+    // figure whose x-axis is drawn at 2 - a truncated bar chart - is captured by
+    // clicking it there. py 420 IS the value 2 on this scale.
     const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(s, 2, { baselineValue: '2' });
-    s.addDataPoint(150, 420); // value 2, the declared origin
+    for (const [k, v] of Object.entries({})) s.setOption(k, v as string);
+    s.handleCalibrationClick(300, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s, { count: 2, from: { x: 100, y: 420 }, to: { x: 500, y: 420 } });
+    expect(s.runCalibration()).toBe(true);
+    s.addDataPoint(150, 420); // ON the axis the bars stand on
     s.addDataPoint(150, 300); // value 5
     expect(s.getBarCategoryTable().columns[0]!.cells[0]![0]).toBeCloseTo(3, 6);
   });

@@ -226,7 +226,8 @@ export function buildExportJson(input: ExportAssemblyInput): string {
       rounder,
       session.getConfig().derivedTupleValue?.label,
       measures,
-      session.getConfig().intervalSlots
+      session.getConfig().intervalSlots,
+      session.getConfig().measuredFromFigureOrigin
     );
   }
   return buildSeriesJSON(scoped, exportFields, measures);
@@ -361,7 +362,8 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           rounder,
           derivedLabel,
           errorColumnsByTuple(session, info.index, input.precision).error,
-          session.getConfig().intervalSlots
+          session.getConfig().intervalSlots,
+          session.getConfig().measuredFromFigureOrigin
         );
         sections.push({ ...block, title: info.name });
       }
@@ -373,7 +375,8 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
           rounder,
           derivedLabel,
           errorColumnsByTuple(session, activeIndex, input.precision).error,
-          session.getConfig().intervalSlots
+          session.getConfig().intervalSlots,
+          session.getConfig().measuredFromFigureOrigin
         )
       );
     }

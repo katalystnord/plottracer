@@ -917,11 +917,16 @@ describe('a bar figure keeps what it declares about itself across a save', () =>
     expect(stackedBarProject({ isStacked: 'false' }).isStacked()).toBe(false);
   });
 
-  it('the origin travels with it, value and all', () => {
-    // ⚑ v2.5: there is no longer a tick box - a bar chart HAS a common origin -
-    // so what has to survive the save is WHERE it is.
-    const axes = stackedBarProject({ baselineValue: '-5' });
-    expect(axes.hasDeclaredBaseline()).toBe(true);
-    expect(axes.getBaselineValue()).toBe(-5);
+  it('⚑⚑ the origin needs no saving at all - it is read back off the CATEGORY AXIS', () => {
+    // ⚠️ THIS USED TO SAVE AND RESTORE A TYPED `baselineValue`. Since v2.5 the
+    // origin is the line the bars stand on: the walk's third click is a point on
+    // it, and the value axis says what it is worth. The category axis is already
+    // in the file (it has been since v2.0), so the origin round-trips for free -
+    // there is nothing extra to write and nothing to fall out of step.
+    // David: *"baseline value == x axis position."*
+    const axes = stackedBarProject({});
+    // The fixture's walk puts the axis at py 500, which this calibration maps to
+    // 0 - so a reopened project measures its bars from the same place.
+    expect(axes.getBaselineValue()).toBeCloseTo(0, 6);
   });
 });

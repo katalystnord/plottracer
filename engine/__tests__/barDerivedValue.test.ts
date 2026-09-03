@@ -81,13 +81,36 @@ describe('barCalibrationValueCheck - the refusal a LOADED file must also meet', 
     expect(BAR_AXES_CONFIG.checkValues!(barCal('abc', '10'), {}, {})).toBeNull();
   });
 
-  it("Bar's own baseline check still fires alongside the shared one", () => {
-    // BAR_AXES_CONFIG composes both; the shared check must not have displaced
-    // its own.
-    const bad = BAR_AXES_CONFIG.checkValues!(barCal('0', '10'), { hasBaseline: 'true', baselineValue: 'abc' }, {});
-    expect(bad).toMatch(/baseline/i);
+  it('⚑⚑ there is no baseline value to refuse any more - it is MEASURED (v2.5)', () => {
+    // ⚠️ THIS USED TO ASSERT A REFUSAL for a non-numeric `Baseline value`, and
+    // the field it guarded is gone. David: *"We set the calibration on the value
+    // axis (y-axis), and THEN! we also set the x-axis with a value. baseline
+    // value == x axis position."* The walk's third click - `Cat 1` - is a point
+    // ON the line the bars stand on, and the value axis says what value that
+    // line has, so the origin is read off the calibration the session already
+    // holds. Nothing is typed, so nothing can be mistyped.
+    expect(BAR_AXES_CONFIG.options?.map((o) => o.key)).not.toContain('baselineValue');
+    expect(BAR_AXES_CONFIG.checkValues!(barCal('0', '10'), {}, {})).toBeNull();
   });
 });
+
+/**
+ * A calibrated Bar session whose CATEGORY AXIS - and so whose origin - sits at
+ * `axisPy`, on the same value scale (py 500 -> 0, py 100 -> 10).
+ *
+ * ⚑ v2.5: a figure's origin is not typed, it is the line the bars stand on, so a
+ * fixture that wants a non-zero origin draws the figure that has one.
+ */
+function calibratedBarWithAxisAt(axisPy: number): CalibrationSession<BarAxes> {
+  const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+  s.handleCalibrationClick(300, 500);
+  s.confirmCalibrationValues(['0']);
+  s.handleCalibrationClick(300, 100);
+  s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s, { from: { x: 100, y: axisPy }, to: { x: 500, y: axisPy } });
+  expect(s.runCalibration()).toBe(true);
+  return s;
+}
 
 /** A calibrated Bar session: P1=0 @ y=500, P2=10 @ y=100, so 40px == 1 unit. */
 function calibratedBar(options: Record<string, string> = {}): CalibrationSession<BarAxes> {
@@ -133,18 +156,25 @@ describe("a bar's value - the sign convention", () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(300, 100); // 10 above it
     s.confirmCalibrationValues(['10']);
-    walkCategoryAxis(s);
+    // ⚑ THE CATEGORY AXIS IS THE ORIGIN (v2.5), so the fixture has to place it
+    // where this figure's bars stand - at py 300, the zero it just calibrated.
+    // It used to take the helper's default (py 500) because the origin was a
+    // typed number and where the axis ran did not affect the reading.
+    walkCategoryAxis(s, { from: { x: 100, y: 300 }, to: { x: 500, y: 300 } });
     expect(s.runCalibration()).toBe(true);
 
     expect(barValue(s, 150, 300, 200)).toBeCloseTo(5, 6); // above the baseline
     expect(barValue(s, 200, 300, 400)).toBeCloseTo(-5, 6); // below it
   });
 
-  it('measures from a NON-ZERO declared baseline', () => {
-    const s = calibratedBar();
-    s.setOption('baselineValue', '2');
-    // The fixture maps py 500 -> 0 and py 100 -> 10, so py 420 is the baseline
-    // value 2 and py 300 is 5. A bar drawn from the baseline to 5 is worth 3.
+  it('measures from a NON-ZERO origin - a truncated axis, MEASURED not typed', () => {
+    // ⚑⚑ THE ORIGIN IS WHERE THE CATEGORY AXIS WAS CLICKED (v2.5). This used to
+    // type `baselineValue: 2`; now the fixture draws the figure it means - a
+    // chart whose x-axis is at 2 rather than at 0, which is what a truncated
+    // bar chart looks like. The value axis maps py 500 -> 0 and py 100 -> 10,
+    // so py 420 IS the value 2.
+    const s = calibratedBarWithAxisAt(420);
+    // A bar from that axis up to py 300 (value 5) is worth 3.
     expect(barValue(s, 150, 420, 300)).toBeCloseTo(3, 6);
   });
 
@@ -164,10 +194,10 @@ describe("a bar's value - the sign convention", () => {
     // meaningless was mixing minima and maxima, and "the end farther from the
     // origin, minus the origin" is one rule that never flips.
     //
-    // This bar runs 0..5 on a chart whose declared origin is 2. The far end is
-    // 5, so the bar is worth 3 - the number `bar(x, height, bottom=2)` draws.
-    const s = calibratedBar();
-    s.setOption('baselineValue', '2');
+    // This bar runs 0..5 on a chart whose x-axis - and so whose origin - is at
+    // 2. The far end is 5, so the bar is worth 3: the number
+    // `bar(x, height, bottom=2)` draws.
+    const s = calibratedBarWithAxisAt(420);
     expect(barValue(s, 150, 500, 300)).toBeCloseTo(3, 6);
     expect(
       s.getTupleRows()[0]!.interval,
@@ -274,7 +304,6 @@ describe('a log-scale bar reads its value through the log axis', () => {
   it('spans a decade correctly rather than linearly', () => {
     const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     s.setOption('isLog', 'true');
-    s.setOption('baselineValue', '1');
     s.handleCalibrationClick(300, 500);
     s.confirmCalibrationValues(['1']);
     s.handleCalibrationClick(300, 100);

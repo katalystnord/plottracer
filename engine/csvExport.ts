@@ -354,9 +354,42 @@ export function tupleDataSection(
   /** The record's own names for slots that are an unordered INTERVAL - see
    * `AxesTypeConfig.intervalSlots`. Given, these REPLACE `pointGroupNames` in
    * the header and the pair is written smallest first. */
-  intervalSlots?: readonly [string, string]
+  intervalSlots?: readonly [string, string],
+  /** This type measures its datum FROM a figure-level origin, so its slots are
+   * not two readings on the value axis - see
+   * `AxesTypeConfig.measuredFromFigureOrigin`. */
+  measuredFromFigureOrigin?: boolean
 ): TableSection {
-  // Box Plot's axes is Bar (dataDim 1): each group's single value is dimension 0.
+  // ⚑⚑ THE COLUMNS ARE THE TYPE'S NAMED VALUES, and the order of these two
+  // questions IS the rule (`engine/valueColumns.ts`): a type whose record is an
+  // INTERVAL reports its two ends, and a type that DERIVES one number reports
+  // that. Never both.
+  //
+  // ⚠️ A BAR USED TO WRITE BOTH, and the pair was wrong twice over. One of the
+  // two columns held the near end's own reading - hand jitter a pixel or two
+  // either side of the origin, published as a measurement (0.05 on a chart
+  // whose bars sit on zero) - and the other restated `Value` against it. Worse,
+  // which was which FLIPPED with the sign of the bar, so a chart with bars above
+  // and below the axis had minima and maxima mixed down one column: the exact
+  // defect the v2.3 rename was written to remove, surviving in the file after
+  // the panel was fixed. And a per-bar base is what every plotting library reads
+  // as a FLOATING bar (`bottom` as an array), so the file said "span" while the
+  // type said Bar.
+  // ▶ David: *"are we really needing to report max min values? All the min
+  // values should go to a common origin axis now."* The origin is a figure fact
+  // and is written once, in the `Figure` block.
+  //
+  // ⚑ SORTED, not data-driven. `some(r => r.derived != null)` asked the ROWS what
+  // the type is, so a bar chart where nothing had been captured yet - or where
+  // every bar was still half-dragged - silently exported the slot columns
+  // instead. The type knows; the rows only know what has been done so far.
+  const reportsInterval = intervalSlots !== undefined;
+  const memberNames = reportsInterval ? intervalSlots : measuredFromFigureOrigin ? [] : pointGroupNames;
+  // ⚑ PRESENCE STAYS THE SIGNAL for the derived column itself - this file's own
+  // rule, and the one the error and position columns follow: no column where
+  // nothing was measured. What changed above is only WHICH columns a type is
+  // entitled to, which is a question about the type; whether it has anything to
+  // put in them is still a question about the rows.
   const hasDerived = derivedLabel != null && tupleRows.some((r) => r.derived != null);
   const err = error?.labels.length ? error : null;
   // ⚑⚑ F21 - THE CATEGORY COORDINATE, and the bar's extent along it. `category`
@@ -384,7 +417,7 @@ export function tupleDataSection(
       ...(hasPosition ? [positionLabel] : []),
       'category',
       ...(hasSpan ? ['Position min', 'Position max'] : []),
-      ...(intervalSlots ?? pointGroupNames),
+      ...memberNames,
       ...(hasDerived ? [derivedLabel] : []),
       ...(err ? err.labels : []),
       ...(err ? err.labels.map((l) => `${l} delta`) : []),
@@ -414,9 +447,9 @@ export function tupleDataSection(
       // is worse than dropping them. Sliced HERE rather than upstream because
       // `TupleRow` is also what the on-screen table reads, where the members are
       // wanted.
-      ...memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined).map(
-        (v) => v ?? ''
-      ),
+      ...(memberNames.length === 0
+        ? []
+        : memberValues(row, pointGroupNames.length, rounder, reportsInterval).map((v) => v ?? '')),
       // ⚠️ NOT ROUNDED HERE, DELIBERATELY - see the note on `row.derived` above,
       // and do not 'fix' this without reading it. `compute` has already rounded
       // to the TYPE's own precision, and re-rounding needs `axes.dataToPixel`,
@@ -1325,7 +1358,10 @@ export function buildTupleSeriesJSON(
   /** See `tupleDataSection`'s parameter of the same name - the same names and
    * the same ordering rule, because a reader who switches format must meet the
    * same words. */
-  intervalSlots?: readonly [string, string]
+  intervalSlots?: readonly [string, string],
+  /** See `AxesTypeConfig.measuredFromFigureOrigin` - the same rule as the table
+   * above, so a reader who switches format meets the same columns. */
+  measuredFromFigureOrigin?: boolean
 ): string {
   const doc: Record<string, unknown> = {
     series: series.map(({ name, rows: tupleRows, error }) => (
@@ -1343,8 +1379,11 @@ export function buildTupleSeriesJSON(
             ...(row.positionSpan
               ? { positionMin: row.positionSpan[0], positionMax: row.positionSpan[1] }
               : {}),
+            // ⚑ THE SAME RULE AS THE TABLE ABOVE, so a reader who switches
+            // format meets the same columns: a type reports EITHER its named
+            // ends OR one derived value, never both. See `tupleDataSection`.
             ...Object.fromEntries(
-              (intervalSlots ?? pointGroupNames).map((label, slot) => [
+              (intervalSlots ?? (measuredFromFigureOrigin ? [] : pointGroupNames)).map((label, slot) => [
                 label,
                 memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined)[slot] ??
                   null,

@@ -263,18 +263,19 @@ describe('the session says where the baseline runs, so the detector can ask', ()
     expect(s.baselinePixelForDetect()?.atPixel).toBeCloseTo(500, 6);
   });
 
-  it('⚑ and follows a NON-ZERO declared baseline', async () => {
-    // Nothing here assumes the baseline is zero: it is a declared value like any
-    // other, and the pixel follows it. 40 px per unit, so a baseline of 2 is
-    // py 420.
+  it('⚑⚑ and follows a NON-ZERO origin, because it follows the CATEGORY AXIS', async () => {
+    // ⚑ Nothing here assumes the origin is zero. Since v2.5 it is not a declared
+    // value at all: the walk's third click is a point ON the line the bars stand
+    // on, so a figure whose x-axis is drawn at 2 puts the baseline pixel at py
+    // 420 - and the detector, which asks where the bars' feet are, gets it right
+    // for free. David: *"baseline value == x axis position."*
     const { CalibrationSession, BAR_AXES_CONFIG } = await import('../calibrationSession.js');
     const s = new CalibrationSession(BAR_AXES_CONFIG);
-    s.setOption('baselineValue', '2');
     s.handleCalibrationClick(100, 500);
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
-    walkCategoryAxis(s);
+    walkCategoryAxis(s, { from: { x: 100, y: 420 }, to: { x: 500, y: 420 } });
     expect(s.runCalibration()).toBe(true);
     expect(s.baselinePixelForDetect()?.atPixel).toBeCloseTo(420, 6);
   });

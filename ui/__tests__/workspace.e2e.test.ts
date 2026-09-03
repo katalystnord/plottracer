@@ -1009,21 +1009,25 @@ describe('Workspace: Bar axes', () => {
   // measured answer was almost nothing, because its only consumer tested it for
   // non-empty and nothing anywhere read the string. *"THIS is where we should
   // ask if the bars are stacked!"*
-  it('⚑⚑ "Stacked bars" is a question about the FIGURE, beside the other two', async () => {
+  it('⚑⚑ "Stacked bars" is a question about the FIGURE, beside "Horizontal bars"', async () => {
     // The keystone rule: it must be visible without knowing it is there. It sits
-    // in the same row as `Horizontal bars` and `Bars share a baseline`, which are
-    // the same KIND of question - one fact about how this figure draws its bars,
-    // asked once while you are already answering questions about them.
+    // beside `Horizontal bars`, which is the same KIND of question - one fact
+    // about how this figure draws its bars, asked once while you are already
+    // answering questions about them.
     await resetWorkspace('bar');
     const stacked = page.getByTestId('calib-option-isStacked');
     await expect.poll(() => stacked.isVisible()).toBe(true);
     expect(await stacked.isChecked()).toBe(false); // the ordinary bar chart
     const options = await page.getByTestId('axes-options').textContent();
     expect(options).toMatch(/Stacked bars/);
-    // ⚑ v2.5: the tick box is gone and only the VALUE is asked - a bar chart
-    // whose bars do not share an origin is a Span chart, a type of its own.
-    expect(options).toMatch(/Baseline value/);
+    expect(options).toMatch(/Horizontal bars/);
+    // ⚑⚑ AND NOTHING AT ALL ABOUT THE ORIGIN (v2.5). The tick box went first - a
+    // bar chart whose bars do not share an origin is a Span chart - and then the
+    // typed value, because the walk already clicks that line: `Cat 1` is a point
+    // ON the axis the bars stand on. Two controls asking for something measured
+    // two steps earlier in the same walk.
     expect(options).not.toMatch(/Bars share a baseline/);
+    expect(options).not.toMatch(/Baseline value/);
   });
 
   it('⚑ the per-series "Stack group" field is gone from every type', async () => {
@@ -2972,15 +2976,17 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // frame had to be DERIVED from the bars themselves and one bar cannot supply
     // a pitch. The axis is calibrated in the walk now, so the bands are declared
     // and the bar's own width is measured against them.
-    expect(lines[0]).toBe('Position,category,Position min,Position max,Min,Max,Value');
+    // ⚑⚑ NO `Min`/`Max` SINCE v2.5. A bar is measured FROM the figure's common
+    // origin, so the near corner's reading is not a value on this axis: the
+    // origin is stated once in the `Figure` block below, the far corner is
+    // `Value`, and both corners' category coordinates are the position span.
+    expect(lines[0]).toBe('Position,category,Position min,Position max,Value');
     const cells = lines[1]!.split(',').slice(1);
     // v2.0, 2026-07-30: no more invented "Bar0" default (tenet 9) -- the
     // category column is still present and exported (proven by lines[0]'s
     // header above), just empty until the user actually types a name.
     expect(cells[0]).toBe('');
-    expect(Number(cells[3])).toBeCloseTo(0, 1); // Min -- the baseline end
-    expect(Number(cells[4])).toBeCloseTo(5, 1); // Max -- the far end
-    expect(Number(cells[5])).toBeCloseTo(5, 1); // the derived Value
+    expect(Number(cells[3])).toBeCloseTo(5, 1); // the derived Value
 
     fs.unlinkSync(csvPath);
   });
@@ -3255,9 +3261,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // ⚑ The heading itself survives for the one door that can still produce an
     // unmarked axis - a project saved before v2.3 - which is where its unit test
     // now reaches it (`categoryOfferPromotes.test.ts`).
-    expect(lines[0]).toBe(
-      'Position,category,Position min,Position max,Min,Max,Value'
-    );
+    // ⚑ No `Min`/`Max` since v2.5 - see the plain-Bar export case above: a bar
+    // is measured from the figure's origin, which the `Figure` block states once.
+    expect(lines[0]).toBe('Position,category,Position min,Position max,Value');
     expect(lines[1]!.split(',')[1]).toBe('Flax');
     fs.unlinkSync(csvPath);
   });
@@ -6946,7 +6952,14 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       // which REPLACED the Series card's per-series `Stack group` field. The
       // order is the card's layout, and stacking belongs with the other two
       // questions about how this figure draws its bars.
-      bar: ['isLog', 'isRotated', 'hasBaseline', 'baselineValue', 'isStacked'],
+      // ⚑⚑ v2.5 ASKS NOTHING ABOUT THE ORIGIN. The tick box went first - a bar
+      // chart whose bars do not share an origin is a Span chart, a type of its
+      // own to pick - and then the typed value, because the walk already clicks
+      // that line: `Cat 1` is a point ON the axis the bars stand on, and the
+      // value axis says what it is worth. David: *"We set the calibration on the
+      // value axis (y-axis), and THEN! we also set the x-axis with a value.
+      // baseline value == x axis position."*
+      bar: ['isLog', 'isRotated', 'isStacked'],
       // v2.0 Phase 6: pinned so Box Plot's options can never again silently
       // inherit Bar's by reference -- it did, briefly, right after Phase 2
       // added hasBaseline/baselineValue to BAR_AXES_CONFIG.options, and
@@ -10815,3 +10828,4 @@ describe('Workspace: Span chart capture (v2.5)', () => {
     expect(await page.getByTestId('bar-unreadable').count()).toBe(0);
   }, 30000);
 });
+
