@@ -43,10 +43,14 @@ describe('the record shape itself', () => {
   });
 });
 
-describe('a baseline-anchored bar (the default: hasBaseline true, value 0)', () => {
-  it('defaults to a shared baseline at zero -- walked past, no setup needed', () => {
+describe('a baseline-anchored bar (every bar: the origin is the figure\u2019s, value 0 by default)', () => {
+  it('defaults to an origin at zero -- walked past, no setup needed', () => {
+    // ⚑ v2.5: there is no longer a tick box asking WHETHER the bars share an
+    // origin, only a field asking where it is. A figure whose bars do not share
+    // one is a Span chart.
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getOptions()).toMatchObject({ hasBaseline: 'true', baselineValue: '0' });
+    expect(session.getOptions()).toMatchObject({ baselineValue: '0' });
+    expect(session.getOptions()).not.toHaveProperty('hasBaseline');
   });
 
   it('reads a POSITIVE bar above the baseline', () => {
@@ -231,7 +235,7 @@ describe('a stacked-bar segment (declared on the AXES since v2.3)', () => {
     // stacked!"* - beside the two questions of the same kind already there.
     const keys = BAR_AXES_CONFIG.options?.map((o) => o.key) ?? [];
     expect(keys).toContain('isStacked');
-    expect(keys).toContain('hasBaseline');
+    expect(keys).toContain('baselineValue');
     expect(keys).toContain('isRotated');
   });
 
@@ -480,7 +484,7 @@ describe('a bar left half-finished does not swallow the next one', () => {
     const s = fiveCategories();
     s.addDataPoint(544, 200); // the stray: one corner only, in band 2
     s.addBarDetectBoxes([{ start: { x: 246, y: 900 }, end: { x: 356, y: 500 } }]);
-    const values = s.getBarCategoryTable().columns[0]!.values;
+    const values = s.getBarCategoryTable().columns[0]!.cells.map((c) => c[0]);
     // Band 0 is the traced bar's own; band 2 is the stray's and holds no reading.
     expect(values[0]).toBeCloseTo(13.33, 1);
     expect(values[2]).toBeNull();
@@ -494,7 +498,7 @@ describe('a bar left half-finished does not swallow the next one', () => {
     s.setSlotCursor(null, 0);
     s.addDataPoint(246, 900);
     s.addDataPoint(356, 500);
-    const values = s.getBarCategoryTable().columns[0]!.values;
+    const values = s.getBarCategoryTable().columns[0]!.cells.map((c) => c[0]);
     expect(values[0]).toBeCloseTo(13.33, 1);
     expect(values[2]).toBeNull();
   });
@@ -509,6 +513,6 @@ describe('a bar left half-finished does not swallow the next one', () => {
     s.addDataPoint(246, 900); // first corner by hand
     s.addDataPoint(356, 500); // second click completes THAT bar
     expect(s.getTupleRows()).toHaveLength(1);
-    expect(s.getBarCategoryTable().columns[0]!.values[0]).toBeCloseTo(13.33, 1);
+    expect(s.getBarCategoryTable().columns[0]!.cells[0]![0]).toBeCloseTo(13.33, 1);
   });
 });

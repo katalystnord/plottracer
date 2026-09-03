@@ -337,7 +337,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
       s.addDataPoint(x, 500);
     }
     expect(s.getCategoryAxis().getCategories()).toHaveLength(4);
-    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(4);
+    expect(s.getBarCategoryTable().columns[0]?.cells.map((c) => c[0]).filter((v) => v !== null)).toHaveLength(4);
 
     s.removeTuple(0);
 
@@ -347,7 +347,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     // category is exactly the state this feature exists to record.
     expect(s.getCategoryAxis().getCategories()).toHaveLength(4);
     expect(s.getCategoryAxis().hasDeclaredCount()).toBe(true);
-    expect(s.getBarCategoryTable().columns[0]?.values.filter((v) => v !== null)).toHaveLength(3);
+    expect(s.getBarCategoryTable().columns[0]?.cells.map((c) => c[0]).filter((v) => v !== null)).toHaveLength(3);
   });
 
   it('⚑ but a count the user DID declare survives the same round trip', () => {
@@ -472,8 +472,8 @@ describe('⚑ a bar belongs to its BAND - the guess is gone, not fenced', () => 
     s.moveCategoryTick(0, { x: 120, y: 500 });
     expect(s.categoryBandAt(300, 300)).toBe(1);
     const table = s.getBarCategoryTable();
-    expect(table.columns[0]!.values[0]).toBeNull(); // band 0 is empty now
-    expect(table.columns[0]!.values[1]).not.toBeNull(); // the bar moved into band 1
+    expect(table.columns[0]!.cells[0]![0]).toBeNull(); // band 0 is empty now
+    expect(table.columns[0]!.cells[1]![0]).not.toBeNull(); // the bar moved into band 1
   });
 });
 
@@ -485,7 +485,7 @@ describe('the table shows every declared category, empty ones included', () => {
     const table = s.getBarCategoryTable();
     expect(table.categoryNames).toEqual(['Category 1', 'Category 2', 'Category 3']);
     expect(table.columns).toHaveLength(1);
-    expect(table.columns[0]!.values).toEqual([5, null, 2.5]);
+    expect(table.columns[0]!.cells.map((c) => c[0])).toEqual([5, null, 2.5]);
     expect(table.columns[0]!.tupleIndices).toEqual([0, null, 1]);
   });
 
@@ -493,7 +493,7 @@ describe('the table shows every declared category, empty ones included', () => {
     const s = withTicks(4);
     const table = s.getBarCategoryTable();
     expect(table.categoryNames).toHaveLength(4);
-    expect(table.columns[0]!.values).toEqual([null, null, null, null]);
+    expect(table.columns[0]!.cells.map((c) => c[0])).toEqual([null, null, null, null]);
   });
 });
 

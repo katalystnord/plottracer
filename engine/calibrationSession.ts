@@ -249,6 +249,7 @@ import {
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './seriesNames.js';
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
+import { valueColumnNames, valueCells } from './valueColumns.js';
 
 // ⚑ The axes-type configuration system lives in its own module since v2.0 - the
 // eleven graph-type declarations plus the shape they satisfy. RE-EXPORTED here
@@ -267,7 +268,7 @@ import {
   type CalibStepInfo,
   type RepeatingStepInfo,
   type DataPointView,
-  type UnreadableReason,
+  type TupleAdvisory,
   defaultOptionValues,
   checkGuards,
   mustDiffer,
@@ -4891,41 +4892,53 @@ export class CalibrationSession<A extends CalibratedAxes> {
      * carries the positional fallback for display; an editable field must
      * show THIS one, exactly as spider's axisRawNames/axisNames split. */
     categoryRawNames: string[];
+    /**
+     * What a datum's values are CALLED, in order - one name per cell of every
+     * row below (v2.5). `Value` for a Bar, `Min`/`Max` for a Span, five for a
+     * box plot when it joins this table.
+     *
+     * ⚑ The TYPE answers it, through `valueColumnNames`, because N is a property
+     * of the type - which is how every plotting library treats it.
+     */
+    valueColumns: readonly string[];
     columns: {
       seriesIndex: number;
       seriesName: string;
-      values: (number | null)[];
       /**
-       * Each row's two measured ends, where that bar has no single value (v2.3).
+       * Each row's readings, aligned index-for-index with `valueColumns`.
        *
-       * ⚑⚑ A FLOATING BAR IS NOT WORTH ONE NUMBER, and this column pair is what
-       * the panel shows instead of `Value`: `Min` and `Max` under a spanning
-       * series heading, mirroring the heatmap matrix header the reader has
-       * already met. Null wherever `values` answers, so the two are never both
-       * printed for one bar.
+       * ⚠️ IT WAS `values` PLUS `intervals` - one array for types with a single
+       * number, another for types with two, and every consumer branching on
+       * which was null. That is the N=1 and N=2 cases carried as separate
+       * shapes, and a box plot's five would have wanted a third. One aligned
+       * array says all of them; a missing reading is a `null` that keeps its
+       * place, so a column can never shift into its neighbour.
        */
-      intervals: ({ min: number; max: number } | null)[];
+      cells: (number | null)[][];
       /** Which tuple (in that series' OWN dataset) fills each row, so a
        * click can select/delete it -- one series' tupleIndex is meaningless
        * against another series' dataset, so this is per-column, not global. */
       tupleIndices: (number | null)[];
     }[];
     /**
-     * Bars that were fully captured and still have no value to report, with the
-     * type's own reason (v2.5).
+     * Fully captured tuples the panel should say something ABOUT, though their
+     * reading stands (v2.5).
      *
-     * ⚑⚑ THE SECOND HALF OF `crowded`'S LESSON. A bar whose near end misses the
-     * baseline computes to null, and null prints as the same dash a category
-     * with NO BAR prints - so a measured bar and an absent one looked identical
-     * and nothing on screen said which. The corners are in the record and in the
-     * export the whole time; it is the REPORT that went missing, which is
-     * exactly the failure `crowded` exists to prevent, in a second place.
+     * ⚑⚑ IT WAS A REFUSAL FOR ONE DAY AND IS A REPORT NOW. A bar whose near end
+     * misses the baseline used to compute to null, and null prints as the same
+     * dash a category with NO BAR prints - a measured bar and an absent one
+     * looking identical, `crowded`'s failure in a second place. The answer is
+     * not to say why the number is missing but to STOP MISSING IT: a bar is
+     * measured from the figure's common origin whatever the near end's y, so
+     * every bar reports, and this says only that the bar does not reach the axis
+     * it is measured from.
      *
-     * ⚑ Mirroring `crowded` deliberately - same shape, same route, surfaced by
-     * the same panel - rather than a second mechanism for "something is not
-     * shown above".
+     * ⚑ Which is worth saying, because it is how a user discovers their figure
+     * is a Span chart. Mirroring `crowded` deliberately - same shape, same
+     * route, same panel - rather than a second mechanism for "something here is
+     * worth a sentence".
      */
-    unreadable: { seriesIndex: number; categoryIndex: number; tupleIndex: number; reason: UnreadableReason }[];
+    advisory: { seriesIndex: number; categoryIndex: number; tupleIndex: number; kind: TupleAdvisory }[];
     /** Bars that could not be shown because another bar of the same series
      * already fills that category's cell. Empty in every ordinary figure.
      *
@@ -4936,20 +4949,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
     crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[];
   } {
     if (!this.axes || !this.isBarIntervalShape(this.activeEntry.dataset)) {
-      return { categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] };
+      return { categoryNames: [], categoryRawNames: [], valueColumns: [], columns: [], crowded: [], advisory: [] };
     }
     const axes = this.axes;
     const categories = this.categoryAxis.getCategories();
     const categoryRawNames = [...categories];
     const categoryNames = categories.map((name, i) => (name === '' ? `Category ${i + 1}` : name));
     const derive = this.config.derivedTupleValue;
+    // ⚑ Asked ONCE for the whole table: the names are a fact about the TYPE, not
+    // about a series or a row, so a per-column answer would be a fourth place
+    // for them to disagree.
+    const columnNames = valueColumnNames(this.config, this.ownSlots(this.activeEntry.dataset));
 
     const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
-    const unreadable: {
+    const advisory: {
       seriesIndex: number;
       categoryIndex: number;
       tupleIndex: number;
-      reason: UnreadableReason;
+      kind: TupleAdvisory;
     }[] = [];
     const columns = this.datasetEntries.map((entry, seriesIndex) => {
       const dataset = entry.dataset;
@@ -4975,17 +4992,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         }
         tupleForCategory.set(idx, tupleIndex);
       });
-      const values: (number | null)[] = [];
-      // ⚑ The other half of the same answer - a cell whose bar floats has no
-      // single value and carries its two measured ends instead. Same source as
-      // `getTupleRows`, so the two tables cannot disagree about which it is.
-      const intervals: ({ min: number; max: number } | null)[] = [];
+      const cells: (number | null)[][] = [];
       const tupleIndices: (number | null)[] = [];
       categories.forEach((_, categoryIndex) => {
         const tupleIndex = tupleForCategory.get(categoryIndex);
         if (tupleIndex === undefined) {
-          values.push(null);
-          intervals.push(null);
+          // ⚑ A row with no datum still has one cell PER COLUMN, so every row is
+          // the same width and a reader never has to ask which column is which.
+          cells.push(columnNames.map(() => null));
           tupleIndices.push(null);
           return;
         }
@@ -4995,23 +5009,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
           const p = dataset.getPixel(pixelIndex);
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
-        const derived =
-          derive?.compute(points, axes, { apex: null }) ?? null;
-        values.push(derived);
-        const interval = derive?.interval?.(points, axes) ?? null;
-        intervals.push(interval);
+        cells.push(valueCells(this.config, points, axes));
         tupleIndices.push(tupleIndex);
-        // ⚑ Only where NEITHER column can answer. A type that falls back to an
-        // interval has reported its reading, however it is spelled, and there is
-        // nothing for a notice to be about.
-        if (derived === null && interval === null) {
-          const reason = derive?.unreadable?.(points, axes) ?? null;
-          if (reason !== null) unreadable.push({ seriesIndex, categoryIndex, tupleIndex, reason });
-        }
+        // ⚑⚑ ASKED OF EVERY COMPLETE TUPLE, not only of the ones with no number.
+        // It used to be gated on `derived === null && interval === null`, which
+        // was right while this was a refusal and is exactly wrong now: the whole
+        // correction is that the reading STANDS and the observation is made
+        // beside it. A gate on the missing value would have kept the sentence
+        // and thrown away the case it now exists for.
+        const kind = derive?.advisory?.(points, axes) ?? null;
+        if (kind !== null) advisory.push({ seriesIndex, categoryIndex, tupleIndex, kind });
       });
-      return { seriesIndex, seriesName: dataset.name, values, intervals, tupleIndices };
+      return { seriesIndex, seriesName: dataset.name, cells, tupleIndices };
     });
-    return { categoryNames, categoryRawNames, columns, crowded, unreadable };
+    return { categoryNames, categoryRawNames, valueColumns: columnNames, columns, crowded, advisory };
   }
 
   /** Renames a category directly by its canonical CategoryAxis index - the

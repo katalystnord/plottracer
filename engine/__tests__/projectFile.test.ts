@@ -917,11 +917,11 @@ describe('a bar figure keeps what it declares about itself across a save', () =>
     expect(stackedBarProject({ isStacked: 'false' }).isStacked()).toBe(false);
   });
 
-  it('the baseline declaration travels with it, value and all', () => {
-    const axes = stackedBarProject({ hasBaseline: 'true', baselineValue: '-5' });
+  it('the origin travels with it, value and all', () => {
+    // ⚑ v2.5: there is no longer a tick box - a bar chart HAS a common origin -
+    // so what has to survive the save is WHERE it is.
+    const axes = stackedBarProject({ baselineValue: '-5' });
     expect(axes.hasDeclaredBaseline()).toBe(true);
     expect(axes.getBaselineValue()).toBe(-5);
-    const none = stackedBarProject({ hasBaseline: 'false' });
-    expect(none.hasDeclaredBaseline()).toBe(false);
   });
 });

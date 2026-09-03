@@ -148,47 +148,46 @@ describe("a bar's value - the sign convention", () => {
     expect(barValue(s, 150, 420, 300)).toBeCloseTo(3, 6);
   });
 
-  it('⚑⚑ and a bar that does NOT start at that baseline is not measured from it', () => {
-    // THE v2.3 FIX. This bar runs 0..5 on a chart whose declared baseline is 2,
-    // so it does not sit on the baseline and there is nothing to sign against.
-    // The old rule reported the far end anyway - which is how a floating figure
-    // came to report a minimum on some rows and a maximum on others.
+  it('⚑⚑ and a bar that does NOT start at that baseline is STILL measured from it', () => {
+    // ⚑⚑ REWRITTEN THREE TIMES, AND THE HISTORY IS THE POINT.
+    //   v2.3: the far end was reported relative to a DECLARED baseline whether
+    //         or not the bar reached it - which made one column hold a minimum
+    //         on some rows and a maximum on others.
+    //   then: the near end had to SIT on the baseline or nothing was reported -
+    //         correct about the ambiguity, and it made a steady hand a
+    //         precondition for getting a number at all.
+    //   v2.5: the origin is a property of the FIGURE, so the far end is measured
+    //         from it, full stop, and the fact that this bar does not reach it
+    //         is REPORTED beside the number instead of replacing it.
     //
-    // ⚑⚑ AND SINCE v2.5 BAR REPORTS NOTHING AT ALL HERE, WHICH IS THE POINT.
-    // It used to fall back to an INTERVAL - the floating record living inside
-    // Bar, decided per bar by whether its near end happened to touch the
-    // baseline. That hidden mode is what Span chart took away: this figure is a
-    // Span chart, and there it reports {min: 0, max: 5} (see
-    // barIntervalRecord.test.ts and barCategoryTable.test.ts, which own that
-    // case now). Bar answers for what it can measure from its baseline, and is
-    // silent about what it cannot.
+    // ▶ The v2.3 ambiguity is dissolved rather than gated: what made a column
+    // meaningless was mixing minima and maxima, and "the end farther from the
+    // origin, minus the origin" is one rule that never flips.
+    //
+    // This bar runs 0..5 on a chart whose declared origin is 2. The far end is
+    // 5, so the bar is worth 3 - the number `bar(x, height, bottom=2)` draws.
     const s = calibratedBar();
     s.setOption('baselineValue', '2');
-    expect(barValue(s, 150, 500, 300)).toBeNull();
+    expect(barValue(s, 150, 500, 300)).toBeCloseTo(3, 6);
     expect(
       s.getTupleRows()[0]!.interval,
       'a Bar has no interval to fall back on any more - that is a Span'
     ).toBeNull();
   });
 
-  it('⚑⚑ a FLOATING bar has no single value at all - it is an INTERVAL', () => {
-    // ⚑ REWRITTEN TWICE, and the history is the point. Until 2026-08-03 this was
-    // named "takes its direction from the drag order" and asserted -5 for the
-    // reversed drag: a defect asserted as its own premise. That was replaced by
-    // an unsigned SPAN, which fixed the sign and kept the wrong question - a
-    // span says how TALL the bar is where the reader asked WHERE it sits.
-    // ▶ v2.3: both ends were measured, both are kept, and neither is discarded
-    // to manufacture one number. What survives from 2026-08-03 is the invariant
-    // that made it wrong to begin with: the answer must not depend on the hand.
+  it('⚑⚑ and the answer never depends on the HAND - the same bar, dragged either way', () => {
+    // ⚑ REWRITTEN THREE TIMES, and the invariant is what survives every rewrite.
+    // Until 2026-08-03 this was named "takes its direction from the drag order"
+    // and asserted -5 for the reversed drag: a defect asserted as its own
+    // premise. Then an unsigned SPAN, which fixed the sign and answered the
+    // wrong question. Then v2.3's interval, which left with floating in v2.5.
+    // ▶ What has been true throughout: two people capturing the identical bar
+    // must get the identical number, whichever corner their hand started at.
     const up = calibratedBar();
-    up.setOption('hasBaseline', 'false');
-    expect(barValue(up, 150, 400, 200)).toBeNull();
-
     const down = calibratedBar();
-    down.setOption('hasBaseline', 'false');
-    expect(barValue(down, 150, 200, 400)).toBeNull();
-
-    expect(down.getTupleRows()[0]!.interval).toEqual(up.getTupleRows()[0]!.interval);
+    expect(barValue(up, 150, 400, 200)).toBe(barValue(down, 150, 200, 400));
+    // And it is the far corner's reading: 400 -> 2.5, 200 -> 7.5, origin 0.
+    expect(barValue(up, 150, 400, 200)).toBeCloseTo(7.5, 6);
   });
 
   it('⚑ a STACKED segment reads as an unsigned SPAN, bypassing the baseline entirely', () => {

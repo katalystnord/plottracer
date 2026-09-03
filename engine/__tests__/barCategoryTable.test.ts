@@ -33,14 +33,14 @@ function calibratedBar(session: CalibrationSession<BarAxes>, count = 4): void {
 describe('getBarCategoryTable: gating', () => {
   it('is empty before calibration', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [] });
   });
 
   it('is empty for a 5-slot Box Plot session -- no "opposite corners" a bbox could mean there either', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
     session.applyBoxPlotGroups();
-    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], unreadable: [] });
+    expect(session.getBarCategoryTable()).toEqual({ categoryNames: [], categoryRawNames: [], columns: [], crowded: [], advisory: [], valueColumns: [] });
   });
 });
 
@@ -64,8 +64,8 @@ describe('getBarCategoryTable: single series', () => {
     const col = table.columns[0]!;
     expect(col.seriesIndex).toBe(0);
     expect(col.seriesName).toBe('Series 1');
-    expect(col.values[0]).toBeCloseTo(5, 9);
-    expect(col.values[1]).toBeCloseTo(2, 9);
+    expect(col.cells[0]![0]).toBeCloseTo(5, 9);
+    expect(col.cells[1]![0]).toBeCloseTo(2, 9);
     expect(col.tupleIndices).toEqual([0, 1]);
   });
 
@@ -112,7 +112,7 @@ describe('getBarCategoryTable: single series', () => {
     calibratedBar(session);
     session.addDataPoint(150, 500); // one corner only
     const table = session.getBarCategoryTable();
-    expect(table.columns[0]!.values[0]).toBeNull();
+    expect(table.columns[0]!.cells[0]![0]).toBeNull();
     expect(table.columns[0]!.tupleIndices[0]).toBe(0); // still addressable, for the cell click/delete
   });
 });
@@ -132,7 +132,7 @@ describe('setSlotCursor: aiming at a specific half-filled bar (v2.0 audit)', () 
     expect(session.setSlotCursor(null, 0)).toBe(true); // start a genuinely NEW tuple
     session.addDataPoint(350, 500); // tuple 1, one corner only (Bar 2), category 2
     expect(session.getBarCategoryTable().columns[0]!.tupleIndices).toEqual([0, 1]);
-    expect(session.getBarCategoryTable().columns[0]!.values).toEqual([null, null]);
+    expect(session.getBarCategoryTable().columns[0]!.cells.map((c) => c[0])).toEqual([null, null]);
 
     // The cursor now sits at tuple 1's own remaining slot (nextSlot() walked
     // forward from where tuple 1 was just filled) -- completing tuple 0
@@ -142,8 +142,8 @@ describe('setSlotCursor: aiming at a specific half-filled bar (v2.0 audit)', () 
     session.addDataPoint(150, 420); // fills tuple 0's missing corner directly
 
     const table = session.getBarCategoryTable();
-    expect(table.columns[0]!.values[0]).not.toBeNull(); // tuple 0 completed
-    expect(table.columns[0]!.values[1]).toBeNull(); // tuple 1 untouched, still half-filled
+    expect(table.columns[0]!.cells[0]![0]).not.toBeNull(); // tuple 0 completed
+    expect(table.columns[0]!.cells[1]![0]).toBeNull(); // tuple 1 untouched, still half-filled
   });
 
   it('still refuses for Box Plot -- a 5-slot object tuple built out of order would be left permanently half-made', () => {
@@ -181,10 +181,10 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     expect(table.categoryNames).toEqual(['Flax', 'Hemp']);
     expect(table.columns).toHaveLength(2);
     const [s1, s2] = table.columns as [typeof table.columns[0], typeof table.columns[0]];
-    expect(s1.values[0]).toBeCloseTo(5, 9); // series 1 has Flax
-    expect(s1.values[1]).toBeCloseTo(1, 9); // ...and Hemp
-    expect(s2.values[0]).toBeCloseTo(6.25, 9); // series 2 has Flax
-    expect(s2.values[1]).toBeNull(); // series 2 never reached Hemp
+    expect(s1.cells[0]![0]).toBeCloseTo(5, 9); // series 1 has Flax
+    expect(s1.cells[1]![0]).toBeCloseTo(1, 9); // ...and Hemp
+    expect(s2.cells[0]![0]).toBeCloseTo(6.25, 9); // series 2 has Flax
+    expect(s2.cells[1]![0]).toBeNull(); // series 2 never reached Hemp
     expect(s2.tupleIndices[1]).toBeNull();
   });
 
@@ -208,7 +208,7 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5 -- unsigned span 3, not baseline-relative
     const table = session.getBarCategoryTable();
-    expect(table.columns[0]!.values[0]).toBeCloseTo(3, 9);
+    expect(table.columns[0]!.cells[0]![0]).toBeCloseTo(3, 9);
     expect(session.getTupleRows()[0]!.derived).toBeCloseTo(3, 9);
   });
 });
@@ -269,7 +269,7 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     session.addDataPoint(140, 500);
     session.addDataPoint(220, 300);
     const table = session.getBarCategoryTable();
-    const values = table.columns[0]!.values;
+    const values = table.columns[0]!.cells.map((c) => c[0]);
     expect(values).toHaveLength(4);
     // Band 0 holds the reading; every other band is still empty.
     expect(values[0]).not.toBeNull();
@@ -284,7 +284,7 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     }
     const table = session.getBarCategoryTable();
     expect(table.categoryNames).toHaveLength(4);
-    expect(table.columns[0]!.values.every((v) => v !== null)).toBe(true);
+    expect(table.columns[0]!.cells.map((c) => c[0]).every((v) => v !== null)).toBe(true);
   });
 
 });
@@ -346,8 +346,8 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     session.addDataPoint(220, 300);
     const table = session.getBarCategoryTable();
     expect(table.categoryNames).toEqual(['Day 3', 'Day 7', 'Day 14', 'Day 21']);
-    expect(table.columns[0]!.values[0]).not.toBeNull();
-    expect(table.columns[0]!.values.slice(1)).toEqual([null, null, null]);
+    expect(table.columns[0]!.cells[0]![0]).not.toBeNull();
+    expect(table.columns[0]!.cells.map((c) => c[0]).slice(1)).toEqual([null, null, null]);
   });
 
   it('⚑ and it still lands in its band when a tick has been DRAGGED first', () => {
@@ -366,17 +366,25 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
  * both ends measured, neither a baseline. Bar keeps one Value column, because
  * that is what a bar measured from a baseline has.
  */
-describe('⚑⚑ a SPAN takes two columns in the shared table, not one', () => {
+describe('⚑⚑ the columns are the TYPE\u2019s named values', () => {
   /**
    * David: *"For the floating bars output window, I think we will add another
    * row below #, Category, Series N, that says Min, Max in two separate
-   * columns."*
+   * columns."* And he refused showing `Min` on ordinary bars as well - a column
+   * of zeros *"will look like a fault to the users"*.
    *
-   * ⚑ ONLY WHERE THE BAR ACTUALLY FLOATS. He refused showing `Min` on ordinary
-   * bars as well - a column of zeros *"will look like a fault to the users"* -
-   * and adaptive columns are already this project's house rule: `getErrorColumns`
-   * omits left/right on a vertical-error figure because four columns of blanks
-   * assert an emptiness nobody looked for.
+   * ⚑⚑ v2.5 STATES THE GENERAL RULE INSTEAD OF THE TWO CASES. A datum has N
+   * NAMED values and N belongs to the TYPE: 1 for a Bar (`Value`), 2 for a Span
+   * (`Min`, `Max`), 4 for a candlestick, 5 for a box plot - which is how every
+   * plotting library asks for them (`bar(x, height)`, `broken_barh`,
+   * `Candlestick(open, high, low, close)`, `bxp(med, q1, q3, whislo, whishi)`).
+   * See `engine/valueColumns.ts`.
+   *
+   * ⚠️ WHAT THAT REPLACED: two arrays, `values` and `intervals`, with every
+   * consumer branching on which was null - the N=1 and N=2 cases carried as
+   * separate shapes, where a box plot's five would have wanted a third. David:
+   * *"you had a tendency to make special cases for some groups, and forgot to
+   * look at the bigger picture for consistency and coherency."*
    */
   function markedFourBands(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(SPAN_AXES_CONFIG);
@@ -401,32 +409,34 @@ describe('⚑⚑ a SPAN takes two columns in the shared table, not one', () => {
     return session;
   }
 
-  it('a BAR on the baseline reports a value and NO interval', () => {
+  it('a BAR has ONE named value, and its row has one cell', () => {
     const session = markedFourBandsBar();
-    session.addDataPoint(140, 500); // value 0 - the baseline
+    session.addDataPoint(140, 500); // value 0 - the origin
     session.addDataPoint(220, 300); // value 5
-    const col = session.getBarCategoryTable().columns[0]!;
-    expect(col.values[0]).toBeCloseTo(5, 6);
-    expect(col.intervals[0]).toBeNull();
+    const table = session.getBarCategoryTable();
+    expect(table.valueColumns).toEqual(['Value']);
+    expect(table.columns[0]!.cells[0]).toHaveLength(1);
+    expect(table.columns[0]!.cells[0]![0]).toBeCloseTo(5, 6);
   });
 
-  it('⚑⚑ a SPAN reports an interval and NO value', () => {
+  it('⚑⚑ a SPAN has TWO, and the same table simply has two cells', () => {
     const session = markedFourBands();
     session.addDataPoint(140, 400); // value 2.5
-    session.addDataPoint(220, 300); // value 5 - neither end is the baseline
-    const col = session.getBarCategoryTable().columns[0]!;
-    expect(col.values[0]).toBeNull();
-    expect(col.intervals[0]!.min).toBeCloseTo(2.5, 6);
-    expect(col.intervals[0]!.max).toBeCloseTo(5, 6);
+    session.addDataPoint(220, 300); // value 5
+    const table = session.getBarCategoryTable();
+    expect(table.valueColumns).toEqual(['Min', 'Max']);
+    expect(table.columns[0]!.cells[0]![0]).toBeCloseTo(2.5, 6);
+    expect(table.columns[0]!.cells[0]![1]).toBeCloseTo(5, 6);
   });
 
-  it('⚑ an empty cell has neither, so the row still reads as empty', () => {
-    const session = markedFourBandsBar();
+  it('⚑ a row with no datum is still FULL WIDTH, so no column can shift', () => {
+    // ⚑ The nulls keep their places. A short row would let a reader (or an
+    // exporter) line a Max up under a Min.
+    const session = markedFourBands();
     session.addDataPoint(140, 400);
     session.addDataPoint(220, 300);
     const col = session.getBarCategoryTable().columns[0]!;
-    expect(col.values.slice(1)).toEqual([null, null, null]);
-    expect(col.intervals.slice(1)).toEqual([null, null, null]);
+    expect(col.cells.slice(1)).toEqual([[null, null], [null, null], [null, null]]);
   });
 
   /**
@@ -449,11 +459,17 @@ describe('⚑⚑ a SPAN takes two columns in the shared table, not one', () => {
     session.addDataPoint(220, 300);
     session.addDataPoint(340, 400); // and one clear of it
     session.addDataPoint(420, 300);
-    const col = session.getBarCategoryTable().columns[0]!;
-    expect(col.values[0], 'a span never reports a single value').toBeNull();
-    expect(col.values[1]).toBeNull();
-    expect(col.intervals[0], 'even the one touching the baseline').not.toBeNull();
-    expect(col.intervals[1]).not.toBeNull();
+    const table = session.getBarCategoryTable();
+    // ⚑ The TYPE decides, so BOTH rows have the same two named values - the one
+    // that happens to touch the old baseline value included. That is the hidden
+    // mode this split removed: a figure cannot carry value rows and interval
+    // rows at once any more.
+    expect(table.valueColumns).toEqual(['Min', 'Max']);
+    const col = table.columns[0]!;
+    expect(col.cells[0], 'even the one touching the baseline').toHaveLength(2);
+    expect(col.cells[1]).toHaveLength(2);
+    expect(col.cells[0]!.every((v) => v != null)).toBe(true);
+    expect(col.cells[1]!.every((v) => v != null)).toBe(true);
   });
 
 });

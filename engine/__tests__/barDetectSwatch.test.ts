@@ -282,13 +282,19 @@ describe('the session says where the baseline runs, so the detector can ask', ()
   it('⚑⚑ says NOTHING when no baseline was declared', async () => {
     const { CalibrationSession, BAR_AXES_CONFIG } = await import('../calibrationSession.js');
     const s = new CalibrationSession(BAR_AXES_CONFIG);
-    s.setOption('hasBaseline', 'false');
     s.handleCalibrationClick(100, 500);
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(100, 100);
     s.confirmCalibrationValues(['10']);
     walkCategoryAxis(s);
     expect(s.runCalibration()).toBe(true);
+    // ⚠️ THE STATE IS REACHED THROUGH THE MODEL NOW, NOT THROUGH AN OPTION, and
+    // that is the point of keeping the test. v2.5 removed the "Bars share a
+    // baseline" tick box - a bar chart always has an origin - so the ONLY way
+    // to hold an undeclared one is a file written before that, which
+    // `PlotData.deserialize` restores faithfully. The guard has to survive for
+    // exactly those files, and nothing interactive can reach it any more.
+    (s.getAxes() as unknown as { setBaseline(has: boolean, value: number): void }).setBaseline(false, 0);
     // A figure with no baseline has no anchor to measure against, and the
     // detector must not be handed one that was never declared.
     expect(s.baselinePixelForDetect()).toBeNull();

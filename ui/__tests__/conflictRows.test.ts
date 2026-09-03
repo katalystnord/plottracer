@@ -12,11 +12,13 @@ import type { BarCategoryTable } from '../src/panels/BarTable.js';
  */
 const display = { atData: (v: readonly number[]) => v[0]! } as never;
 
+// ⚑ One cell per named value, `null` where there is no reading - the shape the
+// session hands over since v2.5 (see `engine/valueColumns.ts`). These fixtures
+// describe a ONE-value type, which is what a bar chart is.
 const column = (seriesIndex: number, values: (number | null)[]) => ({
   seriesIndex,
   seriesName: `Series ${seriesIndex + 1}`,
-  values,
-  intervals: values.map(() => null),
+  cells: values.map((v) => [v]),
   tupleIndices: values.map((v, i) => (v === null ? null : i)),
 });
 
@@ -24,6 +26,7 @@ const table = (values: (number | null)[], names: string[], extraSeries = 0): Bar
   ({
     categoryNames: names,
     categoryRawNames: names,
+    valueColumns: ['Value'],
     columns: [
       column(0, values),
       ...Array.from({ length: extraSeries }, (_, i) => column(i + 1, values)),

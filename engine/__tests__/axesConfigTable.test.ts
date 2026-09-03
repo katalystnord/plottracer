@@ -420,7 +420,12 @@ describe('the config table - the per-type defaults, pinned', () => {
     // v2.0: the ordinary zero-based bar chart is what the user walks past.
     expect(optionDefault(BAR_AXES_CONFIG, 'isLog')).toBe(false);
     expect(optionDefault(BAR_AXES_CONFIG, 'isRotated')).toBe(false);
-    expect(optionDefault(BAR_AXES_CONFIG, 'hasBaseline')).toBe(true);
+    // ⚑⚑ THE TICK BOX IS GONE (v2.5) and only the VALUE is asked. A bar chart
+    // whose bars do not share an origin is a Span chart, which is a type of its
+    // own to pick - so the question is no longer WHETHER there is a common
+    // origin but WHERE it is. David: *"They all NEED (for bars) to come to the
+    // same common axis."*
+    expect(BAR_AXES_CONFIG.options?.map((o) => o.key)).not.toContain('hasBaseline');
     expect(optionDefault(BAR_AXES_CONFIG, 'baselineValue')).toBe('0');
   });
 

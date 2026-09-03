@@ -60,14 +60,14 @@ describe('acting on a crowded reading that belongs to another series', () => {
     // band was untouched and the warning stayed on screen.
     const s = twoSeries();
     const before = s.getBarCategoryTable();
-    expect(before.columns[0]!.values).toEqual([5, 5, 5]);
+    expect(before.columns[0]!.cells.map((c) => c[0])).toEqual([5, 5, 5]);
 
     const c = before.crowded[0]!;
     s.setActiveDataset(c.seriesIndex);
     s.removeTuple(c.tupleIndex);
 
     const after = s.getBarCategoryTable();
-    expect(after.columns[0]!.values).toEqual([5, 5, 5]); // untouched
+    expect(after.columns[0]!.cells.map((c) => c[0])).toEqual([5, 5, 5]); // untouched
     expect(after.crowded).toEqual([]); // and the crowding is actually resolved
   });
 

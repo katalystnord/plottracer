@@ -623,16 +623,23 @@ export function commonOriginReuse(
 export const GRAPH_TYPE_METADATA_KEY = 'graphType';
 
 /**
- * Why a fully captured tuple still has no value to report.
+ * Something the panel should SAY about a tuple, though its reading stands.
  *
- * ⚑ `off-baseline` - this bar's near end does not sit on the declared baseline,
- * so there is no quantity to state: a Bar is measured FROM a baseline, and since
- * v2.5 it has no interval to fall back to (that is the Span chart).
- * ⚑ `no-baseline` - the FIGURE declares no baseline at all, so no bar on it has
- * a value. One fact about the whole chart, not a fact about each bar, and the
- * panel says it once.
+ * ⚑⚑ IT USED TO BE A REFUSAL AND IT IS NOW A REPORT, which is the whole of the
+ * v2.5 correction. `off-baseline` meant *"this bar has no value"* for one day;
+ * a bar's value is measured from the figure's common origin whatever the near
+ * end's y, so the number always stands and this says only that the bar does not
+ * reach the axis it is measured from - which is worth knowing, because it is
+ * how a user learns their figure is a Span chart.
+ *
+ * ⚠️ `no-baseline` IS GONE with the tick box that produced it: a bar chart
+ * always has a common origin now, so there is no state in which none exists.
+ *
+ * ▶ Tenet 9 in its plainest form: MEASURE AND REPORT, never withhold. The
+ * seating question is answered off the pixels and handed to the user; what it
+ * must not do is decide whether they are allowed a number.
  */
-export type UnreadableReason = 'off-baseline' | 'no-baseline';
+export type TupleAdvisory = 'off-baseline';
 
 export interface AxesTypeConfig<A extends CalibratedAxes> {
   /** Identifies the *graph type* (the dropdown entry), not the axes class --
@@ -751,26 +758,22 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
      */
     interval?(points: (DataPointView | null)[], axes: A): { min: number; max: number } | null;
     /**
-     * WHY a COMPLETE tuple still has no value - the sentence the panel owes the
-     * user when `compute` answers null and nothing else will (v2.5).
+     * What the panel should SAY about this tuple, beside the number rather than
+     * instead of it (v2.5).
      *
-     * ⚑⚑ IT LIVES BESIDE `compute` BECAUSE IT IS THE SAME DECISION. `compute`
-     * returning null is the whole of what the table sees, and a null renders as
-     * the same dash a category with NO BAR AT ALL renders as - so a real
-     * measurement and an absence look identical, which is
-     * `crowded`'s defect in a second place: a complete-LOOKING table with a
-     * reading silently missing. Asking the type WHY keeps the answer with the
-     * code that produced it instead of re-deriving it in the panel.
+     * ⚑⚑ IT LIVES BESIDE `compute` BECAUSE IT IS THE SAME MEASUREMENT read for a
+     * different purpose - `barSeating` answers both, so the two can never
+     * disagree about which bars these are.
      *
-     * ⚠️ ONLY FOR A COMPLETE CAPTURE. A half-dragged tuple has no value YET,
-     * which the table already says with its aim-the-missing-corner cell; saying
-     * it twice, in two registers, would be worse than saying it once.
+     * ⚠️ ONLY FOR A COMPLETE CAPTURE. A half-dragged tuple is a different state
+     * with its own cell (aim the missing corner), and saying it twice in two
+     * registers is worse than saying it once.
      *
-     * ⚑ Returns a REASON CODE, not prose: the wording belongs to the panel that
-     * has the room for it, and a code is what a test can name.
-     * Undeclared - Span, Pie, XY - means "there is nothing to explain".
+     * ⚑ Returns a CODE, not prose: the wording belongs to the panel that has the
+     * room for it, and a code is what a test can name. Undeclared - Span, Pie,
+     * XY - means there is nothing to say.
      */
-    unreadable?(points: (DataPointView | null)[], axes: A): UnreadableReason | null;
+    advisory?(points: (DataPointView | null)[], axes: A): TupleAdvisory | null;
   };
   /**
    * What auto-extract MEANS on this graph type - a declared capability, because
@@ -2055,9 +2058,19 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   options: [
     { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
     { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
-    // v2.0: a declared setting, not a calibration value -- see BarAxes.setBaseline.
-    // Defaults ON at '0', the ordinary bar chart, walked past like pie's total/sweep.
-    { key: 'hasBaseline', label: 'Bars share a baseline', kind: 'checkbox', default: true },
+    // ⚑⚑ THE CHECKBOX IS GONE (v2.5), AND ONLY THE VALUE IS ASKED. David: *"They
+    // all NEED (for bars) to come to the same common axis."* A bar chart whose
+    // bars do NOT share an origin is not a bar chart - it is a Span chart, and
+    // that is now a type of its own to pick. So the question is no longer
+    // WHETHER there is a common origin but WHERE it is, which is the one thing
+    // the figure cannot tell us.
+    //
+    // ⚠️ AND LEAVING IT WOULD HAVE BEEN WORSE THAN USELESS after the value
+    // stopped being gated on it: unticked, every bar would have been measured
+    // from 0 regardless, so the control would have changed nothing while
+    // appearing to. That is the defect this codebase names in three other
+    // places, and it would have been introduced by the same edit that removed
+    // its own justification.
     { key: 'baselineValue', label: 'Baseline value', kind: 'text', default: '0' },
     // ⚑⚑ v2.3: THIS IS WHERE THE STACK QUESTION BELONGS, and it replaces the
     // Series card's `Stack group` free-text field entirely. David, having got
@@ -2244,7 +2257,30 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       if (axes.isStacked()) {
         return Math.abs(roundAtPixel(bar.max, farPoint) - roundAtPixel(bar.min, nearPoint));
       }
-      if (!axes.hasDeclaredBaseline() || !bar.onBaseline) return null;
+      // ⚑⚑ THE NEAR END'S VALUE IS NOT AN ARGUMENT TO THIS NUMBER (v2.5, David).
+      // It is still the user's input - clicked, stored, drawn and draggable, and
+      // it carries two jobs of its own: the bar's WIDTH (with the far corner's
+      // x, which is what separates one column from the next) and the seating
+      // report below. What it does not do is decide the value.
+      //
+      // ▶ THE GENERATORS SETTLE IT, and the signature is the argument
+      // (tenet 11b). `matplotlib.axes.Axes.bar(x, height, width=0.8,
+      // bottom=None)` documents `bottom : float or array-like, default: 0` - a
+      // bar chart is ONE number per bar over a SHARED origin, and passing
+      // `bottom` as an ARRAY is how the same call draws a floating bar. So a
+      // per-bar base on a bar chart is the encoding of a span; the common origin
+      // is a property of the SCALE, not of the mark. David: *"They all NEED (for
+      // bars) to come to the same common axis."*
+      //
+      // ⚠️ WHAT THIS REPLACES, and it was measured on a hand-plausible click: a
+      // bar clicked TWO PIXELS below the baseline failed the seating test and
+      // reported NO VALUE AT ALL. A gate on the near end's y meant a steady hand
+      // was a precondition for getting a number, which is not a claim the figure
+      // ever made.
+      //
+      // ⚑ Stacked stays above, and the same signature says why: a stack IS the
+      // `bottom`-as-array case, so its segments' bases are real measurements.
+      
       // ⚑ Sign comes from comparing VALUES to the baseline, never raw pixel
       // position - a pixel rule ("smaller y = far end") is exactly backwards for
       // a bar below the baseline in an ordinary vertical figure, and
@@ -2252,29 +2288,24 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
       return roundAtPixel(bar.far, farPoint) - baseline;
     },
     /**
-     * ⚑⚑ THE DASH THAT MEANT TWO THINGS (v2.5). A bar whose near end misses the
-     * baseline computes to null, and a null prints as `-` - the same dash a
-     * category with NO BAR prints. Both corners were MEASURED and are in the
-     * record and in the export; only the report was missing, and it was missing
-     * in the one way this project has learnt to fear: a complete-looking table
-     * with a real reading not shown - the same shape as `crowded`.
+     * ⚑⚑ A BAR THAT DOES NOT REACH THE COMMON ORIGIN IS WORTH SAYING OUT LOUD -
+     * and nothing more than that (v2.5). Its value stands: it is measured from
+     * the origin the figure declares, like every other bar's.
      *
-     * ⚑ ASKED THROUGH `barSeating`, the same call `compute` makes, so the two
-     * cannot disagree about which bars these are.
+     * ⚑ What the report is FOR is the type. A figure whose bars float is a Span
+     * chart, and this sentence is how a user finds that out - the discoverable
+     * route to the right type, rather than a refusal that leaves them stuck.
+     *
+     * ⚑ ASKED THROUGH `barSeating`, the same call `compute` makes for the width
+     * and the sign, so the two cannot disagree about which bars these are.
      */
-    unreadable(points, axes) {
+    advisory(points, axes) {
       const [start, end] = points;
-      // Not yet captured is not unreadable - the table already aims at the
-      // missing corner, and that cell must keep saying so.
+      // A half-dragged bar is a different state with its own cell.
       if (!start?.data || !end?.data) return null;
-      // A stacked segment's value is its own height, measured from neither the
-      // baseline nor anything else the user has to declare.
+      // A stack's segments are SUPPOSED to sit clear of the baseline - that is
+      // what a stack is - so the observation carries no information there.
       if (axes.isStacked()) return null;
-      // ⚑ ASKED OF THE FIGURE, ONCE. With no baseline declared there is nothing
-      // for any bar to sit on, so this is not N floating bars - it is one
-      // missing declaration, and saying it per bar would send the user hunting
-      // for bars that are drawn perfectly well.
-      if (!axes.hasDeclaredBaseline()) return 'no-baseline';
       const v1 = start.data[0]!;
       const v2 = end.data[0]!;
       const baseline = axes.getBaselineValue();
@@ -2294,11 +2325,15 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
   // refusal a click does (same reasoning as pie's checkValues above it).
   checkValues(cal, options) {
-    if (optionBool(options, 'hasBaseline')) {
-      const baseline = parseFloat(options['baselineValue'] ?? '');
-      if (!Number.isFinite(baseline)) {
-        return 'The baseline value must be a number (0 for an ordinary zero-based bar chart).';
-      }
+    // ⚑ Always asked now, because a bar chart always has an origin - the refusal
+    // is no longer behind a tick box that could turn it off.
+    // ⚑ AN ABSENT KEY IS THE DECLARED DEFAULT (0), not a refusal: `options` is
+    // filled from `defaultOptionValues` in the app, so the only way to arrive
+    // here without it is a hand-made or older file, and those meant zero. A key
+    // that IS present must parse - clearing the box is a question, not a shrug.
+    const raw = options['baselineValue'];
+    if (raw !== undefined && !Number.isFinite(parseFloat(raw))) {
+      return 'The baseline value must be a number (0 for an ordinary zero-based bar chart).';
     }
     return barCalibrationValueCheck(cal, options);
   },
@@ -2306,7 +2341,10 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     const axes = new BarAxes();
     const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
-    axes.setBaseline(optionBool(ctx.options, 'hasBaseline'), parseFloat(ctx.options.baselineValue ?? '0'));
+    // ⚑ Declared unconditionally: a Bar HAS a common origin (v2.5). The axes
+    // keeps `hasDeclaredBaseline` because the LOAD path still meets files
+    // written before the checkbox went, and the span relabel reads it.
+    axes.setBaseline(true, parseFloat(ctx.options.baselineValue ?? '0'));
     axes.setStacked(optionBool(ctx.options, 'isStacked'));
     return { axes };
   },
@@ -2314,7 +2352,6 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     return {
       isLog: String(axes.isLog()),
       isRotated: String(axes.isRotated()),
-      hasBaseline: String(axes.hasDeclaredBaseline()),
       baselineValue: String(axes.getBaselineValue()),
       isStacked: String(axes.isStacked()),
     };

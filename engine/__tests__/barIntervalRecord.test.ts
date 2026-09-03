@@ -136,19 +136,20 @@ describe('the two ends of a bar reach the file as Min and Max', () => {
     expect(at('Value')).toBeCloseTo(5, 6);
   });
 
-  it('⚑⚑ a FLOATING bar carries no Value column at all', () => {
-    // Adaptive columns are the house rule (`getErrorColumns` does the same): a
-    // column of blanks asserts an emptiness nobody looked for, and David refused
-    // the alternative outright - a column of zeros "will look like a fault to
-    // the users".
+  it('⚑⚑ a floating bar in a BAR chart still carries its Value (v2.5)', () => {
+    // ⚠️ THIS ASSERTED THE OPPOSITE FOR ONE DAY, under the rule that a bar which
+    // misses the baseline has no single value. A bar is measured from the
+    // figure's common origin whatever its near end did, so the column is there
+    // and filled; what the panel adds is a sentence saying the bar does not
+    // reach the axis it is measured from, which is how a user finds the Span
+    // chart. (The interval columns beside it are stage-D work - see the v2.5
+    // export design.)
     const s = barSession();
     s.addDataPoint(150, 420); // value 2
     s.addDataPoint(200, 300); // value 5 - neither end is the baseline
     const [data] = sectionsFor(s);
-    expect(data!.header).not.toContain('Value');
     const at = (name: string) => data!.rows[0]![data!.header.indexOf(name)];
-    expect(at('Min')).toBeCloseTo(2, 6);
-    expect(at('Max')).toBeCloseTo(5, 6);
+    expect(at('Value')).toBeCloseTo(5, 6);
   });
 
   it('⚑ a half-dragged bar is not sorted into a Min it does not have', () => {

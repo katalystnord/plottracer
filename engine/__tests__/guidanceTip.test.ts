@@ -381,11 +381,17 @@ describe('guidanceTip - capture, per graph type', () => {
       })
     );
     expect(tip).toContain('one corner of the bar to the opposite corner');
-    expect(tip).toContain('both ends are measured');
+    // ⚑ The guard is against "click anywhere on the value axis" (the v1.3
+    // midpoint defect), so what has to survive is that BOTH corners are asked
+    // for. v2.5 says it by naming what each one is for rather than by the words
+    // "both ends are measured" - same guarantee, and it stays true whatever the
+    // value calculation does next.
+    expect(tip).toContain('mark both');
+    expect(tip).toMatch(/gives the value/);
     expect(tip).toContain('bar 3, one end still to fill');
   });
 
-  it('⚑⚑ tells a Bar user the near end must land ON the baseline (v2.5)', () => {
+  it('⚑⚑ tells a Bar user what EACH corner is for, and asks for both (v2.5)', () => {
     // ⚠️ THE TIP USED TO PROMISE THE OPPOSITE, and it was true until v2.5:
     // *"this reads a bar that floats above or below its baseline just as well as
     // an ordinary one"*. Floating moved to the Span chart, so a user following
@@ -401,9 +407,16 @@ describe('guidanceTip - capture, per graph type', () => {
         currentTupleIndex: null,
       })
     );
-    expect(tip).toContain('must land ON it');
-    expect(tip).toContain('Span chart');
+    // ⚑ Both corners, said out loud - David asked for that explicitly, and the
+    // second one carries the WIDTH that separates one column from the next.
+    expect(tip).toContain('mark both');
+    expect(tip).toContain('gives the value');
+    expect(tip).toContain('width');
+    // ⚠️ NEITHER OF THE TWO WORDINGS THIS REPLACED. The first promised floating
+    // still worked; the second made the baseline a PRECONDITION, which stopped
+    // being true the moment the near end left the value calculation.
     expect(tip).not.toContain('floats above or below');
+    expect(tip).not.toContain('must land ON');
   });
 
   it('⚑ a Span gets the SAME gesture and is offered no baseline, because it has none', () => {

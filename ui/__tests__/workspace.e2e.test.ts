@@ -924,50 +924,60 @@ describe('Workspace: Bar axes', () => {
     await page.getByTestId('mode-place-point').click();
     const tip = await textOf('tips-bar');
     expect(tip).toMatch(/opposite corner/i);
-    expect(tip).toMatch(/both ends are measured/i);
+    // ⚑ v2.5 says what each corner is FOR rather than asserting a precondition:
+    // the far one gives the value, the other the width. Both are still asked
+    // for, which is what this guard is actually about (the v1.3 midpoint
+    // defect), and the wording now survives a change to the value rule.
+    expect(tip).toMatch(/mark both/i);
+    expect(tip).toMatch(/width/i);
     expect(tip).not.toMatch(/anywhere on the image/i);
   });
 
   /**
-   * ⚑⚑ A BAR THAT MISSES THE BASELINE SAYS SO (v2.5).
+   * ⚑⚑ A BAR THAT DOES NOT REACH THE ORIGIN IS REPORTED, NOT REFUSED (v2.5).
    *
-   * Bar lost its interval when floating moved to the Span chart, and the
-   * interval was the only thing that put a NUMBER in such a row. What was left
-   * was a null - printed as the same dash a category with NO BAR prints - so a
-   * measured bar and an absent one were indistinguishable while both of the
-   * bar's corners sat in the record and in every export.
+   * A bar is measured from the origin the FIGURE declares, whatever its near
+   * corner did - David: *"They all NEED (for bars) to come to the same common
+   * axis."* So the number is always there, and what the panel adds is the
+   * observation that this bar does not reach the axis it is measured from,
+   * which is how a user discovers their figure is a Span chart.
    *
-   * ⚑ THE ENGINE HALF IS UNIT-TESTED (`barUnreadableBars.test.ts`); what only an
-   * e2e can show is that the sentence actually reaches the panel, which is
-   * exactly where `crowded` was lost for three releases - computed, handed over,
-   * and declared out of the component's own props.
+   * ⚠️ IT WAS A REFUSAL FOR ABOUT SIX HOURS, and the case that killed that is in
+   * `barValueFromCommonOrigin.test.ts`: a bar clicked TWO PIXELS below the axis
+   * reported nothing at all, so a steady hand was a precondition for getting a
+   * number. What only an e2e can show is that the sentence reaches the panel -
+   * which is exactly where `crowded` was lost for three releases.
    */
-  it('a bar that does not reach the baseline is explained, not left as a bare dash', async () => {
+  it('a bar that does not reach the baseline reports its value AND says so', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    // Baseline is y=400 (value 0). This bar runs 1.25 to 5.00 and touches
-    // nothing - the floating capture that used to report Min and Max.
     // ⚑ x=350 sits inside category 3 (bands of 100px from x=100), not on a
-    // divider - a bar straddling one is a different test.
+    // divider. Baseline y=400 is value 0, 30 px to the unit: this bar runs
+    // 1.67 to 5.00 and touches nothing.
     await dragMarker(350, 350, 350, 250);
-    const notice = await textOf('bar-unreadable');
+
+    // ⚑⚑ THE READING STANDS. Measured from the declared origin to the far
+    // corner, exactly as a seated bar's is - that is the correction.
+    expect(await textOf('bar-cell-0-2')).toMatch(/5/);
+
+    const notice = await textOf('bar-off-baseline');
     expect(notice).toMatch(/does not reach the baseline/);
+    expect(notice).toMatch(/value is still measured from it/);
     // Both causes, neither asserted - a hand can miss a two-pixel target.
     expect(notice).toMatch(/clicked short of the baseline/);
     expect(notice).toMatch(/Span chart/);
-    // ⚑⚑ AND THE CELL NO LONGER CLAIMS THE CATEGORY IS EMPTY. The dash is the
-    // same glyph either way, so the only thing that could tell a measured bar
-    // from an absent one said the wrong one of them: "Series 1 has no bar".
+
+    // ⚑ And the cell itself says which bar the note is about, on hover.
     expect(await page.getByTestId('bar-cell-0-2').getAttribute('title')).toMatch(
-      /no value to report/
+      /does not reach the baseline/
     );
 
     // A bar dragged from the baseline reports as it always did, and does not
-    // pick up the notice meant for its neighbour.
+    // pick up the note meant for its neighbour.
     await dragMarker(150, 400, 150, 250);
     expect(await derivedValue(1)).toBeCloseTo(5, 2);
-    expect(await textOf('bar-unreadable')).toMatch(/1 bar/);
-  });
+    expect(await textOf('bar-off-baseline')).toMatch(/1 bar/);
+  }, 30000);
 
   // v2.0 Phase 7: Auto-extract is now a REAL option for Bar (a bar blob's own
   // bounding box is its two ends), so the empty-table hint names it again --
@@ -1010,7 +1020,10 @@ describe('Workspace: Bar axes', () => {
     expect(await stacked.isChecked()).toBe(false); // the ordinary bar chart
     const options = await page.getByTestId('axes-options').textContent();
     expect(options).toMatch(/Stacked bars/);
-    expect(options).toMatch(/Bars share a baseline/);
+    // ⚑ v2.5: the tick box is gone and only the VALUE is asked - a bar chart
+    // whose bars do not share an origin is a Span chart, a type of its own.
+    expect(options).toMatch(/Baseline value/);
+    expect(options).not.toMatch(/Bars share a baseline/);
   });
 
   it('⚑ the per-series "Stack group" field is gone from every type', async () => {

@@ -23,56 +23,54 @@ export function crowdedMessage(
 }
 
 /**
- * What to say when a captured bar has no value to report.
+ * What to say about a bar that does not reach the figure's common origin.
  *
- * ⚑⚑ WRITTEN TO `crowdedMessage`'S SHAPE, deliberately: how many, WHICH ones,
- * and what to do about it. That trio is what turns "a number is missing" into
- * something a user can act on, and the panel already speaks it.
+ * ⚑⚑ IT REPORTS, IT DOES NOT REFUSE, and that is the whole of the v2.5
+ * correction. For one day this sentence explained why a bar had NO value; a bar
+ * is measured from the origin the figure declares whatever its near end did, so
+ * the number always stands and this says one thing only: *this bar does not
+ * reach the axis it is measured from*. Tenet 9 in its plainest form - measure
+ * and report, never withhold.
  *
- * ⚑ TWO REASONS, TWO REMEDIES, and they are not variations of one sentence. A
- * bar that misses the baseline is a fact about THAT bar and the answer is a
- * different chart type; no baseline declared at all is one fact about the whole
- * figure and the answer is a tick box. Naming the categories in the second case
- * would send the user hunting for bars that are drawn perfectly well.
+ * ⚑ WHAT IT IS FOR IS THE TYPE. A figure whose bars float is a Span chart, and
+ * this is how a user discovers that - the discoverable route to the right type
+ * rather than a dead end. So it names the count, the categories and the remedy,
+ * in `crowdedMessage`'s shape: how many, which ones, what to do.
  *
- * ⚑ IT SAYS THE ENDS ARE KEPT, because they are: both corners were measured and
- * they ride in the record and in every export whatever this column shows. The
- * user is being told a READING is not reportable, not that their work is gone.
- *
- * ⚑⚑ AND IT OFFERS THE MIS-CLICK FIRST, because that is the likelier cause and
- * because asserting the other one would be wrong. A bar's near end is a REAL
- * CLICKED PIXEL - never a baseline assumed for it (Workspace's bar drag says so
- * in as many words) - and "sits on the baseline" is answered within
- * `BASELINE_TOLERANCE_PX`, two IMAGE pixels, which is a finer target than two
- * screen pixels on any figure shown smaller than 1:1. So a hand that missed the
- * axis and a figure that genuinely floats arrive here identically, and only the
- * user can see which. Same shape as `crowdedMessage`: name both, decide neither.
+ * ⚑ AND IT OFFERS THE MIS-CLICK FIRST, because that is the likelier cause on a
+ * bar or two and because asserting the other would be wrong. A near end is a
+ * real clicked pixel and "reaches the baseline" is answered within
+ * `BASELINE_TOLERANCE_PX`, two IMAGE pixels. A hand that stopped short and a
+ * figure that genuinely floats arrive here identically, and only the user can
+ * see which. Same posture as `crowdedMessage`: name both, decide neither.
  */
-export function unreadableMessage(
-  unreadable: readonly { categoryIndex: number; reason: 'off-baseline' | 'no-baseline' }[],
+export function offBaselineMessage(
+  offBaseline: readonly { categoryIndex: number }[],
   categoryNames: readonly string[],
   tupleNoun: string
 ): string {
-  if (unreadable.length === 0) return '';
-  if (unreadable.some((u) => u.reason === 'no-baseline')) {
-    return `No baseline is declared, so no ${tupleNoun} on this figure has a value to report - a ${tupleNoun} is measured FROM its baseline. Tick "Bars share a baseline" and give its value, or capture this figure as a Span chart if its ${tupleNoun}s do not share one.`;
-  }
-  const off = unreadable.filter((u) => u.reason === 'off-baseline');
-  const names = [...new Set(off.map((u) => categoryNames[u.categoryIndex] ?? `#${u.categoryIndex + 1}`))];
+  if (offBaseline.length === 0) return '';
+  const names = [...new Set(offBaseline.map((u) => categoryNames[u.categoryIndex] ?? `#${u.categoryIndex + 1}`))];
   const list = names.filter((n) => n !== '').join(', ');
   const where = list === '' ? '' : ` (${list})`;
-  const one = off.length === 1;
-  return `${off.length} ${tupleNoun}${one ? '' : 's'}${where} ${one ? 'does' : 'do'} not reach the baseline, so ${one ? 'it has' : 'they have'} no value to report - a ${tupleNoun} is measured FROM its baseline. Both measured ends are still in the record and in every export. Check whether the near end was clicked short of the baseline; if ${one ? 'this bar really does' : 'these bars really do'} float, the figure is a Span chart, where both ends are reported as Min and Max.`;
+  const one = offBaseline.length === 1;
+  return `${offBaseline.length} ${tupleNoun}${one ? '' : 's'}${where} ${one ? 'does' : 'do'} not reach the baseline. ${one ? 'Its' : 'Their'} value is still measured from it, like every other ${tupleNoun}'s - check whether the near corner was clicked short of the baseline, and if ${one ? `this ${tupleNoun} really does` : 'these really do'} float, the figure is a Span chart, where both ends are reported as Min and Max.`;
 }
 
-/** One series' column of the bar table, index-aligned with the categories. */
+/** One series' column block of the table, index-aligned with the categories. */
 export interface BarColumn {
   seriesIndex: number;
   seriesName: string;
-  values: readonly (number | null)[];
-  /** Each row's two measured ends, where that bar has no single value - see
-   * `isInterval` below and `CalibrationSession.getBarCategoryTable`. */
-  intervals: readonly ({ min: number; max: number } | null)[];
+  /**
+   * Each row's readings, aligned index-for-index with `valueColumns` - one cell
+   * per named value, `null` where there is none.
+   *
+   * ⚠️ IT WAS `values` PLUS `intervals`, one array per arity, with this
+   * component branching on which was null. See `engine/valueColumns.ts`: the
+   * family has 1, 2, 4 and 5 named values, so an array of arrays is the only
+   * shape that says all of them.
+   */
+  cells: readonly (readonly (number | null)[])[];
   tupleIndices: readonly (number | null)[];
 }
 
@@ -81,16 +79,24 @@ export interface BarCategoryTable {
   categoryNames: readonly string[];
   categoryRawNames: readonly string[];
   /**
-   * Bars that were fully captured and still have no number in the table, with
-   * the reason the TYPE gave - see `CalibrationSession.getBarCategoryTable`.
+   * What a datum's values are CALLED, in order - the TYPE's answer, from
+   * `engine/valueColumns.ts`. One name per cell of every row.
    *
-   * ⚑⚑ THE SAME DEFECT AS `crowded`, ONE ROW OVER. A bar that misses the
-   * baseline computes to null, and a null prints as the dash a category with NO
-   * BAR prints, so the two are indistinguishable on screen while both of the
-   * bar's ends sit in the record and in every export. Surfacing it here is
-   * mirroring, not a second mechanism: same source, same panel, same shape.
+   * ⚑ This is what replaced a two-column MODE in this component. The columns
+   * are not "one value, or an interval": they are the type's named values, 1
+   * for a Bar, 2 for a Span, 4 for a candlestick, 5 for a box plot - which is
+   * how every plotting library asks for them.
    */
-  unreadable?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number; reason: 'off-baseline' | 'no-baseline' }[];
+  valueColumns: readonly string[];
+  /**
+   * Bars the panel should say something ABOUT, though their number stands - see
+   * `CalibrationSession.getBarCategoryTable`.
+   *
+   * ⚑ Surfacing it here is mirroring, not a second mechanism: same source, same
+   * panel and the same shape as `crowded`, which is the other thing this table
+   * has to say out loud.
+   */
+  advisory?: readonly { seriesIndex: number; categoryIndex: number; tupleIndex: number; kind: 'off-baseline' }[];
   /**
    * Readings that could not be shown, because another one of the same series
    * already occupies that category.
@@ -195,7 +201,7 @@ export interface ConflictRow {
  * trend either side is the plausible one, and that judgement is the user's.
  *
  * ⚠️ THE HIDDEN ROW HAS NO NUMBER, and says so rather than showing a blank. It
- * lost the cell, so its value is not among `col.values` at all - the table knows
+ * lost the cell, so its reading is not among `col.cells` at all - the table knows
  * THAT it exists and WHICH bar it is, which is what makes it selectable, and
  * nothing more. A blank there would read as "this bar measured nothing".
  */
@@ -211,11 +217,13 @@ export function conflictRows(
     const n = table.categoryNames[i];
     return n === undefined ? '' : n === '' ? `Category ${i + 1}` : n;
   };
+  // ⚑ ONE FORMATTER FOR ANY ARITY. A row's reading is its cells joined - one
+  // number for a Bar, "2.5 to 7.5" for a Span, four for a candlestick - so this
+  // stopped needing to know which type it is looking at.
   const readingOf = (i: number): string => {
-    const iv = col.intervals[i] ?? null;
-    if (iv) return `${display.atData([iv.min], 0)} to ${display.atData([iv.max], 0)}`;
-    const v = col.values[i];
-    return v == null ? '-' : String(display.atData([v], 0));
+    const shown = (col.cells[i] ?? []).filter((v): v is number => v != null);
+    if (shown.length === 0) return '-';
+    return shown.map((v) => String(display.atData([v], 0))).join(' to ');
   };
   const at = crowded.categoryIndex;
   const out: ConflictRow[] = [];
@@ -444,26 +452,27 @@ export function BarTable({
   // so an ordinary bar chart's table is exactly what it was.
   const anyError = errors.some((e) => e !== null);
   /**
-   * ⚑⚑ WHICH SERIES REPORT AN INTERVAL RATHER THAN A VALUE (v2.3).
+   * ⚑⚑ THE COLUMNS ARE THE TYPE'S NAMED VALUES, and it says so itself.
    *
-   * A bar whose near end does not sit on the baseline is not worth one number,
-   * so its column becomes `Min` and `Max` under a spanning series heading.
-   * David: *"add another row below #, Category, Series N, that says Min, Max in
-   * two separate columns."*
-   * ⚑ NOT A NEW CONVENTION: the heatmap matrix header is already two lines
-   * (`C1` over `0.00 - 2.00`), so a spanning name over a pair is something the
-   * reader has met - and it grows the way this table already grows, a block per
-   * series.
-   * ⚑ PER SERIES, and only where bars actually float. David refused showing
-   * `Min` on ordinary bars too: a column of zeros *"will look like a fault to
-   * the users"*, and adaptive columns are already the house rule here.
+   * A Bar has one (`Value`), a Span two (`Min`, `Max`), a candlestick four, a
+   * box plot five - which is not our scheme but the one every plotting library
+   * uses: `bar(x, height)`, `broken_barh`, `Candlestick(open, high, low,
+   * close)`, `bxp(med, q1, q3, whislo, whishi)`. See `engine/valueColumns.ts`.
+   *
+   * ⚠️ TWO WRONG SHAPES PRECEDED IT, both mine, both from one evening. First the
+   * column set was read off the ROWS (`intervals.some(iv => iv !== null)`), so a
+   * Span with nothing captured yet headed its column `Value` and the panel would
+   * have relabelled itself as readings arrived. Then it was a two-column MODE
+   * driven by a PAIR - the N=2 case wearing the interface, which a box plot's
+   * five could not have used. David: *"Consistency and coherency above all."*
    */
-  const isInterval = table.columns.map((col) => col.intervals.some((iv) => iv !== null));
-  const anyInterval = isInterval.some(Boolean);
-  // ⚑ Which cells hold a bar that HAS no number - so the dash can say why on
-  // hover instead of claiming the category is empty, which it is not.
-  const unreadableAt = new Set((table.unreadable ?? []).map((u) => `${u.seriesIndex}:${u.categoryIndex}`));
-  const headRowSpan = anyError || anyInterval ? 2 : 1;
+  const slotLabels = table.valueColumns;
+  // ⚑ Which cells hold a bar that does not reach the origin, so the hover can
+  // say so on the cell itself rather than only in the note below the table.
+  const offBaselineAt = new Set((table.advisory ?? []).map((u) => `${u.seriesIndex}:${u.categoryIndex}`));
+  // ⚑ A second header row whenever a series' block is more than one column -
+  // which is any type past Bar, and any type carrying error roles.
+  const headRowSpan = anyError || slotLabels.length > 1 ? 2 : 1;
   return (
     <>
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
@@ -479,7 +488,7 @@ export function BarTable({
               // error role beside it - the same fix the spreadsheet's header
               // needed when a series grew a Δ column and the name stayed one
               // cell wide, skewing every column to its right.
-              colSpan={(isInterval[i] ? 2 : 1) + (errors[i]?.labels.length ?? 0)}
+              colSpan={slotLabels.length + (errors[i]?.labels.length ?? 0)}
               style={{
                 textAlign: 'right',
                 paddingRight: 16,
@@ -493,11 +502,11 @@ export function BarTable({
             </th>
           ))}
         </tr>
-        {(anyError || anyInterval) && (
+        {(anyError || slotLabels.length > 1) && (
           <tr>
             {table.columns.map((col, i) => (
               <Fragment key={col.seriesIndex}>
-                {(isInterval[i] ? ['Min', 'Max'] : ['Value']).map((label, sub) => (
+                {slotLabels.map((label, sub) => (
                   <th
                     key={label}
                     style={{
@@ -538,7 +547,7 @@ export function BarTable({
               {renderCategoryName(categoryIndex, table.categoryRawNames[categoryIndex] ?? '')}
             </td>
             {table.columns.map((col, colIndex) => {
-              const value = col.values[categoryIndex];
+              const rowCells = col.cells[categoryIndex] ?? [];
               const tupleIndex = col.tupleIndices[categoryIndex];
               const err = errors[colIndex];
               const isActive = col.seriesIndex === activeSeriesIndex;
@@ -551,23 +560,17 @@ export function BarTable({
               // slots directly. Same fix, scoped to the case it's
               // actually safe for (see setSlotCursor's own comment on
               // why Box Plot stays excluded).
-              const interval = col.intervals[categoryIndex] ?? null;
-              // ⚑ A cell is EMPTY when it has neither - not when it has no
-              // `value`, which a floating bar legitimately does not.
-              const empty = value == null && interval == null;
+              // ⚑ A row is EMPTY when NO named value answered - never when one
+              // particular column did not, which a type of several values
+              // legitimately leaves blank.
+              const empty = rowCells.every((v) => v == null);
               const aimTupleIndex = isActive && empty && tupleIndex != null ? tupleIndex : null;
               const missingGroupIndex =
                 aimTupleIndex != null ? missingSlotIndexOf(aimTupleIndex) : -1;
               const aimable = aimTupleIndex != null && missingGroupIndex > -1;
               return (
                 <Fragment key={col.seriesIndex}>
-                {(isInterval[colIndex]
-                  ? [
-                      { key: 'min', shown: interval ? interval.min : null, sub: 0 },
-                      { key: 'max', shown: interval ? interval.max : null, sub: 1 },
-                    ]
-                  : [{ key: 'value', shown: value, sub: 0 }]
-                ).map(({ key: cellKey, shown, sub }) => (
+                {slotLabels.map((slotName, sub) => ({ key: slotName, shown: rowCells[sub] ?? null, sub })).map(({ key: cellKey, shown, sub }) => (
                 <td
                   key={cellKey}
                   data-testid={
@@ -601,12 +604,11 @@ export function BarTable({
                   title={
                     aimable
                       ? `Click to fill this bar's missing corner next`
-                      : // ⚑ A CELL WITH A BAR IN IT DOES NOT SAY "no bar". The
-                        // dash is the same glyph either way, so the only thing
-                        // that could tell the two apart said the wrong one of
-                        // them - see `unreadableMessage` below the table.
-                        unreadableAt.has(`${col.seriesIndex}:${categoryIndex}`)
-                      ? `This ${tupleNoun} was measured, but it has no value to report - see the note below the table`
+                      : // ⚑ Its number is in the cell like any other; what the
+                        // hover adds is the observation behind the note under
+                        // the table - see `offBaselineMessage`.
+                        offBaselineAt.has(`${col.seriesIndex}:${categoryIndex}`)
+                      ? `This ${tupleNoun} does not reach the baseline it is measured from - see the note below the table`
                       : empty
                       ? `${col.seriesName} has no ${categoryName} ${tupleNoun}`
                       : isActive
@@ -660,7 +662,7 @@ export function BarTable({
                       </span>
                       {/* ⚑ ONE delete button per BAR, on the last of its cells -
                           a bar is one datum however many columns report it. */}
-                      {isActive && tupleIndex != null && sub === (isInterval[colIndex] ? 1 : 0) && (
+                      {isActive && tupleIndex != null && sub === slotLabels.length - 1 && (
                         <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
                       )}
                     </>
@@ -718,17 +720,16 @@ export function BarTable({
         {noPointsHint}
       </div>
     )}
-    {/* ⚑⚑ WHAT WAS MEASURED AND STILL HAS NO NUMBER, said in the panel that
-        showed the dash. It sits above `crowded` because the two answer the same
-        question in the reader's head - *why is that cell empty?* - and a reader
-        who has just seen a dash should not have to scroll past a different
-        notice to find out. */}
-    {(table.unreadable?.length ?? 0) > 0 && (
+    {/* ⚑⚑ AN OBSERVATION ABOUT THE FIGURE, beneath the numbers it is about. It
+        sits above `crowded` because the two answer the same question in the
+        reader's head - *is this table telling me everything?* - and because a
+        reader should not have to scroll past one notice to find the other. */}
+    {(table.advisory?.length ?? 0) > 0 && (
       <div
-        data-testid="bar-unreadable"
+        data-testid="bar-off-baseline"
         style={{ padding: 8, fontSize: 12.5, color: theme.color.error }}
       >
-        {unreadableMessage(table.unreadable!, table.categoryNames, tupleNoun)}
+        {offBaselineMessage(table.advisory!, table.categoryNames, tupleNoun)}
       </div>
     )}
     {(table.crowded?.length ?? 0) > 0 && (

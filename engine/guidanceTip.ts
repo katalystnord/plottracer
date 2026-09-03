@@ -440,18 +440,28 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // sort that out later. I think any other wording is not generalizable as
       // tooltip."* Which end is still open is not a fact the gesture needs - HOW
       // MANY are is - so the note says that instead.
-      // ⚠️ THE SENTENCE THIS REPLACES WAS TRUE UNTIL v2.5 AND FALSE AFTER IT. It
-      // promised the gesture *"reads a bar that floats above or below its
-      // baseline just as well as an ordinary one"* - which is precisely what Bar
-      // stopped doing when floating moved to the Span chart. A tip that promises
-      // a capability the type no longer has is the worst kind of wrong: the user
-      // follows it, the bar records both ends, and the Value column says nothing.
+      // ⚠️ TWICE WRONG IN ONE DAY, AND BOTH WORDINGS ARE WORTH REMEMBERING. It
+      // promised *"reads a bar that floats above or below its baseline just as
+      // well as an ordinary one"*, which Bar stopped doing when floating moved
+      // to the Span chart. The replacement said the near end *"must land ON"*
+      // the baseline - true for about six hours, and false the moment a bar's
+      // value stopped being derived from that end at all. A tip that states a
+      // PRECONDITION is the fragile kind; one that says what each corner is FOR
+      // survives a change to how the number is worked out.
+      //
+      // ⚑⚑ IT STILL ASKS FOR BOTH CORNERS, and that is deliberate. David: *"for
+      // consistency, I still want us to SAY to the user that they should click /
+      // mark each corner of the bar."* The second corner is not decoration - it
+      // carries the bar's WIDTH, which is what separates one column from the
+      // next - and with the mark now drawn down to the baseline a user could
+      // easily conclude the second click had stopped mattering.
+      //
       // ⚑ The two types share ONE sentence with its middle clause swapped,
       // because they share one gesture. Two paragraphs would drift.
       if ((config.id === 'bar' || config.id === 'span') && hasSlots)
         return `Drag from one corner of the ${tupleNoun} to the opposite corner - ${
           config.id === 'bar'
-            ? 'both ends are measured, and the end nearer the baseline must land ON it, because that is what a bar is measured from (a bar that floats belongs in a Span chart)'
+            ? 'mark both: the corner away from the baseline gives the value, the other gives the bar\u2019s width. Every bar is measured from the figure\u2019s baseline'
             : 'both ends are measured, and neither of them is a baseline: a span IS its two ends'
         }${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, one end still to fill)`}. A single click still works too, filling one end at a time.`;
       if (hasSlots)

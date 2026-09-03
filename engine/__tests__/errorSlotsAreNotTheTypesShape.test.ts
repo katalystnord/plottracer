@@ -273,7 +273,7 @@ describe('a BAR series that gained error slots is still a bar', () => {
     });
     const after = s.getBarCategoryTable();
     expect(after.categoryNames).toEqual(before.categoryNames);
-    expect(after.columns[0]!.values).toEqual(before.columns[0]!.values);
+    expect(after.columns[0]!.cells.map((c) => c[0])).toEqual(before.columns[0]!.cells.map((c) => c[0]));
   });
 });
 
