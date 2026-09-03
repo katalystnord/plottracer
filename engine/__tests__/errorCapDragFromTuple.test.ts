@@ -44,7 +44,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
     const slots = errorSlotNames('SD');
     ds.adoptSlots(slots);
     const capIndex = ds.addPixel(200, 150);
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), capIndex);
+    ds.addToTupleAt(0, slotForRole('upper', slots), capIndex);
 
     const line = s.errorCapDragLine(0, capIndex);
     expect(line, 'a recorded cap must be constrained').not.toBeNull();
@@ -64,7 +64,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
     const slots = errorSlotNames('SD');
     ds.adoptSlots(slots);
     const capIndex = ds.addPixel(150, 180); // A's cap: 100px from A, ~60px from B
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), capIndex);
+    ds.addToTupleAt(0, slotForRole('upper', slots), capIndex);
 
     const line = s.errorCapDragLine(0, capIndex);
     expect(line).not.toBeNull();
@@ -79,7 +79,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
     const slots = errorSlotNames('SD');
     ds.adoptSlots(slots);
     const capIndex = ds.addPixel(240, 200);
-    ds.addToTupleAt(0, slotForRole('right', slots.length), capIndex);
+    ds.addToTupleAt(0, slotForRole('right', slots), capIndex);
 
     const line = s.errorCapDragLine(0, capIndex);
     expect(line).not.toBeNull();
@@ -93,7 +93,7 @@ describe('a cap recorded in its datum\'s tuple drags along that datum\'s line', 
     const datumIndex = ds.addPixel(200, 200);
     const slots = errorSlotNames('SD');
     ds.adoptSlots(slots);
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), ds.addPixel(200, 150));
+    ds.addToTupleAt(0, slotForRole('upper', slots), ds.addPixel(200, 150));
     expect(s.errorCapDragLine(0, datumIndex)).toBeNull();
   });
 

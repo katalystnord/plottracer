@@ -47,7 +47,7 @@ function datumWithCap(s: CalibrationSession<XYAxes>) {
   const slots = errorSlotNames('SD');
   ds.adoptSlots(slots);
   const capIndex = ds.addPixel(200, 182);
-  ds.addToTupleAt(0, slotForRole('upper', slots.length), capIndex);
+  ds.addToTupleAt(0, slotForRole('upper', slots), capIndex);
   return { ds, datumIndex, capIndex };
 }
 

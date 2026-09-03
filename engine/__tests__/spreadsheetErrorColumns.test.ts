@@ -113,8 +113,8 @@ describe("the error columns carry the user's own word", () => {
     // as a starting position, so both were recorded. Left and right were not
     // touched, and get no column.
     expect(only!.errorColumns).toEqual([
-      { role: 'upper', label: 'SD upper' },
-      { role: 'lower', label: 'SD lower' },
+      { role: 'upper', valueIndex: 0, label: 'SD upper' },
+      { role: 'lower', valueIndex: 0, label: 'SD lower' },
     ]);
   });
 

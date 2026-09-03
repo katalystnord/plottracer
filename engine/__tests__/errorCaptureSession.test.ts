@@ -168,7 +168,7 @@ describe('captureErrorCap - the drag gesture', () => {
     });
     const ds = session.getDatasets()[0]!;
     const slots = ds.getSlotNames();
-    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots.length)]!;
+    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots)]!;
     ds.setPixelAt(lowerPixel, 200, 245); // user drags the lower cap far down
     const asymmetric = session.getResolvedErrorBars(0)[0]!.yLower!;
 
@@ -344,7 +344,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     const session = twoPointsWithErrorBars();
     const ds = session.getDatasets()[0]!;
     const slots = ds.getSlotNames();
-    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots)]!;
 
     session.setActiveDataset(0);
     session.removeDataPoints([upperPixel]);
@@ -389,7 +389,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
   it('deleting the SD cap leaves the separate 95% CI bar untouched', () => {
     const session = onePointWithTwoErrorTypes();
     const ds = session.getDatasets()[0]!;
-    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', ds.getSlotNames().length)]!;
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', ds.getSlotNames())]!;
     const ciUpper = session.getDatasets().findIndex((d) => d.name.trim() === '95% CI upper');
 
     session.setActiveDataset(0);
@@ -434,7 +434,7 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     expect(before.yUpper, 'the vertical arm exists').toBeDefined();
     expect(before.xRight, 'and so does the horizontal').toBeDefined();
 
-    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots)]!;
     session.setActiveDataset(0);
     session.removeDataPoints([upperPixel]); // delete the vertical arm's upper cap
 
@@ -452,12 +452,12 @@ describe('deleting points/caps keeps error bars whole (cascade + pair, 2026-07-2
     const session = twoPointsWithErrorBars();
     const ds = session.getDatasets()[0]!;
     const slots = ds.getSlotNames();
-    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots.length)]!;
+    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots)]!;
     session.setActiveDataset(0);
     session.removeDataPoints([lowerPixel]); // one-sided now: upper only
     expect(session.getResolvedErrorBars(0)[0]!.yLower).toBeUndefined();
 
-    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots.length)]!;
+    const upperPixel = ds.getAllTuples()[0]![slotForRole('upper', slots)]!;
     expect(() => session.removeDataPoints([upperPixel])).not.toThrow();
 
     const bars = session.getResolvedErrorBars(0);
@@ -497,7 +497,7 @@ describe('errorCapDragLine - the axis-lock a cap is dragged along', () => {
   /** The pixel index of a role's cap on the first datum of series 0. */
   function capPixel(session: { getDatasets(): { getAllTuples(): (number | null)[][]; getSlotNames(): string[] }[] }, role: 'upper' | 'lower' | 'left' | 'right') {
     const ds = session.getDatasets()[0]!;
-    return ds.getAllTuples()[0]![slotForRole(role, ds.getSlotNames().length)]!;
+    return ds.getAllTuples()[0]![slotForRole(role, ds.getSlotNames())]!;
   }
 
   it('locks an upper cap to the vertical through its own datum', () => {

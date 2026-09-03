@@ -160,6 +160,17 @@ export interface ErrorBarsCardProps {
   calibrated: boolean;
   /** False when the target series has no points to hang error off. */
   targetHasPoints: boolean;
+  /**
+   * ⚑⚑ THE ENDS THAT CAN EACH CARRY ERROR, named as the table names them
+   * (`Min`, `Max`) - empty for a type with a single value.
+   *
+   * It exists because a span's second end is otherwise a HIDDEN CAPABILITY:
+   * nothing on screen would say you may drag from the low end as well as the
+   * high one, and the keystone test is that Parallel Universe David can only use
+   * what he sees. The card names both ends rather than leaving him to guess that
+   * the gesture repeats.
+   */
+  valueEnds?: readonly string[];
 }
 
 export function ErrorBarsCard({
@@ -173,6 +184,7 @@ export function ErrorBarsCard({
   notice = null,
   calibrated,
   targetHasPoints,
+  valueEnds = [],
 }: ErrorBarsCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -275,6 +287,13 @@ export function ErrorBarsCard({
                   describe one that is not there at all. */}
               Drag from a data point out to its error cap. A cap is placed on each side - the lower one mirrored as a
               starting position. Drag either cap to where the figure draws it.
+              {valueEnds.length > 1 && (
+                <>
+                  {' '}
+                  <strong>Each end carries its own error</strong>: drag from the {valueEnds[0]} end and from the{' '}
+                  {valueEnds[valueEnds.length - 1]} end separately, and each gets its own columns.
+                </>
+              )}
             </Hint>
           )}
 

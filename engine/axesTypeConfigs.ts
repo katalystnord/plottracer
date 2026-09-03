@@ -892,6 +892,25 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    */
   errorBarsRefusal?: string;
   /**
+   * ⚑⚑ WHICH OF THE TYPE'S OWN SLOTS CAN CARRY ERROR - by index.
+   *
+   * David, 2026-09-03: *"A floating bar chart is just a bar chart, but with two
+   * ends on the span. And error bars work exactly the same, on each end."*
+   * Error attaches to a NAMED VALUE, not to a tuple; the default is the single
+   * value at slot 0, which is every type's behaviour as it has always been.
+   *
+   * ⚑ SLOT INDICES, NOT REPORTED NAMES. A span reports `Min`/`Max` by SORTING
+   * its two corners, and sorting is not an identity - drag one corner past the
+   * other and the names swap while the measurement does not. The slot is the
+   * thing that was measured, so the error hangs off the slot; the table and the
+   * exports sort a value and its error together.
+   *
+   * ⚠️ It is NOT "every own slot". A histogram and a pie have two own slots
+   * (`Bin start`/`Bin end`) and ONE named value between them, and giving those a
+   * second group invented columns nobody measured - see `errorSlotNames`.
+   */
+  errorValueSlots?: readonly number[];
+  /**
    * The SHAPE this type's data takes in an export file - declared, because the
    * assembly was an if/else cascade in the UI reading `id === 'errorbar'`, then
    * `id === 'histogram'`, then a grouped test. A type's export shape is a property
@@ -2762,33 +2781,35 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     },
   },
   /**
-   * ⚑⚑ A SPAN THAT CARRIES UNCERTAINTY AT EACH END IS A CANDLESTICK, and the
-   * reason is DIRECTION - not, as this said until v2.5, an ambiguity in our
-   * error roles.
+   * ⚑⚑ A SPAN CARRIES ERROR ON EACH END - two groups of roles, not one.
    *
-   * ⚠️ THE OLD REASON WAS WRONG AND IT IS WORTH RECORDING WHY. It argued that a
-   * span has TWO values so `upper` cannot say which end it belongs to. For an
-   * INTERVAL that is false: above-the-max and below-the-min are each unique, so
-   * a body with one cap at each end is perfectly expressible. David saw it
-   * immediately - *"in our model, are candlestick graphs not just floating bars
-   * + errorbars?"* Geometrically, yes.
+   * David, 2026-09-03, dissolving my own reasoning in one sentence: *"A floating
+   * bar chart is just a bar chart, but with two ends on the span. And error bars
+   * work exactly the same, on each end."*
    *
-   * ▶ WHAT ACTUALLY REFUSES IT IS THE RECORD, and the generators say so
-   * (tenet 11b, measured 2026-09-03). `plotly.graph_objects.Candlestick` takes
-   * `open, high, low, close` and carries first-class `increasing` / `decreasing`
-   * properties; `mplfinance` REFUSES a frame with `Close` missing and decides
-   * direction as `close > open`. A candle's colour IS which way the period
-   * moved - and our span record SORTS its two ends, deliberately, so that two
-   * people capturing one span produce one file. Sorting discards precisely the
-   * fact a candlestick is about. Four NAMED values carry it by construction,
-   * which is also how `bxp` grew its optional `mean` / `cilo` / `cihi` rather
-   * than borrowing `errorbar`.
+   * ⚠️ WHAT STOOD HERE UNTIL v2.5 REFUSED ERROR OUTRIGHT, and it was wrong in
+   * two different ways, one after the other. The first argued a span has TWO
+   * values so `upper` cannot say which end it belongs to - true only while the
+   * role hangs off the TUPLE. It hangs off the END now, so the ambiguity never
+   * arises. The second, written the same day, said a span with uncertainty at
+   * each end simply IS a candlestick. It is not: a candle's wicks are the
+   * highest and lowest prices TRADED - data - where a span's caps are
+   * STATISTICAL uncertainty. Same geometry, different claim, and recording wicks
+   * as error would file four measurements as two-plus-a-doubt, invisibly.
    *
-   * ⚑ So the conclusion stands and the reasoning is now the checkable one. See
-   * `project_bar_family_generator_sweep`.
+   * ⚑ CHECKED AGAINST THE GENERATORS rather than asserted (tenet 11b, measured
+   * 2026-09-03): matplotlib's `yerr` is `shape(2, N)` - per data point - and
+   * ggplot2's `geom_errorbar` takes one LAYER per end. Neither offers a
+   * span-with-error primitive; you COMPOSE one from a bar plus an error layer
+   * per end, which is this record exactly. David's own reference figure was
+   * regenerated from the proposed record before any of it was built.
+   *
+   * ⚑ Candlestick remains a type of its own, on the box-plot pattern - four
+   * NAMED values, because a span SORTS its ends and sorting discards precisely
+   * the direction a candle is about. See
+   * `project_candlestick_and_span_error_taxonomy`.
    */
-  errorBarsRefusal:
-    'A span with uncertainty at each end is a Candlestick, which is a type of its own: a candle records open, high, low and close, and which end is the OPEN is what its colour shows - a span sorts its two ends, so that direction cannot be kept. Coming in a later release.',
+  errorValueSlots: [0, 1],
   // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
   // - the same slot Bar, Box Plot and the heatmap's counts use.
   calibrationDimensions: 3,

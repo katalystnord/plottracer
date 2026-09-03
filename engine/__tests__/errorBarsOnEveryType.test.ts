@@ -4,6 +4,7 @@ import path from 'node:path';
 import { CalibrationSession, type CalibratedAxes } from '../calibrationSession.js';
 import { ALL_TYPES, calibratedHealthy, labelOf } from './fixtures/anyType.js';
 import { capFreeDirection } from '../../algorithms/errorCapture.js';
+import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 import { hasErrorSlots } from '../../algorithms/errorExtent.js';
 
 /**
@@ -65,16 +66,32 @@ describe('every graph type records error the same way', () => {
       // its five letter values.
       const slots = session.getDataset().getSlotNames();
       expect(hasErrorSlots(slots), `${id}'s slots do not end in the four roles`).toBe(true);
-      expect(slots.slice(-4)).toEqual(['SD upper', 'SD lower', 'SD left', 'SD right']);
+      // ⚑⚑ ONE GROUP PER END (v2.5). Every type here has ONE named value and so
+      // one group, reading exactly as it always has - except a Span, which
+      // carries error on each of its two ends and so names its groups after the
+      // ends, because 'SD upper' twice would be the same column written twice.
+      const ends = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)?.errorValueSlots ?? [0];
+      const expected =
+        ends.length > 1
+          ? ['SD upper', 'SD lower', 'SD left', 'SD right'].map((n) => `Opposite corner ${n}`)
+          : ['SD upper', 'SD lower', 'SD left', 'SD right'];
+      expect(slots.slice(-4)).toEqual(expected);
       // Nothing the type owned was overwritten to make room.
-      if (ownSlots > 0) expect(slots.length).toBe(ownSlots + 4);
+      if (ownSlots > 0) expect(slots.length).toBe(ownSlots + 4 * ends.length);
 
       // ⚑ THE SAME WHISKER BUILDER, with no branch per type: a cap and its
       // mirror are two whiskers, drawn from the stored pairing.
       expect(session.getErrorWhiskers().length, `${id} drew no whisker`).toBe(2);
 
-      // ⚑ And the SAME accessor reports the roles that were measured.
-      expect(session.getErrorColumns(0).map((c) => c.label)).toEqual(['SD upper', 'SD lower']);
+      // ⚑ And the SAME accessor reports the roles that were measured, under the
+      // end they were measured against - named for the REPORTED value, so the
+      // error columns mirror the value columns rather than the capture slots.
+      const reported = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)?.intervalSlots;
+      const prefix = ends.length > 1 ? `${reported?.[0] ?? ''} ` : '';
+      expect(session.getErrorColumns(0).map((c) => c.label)).toEqual([
+        `${prefix}SD upper`,
+        `${prefix}SD lower`,
+      ]);
     });
   }
 });

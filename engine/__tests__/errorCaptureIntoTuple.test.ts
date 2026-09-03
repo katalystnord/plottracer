@@ -163,7 +163,7 @@ describe('capturing a cap writes it onto the datum, not into a new series', () =
     expect(cap(s, { x: 200, y: 200 }, { x: 200, y: 160 })).toBeNull();
     const ds = s.getDatasets()[0]!;
     const slots = ds.getSlotNames();
-    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots.length)]!;
+    const lowerPixel = ds.getAllTuples()[0]![slotForRole('lower', slots)]!;
     ds.setPixelAt(lowerPixel, 200, 280); // user drags the lower cap far out
     const asymmetricLower = s.getResolvedErrorBars(0)[0]!.yLower!;
 

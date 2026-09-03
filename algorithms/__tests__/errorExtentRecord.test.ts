@@ -50,7 +50,9 @@ describe('the slot list is derived from the roles, so a role cannot be forgotten
       const slot = slotForRole(role);
       expect(slot, `${role} has no slot`).toBeGreaterThan(0); // 0 is the datum
       expect(ERROR_EXTENT_SLOTS[slot], `${role}'s slot is unnamed`).toBeTruthy();
-      expect(roleForSlot(slot), `${role}'s slot does not map back`).toBe(role);
+      // ⚑ v2.5: the inverse names the END as well as the role, because error
+      // attaches to a named VALUE - a span has two. A one-value type is end 0.
+      expect(roleForSlot(slot), `${role}'s slot does not map back`).toEqual({ role, valueIndex: 0 });
     }
   });
 
@@ -239,9 +241,9 @@ describe('error bars on a series that ALREADY has slots - a bar chart', () => {
     // have reported the BAR'S OWN far corner as its error bar: a wrong number
     // that looks entirely plausible, on the type where the value IS an extent.
     const barSlots = ['Bar start', 'Bar end', 'SD upper', 'SD lower', 'SD left', 'SD right'];
-    expect(slotForRole('upper', barSlots.length)).toBe(2); // NOT 1
-    expect(roleForSlot(1, barSlots.length)).toBeNull(); // 'Bar end' is no one's extent
-    expect(roleForSlot(0, barSlots.length)).toBeNull();
+    expect(slotForRole('upper', barSlots)).toBe(2); // NOT 1
+    expect(roleForSlot(1, barSlots)).toBeNull(); // 'Bar end' is no one's extent
+    expect(roleForSlot(0, barSlots)).toBeNull();
 
     const points = [
       { x: 1, y: 0 }, // 0: bar start
@@ -249,7 +251,7 @@ describe('error bars on a series that ALREADY has slots - a bar chart', () => {
       { x: 1, y: 12 }, // 2: SD upper
       { x: 1, y: 8 }, // 3: SD lower
     ];
-    const [bar] = errorBarsFromTuples([[0, 1, 2, 3, null, null]], lookup(points), barSlots.length);
+    const [bar] = errorBarsFromTuples([[0, 1, 2, 3, null, null]], lookup(points), barSlots);
     expect(bar).toMatchObject({ x: 1, y: 0, yUpper: 12, yLower: 8 });
     // The bar's own top (10) must not appear as an error reading anywhere.
     expect(bar!.yUpper).not.toBe(10);

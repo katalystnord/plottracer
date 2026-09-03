@@ -75,7 +75,7 @@ describe('one accessor answers for every way an error is stored', () => {
     ds.addPixel(200, 200); // (5, 5) -- the datum, placed BEFORE error was thought of
     ds.adoptSlots(slots); // ...which is the point: error is added afterwards
     const cap = ds.addPixel(200, 160); // (5, 7)
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
+    ds.addToTupleAt(0, slotForRole('upper', slots), cap);
 
     const bars = s.getResolvedErrorBars(0);
     expect(bars).toHaveLength(1);
@@ -109,7 +109,7 @@ describe('one accessor answers for every way an error is stored', () => {
     ds.addPixel(200, 200);
     ds.adoptSlots(slots);
     const cap = ds.addPixel(200, 160);
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
+    ds.addToTupleAt(0, slotForRole('upper', slots), cap);
 
     expect(readings(newWay.getResolvedErrorBars(0))).toEqual(readings(oldWay.getResolvedErrorBars(0)));
     // ⚑ And the asymmetry itself is pinned, so it cannot quietly become
@@ -134,7 +134,7 @@ describe('one accessor answers for every way an error is stored', () => {
     dsW.addPixel(200, 200);
     const capW = dsW.addPixel(200, 160); // cap added too early
     dsW.adoptSlots(slots);
-    dsW.addToTupleAt(0, slotForRole('upper', slots.length), capW);
+    dsW.addToTupleAt(0, slotForRole('upper', slots), capW);
     expect(wrong.getResolvedErrorBars(0), 'the cap became its own datum').toHaveLength(2);
 
     const right = session();
@@ -142,7 +142,7 @@ describe('one accessor answers for every way an error is stored', () => {
     dsR.addPixel(200, 200);
     dsR.adoptSlots(slots); // adopt FIRST
     const capR = dsR.addPixel(200, 160);
-    dsR.addToTupleAt(0, slotForRole('upper', slots.length), capR);
+    dsR.addToTupleAt(0, slotForRole('upper', slots), capR);
     expect(right.getResolvedErrorBars(0)).toHaveLength(1);
   });
 
@@ -169,7 +169,7 @@ describe('one accessor answers for every way an error is stored', () => {
     ds.addPixel(200, 200); // (5, 5)
     ds.adoptSlots(slots);
     const cap = ds.addPixel(200, 160); // (5, 7) -- the recorded one
-    ds.addToTupleAt(0, slotForRole('upper', slots.length), cap);
+    ds.addToTupleAt(0, slotForRole('upper', slots), cap);
 
     const strayIndex = s.addDataset('SD upper');
     setErrorRelation(s.getDatasets()[strayIndex]!, { role: 'upper', of: 'Sample' });

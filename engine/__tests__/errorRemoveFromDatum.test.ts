@@ -45,7 +45,7 @@ function twoCappedPoints() {
   const slots = errorSlotNames('SD');
   ds.adoptSlots(slots);
   const put = (tuple: number, role: 'upper' | 'lower', x: number, y: number) =>
-    ds.addToTupleAt(tuple, slotForRole(role, slots.length), ds.addPixel(x, y));
+    ds.addToTupleAt(tuple, slotForRole(role, slots), ds.addPixel(x, y));
   put(0, 'upper', 180, 190);
   put(0, 'lower', 180, 250);
   put(1, 'upper', 260, 130);

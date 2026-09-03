@@ -59,6 +59,16 @@ export interface ErrorBarPoint {
    * row's error by one. See `errorBarsFromTuples` for the full note (F41).
    */
   tupleIndex?: number;
+  /**
+   * WHICH CAPTURED END of that tuple this bar hangs off - 0 for a type with one
+   * value (XY, bar), 0 or 1 for a span's two ends.
+   *
+   * ⚑ David, 2026-09-03: *"error works exactly the same, on each end."* The
+   * index is the OWN SLOT the error was captured against, which is the stable
+   * identity: a span's `Min`/`Max` are its two corners SORTED, and sorting is
+   * not an identity - drag one corner past the other and the names swap.
+   */
+  valueIndex?: number;
 }
 
 /**

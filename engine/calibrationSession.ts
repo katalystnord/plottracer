@@ -216,6 +216,8 @@ import {
 import {
   hasErrorSlots,
   errorBarsFromTuples,
+  errorGroupCount,
+  ownSlotCount,
   slotForRole,
   errorSlotNames,
   ownSlotNames,
@@ -1092,9 +1094,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const slots = dataset.getSlotNames();
     if (!hasErrorSlots(slots)) return dataset.getCount();
     let caps = 0;
+    const groups = errorGroupCount(slots);
     for (const tuple of dataset.getAllTuples()) {
-      for (const role of ERROR_ROLES) {
-        if (tuple[slotForRole(role, slots.length)] != null) caps++;
+      for (let valueIndex = 0; valueIndex < groups; valueIndex += 1) {
+        for (const role of ERROR_ROLES) {
+          if (tuple[slotForRole(role, slots, valueIndex)] != null) caps++;
+        }
       }
     }
     return dataset.getCount() - caps;
@@ -1138,7 +1143,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // the same inverse `hasErrorSlots` relies on, for the same reason (a box
     // plot has five own slots and a count-based guess reads four of them as
     // roles).
-    const ownCount = slots.length - ERROR_ROLES.length;
+    // ⚑ v2.5: the SUBTRACTION is gone. The comment above has always said this is
+    // `ownSlotNames`' question, and a fixed "minus four" was right only while
+    // every tuple carried exactly one role group. A span carries two.
+    const ownCount = ownSlotCount(slots);
     const rows: number[] = [];
     for (const tuple of entry.dataset.getAllTuples()) {
       for (let slot = 0; slot < ownCount; slot += 1) {
@@ -1166,13 +1174,87 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * (pattern 3). Same presence-is-the-signal rule as the `role` and `delta`
    * columns beside it.
    */
-  getErrorColumns(index: number): { role: ErrorRole; label: string }[] {
+
+  /**
+   * ⚑⚑ WHICH REPORTED COLUMN EACH CAPTURED END FILLS, PER TUPLE.
+   *
+   * The record stores error against the CORNER it was measured on, because that
+   * is the stable identity. The table and the exports report a span's ends
+   * SORTED - `Min` then `Max`, so that two people capturing the same span
+   * produce the same file - and sorting is per TUPLE. So corner 0 can be the
+   * `Min` of one span and the `Max` of the next.
+   *
+   * ⚠️ WITHOUT THIS THE TWO WOULD DRIFT APART SILENTLY: the `Min` column would
+   * carry one corner's VALUE beside the other corner's UNCERTAINTY, every number
+   * plausible, nothing on screen saying which pair belonged together. That is
+   * the same failure as F41 one floor up, in the other direction.
+   *
+   * ⚑ Sorted on the SAME quantity the value cells sort on - a 1-D axes carries
+   * its one value in both fields, so `y` is the reading - rather than on a
+   * second definition that could disagree with `interval()`.
+   */
+  private endColumnOrder(index: number): Map<string, number> {
+    const out = new Map<string, number>();
+    if (this.errorCarrierSlots().length < 2 || !this.config.intervalSlots) return out;
+    const byTuple = new Map<number, { valueIndex: number; value: number }[]>();
+    for (const bar of this.getResolvedErrorBars(index)) {
+      if (bar.tupleIndex === undefined) continue;
+      const list = byTuple.get(bar.tupleIndex) ?? [];
+      list.push({ valueIndex: bar.valueIndex ?? 0, value: bar.y ?? 0 });
+      byTuple.set(bar.tupleIndex, list);
+    }
+    for (const [tupleIndex, ends] of byTuple) {
+      [...ends]
+        .sort((a, b) => a.value - b.value)
+        .forEach((end, position) => out.set(`${tupleIndex}:${end.valueIndex}`, position));
+    }
+    return out;
+  }
+
+  /** The user's own word for the error ('SD'), recovered from a group's slot
+   *  name by removing the end label this session prefixed it with. */
+  private errorBaseWord(tailName: string, groupLabel: string): string {
+    const prefix = `${groupLabel} `;
+    return tailName.startsWith(prefix) ? tailName.slice(prefix.length) : tailName;
+  }
+
+  getErrorColumns(index: number): { role: ErrorRole; valueIndex: number; label: string }[] {
     const tail = this.getErrorSlotNames(index);
     if (tail.length === 0) return [];
     const bars = this.getResolvedErrorBars(index);
-    return ERROR_ROLES.flatMap((role, i) =>
-      bars.some((b) => b[ROLE_FIELD[role]] !== undefined) ? [{ role, label: tail[i] ?? role }] : []
-    );
+    // ⚑⚑ ONE GROUP PER CAPTURED END (v2.5). A span carries error on each end, so
+    // 'Corner SD upper' and 'Opposite corner SD upper' are different columns
+    // rather than the same slot written twice. A one-value type has one group
+    // and its columns are exactly what they were.
+    const groups = tail.length / ERROR_ROLES.length;
+    const columns: { role: ErrorRole; valueIndex: number; label: string }[] = [];
+    // ⚑⚑ THE COLUMN IS NAMED FOR THE REPORTED VALUE, NOT THE CORNER. What the
+    // table calls a value it must call its error - David's mirror rule: *"even
+    // better when two things can mirror each other in a visual way."* A user
+    // reading `Min` beside `Corner SD upper` would have to be TOLD they are the
+    // same end, which is the definition of matching rather than mirroring.
+    const order = this.endColumnOrder(index);
+    const reported = this.config.intervalSlots;
+    const ownSlots = this.ownSlots(this.datasetEntries[index]!.dataset);
+    const carriers = this.errorCarrierSlots();
+    const positionOf = (bar: ErrorBarPoint): number =>
+      order.get(`${bar.tupleIndex}:${bar.valueIndex ?? 0}`) ?? (bar.valueIndex ?? 0);
+    for (let valueIndex = 0; valueIndex < groups; valueIndex += 1) {
+      ERROR_ROLES.forEach((role, i) => {
+        const slotName = tail[valueIndex * ERROR_ROLES.length + i] ?? role;
+        const measured = bars.some(
+          (b) =>
+            (reported ? positionOf(b) : (b.valueIndex ?? 0)) === valueIndex &&
+            b[ROLE_FIELD[role]] !== undefined
+        );
+        if (!measured) return;
+        const label = reported
+          ? `${reported[valueIndex] ?? valueIndex} ${this.errorBaseWord(slotName, ownSlots[carriers[valueIndex] ?? 0] ?? '')}`
+          : slotName;
+        columns.push({ role, valueIndex, label });
+      });
+    }
+    return columns;
   }
 
   /**
@@ -1233,9 +1315,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // lets each row be rounded at ITS OWN datum's pixel - see `roundErrorAt`.
     const pixels = this.datasetEntries[index]?.dataset.getAllPixels() ?? [];
     const datumPixels = this.getDatumPixelIndices(index).map((i) => pixels[i] ?? null);
+    const order = this.endColumnOrder(index);
     return this.getResolvedErrorBars(index).map((bar, row) =>
+      // ⚑ A row is ONE captured end, so the other end's columns are blank on it
+      // rather than repeating this end's reading under the other's heading.
       columns.map((c) =>
-        this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(bar[ROLE_FIELD[c.role]] ?? null)
+        (order.get(`${bar.tupleIndex}:${bar.valueIndex ?? 0}`) ?? (bar.valueIndex ?? 0)) !== c.valueIndex
+          ? null
+          : this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(bar[ROLE_FIELD[c.role]] ?? null)
       )
     );
   }
@@ -1291,14 +1378,28 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return null;
     };
     const rows: ((number | null)[] | null)[] = Array.from({ length: tuples.length }, () => null);
+    // ⚑⚑ A TUPLE'S ENDS SHARE ITS ROW (v2.5). A span produces one bar per end,
+    // and a table row is a TUPLE - so writing the row per bar let the second end
+    // overwrite the first and the low end's readings vanished. Indexed by end so
+    // each column is filled by the bar that belongs to it.
+    const order = this.endColumnOrder(index);
+    const reportedEnd = (bar: ErrorBarPoint): number =>
+      order.get(`${bar.tupleIndex}:${bar.valueIndex ?? 0}`) ?? (bar.valueIndex ?? 0);
+    const barFor = new Map<string, ErrorBarPoint>();
     for (const bar of this.getResolvedErrorBars(index)) {
       // ⚑ A bar with no tuple came from the import-boundary path, which resolves
       // caps geometrically and has no tuple to name. It cannot be filed.
       if (bar.tupleIndex === undefined) continue;
-      const pixel = datumPixelOf(bar.tupleIndex);
-      rows[bar.tupleIndex] = columns.map((c) =>
-        this.roundErrorAt(pixel, c.role, mode)(read(bar, c.role))
-      );
+      barFor.set(`${bar.tupleIndex}:${reportedEnd(bar)}`, bar);
+    }
+    for (let tupleIndex = 0; tupleIndex < tuples.length; tupleIndex += 1) {
+      const mine = columns.map((c) => barFor.get(`${tupleIndex}:${c.valueIndex}`));
+      if (mine.every((bar) => bar === undefined)) continue;
+      const pixel = datumPixelOf(tupleIndex);
+      rows[tupleIndex] = columns.map((c, i) => {
+        const bar = mine[i];
+        return bar === undefined ? null : this.roundErrorAt(pixel, c.role, mode)(read(bar, c.role));
+      });
     }
     return rows;
   }
@@ -1312,10 +1413,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (columns.length === 0) return [];
     const pixels = this.datasetEntries[index]?.dataset.getAllPixels() ?? [];
     const datumPixels = this.getDatumPixelIndices(index).map((i) => pixels[i] ?? null);
+    const order = this.endColumnOrder(index);
     return this.getResolvedErrorBars(index).map((bar, row) => {
       const d = deltasFromBar(bar);
       return columns.map((c) =>
-        this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(d[ROLE_FIELD[c.role]] ?? null)
+        (order.get(`${bar.tupleIndex}:${bar.valueIndex ?? 0}`) ?? (bar.valueIndex ?? 0)) !== c.valueIndex
+          ? null
+          : this.roundErrorAt(datumPixels[row] ?? null, c.role, mode)(d[ROLE_FIELD[c.role]] ?? null)
       );
     });
   }
@@ -1339,7 +1443,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!hasErrorSlots(slots)) return caps;
     for (const tuple of entry.dataset.getAllTuples()) {
       for (const role of ERROR_ROLES) {
-        const pixelIndex = tuple[slotForRole(role, slots.length)];
+        const pixelIndex = tuple[slotForRole(role, slots)];
         if (pixelIndex == null) continue;
         // ⚑⚑ THE SAME LINE THE MODEL WILL CONSTRAIN TO, not one derived from the
         // drawing. `updateDataPointPixel` runs the drag through
@@ -1450,7 +1554,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const slots = entry.dataset.getSlotNames();
     if (hasErrorSlots(slots)) {
       const points = toData(entry.dataset);
-      return errorBarsFromTuples(entry.dataset.getAllTuples(), (i) => points[i] ?? null, slots.length);
+      return errorBarsFromTuples(entry.dataset.getAllTuples(), (i) => points[i] ?? null, slots);
     }
 
     // The IMPORT-BOUNDARY path: a WPD file, or any of ours written before B4,
@@ -1629,7 +1733,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // with a SHADED BAND are 14,220, ~350× more common, and that is a second
     // CARRIER rather than a second cap set.
     const ownSlots = ds.getSlotNames();
-    const errorGoesInTuple = !hasErrorSlots(ownSlots) || errorSlotNames(base, []).every((n) => ownSlots.includes(n));
+    const carriers = this.errorCarrierSlots();
+    /** ⚑ One group label per carrier, so a span's two ends get columns that
+     * cannot be confused ('Corner SD upper' / 'Opposite corner SD upper'). A
+     * one-value type passes a single blank label and reads 'SD upper' exactly as
+     * before. */
+    const groupLabels =
+      carriers.length > 1 ? carriers.map((slot) => ownSlots[slot] ?? `Value ${slot + 1}`) : [''];
+    const errorGoesInTuple =
+      !hasErrorSlots(ownSlots) ||
+      errorSlotNames(base, [], groupLabels).every((n) => ownSlots.includes(n));
     if (!errorGoesInTuple) {
       const targetName = ds.name;
       const placed = this.addCapTo(base, role, targetName, cap);
@@ -1640,7 +1753,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       return placed ?? mirror;
     }
     if (!hasErrorSlots(ownSlots)) {
-      ds.adoptSlots(errorSlotNames(base, ds.hasSlots() ? ownSlots : ['Value']));
+      ds.adoptSlots(errorSlotNames(base, ds.hasSlots() ? ownSlots : ['Value'], groupLabels));
     }
     const slots = ds.getSlotNames();
 
@@ -1648,11 +1761,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // to a point of this series, so this is a lookup rather than a guess -- and
     // an unmatched drag is REFUSED rather than inventing a datum to hang the
     // extent off, because an extent with no carrier is not a measurement.
-    const tupleIndex = this.tupleIndexAtDatum(ds, opts.datumPixel);
+    const { tupleIndex, valueIndex } = this.tupleIndexAtDatum(ds, opts.datumPixel, carriers);
     if (tupleIndex < 0) return 'Drag from one of this series\' own data points out to its error cap.';
 
     const write = (r: ErrorRole, at: { x: number; y: number }): void => {
-      const slot = slotForRole(r, slots.length);
+      const slot = slotForRole(r, slots, valueIndex);
       const existing = ds.getAllTuples()[tupleIndex]?.[slot];
       if (existing !== null && existing !== undefined) {
         // Re-capture MOVES the cap. Adding a second pixel would leave the first
@@ -1676,7 +1789,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // on the very feature ("asymmetric error bars") this rework exists to make
     // workable.
     const opposite = oppositeRole(role);
-    if (ds.getAllTuples()[tupleIndex]?.[slotForRole(opposite, slots.length)] == null) {
+    if (ds.getAllTuples()[tupleIndex]?.[slotForRole(opposite, slots, valueIndex)] == null) {
       write(opposite, mirrorCap(opts.datumPixel, cap));
     }
 
@@ -1697,22 +1810,42 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * rounding difference must not lose the point. Bounded, so a drag that started
    * on nothing still refuses instead of attaching to whatever was furthest away.
    */
-  private tupleIndexAtDatum(ds: Dataset, datumPixel: { x: number; y: number }): number {
+  private tupleIndexAtDatum(
+    ds: Dataset,
+    datumPixel: { x: number; y: number },
+    /** The own slots a cap may hang off, in group order. Slot 0 alone for every
+     * one-value type; a span's two ends for a span. */
+    carriers: readonly number[] = [0]
+  ): { tupleIndex: number; valueIndex: number } {
     const pixels = ds.getAllPixels();
-    let best = -1;
+    let best = { tupleIndex: -1, valueIndex: 0 };
     let bestDistance = CAP_DATUM_MATCH_PX;
     ds.getAllTuples().forEach((tuple, i) => {
-      const pixelIndex = tuple[0];
-      if (pixelIndex === null || pixelIndex === undefined) return;
-      const p = pixels[pixelIndex];
-      if (!p) return;
-      const distance = Math.hypot(p.x - datumPixel.x, p.y - datumPixel.y);
-      if (distance <= bestDistance) {
-        bestDistance = distance;
-        best = i;
-      }
+      // ⚑⚑ WHICH END THE DRAG STARTED FROM IS THE MEASUREMENT (v2.5). A span
+      // carries error on each end, and nothing has to be asked to find out
+      // which: the user grabbed one of the two corners, and the UI has already
+      // snapped the drag's start to a point of this series. A prompted gesture
+      // is a reading of the user's own eye, and it costs a click that was
+      // needed anyway.
+      carriers.forEach((slot, valueIndex) => {
+        const pixelIndex = tuple[slot];
+        if (pixelIndex === null || pixelIndex === undefined) return;
+        const p = pixels[pixelIndex];
+        if (!p) return;
+        const distance = Math.hypot(p.x - datumPixel.x, p.y - datumPixel.y);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          best = { tupleIndex: i, valueIndex };
+        }
+      });
     });
     return best;
+  }
+
+  /** The own slots that can carry error on this type, in group order - the
+   * config's answer, defaulted to the single value at slot 0. */
+  private errorCarrierSlots(): readonly number[] {
+    return this.config.errorValueSlots ?? [0];
   }
 
   /**
@@ -1794,13 +1927,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // starts. They did until 2026-08-29; see that method's note.
         const anchorFor = (tuple: readonly (number | null | undefined)[], cap: { x: number; y: number }) =>
           this.errorAnchorFor(entry.dataset, tuple, cap);
+        const carriers = this.errorCarrierSlots();
         for (const tuple of entry.dataset.getAllTuples()) {
-          const datumIndex = tuple[0];
+          // ⚑ A whisker hangs off the END it was captured against, so a span
+          // draws one set per end rather than both from the first corner.
+          for (const [valueIndex, carrier] of carriers.entries()) {
+          const datumIndex = tuple[carrier];
           if (datumIndex == null) continue;
           const datum = pixels[datumIndex];
           if (!datum) continue;
           for (const role of ERROR_ROLES) {
-            const capIndex = tuple[slotForRole(role, slots.length)];
+            const capIndex = tuple[slotForRole(role, slots, valueIndex)];
             if (capIndex == null) continue;
             const cap = pixels[capIndex];
             if (!cap) continue;
@@ -1810,6 +1947,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
               color,
               ...(active ? { capMarkerId: dataPointMarkerId(capIndex) } : {}),
             });
+          }
           }
         }
         continue;
@@ -1939,7 +2077,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const tuple = ds.getAllTuples()[tupleIndex];
     if (!tuple) return false;
 
-    const capPixels = ERROR_ROLES.map((role) => tuple[slotForRole(role, slots.length)])
+    const capPixels = this.errorCarrierSlots()
+      .flatMap((_, valueIndex) => ERROR_ROLES.map((role) => tuple[slotForRole(role, slots, valueIndex)]))
       .filter((i): i is number => i !== null && i !== undefined)
       .sort((a, b) => b - a);
     if (capPixels.length === 0) return false;
@@ -1965,13 +2104,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
   ): { role: ErrorRole; datumPixelIndex: number; tuple: readonly (number | null | undefined)[] } | null {
     const slots = ds.getSlotNames();
     if (!hasErrorSlots(slots)) return null;
+    const carriers = this.errorCarrierSlots();
     for (const tuple of ds.getAllTuples()) {
-      const datumPixelIndex = tuple[0];
-      if (datumPixelIndex == null) continue;
-      for (const role of ERROR_ROLES) {
-        // ⚑ The TUPLE comes back too, because a bar's whisker is anchored at the
-        // bar's CENTRE and the centre needs both corners. See `errorAnchorFor`.
-        if (tuple[slotForRole(role, slots.length)] === pixelIndex) return { role, datumPixelIndex, tuple };
+      for (const [valueIndex, carrier] of carriers.entries()) {
+        const datumPixelIndex = tuple[carrier];
+        if (datumPixelIndex == null) continue;
+        for (const role of ERROR_ROLES) {
+          // ⚑ The TUPLE comes back too, because a bar's whisker is anchored at the
+          // bar's CENTRE and the centre needs both corners. See `errorAnchorFor`.
+          if (tuple[slotForRole(role, slots, valueIndex)] === pixelIndex) {
+            return { role, datumPixelIndex, tuple };
+          }
+        }
       }
     }
     return null;

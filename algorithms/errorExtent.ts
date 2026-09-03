@@ -70,8 +70,56 @@ export const ERROR_EXTENT_SLOTS: readonly string[] = [
  * was a per-dataset "where do my error slots begin" field, which is state that
  * can disagree with the thing it describes.
  */
-function errorSlotBase(slotCount: number): number {
-  return slotCount - ERROR_ROLES.length;
+/**
+ * How many tuple members sit BEFORE the error tail - the type's own slots,
+ * INCLUDING the synthetic 'Value' that stands in for an XY datum.
+ *
+ * ⚠️ NOT `ownSlotNames(...).length`, and the difference is a silent emptying.
+ * `ownSlotNames` answers "which slots belong to the TYPE", so it drops the
+ * synthetic member and returns `[]` for an XY series - correct for a table
+ * asking what columns to draw, and fatal for a loop asking which members hold
+ * datums, which then walked none of them and exported no rows at all.
+ */
+export function ownSlotCount(slotNames: readonly string[]): number {
+  return errorSlotBase(slotNames);
+}
+
+function errorSlotBase(slotNames: readonly string[]): number {
+  return slotNames.length - ERROR_ROLES.length * errorGroupCount(slotNames);
+}
+
+/**
+ * ⚑⚑ HOW MANY ROLE GROUPS THE TAIL CARRIES - one per CAPTURED VALUE.
+ *
+ * David, 2026-09-03: *"Error bars work exactly the same, on each end."* A span
+ * has two ends, so it has two groups; an XY point has one. Before this the tail
+ * was a single group by construction, which is the tuple-level assumption that
+ * put an upper cap on the low end and an upper cap on the high end into the
+ * SAME slot - the second silently overwriting the first.
+ *
+ * ⚑ COUNTED FROM THE NAMES, like `hasErrorSlots`, and for the same reason: a
+ * stored "how many groups" field is state that can disagree with the slot list
+ * it describes, and it would have to survive the file, an import and every undo.
+ *
+ * ⚑ It stops before consuming the last slot. A tuple needs a member 0 to hang
+ * its extents off - `errorBarsFromTuples` yields nothing for a tuple with no
+ * datum - so a greedy count that ate every slot would leave a carrier-less
+ * record that still looked well formed.
+ */
+export function errorGroupCount(slotNames: readonly string[]): number {
+  let groups = 0;
+  let end = slotNames.length;
+  while (end - ERROR_ROLES.length >= 1) {
+    const tail = slotNames.slice(end - ERROR_ROLES.length, end);
+    const isGroup = tail.every((name, i) => {
+      const words = name.trim().toLowerCase().split(/\s+/);
+      return words[words.length - 1] === ERROR_ROLES[i];
+    });
+    if (!isGroup) break;
+    groups += 1;
+    end -= ERROR_ROLES.length;
+  }
+  return groups;
 }
 
 /**
@@ -96,27 +144,32 @@ function errorSlotBase(slotCount: number): number {
  * survive the project file, an import, and every undo.
  */
 export function hasErrorSlots(slotNames: readonly string[]): boolean {
-  if (slotNames.length < ERROR_ROLES.length + 1) return false; // no room for a datum plus four
-  const tail = slotNames.slice(errorSlotBase(slotNames.length));
-  return tail.every((name, i) => {
-    const words = name.trim().toLowerCase().split(/\s+/);
-    return words[words.length - 1] === ERROR_ROLES[i];
-  });
+  return errorGroupCount(slotNames) > 0;
 }
 
 /**
  * Which tuple slot a role's cap occupies, in a tuple of `slotCount` members.
  * Defaults to the plain XY shape so the common call reads unchanged.
  */
-export function slotForRole(role: ErrorRole, slotCount: number = ERROR_EXTENT_SLOTS.length): number {
-  return errorSlotBase(slotCount) + ERROR_ROLES.indexOf(role);
+export function slotForRole(
+  role: ErrorRole,
+  slotNames: readonly string[] = ERROR_EXTENT_SLOTS,
+  valueIndex: number = 0
+): number {
+  return errorSlotBase(slotNames) + valueIndex * ERROR_ROLES.length + ERROR_ROLES.indexOf(role);
 }
 
 /** The role a slot carries, or null when the slot is one of the type's OWN
  * members (a datum, a bar corner) rather than an extent. */
-export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS.length): ErrorRole | null {
-  const offset = slot - errorSlotBase(slotCount);
-  return offset < 0 ? null : ERROR_ROLES[offset] ?? null;
+export function roleForSlot(
+  slot: number,
+  slotNames: readonly string[] = ERROR_EXTENT_SLOTS
+): { role: ErrorRole; valueIndex: number } | null {
+  const offset = slot - errorSlotBase(slotNames);
+  if (offset < 0) return null;
+  const role = ERROR_ROLES[offset % ERROR_ROLES.length];
+  const valueIndex = Math.floor(offset / ERROR_ROLES.length);
+  return role && valueIndex < errorGroupCount(slotNames) ? { role, valueIndex } : null;
 }
 
 /**
@@ -151,7 +204,7 @@ export function roleForSlot(slot: number, slotCount: number = ERROR_EXTENT_SLOTS
  */
 export function ownSlotNames(slotNames: readonly string[]): string[] {
   if (!hasErrorSlots(slotNames)) return [...slotNames];
-  const own = slotNames.slice(0, errorSlotBase(slotNames.length));
+  const own = slotNames.slice(0, errorSlotBase(slotNames));
   return own.length === 1 && own[0] === ERROR_EXTENT_SLOTS[0] ? [] : own;
 }
 
@@ -159,7 +212,7 @@ export function ownSlotNames(slotNames: readonly string[]): string[] {
  * ('SD upper', 'SD lower', …). Empty for a series carrying no error, so a
  * caller can concatenate it unconditionally. */
 export function errorTailNames(slotNames: readonly string[]): string[] {
-  return hasErrorSlots(slotNames) ? slotNames.slice(errorSlotBase(slotNames.length)) : [];
+  return hasErrorSlots(slotNames) ? slotNames.slice(errorSlotBase(slotNames)) : [];
 }
 
 /**
@@ -177,9 +230,33 @@ export function errorTailNames(slotNames: readonly string[]): string[] {
  * The user still names the concept exactly once, still gets no default, and the
  * columns read 'SD upper' / 'SD lower' in the table and in the export.
  */
-export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Value']): string[] {
+export function errorSlotNames(
+  base: string,
+  ownSlots: readonly string[] = ['Value'],
+  /**
+   * ⚑⚑ ONE LABEL PER NAMED VALUE THAT CAN CARRY ERROR - the rule David settled
+   * on 2026-09-03: *"error works exactly the same, on each end."*
+   *
+   * The default is a single unlabelled group, which is every type's layout as it
+   * has always been ('SD upper'). A SPAN passes its two ends, so an upper cap on
+   * the low end and an upper cap on the high end stop colliding in one slot.
+   *
+   * ⚠️ NOT one group per OWN slot, which is the version I built first and the
+   * tests caught: a histogram and a pie have two own slots (`Bin start`/`Bin
+   * end`) and exactly ONE named value between them, so that gave both a second
+   * group of columns nobody had measured, and renamed the first. The
+   * multiplicity is the type's NAMED VALUES - `valueColumns.ts`' question,
+   * asked one layer down.
+   */
+  groupLabels: readonly string[] = ['']
+): string[] {
   const label = base.trim();
-  return [...ownSlots, ...ERROR_ROLES.map((role) => (label ? `${label} ${role}` : role))];
+  const named = (group: string, role: ErrorRole): string =>
+    [group.trim(), label, role].filter(Boolean).join(' ');
+  return [
+    ...ownSlots,
+    ...groupLabels.flatMap((group) => ERROR_ROLES.map((role) => named(group, role))),
+  ];
 }
 
 /**
@@ -201,11 +278,13 @@ export function errorSlotNames(base: string, ownSlots: readonly string[] = ['Val
 export function errorBarsFromTuples(
   tuples: readonly (readonly (number | null)[])[],
   pointAt: (pixelIndex: number) => { x: number; y: number } | null,
-  /** How many members a tuple has, so the error slots can be found at its END.
-   * Defaults to the plain XY shape. On a bar series this is 6, not 5. */
-  slotCount: number = ERROR_EXTENT_SLOTS.length
+  /** The tuple's slot NAMES, so the error groups can be found at its END and
+   * counted. Defaults to the plain XY shape. A bar has two own slots and so two
+   * groups; an XY point one. */
+  slotNames: readonly string[] = ERROR_EXTENT_SLOTS
 ): ErrorBarPoint[] {
   const bars: ErrorBarPoint[] = [];
+  const groups = errorGroupCount(slotNames);
   for (const [tupleIndex, tuple] of tuples.entries()) {
     // ⚑⚑ ONE GATE, NOT TWO (v2.3 re-audit, found by mutation). This used to test
     // the INDEX for null and then test the POINT it resolved to, and the second
@@ -215,7 +294,14 @@ export function errorBarsFromTuples(
     // passed, because the second one caught the case anyway. That is the exact
     // mutual masking `exportAssembly`'s `geometries` note records: "a second
     // gate behind the first, so neither could be shown to matter".
-    const datumIndex = tuple[0];
+    // ⚑⚑ ONE BAR PER CAPTURED END, not one per tuple (v2.5). A span has error on
+    // each end, so each end is a carrier in its own right; an XY point and a bar
+    // have one group and read exactly as before. ⚠️ It also repairs an
+    // alignment that was already wrong: `getDatumPixelIndices` has yielded one
+    // row per OWN SLOT since v2.3, so a bar series with error produced two rows
+    // against one bar and every reading after the first sat on the wrong row.
+    for (let valueIndex = 0; valueIndex < groups; valueIndex += 1) {
+    const datumIndex = tuple[valueIndex];
     const datum = datumIndex == null ? null : pointAt(datumIndex);
     if (!datum) continue;
 
@@ -229,15 +315,21 @@ export function errorBarsFromTuples(
     // F20's defect, still live on the other half of the app.
     // ⚑ Written by the skipping loop rather than re-derived by a second walk,
     // so the two cannot disagree about which tuples were dropped.
-    const bar: ErrorBarPoint = { x: datum.x, y: datum.y, tupleIndex };
+    // ⚑ THE END IS NAMED ONLY WHEN THERE IS MORE THAN ONE. The import-boundary
+    // path resolves caps geometrically and has no ends to speak of, so stamping
+    // `valueIndex: 0` on a one-value type would make the two primitives differ
+    // in the record while agreeing on every reading - which is precisely what
+    // `errorPrimitiveConvergence` exists to refuse.
+    const bar: ErrorBarPoint = { x: datum.x, y: datum.y, tupleIndex, ...(groups > 1 ? { valueIndex } : {}) };
     for (const role of ERROR_ROLES) {
       // The same one gate, for the same reason as the datum above.
-      const member = tuple[slotForRole(role, slotCount)];
+      const member = tuple[slotForRole(role, slotNames, valueIndex)];
       const cap = member == null ? null : pointAt(member);
       if (!cap) continue; // an empty slot, or one pointing at a pixel that is gone
       bar[ROLE_FIELD[role]] = role === 'upper' || role === 'lower' ? cap.y : cap.x;
     }
     bars.push(bar);
+    }
   }
   return bars;
 }

@@ -45,7 +45,7 @@ function withTupleCaps(
   const slots = errorSlotNames('SD');
   ds.adoptSlots(slots); // AFTER the datums, BEFORE the caps - order matters
   for (const c of caps) {
-    ds.addToTupleAt(c.tuple, slotForRole(c.role, slots.length), ds.addPixel(c.x, c.y));
+    ds.addToTupleAt(c.tuple, slotForRole(c.role, slots), ds.addPixel(c.x, c.y));
   }
   return ds;
 }

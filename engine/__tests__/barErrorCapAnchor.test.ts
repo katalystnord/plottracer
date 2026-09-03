@@ -58,7 +58,7 @@ describe("a bar's error cap is constrained to the line its whisker is drawn alon
   it('locks to the bar CENTRE, not to the corner the datum happens to be', () => {
     const s = barSession();
     const { slots, capIndex } = floatingBarWithCap(s, 250);
-    s.getDatasets()[0]!.addToTupleAt(0, slotForRole('upper', slots.length), capIndex);
+    s.getDatasets()[0]!.addToTupleAt(0, slotForRole('upper', slots), capIndex);
 
     const line = s.errorCapDragLine(0, capIndex);
     expect(line, 'a recorded cap must be constrained').not.toBeNull();
@@ -72,14 +72,14 @@ describe("a bar's error cap is constrained to the line its whisker is drawn alon
     // Upper cap above the high end: anchor at the HIGH end's centre.
     const up = barSession();
     const a = floatingBarWithCap(up, 250);
-    up.getDatasets()[0]!.addToTupleAt(0, slotForRole('upper', a.slots.length), a.capIndex);
+    up.getDatasets()[0]!.addToTupleAt(0, slotForRole('upper', a.slots), a.capIndex);
     const upperLine = up.errorCapDragLine(0, a.capIndex);
     expect(upperLine!.origin.y).toBeCloseTo(300, 6);
 
     // Lower cap below the low end: anchor at the LOW end's centre.
     const down = barSession();
     const b = floatingBarWithCap(down, 450);
-    down.getDatasets()[0]!.addToTupleAt(0, slotForRole('lower', b.slots.length), b.capIndex);
+    down.getDatasets()[0]!.addToTupleAt(0, slotForRole('lower', b.slots), b.capIndex);
     const lowerLine = down.errorCapDragLine(0, b.capIndex);
     expect(lowerLine!.origin.y).toBeCloseTo(400, 6);
 

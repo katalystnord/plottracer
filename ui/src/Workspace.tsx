@@ -8726,6 +8726,9 @@ export function Workspace() {
                 setErrorNotice(null);
               }}
               existing={errorSeriesRows}
+              // ⚑ The type's own answer, so a fourth end on a later type names
+              // itself here without this call site changing.
+              valueEnds={(config.errorValueSlots ?? [0]).length > 1 ? (config.intervalSlots ?? []) : []}
               onSelectSeries={handleSelectDataset}
               notice={errorNotice}
               calibrated={axes !== null}

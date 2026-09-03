@@ -213,10 +213,17 @@ describe('the config table - cross-cutting invariants', () => {
     // the floating case away, so a Bar now has ONE measured value and a
     // baseline, and `upper` means what it says again.
     //
-    // ⚑ The two that still refuse do so on MODEL grounds, which do not expire:
-    // a box has five measured values and a span two, so neither has a single
-    // value for an error to be measured FROM.
-    const refusing = ['boxplot', 'span'];
+    // ⚑⚑ SPAN ACCEPTS ERROR BARS TOO (v2.5), and my reason for refusing it was
+    // wrong rather than expired. I had argued that with two measured values
+    // `upper` cannot say which end it belongs to - true only while the role
+    // hangs off the TUPLE. David, 2026-09-03: *"error works exactly the same, on
+    // each end."* The role hangs off the END, so the ambiguity never arises, and
+    // `errorValueSlots` is where the type says how many ends it has.
+    //
+    // ⚑ THE ONE THAT STILL REFUSES DOES SO ON MODEL GROUNDS, which do not
+    // expire: a box plot's five values ARE the spread, so there is no single
+    // value for an error to be measured FROM. Its whiskers are the datum.
+    const refusing = ['boxplot'];
     for (const c of ALL) {
       if (!refusing.includes(c.id)) {
         expect(
