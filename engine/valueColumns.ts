@@ -8,10 +8,19 @@
  *   · `valueColumnNames` - the NAMES, in order;
  *   · `valueCells`       - the READINGS, aligned to those names.
  *
- * Every surface that shows or writes a datum's numbers asks THESE, so the panel,
- * the file and (next) the value editor cannot drift into three answers to one
- * question. That drift had already started: the panel derived its columns one
- * way and the exporter another.
+ * ⚠️ WHAT ASKS THESE TODAY, stated exactly rather than aspirationally: the BAR
+ * FAMILY's shared table (`BarTable`, serving Bar and Span), its value editor,
+ * and the tuple export path. Those three cannot drift into three answers, which
+ * is what this module was created to stop - the drift had already started, with
+ * the panel deriving its columns one way and the exporter another, and a stacked
+ * bar was where the two parted.
+ *
+ * ⛔ IT IS NOT YET THE WHOLE APP, and saying it was would be the gate-3 mistake:
+ * `TupleTable` (Box Plot), `SpiderTable`, `HeatmapCellsTable`,
+ * `HistogramBinsTable` and the flat spreadsheet all still answer this question
+ * their own way. Bringing them in is real work, not a rename - a pie's two
+ * boundary angles plus its derived proportion do not fit `valueColumnNames`'s
+ * three questions as they stand.
  *
  * ⚑⚑ THE RULE IS THE FAMILY'S, NOT OURS, and it came from asking the generators
  * (tenet 11b): a datum has N NAMED VALUES, and N is a property of the TYPE.
