@@ -104,7 +104,7 @@ describe('the config table - cross-cutting invariants', () => {
     // inconsistency in the family: it fell to the generic tuple table and listed
     // its boxes in CLICK ORDER while its neighbours listed theirs by category.
     const EXPECTED: Record<string, string[]> = {
-      bar: ['bar', 'boxplot', 'span'],
+      bar: ['bar', 'boxplot', 'candlestick', 'span'],
       bins: ['histogram'],
       heatmap: ['heatmap'],
       spider: ['spider'],
@@ -144,9 +144,10 @@ describe('the config table - cross-cutting invariants', () => {
     ).map((c) => c.id);
     const barPanel = ALL.filter((c) => c.outputPanel === 'bar').map((c) => c.id);
     expect(filesUnderCategories.sort()).toEqual(barPanel.sort());
-    // ⚑ Not vacuous: there are three of them today, and a Candlestick's four
-    // named values will make four without this line changing.
-    expect(barPanel).toHaveLength(3);
+    // ⚑ Not vacuous: four of them today - Bar, Span, Box Plot and Candlestick.
+    // The last of those arrived in v2.5 and needed nothing here but its own
+    // config, which is what this invariant is for.
+    expect(barPanel).toHaveLength(4);
   });
 
   it('⚑⚑ ...and it is the type that STANDS on its origin which offers a baseline', () => {
@@ -233,10 +234,11 @@ describe('the config table - cross-cutting invariants', () => {
     // each end."* The role hangs off the END, so the ambiguity never arises, and
     // `errorValueSlots` is where the type says how many ends it has.
     //
-    // ⚑ THE ONE THAT STILL REFUSES DOES SO ON MODEL GROUNDS, which do not
-    // expire: a box plot's five values ARE the spread, so there is no single
-    // value for an error to be measured FROM. Its whiskers are the datum.
-    const refusing = ['boxplot'];
+    // ⚑ THE TWO THAT STILL REFUSE DO SO ON MODEL GROUNDS, which do not expire:
+    // a box plot's five values ARE the spread and a candlestick's four ARE the
+    // period's extent, so neither has a single value for an error to be
+    // measured FROM. Their whiskers are the datum, not doubt about it.
+    const refusing = ['boxplot', 'candlestick'];
     for (const c of ALL) {
       if (!refusing.includes(c.id)) {
         expect(
@@ -544,6 +546,10 @@ describe('the config table - how many clicks each type asks for', () => {
       heatmap: 8,
       // Shares Bar's fixedSteps by reference, so it asks the same four.
       span: 4,
+      // Same again: a candlestick's WALK is a box plot's, and only the number
+      // of marks per datum differs (four, not five). The calibration is a bar
+      // chart's either way.
+      candlestick: 4,
     };
     // ⚑ NO SILENT PASS FOR AN UNLISTED TYPE. `toBe(undefined)` would quietly
     // succeed for any type missing from the table above - which is exactly how

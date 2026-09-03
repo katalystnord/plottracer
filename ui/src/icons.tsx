@@ -136,6 +136,11 @@ import graphHeatmapSvg from '../../icons/custom/graph-heatmap.svg?raw';
 import graphBarSvg from '../../icons/custom/graph-bar.svg?raw';
 import graphCategoricalLineSvg from '../../icons/custom/graph-categorical-line.svg?raw';
 import boxPlotSvg from '../../icons/custom/box-plot.svg?raw';
+// ⚑ The icon TEACHES THE CONVENTION the overlay uses: one hollow candle (the
+// period closed above where it opened) beside one filled candle (it closed
+// below). A user who has seen the card knows what a filled body means before
+// they place their first mark.
+import graphCandlestickSvg from '../../icons/custom/graph-candlestick.svg?raw';
 import graphPolarSvg from '../../icons/custom/graph-polar.svg?raw';
 import graphSpiderSvg from '../../icons/custom/graph-spider.svg?raw';
 import graphPieSvg from '../../icons/custom/graph-pie.svg?raw';
@@ -216,6 +221,9 @@ export const GraphBarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphB
 export const GraphCategoricalLineIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphCategoricalLineSvg} size={size} />;
 export const GraphBoxPlotIcon = ({ size }: GraphIconProps = {}) => <Icon svg={boxPlotSvg} size={size} />;
 export const GraphSpanIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphSpanSvg} size={size} />;
+export const GraphCandlestickIcon = ({ size }: GraphIconProps = {}) => (
+  <Icon svg={graphCandlestickSvg} size={size} />
+);
 export const GraphPolarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphPolarSvg} size={size} />;
 export const GraphSpiderIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphSpiderSvg} size={size} />;
 export const GraphPieIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphPieSvg} size={size} />;
@@ -239,6 +247,7 @@ export const GRAPH_TYPE_ICONS: Record<string, (props?: GraphIconProps) => React.
   bar: GraphBarIcon,
   categorical: GraphCategoricalLineIcon,
   boxplot: GraphBoxPlotIcon,
+  candlestick: GraphCandlestickIcon,
   span: GraphSpanIcon,
   polar: GraphPolarIcon,
   spider: GraphSpiderIcon,

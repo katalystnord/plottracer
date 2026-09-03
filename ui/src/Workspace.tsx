@@ -6273,6 +6273,7 @@ export function Workspace() {
     [session, version, currentGroupLabel, currentTupleIndex, tupleNoun]
   );
   const boxPlotGlyphs = useMemo(() => session.getBoxPlotGlyphs(), [session, version]);
+  const candlestickGlyphs = useMemo(() => session.getCandlestickGlyphs(), [session, version]);
   // Multi-figure (checkpoint 110). figuresRef is a ref, but every figure op ends
   // in setActiveFigureIndex, so this reads fresh on the re-render that follows.
   // The jumper (top, flanking the calibration card) shows only at ≥2 figures (§0).
@@ -8744,6 +8745,7 @@ export function Workspace() {
           seriesLines={seriesLines}
           calibrationPreview={calibPreview}
           boxPlotGlyphs={boxPlotGlyphs}
+          candlestickGlyphs={candlestickGlyphs}
           tupleGlyphs={allTupleGlyphs}
           aidGlyphs={allAidGlyphs}
           errorBarGlyphs={errorWhiskers}

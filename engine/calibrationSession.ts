@@ -202,6 +202,7 @@ import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segment
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
 import { computeBarGlyph } from './barGlyph.js';
 import { computeWhiskerGlyph, type WhiskerShape } from './errorBarGlyph.js';
+import { computeCandlestickGlyph, type CandlestickGlyph } from './candlestickGlyph.js';
 import { dataPointMarkerId } from './canvasOverlays.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
 import {
@@ -279,6 +280,7 @@ import {
   HISTOGRAM_SLOTS,
   OPPOSITE_CORNER_SLOTS,
   BOX_PLOT_SLOTS,
+  CANDLESTICK_SLOTS,
 } from './axesTypeConfigs.js';
 
 /** How a point of an interpolation-assist series came to exist.
@@ -5456,6 +5458,51 @@ export class CalibrationSession<A extends CalibratedAxes> {
             median: dataset.getPixel(medianI!),
             q3: dataset.getPixel(q3I!),
             max: dataset.getPixel(maxI!),
+          },
+          orientation
+        )
+      );
+    }
+    return glyphs;
+  }
+
+  /**
+   * ⚑⚑ THE CANDLESTICK OVERLAY - drawn after the four marks, exactly as the box
+   * plot's is, and for the same reason: a capture you cannot check by eye is a
+   * capture you cannot trust.
+   *
+   * ⚑ GATED THE SAME WAY `getBoxPlotGlyphs` IS - on the axes KIND plus the
+   * dataset's actual slot names, never on `config.id`. The slot check is what
+   * keeps a plain Bar or Categorical dataset from drawing candles, and it is the
+   * same inverse the box plot's uses one method up.
+   */
+  getCandlestickGlyphs(): CandlestickGlyph[] {
+    if (!this.axes || this.config.axesKind !== 'bar') return [];
+    const dataset = this.activeEntry.dataset;
+    const slots = ownSlotNames(dataset.getSlotNames()).map((g) => g.trim().toLowerCase());
+    const expected = CANDLESTICK_SLOTS.map((g) => g.toLowerCase());
+    if (slots.length !== expected.length || !slots.every((g, i) => g === expected[i])) return [];
+
+    const orientation: BoxPlotOrientation =
+      (this.axes as unknown as { calculateOrientation(): { axes: 'X' | 'Y' } }).calculateOrientation()
+        .axes === 'Y'
+        ? 'vertical'
+        : 'horizontal';
+
+    const glyphs: CandlestickGlyph[] = [];
+    for (const tuple of dataset.getAllTuples()) {
+      const [openI, highI, lowI, closeI] = tuple;
+      // ⚑ An incomplete candle draws nothing - the same rule the box plot has.
+      // A body between two marks and a wick to nowhere would be a picture of a
+      // reading that was never taken.
+      if (openI == null || highI == null || lowI == null || closeI == null) continue;
+      glyphs.push(
+        computeCandlestickGlyph(
+          {
+            open: dataset.getPixel(openI),
+            high: dataset.getPixel(highI),
+            low: dataset.getPixel(lowI),
+            close: dataset.getPixel(closeI),
           },
           orientation
         )

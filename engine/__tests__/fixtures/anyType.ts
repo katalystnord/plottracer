@@ -51,6 +51,9 @@ export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   bar: [[300, 500], [300, 100], [100, 500], [500, 500]],
   categorical: [[300, 500], [300, 100], [100, 500], [500, 500]],
   boxplot: [[300, 500], [300, 100], [100, 500], [500, 500]],
+  // ⚑ A candlestick is calibrated exactly as a box plot is - the walk is Box
+  // Plot's, only the number of marks per datum differs (four, not five).
+  candlestick: [[300, 500], [300, 100], [100, 500], [500, 500]],
   // ⚑ Span shares Bar's fixedSteps exactly, so it shares Bar's layout: two on
   // the VALUE axis, then the two ends of the CATEGORY axis.
   span: [[300, 500], [300, 100], [100, 500], [500, 500]],

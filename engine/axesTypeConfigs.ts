@@ -2691,6 +2691,127 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   },
 };
 
+/** The four captured points of a candlestick, IN CLICK ORDER - which is also
+ * the order that records the period's DIRECTION.
+ *
+ * ⚑⚑ THE ORDER IS THE MEASUREMENT. A candle's colour says which way the period
+ * moved, and colour is not readable: classic print uses FILLED vs HOLLOW while
+ * modern platforms use red vs green, and both conventions are live. The user can
+ * SEE which edge is the open and says so by clicking it first, which costs a
+ * gesture that was needed anyway. ⚠️ A colour sampler was designed for this and
+ * thrown away; see `project_candlestick_and_span_error_taxonomy`.
+ *
+ * ⚑ Named as every generator names them - `plotly.graph_objects.Candlestick`
+ * takes `open, high, low, close` and carries first-class `increasing` /
+ * `decreasing` properties; `mplfinance` REFUSES a frame missing any of the four
+ * (measured 2026-09-03: all four dropped in turn, all four refused). That FIXED
+ * ARITY is what puts this beside Box Plot rather than inside Span.
+ */
+export const CANDLESTICK_SLOTS = ['Open', 'High', 'Low', 'Close'] as const;
+
+/**
+ * ⚑⚑ CANDLESTICK AS ITS OWN TYPE (v2.5), patterned on Box Plot.
+ *
+ * David, 2026-09-03: *"A candlestick always has 4 points. Like a box plot always
+ * has 5."* And on why it is not a Span carrying error: *"candlestick charts are
+ * a completely different beast, more closely aligned to box-plots than anything
+ * else."*
+ *
+ * ⚠️ IT WAS VERY NEARLY BUILT AS A SPAN PLUS ERROR BARS, and the difference is
+ * not cosmetic. A span SORTS its two ends, deliberately, so that two people
+ * capturing one span produce one file - and sorting discards precisely the fact
+ * a candle is about. Recording the wicks as error would file four MEASUREMENTS
+ * as two-plus-a-doubt: on a floating bar the outer marks are statistical
+ * uncertainty, on a candle they are the highest and lowest prices TRADED.
+ *
+ * ⚑ EVERYTHING HERE IS BOX PLOT'S, BECAUSE THE WALK IS BOX PLOT'S: the same
+ * BarAxes, the same two category clicks, the same shared category table, the
+ * same refusals. The differences are four slot names, a noun, and a glyph -
+ * which is the whole argument for making it a config rather than a code path.
+ *
+ * ⚑ It earns its place beyond finance because GANTT and WATERFALL charts ride on
+ * the same fixed-arity machinery, and those do appear in engineering papers.
+ */
+export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
+  id: 'candlestick',
+  label: 'Candlestick',
+  axesKind: 'bar',
+  exportShape: 'tuples',
+  autoExtractKind: 'none',
+  autoExtractRefusal:
+    'Auto-extract can’t find a candle’s four values from its colour - place its Open/High/Low/Close points by hand, in that order.',
+  dataDim: 1,
+  valueLabels: ['value'],
+  globalFields: [],
+  defaultSlots: CANDLESTICK_SLOTS,
+  /**
+   * ⚑ A CANDLE'S WICKS ARE DATA, NOT DOUBT - the same refusal Box Plot makes one
+   * type along, and for the same reason: the four values ARE the period's
+   * extent, so there is no single value for an error bar to be measured FROM.
+   */
+  errorBarsRefusal:
+    'A candlestick already reports its own extent: it has four measured values (Open, High, Low, Close), so there is no single value for an error bar to be measured from. Its wicks are the highest and lowest readings the period reached, not uncertainty around one.',
+  /**
+   * ⚑⚑ THE SAME TABLE AS THE REST OF THE FAMILY. A candlestick marks a category axis
+   * in the same walk the others do, so its readings file under those categories
+   * the same way.
+   *
+   * ⚑ NOTHING HAD TO BE BUILT FOR IT, which is the reuse rule paying: the table
+   * is gated on "does this type file under categories", and `valueColumnNames`'
+   * third case already says a type's own SLOTS are its values - four, here.
+   */
+  outputPanel: 'bar',
+  // Shares Bar's fixedSteps (below), so the same two category clicks.
+  // ⚑ THREE DIMENSIONS, because the second category end stores its COUNT in `dz`
+  // - the same slot a heatmap's column and row counts use, for the same reason.
+  // Without this the Calibration drops the third field silently and the count
+  // never reaches `checkValues` or the axis.
+  calibrationDimensions: 3,
+  categoryTicks: { startStep: 'c1', endStep: 'c2' },
+  // ⚑ Stage 2: the ticks INSIDE the axis the walk calibrated - the same shape,
+  // and the same card, as Bar and the heatmap's grid.
+  secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
+  tupleNoun: 'candle',
+  // Shares Bar's calibration and guards -- reusing the arrays keeps them from
+  // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
+  // list; see the comment immediately below for why sharing it was a bug.
+  fixedSteps: BAR_AXES_CONFIG.fixedSteps,
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
+  // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
+  // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
+  // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and
+  // sharing the reference leaked those into every Box Plot session too: the
+  // settings panel showed "Bars share a baseline" / "Baseline value"
+  // controls that DID NOTHING -- buildAxes below never reads them, and Box
+  // Plot has no derivedTupleValue that would use them anyway (it shows the
+  // ⚠️ HISTORICAL: v2.5 removed both fields from Bar's own `options` array too
+  // (the origin is measured off the category axis now, never typed) -- but the
+  // WARNING stands unchanged for whatever Bar's array carries next.
+  // five raw letter values, not a computed extent). A control that changes
+  // nothing when changed is exactly the defect class this project treats as
+  // a real bug, not cosmetic. Found auditing this file for Phase 6, not by
+  // a report -- the "offers every axes type its own options" e2e test never
+  // covered Box Plot, so nothing had caught it.
+  options: [
+    { key: 'isLog', label: 'Log scale', kind: 'checkbox', default: false },
+    { key: 'isRotated', label: 'Horizontal bars', kind: 'checkbox', default: false },
+  ],
+  extractOptions(axes) {
+    return { isLog: String(axes.isLog()), isRotated: String(axes.isRotated()) };
+  },
+  // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
+  checkValues(cal, options) {
+    return barCalibrationValueCheck(cal, options);
+  },
+  buildAxes(cal, ctx) {
+    const axes = new BarAxes();
+    const ok = axes.calibrate(cal, optionBool(ctx.options, 'isLog'), optionBool(ctx.options, 'isRotated'));
+    if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
+    axes.setMetadata({ ...axes.getMetadata(), [GRAPH_TYPE_METADATA_KEY]: 'candlestick' });
+    return { axes };
+  },
+};
+
 /**
  * ⭐⭐ SPAN CHART (v2.5) - the simplest member of the span family.
  *
@@ -3552,56 +3673,59 @@ export const PIE_AXES_CONFIG: AxesTypeConfig<PieAxes> = {
 // each config's own axes type -- see CalibratedAxes's doc comment in
 // engine/calibrationSession.ts for why that covariance holds.
 export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = [
+  // ⚑⚑ THE PICKER IS A 3-WIDE GRID, SO THIS ORDER *IS* THE LAYOUT. David gave it
+  // himself on 2026-09-03, left to right and top to bottom:
+  //
+  //   XY          Line            Histogram
+  //   Bar         Span chart      Pie / donut
+  //   Box Plot    Candlestick     Spider
+  //   Heatmap     Map             Ternary
+  //   Polar       Chart recorder
+  //
+  // ⚑⚑ THE RULE IS: GROUP BY THE DATA, NOT BY THE PICTURE. David, correcting a
+  // shape-first argument that had stood in this file since v1.6: *"Just because
+  // pies are round does not make them more aligned with polar or others. The
+  // data represented in bars are sometimes shown as a pie and vice versa.
+  // Histograms, the odd one out, even though it looks like a bar, is actually
+  // more aligned with a box or candlestick, as it describes an absolute
+  // distribution, a statistical measurement."*
+  //
+  // So PIE sits with BAR - they carry the same record, a category and one
+  // magnitude, and the same figure gets drawn either way; round is a rendering
+  // choice, not a family. And HISTOGRAM leaves Bar's side despite looking like
+  // it, because it reports a DISTRIBUTION, which is the box plot's kind of
+  // claim.
+  //
+  // ⚑ WHAT THE LAYOUT BUYS: the bar family becomes a 2x2 BLOCK - Bar/Span above
+  // Box Plot/Candlestick - so both axes of the family are readable at once. One
+  // value vs N named values reads DOWN the columns; simple vs compound reads
+  // ACROSS. A single row could only ever show one of those.
+  //
+  // ▶ THE COST DAVID ACCEPTED KNOWINGLY (*"this is the best that we can make for
+  // now"*): Histogram and Bar are split by the row wrap, and Polar sits away
+  // from Spider - beside the Chart recorder, which is a fair pairing of its own
+  // since both are read as a circular record.
+  //
+  // ⚑ A picker is a DISCRIMINATION task: the types most easily confused go where
+  // they can be compared directly, rather than down a column where each is
+  // judged against a memory of the others.
   XY_AXES_CONFIG,
   // Error bars are rail tool 6, not a graph type (checkpoint 79): you trace a
   // curve and THEN add error to it. As a graph type the choice came *before* you
   // started -- trace an XY curve, then want error, and you started over -- the
   // first of the four problems docs/error-bars-design.md lists against the tuple
   // model. The retired config was deleted outright in v1.5; see that commit.
-  // ⚑⚑ THE PICKER IS A 3-WIDE GRID, SO THIS ORDER *IS* THE LAYOUT - and the
-  // layout is doing real work here. David, after seeing Span land under Bar
-  // rather than beside it: *"it would be better to put histogram, bar and span
-  // next to each other on one line... Then they are more easily different."*
-  //
-  // ▶ A picker is a DISCRIMINATION task. The three bar-shaped types are the ones
-  // most easily confused with one another, so they go side by side where they
-  // can be compared directly, rather than scattered down a column where each is
-  // judged against a memory of the others. The icons differ by design (bars from
-  // a baseline / bars floating over one / bins that touch); adjacency is what
-  // makes that difference legible instead of merely present.
-  //
-  // ⚑ HISTOGRAM KEEPS ITS OLD JOB IN THE NEW POSITION. It sat next to XY because
-  // it IS XY underneath, and directly beside Bar because that adjacency is the
-  // point: a histogram LOOKS like bars, so Bar is the tempting pick, but BarAxes
-  // yields a typed label plus one magnitude and no numeric x - silently losing
-  // the axis that makes a histogram a histogram. Leading this row keeps it
-  // beside Bar, which is the adjacency that was doing the work.
-  //
-  // Row 1: XY - Line - Box Plot        Row 2: Histogram - Bar - Span chart
-  // ⚑ Box Plot ends row 1 so it sits DIRECTLY ABOVE Span chart: the span family
-  // stays adjacent (span 2 values, box plot 5) without breaking the row David
-  // asked for. Heatmap keeps its documented slot - last of the rectangular
-  // charts, first before the radial ones - at the head of row 3.
   CATEGORICAL_LINE_CONFIG,
-  BOX_PLOT_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
   BAR_AXES_CONFIG,
   SPAN_AXES_CONFIG,
-  HEATMAP_AXES_CONFIG,
-  POLAR_AXES_CONFIG,
-  // Spider/radar (v1.4). Sits beside Polar because both are read outwards from a
-  // shared centre, and differs in the way that matters: Polar has ONE radial scale
-  // and a continuously measured angle, while a spider has N independent 1-D axes
-  // and no angle at all. Grouping them makes that the visible question at the
-  // moment of choosing -- the same job the Histogram/Bar adjacency does above.
-  SPIDER_AXES_CONFIG,
-  // Pie / donut (v1.6). Completes the radial group, and belongs here rather than
-  // beside Bar even though its RECORD is bar-shaped -- a category plus one
-  // magnitude. Someone arriving with a pie is looking for a circle, not thinking
-  // about what the record turns out to be; the dropdown answers "what does my
-  // figure look like?", which is why Histogram sits by Bar and Spider by Polar.
   PIE_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
+  BOX_PLOT_AXES_CONFIG,
+  CANDLESTICK_AXES_CONFIG,
+  SPIDER_AXES_CONFIG,
+  HEATMAP_AXES_CONFIG,
   MAP_AXES_CONFIG,
+  TERNARY_AXES_CONFIG,
+  POLAR_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
 ];

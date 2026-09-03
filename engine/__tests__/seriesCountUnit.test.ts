@@ -51,6 +51,7 @@ const RECORDS_POINTS: Record<string, boolean> = {
   bar: false, // two corners per bar
   span: false, // two MEASURED ends per span - the interval IS the datum
   boxplot: false, // five per box
+  candlestick: false, // four per candle - open, high, low, close
   pie: false, // two edges per sector
 };
 

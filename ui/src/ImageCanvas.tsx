@@ -14,6 +14,7 @@ Konva.dragButtons = [0];
 import { IS_MAC } from './platform.js';
 import { fitToContainer, zoomAt, zoomByFactor, panBy, screenToImage, imageToScreen, isClick, type ViewState } from '../../engine/canvasView.js';
 import type { BoxPlotGlyphSegment } from '../../engine/boxPlotGlyph.js';
+import type { CandlestickGlyph } from '../../engine/candlestickGlyph.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
 import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
 import type { CalibrationPreview } from '../../engine/calibrationPreview.js';
@@ -225,6 +226,13 @@ interface ImageCanvasProps {
   /** Box-and-whisker glyph segments (one array per completed tuple), in
    * image-pixel space -- see engine/calibrationSession.ts's getBoxPlotGlyphs. */
   boxPlotGlyphs?: BoxPlotGlyphSegment[][];
+  /**
+   * ⚑ Candlestick overlays (v2.5). Not folded into `boxPlotGlyphs` because a
+   * candle carries one thing a box does not: WHICH WAY the period moved, which
+   * the figure draws as a filled or hollow body. Passing it as plain segments
+   * would drop exactly the fact the type exists to record.
+   */
+  candlestickGlyphs?: CandlestickGlyph[];
   /** Histogram bin glyphs (checkpoint 66), image-pixel space -- see
    * engine/histogramGlyph.ts. Same decorative, listening={false} treatment as
    * boxPlotGlyphs: they mark what was captured, they aren't hit targets. */
@@ -618,7 +626,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2228,6 +2236,40 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     );
                   })
                 )}
+                {candlestickGlyphs?.map((glyph, glyphIndex) => (
+                  <Fragment key={`candle-glyph-`}>
+                    {/* ⚑⚑ A FALLING CANDLE IS FILLED, a rising one hollow - the
+                        figure's own convention, and the reason the overlay can
+                        CHECK the capture. Open and close are both body edges, so
+                        clicking them the wrong way round draws an identical box;
+                        the fill is the only thing that shows the mistake. */}
+                    {!glyph.rising && (
+                      <Line
+                        points={glyph.body.flatMap((p) => {
+                          const s = imageToScreen(view, p.x, p.y);
+                          return [s.x, s.y];
+                        })}
+                        closed
+                        fill={theme.color.overlay.stroke}
+                        opacity={0.35}
+                        listening={false}
+                      />
+                    )}
+                    {glyph.segments.map((segment, segmentIndex) => {
+                      const from = imageToScreen(view, segment.from.x, segment.from.y);
+                      const to = imageToScreen(view, segment.to.x, segment.to.y);
+                      return (
+                        <Line
+                          key={`candle-glyph-${glyphIndex}-${segmentIndex}`}
+                          points={[from.x, from.y, to.x, to.y]}
+                          stroke={theme.color.overlay.stroke}
+                          strokeWidth={1.5}
+                          listening={false}
+                        />
+                      );
+                    })}
+                  </Fragment>
+                ))}
                 {tupleGlyphs?.map((segments, glyphIndex) =>
                   segments.map((segment, segmentIndex) => {
                     const from = imageToScreen(view, segment.from.x, segment.from.y);

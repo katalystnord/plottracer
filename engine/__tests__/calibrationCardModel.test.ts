@@ -221,7 +221,10 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card - a thirteenth canno
     // axis turned it red, which is what a pin is for - the fourth entry arrives
     // with a reason attached rather than unnoticed.
     const withStage = ALL_AXES_TYPE_CONFIGS.filter((c) => c.secondStage).map((c) => c.id).sort();
-    expect(withStage).toEqual(['bar', 'boxplot', 'categorical', 'heatmap', 'span']);
+    // ⚑ Candlestick joined in v2.5 with the rest of Box Plot's walk: it marks
+    // the same category axis, in the same stage, and got it by sharing the
+    // declaration rather than by growing one of its own.
+    expect(withStage).toEqual(['bar', 'boxplot', 'candlestick', 'categorical', 'heatmap', 'span']);
   });
 
   it('⚑ every type that marks CATEGORY TICKS declares the stage that marks them', () => {
