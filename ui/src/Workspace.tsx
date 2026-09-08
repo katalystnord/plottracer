@@ -636,6 +636,17 @@ export function Workspace() {
   // is over it (click-through cards leak hover to the canvas).
   const [cardRect, setCardRect] = useState<AvoidRect | null>(null);
   const [version, setVersion] = useState(0);
+  /**
+   * ⚑⚑ THE ONE FACT A CANDLESTICK FIGURE CAN NEED FROM ITS READER: is our
+   * reading of its colour convention backwards?
+   *
+   * ⚑ ONE per figure, not one per candle. The bodies cluster into the figure's
+   * two appearances and the default is measured (hollow rises; otherwise the
+   * greener rises), so this is a correction, not a question the user must answer
+   * before anything works. The overlay's own fill is what shows them whether it
+   * needs pressing - which is the only reason it is safe to default at all.
+   */
+  const [candleFlip, setCandleFlip] = useState(false);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
   // Measure the rail/card row in canvas-region-local coords (the loupe's own
@@ -6273,6 +6284,25 @@ export function Workspace() {
     [session, version, currentGroupLabel, currentTupleIndex, tupleNoun]
   );
   const boxPlotGlyphs = useMemo(() => session.getBoxPlotGlyphs(), [session, version]);
+  // ⚑⚑ A CANDLE'S DIRECTION IS READ OFF THE FIGURE, not off the click order.
+  //
+  // The walk marks the two body edges by POSITION, bottom-up, exactly as the box
+  // plot's five are marked - so every candle arrives provisionally rising and
+  // the figure's own colour has to name them. David: "Is it not dependant on
+  // the color?" It is: the two edges are the same rectangle either way round.
+  //
+  // ⚑ Runs here rather than at the click, because a DRAG moves an edge too and
+  // a candle re-read after a drag must still say what the figure says. The
+  // session's pass is idempotent, so repeating it cannot walk one backwards.
+  useEffect(() => {
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return;
+    if (sessionRef.current.readCandleDirections(img.data, img.width, img.height, candleFlip) > 0) {
+      bump();
+    }
+    // ⚑ `version` is the dependency that matters: it changes on every capture
+    // and every drag, which is exactly when a body may have moved.
+  }, [session, version, candleFlip, bump]);
   const candlestickGlyphs = useMemo(() => session.getCandlestickGlyphs(), [session, version]);
   // Multi-figure (checkpoint 110). figuresRef is a ref, but every figure op ends
   // in setActiveFigureIndex, so this reads fresh on the re-render that follows.
@@ -9418,6 +9448,37 @@ export function Workspace() {
               noPointsHint={noPointsHint}
             />
           ) : config.outputPanel === 'bar' && axes ? (
+            <>
+            {/* ⚑⚑ THE FIGURE'S COLOUR CONVENTION, and the ONLY thing a
+                candlestick can need told. Direction is measured from each
+                body's colour, and the default is measured too (hollow rises;
+                otherwise the greener of the figure's two appearances) - so this
+                is here to CORRECT a reading, never to enable one.
+                ⚑ It is visible rather than inferred because the overlay is what
+                shows a wrong reading: a candle drawn filled against a hollow one
+                in the figure is the disagreement, and this is what answers it.
+                ⚠️ It does not yet survive a save - `isRotated` and friends ride
+                on BarAxes and the project file, and this does not. */}
+            {config.id === 'candlestick' && (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: 8,
+                  fontSize: 12,
+                  color: theme.color.text.secondary,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={candleFlip}
+                  onChange={(e) => setCandleFlip(e.target.checked)}
+                  data-testid="candle-flip"
+                />
+                This figure&rsquo;s rising candles are the other colour
+              </label>
+            )}
             <BarTable
               table={barTable}
               display={displayRounder}
@@ -9442,6 +9503,7 @@ export function Workspace() {
               renderValue={renderEditableBarValue}
               noPointsHint={noPointsHint}
             />
+            </>
           ) : hasSlots ? (
             <TupleTable
               rows={tupleRows}

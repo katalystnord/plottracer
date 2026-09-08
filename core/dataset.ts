@@ -334,6 +334,27 @@ export class Dataset {
     }
   }
 
+  /**
+   * Exchange the pixels in two of a tuple's slots.
+   *
+   * ⚑ NOT expressible with `addToTupleAt`, which refuses a pixel the tuple
+   * already holds - the guard that stops one click filling two slots is exactly
+   * what a swap has to get past.
+   *
+   * ⚑ Its user is the candlestick, whose two body edges are captured by
+   * POSITION and named Open/Close by the figure's colour: the geometry is
+   * identical either way round, so correcting the direction moves no pixel, it
+   * only exchanges which name each one answers to.
+   */
+  swapTupleSlots(tupleIndex: number, groupA: number, groupB: number): void {
+    const tuple = this._tuples[tupleIndex];
+    if (!tuple) return;
+    const a = tuple[groupA] ?? null;
+    const b = tuple[groupB] ?? null;
+    tuple[groupA] = b;
+    tuple[groupB] = a;
+  }
+
   removeTuple(tupleIndex: number): void {
     if (tupleIndex < this._tuples.length) {
       this._tuples.splice(tupleIndex, 1);

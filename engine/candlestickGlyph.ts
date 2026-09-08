@@ -79,7 +79,7 @@ export interface CandlestickGlyph {
 /** Half-width of the candle's body, in image pixels. ⚑ Narrower than the box
  *  plot's 20: a candlestick chart packs many more periods across the same
  *  figure, and a body as wide as a box would overlap its neighbours. */
-const BODY_HALF = 12;
+export const CANDLE_BODY_HALF = 12;
 
 /**
  * The wick, the body outline, and which way the period moved.
@@ -115,8 +115,8 @@ export function computeCandlestickGlyph(
   // hand that wandered a pixel or two across the category still draws one
   // upright candle rather than a leaning one.
   const cross = (vc.open.c + vc.high.c + vc.low.c + vc.close.c) / 4;
-  const left = cross - BODY_HALF;
-  const right = cross + BODY_HALF;
+  const left = cross - CANDLE_BODY_HALF;
+  const right = cross + CANDLE_BODY_HALF;
 
   const bodyNear = Math.min(vc.open.v, vc.close.v);
   const bodyFar = Math.max(vc.open.v, vc.close.v);

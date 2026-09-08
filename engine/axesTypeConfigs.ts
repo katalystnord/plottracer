@@ -1137,6 +1137,18 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * the hidden-mode problem CLAUDE.md flags. Undefined = plain, ungrouped
    * points (every other type today). */
   defaultSlots?: readonly string[];
+  /**
+   * ⚑⚑ WHAT THE PROMPT SAYS TO CLICK, when the slot's NAME will not do it.
+   *
+   * Aligned index-for-index with `defaultSlots`. Most types need nothing here:
+   * a box plot's `Median` and a histogram's `Bin start` name a place on the
+   * figure, so the slot name IS the instruction. A candlestick's do not - on a
+   * falling candle `Open` is the upper body edge and on a rising one it is the
+   * lower, so the word sends the hand to the wrong place half the time.
+   *
+   * ⚑ Undefined = the slot name is the prompt, which is every other type.
+   */
+  captureLabels?: readonly string[];
   /** Slot names DERIVED from the calibrated axes, for a type whose capture
    * shape only exists once the axes are known (v1.4, Spider: one slot per spoke,
    * named after it). Applied on both entrances - a fresh calibration and a loaded
@@ -2691,15 +2703,32 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   },
 };
 
-/** The four captured points of a candlestick, IN CLICK ORDER - which is also
- * the order that records the period's DIRECTION.
+/** The four captured points of a candlestick, IN CLICK ORDER - which is now
+ * BOTTOM-UP BY POSITION, exactly as `BOX_PLOT_SLOTS` is.
  *
- * ⚑⚑ THE ORDER IS THE MEASUREMENT. A candle's colour says which way the period
- * moved, and colour is not readable: classic print uses FILLED vs HOLLOW while
- * modern platforms use red vs green, and both conventions are live. The user can
- * SEE which edge is the open and says so by clicking it first, which costs a
- * gesture that was needed anyway. ⚠️ A colour sampler was designed for this and
- * thrown away; see `project_candlestick_and_span_error_taxonomy`.
+ * ⚠️⚑⚑ THIS USED TO BE `['Open', 'High', 'Low', 'Close']`, AND THE ORDER WAS
+ * CLAIMED AS THE MEASUREMENT of the period's direction. David marked a candle
+ * bottom-up - the way the box plot's own walk teaches, one type along - and got
+ * High recorded below Low on every candle, with nothing on screen objecting.
+ * *"I marked them from the bottom up like we did for the box plot. Was that
+ * wrong?"* It was not. Box Plot's five slots are positional, so position IS
+ * identity there and bottom-up cannot be wrong; OHLC is not positional at all,
+ * and the two types share a walk, a card and a table with nothing marking the
+ * difference. ▶ *"What ever happens, we need to be consistent with box plots."*
+ *
+ * ⚑⚑ SO DIRECTION COMES FROM THE COLOUR AFTER ALL. The old note said a colour
+ * sampler had been "designed for this and thrown away" because filled/hollow and
+ * red/green are both live - but that is an argument against ASSUMING a
+ * convention, not against MEASURING one, and the two body edges are
+ * geometrically indistinguishable so nothing else in the figure carries the
+ * fact. David: *"Is it not dependant on the color?"* Confirmed against the
+ * trading source: *"The color itself serves as the primary indicator of whether
+ * price moved upward or downward."*
+ *
+ * ⚑ Slots 1 and 2 are PROVISIONALLY Open-then-Close, which is correct for a
+ * RISING candle and swapped for a falling one. Every stored value stays a
+ * clicked pixel; only which name it answers to is derived - the same thing a
+ * span does when it sorts its two ends.
  *
  * ⚑ Named as every generator names them - `plotly.graph_objects.Candlestick`
  * takes `open, high, low, close` and carries first-class `increasing` /
@@ -2707,7 +2736,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
  * (measured 2026-09-03: all four dropped in turn, all four refused). That FIXED
  * ARITY is what puts this beside Box Plot rather than inside Span.
  */
-export const CANDLESTICK_SLOTS = ['Open', 'High', 'Low', 'Close'] as const;
+export const CANDLESTICK_SLOTS = ['Low', 'Open', 'Close', 'High'] as const;
 
 /**
  * ⚑⚑ CANDLESTICK AS ITS OWN TYPE (v2.5), patterned on Box Plot.
@@ -2744,6 +2773,19 @@ export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   valueLabels: ['value'],
   globalFields: [],
   defaultSlots: CANDLESTICK_SLOTS,
+  /**
+   * ⚑⚑ WHAT TO CLICK, SAID IN TERMS OF WHAT IS ON SCREEN.
+   *
+   * A slot NAME cannot serve as the prompt here: on a falling candle "Open" is
+   * the TOP body edge, so the word points the hand at the wrong place half the
+   * time. The position is the same for both directions, so that is what the
+   * prompt says - and the prompt is the only thing a first-time user has.
+   *
+   * ⚑ Gate 4: a walkthrough test may only click what a prompt tells it to. The
+   * old walk passed because it was written by someone who already knew the
+   * order, which is exactly the failure that gate names.
+   */
+  captureLabels: ['the low', 'the lower body edge', 'the upper body edge', 'the high'],
   /**
    * ⚑ A CANDLE'S WICKS ARE DATA, NOT DOUBT - the same refusal Box Plot makes one
    * type along, and for the same reason: the four values ARE the period's

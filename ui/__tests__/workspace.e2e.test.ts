@@ -1533,48 +1533,52 @@ describe('Workspace: Candlestick', () => {
 
     // The card names the first slot before any mark is placed - the walk is
     // discoverable without knowing that a candle has four points.
-    expect(await textOf('tips-bar')).toMatch(/Open.*new candle/);
+    expect(await textOf('tips-bar')).toMatch(/the low.*new candle/);
     expect(await textOf('candlestick-glyph-count')).toBe('0');
 
     // Open at 2, High at 4, Low at 1, Close at 3 - a RISING candle.
-    const pys = [340, 280, 370, 310];
-    const nextLabels = ['High', 'Low', 'Close', 'Open'];
+    // ⚑⚑ BOTTOM-UP, which is what the prompt now asks for and what the box
+    // plot's own walk teaches. Screen y runs DOWN, so ascending value is
+    // descending y: 370, 340, 310, 280.
+    const pys = [370, 340, 310, 280];
+    const labels = ['the low', 'the lower body edge', 'the upper body edge', 'the high'];
     for (let i = 0; i < pys.length; i++) {
-      // ⚑ The prompt says which slot this click fills; the test follows it
-      // rather than asserting from its own knowledge of the order.
-      expect(await textOf('tips-bar')).toContain(i === 0 ? 'Open' : nextLabels[i - 1]!);
+      // ⚑ Gate 4: the test clicks what the prompt names, and nothing else. The
+      // old walk asked for "Open" - a slot whose position depends on a
+      // direction nobody has established yet - and passed only because it was
+      // written by someone who already knew the answer.
+      expect(await textOf('tips-bar')).toContain(labels[i]!);
       await clickAt(300, pys[i]!);
-      expect(await textOf('tips-bar')).toContain(nextLabels[i]!);
       // ⚑ Three of four draws nothing: a body between two marks and a wick to
       // nowhere would be a picture of a reading nobody took.
       expect(await textOf('candlestick-glyph-count')).toBe(i < pys.length - 1 ? '0' : '1');
     }
   });
 
-  it('⚑⚑ shows which way the period moved, so a wrong click order looks wrong', async () => {
-    // The whole reason the overlay is a CHECK rather than a decoration: open and
-    // close are both body edges, so the two orders draw an IDENTICAL box and the
-    // fill is the only thing that separates them.
+  it('⚑⚑ takes its direction from the figure, not from the click order', async () => {
+    // ⚠️ THIS TEST USED TO PROVE THE OPPOSITE, and the change is the point.
+    // It clicked the same four marks in two orders and asserted that the
+    // overlay told them apart - which made the USER the colour-reader, and
+    // cost the bottom-up consistency the box plot teaches one type along.
+    // David: "Is it not dependant on the color?" It is: the two body edges are
+    // geometrically indistinguishable, so no click order can carry the fact.
     await resetWorkspace('candlestick');
     await declineCommonOrigin();
     await calibrateCandlestick();
 
-    // Open low, close high: the period rose.
-    await clickAt(300, 340); // Open
-    await clickAt(300, 280); // High
-    await clickAt(300, 370); // Low
-    await clickAt(300, 310); // Close
+    // The bottom-up walk. On a figure with no candle ink under it there is ONE
+    // body appearance, so every candle reads the same way - which is exactly
+    // what a chart whose periods all rose looks like.
+    await clickAt(300, 370);
+    await clickAt(300, 340);
+    await clickAt(300, 310);
+    await clickAt(300, 280);
     expect(await textOf('candlestick-directions')).toBe('rising');
 
-    // The same four marks with open and close swapped: the same body, the
-    // opposite claim, and the overlay says so.
-    await resetWorkspace('candlestick');
-    await declineCommonOrigin();
-    await calibrateCandlestick();
-    await clickAt(300, 310); // Open, the higher of the two now
-    await clickAt(300, 280); // High
-    await clickAt(300, 370); // Low
-    await clickAt(300, 340); // Close
+    // ⚑ And the one control a candlestick figure can need: the reader saying
+    // our reading of its colour convention is backwards. It is on screen, so
+    // a wrong default is correctable rather than silent.
+    await page.click('[data-testid="candle-flip"]');
     expect(await textOf('candlestick-directions')).toBe('falling');
   });
 

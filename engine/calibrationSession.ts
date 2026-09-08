@@ -202,7 +202,13 @@ import { nearestNeighbourOrder, bestInsertionIndex } from '../algorithms/segment
 import { computeBinGlyph, type GlyphSegment } from './histogramGlyph.js';
 import { computeBarGlyph } from './barGlyph.js';
 import { computeWhiskerGlyph, type WhiskerShape } from './errorBarGlyph.js';
-import { computeCandlestickGlyph, type CandlestickGlyph } from './candlestickGlyph.js';
+import {
+  CANDLE_BODY_HALF,
+  computeCandlestickGlyph,
+  type CandlestickGlyph,
+} from './candlestickGlyph.js';
+import { candleDirections, sampleBackground, sampleCandleBody } from './candleDirection.js';
+import type { RGB } from '../algorithms/colorFilter.js';
 import { dataPointMarkerId } from './canvasOverlays.js';
 import { calibrationPreview, type CalibrationPreview } from './calibrationPreview.js';
 import {
@@ -4691,9 +4697,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * wpd.pointGroups.refreshControls()'s fallback naming for an unnamed group. */
   getCurrentSlotLabel(): string {
     const entry = this.activeEntry;
-    const name = entry.dataset.getSlotNames()[entry.slotCursor.groupIndex];
+    const index = entry.slotCursor.groupIndex;
+    // ⚑⚑ A CAPTURE LABEL WINS, because a slot NAME is not always an
+    // instruction. A candlestick's `Open` is the upper body edge on a falling
+    // candle and the lower on a rising one, so the name points the hand at the
+    // wrong place half the time; the POSITION is the same either way.
+    // ⚑ One entrance, so the tips bar and the status line's "Next: ..." say the
+    // same thing - they both ask this.
+    // ⚑ Guarded on the count so a RESHAPED dataset (Box Plot's groups applied
+    // to a Bar session at runtime) cannot be labelled from a config answering
+    // for a shape that is no longer on the record.
+    const own = ownSlotNames(entry.dataset.getSlotNames());
+    const capture = this.config.captureLabels;
+    if (capture && capture.length === own.length) {
+      const label = capture[index];
+      if (label) return label;
+    }
+    const name = entry.dataset.getSlotNames()[index];
     if (name) return name;
-    return entry.slotCursor.groupIndex === 0 ? 'Primary group' : `Group ${entry.slotCursor.groupIndex}`;
+    return index === 0 ? 'Primary group' : `Group ${index}`;
   }
 
   /** Advance the active dataset's cursor to the next open group slot: the
@@ -5476,6 +5498,119 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * keeps a plain Bar or Categorical dataset from drawing candles, and it is the
    * same inverse the box plot's uses one method up.
    */
+  /**
+   * ⚑⚑ SAY WHICH WAY ONE CANDLE MOVED, and let the record follow.
+   *
+   * The walk captures a candle's two body edges BY POSITION, bottom-up, exactly
+   * as the box plot's five are captured - so slot 1 is the lower edge and slot 2
+   * the upper, whatever the period actually did. That is provisionally
+   * Open-then-Close, which is right for a RISING candle and backwards for a
+   * falling one.
+   *
+   * ⚑ Correcting it EXCHANGES TWO NAMES, it does not move a pixel: both edges
+   * are real clicks either way round, and the geometry of a rising and a falling
+   * candle is identical. The same thing a span does when it sorts its ends.
+   *
+   * ⚠️ The direction itself is NOT decided here. It is measured from the
+   * figure's colour - the only signal a candle carries, since the two body edges
+   * are geometrically indistinguishable - and passed in.
+   */
+  setCandleRising(tupleIndex: number, rising: boolean): boolean {
+    if (this.config.axesKind !== 'bar') return false;
+    const dataset = this.activeEntry.dataset;
+    const slots = ownSlotNames(dataset.getSlotNames()).map((g) => g.trim().toLowerCase());
+    const expected = CANDLESTICK_SLOTS.map((g) => g.toLowerCase());
+    if (slots.length !== expected.length || !slots.every((g, i) => g === expected[i])) return false;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return false;
+    const [, openI, closeI] = tuple;
+    if (openI == null || closeI == null) return false;
+    if (this.isCandleRising(openI, closeI) === rising) return false;
+    dataset.swapTupleSlots(tupleIndex, 1, 2);
+    return true;
+  }
+
+  /** Does the close sit further along the VALUE axis than the open? ⚑ Shares the
+   *  glyph's own rule rather than restating it: on a vertical chart the value
+   *  runs up the figure while pixel-y runs down it. */
+  private isCandleRising(openIndex: number, closeIndex: number): boolean {
+    const dataset = this.activeEntry.dataset;
+    const open = dataset.getPixel(openIndex);
+    const close = dataset.getPixel(closeIndex);
+    const vertical =
+      (this.axes as unknown as { calculateOrientation(): { axes: 'X' | 'Y' } } | null)?.calculateOrientation()
+        .axes === 'Y';
+    return vertical ? close.y < open.y : close.x > open.x;
+  }
+
+  /**
+   * ⚑⚑ READ EVERY CANDLE'S DIRECTION OFF THE FIGURE, in one pass.
+   *
+   * The walk captures the two body edges BY POSITION - it has to, because that
+   * is the only thing a hand can aim at - so every candle arrives provisionally
+   * rising. This is what makes it true: the bodies are sampled, clustered into
+   * the figure's two appearances, and the cluster that rises is decided once.
+   *
+   * ⚑ ONE ENTRANCE for the whole operation, so the pure geometry stays pure and
+   * `ui/` only has to hand over the pixels it already holds.
+   *
+   * ⚑ IDEMPOTENT. It sets each candle to what the figure says, rather than
+   * toggling, so running it again after a drag or a re-open cannot walk a
+   * candle's direction backwards.
+   *
+   * ⛔ It REPORTS, it does not refuse: a figure whose two appearances we rank
+   * the wrong way round still gets an answer, and the overlay's fill shows the
+   * disagreement so `flipped` can put it right. A refusal would leave nothing on
+   * screen to correct.
+   *
+   * ⚑⚑ RETURNS HOW MANY CANDLES IT CHANGED, NOT HOW MANY IT READ, and the
+   * difference is load-bearing: `ui/` runs this whenever the capture version
+   * moves and re-renders when it reports work done. Returning "read" would make
+   * every settled figure report 2, 5, 50 for ever and spin the render loop.
+   * Reporting CHANGES makes the steady state zero, which is the truth anyway.
+   */
+  readCandleDirections(
+    src: Uint8ClampedArray,
+    width: number,
+    height: number,
+    flipped = false
+  ): number {
+    if (this.config.axesKind !== 'bar') return 0;
+    const dataset = this.activeEntry.dataset;
+    const slots = ownSlotNames(dataset.getSlotNames()).map((g) => g.trim().toLowerCase());
+    const expected = CANDLESTICK_SLOTS.map((g) => g.toLowerCase());
+    if (slots.length !== expected.length || !slots.every((g, i) => g === expected[i])) return 0;
+
+    const tuples = dataset.getAllTuples();
+    const complete: number[] = [];
+    const bodies: RGB[] = [];
+    for (let t = 0; t < tuples.length; t++) {
+      const [, openI, closeI] = tuples[t]!;
+      if (openI == null || closeI == null) continue;
+      // ⚑ The body's half-width is the glyph's own, so the sample sits inside
+      // the rectangle the user can SEE rather than inside a second guess at it.
+      const rgb = sampleCandleBody(
+        src,
+        width,
+        height,
+        dataset.getPixel(openI),
+        dataset.getPixel(closeI),
+        CANDLE_BODY_HALF * 2
+      );
+      if (rgb === null) continue;
+      complete.push(t);
+      bodies.push(rgb);
+    }
+    if (complete.length === 0) return 0;
+
+    const directions = candleDirections(bodies, sampleBackground(src, width, height), flipped);
+    let changed = 0;
+    for (let i = 0; i < complete.length; i++) {
+      if (this.setCandleRising(complete[i]!, directions[i]!)) changed++;
+    }
+    return changed;
+  }
+
   getCandlestickGlyphs(): CandlestickGlyph[] {
     if (!this.axes || this.config.axesKind !== 'bar') return [];
     const dataset = this.activeEntry.dataset;
@@ -5491,7 +5626,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
     const glyphs: CandlestickGlyph[] = [];
     for (const tuple of dataset.getAllTuples()) {
-      const [openI, highI, lowI, closeI] = tuple;
+      const [lowI, openI, closeI, highI] = tuple;
       // ⚑ An incomplete candle draws nothing - the same rule the box plot has.
       // A body between two marks and a wick to nowhere would be a picture of a
       // reading that was never taken.

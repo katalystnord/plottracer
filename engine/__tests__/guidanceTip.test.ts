@@ -1193,3 +1193,47 @@ describe('the walk has an ENDING, and the tips bar says what it is', () => {
     expect(tip).not.toMatch(/press Calibrate/i);
   });
 });
+
+/**
+ * ⚑⚑ A TYPE THAT NAMES ITS OWN CLICK TARGETS SAYS THE PLACE, NOT THE SLOT.
+ *
+ * "filling Open" describes our bookkeeping; "the lower body edge" describes the
+ * figure, and the figure is the only thing the user can see.
+ */
+describe('the tips bar for a type with capture labels', () => {
+  it('names the place instead of announcing which slot is being filled', () => {
+    const tip = guidanceTipBase(
+      base({
+        mode: 'place-point',
+        config: {
+          id: 'candlestick',
+          axesKind: 'bar',
+          autoExtractKind: 'none',
+          captureLabels: ['the low', 'the lower body edge', 'the upper body edge', 'the high'],
+        },
+        isCalibrated: true,
+        hasSlots: true,
+        currentGroupLabel: 'the lower body edge',
+        currentTupleIndex: 0,
+        tupleNoun: 'candle',
+      })
+    );
+    expect(tip).toContain('the lower body edge');
+    expect(tip).not.toContain('filling');
+  });
+
+  it('still says "filling" for a type whose slot names are already instructions', () => {
+    const tip = guidanceTipBase(
+      base({
+        mode: 'place-point',
+        config: { id: 'boxplot', axesKind: 'bar', autoExtractKind: 'none' },
+        isCalibrated: true,
+        hasSlots: true,
+        currentGroupLabel: 'Median',
+        currentTupleIndex: 0,
+        tupleNoun: 'box',
+      })
+    );
+    expect(tip).toContain('filling Median');
+  });
+});

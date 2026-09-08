@@ -23,7 +23,10 @@ import { readingOrdinals } from './canvasOverlays.js';
  */
 
 /** The subset of the graph type's config these sentences read. */
-export type GuidanceConfig = Pick<AxesTypeConfig<CalibratedAxes>, 'id' | 'axesKind' | 'autoExtractKind'>;
+export type GuidanceConfig = Pick<
+  AxesTypeConfig<CalibratedAxes>,
+  'id' | 'axesKind' | 'autoExtractKind' | 'captureLabels'
+>;
 
 /**
  * ⚑ Narrower than `ui/`'s own `MeasureToolId` ON PURPOSE, and the narrowing is
@@ -464,6 +467,13 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
             ? 'mark both: the corner away from the baseline gives the value, the other gives the bar\u2019s width. Every bar is measured from the figure\u2019s baseline'
             : 'both ends are measured, and neither of them is a baseline: a span IS its two ends'
         }${currentTupleIndex === null ? ` (starting a new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1}, one end still to fill)`}. A single click still works too, filling one end at a time.`;
+      // ⚑⚑ A TYPE WITH CAPTURE LABELS ALREADY SAYS WHERE TO CLICK, so the
+      // sentence names the place instead of announcing which slot is being
+      // filled. "filling the lower body edge" describes our bookkeeping;
+      // "the lower body edge" describes the figure, which is the only thing the
+      // user can see. See AxesTypeConfig.captureLabels.
+      if (hasSlots && config.captureLabels)
+        return `Click to add a point - ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
       if (hasSlots)
         return `Click to add a point - filling ${currentGroupLabel}${currentTupleIndex === null ? ` (new ${tupleNoun})` : ` (${tupleNoun} ${currentTupleIndex + 1})`}.`;
       // ⚑ Categorical Line is the one bar-family type that stays a plain point per
