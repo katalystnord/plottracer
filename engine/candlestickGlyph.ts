@@ -19,10 +19,27 @@
  * figure's own convention (Investopedia's diagram uses filled/hollow; modern
  * platforms use red/green, and both are live), so a wrong order now looks wrong.
  *
- * ⚠️ THE DIRECTION IS MEASURED FROM THE RECORD, never sampled from the figure's
- * colour. The prompt order captures it: the user can SEE which edge is the open
- * and says so by clicking it first. A colour test would have to choose between
- * two live conventions and would be wrong half the time.
+ * ⚠️⚑⚑ THE "NEVER SAMPLE THE COLOUR" RULE HERE WAS OVERTURNED, 2026-09-08, and
+ * the paragraph it replaces is why this note exists. It said direction was
+ * measured from the RECORD via the prompt order, and that a colour test "would
+ * have to choose between two live conventions and would be wrong half the
+ * time."
+ *
+ * ▶ David, driving the built app: *"Is it not dependant on the color?"* It is.
+ * The two body edges are geometrically INDISTINGUISHABLE, so colour is the only
+ * signal the figure carries - confirmed against the trading source he sent:
+ * *"The color itself serves as the primary indicator of whether price moved
+ * upward or downward."*
+ *
+ * ⚑ The old objection was against ASSUMING a convention, not against MEASURING
+ * one - and it does not even need resolving: a figure has exactly TWO body
+ * appearances, so they CLUSTER, and one declaration per figure says which
+ * cluster rises. What the prompt order really did was make the USER be the
+ * colour-reader, at the cost of the bottom-up consistency the box plot teaches
+ * one type along. See `project_candlestick_and_span_error_taxonomy`.
+ *
+ * ⛔ `rising` below is still read off the record; the capture change that feeds
+ * it from the figure is the next step, not this one.
  */
 import type { BoxPlotGlyphSegment, BoxPlotOrientation, Point2D } from './boxPlotGlyph.js';
 
@@ -42,6 +59,14 @@ export interface CandlestickGlyph {
   /** The body's four corners in draw order, so a falling candle can be filled.
    *  Always present; whether it is painted is `rising`'s business. */
   body: Point2D[];
+  /**
+   * Does the body lie INSIDE the low..high range, as a real candle's must?
+   *
+   * ⚑⚑ FALSE IS A RECORD THAT CANNOT BE A CANDLE - High below Low, or a body
+   * edge outside both. We REPORT it and draw it loudly; we never refuse it or
+   * repair it. The generator sweep found nobody validates ordering either.
+   */
+  coherent: boolean;
   /**
    * Did the period CLOSE ABOVE where it OPENED?
    *
@@ -64,10 +89,12 @@ const BODY_HALF = 12;
  * whichever of open/close is further along the value axis, so a rising and a
  * falling candle are the same geometry with `rising` flipped.
  *
- * ⚑ The wick is ONE line through the body rather than two stubs. It is what the
- * figure draws, and it means a body that has been mis-placed OUTSIDE its own
- * high/low range shows the wick sticking out of the wrong side, which is exactly
- * the mistake worth seeing.
+ * ⚑⚑ THE WICK IS TWO STUBS, one above the body and one below - the standard
+ * diagram's shape, and what makes this read as a candle. ⚠️ It used to be ONE
+ * line drawn straight THROUGH the body, justified as showing a body mis-placed
+ * outside its own high/low range. That case is real and is kept: an INCOHERENT
+ * candle reverts to the through-line and reports `coherent: false`. What the
+ * through-line cost was every CORRECT candle, which looked like a box plot.
  */
 export function computeCandlestickGlyph(
   points: CandlestickPoints,
@@ -101,9 +128,33 @@ export function computeCandlestickGlyph(
     toXY(bodyFar, left),
   ];
 
+  // ⚑⚑ THE WICK IS TWO STUBS, ABOVE AND BELOW THE BODY - what the figure
+  // draws, and what makes the overlay read as a candle rather than as a box
+  // with a median line through it. Measured in v-space with min/max so it needs
+  // no assumption about which of low/high sits at the smaller pixel value; a
+  // rotated chart falls out of the same arithmetic.
+  const wickNear = Math.min(vc.low.v, vc.high.v);
+  const wickFar = Math.max(vc.low.v, vc.high.v);
+
+  // ⚠️ A BODY OUTSIDE ITS OWN WICK IS AN IMPOSSIBLE CANDLE, and it is exactly
+  // what a bottom-up capture produces when the slots are filled in OHLC order.
+  // Two stubs would draw that tidily - the offending wick hidden INSIDE the
+  // body - so the incoherent case keeps the single line straight through, which
+  // is the one drawing that cannot be mistaken for a correct candle.
+  const coherent = wickNear <= bodyNear && bodyFar <= wickFar;
+
+  const wick: BoxPlotGlyphSegment[] = coherent
+    ? [
+        { from: toXY(wickNear, cross), to: toXY(bodyNear, cross) },
+        { from: toXY(bodyFar, cross), to: toXY(wickFar, cross) },
+      ]
+        // ⚑ A candle that opened at its low or closed at its high draws no wick
+        // on that side. The figure draws none, so neither do we.
+        .filter((s) => s.from.x !== s.to.x || s.from.y !== s.to.y)
+    : [{ from: toXY(wickNear, cross), to: toXY(wickFar, cross) }];
+
   const segments: BoxPlotGlyphSegment[] = [
-    // The wick, low to high, through the body.
-    { from: toXY(vc.low.v, cross), to: toXY(vc.high.v, cross) },
+    ...wick,
     // The body's four sides.
     { from: body[0]!, to: body[1]! },
     { from: body[1]!, to: body[2]! },
@@ -116,5 +167,5 @@ export function computeCandlestickGlyph(
   // rotated chart the value runs left to right and the comparison flips.
   const rising = isVertical ? vc.close.v < vc.open.v : vc.close.v > vc.open.v;
 
-  return { segments, body, rising };
+  return { segments, body, rising, coherent };
 }

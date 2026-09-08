@@ -2237,7 +2237,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   })
                 )}
                 {candlestickGlyphs?.map((glyph, glyphIndex) => (
-                  <Fragment key={`candle-glyph-`}>
+                  <Fragment key={`candle-glyph-${glyphIndex}`}>
                     {/* ⚑⚑ A FALLING CANDLE IS FILLED, a rising one hollow - the
                         figure's own convention, and the reason the overlay can
                         CHECK the capture. Open and close are both body edges, so
