@@ -1857,6 +1857,28 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * ⚑⚑ WHAT TO CALL THE ENDS THAT CAN EACH CARRY ERROR - one answer, from the
+   * two facts that already decide it: which slots carry error
+   * (`errorCarrierSlots`) and what this figure calls its values
+   * (`getValueColumns`). Empty for a type with a single value.
+   *
+   * ⚠️ THE CARD USED TO ASSEMBLE THIS ITSELF, out of `errorValueSlots.length`
+   * on one side and `intervalSlots` on the other, and the two could disagree:
+   * a type declaring two carriers with no `intervalSlots` produced an EMPTY
+   * list, which the card renders as no hint at all. That fails OPEN, and the
+   * thing it fails open on is the sentence telling the user the second end can
+   * carry error too - a hidden capability, which is the one thing the keystone
+   * persona rules out. Derived from the same names the table shows, so the card
+   * and the table cannot call one end two things either.
+   */
+  getErrorCarrierNames(index?: number): readonly string[] {
+    const carriers = this.errorCarrierSlots();
+    if (carriers.length < 2) return [];
+    const names = this.getValueColumns(index);
+    return carriers.map((slot) => names[slot] ?? `Value ${slot + 1}`);
+  }
+
+  /**
    * Every recorded error relation drawn as whiskers, in image-pixel space
    * (checkpoint 79) -- one bar per cap, from the datum it resolves to.
    *

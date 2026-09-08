@@ -8763,7 +8763,13 @@ export function Workspace() {
               existing={errorSeriesRows}
               // ⚑ The type's own answer, so a fourth end on a later type names
               // itself here without this call site changing.
-              valueEnds={(config.errorValueSlots ?? [0]).length > 1 ? (config.intervalSlots ?? []) : []}
+              // ⚑ ONE SOURCE: the session already knows which slots carry error
+              // and what this figure calls them. Assembled here from two configs
+              // that could disagree, a mismatch produced an empty list and the
+              // card silently dropped the sentence saying the second end can
+              // carry error too - the hidden capability the card exists to
+              // prevent.
+              valueEnds={session.getErrorCarrierNames(activeDatasetIndex)}
               onSelectSeries={handleSelectDataset}
               notice={errorNotice}
               calibrated={axes !== null}
