@@ -89,9 +89,18 @@ export function normalizeOcrText(raw: string): string {
  * lives one level up from the label being judged. The same shape as the crowded
  * reading, which is decided across a series rather than in one cell.
  *
- * ⛔ It is still an OFFER. The card opens with this turn applied and the
- * thumbnails the right way up; the per-row rotate control stays, because 6/6 on
- * one figure is not a promise about every figure.
+ * ⛔ It is still an OFFER, and 6/6 on one figure is not a promise about every
+ * figure.
+ *
+ * ⚠️⚑ NOT ON THE LIVE PATH SINCE `efab594`. The card reads the whole band at
+ * one measured angle (`findBandAngle`), which generalises this function off its
+ * four fixed turns - so this, `labelRegionsInBand` and `normalizeOcrText` are
+ * now reached only from the older corpus harness, which scores a path the app
+ * no longer runs. Kept deliberately and said out loud here, because the
+ * paragraph this replaces described a card with per-row thumbnails and a rotate
+ * control that the same commit deleted.
+ * ⚑ The one thing worth carrying FORWARD from here is the refusal: this returns
+ * null when the evidence is absent, and `findBandAngle` now does the same.
  */
 export function axisQuarterTurn(
   confidenceByTurn: readonly (readonly number[])[]

@@ -33,8 +33,18 @@
  */
 
 /** Candidate angles swept, in degrees. ⚑ Wider than the 45 that prompted this:
- *  chart tools offer 30, 45, 60 and 90, and a hand-drawn figure lands between. */
-export const DESKEW_RANGE_DEG = 60;
+ *  chart tools offer 30, 45, 60 and 90, and a hand-drawn figure lands between.
+ *
+ *  ⚠️ IT SAID 60 WHILE THE SENTENCE ABOVE IT NAMED 90. Vertical labels are one
+ *  of the two commonest non-horizontal layouts - matplotlib's `rotation=90`,
+ *  Excel's "Rotate all text down" - and the path that DID read them was the
+ *  quarter-turn sweep this generalises, removed in the same commit that wired
+ *  this in. So a whole layout went from read correctly to read at -60 with
+ *  nothing on screen to say so. The range has to reach what the tools offer.
+ *
+ *  ⚑ BOTH SIGNS, because +90 and -90 are not the same picture: one reads bottom
+ *  to top and the other top to bottom, and figures draw each. */
+export const DESKEW_RANGE_DEG = 90;
 
 /**
  * ⚑⚑ THE ANGLE IS FOUND BY READING, NOT BY LOOKING AT THE INK.
@@ -83,7 +93,7 @@ export async function findBandAngle(
   readAt: (radians: number) => Promise<number>,
   coarseStepDeg = 15,
   fineStepDeg = 5
-): Promise<{ radians: number; sweep: AngleSweepStep[] }> {
+): Promise<{ radians: number; sweep: AngleSweepStep[] } | null> {
   const sweep: AngleSweepStep[] = [];
   const score = async (deg: number) => {
     const radians = (deg * Math.PI) / 180;
@@ -102,7 +112,12 @@ export async function findBandAngle(
   }
   // ⚑ Refine either side of the coarse winner only. A second full sweep would
   // pay for the whole range to find a peak we have already located.
-  for (let deg = bestDeg - coarseStepDeg + fineStepDeg; deg < bestDeg + coarseStepDeg; deg += fineStepDeg) {
+  // ⚠️ CLAMPED TO THE DECLARED RANGE. Unclamped, a winner at the end of the
+  // sweep sent the refinement past it - measured, a probe at -70 from a range
+  // that says 60 - so the function read at angles its own constant rules out.
+  const from = Math.max(bestDeg - coarseStepDeg + fineStepDeg, -DESKEW_RANGE_DEG);
+  const to = Math.min(bestDeg + coarseStepDeg, DESKEW_RANGE_DEG + fineStepDeg);
+  for (let deg = from; deg < to; deg += fineStepDeg) {
     if (deg === bestDeg) continue;
     const s = await score(deg);
     if (s > bestScore) {
@@ -110,6 +125,14 @@ export async function findBandAngle(
       bestDeg = deg;
     }
   }
+  // ⚑⚑ NOTHING SCORED IS NOT AN ANGLE. Every read returning nothing - a blank
+  // band, or a reader that failed on every attempt - left the first candidate
+  // winning by `>` against -Infinity, so "the reader answered nothing thirteen
+  // times" was reported as "the axis is drawn at -60 degrees", and the caller
+  // could not tell that from a measurement.
+  // ⚑ `axisQuarterTurn`, which this generalises, has always returned null when
+  // the evidence is absent. That refusal was not carried over; this is it.
+  if (bestScore <= 0) return null;
   return { radians: (bestDeg * Math.PI) / 180, sweep };
 }
 

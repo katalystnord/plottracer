@@ -154,7 +154,7 @@ describe('reading each figure’s label band in ONE pass', () => {
         // 0/4. Length is what separates a label from a confident smudge.
         return ws.reduce((t, w) => t + w.confidence * w.text.trim().length, 0);
       };
-      const { radians: angle } = await findBandAngle(readMeanConfidence);
+      const { radians: angle } = (await findBandAngle(readMeanConfidence))!;
       const straight = deskewBand(crop.data, crop.width, crop.height, angle);
       const scaled = upscaleForOcr(straight);
       const factor = straight.height === 0 ? 1 : scaled.height / straight.height;

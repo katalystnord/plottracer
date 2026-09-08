@@ -6,7 +6,7 @@
  * wrong, so the card showed the least bad garbage at confidence 29-47.
  */
 import { describe, expect, it } from 'vitest';
-import { deskewBand, findBandAngle } from '../ocrDeskew.js';
+import { deskewBand, findBandAngle, DESKEW_RANGE_DEG } from '../ocrDeskew.js';
 
 /**
  * A band of "text": evenly spaced dark strokes sitting on rows that run at
@@ -53,32 +53,68 @@ describe('finding the angle by reading at it', () => {
   };
 
   it('⚑⚑ finds the 45 degree angle the quarter turns could not', async () => {
-    const { radians } = await findBandAngle(readerPeakingAt(-45));
+    const { radians } = (await findBandAngle(readerPeakingAt(-45)))!;
     expect(Math.round((radians * 180) / Math.PI)).toBe(-45);
   });
 
   it('leaves a horizontal axis at zero', async () => {
-    const { radians } = await findBandAngle(readerPeakingAt(0));
+    const { radians } = (await findBandAngle(readerPeakingAt(0)))!;
     expect(Math.round((radians * 180) / Math.PI)).toBe(0);
   });
 
   it('finds the shallower angles chart tools actually offer', async () => {
     for (const want of [30, -30, 60]) {
-      const { radians } = await findBandAngle(readerPeakingAt(want));
+      const { radians } = (await findBandAngle(readerPeakingAt(want)))!;
       expect(Math.round((radians * 180) / Math.PI), `at ${want} degrees`).toBe(want);
     }
+  });
+
+  it('⚑⚑ finds a VERTICAL axis, which is what the quarter turns used to do', async () => {
+    // ⚠️ THE RANGE SAID 60 WHILE ITS OWN COMMENT NAMED 90. `rotation=90` and
+    // Excel's "Rotate all text down" are one of the two commonest non-horizontal
+    // layouts, the quarter-turn sweep that read them was deleted in the same
+    // commit that wired this in, and a 90 degree axis came back as -60 with
+    // nothing on screen to say so.
+    for (const want of [90, -90, 75]) {
+      const { radians } = (await findBandAngle(readerPeakingAt(want)))!;
+      expect(Math.round((radians * 180) / Math.PI), `at ${want} degrees`).toBe(want);
+    }
+  });
+
+  it('⚑ never reads at an angle its own range rules out', async () => {
+    // ⚠️ Measured before the clamp: a winner at the end of the sweep sent the
+    // refinement past it, probing -70 from a range that declared 60.
+    const seen: number[] = [];
+    await findBandAngle(readerPeakingAt(-90, seen));
+    const outside = seen.filter((d) => Math.abs(d) > DESKEW_RANGE_DEG);
+    expect(outside, `read outside +-${DESKEW_RANGE_DEG}`).toEqual([]);
+  });
+
+  it('⚑⚑ REFUSES when nothing reads at any angle, rather than naming one', async () => {
+    // A blank band, or a reader that failed every time. Left to `>` against
+    // -Infinity the first candidate won, so thirteen empty reads were reported
+    // as an angle - and the caller could not tell that from a measurement.
+    // ⚑ `axisQuarterTurn`, which this generalises, has always returned null
+    // when the evidence is absent.
+    expect(await findBandAngle(async () => 0)).toBeNull();
+  });
+
+  it('⚑ and a tie of real readings is still an answer, not a refusal', async () => {
+    // The companion assertion: the refusal is for NO evidence, not for
+    // ambiguous evidence. A flat but non-zero score means text was read.
+    expect(await findBandAngle(async () => 42)).not.toBeNull();
   });
 
   it('⚑ costs a coarse sweep plus a refinement, not a fine sweep of the whole range', async () => {
     const seen: number[] = [];
     await findBandAngle(readerPeakingAt(-45, seen));
-    // -60..60 at 15 is 9 reads; refining +-15 at 5 adds 4 more. A 5 degree
-    // sweep of the whole range would be 25, and the old path cost 4 x N.
-    expect(seen.length).toBeLessThanOrEqual(13);
+    // -90..90 at 15 is 13 reads; refining +-15 at 5 adds up to 5 more. A 5
+    // degree sweep of the whole range would be 37, and the old path cost 4 x N.
+    expect(seen.length).toBeLessThanOrEqual(18);
   });
 
   it('⚑ reports the whole sweep, so the card can show what it tried', async () => {
-    const { sweep } = await findBandAngle(readerPeakingAt(-45));
+    const { sweep } = (await findBandAngle(readerPeakingAt(-45)))!;
     expect(sweep.length).toBeGreaterThan(8);
     expect(Math.max(...sweep.map((s) => s.meanConfidence))).toBeGreaterThan(80);
   });

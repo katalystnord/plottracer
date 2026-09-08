@@ -43,9 +43,11 @@ export function isOcrFailure<T extends object>(x: T | OcrFailure): x is OcrFailu
 /**
  * PNG bytes for a crop, via a canvas - the one step that needs a browser.
  *
- * ⚑ The full data URL is kept for the thumbnail and the bare base64 handed to
- * the reader, so the picture in the card and the pixels that were read are the
- * SAME bytes rather than two renderings that could drift.
+ * ⚠️ The full data URL was kept so the card's per-row thumbnail and the pixels
+ * that were read could not drift apart. There is no per-row thumbnail since
+ * `efab594` - the band is read whole - so that reason has expired; the URL is
+ * still returned because callers other than the card use it, and this note is
+ * here so the next reader does not take it as evidence a thumbnail exists.
  */
 function encodeCrop(crop: { data: Uint8ClampedArray; width: number; height: number }): {
   dataUrl: string;
@@ -122,12 +124,31 @@ export async function readBandAtAngle(
     const enc = encodeCrop(scaledTry);
     if (!enc) return 0;
     const a = await api.readText(enc.base64);
+    // ⚑ A FAILED READ SCORES NOTHING, and says so by scoring nothing - which is
+    // what `findBandAngle`'s refusal counts. It used to reach the reduce with
+    // no words and return 0 indistinguishably from a blank band; that is the
+    // same number, but it is now the number that means "no evidence" rather
+    // than a value quietly competing to win the sweep.
+    if (a.error !== undefined) return 0;
     return (a.words ?? []).reduce(
       (total, w) => total + w.confidence * w.text.trim().length,
       0
     );
   };
-  const angle = angleRadians ?? (await findBandAngle(readScore)).radians;
+  let angle = angleRadians;
+  if (angle === undefined) {
+    const found = await findBandAngle(readScore);
+    // ⚑⚑ A REFUSAL, NOT A DEFAULT. Nothing scored anywhere in the sweep means
+    // the band holds no readable text at any angle, and answering with an angle
+    // would hand the user a measurement nobody made.
+    if (!found) {
+      return {
+        error:
+          'Nothing could be read in that box at any angle. Drag it round the row of labels beneath the axis you marked, clear of the tick marks.',
+      };
+    }
+    angle = found.radians;
+  }
   const straight = deskewBand(crop.data, crop.width, crop.height, angle);
   const scaled = upscaleForOcr(straight);
   // ⚑ The upscale is a whole factor, so the word boxes come back in the SCALED

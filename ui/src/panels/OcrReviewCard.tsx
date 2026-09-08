@@ -17,18 +17,26 @@ import type { OcrProposal } from '../ocrClient.js';
  * end. It also means no new in-cell look had to be invented: `[brackets]`,
  * italics and the selection tint all keep their single meanings.
  *
- * ⚑⚑ EVERY ROW CARRIES ITS OWN CROP, and that is how the rotation is shown.
- * David: *"how do we show this rotation clearly?"* Not with a `90 degrees`
- * badge - with the picture. Press `Rotate` and the thumbnail turns while the
- * text and the confidence beneath it change, so the feedback needs no words. It
- * pays twice more: a badly aimed box stops being a confidence number to
- * interpret (you SEE that it caught half a label), and a column of thumbnails is
- * a visual index of the axis, checkable against the figure at a glance.
- *
- * ⚑ The card opens with the turn THE WHOLE AXIS agreed on already applied, so
+ * ⚑ The card opens with the angle THE WHOLE AXIS agreed on already applied, so
  * an axis of rotated labels arrives the right way up. Measured: per-label
- * confidence picks a confidently wrong turn for one label in six; the axis mean
- * picks the right one by 90 against 53.
+ * confidence picks a confidently wrong answer for one label in six; the axis
+ * mean picks the right one by 90 against 53.
+ *
+ * ⚠️⚑⚑ THIS PARAGRAPH USED TO DESCRIBE A PER-ROW THUMBNAIL AND A `Rotate`
+ * BUTTON, and `efab594` deleted both in the commit that made the card read the
+ * whole band at once - there is no per-label crop any more, so there is nothing
+ * to draw. The description outlived the controls, which is the failure gate 3
+ * names: a header restating a design is what stops the next reader from
+ * checking the code, and this one answered David's *"how do we show this
+ * rotation clearly?"* with a mechanism that was gone. The card is `#`, `name`,
+ * `conf.`
+ *
+ * ⛔ SO THE QUESTION IS OPEN AGAIN, and it should be read as open: nothing on
+ * screen now shows the angle the band was read at, and the `angleRadians` the
+ * client returns is discarded by its only caller. `readBandAtAngle` already
+ * takes a user's angle as its last argument - documented as "the user's own
+ * setting, which always wins" - and nothing passes one. That control is the
+ * next step both earlier commits named, and it is not built.
  */
 
 export interface OcrReviewCardProps {
