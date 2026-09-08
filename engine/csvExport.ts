@@ -397,7 +397,23 @@ export function tupleDataSection(
   // (`CalibrationSession.getValueColumns`), which is the point: this file used
   // to derive its columns independently, and a stacked bar is exactly where the
   // two answers parted.
-  const derivedColumns = valueColumns && valueColumns.length > 1 ? valueColumns : null;
+  //
+  // ⚠️⚠️ AN INTERVAL ANSWERS FIRST, and leaving that out wrote a span's pair
+  // TWICE. `SPAN_AXES_CONFIG.intervalSlots` is `['Min','Max']` and
+  // `getValueColumns()` answers with the same two names, so both branches were
+  // true at once and the header carried `Min, Max, Min, Max` - the same
+  // measurement under the same word at two precisions, which is the one way a
+  // table can be wrong that nobody reads as wrong. The doc on `valueColumns`
+  // three lines up already said these REPLACE the member columns; only the
+  // non-interval branch did it.
+  //
+  // ⚑⚑ AND THE ORDER OF THE TWO QUESTIONS IS NOT A TIE-BREAK, it is the answer.
+  // The two routes are not interchangeable: `memberValues` sorts a complete pair
+  // smallest first and puts every reading through the export rounder, while
+  // `row.cells` is raw `pixelToData` in CLICK order. An interval record has no
+  // first and second end, only a smaller and a larger one, so the route that
+  // sorts is the only one entitled to fill it.
+  const derivedColumns = !reportsInterval && valueColumns && valueColumns.length > 1 ? valueColumns : null;
   const memberNames = reportsInterval
     ? intervalSlots
     : derivedColumns || measuredFromFigureOrigin
@@ -468,7 +484,18 @@ export function tupleDataSection(
       ...(memberNames.length === 0
         ? []
         : memberValues(row, pointGroupNames.length, rounder, reportsInterval).map((v) => v ?? '')),
-      ...(derivedColumns ? row.cells.map((v) => (v == null ? '' : v)) : []),
+      // ⚑⚑ THROUGH THE ROUNDER, like every other measured column - the same
+      // correction the position span above carries, for the same reason. These
+      // cells are raw `pixelToData`, so a box plot and a candlestick published
+      // `0.29750000000000004`: seventeen significant digits claimed from a pixel
+      // reading, in `auto` precision. It also made the export dialog's precision
+      // setting do nothing at all for the two types that route through here.
+      // ⚑ A stacked segment's `Base` is a REAL READING - the top of the segment
+      // below it - so it is entitled to exactly what `Value` beside it gets;
+      // unrounded, one figure printed at two precisions in adjacent columns.
+      ...(derivedColumns
+        ? row.cells.map((v) => (v == null ? '' : rounder.at([v], 0)))
+        : []),
       // ⚠️ NOT ROUNDED HERE, DELIBERATELY - see the note on `row.derived` above,
       // and do not 'fix' this without reading it. `compute` has already rounded
       // to the TYPE's own precision, and re-rounding needs `axes.dataToPixel`,
@@ -1411,11 +1438,19 @@ export function buildTupleSeriesJSON(
             // ⚑ The same rule as the table: a figure that names more than one
             // value per datum (a STACKED bar's `Base` and `Value`) reports those
             // and nothing else, so a reader who switches format meets one model.
-            ...(valueColumns && valueColumns.length > 1
-              ? Object.fromEntries(valueColumns.map((label, i) => [label, row.cells[i] ?? null]))
+            // ⚑ THE SAME TWO CORRECTIONS AS THE TABLE, so the formats cannot
+            // drift apart: an interval answers first (`intervalSlots` below),
+            // and a cell reaches the file through the rounder.
+            ...(intervalSlots === undefined && valueColumns && valueColumns.length > 1
+              ? Object.fromEntries(
+                  valueColumns.map((label, i) => [
+                    label,
+                    row.cells[i] == null ? null : rounder.at([row.cells[i] as number], 0),
+                  ])
+                )
               : {}),
             ...Object.fromEntries(
-              (valueColumns && valueColumns.length > 1
+              (intervalSlots === undefined && valueColumns && valueColumns.length > 1
                 ? []
                 : intervalSlots ?? (measuredFromFigureOrigin ? [] : pointGroupNames)
               ).map((label, slot) => [
@@ -1426,7 +1461,7 @@ export function buildTupleSeriesJSON(
             ),
           };
           if (
-            !(valueColumns && valueColumns.length > 1) &&
+            !(intervalSlots === undefined && valueColumns && valueColumns.length > 1) &&
             derivedLabel != null &&
             row.derived != null
           ) {
