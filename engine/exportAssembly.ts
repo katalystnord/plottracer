@@ -222,6 +222,9 @@ export function buildExportJson(input: ExportAssemblyInput): string {
         : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsByTuple(session, activeIndex, input.precision) }];
     return buildTupleSeriesJSON(
       tupleSeries,
+      // ⚑ THE ACTIVE SERIES' NAMES, and that is right HERE only because this
+      // builder takes one name list for the document. Where a block is written
+      // per series - the sections path below - each block asks for its own.
       session.getSlotNames(),
       rounder,
       session.getConfig().derivedTupleValue?.label,
@@ -357,15 +360,21 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     const infosForScope = scope === 'all' ? session.getDatasetInfos() : [];
     if (infosForScope.length > 1) {
       for (const info of infosForScope) {
+        // ⚠️ EACH BLOCK ASKS FOR ITS OWN SERIES' NAMES. These were hoisted out
+        // of the loop from the ACTIVE series, so every block in a multi-series
+        // file carried the selected series' headings over its neighbours'
+        // numbers - and which headings those were depended on what happened to
+        // be selected when Export was pressed. The rows were already per-series
+        // one line down; only the words were not.
         const block = tupleDataSection(
-          slots,
+          session.getSlotNames(info.index),
           session.getTupleRows(info.index),
           rounder,
           derivedLabel,
           errorColumnsByTuple(session, info.index, input.precision).error,
           session.getConfig().intervalSlots,
           session.getConfig().measuredFromFigureOrigin,
-          session.getValueColumns()
+          session.getValueColumns(info.index)
         );
         sections.push({ ...block, title: info.name });
       }

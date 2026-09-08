@@ -4540,12 +4540,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ It takes the AXES because some answers are a fact about the FIGURE rather
    * than the type: a stacked bar's segment has a `Base` as well as a `Value`.
    */
-  getValueColumns(): readonly string[] {
-    return valueColumnNames(this.config, this.getSlotNames(), this.axes ?? undefined);
+  /** ⚑ Takes an index for the same reason `getTupleRows` does: an export
+   *  reaches series that are not selected, and a series that has been reshaped
+   *  has its OWN names. Asked without one it answers for the active series, so
+   *  every on-screen caller reads unchanged. */
+  getValueColumns(index?: number): readonly string[] {
+    return valueColumnNames(this.config, this.getSlotNames(index), this.axes ?? undefined);
   }
 
-  getSlotNames(): string[] {
-    return this.ownSlots(this.activeEntry.dataset);
+  getSlotNames(index?: number): string[] {
+    return this.ownSlots(this.datasetAt(index));
   }
 
   /** The active series' error columns, under the name the user gave the error
@@ -4999,9 +5003,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
         positionSpan: this.tuplePositionSpan(dataset, tuple),
         // ⚑ The same answer the table shows - one module, asked twice, never
         // re-derived. Empty before calibration, when nothing can be read.
-        cells: this.axes
-          ? valueCells(this.config, points, this.axes, this.ownSlots(this.activeEntry!.dataset))
-          : [],
+        // ⚠️ `dataset`, NOT the active one. Every other line in this map threads
+        // `datasetIndex` - the label, the position, the points - and this asked
+        // `activeEntry`, so the numbers were read with whatever series happened
+        // to be SELECTED. `valueCells`' own doc for this argument states the
+        // premise it broke: the dataset's OWN slot names, "so the two cannot
+        // answer from different premises". A plain bar's `Value` printed under a
+        // box plot's `Q1` whenever the box plot was the one on screen.
+        // ⚑⚑ The same `activeDatasetIndex`-for-`datasetIndex` shape the note
+        // fifteen lines below records having fixed in the stacking argument,
+        // one property up. This entrance is invisible from the app: it opens
+        // only when the series being exported is NOT the series being looked at.
+        cells: this.axes ? valueCells(this.config, points, this.axes, this.ownSlots(dataset)) : [],
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
         // tuple's own apex, and the whole the values are read against.
