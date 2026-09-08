@@ -1,0 +1,102 @@
+{
+  "source": {
+    "imagePath": "candlestick-trading-week.png",
+    "note": "Synthetic ground truth - Open/High/Low/Close per day. The date labels are drawn at 45 degrees, which is what makes this the corpus's rotated-text case."
+  },
+  "graphType": "candlestick",
+  "axes": {
+    "y": {
+      "label": "Price",
+      "min": 10,
+      "max": 40
+    }
+  },
+  "calibration": {
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "anchors": {
+      "p1": {
+        "px": 67.78,
+        "py": 601.74,
+        "value": 10
+      },
+      "p2": {
+        "px": 67.78,
+        "py": 39.33,
+        "value": 40
+      },
+      "c1": {
+        "px": 67.78,
+        "py": 601.74
+      },
+      "c2": {
+        "px": 885.0,
+        "py": 601.74,
+        "value": 8
+      }
+    }
+  },
+  "series": [
+    {
+      "name": "price",
+      "points": [
+        {
+          "category": "2021-01-01",
+          "open": 25,
+          "high": 28,
+          "low": 22,
+          "close": 24
+        },
+        {
+          "category": "2021-01-02",
+          "open": 22,
+          "high": 27,
+          "low": 16,
+          "close": 20
+        },
+        {
+          "category": "2021-01-03",
+          "open": 21,
+          "high": 29,
+          "low": 14,
+          "close": 17
+        },
+        {
+          "category": "2021-01-04",
+          "open": 19,
+          "high": 25,
+          "low": 17,
+          "close": 23
+        },
+        {
+          "category": "2021-01-05",
+          "open": 23,
+          "high": 24,
+          "low": 19,
+          "close": 22
+        },
+        {
+          "category": "2021-01-06",
+          "open": 21,
+          "high": 26,
+          "low": 18,
+          "close": 25
+        },
+        {
+          "category": "2021-01-07",
+          "open": 25,
+          "high": 31,
+          "low": 22,
+          "close": 29
+        },
+        {
+          "category": "2021-01-08",
+          "open": 29,
+          "high": 37,
+          "low": 26,
+          "close": 31
+        }
+      ]
+    }
+  ]
+}

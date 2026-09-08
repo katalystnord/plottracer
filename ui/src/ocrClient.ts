@@ -7,7 +7,7 @@ import {
   type QuarterTurn,
 } from '../../engine/ocrRegion.js';
 import type { CropRect } from '../../engine/imageEdit.js';
-import { deskewBand, estimateTextAngle } from '../../engine/ocrDeskew.js';
+import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks, type TickReading } from '../../engine/ocrWordsToTicks.js';
 
 /**
@@ -208,8 +208,29 @@ export async function readBandAtAngle(
   const crop = cropForOcr(image.data, image.width, image.height, band, 0);
   if (!crop) return { error: 'That box is not on the figure.' };
 
-  const angle =
-    angleRadians ?? estimateTextAngle(crop.data, crop.width, crop.height);
+  // ⚑⚑ THE ANGLE IS FOUND BY READING AT IT when the caller has not set one.
+  // Measured: a projection-profile deskew reads the real 45 degree figure as 0,
+  // because it assumes long shared text rows and a category axis draws short
+  // staggered labels. The reader's own confidence peaks sharply at the true
+  // angle (88.6 against under 35 ten degrees off), so that is the instrument.
+  //
+  // ⚑ SCORED BY CONFIDENCE x LENGTH, SUMMED. The mean alone is not comparable
+  // across angles, because the WORD COUNT changes with the angle - a wrong
+  // angle returns a few confidently-read glyphs and outscores four correct
+  // labels. Measured: the mean picked -30 for a horizontal figure and took it
+  // from 4/4 to 0/4.
+  const readScore = async (radians: number): Promise<number> => {
+    const turned = deskewBand(crop.data, crop.width, crop.height, radians);
+    const scaledTry = upscaleForOcr(turned);
+    const enc = encodeCrop(scaledTry);
+    if (!enc) return 0;
+    const a = await api.readText(enc.base64);
+    return (a.words ?? []).reduce(
+      (total, w) => total + w.confidence * w.text.trim().length,
+      0
+    );
+  };
+  const angle = angleRadians ?? (await findBandAngle(readScore)).radians;
   const straight = deskewBand(crop.data, crop.width, crop.height, angle);
   const scaled = upscaleForOcr(straight);
   // ⚑ The upscale is a whole factor, so the word boxes come back in the SCALED

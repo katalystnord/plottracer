@@ -704,6 +704,73 @@ def gen_boxplot():
     })
 
 
+def gen_candlestick():
+    """Eight trading days as candlesticks, with the dates at 45 degrees.
+
+    ⚑⚑ TWO JOBS IN ONE FIGURE, and both were gaps found by David driving v2.5:
+
+      1. Candlestick was the ONE registered graph type with no bundled example -
+         you could pick its card and have nothing to open. Nothing asserted that
+         a registered type ships a sample, the same way nothing asserted it ships
+         an icon until the type was added.
+      2. Every bundled figure draws its category labels HORIZONTAL, so the whole
+         corpus was blind to rotated text by construction. A real 45 degree axis
+         read back as `he' "0 3 9` at confidence 32 and no test could see it.
+
+    ⚑ The colours are the modern convention (green rises, red falls) because
+    that is what the direction reader ranks; the print convention (hollow rises)
+    is the other live one and is covered by unit tests rather than by a second
+    figure.
+    """
+    name = "candlestick-trading-week"
+    # (date, open, high, low, close)
+    days = [
+        ("2021-01-01", 25, 28, 22, 24),
+        ("2021-01-02", 22, 27, 16, 20),
+        ("2021-01-03", 21, 29, 14, 17),
+        ("2021-01-04", 19, 25, 17, 23),
+        ("2021-01-05", 23, 24, 19, 22),
+        ("2021-01-06", 21, 26, 18, 25),
+        ("2021-01-07", 25, 31, 22, 29),
+        ("2021-01-08", 29, 37, 26, 31),
+    ]
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    for i, (_, o, h, lo, c) in enumerate(days):
+        rising = c >= o
+        colour = "#1b7a34" if rising else "#d62728"
+        # The wick, then the body drawn over it.
+        ax.plot([i, i], [lo, h], color=colour, linewidth=2, zorder=2)
+        ax.add_patch(plt.Rectangle((i - 0.28, min(o, c)), 0.56, abs(c - o) or 0.15,
+                                   facecolor=colour, edgecolor=colour, zorder=3))
+    ax.set_xlim(-0.5, len(days) - 0.5)
+    ax.set_ylim(10, 40)
+    ax.set_xticks(range(len(days)))
+    # ⚑⚑ THE POINT OF THIS FIGURE: rotated labels, anchored so the END of each
+    # date sits at its own tick, which is what `ha="right"` does and what every
+    # real chart tool draws.
+    ax.set_xticklabels([d for d, *_ in days], rotation=45, ha="right")
+    ax.set_ylabel("Price", fontsize=13)
+    ax.set_title("Daily price - one trading week", fontsize=15)
+    ax.grid(True, axis="y", color="#dddddd", linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _value_calibration(fig, ax, 10, 40)
+    # ⚑ Into `anchors`, where every other bar-family figure keeps c1/c2 - the
+    # harness reads them from there, and a top-level copy is invisible to it.
+    calib["anchors"].update(_category_calibration(fig, ax, len(days)))
+    _save(fig, name)
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - Open/High/Low/Close per day. The date labels are drawn at 45 degrees, which is what makes this the corpus's rotated-text case."},
+        "graphType": "candlestick",
+        "axes": {"y": {"label": "Price", "min": 10, "max": 40}},
+        "calibration": calib,
+        "series": [{"name": "price", "points": [
+            {"category": d, "open": o, "high": h, "low": lo, "close": c} for d, o, h, lo, c in days]}],
+    })
+
+
 def gen_polar():
     """Diffusion rate vs. angle - a polar plot. Truth = (angle°, radius) samples."""
     name = "polar-diffusion-rate"
@@ -1677,6 +1744,7 @@ if __name__ == "__main__":
     gen_errorbar()
     gen_errorbar_asymmetric()
     gen_boxplot()
+    gen_candlestick()
     gen_polar()
     gen_ccr()
     gen_dashstyles()

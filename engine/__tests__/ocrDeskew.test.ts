@@ -6,7 +6,7 @@
  * wrong, so the card showed the least bad garbage at confidence 29-47.
  */
 import { describe, expect, it } from 'vitest';
-import { deskewBand, estimateTextAngle } from '../ocrDeskew.js';
+import { deskewBand, findBandAngle } from '../ocrDeskew.js';
 
 /**
  * A band of "text": evenly spaced dark strokes sitting on rows that run at
@@ -42,53 +42,72 @@ function bandAt(deg: number, width = 160, height = 160) {
   return { data, width, height };
 }
 
-describe('measuring the angle a label band runs at', () => {
-  it('reads a horizontal band as level', () => {
-    const b = bandAt(0);
-    expect(Math.round((estimateTextAngle(b.data, b.width, b.height) * 180) / Math.PI)).toBe(0);
+describe('finding the angle by reading at it', () => {
+  /** A stand-in reader whose confidence peaks at `trueDeg`, as the real one does:
+   *  measured on the 45 degree figure, 88.6 at the angle and under 35 by 10
+   *  degrees off. */
+  const readerPeakingAt = (trueDeg: number, seen: number[] = []) => async (radians: number) => {
+    const deg = (radians * 180) / Math.PI;
+    seen.push(Math.round(deg));
+    return Math.max(0, 90 - Math.abs(deg - trueDeg) * 6);
+  };
+
+  it('⚑⚑ finds the 45 degree angle the quarter turns could not', async () => {
+    const { radians } = await findBandAngle(readerPeakingAt(-45));
+    expect(Math.round((radians * 180) / Math.PI)).toBe(-45);
   });
 
-  it('⚑⚑ reads the 45 degree band the quarter turns could not', () => {
-    const b = bandAt(45);
-    const deg = (estimateTextAngle(b.data, b.width, b.height) * 180) / Math.PI;
-    expect(Math.abs(deg - 45)).toBeLessThanOrEqual(2);
+  it('leaves a horizontal axis at zero', async () => {
+    const { radians } = await findBandAngle(readerPeakingAt(0));
+    expect(Math.round((radians * 180) / Math.PI)).toBe(0);
   });
 
-  it('reads the other diagonal too, so the sign is real', () => {
-    const b = bandAt(-45);
-    const deg = (estimateTextAngle(b.data, b.width, b.height) * 180) / Math.PI;
-    expect(Math.abs(deg + 45)).toBeLessThanOrEqual(2);
-  });
-
-  it('reads the shallower angles chart tools actually offer', () => {
-    for (const want of [30, 60, -30]) {
-      const b = bandAt(want);
-      const deg = (estimateTextAngle(b.data, b.width, b.height) * 180) / Math.PI;
-      expect(Math.abs(deg - want), `at ${want} degrees`).toBeLessThanOrEqual(3);
+  it('finds the shallower angles chart tools actually offer', async () => {
+    for (const want of [30, -30, 60]) {
+      const { radians } = await findBandAngle(readerPeakingAt(want));
+      expect(Math.round((radians * 180) / Math.PI), `at ${want} degrees`).toBe(want);
     }
   });
 
-  it('⚑ measures ink against the band’s own paper, so a dark figure reads', () => {
-    const b = bandAt(45);
-    // Invert: light text on a dark ground, which a hardcoded threshold would
-    // read as ink everywhere and score flat at every angle.
-    for (let i = 0; i < b.data.length; i += 4) {
-      b.data[i] = 255 - b.data[i]!;
-      b.data[i + 1] = 255 - b.data[i + 1]!;
-      b.data[i + 2] = 255 - b.data[i + 2]!;
-    }
-    const deg = (estimateTextAngle(b.data, b.width, b.height) * 180) / Math.PI;
-    expect(Math.abs(deg - 45)).toBeLessThanOrEqual(2);
+  it('⚑ costs a coarse sweep plus a refinement, not a fine sweep of the whole range', async () => {
+    const seen: number[] = [];
+    await findBandAngle(readerPeakingAt(-45, seen));
+    // -60..60 at 15 is 9 reads; refining +-15 at 5 adds 4 more. A 5 degree
+    // sweep of the whole range would be 25, and the old path cost 4 x N.
+    expect(seen.length).toBeLessThanOrEqual(13);
+  });
+
+  it('⚑ reports the whole sweep, so the card can show what it tried', async () => {
+    const { sweep } = await findBandAngle(readerPeakingAt(-45));
+    expect(sweep.length).toBeGreaterThan(8);
+    expect(Math.max(...sweep.map((s) => s.meanConfidence))).toBeGreaterThan(80);
   });
 });
 
 describe('straightening the band', () => {
-  it('⚑ turns a 45 degree band level, so the sweep finds nothing left to correct', () => {
-    const b = bandAt(45);
-    const angle = estimateTextAngle(b.data, b.width, b.height);
-    const straight = deskewBand(b.data, b.width, b.height, angle);
-    const left = (estimateTextAngle(straight.data, straight.width, straight.height) * 180) / Math.PI;
-    expect(Math.abs(left)).toBeLessThanOrEqual(2);
+  it('⚑ turns the band by the angle it is given, and back again', () => {
+    // ⚠️ This used to check the straightened band by re-measuring its angle with
+    // a projection-profile deskew. That method is GONE - it read the real 45
+    // degree figure as 0, because a projection profile assumes long shared text
+    // rows and a category axis draws short staggered labels. What is left to
+    // check here is the geometry: rotating by an angle and mapping back must be
+    // an exact round trip, which is what the word boxes depend on.
+    const b = bandAt(45, 120, 80);
+    const straight = deskewBand(b.data, b.width, b.height, Math.PI / 4);
+    for (const [x, y] of [
+      [10, 10],
+      [60, 40],
+      [100, 70],
+    ]) {
+      const src = straight.toSource(x!, y!);
+      // Rotating that source point forward by the same angle returns the point.
+      const cos = Math.cos(Math.PI / 4);
+      const sin = Math.sin(Math.PI / 4);
+      const dx = src.x - b.width / 2;
+      const dy = src.y - b.height / 2;
+      expect(dx * cos + dy * sin + straight.width / 2).toBeCloseTo(x!, 6);
+      expect(-dx * sin + dy * cos + straight.height / 2).toBeCloseTo(y!, 6);
+    }
   });
 
   it('⚑ sizes the output to the ROTATED bounding box, so nothing is clipped', () => {

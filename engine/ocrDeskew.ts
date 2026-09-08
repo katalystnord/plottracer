@@ -32,105 +32,85 @@
  * rather than assumed better.
  */
 
-/** A greyscale ink mask: 1 where there is ink, 0 where there is paper. */
-function inkMask(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number
-): { ink: Float32Array; width: number; height: number } {
-  const ink = new Float32Array(width * height);
-  // ⚑ The paper is whatever the BORDER is, measured, not assumed white - the
-  // same rule the candle bodies are judged by. A dark-themed figure has ink that
-  // is LIGHTER than its ground, and a hardcoded threshold reads it as all ink.
-  let border = 0;
-  let n = 0;
-  for (let x = 0; x < width; x++) {
-    border += luma(data, width, x, 0) + luma(data, width, x, height - 1);
-    n += 2;
-  }
-  const paper = n > 0 ? border / n : 255;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      ink[y * width + x] = Math.abs(luma(data, width, x, y) - paper) / 255;
-    }
-  }
-  return { ink, width, height };
-}
-
-function luma(data: Uint8ClampedArray, width: number, x: number, y: number): number {
-  const i = (y * width + x) * 4;
-  return 0.299 * (data[i] ?? 0) + 0.587 * (data[i + 1] ?? 0) + 0.114 * (data[i + 2] ?? 0);
-}
-
 /** Candidate angles swept, in degrees. ⚑ Wider than the 45 that prompted this:
  *  chart tools offer 30, 45, 60 and 90, and a hand-drawn figure lands between. */
-export const DESKEW_RANGE_DEG = 75;
+export const DESKEW_RANGE_DEG = 60;
 
 /**
- * The angle the band's text runs at, in RADIANS, measured off the ink.
+ * ⚑⚑ THE ANGLE IS FOUND BY READING, NOT BY LOOKING AT THE INK.
  *
- * ⚑⚑ PROJECTION-PROFILE VARIANCE, the classic deskew: rotate the ink by a
- * candidate angle, sum each row, and score how PEAKY the result is. Text rows
- * aligned with the sum direction give tall peaks separated by empty gaps, so the
- * variance is maximal at the true angle. Nothing here reads a character.
+ * ⚠️⚑⚑ A PROJECTION-PROFILE DESKEW WAS BUILT HERE FIRST AND IT DOES NOT WORK
+ * FOR THIS LAYOUT. It scored how peaky the ink is when summed along a candidate
+ * direction - the classic page-deskew - and it passed a synthetic test at 45
+ * degrees while reading the REAL figure as 0. The reason is the layout, not the
+ * arithmetic: a projection profile assumes long text rows spanning the image,
+ * and a category axis draws N SHORT labels STAGGERED along it. Rotated, they
+ * never share a row, so they smear instead of peaking. My fixture drew
+ * full-width rows and hid exactly that.
  *
- * ⚑ Positive means the text runs down to the right, as a matplotlib
- * `rotation=-45` label does.
+ * ▶ MEASURED on `samples/candlestick-trading-week.png`, sweeping -60..60:
  *
- * ⛔ It OFFERS. The slider is what settles it, because a band containing a
- * stray gridline or a truncated neighbour can peak in the wrong place, and the
- * user can see the read while we cannot.
+ *     -50 deg  meanConf 79.0  dates read 7/8
+ *     -45 deg  meanConf 88.6  dates read 7/8   <- the true angle
+ *     -40 deg  meanConf 83.6  dates read 7/8
+ *     -35 deg  meanConf 34.4  dates read 3/8
+ *       0 deg  meanConf 21.6  dates read 0/8
+ *
+ * The peak is sharp and everything beyond 10 degrees off sits below 57, so the
+ * reader's own confidence is a far better instrument than the ink is.
+ *
+ * ⚑ AND IT IS THE MECHANISM THE PROJECT ALREADY MEASURED, generalised.
+ * `axisQuarterTurn` picks a turn by MEAN CONFIDENCE ACROSS THE AXIS, because
+ * per-label confidence picks a confidently wrong answer one label in six. This
+ * is that, freed from four fixed values.
+ *
+ * ⚑ COARSE THEN FINE, so it costs ~12 reads rather than 25: the peak is broad
+ * enough at 15 degrees to be found, and narrow enough at 5 to be worth
+ * refining. The old path cost 4 x N, which is 32 reads on this very figure.
  */
-export function estimateTextAngle(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  stepDeg = 1
-): number {
-  if (width < 2 || height < 2) return 0;
-  const { ink } = inkMask(data, width, height);
-  let bestScore = -Infinity;
+export interface AngleSweepStep {
+  radians: number;
+  meanConfidence: number;
+}
+
+/**
+ * The angle whose reading scores best, from a caller that knows how to read.
+ *
+ * ⚑ The reader is INJECTED, so this stays testable with no OCR engine, no
+ * Electron and no figure - the same split `ocrRegion.ts` was built on.
+ */
+export async function findBandAngle(
+  readAt: (radians: number) => Promise<number>,
+  coarseStepDeg = 15,
+  fineStepDeg = 5
+): Promise<{ radians: number; sweep: AngleSweepStep[] }> {
+  const sweep: AngleSweepStep[] = [];
+  const score = async (deg: number) => {
+    const radians = (deg * Math.PI) / 180;
+    const meanConfidence = await readAt(radians);
+    sweep.push({ radians, meanConfidence });
+    return meanConfidence;
+  };
   let bestDeg = 0;
-  for (let deg = -DESKEW_RANGE_DEG; deg <= DESKEW_RANGE_DEG; deg += stepDeg) {
-    const score = profileVariance(ink, width, height, (deg * Math.PI) / 180);
-    if (score > bestScore) {
-      bestScore = score;
+  let bestScore = -Infinity;
+  for (let deg = -DESKEW_RANGE_DEG; deg <= DESKEW_RANGE_DEG; deg += coarseStepDeg) {
+    const s = await score(deg);
+    if (s > bestScore) {
+      bestScore = s;
       bestDeg = deg;
     }
   }
-  return (bestDeg * Math.PI) / 180;
-}
-
-/** How peaky the row-sums are once the ink is rotated by `radians`. */
-function profileVariance(
-  ink: Float32Array,
-  width: number,
-  height: number,
-  radians: number
-): number {
-  const cos = Math.cos(-radians);
-  const sin = Math.sin(-radians);
-  const cx = width / 2;
-  const cy = height / 2;
-  // ⚑ Rows indexed in the ROTATED frame, so the accumulator has to span the
-  // rotated bounding box or a steep angle would fold its ends onto each other.
-  const span = Math.ceil(Math.abs(width * sin) + Math.abs(height * cos)) + 1;
-  const rows = new Float32Array(span);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const v = ink[y * width + x]!;
-      if (v <= 0) continue;
-      const ry = (x - cx) * sin + (y - cy) * cos + span / 2;
-      const r = Math.round(ry);
-      if (r >= 0 && r < span) rows[r] = rows[r]! + v;
+  // ⚑ Refine either side of the coarse winner only. A second full sweep would
+  // pay for the whole range to find a peak we have already located.
+  for (let deg = bestDeg - coarseStepDeg + fineStepDeg; deg < bestDeg + coarseStepDeg; deg += fineStepDeg) {
+    if (deg === bestDeg) continue;
+    const s = await score(deg);
+    if (s > bestScore) {
+      bestScore = s;
+      bestDeg = deg;
     }
   }
-  let mean = 0;
-  for (const v of rows) mean += v;
-  mean /= span;
-  let variance = 0;
-  for (const v of rows) variance += (v - mean) * (v - mean);
-  return variance / span;
+  return { radians: (bestDeg * Math.PI) / 180, sweep };
 }
 
 /** A straightened band, and the way back to the figure's own pixels. */
