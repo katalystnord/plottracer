@@ -646,6 +646,10 @@ export function Workspace() {
    * before anything works. The overlay's own fill is what shows them whether it
    * needs pressing - which is the only reason it is safe to default at all.
    */
+  // ⚑ The figure's colour convention lives on its AXES (`BarAxes.candlesFlipped`),
+  // so it rides the project file with `isStacked` and `isRotated` and cannot be
+  // reset by a re-render or inherited by the next figure. This state exists only
+  // to re-render when it changes; the session is the source of truth.
   const [candleFlip, setCandleFlip] = useState(false);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -6297,7 +6301,7 @@ export function Workspace() {
   useEffect(() => {
     const img = imageCanvasRef.current?.getImageData();
     if (!img) return;
-    if (sessionRef.current.readCandleDirections(img.data, img.width, img.height, candleFlip) > 0) {
+    if (sessionRef.current.readCandleDirections(img.data, img.width, img.height) > 0) {
       bump();
     }
     // ⚑ `version` is the dependency that matters: it changes on every capture
@@ -9457,8 +9461,9 @@ export function Workspace() {
                 ⚑ It is visible rather than inferred because the overlay is what
                 shows a wrong reading: a candle drawn filled against a hollow one
                 in the figure is the disagreement, and this is what answers it.
-                ⚠️ It does not yet survive a save - `isRotated` and friends ride
-                on BarAxes and the project file, and this does not. */}
+                ⚑ It rides on BarAxes and the project file, exactly as
+                `isRotated` and `isStacked` do - a declaration about the figure,
+                so it survives a save and belongs to this figure alone. */}
             {config.id === 'candlestick' && (
               <label
                 style={{
@@ -9472,8 +9477,12 @@ export function Workspace() {
               >
                 <input
                   type="checkbox"
-                  checked={candleFlip}
-                  onChange={(e) => setCandleFlip(e.target.checked)}
+                  checked={session.candlesFlipped()}
+                  onChange={(e) => {
+                    session.setCandlesFlipped(e.target.checked);
+                    setCandleFlip(e.target.checked);
+                    bump();
+                  }}
                   data-testid="candle-flip"
                 />
                 This figure&rsquo;s rising candles are the other colour

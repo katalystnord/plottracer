@@ -6,7 +6,7 @@ import {
   serializeMultiFigureProject,
   deserializeMultiFigureProject,
 } from '../projectFile.js';
-import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG, CIRCULAR_CHART_RECORDER_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG, CIRCULAR_CHART_RECORDER_AXES_CONFIG, CANDLESTICK_AXES_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
@@ -909,12 +909,43 @@ describe('a bar figure keeps what it declares about itself across a save', () =>
     return back.axes as BarAxes;
   }
 
+  function candlestickProject(flipped: boolean): BarAxes {
+    const session = new CalibrationSession<BarAxes>(CANDLESTICK_AXES_CONFIG);
+    calibrateStandardBar(session);
+    walkCategoryAxis(session, { count: 2 });
+    expect(session.runCalibration()).toBe(true);
+    // One complete candle: low, lower body edge, upper body edge, high.
+    for (const y of [420, 380, 320, 280]) session.addDataPoint(150, y);
+    expect(session.setCandlesFlipped(flipped), 'the declaration reaches the axes').toBe(true);
+    const file = serializeProject(session, 'data:image/png;base64,AA==', 'figure.png');
+    if ('error' in file) throw new Error(file.error);
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    return back.axes as BarAxes;
+  }
+
   it('⚑ a STACKED chart reopens stacked, so its segments still report their own height', () => {
     expect(stackedBarProject({ isStacked: 'true' }).isStacked()).toBe(true);
   });
 
   it('and an ordinary chart reopens unstacked - the companion assertion', () => {
     expect(stackedBarProject({ isStacked: 'false' }).isStacked()).toBe(false);
+  });
+
+  it('⚑⚑ a CANDLESTICK keeps its colour convention, so Open and Close do not exchange on reopen', () => {
+    // ⚠️ THE FLIP WAS REACT STATE FOR ONE COMMIT, and its own comment admitted
+    // it: *"It does not yet survive a save."* A candle's two body edges are the
+    // same rectangle either way round, so the flip moves NO pixel - it decides
+    // only which edge answers to `Open`. A reopened figure re-read its
+    // directions with the flip back at its default and silently exchanged every
+    // Open and Close in the record, with nothing on screen to say so.
+    // ⚑ Named beside `isStacked` on purpose: this door carries the figure's
+    // declarations or it carries none.
+    expect(candlestickProject(true).candlesFlipped()).toBe(true);
+  });
+
+  it('and a figure drawn the usual way round reopens unflipped - the companion assertion', () => {
+    expect(candlestickProject(false).candlesFlipped()).toBe(false);
   });
 
   it('⚑⚑ the origin needs no saving at all - it is read back off the CATEGORY AXIS', () => {

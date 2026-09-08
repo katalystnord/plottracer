@@ -71,6 +71,7 @@ export class BarAxes {
   // v2.0: a declared baseline, not a calibration value -- see setBaseline.
   private _hasBaseline = true;
   private _isStacked = false;
+  private _candlesFlipped = false;
   private _baselineValue = 0;
 
   isCalibrated(): boolean {
@@ -257,6 +258,30 @@ export class BarAxes {
 
   isStacked(): boolean {
     return this._isStacked;
+  }
+
+  /**
+   * ⚑⚑ WHICH OF THE FIGURE'S TWO BODY APPEARANCES RISES (v2.5, candlestick).
+   *
+   * A candle's two body edges are the same rectangle either way round, so
+   * colour is the only signal the figure carries. `candleDirection.ts` measures
+   * the two appearances and ranks them; this is the one bit that says the
+   * ranking came out backwards for THIS figure - hollow-means-falling, a red
+   * theme, a printed chart that inverts the modern convention.
+   *
+   * ⚑ IT LIVES HERE, WITH `isStacked` AND `isRotated`, BECAUSE IT IS THE SAME
+   * KIND OF FACT: one declaration per figure that no measurement settles and
+   * everything downstream is then measured against. It was React state for one
+   * commit, and a saved project reopened with every Open and Close exchanged -
+   * silently, since the flip moves no pixel, only which edge answers to which
+   * name.
+   */
+  setCandlesFlipped(flipped: boolean): void {
+    this._candlesFlipped = flipped;
+  }
+
+  candlesFlipped(): boolean {
+    return this._candlesFlipped;
   }
 
   /**

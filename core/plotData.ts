@@ -100,6 +100,7 @@ export interface SerializedAxesData {
    * `isRotated` are, so it travels with them.
    */
   isStacked?: boolean;
+  candlesFlipped?: boolean;
   isDegrees?: boolean;
   isClockwise?: boolean;
   isRange100?: boolean;
@@ -654,6 +655,9 @@ export class PlotData {
           // Absent in every file written before v2.5 - and false is what those
           // files were read as, so the fallback changes nothing for them.
           axes.setStacked(Boolean(axData.isStacked));
+          // The candlestick's colour convention, on the same terms: absent in
+          // files written before it existed, and false is what they meant.
+          axes.setCandlesFlipped(Boolean(axData.candlesFlipped));
         } else if (axData.type === 'PolarAxes') {
           axes = new PolarAxes();
           axes.calibrate(calibration!, Boolean(axData.isDegrees), Boolean(axData.isClockwise), Boolean(axData.isLog));
@@ -1004,6 +1008,7 @@ export class PlotData {
         axData.hasBaseline = axes.hasDeclaredBaseline();
         axData.baselineValue = axes.getBaselineValue();
         axData.isStacked = axes.isStacked();
+        axData.candlesFlipped = axes.candlesFlipped();
       } else if (axes instanceof PolarAxes) {
         axData.type = 'PolarAxes';
         axData.isDegrees = axes.isThetaDegrees();

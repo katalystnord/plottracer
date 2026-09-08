@@ -230,6 +230,28 @@ describe('reading the candles’ direction off the figure', () => {
     expect(session.getCandlestickGlyphs().map((g) => g.rising)).toEqual([false, true]);
   });
 
+  it('⚑⚑ takes the flip from the FIGURE\'s own declaration, not from the caller', () => {
+    // ⚠️ This is the join that was missing. The flip was passed in from React
+    // state, so the declaration existed only in the component: the axes did not
+    // know, the project file could not write it, and a reopened figure re-read
+    // its directions unflipped. Asking the axes is what makes the saved
+    // declaration and the re-read the same fact.
+    const { session, src, width, height } = twoCandles();
+    // ⚑ The MEASURED baseline, not the provisional one: every candle arrives
+    // rising and the figure's colour has to name it, so the comparison has to be
+    // against a read that has happened.
+    session.readCandleDirections(src, width, height);
+    const asDrawn = session.getCandlestickGlyphs().map((g) => g.rising);
+
+    expect(session.setCandlesFlipped(true), 'the declaration reaches the axes').toBe(true);
+    session.readCandleDirections(src, width, height);
+    expect(session.getCandlestickGlyphs().map((g) => g.rising)).toEqual(asDrawn.map((r) => !r));
+
+    session.setCandlesFlipped(false);
+    session.readCandleDirections(src, width, height);
+    expect(session.getCandlestickGlyphs().map((g) => g.rising)).toEqual(asDrawn);
+  });
+
   it('moves no measured pixel - only which name each edge answers to', () => {
     const { session, src, width, height } = twoCandles();
     const before = session.getCandlestickGlyphs().map((g) => g.body);

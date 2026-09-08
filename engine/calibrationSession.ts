@@ -5582,11 +5582,34 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * every settled figure report 2, 5, 50 for ever and spin the render loop.
    * Reporting CHANGES makes the steady state zero, which is the truth anyway.
    */
+  /** The figure's own colour convention - see `BarAxes.setCandlesFlipped`. The
+   *  session forwards rather than stores, so there is exactly one copy of this
+   *  declaration and it is the one that gets saved. */
+  setCandlesFlipped(flipped: boolean): boolean {
+    const axes = this.axes as { setCandlesFlipped?: (v: boolean) => void } | null;
+    if (!axes?.setCandlesFlipped) return false;
+    axes.setCandlesFlipped(flipped);
+    return true;
+  }
+
+  candlesFlipped(): boolean {
+    return (this.axes as { candlesFlipped?: () => boolean } | null)?.candlesFlipped?.() ?? false;
+  }
+
+  /**
+   * ⚠️ `flipped` IS THE FIGURE'S DECLARATION, READ OFF THE AXES. It was a
+   * parameter fed from React state, so the correction lived nowhere the project
+   * file could see it: a flipped figure reopened with every Open and Close
+   * exchanged, and nothing on screen said the correction had been dropped -
+   * the flip moves no pixel, only which edge answers to which name.
+   * ⚑ Still overridable by argument, which is what the tests that exercise the
+   * ranking itself pass; absent, the figure answers for itself.
+   */
   readCandleDirections(
     src: Uint8ClampedArray,
     width: number,
     height: number,
-    flipped = false
+    flipped: boolean = this.candlesFlipped()
   ): number {
     if (this.config.axesKind !== 'bar') return 0;
     const dataset = this.activeEntry.dataset;
