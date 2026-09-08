@@ -114,3 +114,59 @@ describe('every series is read with its own shape', () => {
     }
   });
 });
+
+/**
+ * ⚑⚑ THE NAMES AND THE POINTS THEY MOVE ARE ONE ANSWER.
+ *
+ * `valuePointIndexFor`'s own doc says it *"asks the same three questions in the
+ * same order as `valueColumnNames`"*. It asked two of them. `valueColumnNames`
+ * opens with a question this did not have - *"a RESHAPED dataset answers from
+ * its SLOTS, whatever the type says"* - so on a bar reshaped to a box plot's
+ * five slots the NAMES came from the slots and the POINTS came from the derived
+ * branch, which answers the far corner for every column but the first.
+ *
+ * ⚠️ So editing `Q1`, `Median`, `Q3` or `Max` all moved the SAME corner, and the
+ * `[ ]` supplied mark was read off the wrong point. Gate 3, in the sentence that
+ * promised the two agree.
+ */
+describe('a reshaped record’s columns each name their own point', () => {
+  function reshapedBar(): CalibrationSession<CalibratedAxes> {
+    const s = new CalibrationSession<CalibratedAxes>(BAR_AXES_CONFIG as never);
+    s.handleCalibrationClick(100, 500);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(100, 100);
+    s.confirmCalibrationValues(['7']);
+    walkCategoryAxis(s, { from: { x: 100, y: 500 }, to: { x: 400, y: 500 }, count: 3 });
+    s.runCalibration();
+    s.applyBoxPlotGroups();
+    for (const y of [483, 441, 377, 313, 259]) s.addDataPoint(120, y);
+    return s;
+  }
+
+  it('five columns name five different points, not one corner five times', () => {
+    const s = reshapedBar();
+    const names = s.getValueColumns();
+    expect(names.length, `reshaped to ${JSON.stringify(names)}`).toBe(5);
+    const points = names.map((_, i) => s.valuePointIndexFor(0, i));
+    expect(points.every((p) => p != null), `some column names nothing: ${JSON.stringify(points)}`).toBe(
+      true
+    );
+    expect(new Set(points).size, `columns share a point: ${JSON.stringify(points)}`).toBe(5);
+  });
+
+  it('⚑ and each column names the point whose value it prints', () => {
+    // The stronger form: the cell a user edits must be the corner whose number
+    // they are looking at.
+    const s = reshapedBar();
+    const cells = s.getTupleRows()[0]!.cells;
+    const axes = s.getAxes()!;
+    s.getValueColumns().forEach((name, i) => {
+      const at = s.valuePointIndexFor(0, i)!;
+      const p = s.getDataset().getPixel(at);
+      expect(axes.pixelToData(p.x, p.y)[0], `${name} names a different point than it prints`).toBeCloseTo(
+        cells[i] as number,
+        6
+      );
+    });
+  });
+});

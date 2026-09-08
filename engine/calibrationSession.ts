@@ -259,7 +259,7 @@ import {
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './seriesNames.js';
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
-import { valueColumnNames, valueCells } from './valueColumns.js';
+import { valueColumnNames, valueCells, isReshaped } from './valueColumns.js';
 
 // ⚑ The axes-type configuration system lives in its own module since v2.0 - the
 // eleven graph-type declarations plus the shape they satisfy. RE-EXPORTED here
@@ -5360,6 +5360,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const indices = tuple.filter((i): i is number => i !== null && i !== undefined);
     if (indices.length === 0) return null;
 
+    // ⚠️⚑⚑ 0. A RESHAPED DATASET ANSWERS FROM ITS SLOTS, and this question was
+    // missing while the doc above claimed the same three questions in the same
+    // order as `valueColumnNames`. That function asks this one FIRST - a
+    // reshaped record is no longer the type's own shape - so on a bar reshaped
+    // to a box plot's five slots the names came from here and the POINTS came
+    // from the derived branch below, which answers `far` for every column but
+    // the first. Editing `Q1`, `Median`, `Q3` or `Max` all moved one corner,
+    // and the `[ ]` supplied mark was read off the wrong point. Gate 3, in the
+    // sentence that promised the two functions agree.
+    if (isReshaped(this.config, this.ownSlots(dataset))) {
+      return tuple[columnIndex] ?? null;
+    }
     // 3. slots, in order - the fallback, and the box plot's answer.
     if (!this.config.intervalSlots && !this.config.derivedTupleValue) {
       return tuple[columnIndex] ?? null;

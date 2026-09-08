@@ -152,7 +152,7 @@ export function valueCells<A extends CalibratedAxes>(
  * ⚑ Unknowable without `defaultSlots`, so a config that does not declare them is
  * taken at its word - which is every type that cannot be reshaped.
  */
-function isReshaped<A extends CalibratedAxes>(
+export function isReshaped<A extends CalibratedAxes>(
   config: ValueColumnConfig<A>,
   slotNames: readonly string[]
 ): boolean {
