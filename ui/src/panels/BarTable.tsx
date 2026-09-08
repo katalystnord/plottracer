@@ -1,6 +1,7 @@
 import { theme } from '../theme.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
+import { ScrollNoticer } from './ScrollNoticer.js';
 import { Fragment, type ReactNode } from 'react';
 import type { DisplayRounder } from '../../../core/displayPrecision.js';
 
@@ -502,6 +503,25 @@ export function BarTable({
   const headRowSpan = anyError || slotLabels.length > 1 ? 2 : 1;
   return (
     <>
+    {/* ⚑⚑ THE TABLE SAYS WHEN IT IS HIDING A COLUMN, AND IT SAYS IT THE WAY THE
+        MATRIX ALREADY DOES.
+
+        David, on a candlestick whose four value columns ran off the panel: *"The
+        output window needs to be wider to see it all here. Should we have scroll
+        bar down the bottom to alert the user that there is more to the right?"*
+
+        ⚠️ THERE ALREADY WAS A SCROLLBAR - the whole right-hand panel's, pinned to
+        the bottom of the window, nowhere near the column that was cut off. A cue
+        that far from the thing it describes does not say what it is about.
+
+        ⚑ REUSE: `ScrollNoticer` was written for exactly this complaint on the
+        heatmap (B17) and sat private inside `HeatmapCellsTable`. It is lifted,
+        not re-invented, so a clipped record reads the same in both tables.
+
+        ⚑ NO `maxHeight` here: this table IS the panel's content, and a second
+        vertical scroller nested in a panel that already scrolls swallows the
+        wheel. Sideways only. */}
+    <ScrollNoticer testId="points-table-scroll-notice">
     <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr>
@@ -749,6 +769,7 @@ export function BarTable({
         ))}
       </tbody>
     </table>
+    </ScrollNoticer>
     {/* ⚑⚑ NO READINGS YET, NOT "NO ROWS" (v2.3). This asked whether the table had
         any CATEGORY rows - which was the same question while a bar chart could be
         calibrated without its category axis. Since the axis is part of the walk,

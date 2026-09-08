@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { theme, withAlpha } from '../theme.js';
 import { CATEGORY_TICK_COLOR } from '../../../engine/categoryTickOverlay.js';
 import { cellKey, type HeatmapRow } from '../../../engine/heatmapRun.js';
 import { textOn } from '../contrast.js';
 import { valueText as sharedValueText, suppliedBySource } from './ValueMark.js';
+import { ScrollNoticer } from './ScrollNoticer.js';
 
 /**
  * A heatmap's cells, IN THE DATA POINTS PANEL - the same place every other
@@ -389,53 +390,6 @@ function valueCell(cell: HeatmapRow, renderValue: HeatmapCellsTableProps['render
 }
 
 /**
- * A container that SAYS when it is hiding something sideways (B17).
- *
- * ⚑ David, photographing the tint: the matrix scrolled horizontally with a
- * fifth column off-screen in a narrow sidebar, and nothing said so. A table
- * that silently ends mid-record is worse than a narrow one - the columns you
- * cannot see look like columns that do not exist, and this panel IS the record.
- *
- * ⚑ MEASURED, not assumed. Whether it overflows depends on the sidebar's width,
- * the number of columns and the font, none of which this component gets to know
- * - so it reads `scrollWidth` against `clientWidth` and re-reads on resize.
- * Guessing from the column count would be wrong at both ends: five narrow
- * columns fit, three wide ones may not.
- */
-function ScrollNoticer({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [clipped, setClipped] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setClipped(el.scrollWidth > el.clientWidth + 1);
-    measure();
-    // ⚑ ResizeObserver rather than a window listener: the sidebar can change
-    // width without the window doing so (a fold-out opening beside it), and
-    // that is exactly when a matrix starts and stops overflowing.
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [children]);
-  return (
-    <>
-      <div ref={ref} style={{ maxHeight: 320, overflow: 'auto' }}>
-        {children}
-      </div>
-      {clipped && (
-        <p
-          data-testid="heatmap-scroll-notice"
-          style={{ margin: '2px 0 0', color: theme.color.text.legend, fontSize: theme.font.size.small }}
-        >
-          More columns to the right - scroll sideways.
-        </p>
-      )}
-    </>
-  );
-}
-
-/**
  * The figure's own shape: one cell per cell, names down the edges.
  *
  * ⚑⚑ ROWS RUN TOP-DOWN, which is the whole point of this view. Cell row 0 is
@@ -460,7 +414,7 @@ function MatrixView({
   const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
   const byKey = new Map(cells.map((c) => [cellKey(c.col, c.row), c]));
   return (
-    <ScrollNoticer>
+    <ScrollNoticer maxHeight={320} testId="heatmap-scroll-notice">
       <table
         data-testid="heatmap-matrix"
         style={{ borderCollapse: 'collapse', fontSize: theme.font.size.small, fontVariantNumeric: 'tabular-nums' }}
@@ -626,7 +580,7 @@ function LongView({
   // stop referring to the same cell.
   const picked = (col: number, row: number) => selectedCells?.has(cellKey(col, row)) === true;
   return (
-    <ScrollNoticer>
+    <ScrollNoticer maxHeight={320} testId="heatmap-scroll-notice">
       <table
         data-testid="heatmap-table"
         style={{
