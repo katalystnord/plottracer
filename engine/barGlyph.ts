@@ -26,15 +26,13 @@
  * baseline would be a straight lie about what was measured.
  */
 
-export interface Point2D {
-  x: number;
-  y: number;
-}
-
-export interface GlyphSegment {
-  from: Point2D;
-  to: Point2D;
-}
+// ⚑ REUSE: `histogramGlyph.ts` is where these two live - this file's own header
+// already cites it for the baseline decision, and `errorBarGlyph.ts` imports
+// them from there. Re-declaring them here made a THIRD pair of structurally
+// identical types in one directory, which is how two modules that draw the same
+// staple stop being able to hand a segment to each other.
+export type { Point2D, GlyphSegment } from './histogramGlyph.js';
+import type { Point2D, GlyphSegment } from './histogramGlyph.js';
 
 /**
  * The bar between two captured corners, drawn as a staple standing ON the

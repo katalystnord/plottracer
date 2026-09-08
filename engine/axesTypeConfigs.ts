@@ -2280,14 +2280,23 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
      * baseline, within the figure's own resolution? See `core/barInterval.ts`,
      * which is one measurement with several consumers.
      *
-     * ⚑ Three outcomes, and only two of them are a single number:
-     *   · sits on the baseline  -> the far end relative to it, SIGNED. A bar
-     *     drawn DOWN from zero to -20 is worth -20; its span is 20 and has
-     *     thrown the sign away, which is why "always use the span" is wrong.
-     *   · declared STACKED      -> its own height, the segment's contribution.
-     *   · anything else FLOATS  -> it has no single value, and since v2.5 a Bar
-     *     has no interval to fall back to either. `null`, and `unreadable`
-     *     below is what says SO ON SCREEN rather than leaving a bare dash.
+     * ⚑ Two outcomes, and both are a single number:
+     *   · declared STACKED -> its own height, the segment's contribution,
+     *     signed by which side of the origin the figure drew it on.
+     *   · anything else    -> the far point's own value, with nothing done to
+     *     it. A bar is ONE number over a SHARED origin, and the origin is a
+     *     property of the scale rather than of the mark.
+     *
+     * ⚠️ THIS PARAGRAPH USED TO NAME A THIRD OUTCOME - "anything else FLOATS ->
+     * ... `null`, and `unreadable` below is what says SO ON SCREEN" - and by
+     * the time it was read, neither half existed. `0d75cc3` made a bar REPORT
+     * its value whatever its near end did (a bar clicked two pixels below the
+     * baseline used to report no value at all, so a steady hand was a
+     * precondition for getting a number), and the surface was rebuilt as
+     * `advisory` + `offBaselineMessage`, which says the near end misses the
+     * baseline while the number still stands. A doc naming a `null` the
+     * function cannot return, and a mechanism by a name nothing answers to, is
+     * how a reader concludes the floating case is handled and stops looking.
      */
     compute(points, axes) {
       const [start, end] = points;

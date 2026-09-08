@@ -6083,7 +6083,12 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // can try it against. ⚑ This count is why the example's Help entry exists
     // at all - it was added without updating this number, and the board caught
     // it before the tag rather than a user finding an invisible example.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(28);
+    // 28 -> 29 with the candlestick's trading week. ⚑ AND IT CAUGHT THAT ONE
+    // TOO, in the other direction: the figure and its `.truth.json` had been
+    // committed for two commits with no entry in `examples.ts`, so the one type
+    // whose card you could pick had nothing to open. This assertion is the
+    // reason a silent example cannot survive a board run.
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(29);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
@@ -11053,6 +11058,59 @@ describe('Workspace: Span chart capture (v2.5)', () => {
     await dragMarker(150, 300, 150, 250);
     expect(await page.getByTestId('bar-unreadable').count()).toBe(0);
   }, 30000);
+
+  /**
+   * ⚑⚑ ERROR ON EACH END, PROVEN AT THE GESTURE.
+   *
+   * "A span carries error on each end, because error hangs off a VALUE" is the
+   * v2.5 headline, and it was proven at the model only: `endColumnOrder` has
+   * unit tests, and no e2e had ever dragged an error cap onto anything but an
+   * XY datum. The audit's own summary of it - proven at the model, unproven at
+   * the gesture - is [[feedback_a_harness_only_tests_me]] in one line, and a
+   * capture workflow is exactly where this project's instruments are thinnest.
+   *
+   * ⚑ Gate 4: every step reads the prompt before it clicks.
+   */
+  it('⚑⚑ carries error on EACH end, and each end’s error sits with its own value', async () => {
+    await calibrateSpan();
+    await dragMarker(150, 300, 150, 250); // 3.33 .. 5.00
+
+    await page.getByTestId('mode-error-bars').click();
+    // The tool names the gesture before it is made - a drag FROM the reading it
+    // belongs to, which is what makes an end's error that end's.
+    expect(await textOf('tips-bar')).toMatch(/drag from a .* out to its error cap/i);
+    await page.getByTestId('error-base-name').fill('SD');
+
+    // ⚠️ THE UPPER END FIRST, DELIBERATELY. The columns are named for the
+    // REPORTED value - `Min` and `Max` - not for the corner that was clicked,
+    // so capturing in the other order is what would cross them: `Min` carrying
+    // one corner's value beside the other corner's uncertainty, every number
+    // plausible and nothing on screen saying which pair belonged together.
+    await dragMarker(150, 250, 150, 235); // off the MAX end, 5.00 -> 5.50
+    await dragMarker(150, 300, 150, 285); // off the MIN end, 3.33 -> 3.83
+
+    const table = (await textOf('points-table')) ?? '';
+    // Each end names its own error columns, so the table says which is which.
+    expect(table, `the table does not name both ends' error: ${table}`).toMatch(/Min SD upper/);
+    expect(table).toMatch(/Max SD upper/);
+
+    // ⚑⚑ AND THE PAIRING IS THE POINT. Read each error column's value against
+    // the end it is named for: half a unit off each, so a crossed pairing shows
+    // up as the wrong end's number rather than as a missing one.
+    const headings = (await page.getByTestId('points-table').locator('thead th').allInnerTexts()).map(
+      (h) => h.trim()
+    );
+    const cells = (
+      await page.getByTestId('points-table').locator('tbody tr').nth(0).locator('td').allInnerTexts()
+    ).map((c) => c.replace('✕', '').trim());
+    const under = (heading: string): number => {
+      const at = headings.findIndex((h) => h === heading);
+      expect(at, `no ${heading} column in ${JSON.stringify(headings)}`).toBeGreaterThan(-1);
+      return Number(cells[at - (headings.length - cells.length)]);
+    };
+    expect(under('Min SD upper'), 'the MIN end’s cap').toBeCloseTo(3.83, 1);
+    expect(under('Max SD upper'), 'the MAX end’s cap').toBeCloseTo(5.5, 1);
+  }, 45000);
 });
 
 

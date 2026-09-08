@@ -25,6 +25,7 @@
  */
 import { colorDistance, medoidColor } from '../algorithms/colorBar.js';
 import type { RGB } from '../algorithms/colorFilter.js';
+import type { Point2D } from './histogramGlyph.js';
 
 /**
  * Split the bodies into the figure's two appearances.
@@ -119,11 +120,10 @@ export function candleDirections(
   return group.map((g) => (g === rising) !== flipped);
 }
 
-/** A pixel position on the image, as every other geometry module states it. */
-export interface Point2D {
-  x: number;
-  y: number;
-}
+/** A pixel position on the image, as every other geometry module states it -
+ *  ⚑ which is now said by IMPORTING it rather than by re-declaring it. The
+ *  comment was true and the code was a fourth copy. */
+export type { Point2D } from './histogramGlyph.js';
 
 function pixelAt(src: Uint8ClampedArray, width: number, x: number, y: number): RGB {
   const i = (y * width + x) * 4;
