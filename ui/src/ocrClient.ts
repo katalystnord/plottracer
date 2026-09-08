@@ -7,6 +7,8 @@ import {
   type QuarterTurn,
 } from '../../engine/ocrRegion.js';
 import type { CropRect } from '../../engine/imageEdit.js';
+import { deskewBand, estimateTextAngle } from '../../engine/ocrDeskew.js';
+import { wordsToTicks, type TickReading } from '../../engine/ocrWordsToTicks.js';
 
 /**
  * Turning one dragged band into a proposal per category (v2.4).
@@ -169,4 +171,77 @@ export async function readLabelBand(
       ...sweeps[turn]![i]!,
     })),
   };
+}
+
+/**
+ * ⚑⚑ READ THE WHOLE BAND ONCE, AT ONE ANGLE (v2.5) - David's design.
+ *
+ * *"All we need (I think) is to know the angle at which the text read
+ * resonably, and that gets us all the text for the whole marked region. And
+ * THEN, we just need to relate this with the positions on the tick marks."*
+ *
+ * ⚑ The angle is the AXIS's, which is what the model always said - the old
+ * sweep already picked ONE turn for the whole axis by mean confidence, because
+ * per-label confidence picks a confidently wrong turn for one label in six. What
+ * it did NOT do was let that angle be anything other than a quarter turn, which
+ * is why a 45 degree axis had no good answer and the card offered a per-ROW
+ * rotate button for a per-AXIS fact.
+ *
+ * ⚑ ONE OCR CALL, against the old sweep's 4 x N. Tuning the angle costs one
+ * read, which is what makes a slider usable at all.
+ *
+ * `angleRadians` undefined means "measure it"; a number is the user's own
+ * setting, which always wins.
+ */
+export async function readBandAtAngle(
+  image: ImageData,
+  band: CropRect,
+  dividers: readonly { x: number; y: number }[],
+  along: 'x' | 'y',
+  axisAt: number,
+  angleRadians?: number
+): Promise<
+  { readings: TickReading[]; angleRadians: number; thumbnail: string } | OcrFailure
+> {
+  const api = window.electronAPI;
+  if (!api) return { error: NO_BRIDGE };
+  const crop = cropForOcr(image.data, image.width, image.height, band, 0);
+  if (!crop) return { error: 'That box is not on the figure.' };
+
+  const angle =
+    angleRadians ?? estimateTextAngle(crop.data, crop.width, crop.height);
+  const straight = deskewBand(crop.data, crop.width, crop.height, angle);
+  const scaled = upscaleForOcr(straight);
+  // ⚑ The upscale is a whole factor, so the word boxes come back in the SCALED
+  // frame and divide cleanly on the way home. Nothing is rounded twice.
+  const factor = straight.height === 0 ? 1 : scaled.height / straight.height;
+  const encoded = encodeCrop(scaled);
+  if (!encoded) return { error: 'Could not prepare that region to be read.' };
+
+  const answer = await api.readText(encoded.base64);
+  if (answer.error !== undefined) return { error: answer.error };
+
+  const readings = wordsToTicks({
+    words: (answer.words ?? []).map((w) => ({
+      text: w.text,
+      confidence: w.confidence,
+      bbox: {
+        x0: w.bbox.x0 / factor,
+        y0: w.bbox.y0 / factor,
+        x1: w.bbox.x1 / factor,
+        y1: w.bbox.y1 / factor,
+      },
+    })),
+    // ⚑ Two hops home: the straightened frame back to the CROP, then the crop
+    // back to the FIGURE by the band's own origin. Keeping them separate is
+    // what lets `deskewBand` stay ignorant of where the band was drawn.
+    toSource: (x, y) => {
+      const inCrop = straight.toSource(x, y);
+      return { x: inCrop.x + band.x, y: inCrop.y + band.y };
+    },
+    dividers,
+    along,
+    axisAt,
+  });
+  return { readings, angleRadians: angle, thumbnail: encoded.dataUrl };
 }

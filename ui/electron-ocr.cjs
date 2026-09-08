@@ -149,8 +149,28 @@ async function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
     // left pending by the mechanism described above.
     const read = (async () => {
       const worker = await workerPromise
-      const { data } = await worker.recognize(Buffer.from(pngBase64, 'base64'))
-      return { text: data.text, confidence: data.confidence }
+      // ⚑⚑ WORD BOXES, ASKED FOR EXPLICITLY (v2.5). tesseract.js v5 dropped the
+      // flat `data.words`; the geometry now arrives only when `blocks` is
+      // requested, as `blocks -> paragraphs -> lines -> words`, each word
+      // carrying { text, bbox, confidence }. Measured 2026-09-08 against the
+      // installed v7 before any of this was written.
+      //
+      // ⚑ It is what lets the band be read ONCE and the results related to the
+      // ticks afterwards, instead of cutting one crop per label - which cannot
+      // work at all for rotated text, because an axis-aligned box does not
+      // contain a diagonal label.
+      const { data } = await worker.recognize(Buffer.from(pngBase64, 'base64'), {}, { blocks: true, text: true })
+      const words = []
+      for (const block of data.blocks ?? []) {
+        for (const paragraph of block.paragraphs ?? []) {
+          for (const line of paragraph.lines ?? []) {
+            for (const word of line.words ?? []) {
+              words.push({ text: word.text, confidence: word.confidence, bbox: word.bbox })
+            }
+          }
+        }
+      }
+      return { text: data.text, confidence: data.confidence, words }
     })()
     const answer = await Promise.race([
       read,

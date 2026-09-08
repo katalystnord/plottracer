@@ -54,7 +54,23 @@ declare global {
        * gesture, the axis's quarter turn and which category the answer belongs
        * to all stay on this side. See ui/electron-ocr.cjs.
        */
-      readText: (pngBase64: string) => Promise<{ text?: string; confidence?: number; error?: string }>;
+      readText: (pngBase64: string) => Promise<{
+        text?: string;
+        confidence?: number;
+        /**
+         * ⚑⚑ WHERE each word was found, in the submitted image's own frame
+         * (v2.5). What lets a whole band be read ONCE and the results related to
+         * the ticks afterwards, rather than cut into one crop per label - which
+         * cannot work for rotated text, since an axis-aligned box does not
+         * contain a diagonal label.
+         */
+        words?: {
+          text: string;
+          confidence: number;
+          bbox: { x0: number; y0: number; x1: number; y1: number };
+        }[];
+        error?: string;
+      }>;
     };
   }
 }
