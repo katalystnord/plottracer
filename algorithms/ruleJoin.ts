@@ -1,4 +1,5 @@
 import type { Blob } from './blobDetect.js';
+import { extentReaders, sameCategoryExtent } from './categoryExtent.js';
 
 /**
  * Put back together a datum that a RULE THE FIGURE DRAWS cut in two (v2.5).
@@ -50,7 +51,6 @@ export interface SeveringRule {
  * the cut, and nothing more. It is deliberately tight: the cost of joining two
  * shapes that are not one bar is a reading that never existed.
  */
-const SAME_CATEGORY_OVERLAP = 0.9;
 
 /**
  * Put back together the bars that were severed by whatever the figure draws
@@ -89,16 +89,7 @@ export function joinAcrossRule(
   categoryAxis: 'x' | 'y',
   rule: SeveringRule
 ): { blobs: Blob[]; joined: number } {
-  const valueLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minY : b.bbox.minX);
-  const valueHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxY : b.bbox.maxX);
-  const catLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minX : b.bbox.minY);
-  const catHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxX : b.bbox.maxY);
-  /** Do these two occupy the same slice of the category axis? */
-  const sameCategoryExtent = (a: Blob, b: Blob): boolean => {
-    const overlap = Math.min(catHi(a), catHi(b)) - Math.max(catLo(a), catLo(b));
-    const widest = Math.max(catHi(a) - catLo(a), catHi(b) - catLo(b));
-    return widest > 0 && overlap / widest >= SAME_CATEGORY_OVERLAP;
-  };
+  const { valueLo, valueHi } = extentReaders(categoryAxis);
   const at = rule.atPixel;
   const tol = rule.tolerancePx;
   /** Wholly above the baseline and touching it - the piece drawn upwards. */
@@ -116,7 +107,7 @@ export function joinAcrossRule(
     // each side of the baseline, so a second candidate below the same width
     // would be a different shape entirely and joining it would invent an extent
     // spanning both.
-    const j = blobs.findIndex((b, k) => k !== i && !taken.has(k) && below(b) && sameCategoryExtent(a, b));
+    const j = blobs.findIndex((b, k) => k !== i && !taken.has(k) && below(b) && sameCategoryExtent(a, b, categoryAxis));
     if (j < 0) return;
     const b = blobs[j]!;
     taken.add(i);

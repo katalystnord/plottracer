@@ -2767,8 +2767,18 @@ export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   axesKind: 'bar',
   exportShape: 'tuples',
   autoExtractKind: 'none',
+  /**
+   * ⚠️ IT SAID Open/High/Low/Close, IN THAT ORDER, seventeen lines above the
+   * prompts that ask for the LOW first. Two on-screen texts for one gesture,
+   * giving two different orders - and this is the one the user reads FIRST,
+   * because it fires when they try auto-extract before walking anything. The
+   * old order was true until the walk was rebuilt bottom-up (`c8cebe1`); the
+   * refusal was not rewritten with it.
+   * ⚑ So it names no order of its own: it points at the walk, which is the one
+   * place the order is stated, and `captureLabels` below is that statement.
+   */
   autoExtractRefusal:
-    'Auto-extract can’t find a candle’s four values from its colour - place its Open/High/Low/Close points by hand, in that order.',
+    'Auto-extract can’t find a candle’s four values on its own - mark each candle by hand instead, and the walk will name each click as you go.',
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],

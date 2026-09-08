@@ -1,4 +1,5 @@
 import type { Blob } from './blobDetect.js';
+import { extentReaders, sameCategoryExtent } from './categoryExtent.js';
 
 /**
  * Put back together a bar that a HATCH FILL shredded (v2.4).
@@ -59,9 +60,6 @@ export const MAX_HATCH_GAP_PX = 8;
 /** How far the spacing may wander from its own median and still be a pattern. */
 const PITCH_TOLERANCE = 0.35;
 
-/** Same rule, same number as `joinAcrossBaseline`'s: do these occupy the same
- *  slice of the category axis? */
-const SAME_CATEGORY_OVERLAP = 0.9;
 
 export interface HatchJoinResult {
   blobs: Blob[];
@@ -141,15 +139,7 @@ export function joinAcrossHatch(
    */
   dividers?: readonly number[]
 ): HatchJoinResult {
-  const valueLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minY : b.bbox.minX);
-  const valueHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxY : b.bbox.maxX);
-  const catLo = (b: Blob) => (categoryAxis === 'x' ? b.bbox.minX : b.bbox.minY);
-  const catHi = (b: Blob) => (categoryAxis === 'x' ? b.bbox.maxX : b.bbox.maxY);
-  const sameCategoryExtent = (a: Blob, b: Blob): boolean => {
-    const overlap = Math.min(catHi(a), catHi(b)) - Math.max(catLo(a), catLo(b));
-    const widest = Math.max(catHi(a) - catLo(a), catHi(b) - catLo(b));
-    return widest > 0 && overlap / widest >= SAME_CATEGORY_OVERLAP;
-  };
+  const { valueLo, valueHi } = extentReaders(categoryAxis);
 
   const taken = new Set<number>();
   const out: Blob[] = [];
@@ -236,7 +226,7 @@ export function joinAcrossHatch(
     if (taken.has(i)) return;
     const group = blobs
       .map((b, k) => ({ b, k }))
-      .filter(({ b, k }) => !taken.has(k) && (k === i || sameCategoryExtent(seed, b)))
+      .filter(({ b, k }) => !taken.has(k) && (k === i || sameCategoryExtent(seed, b, categoryAxis)))
       .sort((p, q) => valueLo(p.b) - valueLo(q.b));
     if (group.length < MIN_HATCH_PIECES) return;
 

@@ -2240,9 +2240,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                   <Fragment key={`candle-glyph-${glyphIndex}`}>
                     {/* ⚑⚑ A FALLING CANDLE IS FILLED, a rising one hollow - the
                         figure's own convention, and the reason the overlay can
-                        CHECK the capture. Open and close are both body edges, so
-                        clicking them the wrong way round draws an identical box;
-                        the fill is the only thing that shows the mistake. */}
+                        CHECK the reading. Direction is not clicked: the walk
+                        marks both body edges by POSITION, bottom-up, and the
+                        body's own colour names them (`candleDirection.ts`). The
+                        two edges are the same rectangle either way round, so the
+                        fill is the only thing that shows a colour read the wrong
+                        way - and the flip beside the table is what answers it. */}
                     {!glyph.rising && (
                       <Line
                         points={glyph.body.flatMap((p) => {

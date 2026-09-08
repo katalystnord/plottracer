@@ -23,6 +23,7 @@ import barGroupedSample from '../../samples/bar-grouped-viability.png';
 import barGroupedMissingSample from '../../samples/bar-grouped-missing-assay.png';
 import barStackedSample from '../../samples/bar-stacked-cost.png';
 import barFloatingSample from '../../samples/bar-floating-temperature.png';
+import candlestickSample from '../../samples/candlestick-trading-week.png';
 import categoricalSample from '../../samples/categorical-fibre-modulus.png';
 import barBoxSample from '../../samples/bar-box-plot-tensile-strength.png';
 import polarSample from '../../samples/polar-diffusion-rate.png';
@@ -148,6 +149,13 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // own "(categorical X)" 2026-07-30, matching the type label's own rename
   // (David: consistency -- the icon carries the distinction now, same as
   // every other example here).
+  // Candlestick (v2.5). Eight trading days, with the dates at 45 degrees - the
+  // figure carries the OCR label-angle case as well as the type.
+  // ⚠️ IT SHIPPED WITH THE FILE COMMITTED AND THIS LINE MISSING, so the one type
+  // whose card you could pick had nothing to open, which is the exact gap the
+  // figure was drawn to close (`gen_samples.py`'s own docstring says so). The
+  // test beside `everyTypeHasAnIcon` is what now says it out loud.
+  { id: 'candlestick', name: 'Trading week', src: candlestickSample, axes: 'candlestick' },
   { id: 'categorical', name: 'Fibre modulus', src: categoricalSample, axes: 'categorical' },
   // Opens as the first-class 'boxplot' type (checkpoint 107), not 'bar' + the
   // hidden toggle -- so the example demonstrates the discoverable path.

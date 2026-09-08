@@ -1586,29 +1586,65 @@ describe('Workspace: Candlestick', () => {
     await resetWorkspace('candlestick');
     await declineCommonOrigin();
     await calibrateCandlestick();
-    await clickAt(300, 340);
-    await clickAt(300, 280);
-    await clickAt(300, 370);
-    await clickAt(300, 310);
+    // ⚠️ THESE CLICKS WERE THE PRE-`c8cebe1` ORDER (340, 280, 370, 310 - Open,
+    // High, Low, Close) for two commits after the walk was rebuilt bottom-up,
+    // and the test could not see it: the assertions below were `toContain` over
+    // the WHOLE table text, so no heading was ever tied to its value and every
+    // number under the wrong word passed. Under the shipped walk those clicks
+    // record a body that escapes its own high and low - the incoherent candle
+    // `candlestickGlyph.test.ts` exists to name.
+    // ⚑ Gate 4: bottom-up, what the prompt asks for. 370, 340, 310, 280.
+    for (const py of [370, 340, 310, 280]) await clickAt(300, py);
 
     // ⚑ The SHARED category table, not a panel of its own - the same one Bar,
     // Span and Box Plot fill. Its headings are the type's four named values.
-    const table = await textOf('points-table');
-    for (const heading of ['Open', 'High', 'Low', 'Close']) {
-      expect(table, `the table does not name ${heading}`).toContain(heading);
+    //
+    // ⚑ THE VALUE COLUMNS ARE THE LAST FOUR, in both rows. The head is two rows
+    // deep once a type names more than one value per datum - the series spans
+    // the top, its value names sit beneath - so a flat index into `th` does not
+    // line up with a body row's cells. The tail does, and it is the part this
+    // test is about.
+    const table = page.getByTestId('points-table');
+    const headings = (await table.locator('thead th').allInnerTexts()).map((h) => h.trim()).slice(-4);
+    expect(headings, 'the table names the type’s four values').toEqual(['Low', 'Open', 'Close', 'High']);
+
+    // ⚑ The row the candle actually landed in - x=300 is the middle band of a
+    // three-category axis, and the empty rows either side are the categories
+    // nobody has marked yet, which is a real state and not this test's subject.
+    const rows = await table.locator('tbody tr').all();
+    const filled: string[][] = [];
+    for (const row of rows) {
+      // ⚑ `#` and `Category` lead, so the values are the four after them.
+      // ⚑ And the row's delete control lives INSIDE the last value's cell -
+      // deliberately, so the gesture sits on the row it deletes - which means
+      // that cell's text reads `4✕`. Stripped here rather than matched loosely:
+      // this test is about which value sits under which name, and a substring
+      // match is exactly the blindness it was written to remove.
+      const cells = (await row.locator('td').allInnerTexts())
+        .map((c) => c.replace('✕', '').trim())
+        .slice(2, 6);
+      if (cells.some((c) => c !== '' && c !== '-')) filled.push(cells);
     }
-    // (400 - py) / 30 * 10: 2, 4, 1, 3.
-    for (const reading of ['2', '4', '1', '3']) expect(table).toContain(reading);
+    expect(filled.length, 'exactly one category was marked').toBe(1);
+
+    // ⚑⚑ EACH VALUE UNDER ITS OWN HEADING. (400 - py) / 30 * 10, so the low
+    // reads 1, the lower body edge 2, the upper 3 and the high 4 - and with one
+    // body appearance under the marks the candle reads as rising, which is what
+    // puts the LOWER edge under `Open`.
+    expect(Object.fromEntries(headings.map((h, i) => [h, filled[0]![i]]))).toEqual({
+      Low: '1',
+      Open: '2',
+      Close: '3',
+      High: '4',
+    });
   });
 
   it('refuses error bars at the tool, naming what it already reports', async () => {
     await resetWorkspace('candlestick');
     await declineCommonOrigin();
     await calibrateCandlestick();
-    await clickAt(300, 340);
-    await clickAt(300, 280);
-    await clickAt(300, 370);
-    await clickAt(300, 310);
+    // ⚑ The shipped walk, bottom-up - the same four marks the test above makes.
+    for (const py of [370, 340, 310, 280]) await clickAt(300, py);
     // ⚑ Greyed WITH ITS REASON on hover, rather than silently ignoring a drag -
     // the refusal fires at the gesture, not eight steps later.
     const tool = page.getByTestId('mode-error-bars');
