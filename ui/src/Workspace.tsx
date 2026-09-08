@@ -24,8 +24,8 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readLabelBand, readRegionAt, isOcrFailure, type OcrProposal } from './ocrClient.js';
-import { axisRunsAlong, type QuarterTurn } from '../../engine/ocrRegion.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal } from './ocrClient.js';
+import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
 import type { AidGlyph } from '../../engine/categoryTickOverlay.js';
@@ -1425,7 +1425,6 @@ export function Workspace() {
   /** What the last look for the figure's own tick marks found. Per figure. */
   const [tickDetectNotice, setTickDetectNotice] = useState<string | null>(null);
   const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
-  const [ocrBusyIndex, setOcrBusyIndex] = useState<number | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
   // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
@@ -2965,12 +2964,18 @@ export function Workspace() {
       // armed band would eat the first drag on the NEW figure; proposals and
       // their thumbnails are crops of a picture that is no longer on screen, and
       // Apply would write the old figure's names onto this one's categories.
-      // The whole of OCR's state is per-figure by construction, which is why all
-      // four go here rather than one being reset where it happens to be noticed.
+      // The whole of OCR's state is per-figure by construction, which is why they
+      // go here together rather than one being reset where it happens to be
+      // noticed. ⚠️ This said "all four" while a fourth was removed with the
+      // per-row re-read; the count is what rots in a comment like this.
       setOcrArmed(false);
       setOcrProposals(null);
-      setOcrBusyIndex(null);
       setOcrError(null);
+      // ⚑⚑ AND THE CANDLE CONVENTION, which is a per-figure declaration: the
+      // default is MEASURED off each figure's own bodies, so carrying a
+      // correction across would silently mis-name a whole chart's Opens and
+      // Closes with nothing on screen saying why.
+      setCandleFlip(false);
       // ⚑ ...and a tick-detection report describes the axis of the figure you
       // are leaving, so it cannot outlive it either.
       setTickDetectNotice(null);
@@ -4266,12 +4271,24 @@ export function Workspace() {
   );
 
   /**
-   * ONE BAND DRAG BECOMES ONE PROPOSAL PER CATEGORY (v2.4).
+   * ONE BAND DRAG BECOMES ONE PROPOSAL PER CATEGORY (v2.4, rebuilt v2.5).
    *
-   * ⚑ The band is never read as a whole - a strip is not a region, measured. It
-   * is cut at the CATEGORY AXIS's own dividers, which is the half of the answer
-   * we measured (their two clicks and their declared count) while the band is
-   * the half only they can give (where the labels are printed).
+   * ⚠️⚑⚑ IT USED TO SAY "the band is never read as a whole - a strip is not a
+   * region, measured", and cut the band into one crop per category. That is now
+   * the opposite of what happens, and the reason is David's: an axis-aligned box
+   * cut at the dividers CANNOT contain a diagonal label, so a 45 degree axis
+   * read back as `he' "0 3 9` at confidence 32 with every quarter turn.
+   *
+   * ⚑ The band is straightened at the angle the whole AXIS is drawn at - found
+   * by reading at candidate angles, the reader's own confidence being the
+   * instrument - then read ONCE, and the words are related to the ticks by the
+   * boxes the engine returns. Measured on the corpus: the six horizontal figures
+   * score exactly what the per-label path scored (35/36, same single miss), and
+   * the 45 degree figure goes from 0/8 to 7/8.
+   *
+   * ⚑ The dividers are still the half we measured (their two clicks and their
+   * declared count) and the band the half only they can give. That did not
+   * change; only what happens between them did.
    */
   const readCategoryLabels = useCallback(
     async (band: { x: number; y: number; width: number; height: number }) => {
@@ -4284,7 +4301,11 @@ export function Workspace() {
         return;
       }
       const dividers = session.getCategoryAxis().getDividerPoints();
-      const answer = await readLabelBand(image, band, dividers, axisRunsAlong(edges[0], edges[1]));
+      const along = axisRunsAlong(edges[0], edges[1]);
+      // ⚑ Where the axis LINE runs: a rotated label trails AWAY from its tick,
+      // so a word is filed by the end of it nearest this, not by its centre.
+      const axisAt = along === 'x' ? edges[0].y : edges[0].x;
+      const answer = await readBandAtAngle(image, band, dividers, along, axisAt);
       if (isOcrFailure(answer)) {
         setOcrError(answer.error);
         return;
@@ -4319,27 +4340,6 @@ export function Workspace() {
     );
     if (applied) commit();
   }, [session, commit]);
-
-  /** Read ONE row again, a quarter turn further round - the card's `Rotate`. */
-  const rotateProposal = useCallback(
-    async (categoryIndex: number) => {
-      const current = ocrProposals?.find((p) => p.categoryIndex === categoryIndex);
-      const image = imageCanvasRef.current?.getImageData();
-      if (!current || !image) return;
-      setOcrBusyIndex(categoryIndex);
-      const turn = (((current.turn + 1) % 4) as QuarterTurn);
-      const answer = await readRegionAt(image, current.rect, categoryIndex, turn);
-      setOcrBusyIndex(null);
-      if (isOcrFailure(answer)) {
-        setOcrError(answer.error);
-        return;
-      }
-      setOcrProposals((rows) =>
-        rows ? rows.map((r) => (r.categoryIndex === categoryIndex ? answer : r)) : rows
-      );
-    },
-    [ocrProposals]
-  );
 
   /**
    * Apply the vetted names - the ONE place a reading becomes a record.
@@ -9681,13 +9681,11 @@ export function Workspace() {
         <OcrReviewCard
           proposals={ocrProposals}
           currentNames={session.getCategoryAxis().getCategories()}
-          busyIndex={ocrBusyIndex}
           onEditText={(categoryIndex, text) =>
             setOcrProposals((rows) =>
               rows ? rows.map((r) => (r.categoryIndex === categoryIndex ? { ...r, text } : r)) : rows
             )
           }
-          onRotate={(categoryIndex) => void rotateProposal(categoryIndex)}
           onApply={applyOcrNames}
           onCancel={() => {
             setOcrProposals(null);

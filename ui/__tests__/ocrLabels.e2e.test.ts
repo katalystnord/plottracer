@@ -122,34 +122,23 @@ describe('OCR: reading category names off the figure', () => {
     await page.mouse.move(box.x + x1, box.y + y1, { steps: 12 });
     await page.mouse.up();
 
-    // The offer window, with one row per category and the pixels it read.
+    // ⚠️⚑⚑ THE PER-ROW CROP AND THE `Rotate` BUTTON ARE GONE (v2.5), and what
+    // they were tested against is worth keeping: rotate turned ONE row a quarter
+    // turn, and four presses brought it back. Both were per-LABEL answers to a
+    // per-AXIS question - `axisQuarterTurn` already picked one turn for the whole
+    // axis - and neither could help the case that prompted the rebuild, since a
+    // 45 degree axis has no good quarter turn at all. The band is now straightened
+    // at the angle the whole axis is drawn at and read ONCE, so there is no
+    // per-label crop left to show or to turn.
+    // The offer window, with one row per category.
     await page.getByTestId('ocr-review-card').waitFor({ timeout: 60000 });
     for (let i = 0; i < EXPECTED.length; i++) {
       await expect
         .poll(() => page.getByTestId(`ocr-text-${i}`).inputValue(), { timeout: 10000 })
         .toBe(EXPECTED[i]);
-      // ⚑⚑ EVERY ROW SHOWS ITS OWN CROP. It is how the rotation is shown, and
-      // how a badly aimed box stops being a number to interpret.
-      expect(await page.getByTestId(`ocr-thumb-${i}`).isVisible()).toBe(true);
     }
 
     if (process.env['OCR_SHOT']) await page.screenshot({ path: process.env['OCR_SHOT'] });
-    // ⚑⚑ ROTATE TURNS THE PICTURE AND THE WORDS CHANGE UNDER IT. These labels
-    // are printed horizontally, so a quarter turn must make the reading WORSE -
-    // which is the observable that proves the control reaches the reader at all,
-    // and four presses must bring the row back to where it started.
-    const before = await page.getByTestId('ocr-text-0').inputValue();
-    await page.getByTestId('ocr-rotate-0').click();
-    await expect
-      .poll(() => page.getByTestId('ocr-text-0').inputValue(), { timeout: 20000 })
-      .not.toBe(before);
-    for (let i = 0; i < 3; i++) {
-      await page.getByTestId('ocr-rotate-0').click();
-      await page.waitForTimeout(400);
-    }
-    await expect
-      .poll(() => page.getByTestId('ocr-text-0').inputValue(), { timeout: 20000 })
-      .toBe(before);
 
     // ⚑ Escape backs out and writes nothing - and it has to work with nothing in
     // the card focused, which is the state it opens in.

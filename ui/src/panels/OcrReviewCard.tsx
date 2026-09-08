@@ -37,11 +37,8 @@ export interface OcrReviewCardProps {
   currentNames: readonly string[];
   /** Row edits are the user's; the card owns no state of its own. */
   onEditText: (categoryIndex: number, text: string) => void;
-  onRotate: (categoryIndex: number) => void;
   onApply: () => void;
   onCancel: () => void;
-  /** True while a row is being re-read, so the control cannot be pressed twice. */
-  busyIndex: number | null;
 }
 
 const backdrop: React.CSSProperties = {
@@ -70,10 +67,8 @@ export function OcrReviewCard({
   proposals,
   currentNames,
   onEditText,
-  onRotate,
   onApply,
   onCancel,
-  busyIndex,
 }: OcrReviewCardProps) {
   // ⚑ Esc backs out and writes nothing - the same meaning the key has everywhere
   // else in this app (the global ladder, and F40's fix to the name editor).
@@ -116,17 +111,15 @@ export function OcrReviewCard({
             marginBottom: 12,
           }}
         >
-          Check each one against its picture and correct anything misread. Apply puts them on the
+          Check each one against the figure and correct anything misread. Apply puts them on the
           categories; a row you leave empty is left alone.
         </div>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
               <th style={{ paddingRight: 10, fontWeight: 400 }}>#</th>
-              <th style={{ paddingRight: 10, fontWeight: 400 }}>read</th>
               <th style={{ paddingRight: 10, fontWeight: 400 }}>name</th>
               <th style={{ paddingRight: 10, fontWeight: 400, textAlign: 'right' }}>conf.</th>
-              <th style={{ fontWeight: 400 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -136,24 +129,6 @@ export function OcrReviewCard({
                 <tr key={p.categoryIndex} data-testid={`ocr-row-${p.categoryIndex}`}>
                   <td style={{ paddingRight: 10, color: theme.color.text.legend, verticalAlign: 'middle' }}>
                     {p.categoryIndex + 1}
-                  </td>
-                  <td style={{ paddingRight: 10, verticalAlign: 'middle', padding: '4px 10px 4px 0' }}>
-                    {/* ⚑ THE WHOLE CROP, SCALED TO THE ROW, NEVER TRIMMED. What
-                        the user is checking is whether the box caught the whole
-                        label, so a thumbnail that cropped the crop would hide
-                        the one fault it exists to reveal. */}
-                    <img
-                      data-testid={`ocr-thumb-${p.categoryIndex}`}
-                      src={p.thumbnail}
-                      alt={`the pixels read for category ${p.categoryIndex + 1}`}
-                      style={{
-                        display: 'block',
-                        maxHeight: 34,
-                        maxWidth: 150,
-                        border: `1px solid ${theme.color.border.regular}`,
-                        background: '#fff',
-                      }}
-                    />
                   </td>
                   <td style={{ paddingRight: 10, verticalAlign: 'middle' }}>
                     <input
@@ -177,17 +152,6 @@ export function OcrReviewCard({
                   >
                     {Math.round(p.confidence)}
                   </td>
-                  <td style={{ verticalAlign: 'middle' }}>
-                    <button
-                      type="button"
-                      data-testid={`ocr-rotate-${p.categoryIndex}`}
-                      disabled={busyIndex !== null}
-                      onClick={() => onRotate(p.categoryIndex)}
-                      title="Read this one again, turned a quarter turn"
-                    >
-                      {busyIndex === p.categoryIndex ? 'reading' : 'Rotate'}
-                    </button>
-                  </td>
                 </tr>
               );
             })}
@@ -200,7 +164,6 @@ export function OcrReviewCard({
           <button
             type="button"
             data-testid="ocr-apply"
-            disabled={busyIndex !== null}
             onClick={onApply}
           >
             Apply names

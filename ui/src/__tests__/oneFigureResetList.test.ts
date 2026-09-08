@@ -112,7 +112,10 @@ const PER_FIGURE_RESETS = [
   // names onto the incoming one's categories.
   'setOcrArmed',
   'setOcrProposals',
-  'setOcrBusyIndex',
+  // ⚑ The figure's candle colour convention. A new figure must not inherit the
+  // previous one's flip: the default is MEASURED off each figure's own bodies,
+  // so carrying a correction across would silently mis-name a whole chart.
+  'setCandleFlip',
   'setOcrError',
   // ⚑ A tick-detection report describes the axis of ONE figure.
   'setTickDetectNotice',

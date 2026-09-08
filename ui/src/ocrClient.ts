@@ -1,14 +1,7 @@
-import {
-  cropForOcr,
-  upscaleForOcr,
-  labelRegionsInBand,
-  axisQuarterTurn,
-  normalizeOcrText,
-  type QuarterTurn,
-} from '../../engine/ocrRegion.js';
+import { cropForOcr, upscaleForOcr } from '../../engine/ocrRegion.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
-import { wordsToTicks, type TickReading } from '../../engine/ocrWordsToTicks.js';
+import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
 
 /**
  * Turning one dragged band into a proposal per category (v2.4).
@@ -27,21 +20,16 @@ import { wordsToTicks, type TickReading } from '../../engine/ocrWordsToTicks.js'
 
 export interface OcrProposal {
   categoryIndex: number;
-  rect: CropRect;
   /** What the reader made of it, tidied to one line. May be empty. */
   text: string;
   /** Reported beside the row as evidence, never used as a threshold. */
   confidence: number;
-  /** The crop AS THE READER SAW IT, turned - the row's thumbnail. */
-  thumbnail: string;
-  /** Which quarter turn produced the text above, so `Rotate` can carry on. */
-  turn: QuarterTurn;
 }
 
 export interface OcrBandResult {
   proposals: OcrProposal[];
-  /** The turn the whole axis agreed on - shown so the card can say so. */
-  turn: QuarterTurn;
+  /** The angle the whole axis was read at, in radians. */
+  angleRadians: number;
 }
 
 export interface OcrFailure {
@@ -84,95 +72,6 @@ function encodeCrop(crop: { data: Uint8ClampedArray; width: number; height: numb
 const NO_BRIDGE =
   'Reading text needs the desktop app - this window has no connection to it.';
 
-async function readCrop(
-  image: ImageData,
-  rect: CropRect,
-  turn: QuarterTurn
-): Promise<{ text: string; confidence: number; thumbnail: string } | OcrFailure> {
-  const api = window.electronAPI;
-  if (!api) return { error: NO_BRIDGE };
-  const crop = cropForOcr(image.data, image.width, image.height, rect, turn);
-  if (!crop) return { error: 'That box is not on the figure.' };
-  // ⚑ Scaled up before the reader sees it - a chart label is often 12 to 16
-  // pixels tall and the engine wants several times that. Measured worth 8.7
-  // points of exact-match on real published charts; see `upscaleForOcr`.
-  const encoded = encodeCrop(upscaleForOcr(crop));
-  if (!encoded) return { error: 'Could not prepare that region to be read.' };
-  const answer = await api.readText(encoded.base64);
-  if (answer.error !== undefined) return { error: answer.error };
-  return {
-    text: normalizeOcrText(answer.text ?? ''),
-    confidence: answer.confidence ?? 0,
-    thumbnail: encoded.dataUrl,
-  };
-}
-
-/**
- * Read one region again at a given turn - what the card's `Rotate` runs.
- */
-export async function readRegionAt(
-  image: ImageData,
-  rect: CropRect,
-  categoryIndex: number,
-  turn: QuarterTurn
-): Promise<OcrProposal | OcrFailure> {
-  const answer = await readCrop(image, rect, turn);
-  if (isOcrFailure(answer)) return answer;
-  return { categoryIndex, rect, turn, ...answer };
-}
-
-/**
- * One dragged band becomes one proposal per category it reaches.
- *
- * ⚑⚑ EVERY REGION IS READ AT ALL FOUR TURNS, and the AXIS picks which set to
- * keep. Per-label best confidence picks a confidently WRONG answer about one
- * label in six (measured: `Kenaf` read as `"Jeusy"` at 79, beating its own
- * correct reading at 73); the axis mean picks the right turn by 90 against 53,
- * because every label on an axis is written the same way up. The cost is four
- * reads of a small region, which measured at 2 to 15ms each.
- *
- * ⚑ The four sweeps are already in hand when the vote is taken, so the winning
- * turn needs no re-reading.
- */
-export async function readLabelBand(
-  image: ImageData,
-  band: CropRect,
-  dividers: readonly { x: number; y: number }[],
-  along: 'x' | 'y'
-): Promise<OcrBandResult | OcrFailure> {
-  const regions = labelRegionsInBand(band, dividers, along);
-  if (regions.length === 0) {
-    return {
-      error:
-        'That box does not overlap any category on the axis. Drag it round the row of labels beneath the axis you marked.',
-    };
-  }
-  const sweeps: { text: string; confidence: number; thumbnail: string }[][] = [];
-  for (const turn of [0, 1, 2, 3] as QuarterTurn[]) {
-    const rows: { text: string; confidence: number; thumbnail: string }[] = [];
-    for (const region of regions) {
-      const answer = await readCrop(image, region.rect, turn);
-      // ⚑ One region failing ends the whole read rather than quietly proposing
-      // for the others: a card that is short a row looks exactly like an axis
-      // with fewer categories, and the user has no way to tell which it is.
-      if (isOcrFailure(answer)) return answer;
-      rows.push(answer);
-    }
-    sweeps.push(rows);
-  }
-  const turn = axisQuarterTurn(sweeps.map((rows) => rows.map((r) => r.confidence)));
-  if (turn === null) return { error: 'Nothing could be read from that box.' };
-  return {
-    turn,
-    proposals: regions.map((region, i) => ({
-      categoryIndex: region.categoryIndex,
-      rect: region.rect,
-      turn,
-      ...sweeps[turn]![i]!,
-    })),
-  };
-}
-
 /**
  * ⚑⚑ READ THE WHOLE BAND ONCE, AT ONE ANGLE (v2.5) - David's design.
  *
@@ -200,9 +99,7 @@ export async function readBandAtAngle(
   along: 'x' | 'y',
   axisAt: number,
   angleRadians?: number
-): Promise<
-  { readings: TickReading[]; angleRadians: number; thumbnail: string } | OcrFailure
-> {
+): Promise<OcrBandResult | OcrFailure> {
   const api = window.electronAPI;
   if (!api) return { error: NO_BRIDGE };
   const crop = cropForOcr(image.data, image.width, image.height, band, 0);
@@ -264,5 +161,11 @@ export async function readBandAtAngle(
     along,
     axisAt,
   });
-  return { readings, angleRadians: angle, thumbnail: encoded.dataUrl };
+  if (readings.length === 0) {
+    return {
+      error:
+        'Nothing could be read in that box. Drag it round the row of labels beneath the axis you marked, clear of the tick marks.',
+    };
+  }
+  return { proposals: readings, angleRadians: angle };
 }
