@@ -19,7 +19,7 @@
  * pointed at.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { readPng } from './helpers/readPng.js';
 import { encodePng } from './helpers/encodePng.js';
@@ -199,10 +199,11 @@ describe('reading each figure’s label band in ONE pass', () => {
       out.push(`${name.padEnd(32)} ${hit}/${N}  angle ${Math.round((angle * 180) / Math.PI)}`);
       out.push(...detail);
     }
-    writeFileSync(
-      '/tmp/claude-1000/-home-david-code-plottracer/df1c2f89-0421-4ce7-bea2-850c98d646d1/scratchpad/deskew-score.txt',
-      `WHOLE-BAND READ\n${out.join('\n')}\n  total ${totalHit}/${totalAll}\n`
-    );
+    // ⚠️ THE PER-FIGURE TABLE GOES IN THE FAILURE MESSAGE, NOT TO A FILE. This
+    // wrote its score sheet to a scratchpad path belonging to the session that
+    // authored it, so the test failed with ENOENT for every later run and on
+    // CI - a harness that reports its own absence as the code's failure. The
+    // numbers were always in `out`; the assertions below print them.
     // ⚑ PER FIGURE, not just a total: a total alone lets one figure improve
     // while another rots, and the pair nets to green. Same rule as the
     // per-label harness this is measured against.
