@@ -47,7 +47,7 @@ import { CategoryAxis } from '../core/categoryAxis.js';
 import type { Dataset } from '../core/dataset.js';
 import { BarAxes } from '../core/axes/bar.js';
 import { barSeating } from '../core/barInterval.js';
-import { GRAPH_TYPE_METADATA_KEY } from './calibrationSession.js';
+import { GRAPH_TYPE_METADATA_KEY, CANDLESTICK_SLOTS } from './calibrationSession.js';
 import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js';
 
 /** A recorded Measure result, flattened for JSON. Additive to the project file
@@ -413,6 +413,41 @@ export function relabelAllFloatingBarsAsSpan(
   };
 }
 
+/**
+ * ⚑⚑ A CANDLESTICK WHOSE SLOTS ARE NOT THE FOUR SAYS SO, rather than opening
+ * half-recorded and silent.
+ *
+ * Every candlestick mechanism - the overlay, the direction read, the flip -
+ * gates on the slot names being exactly `Low, Open, Close, High` and returns
+ * quietly when they are not. Nothing on the load path checked that a file
+ * DECLARING `candlestick` carries them, so a hand-edited or foreign file opened
+ * as a candlestick that can never draw a candle and never have its direction
+ * read - while its extra pixels sit in the dataset, unreachable from every panel
+ * and every export because the tuple only holds as many marks as there are
+ * slots.
+ *
+ * ⚑ SURFACED, NOT REFUSED, which is this module's standing posture for a file
+ * that is merely odd: *"visible and recoverable beats silent and plausible"*,
+ * the same decision as the dataset-name dedupe and the axes self-check. The
+ * measurements are still in the file and refusing it would strand them.
+ *
+ * ⚑ It borrows `notice`, whose own doc describes exactly this sentence: the
+ * figure opened, and something about it is not what the file said.
+ */
+export function candlestickSlotNotice(
+  configId: string,
+  datasets: readonly Dataset[]
+): string | null {
+  if (configId !== 'candlestick') return null;
+  const expected = CANDLESTICK_SLOTS.map((n) => n.toLowerCase());
+  const wrong = datasets.filter((d) => {
+    const names = d.getSlotNames().map((n) => n.trim().toLowerCase());
+    return names.length !== expected.length || !names.every((n, i) => n === expected[i]);
+  });
+  if (wrong.length === 0) return null;
+  return `This file says it is a candlestick chart, but ${wrong.length === 1 ? 'a series in it does' : `${wrong.length} of its series do`} not carry the four marks a candle is made of (${CANDLESTICK_SLOTS.join(', ')}). ${wrong.length === 1 ? 'That series' : 'Those series'} will show the marks ${wrong.length === 1 ? 'it holds' : 'they hold'} but no candle overlay, and no direction can be read from the figure's colour. The readings themselves are untouched.`;
+}
+
 export function deserializeProject(raw: unknown): ProjectResult<DeserializedProject> {
   if (typeof raw !== 'object' || raw === null) {
     return { error: 'Not a valid project file.' };
@@ -454,10 +489,17 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   // ⚑ AT THE LOAD DOOR, where every open path converges (the `.zip` reader and
   // the multi-figure reader both come through here), so no entrance can miss it.
   const relabel = relabelAllFloatingBarsAsSpan(configId, axes, datasets);
+  const finalConfigId = relabel?.configId ?? configId;
+  // ⚑ Asked about the type the figure is OPENING as, not the one the file
+  // named, so a relabelled figure is never told about slots its new type does
+  // not have. Both notices can be true at once, so they are joined rather than
+  // one winning silently.
+  const slotNotice = candlestickSlotNotice(finalConfigId, datasets);
+  const notices = [relabel?.notice, slotNotice].filter((n): n is string => n != null);
 
   return {
-    configId: relabel?.configId ?? configId,
-    ...(relabel ? { notice: relabel.notice } : {}),
+    configId: finalConfigId,
+    ...(notices.length > 0 ? { notice: notices.join(' ') } : {}),
     axes,
     datasets,
     // Falls back to a fresh empty one for any file predating this (every
