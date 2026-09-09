@@ -480,7 +480,31 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   }
 
   const axes = plotData.getAxesColl()[0];
-  const datasets = plotData.getDatasets();
+  // ⚑⚑ THE SERIES THAT BELONG TO THIS AXES, NOT ALL OF THEM.
+  //
+  // ⚠️ This took `getDatasets()` wholesale and handed the lot to
+  // `loadCalibrated`, which calibrates every series against the ONE axes it is
+  // given. A file that binds a series to a second coordinate system had that
+  // series re-read against the first - measured, a pixel worth 500 on its own
+  // axes reported as 5 - while the second axes and its whole calibration
+  // vanished with nothing said.
+  //
+  // ⚑ THE RULE WAS ALREADY WRITTEN ONE FILE OVER, for the foreign door:
+  // `wpdImport.ts`'s `datasetsForAxes` says *"WPD maps each dataset to its own
+  // axes, so a multi-figure project's datasets must be filtered, not taken
+  // wholesale."* Our own door did not filter.
+  //
+  // ⚑ AND UNBOUND IS NOT "SOMEONE ELSE'S". `plotData` binds a dataset only when
+  // its `axesName` matches an axes it read, so a hand-written file - or any
+  // shape that predates the name - leaves datasets bound to nothing. Those
+  // belong to the only axes there is, and a strict filter would drop every
+  // series in such a file. Only a series bound to a DIFFERENT axes is held back.
+  const allDatasets = plotData.getDatasets();
+  const datasets = allDatasets.filter((ds) => {
+    const bound = plotData.getAxesForDataset(ds);
+    return bound == null || bound === axes;
+  });
+  const heldBack = allDatasets.length - datasets.length;
   if (!axes || datasets.length === 0) {
     return { error: 'Project file has no calibrated axes or dataset.' };
   }
@@ -495,7 +519,13 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   // not have. Both notices can be true at once, so they are joined rather than
   // one winning silently.
   const slotNotice = candlestickSlotNotice(finalConfigId, datasets);
-  const notices = [relabel?.notice, slotNotice].filter((n): n is string => n != null);
+  // ⚑ Said plainly rather than left to be noticed: the readings are still in the
+  // file, and a user who sees this knows why a series they remember is missing.
+  const extraAxesNotice =
+    heldBack > 0
+      ? `This file holds more than one set of calibrated axes. ${heldBack === 1 ? 'One series is' : `${heldBack} series are`} measured against a different one and ${heldBack === 1 ? 'has' : 'have'} not been opened - reading ${heldBack === 1 ? 'it' : 'them'} against these axes would report numbers the file does not contain. Nothing in the file has been changed.`
+      : null;
+  const notices = [relabel?.notice, extraAxesNotice, slotNotice].filter((n): n is string => n != null);
 
   return {
     configId: finalConfigId,
