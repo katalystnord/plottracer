@@ -1579,7 +1579,17 @@ describe('Workspace: Candlestick', () => {
     // our reading of its colour convention is backwards. It is on screen, so
     // a wrong default is correctable rather than silent.
     await page.click('[data-testid="candle-flip"]');
-    expect(await textOf('candlestick-directions')).toBe('falling');
+    // ⚑ POLLED, because the flip is applied by re-READING THE FIGURE, not by
+    // toggling a label. The declaration goes to the axes, an effect re-reads
+    // every candle's colour against it, and the overlay follows - so the answer
+    // arrives a render after the click rather than during it.
+    // ⚠️ This read once and passed for as long as the machine was quick enough.
+    // It failed on a loaded full-board run and passed in isolation, which is the
+    // signature of a race in the TEST: the app was always going to take a tick,
+    // and the assertion was betting it would not.
+    await expect
+      .poll(() => textOf('candlestick-directions'), { timeout: 10000 })
+      .toBe('falling');
   });
 
   it('files its four values under a category, in the table the rest of the family uses', async () => {
