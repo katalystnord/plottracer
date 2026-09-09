@@ -504,6 +504,34 @@ export interface DataProjector {
 export interface HeatmapAxisStamp {
   x: [{ px: number; py: number }, { px: number; py: number }];
   y: [{ px: number; py: number }, { px: number; py: number }];
+  /**
+   * ⚑⚑ THE COLOUR KEY IS THE THIRD AXIS, SO IT IS STAMPED LIKE THE OTHER TWO.
+   *
+   * ⚠️ It was not, and that is pattern 1 of v2.2's five - *does this belong to
+   * the TYPE, or to an AXIS? If an axis, EVERY axis gets it* - applied to the
+   * exact case the stamp was written to close. Moving a key corner, or a
+   * labelled tick, or retyping a tick's VALUE, or ticking Log, changes every
+   * cell's number; the stamp saw none of it, so `heatmapAxisMoved` returned
+   * false and the table, the project file and every export kept numbers read
+   * through a key that no longer exists. Measured on the viridis fixture:
+   * retyping the second key tick from 100 to 120 moved cell 0 from -30.84 to
+   * -32.64, and the stamp was byte-identical.
+   *
+   * ⚑ IT CARRIES MORE THAN PIXELS, because the key can move without one. The
+   * two labelled ticks have TYPED NUMBERS, and Log rescales the whole key
+   * without touching anything on screen - so a stamp of positions alone would
+   * have closed half the hole and looked finished.
+   *
+   * ⚑ Optional: a grid recorded before this existed has no key stamp, and a
+   * missing stamp means "nothing to compare", never "it moved".
+   */
+  key?: {
+    /** k1, k2, kv1, kv2 - the strip's corners and its two labelled ticks. */
+    at: { px: number; py: number }[];
+    /** What the user typed at kv1 and kv2. */
+    values: string[];
+    log: boolean;
+  };
 }
 
 /** How far a calibration point may sit from where it was and still count as
@@ -519,16 +547,28 @@ const AXIS_MOVED_EPS = 0.01;
  * SAY something.
  */
 export function heatmapAxisStamp(
-  placed: Record<string, { px: number; py: number } | undefined>
+  placed: Record<string, { px: number; py: number; values?: readonly string[] } | undefined>,
+  options?: Readonly<Record<string, string>>
 ): HeatmapAxisStamp | null {
   const p = (k: string) => placed[k];
   const [x1, x2, y1, y2] = [p('x1'), p('x2'), p('y1'), p('y2')];
   if (!x1 || !x2 || !y1 || !y2) return null;
   const ok = (q: { px: number; py: number }) => Number.isFinite(q.px) && Number.isFinite(q.py);
   if (![x1, x2, y1, y2].every(ok)) return null;
+  const keyPoints = [p('k1'), p('k2'), p('kv1'), p('kv2')];
+  const key = keyPoints.every((q): q is { px: number; py: number; values?: readonly string[] } =>
+    q !== undefined && ok(q)
+  )
+    ? {
+        at: keyPoints.map((q) => ({ px: q.px, py: q.py })),
+        values: [p('kv1')?.values?.[0] ?? '', p('kv2')?.values?.[0] ?? ''],
+        log: options?.['isLogValue'] === 'true',
+      }
+    : undefined;
   return {
     x: [{ px: x1.px, py: x1.py }, { px: x2.px, py: x2.py }],
     y: [{ px: y1.px, py: y1.py }, { px: y2.px, py: y2.py }],
+    ...(key ? { key } : {}),
   };
 }
 
@@ -549,17 +589,47 @@ export function heatmapAxisStamp(
  */
 export function heatmapAxisMoved(
   stamp: HeatmapAxisStamp | undefined | null,
-  placed: Record<string, { px: number; py: number } | undefined>
+  placed: Record<string, { px: number; py: number; values?: readonly string[] } | undefined>,
+  options?: Readonly<Record<string, string>>
 ): boolean {
-  if (!stamp) return false;
-  const now = heatmapAxisStamp(placed);
-  if (now === null) return false;
+  // ⚑ ONE COMPARISON, ASKED TWO WAYS. `heatmapAxisMovedKind` does the work and
+  // this is the yes/no of it - so the two can never answer differently, which a
+  // second copy of the same arithmetic would eventually do.
+  return heatmapAxisMovedKind(stamp, placed, options) !== null;
+}
+
+/**
+ * ⚑⚑ WHICH AXIS MOVED, because the REMEDY IS NOT THE SAME.
+ *
+ * The two spatial axes carry the grid with them, so the answer is "detect the
+ * grid again if it no longer lines up". The colour key carries no grid at all -
+ * it changes what every cell is WORTH, so the answer is "read the cells again".
+ * A single sentence covering both would send half the users to the wrong
+ * gesture, which is worse than the silence this replaced.
+ */
+export function heatmapAxisMovedKind(
+  stamp: HeatmapAxisStamp | undefined | null,
+  placed: Record<string, { px: number; py: number; values?: readonly string[] } | undefined>,
+  options?: Readonly<Record<string, string>>
+): 'spatial' | 'key' | 'both' | null {
+  if (!stamp) return null;
+  const now = heatmapAxisStamp(placed, options);
+  if (now === null) return null;
   const far = (a: { px: number; py: number }, b: { px: number; py: number }) =>
     Math.abs(a.px - b.px) > AXIS_MOVED_EPS || Math.abs(a.py - b.py) > AXIS_MOVED_EPS;
-  return (
+  const spatial =
     far(stamp.x[0], now.x[0]) || far(stamp.x[1], now.x[1]) ||
-    far(stamp.y[0], now.y[0]) || far(stamp.y[1], now.y[1])
-  );
+    far(stamp.y[0], now.y[0]) || far(stamp.y[1], now.y[1]);
+  const key =
+    stamp.key !== undefined &&
+    now.key !== undefined &&
+    (stamp.key.at.some((q, i) => far(q, now.key!.at[i] ?? q)) ||
+      stamp.key.values.some((v, i) => v !== now.key!.values[i]) ||
+      stamp.key.log !== now.key.log);
+  if (spatial && key) return 'both';
+  if (spatial) return 'spatial';
+  if (key) return 'key';
+  return null;
 }
 
 /**

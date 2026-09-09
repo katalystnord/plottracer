@@ -211,7 +211,7 @@ import {
   isDividerHandle,
   labelsForCells,
   cellKeysInRect,
-  heatmapAxisMoved,
+  heatmapAxisMovedKind,
   heatmapAxisSpans,
   heatmapAxisStamp,
   heatmapGridToParams,
@@ -2148,8 +2148,12 @@ export function Workspace() {
    * entrance and survives save, load and undo for free.
    */
   const heatmapAxisHasMoved = useMemo(() => {
-    if (!heatmapActive || heatmapGridParams === null) return false;
-    return heatmapAxisMoved(heatmapGridParams.axisAt, sessionRef.current.getPlacedPoints());
+    if (!heatmapActive || heatmapGridParams === null) return null;
+    return heatmapAxisMovedKind(
+      heatmapGridParams.axisAt,
+      sessionRef.current.getPlacedPoints(),
+      sessionRef.current.getOptions()
+    );
     // `version` is how React learns the ref-held session mutated.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmapActive, heatmapGridParams, version]);
@@ -2196,7 +2200,7 @@ export function Workspace() {
     const base = grid === null || spans === null ? null : heatmapGridToParams(grid, spans);
     // ⚑ Stamped where the axes SIT right now, so the app can later say "these
     // have moved since" - the one thing David's rule 4 needs, and nothing more.
-    const stamp = heatmapAxisStamp(placedNow);
+    const stamp = heatmapAxisStamp(placedNow, sessionRef.current.getOptions());
     const params = base === null ? null : stamp ? { ...base, axisAt: stamp } : base;
     setHeatmapGridParams(params);
     // ⚑ Copied into plain arrays on the way into the record: the store is
@@ -8373,8 +8377,24 @@ export function Workspace() {
                   data-testid="heatmap-axis-moved"
                   style={{ fontSize: 12, color: theme.color.text.secondary, paddingLeft: 18 }}
                 >
-                  The axes have moved since this grid was recorded, so the grid moved with them.
-                  Detect the grid again if it no longer lines up with the figure.
+                  {/* ⚑⚑ THE REMEDY IS NOT THE SAME FOR THE THIRD AXIS. The two
+                      spatial axes carry the grid with them, so the answer is to
+                      detect it again. The colour key carries no grid - it changes
+                      what every cell is WORTH - so the answer is to read the
+                      cells again. One sentence for both would send half the
+                      readers to the wrong gesture. */}
+                  {heatmapAxisHasMoved !== 'key' && (
+                    <>
+                      The axes have moved since this grid was recorded, so the grid moved with them.
+                      Detect the grid again if it no longer lines up with the figure.{' '}
+                    </>
+                  )}
+                  {heatmapAxisHasMoved !== 'spatial' && (
+                    <>
+                      The colour key has moved since these cells were read, so their values came
+                      through a key that is no longer the one on the figure. Read the cells again.
+                    </>
+                  )}
                 </span>
               )}
               {/* ⚑⚑ THE STAGE'S CONTROLS follow the STAGE; the row above only
