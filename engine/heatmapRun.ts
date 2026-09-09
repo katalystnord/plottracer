@@ -1299,9 +1299,35 @@ export function detectGrid(
     y: detectDividers(image.data, image.width, image.height, box, 'y').candidates,
   };
 
-  // Positions come back as fractions of the box; the grid speaks data.
-  const toData = (fractions: readonly number[], lo: number, hi: number): number[] =>
-    fractions.map((f) => lo + f * (hi - lo));
+  // ⚑⚑ A FRACTION OF THE BOX BECOMES DATA THROUGH THE AXES, NOT THROUGH
+  // ARITHMETIC. `gridDetect` says so of its own output: *"Where it sits along
+  // the axis, 0 at the box's origin edge and 1 at the far one. The caller
+  // converts to data coordinates through its own axes - this module never sees
+  // them."* This is that caller.
+  //
+  // ⚠️ IT INTERPOLATED IN DATA, which is right only on a linear axis - and a
+  // heatmap axis may be logarithmic. Measured on a log X calibrated 1..1000
+  // with equal-width columns: boundaries drawn at px 200 and 300 were placed at
+  // data 332 and 665, whose pixels are 352 and 382 - the grid drawn 150px off
+  // the ink it was measured from, the cells then sampled in the wrong pixels,
+  // the exported `x min`/`x max` wrong. And the report still said "matching the
+  // 2 boundaries found", so the one signal the user has claimed agreement.
+  const invert = axes.pixelToData?.bind(axes);
+  const toData = (fractions: readonly number[], lo: number, hi: number, axis: 'x' | 'y'): number[] => {
+    // ⚑ Without an inverse a projector can only be taken as linear - which the
+    // synthetic projectors in the tests are. The app's axes always invert.
+    if (!invert) return fractions.map((f) => lo + f * (hi - lo));
+    const at = axis === 'x' ? axes.dataToPixel(lo, yMin) : axes.dataToPixel(xMin, lo);
+    const far = axis === 'x' ? axes.dataToPixel(hi, yMin) : axes.dataToPixel(xMin, hi);
+    return fractions.map((f) => {
+      const px = at.x + f * (far.x - at.x);
+      const py = at.y + f * (far.y - at.y);
+      const back = invert(px, py)[axis === 'x' ? 0 : 1];
+      // A projector that cannot answer for a pixel inside its own box has
+      // nothing better to offer than the straight line between the ends.
+      return back === undefined || !Number.isFinite(back) ? lo + f * (hi - lo) : back;
+    });
+  };
 
   const notes: string[] = [];
   const axisGrid = (
@@ -1314,7 +1340,7 @@ export function detectGrid(
     const label = axis === 'x' ? 'columns' : 'rows';
     if (count === undefined) {
       notes.push(`${candidates.length} ${axis === 'x' ? 'column' : 'row'} boundaries found.`);
-      return toData(proposeAllDividers(candidates), lo, hi);
+      return toData(proposeAllDividers(candidates), lo, hi, axis);
     }
     const report = reconcileWithCount(candidates, count);
     const proposed = proposeDividers(candidates, count);
@@ -1340,14 +1366,14 @@ export function detectGrid(
       notes.push(
         `Found ${report.found} of the ${report.expected} boundaries for ${count} ${label}; add the missing ${report.missing} by hand.`
       );
-      return toData(proposeAllDividers(candidates), lo, hi);
+      return toData(proposeAllDividers(candidates), lo, hi, axis);
     }
     notes.push(
       report.agrees
         ? `${count} ${label}, matching the ${report.found} boundaries found.`
         : `${count} ${label} taken from the ${report.found} boundaries found - check the extra ones.`
     );
-    return toData(proposed, lo, hi);
+    return toData(proposed, lo, hi, axis);
   };
 
   const xGrid = axisGrid('x', xMin, xMax, options.columns);

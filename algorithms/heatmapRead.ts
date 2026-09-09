@@ -47,6 +47,19 @@ import type { RGB } from './colorFilter.js';
  * lands on the image. Structural, so it needs no import from `core/axes`. */
 export interface PixelProjector {
   dataToPixel(x: number, y: number): { x: number; y: number };
+  /**
+   * ⚑⚑ THE WAY BACK, when the caller has one.
+   *
+   * Detection answers in FRACTIONS OF THE PLOT BOX, and turning a fraction into
+   * a data coordinate means inverting the projection. Interpolating in data
+   * instead is only right on a LINEAR axis - and a heatmap axis may be
+   * logarithmic (`HEATMAP_AXES_CONFIG` ships `isLogX`/`isLogY`).
+   *
+   * Optional because a projector that cannot invert can still SAMPLE, which is
+   * all `readHeatmap` needs; anything converting a position back to data must
+   * ask for it and say what it does without one.
+   */
+  pixelToData?(x: number, y: number): number[];
 }
 
 export interface ReadHeatmapOptions {
