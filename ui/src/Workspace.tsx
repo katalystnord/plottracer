@@ -1429,6 +1429,18 @@ export function Workspace() {
   /** What the last look for the figure's own tick marks found. Per figure. */
   const [tickDetectNotice, setTickDetectNotice] = useState<string | null>(null);
   const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
+  // ⚑⚑ THE BAND AND THE ANGLE ARE KEPT so the card can read the SAME box again
+  // at another angle. Without the band there is nothing to re-read, which is
+  // why the override argument on `readBandAtAngle` had no caller: the one place
+  // that could have supplied it had already thrown the box away.
+  const [ocrBand, setOcrBand] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [ocrAngleDeg, setOcrAngleDeg] = useState(0);
+  /** ⚑ What the SWEEP answered, kept whatever the user then sets - the offer
+   *  stays on the table (see OcrReviewCard's `measuredDegrees`). */
+  const [ocrMeasuredDeg, setOcrMeasuredDeg] = useState(0);
+  const [ocrAngleIsYours, setOcrAngleIsYours] = useState(false);
+  const [ocrRereading, setOcrRereading] = useState(false);
+  const [ocrAngleNotice, setOcrAngleNotice] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
   // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
@@ -2975,6 +2987,15 @@ export function Workspace() {
       setOcrArmed(false);
       setOcrProposals(null);
       setOcrError(null);
+      // ⚑ The BAND and the ANGLE belong to the same reading: the band is a box
+      // drawn on a picture that is no longer on screen, and re-reading it over
+      // the new figure would take a crop from wherever that rectangle happens to
+      // land. The angle is what the OUTGOING figure's labels were drawn at.
+      setOcrBand(null);
+      setOcrAngleDeg(0);
+      setOcrMeasuredDeg(0);
+      setOcrAngleIsYours(false);
+      setOcrAngleNotice(null);
       // ⚑⚑ AND THE CANDLE CONVENTION, which is a per-figure declaration: the
       // default is MEASURED off each figure's own bodies, so carrying a
       // correction across would silently mis-name a whole chart's Opens and
@@ -4314,9 +4335,75 @@ export function Workspace() {
         setOcrError(answer.error);
         return;
       }
+      // ⚑ The box is KEPT, which is the whole of what a re-read needs: the same
+      // band, at an angle the user names. The dividers and the axis are asked
+      // again at that moment rather than stored, so a tick moved in between is
+      // honoured.
+      setOcrBand(band);
+      setOcrAngleDeg(Math.round(((answer.angleRadians ?? 0) * 180) / Math.PI));
+      setOcrMeasuredDeg(Math.round(((answer.angleRadians ?? 0) * 180) / Math.PI));
+      setOcrAngleIsYours(false);
+      setOcrAngleNotice(null);
       setOcrProposals(answer.proposals);
     },
     [session]
+  );
+
+  /**
+   * ⚑⚑ READ THE SAME BAND AGAIN, AT AN ANGLE THE USER NAMED.
+   *
+   * David: *"should we not re-add some form of user control at the point of
+   * showing what the automated state has found? Else, what is the point of
+   * showing it to the user?"* v2.4 had `Rotate`; `efab594` removed it and
+   * shipped nothing in its place, so a figure the sweep read wrong had no
+   * remedy but Cancel and typing six names by hand. That is a regression, not a
+   * missing feature.
+   *
+   * ⚑ ONE READ, NOT A SWEEP - `readBandAtAngle`'s last argument, documented
+   * since it was written as *"the user's own setting, which always wins"* and
+   * until now called by nobody. Finding the angle costs up to 18 reads; reading
+   * at a stated one costs a single read, which is what makes a 1-degree control
+   * usable.
+   *
+   * ⚑ A FAILED RE-READ KEEPS THE ROWS. Losing a card of corrected names to a
+   * guessed angle is the same expensive accident the card refuses to allow a
+   * stray backdrop click, so the message goes ON the card and the previous
+   * reading stands.
+   */
+  const rereadCategoryLabels = useCallback(
+    async (degrees: number) => {
+      const band = ocrBand;
+      const image = imageCanvasRef.current?.getImageData();
+      const edges = session.getCategoryAxis().getAxisEdges();
+      if (!band || !image || !edges) return;
+      setOcrRereading(true);
+      setOcrAngleNotice(null);
+      try {
+        const dividers = session.getCategoryAxis().getDividerPoints();
+        const along = axisRunsAlong(edges[0], edges[1]);
+        const axisAt = along === 'x' ? edges[0].y : edges[0].x;
+        const answer = await readBandAtAngle(
+          image,
+          band,
+          dividers,
+          along,
+          axisAt,
+          (degrees * Math.PI) / 180
+        );
+        if (isOcrFailure(answer)) {
+          setOcrAngleNotice(`${answer.error} The names below are still the ones read at ${ocrAngleDeg}°.`);
+          return;
+        }
+        setOcrAngleDeg(degrees);
+        // ⚑ Returning to the measured angle is not "your setting" - it is our
+        // reading again, so the card goes back to saying so.
+        setOcrAngleIsYours(Math.round(degrees) !== Math.round(ocrMeasuredDeg));
+        setOcrProposals(answer.proposals);
+      } finally {
+        setOcrRereading(false);
+      }
+    },
+    [ocrBand, ocrAngleDeg, ocrMeasuredDeg, session]
   );
 
   /**
@@ -9701,10 +9788,18 @@ export function Workspace() {
               rows ? rows.map((r) => (r.categoryIndex === categoryIndex ? { ...r, text } : r)) : rows
             )
           }
+          angleDegrees={ocrAngleDeg}
+          angleIsYours={ocrAngleIsYours}
+          measuredDegrees={ocrMeasuredDeg}
+          onReadAgain={rereadCategoryLabels}
+          busy={ocrRereading}
+          notice={ocrAngleNotice}
           onApply={applyOcrNames}
           onCancel={() => {
             setOcrProposals(null);
             setOcrError(null);
+            setOcrBand(null);
+            setOcrAngleNotice(null);
           }}
         />
       )}

@@ -27,6 +27,17 @@ export default tseslint.config(
       'dist/**',
       'dist-ui/**',
       'build/**',
+      // ⚑⚑ THE MUTATION RUN'S OWN SANDBOX. Stryker copies the whole project
+      // into `.stryker-tmp/sandbox-*` and rewrites it, so while a run is in
+      // flight `eslint .` walks thousands of instrumented copies and reports
+      // hundreds of errors in code nobody wrote. Measured: 896 errors, all of
+      // them from the sandbox, in the middle of a scoped run.
+      // ⚠️ AND IT BLOCKS THE PRE-COMMIT HOOK, which runs lint - so the project's
+      // own mutation tool made the project uncommittable while it worked. It is
+      // already in `.gitignore`; flat config does not read that file.
+      '.stryker-tmp/**',
+      // The html reports those runs write, for the same reason.
+      'reports/**',
     ],
   },
   js.configs.recommended,

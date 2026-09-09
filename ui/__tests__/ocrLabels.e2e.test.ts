@@ -138,6 +138,62 @@ describe('OCR: reading category names off the figure', () => {
         .toBe(EXPECTED[i]);
     }
 
+    // ⚑⚑ WHAT IT READ AT, AND THE HANDLE ON IT.
+    //
+    // David: *"should we not re-add some form of user control at the point of
+    // showing what the automated state has found? Else, what is the point of
+    // showing it to the user?"* The angle was measured and thrown away by the
+    // only caller, so nothing said whether the band had been read at the angle
+    // the labels are drawn at or at the sweep's fallback - and there was no way
+    // to disagree. v2.4 had `Rotate`; removing it without a replacement was a
+    // regression, not a deferred feature.
+    const angleOf = async (): Promise<number> =>
+      Number(((await page.getByTestId('ocr-angle-value').textContent()) ?? '').replace(/[^-0-9]/g, ''));
+    const measured = await angleOf();
+    // This figure's labels are horizontal, so the sweep should be near flat -
+    // and the card must SAY the number, whatever it is.
+    expect(Math.abs(measured), `read at ${measured} degrees on a horizontal axis`).toBeLessThanOrEqual(15);
+    expect(await page.getByTestId('ocr-angle-source').textContent()).toMatch(/measured/i);
+
+    // ⚑ A control that would do nothing does not invite a press: Read again is
+    // disabled until the slider actually differs from what the rows were read at.
+    expect(await page.getByTestId('ocr-read-again').isDisabled()).toBe(true);
+
+    // ⚑⚑ ONE DEGREE. David: *"we need to make the steps finer than we had
+    // before."* Before was `Rotate`, a QUARTER TURN a press. A single degree off
+    // a horizontal axis still reads, which is what makes this deterministic -
+    // the point here is the mechanism, not the OCR's tolerance.
+    const asked = measured + 1;
+    await page.getByTestId('ocr-angle').fill(String(asked));
+    expect(await angleOf(), 'the readout follows the slider').toBe(asked);
+    expect(await page.getByTestId('ocr-read-again').isDisabled()).toBe(false);
+
+    await page.getByTestId('ocr-read-again').click();
+    // ⚑ ONE READ, not a sweep - so this returns quickly, and the card says whose
+    // angle it is now showing.
+    await expect
+      .poll(() => page.getByTestId('ocr-angle-source').textContent(), { timeout: 60000 })
+      .toMatch(/the angle you set/i);
+    expect(await angleOf(), 'the card reports the angle it actually read at').toBe(asked);
+
+    // ⚑⚑ AND THE ROWS SURVIVED. Losing a card of names to a guessed angle is
+    // the expensive accident this card already refuses to allow a stray click.
+    expect(await page.getByTestId('ocr-text-0').count()).toBe(1);
+
+    // ⚑⚑ AND OUR OWN READING IS STILL ON OFFER. Found by reading the card cold
+    // in a screenshot: the measured angle vanished the moment you set one of
+    // your own, so the automated finding - the thing being shown - was erased by
+    // the control meant to make it useful, with no way back to it.
+    expect(await page.getByTestId('ocr-angle-source').textContent()).toContain(
+      `We measured ${measured}°`
+    );
+    await page.getByTestId('ocr-angle-reset').click();
+    await expect
+      .poll(() => page.getByTestId('ocr-angle-source').textContent(), { timeout: 60000 })
+      .toMatch(/measured by reading the band/i);
+    // ⚑ Back to OUR answer means it is ours again, not "the angle you set".
+    expect(await angleOf()).toBe(measured);
+
     if (process.env['OCR_SHOT']) await page.screenshot({ path: process.env['OCR_SHOT'] });
 
     // ⚑ Escape backs out and writes nothing - and it has to work with nothing in

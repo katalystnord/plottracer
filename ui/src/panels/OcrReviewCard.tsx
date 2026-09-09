@@ -47,7 +47,54 @@ export interface OcrReviewCardProps {
   onEditText: (categoryIndex: number, text: string) => void;
   onApply: () => void;
   onCancel: () => void;
+  /**
+   * ⚑⚑ THE ANGLE THE BAND WAS READ AT, in degrees, and whether WE measured it.
+   *
+   * David: *"should we not re-add some form of user control at the point of
+   * showing what the automated state has found? Else, what is the point of
+   * showing it to the user?"* Exactly - a measurement nobody can act on has no
+   * business on screen, and a control with nothing to act on is blind. They are
+   * one thing, so they arrive together.
+   */
+  angleDegrees: number;
+  /** True once the reader has been pointed at an angle by hand - so the card can
+   *  say whose answer it is showing. */
+  angleIsYours: boolean;
+  /**
+   * ⚑⚑ WHAT WE MEASURED, KEPT EVEN AFTER YOU DISAGREE WITH IT.
+   *
+   * ⚠️ Found by reading the card cold, in a screenshot, after the control was
+   * built: the moment you set an angle of your own, the measured one vanished
+   * from the screen and there was no way back to it. That defeats the whole
+   * purpose - the automated finding is the thing being shown, and a control that
+   * ERASES it on first use has taken the display away rather than made it
+   * useful. So it stays, and it stays reachable.
+   */
+  measuredDegrees: number;
+  /** Read the same band again at this angle. ONE read, not a sweep. */
+  onReadAgain: (degrees: number) => void;
+  /** A re-read is in flight - the busy state `efab594` removed with `Rotate`. */
+  busy?: boolean;
+  /** What the last re-read said when it could not read anything. The rows it
+   *  replaces are KEPT, so a bad guess costs nothing. */
+  notice?: string | null;
 }
+
+/**
+ * ⚑⚑ ONE DEGREE, WHICH IS FINER THAN ANYTHING THIS FEATURE HAS HAD. David:
+ * *"we need to make the steps finer than we had before."* Before was `Rotate`,
+ * which moved in QUARTER TURNS - 90 degrees a press, so on a 45 degree axis
+ * every one of its four positions was equally wrong. The automatic sweep
+ * refines at 5, which is close enough to find the peak and not close enough to
+ * sit on it: a hand-drawn axis lands between the angles chart tools offer.
+ *
+ * ⚑ AND ONE DEGREE IS AFFORDABLE HERE PRECISELY BECAUSE THE SWEEP IS NOT
+ * REPEATED. Finding the angle costs up to 18 reads; reading AT a stated angle
+ * costs one. That asymmetry is what makes a fine control usable at all, and it
+ * is why the control reads on demand rather than live as the slider moves.
+ */
+const ANGLE_STEP_DEG = 1;
+const ANGLE_LIMIT_DEG = 90;
 
 const backdrop: React.CSSProperties = {
   position: 'fixed',
@@ -77,7 +124,28 @@ export function OcrReviewCard({
   onEditText,
   onApply,
   onCancel,
+  angleDegrees,
+  angleIsYours,
+  measuredDegrees,
+  onReadAgain,
+  busy = false,
+  notice = null,
 }: OcrReviewCardProps) {
+  // ⚑ The slider's own position is a CONTROL, not a record, so it lives here -
+  // and it follows the angle the card is showing whenever a read comes back, so
+  // the handle never sits somewhere the rows were not read at.
+  const [pending, setPending] = React.useState(angleDegrees);
+  // ⚑ ADJUSTED DURING RENDER, not in an effect. When a read comes back the
+  // handle has to follow it, or it sits at an angle the rows below were not read
+  // at - which is the one thing this control must never do. React's own answer
+  // for "a prop changed, reset some state" is to compare and set while
+  // rendering; an effect would paint the stale position first, and the lint rule
+  // that forbids it is right.
+  const [shownFor, setShownFor] = React.useState(angleDegrees);
+  if (shownFor !== angleDegrees) {
+    setShownFor(angleDegrees);
+    setPending(angleDegrees);
+  }
   // ⚑ Esc backs out and writes nothing - the same meaning the key has everywhere
   // else in this app (the global ladder, and F40's fix to the name editor).
   //
@@ -122,6 +190,122 @@ export function OcrReviewCard({
           Check each one against the figure and correct anything misread. Apply puts them on the
           categories; a row you leave empty is left alone.
         </div>
+        {/* ⚑⚑ WHAT IT READ AT, AND THE HANDLE ON IT, TOGETHER.
+            The angle was measured and then thrown away by the only caller, so
+            nothing on screen distinguished a band read at the angle the labels
+            are actually drawn at from one read at the sweep's fallback. Now it
+            says which, and lets you move it.
+            ⚑ IT SAYS WHOSE ANSWER IT IS in words rather than in `[brackets]`.
+            The bracket convention (`ValueMark`) marks a NUMBER IN THE RECORD
+            that did not come off the pixels; the angle never reaches the record,
+            it is how the pixels were read. Borrowing the mark here would spend
+            it on a control and blunt it where it matters. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 12,
+            fontSize: theme.font.size.small,
+            color: theme.color.text.secondary,
+          }}
+        >
+          <label htmlFor="ocr-angle" style={{ whiteSpace: 'nowrap' }}>
+            Read at{' '}
+            <strong data-testid="ocr-angle-value" style={{ color: theme.color.text.primary }}>
+              {Math.round(pending)}&deg;
+            </strong>
+          </label>
+          <input
+            id="ocr-angle"
+            data-testid="ocr-angle"
+            type="range"
+            min={-ANGLE_LIMIT_DEG}
+            max={ANGLE_LIMIT_DEG}
+            step={ANGLE_STEP_DEG}
+            value={pending}
+            disabled={busy}
+            onChange={(e) => setPending(Number(e.target.value))}
+            style={{ flex: 1, minWidth: 120 }}
+          />
+          <button
+            type="button"
+            data-testid="ocr-read-again"
+            disabled={busy || Math.round(pending) === Math.round(angleDegrees)}
+            onClick={() => onReadAgain(Math.round(pending))}
+          >
+            {busy ? 'Reading…' : 'Read again'}
+          </button>
+        </div>
+        {/* ⚑ THE SCALE, because a bare handle says nothing about how far it can
+            go or where flat is. Read cold from a screenshot the slider was a dot
+            on a line: you could not tell the range was a half-turn either way,
+            and 0 - the angle most figures are drawn at - was not marked. */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: theme.font.size.small,
+            color: theme.color.text.legend,
+            margin: '-6px 0 10px',
+          }}
+        >
+          <span>&minus;90&deg;</span>
+          <span>0&deg; (flat)</span>
+          <span>90&deg;</span>
+        </div>
+        <div
+          data-testid="ocr-angle-source"
+          style={{
+            fontSize: theme.font.size.small,
+            color: theme.color.text.legend,
+            marginBottom: 12,
+          }}
+        >
+          {/* ⚑ The sentence names the instrument, which is the tenet-9
+              distinction the card exists to keep straight: an angle we found by
+              reading at it, or one you pointed us at. Neither is worth less. */}
+          {angleIsYours ? (
+            <>
+              {`These names were read at ${Math.round(angleDegrees)}°, the angle you set. We measured ${Math.round(measuredDegrees)}°.`}{' '}
+              {/* ⚑⚑ THE WAY BACK. Our reading stays on offer however far you
+                  wander - the app's standing posture is that a measurement is
+                  OFFERED, never imposed, and an offer you cannot accept twice is
+                  not an offer. */}
+              <button
+                type="button"
+                data-testid="ocr-angle-reset"
+                disabled={busy}
+                onClick={() => onReadAgain(Math.round(measuredDegrees))}
+                style={{ fontSize: 'inherit' }}
+              >
+                Back to {Math.round(measuredDegrees)}&deg;
+              </button>
+            </>
+          ) : (
+            `These names were read at ${Math.round(angleDegrees)}°, measured by reading the band at each angle and keeping the best. Move the slider if the labels sit at a different angle.`
+          )}
+        </div>
+        {notice && (
+          <div
+            data-testid="ocr-angle-notice"
+            style={{
+              fontSize: theme.font.size.small,
+              color: theme.color.text.primary,
+              background: theme.color.background.panel,
+              border: `1px solid ${theme.color.border.regular}`,
+              borderRadius: 6,
+              padding: '6px 8px',
+              marginBottom: 12,
+            }}
+          >
+            {/* ⚑ THE ROWS BELOW ARE THE ONES THAT SURVIVED. Replacing a card of
+                corrected names with nothing, because a guessed angle read
+                nothing, is the expensive accident this card already guards
+                against for a stray backdrop click. */}
+            {notice}
+          </div>
+        )}
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ color: theme.color.text.legend, textAlign: 'left' }}>
