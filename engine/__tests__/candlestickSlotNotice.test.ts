@@ -17,11 +17,18 @@
  * measurements are in the file and refusing it would strand them.
  */
 import { describe, expect, it } from 'vitest';
-import { candlestickSlotNotice, serializeProject, deserializeProject } from '../projectFile.js';
+import {
+  candlestickSlotNotice,
+  boxPlotSlotNotice,
+  orphanedMarksNotice,
+  serializeProject,
+  deserializeProject,
+} from '../projectFile.js';
 import { Dataset } from '../../core/dataset.js';
 import {
   CalibrationSession,
   CANDLESTICK_AXES_CONFIG,
+  BOX_PLOT_AXES_CONFIG,
   type CalibratedAxes,
 } from '../calibrationSession.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
@@ -99,5 +106,96 @@ describe('a candlestick file that cannot hold a candle says so', () => {
     if ('error' in back) throw new Error(back.error);
     expect(back.configId, 'it still opens - surfaced, not refused').toBe('candlestick');
     expect(back.notice, 'and it says what is wrong with it').toMatch(/four marks/i);
+  });
+});
+
+/**
+ * ⚑⚑ THE SAME GUARD, FOR THE OTHER TYPE THAT GATES ON EXACT SLOT NAMES.
+ *
+ * ⚠️ The candlestick guard was never generalised. `getBoxPlotGlyphs` returns
+ * nothing unless the slots are exactly Min/Q1/Median/Q3/Max - the identical
+ * silent failure - and nothing at the load door asked. Measured: a box plot
+ * whose `groupNames` were renamed loaded with all five readings intact and no
+ * box that could ever draw, `notice=undefined`.
+ *
+ * ⚑ AND ONLY THESE TWO TYPES. Bar and Span declare `defaultSlots` too, but a
+ * bar RESHAPED to a box plot's five slots is a legitimate record - `isReshaped`
+ * exists to say so - and a notice on every reshaped bar would be a false alarm,
+ * which is worse than none.
+ */
+describe('a box plot that cannot draw a box says so', () => {
+  it('says so when the five values are renamed', () => {
+    const notice = boxPlotSlotNotice('boxplot', [seriesWith(['A', 'B', 'C', 'D', 'E'])]);
+    expect(notice, 'a box plot with no box opened silently').toBeTruthy();
+    expect(notice).toMatch(/five values/i);
+    expect(notice).toMatch(/readings themselves are untouched/i);
+  });
+
+  it('⚑ stays quiet for a real box plot - the companion assertion', () => {
+    expect(boxPlotSlotNotice('boxplot', [seriesWith(['Min', 'Q1', 'Median', 'Q3', 'Max'])])).toBeNull();
+  });
+
+  it('⚑ and says nothing about a BAR reshaped to those same five slots', () => {
+    // The false alarm this guard must not raise: a reshaped bar is a record the
+    // app itself produces, through `applyBoxPlotGroups`.
+    expect(boxPlotSlotNotice('bar', [seriesWith(['Min', 'Q1', 'Median', 'Q3', 'Max'])])).toBeNull();
+    expect(boxPlotSlotNotice('span', [seriesWith(['Corner', 'Opposite corner'])])).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ A MEASUREMENT THE FILE HOLDS AND NO VALUE CLAIMS.
+ *
+ * ⚠️ `core/plotData.ts` files a pixel under a slot only while `group <
+ * slotCount`, so a file whose `groupNames` is SHORTER than the marks it carries
+ * loads every pixel and files only some. `getTupleRows` IS the data panel and
+ * every export, so a reading present in the file reaches no panel, no table and
+ * no file saved next - with nothing saying a measurement went missing.
+ * Measured on a real box plot: five marks in the file, three cells out.
+ */
+describe('marks the file holds that nothing claims', () => {
+  /** A real box plot, walked through the app's own path so its marks are FILED
+   *  under slots - which is the thing `addPixel` alone does not do, and the
+   *  reason the first draft of this test reported every mark as orphaned. */
+  function boxPlotFile(): Record<string, unknown> {
+    const s = new CalibrationSession<CalibratedAxes>(BOX_PLOT_AXES_CONFIG as never);
+    s.handleCalibrationClick(300, 400);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 100);
+    s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s, { from: { x: 200, y: 400 }, to: { x: 500, y: 400 }, count: 2 });
+    expect(s.runCalibration(), s.getCalibrationError() ?? 'no error').toBe(true);
+    for (const y of [380, 340, 300, 260, 220]) s.addDataPoint(250, y);
+    const file = serializeProject(s, 'data:image/png;base64,AA==', 'f.png');
+    if ('error' in file) throw new Error(file.error);
+    return JSON.parse(JSON.stringify(file)) as Record<string, unknown>;
+  }
+
+  it('⚑⚑ counts a reading that no value in the file claims', () => {
+    const raw = boxPlotFile() as { plotData: { datasetColl: { groupNames: string[] }[] } };
+    const before = deserializeProject(JSON.parse(JSON.stringify(raw)));
+    if ('error' in before) throw new Error(before.error);
+    expect(before.notice, 'an intact box plot has nothing to report').toBeUndefined();
+
+    // The hand-edited case the audit measured: five marks, three names.
+    raw.plotData.datasetColl[0]!.groupNames = raw.plotData.datasetColl[0]!.groupNames.slice(0, 3);
+    const back = deserializeProject(raw as unknown as Record<string, unknown>);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.notice, 'two unreachable readings passed in silence').toMatch(/2 measured marks/);
+    // ⚑ It counts, it does not repair: which value an orphaned mark belongs to
+    // is exactly what the file failed to say.
+    expect(back.notice).toMatch(/Nothing has been changed or discarded/i);
+  });
+
+  it('⚑ says nothing when every mark is filed - the companion assertion', () => {
+    const ds = seriesWith(['Min', 'Q1', 'Median']);
+    expect(orphanedMarksNotice([ds])).toBeNull();
+  });
+
+  it('⚑ and ignores a series with no slots at all, which is most of them', () => {
+    const plain = new Dataset(2);
+    plain.addPixel(10, 10);
+    plain.addPixel(20, 20);
+    expect(orphanedMarksNotice([plain])).toBeNull();
   });
 });

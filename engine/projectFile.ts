@@ -47,7 +47,7 @@ import { CategoryAxis } from '../core/categoryAxis.js';
 import type { Dataset } from '../core/dataset.js';
 import { BarAxes } from '../core/axes/bar.js';
 import { barSeating } from '../core/barInterval.js';
-import { GRAPH_TYPE_METADATA_KEY, CANDLESTICK_SLOTS } from './calibrationSession.js';
+import { GRAPH_TYPE_METADATA_KEY, CANDLESTICK_SLOTS, BOX_PLOT_SLOTS } from './calibrationSession.js';
 import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js';
 
 /** A recorded Measure result, flattened for JSON. Additive to the project file
@@ -448,6 +448,67 @@ export function candlestickSlotNotice(
   return `This file says it is a candlestick chart, but ${wrong.length === 1 ? 'a series in it does' : `${wrong.length} of its series do`} not carry the four marks a candle is made of (${CANDLESTICK_SLOTS.join(', ')}). ${wrong.length === 1 ? 'That series' : 'Those series'} will show the marks ${wrong.length === 1 ? 'it holds' : 'they hold'} but no candle overlay, and no direction can be read from the figure's colour. The readings themselves are untouched.`;
 }
 
+/**
+ * ⚑⚑ A BOX PLOT WHOSE SLOTS ARE NOT THE FIVE CANNOT DRAW A BOX, SO IT SAYS SO.
+ *
+ * ⚑ The candlestick guard above, generalised to the one other type whose
+ * overlay gates on EXACT slot names: `getBoxPlotGlyphs` returns nothing unless
+ * the slots are Min/Q1/Median/Q3/Max, exactly the silent failure the
+ * candlestick one exists to announce - and nothing at the load door asked.
+ *
+ * ⚠️ AND ONLY THOSE TWO TYPES, deliberately. Bar and Span declare
+ * `defaultSlots` as well, but a bar RESHAPED to a box plot's five slots is a
+ * legitimate record - `isReshaped` exists to say so - and a notice fired on
+ * every reshaped bar would be a false alarm, which is worse than none.
+ */
+export function boxPlotSlotNotice(
+  configId: string,
+  datasets: readonly Dataset[]
+): string | null {
+  if (configId !== 'boxplot') return null;
+  const expected = BOX_PLOT_SLOTS.map((n) => n.toLowerCase());
+  const wrong = datasets.filter((d) => {
+    const names = d.getSlotNames().map((n) => n.trim().toLowerCase());
+    return names.length !== expected.length || !names.every((n, i) => n === expected[i]);
+  });
+  if (wrong.length === 0) return null;
+  return `This file says it is a box plot, but ${wrong.length === 1 ? 'a series in it does' : `${wrong.length} of its series do`} not carry the five values a box is drawn from (${BOX_PLOT_SLOTS.join(', ')}). ${wrong.length === 1 ? 'That series' : 'Those series'} will show the marks ${wrong.length === 1 ? 'it holds' : 'they hold'} but no box overlay. The readings themselves are untouched.`;
+}
+
+/**
+ * ⚑⚑ MEASURED MARKS THE FILE HOLDS THAT NO VALUE CLAIMS.
+ *
+ * ⚠️ FOUND BY AUDIT, and it is the half that loses data rather than a picture.
+ * `core/plotData.ts` files a pixel under a slot only while `group < slotCount`,
+ * so a file whose `groupNames` is SHORTER than the marks it carries loads every
+ * pixel and files only some. `getTupleRows` is the data panel and every export,
+ * and it reports the slots that survived - so a reading present in the file
+ * reaches no panel, no table and no file the user saves next, with nothing
+ * saying a measurement went missing. Measured: five marks in, three cells out.
+ *
+ * ⚑ EVERY TYPE, unlike the two overlay guards above. This is not about what a
+ * type can draw; it is about a measurement that exists and cannot be seen, and
+ * that is wrong whatever the figure is.
+ *
+ * ⚑ It counts rather than repairs. Which value an orphaned mark belongs to is
+ * exactly what the file failed to say, so filing it under a guess would be
+ * inventing the one fact that is missing (tenets 9 and 10).
+ */
+export function orphanedMarksNotice(datasets: readonly Dataset[]): string | null {
+  let orphaned = 0;
+  for (const dataset of datasets) {
+    if (!dataset.hasSlots()) continue;
+    let filed = 0;
+    for (const tuple of dataset.getAllTuples()) {
+      for (const at of tuple) if (at !== null && at !== undefined) filed += 1;
+    }
+    const held = dataset.getCount();
+    if (held > filed) orphaned += held - filed;
+  }
+  if (orphaned === 0) return null;
+  return `${orphaned} measured ${orphaned === 1 ? 'mark' : 'marks'} in this file ${orphaned === 1 ? 'is' : 'are'} not filed under any of this graph type's values, so ${orphaned === 1 ? 'it does' : 'they do'} not appear in the table or in any export. That usually means the file names fewer values per datum than it holds marks for. Nothing has been changed or discarded.`;
+}
+
 export function deserializeProject(raw: unknown): ProjectResult<DeserializedProject> {
   if (typeof raw !== 'object' || raw === null) {
     return { error: 'Not a valid project file.' };
@@ -518,14 +579,17 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   // named, so a relabelled figure is never told about slots its new type does
   // not have. Both notices can be true at once, so they are joined rather than
   // one winning silently.
-  const slotNotice = candlestickSlotNotice(finalConfigId, datasets);
+  const slotNotice = candlestickSlotNotice(finalConfigId, datasets) ?? boxPlotSlotNotice(finalConfigId, datasets);
+  const orphanNotice = orphanedMarksNotice(datasets);
   // ⚑ Said plainly rather than left to be noticed: the readings are still in the
   // file, and a user who sees this knows why a series they remember is missing.
   const extraAxesNotice =
     heldBack > 0
       ? `This file holds more than one set of calibrated axes. ${heldBack === 1 ? 'One series is' : `${heldBack} series are`} measured against a different one and ${heldBack === 1 ? 'has' : 'have'} not been opened - reading ${heldBack === 1 ? 'it' : 'them'} against these axes would report numbers the file does not contain. Nothing in the file has been changed.`
       : null;
-  const notices = [relabel?.notice, extraAxesNotice, slotNotice].filter((n): n is string => n != null);
+  const notices = [relabel?.notice, extraAxesNotice, slotNotice, orphanNotice].filter(
+    (n): n is string => n != null
+  );
 
   return {
     configId: finalConfigId,
