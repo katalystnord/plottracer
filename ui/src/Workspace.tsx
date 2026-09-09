@@ -230,6 +230,7 @@ import {
   type HeatmapRow,
   type HeatmapGridParams,
   type HeatmapState,
+  reindexCellReadings,
 } from '../../engine/heatmapRun.js';
 import { HeatmapCard } from './panels/HeatmapCard.js';
 import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
@@ -2420,20 +2421,48 @@ export function Workspace() {
     (next: HeatmapState) => {
       const axesNow = sessionRef.current.getAxes();
       if (!axesNow) return;
+      // ⚑⚑ A PERSON'S READINGS FOLLOW THEIR OWN PATCH OF FIGURE, and this is
+      // the one place to do it: add, remove and re-detect all arrive here.
+      //
+      // ⚠️ They used to be passed through UNCHANGED while the grid renumbered
+      // underneath them. A reading is keyed `col,row`, so inserting a boundary
+      // moved someone's measured number onto a cell they never looked at, while
+      // the cell they did read reverted to the colour - and both then reached
+      // the table, the file and every export with `source = user` on the wrong
+      // row. `moveDivider` refuses to re-sort for exactly this reason and says
+      // so; only the DRAG obeyed the rule.
+      const remapped = heatmapShownGrid
+        ? reindexCellReadings(heatmapCellReadings, heatmapShownGrid, next)
+        : { readings: heatmapCellReadings, dropped: 0 };
       applyHeatmapGrid(next);
+      if (remapped.readings !== heatmapCellReadings) setHeatmapCellReadings(remapped.readings);
       // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
       // they drifted - this one re-read, the other emptied the table - so the
       // symmetry is now structural rather than a thing to remember.
       if (heatmapCells.length > 0) {
-        const result = readCellsFor(next, heatmapCellReadings);
+        const result = readCellsFor(next, remapped.readings);
         if (result) {
           setHeatmapCells(result.rows);
-          setHeatmapSummary(result.summary);
+          // ⚑ SAID OUT LOUD when a reading could not travel. A cell split in two
+          // is not a cell anybody read, so the number goes - and a person who
+          // typed it deserves to be told rather than to find it missing.
+          setHeatmapSummary(
+            remapped.dropped > 0
+              ? `${result.summary} ${remapped.dropped} cell ${remapped.dropped === 1 ? 'value you' : 'values you'} read ${remapped.dropped === 1 ? 'was' : 'were'} taken from ${remapped.dropped === 1 ? 'a cell' : 'cells'} this change splits or merges, so ${remapped.dropped === 1 ? 'it has' : 'they have'} been dropped rather than moved to a cell nobody read.`
+              : result.summary
+          );
         }
       }
       commit();
     },
-    [applyHeatmapGrid, commit, heatmapCells.length, heatmapCellReadings, readCellsFor]
+    [
+      applyHeatmapGrid,
+      commit,
+      heatmapCells.length,
+      heatmapCellReadings,
+      heatmapShownGrid,
+      readCellsFor,
+    ]
   );
 
   const moveHeatmapDivider = useCallback(

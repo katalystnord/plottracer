@@ -676,6 +676,92 @@ export const NO_HEATMAP_CELL_READINGS: HeatmapCellReadings = {};
 
 
 /**
+ * ⚑⚑ CARRY A PERSON'S READINGS ONTO A GRID THAT HAS BEEN RENUMBERED.
+ *
+ * A reading is keyed by `col,row`. Inserting or removing a boundary RENUMBERS
+ * every cell past the change, so the key that meant "the cell spanning 6..7"
+ * now means a different cell - and the number a person measured off the figure
+ * reappears against a cell they never looked at, while the one they did read
+ * reverts to the colour. Both then reach the table, the project file and every
+ * export, with `source = user` on the wrong row.
+ *
+ * ⚠️ THE RULE WAS ALREADY WRITTEN, AND ONLY THE DRAG OBEYED IT.
+ * `core/heatmapGrid.ts`'s `moveDivider` refuses to re-sort in exactly these
+ * words: *"Re-sorting would keep the geometry valid and renumber every cell
+ * beyond the one being dragged - the values would still be right and they would
+ * be filed under the wrong column, which is the silent kind of wrong."* Insert,
+ * remove and re-detect renumber far harder than a drag - a second `Detect`
+ * replaces every interior divider at once - and none of them carried the rule.
+ *
+ * ⚑⚑ A READING BELONGS TO A REGION OF THE FIGURE, NOT TO AN INDEX. That is what
+ * makes this exact rather than a guess: a cell has real data BOUNDS, so the same
+ * patch of figure can be found in the new grid whatever it is now numbered. If
+ * the boundaries either side of it survive, the reading travels; the index it
+ * travels to is wherever that patch now sits.
+ *
+ * ⚑ AND IF THE PATCH ITSELF IS GONE, THE READING GOES. A boundary dropped INSIDE
+ * the cell someone read splits it in two, and neither half is the thing they
+ * looked at - keeping the number for either would be inventing a reading. It is
+ * dropped and counted, so the caller can say so out loud.
+ */
+export function reindexCellReadings(
+  readings: HeatmapCellReadings,
+  before: HeatmapState,
+  after: HeatmapState
+): { readings: HeatmapCellReadings; dropped: number } {
+  const keys = Object.keys(readings);
+  if (keys.length === 0) return { readings, dropped: 0 };
+
+  /** Where a boundary VALUE sits in a divider list, or -1. Compared with a
+   *  tolerance off the axis's own span, because a divider that has been through
+   *  data space and back is equal to itself only to within floating point. */
+  const indexOfEdge = (dividers: readonly number[], value: number): number => {
+    const span = Math.abs((dividers[dividers.length - 1] ?? 0) - (dividers[0] ?? 0));
+    const tol = span === 0 ? 1e-9 : span * 1e-9;
+    let best = -1;
+    let bestGap = Infinity;
+    dividers.forEach((d, i) => {
+      const gap = Math.abs(d - value);
+      if (gap <= tol && gap < bestGap) {
+        best = i;
+        bestGap = gap;
+      }
+    });
+    return best;
+  };
+
+  const out: Record<string, number> = {};
+  let dropped = 0;
+  for (const key of keys) {
+    const [colText, rowText] = key.split(',');
+    const col = Number(colText);
+    const row = Number(rowText);
+    const value = readings[key]!;
+    const xLo = before.xDividers[col];
+    const xHi = before.xDividers[col + 1];
+    const yLo = before.yDividers[row];
+    const yHi = before.yDividers[row + 1];
+    if (xLo === undefined || xHi === undefined || yLo === undefined || yHi === undefined) {
+      dropped += 1;
+      continue;
+    }
+    // BOTH edges of the cell have to survive, and be neighbours still: an edge
+    // that survives with a new boundary between it and its partner describes a
+    // cell that no longer exists.
+    const newCol = indexOfEdge(after.xDividers, xLo);
+    const newRow = indexOfEdge(after.yDividers, yLo);
+    const colEnd = indexOfEdge(after.xDividers, xHi);
+    const rowEnd = indexOfEdge(after.yDividers, yHi);
+    if (newCol < 0 || newRow < 0 || colEnd !== newCol + 1 || rowEnd !== newRow + 1) {
+      dropped += 1;
+      continue;
+    }
+    out[cellKey(newCol, newRow)] = value;
+  }
+  return { readings: out, dropped };
+}
+
+/**
  * Record what the user read in one cell, from what they typed.
  *
  * ⚑ THE REFUSAL IS THE MODEL'S, at the gesture. `positionAtValue` is the third
