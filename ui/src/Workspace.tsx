@@ -2592,15 +2592,28 @@ export function Workspace() {
       return;
     }
     setHeatmapError(null);
-    applyHeatmapGrid(initialGridFor(bounds, counts));
-    // ⚑ Its own undo step, for the same reason detection is one: laying a
-    // lattice is a change to the record, so taking it back must not cost more.
-    commit();
+    // ⚑⚑ THROUGH THE EDIT PATH, WHICH IS THE THIRD CALLER OF ONE RULE.
+    //
+    // ⚠️ This called the raw `applyHeatmapGrid`, so laying a lattice replaced
+    // every boundary at once while the table kept the cells read off the OLD
+    // grid and a person's own readings stayed keyed to indices that no longer
+    // mean what they meant. Detection had already been moved onto the edit path
+    // for exactly this; the even grid was left behind, which is the same defect
+    // one caller over.
+    //
+    // ⚑ An even lattice usually shares no boundary with what was there, so most
+    // readings cannot travel - and `applyHeatmapGridEdit` says how many were
+    // dropped rather than letting them vanish. That is the honest outcome: a
+    // reading belongs to a patch of figure, and this gesture redraws the patches.
+    //
+    // ⚑ It commits, too, for the same reason detection does: laying a lattice is
+    // a change to the record, so taking it back must not cost more.
+    applyHeatmapGridEdit(initialGridFor(bounds, counts));
     setHeatmapGridNote({
       text: `Even ${counts.columns} × ${counts.rows} grid laid over the plot - these boundaries are CHOSEN, not measured from the figure. Drag them onto the cells, or press Detect grid to read the ones the figure draws.`,
       kind: 'provenance',
     });
-  }, [applyHeatmapGrid, commit, heatmapBounds, heatmapCounts]);
+  }, [applyHeatmapGridEdit, heatmapBounds, heatmapCounts]);
 
   /**
    * Read the matrix.
