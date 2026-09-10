@@ -128,9 +128,13 @@ describe('TernaryAxes', () => {
   });
 
   it('produces a valid a+b+c decomposition at an arbitrary point', () => {
-    const cal = new Calibration(2);
+    const cal = new Calibration(3);
     cal.addPoint(0, 100, '0', '0');
     cal.addPoint(100, 100, '0', '0');
+    // ⚑ A ternary is read from the triangle that was CLICKED, so all three
+    // corners are required - this fixture used to pass two, which calibrated
+    // only because the third click was ignored.
+    cal.addPoint(50, 100 - 100 * Math.sin(Math.PI / 3), '0', '0');
     const axes = new TernaryAxes();
     axes.calibrate(cal, true, true);
     const [a, b, c] = axes.pixelToData(50, 50);

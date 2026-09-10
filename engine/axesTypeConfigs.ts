@@ -3168,6 +3168,22 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
   label: 'Ternary',
   axesKind: 'ternary',
   distinctPixelSteps: [['a', 'b', 'c']],
+  // ⚑⚑ THREE CORNERS ON ONE LINE ARE NOT A TRIANGLE, and it is the SAME question
+  // XY asks of its two axes - A-to-B against A-to-C, one cross product - so it is
+  // declared here rather than written again. It became reachable the day the
+  // maths started using corner C (2026-09-10): while C was ignored, a collinear
+  // third click was harmless.
+  // ⚑ The sentence is overridden because the default ends "the calibration has
+  // no scale", and a ternary has no scale to speak of - what it lacks is AREA.
+  // Without this the user would meet `buildAxes`'s "check the entered data
+  // values are valid numbers", and a ternary calibration has no entered values.
+  parallelAxisGuard: {
+    v1: ['b', 'a'],
+    v2: ['c', 'a'],
+    label: 'ternary',
+    message:
+      'The three corners are on one line - a ternary diagram needs a triangle with area, or no pixel has a composition.',
+  },
   // WPD: ternary-axes-scale / ternary-axes-normal.
   options: [
     { key: 'isRange100', label: 'Range', kind: 'choice', default: 'true',

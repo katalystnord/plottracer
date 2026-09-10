@@ -168,6 +168,12 @@ describe('Ternary axes survive a save and reopen', () => {
       const cal = new Calibration(3);
       cal.addPoint(0, 200, '', '');
       cal.addPoint(200, 200, '', '');
+      // ⚑ THE THIRD CORNER IS REQUIRED NOW (2026-09-10). This fixture had two,
+      // which calibrated only because the maths ignored the third click; the
+      // reading is the barycentric coordinate of the clicked triangle, so a
+      // triangle is what it takes. Placed at the equilateral apex, so the
+      // numbers these cases assert are the ones they always asserted.
+      cal.addPoint(100, 200 - 200 * Math.sin(Math.PI / 3), '', '');
       const a = new TernaryAxes();
       a.name = 'Ternary';
       expect(a.calibrate(cal, range100, isNormal)).toBe(true);

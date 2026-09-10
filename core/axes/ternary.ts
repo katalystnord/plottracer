@@ -1,10 +1,42 @@
 /**
- * Faithful TypeScript port of wpd-core's core/axes/ternary.js.
+ * TypeScript port of wpd-core's core/axes/ternary.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
+ *
+ * ⚑⚑ NO LONGER FAITHFUL, AND DELIBERATELY SO (2026-09-10). Upstream collects
+ * THREE corner clicks and reads TWO. Its `processCalibration` assigns
+ * `x2 = cp2.px; y2 = cp2.py;` and never mentions those variables again; the
+ * reading is then `ap = 1 - xx - yy/root3` and friends, which is the barycentric
+ * coordinate of a triangle assumed EQUILATERAL. The third click - the one the
+ * user was asked for - is stored and ignored.
+ *
+ * ⚠️ MEASURED, on a RIGHT-ANGLED ternary A(100,300) B(100,100) C(300,300) - a
+ * real convention, and the shape three fixtures in this repo already used: the
+ * old maths read the CLICKED corner C as `157.7350, 57.7350, -115.4701`. At the
+ * very pixel the user clicked to say *"this corner is pure C"*, the tool
+ * answered 157% of the first component and minus 115% of the third, with
+ * nothing on screen wrong.
+ *
+ * ⚑⚑ THE FIX IS THE GENERAL MODEL, NOT A CORRECTION TO A SPECIAL ONE. A ternary
+ * diagram's data is `a + b + c = constant`; its drawing is an affine image of
+ * that simplex, i.e. ANY triangle. So a reading is the pixel's BARYCENTRIC
+ * coordinate in the triangle that was clicked - `P = a·A + b·B + c·C` with
+ * `a + b + c = 1` - and the equilateral case is one instance of it, not the
+ * rule. David, settling it: *"USE all three corners and click in the math... it
+ * needs to be done properly, like we have done for all our developed
+ * calibrations instead."*
+ *
+ * ⚑ It is SMALLER than what it replaces: no `taninverse`, no `phi0`, no
+ * `root3`, no polar detour. Two cross products and a subtraction (tenet 10).
+ *
+ * ⚑ AND IT REFUSES MORE. The old guard was `L > 0` - the A-to-B distance - so
+ * three COLLINEAR corners calibrated happily and every pixel was read through an
+ * equilateral triangle that was not on the figure. The determinant below is zero
+ * for exactly the degenerate cases: coincident corners and collinear ones.
+ *
+ * ⚑ Tenets 5 and 8: we owe this lineage attribution, not its geometry.
  */
 
-import { taninverse } from '../mathFunctions.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 
@@ -14,37 +46,43 @@ export class TernaryAxes {
 
   private _isCalibrated = false;
   private metadata: AxesMetadata = {};
-  private x0 = 0;
-  private y0 = 0;
-  private L = 0;
-  private phi0 = 0;
-  private root3 = 0;
+  /** Corner A, the origin of the barycentric frame. */
+  private ax = 0;
+  private ay = 0;
+  /** A→B and A→C, the two edge vectors that span the triangle. */
+  private abx = 0;
+  private aby = 0;
+  private acx = 0;
+  private acy = 0;
+  /** Twice the signed area. Zero exactly when the triangle has none. */
+  private det = 0;
   private isRange0to100 = false;
   private isOrientationNormal = true;
 
   private processCalibration(cal: Calibration, range100: boolean, is_normal: boolean): boolean {
-    // v2.0 pre-launch audit: guard the count before indexing (see map.ts's
-    // identical fix for the full reasoning). Only points 0/1 are actually
-    // read here despite numCalibrationPointsRequired() declaring 3 (corner C
-    // is collected but not used by this class's own math) -- guarding on
-    // what this method actually dereferences, not a stricter count nothing
-    // here enforces.
-    if (cal.getCount() < 2) return false;
+    // ⚑ THREE, not two, and `numCalibrationPointsRequired()` has always said so.
+    // The old count guard was `< 2` because two was all the maths dereferenced -
+    // a guard measured against the implementation rather than against the type.
+    if (cal.getCount() < 3) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
+    const cp2 = cal.getPoint(2)!;
 
-    this.x0 = cp0.px;
-    this.y0 = cp0.py;
-    const x1 = cp1.px;
-    const y1 = cp1.py;
+    this.ax = cp0.px;
+    this.ay = cp0.py;
+    this.abx = cp1.px - cp0.px;
+    this.aby = cp1.py - cp0.py;
+    this.acx = cp2.px - cp0.px;
+    this.acy = cp2.py - cp0.py;
+    this.det = this.abx * this.acy - this.aby * this.acx;
 
-    this.L = Math.sqrt((this.x0 - x1) * (this.x0 - x1) + (this.y0 - y1) * (this.y0 - y1));
-    // Every reading divides by L. Two corners on one pixel made it zero, every
-    // value read back null, and this still returned true -- which left
-    // TERNARY_AXES_CONFIG.buildAxes's own `if (!ok)` refusal unable to fire.
-    if (!(this.L > 0)) return false;
-    this.phi0 = taninverse(-(y1 - this.y0), x1 - this.x0);
-    this.root3 = Math.sqrt(3);
+    // Every reading divides by this. It is zero for coincident corners AND for
+    // three collinear ones - a triangle with no interior, where no pixel has a
+    // decomposition. `Number.isFinite` catches a corner that arrived as NaN
+    // from a hand-edited file; a non-finite determinant would otherwise make
+    // every reading NaN while this still returned true.
+    if (!Number.isFinite(this.det) || this.det === 0) return false;
+
     this.isRange0to100 = range100;
     this.isOrientationNormal = is_normal;
 
@@ -73,15 +111,15 @@ export class TernaryAxes {
     const xp = parseFloat(String(pxi));
     const yp = parseFloat(String(pyi));
 
-    const rp = Math.sqrt((xp - this.x0) * (xp - this.x0) + (yp - this.y0) * (yp - this.y0));
-    const thetap = taninverse(-(yp - this.y0), xp - this.x0) - this.phi0;
-
-    const xx = (rp * Math.cos(thetap)) / this.L;
-    const yy = (rp * Math.sin(thetap)) / this.L;
-
-    let ap = 1.0 - xx - yy / this.root3;
-    let bp = xx - yy / this.root3;
-    let cp = (2.0 * yy) / this.root3;
+    // ⚑ BARYCENTRIC, by Cramer's rule on `P - A = b·(B-A) + c·(C-A)`. `a` comes
+    // from the closure rather than from a third solve, so the three components
+    // sum to exactly 1 for every pixel - the defining property of a ternary
+    // plot, held by construction instead of by arithmetic that happens to agree.
+    const wx = xp - this.ax;
+    const wy = yp - this.ay;
+    let bp = (wx * this.acy - wy * this.acx) / this.det;
+    let cp = (this.abx * wy - this.aby * wx) / this.det;
+    let ap = 1.0 - bp - cp;
 
     if (this.isOrientationNormal === false) {
       const bpt = bp;
