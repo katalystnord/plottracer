@@ -93,14 +93,23 @@ describe('a ternary diagram needs a triangle', () => {
 describe('the polar radial guard asks only where its question applies', () => {
   const O = { x: 300, y: 300 };
 
-  function polarWalk(p1: [number, number], v1: string[], p2: [number, number], v2: string[]) {
+  function polarWalk(
+    p1: [number, number],
+    v1: string[],
+    p2: [number, number],
+    v2: string[],
+    { circular = false } = {}
+  ) {
     const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.setOption('isCircular', String(circular));
     const s = session as unknown as {
       handleCalibrationClick(x: number, y: number): void;
       confirmCalibrationValues(v: string[]): void;
     };
     s.handleCalibrationClick(O.x, O.y);
-    s.confirmCalibrationValues([]);
+    // ⚑ The distorted walk asks for the centre's radial value; the circular one
+    // asks for nothing here. The fixture follows the walk rather than assuming.
+    s.confirmCalibrationValues(circular ? [] : ['0']);
     s.handleCalibrationClick(p1[0], p1[1]);
     s.confirmCalibrationValues(v1);
     s.handleCalibrationClick(p2[0], p2[1]);
@@ -121,10 +130,80 @@ describe('the polar radial guard asks only where its question applies', () => {
   });
 
   it('⚠️ still refuses equal distances when the reading IS circular - the guard must not go quiet', () => {
-    // Same pixels, but θ for P2 left blank, which is what every WPD project
-    // carries: no frame, so the radial scale really would be zero.
-    const session = polarWalk([O.x + 100, O.y], ['50', '0'], [O.x, O.y + 100], ['100', '']);
+    // Same pixels, but the figure DECLARED circular - which is what every WPD
+    // project is: no frame, so the radial scale really would be zero.
+    const session = polarWalk([O.x + 100, O.y], ['50', '0'], [O.x, O.y + 100], ['100'], { circular: true });
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toMatch(/same distance from the origin/i);
+  });
+});
+
+/**
+ * ⚑⚑ THE SHAPE OF A POLAR FIGURE IS DECLARED, AND THE DECLARATION CHANGES WHAT
+ * THE WALK ASKS FOR.
+ *
+ * David, 2026-09-10, cutting through a long argument about which reading was
+ * "in force" and whether the card should announce it: *"For all other kinds of
+ * graphs that can have special cases... we have a simple toggle for them, and
+ * they change WHAT WE ASK FOR. So in this case. Can we not simply have a toggle
+ * that asks, is the plot circular?"*
+ *
+ * ▶ It removes the mode rather than labelling it. A circular figure is fully
+ * described by the origin and two radii on one spoke, so that walk asks for
+ * nothing more - upstream's dead θ field is simply not there. A distorted one
+ * needs two more numbers, so that walk asks for them and REQUIRES them.
+ */
+describe('the polar walk asks what the declared shape needs', () => {
+  const stepsFor = (isCircular: boolean) => {
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.setOption('isCircular', String(isCircular));
+    return session.getSteps();
+  };
+  const fieldsOf = (isCircular: boolean, key: string) =>
+    stepsFor(isCircular).find((st) => st.key === key)!.valueFields.map((f) => f.key);
+
+  it('⚑⚑ a CIRCULAR figure is never asked for P2’s angle - nothing would read it', () => {
+    expect(fieldsOf(true, 'p2')).toEqual(['r2']);
+    expect(fieldsOf(true, 'origin')).toEqual([]);
+  });
+
+  it('⚑⚑ a DISTORTED figure is asked for the angle and the centre, and both are required', () => {
+    expect(fieldsOf(false, 'p2')).toEqual(['r2', 'theta2']);
+    expect(fieldsOf(false, 'origin')).toEqual(['r0']);
+    // Required, not optional: without them there is no reading at all.
+    const p2 = stepsFor(false).find((st) => st.key === 'p2')!;
+    expect(p2.valueFields.every((f) => !f.optional)).toBe(true);
+  });
+
+  it('⚑ the prompts differ, because the questions differ', () => {
+    expect(stepsFor(true).find((st) => st.key === 'p2')!.prompt).toMatch(/same θ as P1/);
+    expect(stepsFor(false).find((st) => st.key === 'p2')!.prompt).toMatch(/DIFFERENT angle/);
+    expect(stepsFor(false).find((st) => st.key === 'origin')!.prompt).toMatch(/radial value there/);
+  });
+
+  it('⚑⚑ Direction is offered only where it can change something', () => {
+    // With two angles the sense of rotation is measured, so the control decides
+    // nothing on a distorted figure. `onlyWhen` is the existing declaration for
+    // "do not present a control whose outcome is already decided" - the same
+    // rule the heatmap's tick convention uses.
+    const direction = POLAR_AXES_CONFIG.options!.find((o) => o.key === 'isClockwise')!;
+    expect(direction.onlyWhen).toBe('isCircular');
+  });
+
+  it('⚠️ refuses a distorted walk whose two points share a line through the centre', () => {
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.setOption('isCircular', 'false');
+    const s = session as unknown as {
+      handleCalibrationClick(x: number, y: number): void;
+      confirmCalibrationValues(v: string[]): void;
+    };
+    s.handleCalibrationClick(300, 300);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(400, 300);
+    s.confirmCalibrationValues(['50', '0']);
+    s.handleCalibrationClick(200, 300); // θ=180: the opposite side of one line
+    s.confirmCalibrationValues(['100', '180']);
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/same line through the centre/i);
   });
 });

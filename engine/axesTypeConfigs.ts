@@ -3108,29 +3108,75 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
     p1: 'p1',
     p2: 'p2',
     label: 'radial',
-    // ⚑ A measured frame has no radial SCALE to collapse - it reads r as a
-    // length in the undistorted plane - so equal pixel distances are ordinary
-    // there. Asked of the MODEL rather than re-derived, so the two cannot
-    // disagree about which reading is in force.
-    skipWhen(cal, options) {
-      const probe = new PolarAxes();
-      probe.calibrate(
-        cal,
-        optionBool(options, 'isDegrees'),
-        optionBool(options, 'isClockwise'),
-        optionBool(options, 'isLogR')
-      );
-      return probe.usesMeasuredFrame();
-    },
+    // ⚑⚑ THE QUESTION IS ABOUT THE CIRCULAR SCALE, so the declared shape answers
+    // it outright. A distorted figure reads r as a length in its own undistorted
+    // plane and has no such scale to collapse - and on a 2:1 squash r=50 at 0°
+    // and r=100 at 90° are BOTH 100px out, so this guard refused a perfectly
+    // good calibration (measured, 2026-09-10).
+    // ⚑ An earlier version answered by calibrating a throwaway axes and asking
+    // whether it had built a frame. The toggle made that unnecessary: the shape
+    // is declared before the walk, so there is nothing to infer.
+    skipWhen: (_cal, options) => !optionBool(options, 'isCircular'),
   },
   // WPD: polar-axes-angular-units / -orientation / -scale.
   options: [
     { key: 'isDegrees', label: 'Angle', kind: 'choice', default: 'true',
       choices: [{ value: 'true', label: 'Degrees' }, { value: 'false', label: 'Radians' }] },
-    { key: 'isClockwise', label: 'Direction', kind: 'choice', default: 'false',
+    // ⚑⚑ THE SHAPE OF THE DRAWING, DECLARED - and it changes WHAT WE ASK FOR.
+    // A polar plot that is tilted, squashed into a column or photographed is an
+    // ELLIPSE, and reading it as a circle is wrong everywhere at once. The tool
+    // cannot measure that from the circular walk, because two points on one ray
+    // hold no information perpendicular to it - so this is declared, exactly
+    // like Log or Horizontal bars, and declaring it is what makes the
+    // measurement possible (`stepsForOptions` below asks for the two extra
+    // numbers the shape needs).
+    // ⚑ Default CIRCULAR: the overwhelming case, and what every WPD project is.
+    { key: 'isCircular', label: 'Shape', kind: 'choice', default: 'true',
+      choices: [{ value: 'true', label: 'Circular' }, { value: 'false', label: 'Tilted or squashed' }] },
+    // ⚑⚑ ONLY WHERE IT CAN CHANGE ANYTHING. With two angles the SENSE of
+    // rotation is in the clicks - the measured frame absorbs it - so on a
+    // distorted figure this control decides nothing. An option that cannot
+    // change anything should not be on screen (`AxesOptionVisibility`), and the
+    // alternative was a live control that silently does nothing.
+    { key: 'isClockwise', label: 'Direction', kind: 'choice', default: 'false', onlyWhen: 'isCircular',
       choices: [{ value: 'false', label: 'Anticlockwise' }, { value: 'true', label: 'Clockwise' }] },
     { key: 'isLogR', label: 'Log radial', kind: 'checkbox', default: false },
   ],
+  /**
+   * ⚑⚑ A DIFFERENT SHAPE NEEDS DIFFERENT QUESTIONS, not different wording for
+   * the same one - the heatmap's rule, applied to the same kind of fact.
+   *
+   * A circular figure is fully described by the origin and two radii on one
+   * spoke, so that is all it asks for: θ for P2 is not collected, because
+   * nothing would read it. A distorted one needs the frame, and the frame needs
+   * exactly two more numbers - P2's ANGLE, at a different angle from P1, and the
+   * radial value AT THE CENTRE (two clicks can fix the shape or the radial
+   * offset, not both). So it asks for them, and they are required rather than
+   * optional, because without them there is no reading at all.
+   */
+  stepsForOptions(steps, options) {
+    if (optionBool(options, 'isCircular')) return [...steps];
+    return steps.map((step) => {
+      if (step.key === 'origin') {
+        return {
+          ...step,
+          prompt: 'Click the centre of the plot, and enter the radial value there (usually 0)',
+          valueFields: [{ key: 'r0', label: 'r at centre', field: 'dx' as const }],
+        };
+      }
+      if (step.key === 'p2') {
+        return {
+          ...step,
+          prompt: 'Click a second point with known r and θ, at a DIFFERENT angle from P1 - the two angles are what measure the figure’s shape',
+          valueFields: [
+            { key: 'r2', label: 'r', field: 'dx' as const },
+            { key: 'theta2', label: 'θ', field: 'dy' as const },
+          ],
+        };
+      }
+      return step;
+    });
+  },
   fixedSteps: [
     { key: 'origin', label: 'Origin', color: '#5fb47a', prompt: 'Click the pixel position of the polar origin (r=0)', valueFields: [] },
     {
@@ -3147,21 +3193,14 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       key: 'p2',
       label: 'P2',
       color: '#5fb4e0',
-      // ⚑⚑ THE PROMPT NOW OFFERS THE BETTER CLICK (2026-09-10). It used to say
-      // "at the same θ as P1", which is WPD's own instruction and the reason its
-      // θ field could never be used: two points on one ray see nothing
-      // perpendicular to that ray, so the drawing has to be ASSUMED circular.
-      // Give the second point a different angle and the figure's own frame is
-      // measured instead - ellipse, tilt and rotation direction included.
-      prompt: 'Click a second point with a known r - and give its θ, at a different angle from P1, to have the figure’s shape measured rather than assumed',
-      valueFields: [
-        { key: 'r2', label: 'r', field: 'dx' },
-        // ⚑ STILL OPTIONAL, and now for a reason rather than by inheritance:
-        // blank selects the circular reading, which is what every WPD project
-        // carries and what a figure with only one labelled radial axis can
-        // support. Forcing it would make those calibrations impossible.
-        { key: 'theta2', label: 'θ (optional)', field: 'dy', optional: true },
-      ],
+      // ⚑⚑ THE CIRCULAR WALK ASKS FOR NO ANGLE HERE, and that is the whole
+      // correction. Upstream collects θ for P2 and never reads it - two points
+      // on ONE RAY hold no information perpendicular to that ray, so the shape
+      // has to be assumed and the number is dead on arrival. We do not ask for
+      // what we do not use; `stepsForOptions` adds it back, REQUIRED, in the
+      // shape that reads it.
+      prompt: 'Click a second point with a known r value, at the same θ as P1',
+      valueFields: [{ key: 'r2', label: 'r', field: 'dx' }],
     },
   ],
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
@@ -3171,7 +3210,7 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
   // the ordinary case and selects the circular reading - but a NON-EMPTY value
   // that is not a number would otherwise fall silently back to that same
   // reading, so a typo would cost the user the measured frame and say nothing.
-  checkValues(cal) {
+  checkValues(cal, options) {
     const ip = new InputParser();
     const r1 = ip.parse(cal.getPoint(1)?.dx ?? null);
     if (!ip.isValid || ip.isDate || typeof r1 !== 'number') {
@@ -3185,9 +3224,26 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
     if (!ip.isValid || ip.isDate || typeof r2 !== 'number') {
       return 'P2’s r value must be a number.';
     }
-    const theta2Raw = String(cal.getPoint(2)?.dy ?? '').trim();
-    if (theta2Raw !== '' && !Number.isFinite(Number(theta2Raw))) {
-      return 'P2’s θ must be a number, or blank to read the figure as a circle.';
+    // ⚑⚑ THE DISTORTED SHAPE'S OWN RULES. Both are refusals rather than
+    // fallbacks: the user has said the figure is NOT a circle, so reading it as
+    // one is not a lesser answer, it is the wrong one.
+    if (!optionBool(options, 'isCircular')) {
+      const theta2Raw = String(cal.getPoint(2)?.dy ?? '').trim();
+      const theta2 = Number(theta2Raw);
+      if (theta2Raw === '' || !Number.isFinite(theta2)) {
+        return 'P2’s θ must be a number - it is what measures the figure’s shape.';
+      }
+      // Parallel, not merely equal: θ and θ+180° put both points on one line
+      // through the centre, which sees nothing perpendicular to it either.
+      const toRad = optionBool(options, 'isDegrees') ? Math.PI / 180 : 1;
+      const spread = Math.abs(Math.sin((theta2 - (theta1 as number)) * toRad));
+      if (spread < 1e-9) {
+        return 'P1 and P2 are on the same line through the centre - give P2 a different angle, or set Shape to Circular.';
+      }
+      const centreRaw = String(cal.getPoint(0)?.dx ?? '').trim();
+      if (centreRaw !== '' && !Number.isFinite(Number(centreRaw))) {
+        return 'The radial value at the centre must be a number - it is usually 0.';
+      }
     }
     return null;
   },
@@ -3197,7 +3253,8 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       cal,
       optionBool(ctx.options, 'isDegrees'),
       optionBool(ctx.options, 'isClockwise'),
-      optionBool(ctx.options, 'isLogR')
+      optionBool(ctx.options, 'isLogR'),
+      optionBool(ctx.options, 'isCircular')
     );
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
@@ -3207,6 +3264,9 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       isDegrees: String(axes.isThetaDegrees()),
       isClockwise: String(axes.isThetaClockwise()),
       isLogR: String(axes.isRadialLog()),
+      // ⚑ Or the reopened project would read a distorted figure as a circle -
+      // the same dropped-flag class as the ternary orientation regression.
+      isCircular: String(axes.isCircularPlot()),
     };
   },
 };

@@ -279,7 +279,7 @@ describe('a polar figure is read through the frame its clicks describe', () => {
     cal.addPoint(p1.x, p1.y, '50', '0');
     cal.addPoint(p2.x, p2.y, '100', '90');
     const axes = new PolarAxes();
-    expect(axes.calibrate(cal, true, clockwise, false), 'calibration should succeed').toBe(true);
+    expect(axes.calibrate(cal, true, clockwise, false, false), 'calibration should succeed').toBe(true);
     return axes;
   }
 
@@ -326,7 +326,7 @@ describe('a polar figure is read through the frame its clicks describe', () => {
     cal.addPoint(p1.x, p1.y, '50', '0');
     cal.addPoint(p2.x, p2.y, '100', '90');
     const axes = new PolarAxes();
-    expect(axes.calibrate(cal, true, false, false)).toBe(true);
+    expect(axes.calibrate(cal, true, false, false, false)).toBe(true);
     expect(axes.pixelToData(O.x, O.y)[0]).toBeCloseTo(20, 8);
     expect(axes.pixelToData(p1.x, p1.y)[0]).toBeCloseTo(50, 8);
     expect(axes.pixelToData(p2.x, p2.y)[0]).toBeCloseTo(100, 8);
@@ -345,14 +345,32 @@ describe('a polar figure is read through the frame its clicks describe', () => {
     expect(polar().pixelToData(100, 0)[1]).toBeCloseTo(90, 10);
   });
 
-  it('⚠️ a blank θ for P2 keeps the circular reading - it is what upstream writes', () => {
+  it('⚠️ DECLARED CIRCULAR ignores any angle P2 carries - it is what upstream writes', () => {
+    // ⚑⚑ THE SHAPE IS DECLARED, NOT SNIFFED. A WPD project carries a θ for P2
+    // (often 0, sometimes junk) and is a circular calibration; the reading must
+    // not change because of a number that walk never asked for. `calibrate`
+    // defaults to circular for exactly this reason.
     const cal = new Calibration(2);
     cal.addPoint(100, 100, '0', '0');
     cal.addPoint(200, 100, '10', '0');
-    cal.addPoint(300, 100, '20', '');
+    cal.addPoint(300, 100, '20', '90');
     const axes = new PolarAxes();
     expect(axes.calibrate(cal, true, false, false)).toBe(true);
+    expect(axes.isCircularPlot()).toBe(true);
     expect(axes.pixelToData(300, 100)[0]).toBeCloseTo(20, 10);
+  });
+
+  it('⚑ a figure DECLARED distorted refuses clicks that cannot describe a frame', () => {
+    // The user has said it is not a circle, so the circular maths is not a
+    // lesser answer - it is the one they just ruled out. Reachable from a file
+    // or a handle drag; the walk itself asks for a different angle.
+    const cal = new Calibration(2);
+    cal.addPoint(100, 100, '0', '0');
+    cal.addPoint(200, 100, '10', '0');
+    cal.addPoint(300, 100, '20', '0'); // same ray
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, false, false, false)).toBe(false);
+    expect(axes.isCalibrated()).toBe(false);
   });
 
   it('reads a LOG radial axis through the measured frame too', () => {
@@ -363,7 +381,7 @@ describe('a polar figure is read through the frame its clicks describe', () => {
     cal.addPoint(p1.x, p1.y, '10', '0');
     cal.addPoint(p2.x, p2.y, '100', '90');
     const axes = new PolarAxes();
-    expect(axes.calibrate(cal, true, false, true)).toBe(true);
+    expect(axes.calibrate(cal, true, false, true, false)).toBe(true);
     expect(axes.pixelToData(p1.x, p1.y)[0]).toBeCloseTo(10, 6);
     expect(axes.pixelToData(p2.x, p2.y)[0]).toBeCloseTo(100, 6);
     // Halfway between the decades in GEOMETRY is a decade and a half in value.

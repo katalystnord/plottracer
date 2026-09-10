@@ -39,16 +39,29 @@ function calibrateStandardXY(session: CalibrationSession<XYAxes>) {
   }
 }
 
-describe('Polar P2 optional θ - a field labelled "unused" must not block Confirm', () => {
-  it('confirms P2 with r filled and θ left blank, then calibrates', () => {
+/**
+ * ⚑⚑ THE POLAR WALK ASKS WHAT THE DECLARED SHAPE NEEDS (2026-09-10).
+ *
+ * ⚠️ THIS BLOCK USED TO BE *"Polar P2 optional θ - a field labelled 'unused'
+ * must not block Confirm"*, and that title was the defect wearing a fix. WPD
+ * collects an angle for P2 and never reads it; we inherited the field, noticed
+ * that forcing a throwaway value was a trap, and made it optional - which is a
+ * good answer to the wrong question. The right one, David's: *"we have a simple
+ * toggle... and they change WHAT WE ASK FOR."*
+ *
+ * So a CIRCULAR figure is not asked for an angle it cannot use, and a distorted
+ * one is asked and REQUIRES it. The "optional field must not block Confirm" rule
+ * is unchanged and still covered, by the spider's blank spoke NAME
+ * (`spiderCapture.test.ts`), which is the field that genuinely is optional.
+ */
+describe('the polar walk asks only what its declared shape can use', () => {
+  it('a CIRCULAR figure confirms P2 with r alone - no angle is offered', () => {
     const session = new CalibrationSession(POLAR_AXES_CONFIG);
-    expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin (no value)
+    expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin, no value
     expect(session.handleCalibrationClick(500, 400)).toBe('awaiting-value'); // P1
     expect(session.confirmCalibrationValues(['6', '0'])).toBe(true); // r1, θ1
     expect(session.handleCalibrationClick(600, 400)).toBe('awaiting-value'); // P2
-    // The fix: r filled, θ blank. Previously ANY blank field was refused, so a
-    // field the math never reads still forced the user to type a throwaway value.
-    expect(session.confirmCalibrationValues(['10', ''])).toBe(true);
+    expect(session.confirmCalibrationValues(['10'])).toBe(true);
     expect(session.runCalibration()).toBe(true);
     expect(session.getAxes()).not.toBeNull();
   });
@@ -59,7 +72,22 @@ describe('Polar P2 optional θ - a field labelled "unused" must not block Confir
     session.handleCalibrationClick(500, 400);
     session.confirmCalibrationValues(['6', '0']);
     session.handleCalibrationClick(600, 400);
-    expect(session.confirmCalibrationValues(['', ''])).toBe(false); // r is not optional
+    expect(session.confirmCalibrationValues([''])).toBe(false); // r is not optional
+  });
+
+  it('a DISTORTED figure asks for the centre value and P2’s angle, and requires both', () => {
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    session.setOption('isCircular', 'false');
+    // The origin now carries a question, so the click no longer completes it.
+    expect(session.handleCalibrationClick(400, 400)).toBe('awaiting-value');
+    expect(session.confirmCalibrationValues([''])).toBe(false); // required
+    expect(session.confirmCalibrationValues(['0'])).toBe(true);
+    expect(session.handleCalibrationClick(500, 400)).toBe('awaiting-value');
+    expect(session.confirmCalibrationValues(['6', '0'])).toBe(true);
+    expect(session.handleCalibrationClick(400, 300)).toBe('awaiting-value');
+    expect(session.confirmCalibrationValues(['12', ''])).toBe(false); // θ required here
+    expect(session.confirmCalibrationValues(['12', '90'])).toBe(true);
+    expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
   });
 });
 
@@ -1232,15 +1260,16 @@ describe('CalibrationSession: shared-origin pixel reuse', () => {
 });
 
 function calibrateStandardPolar(session: CalibrationSession<PolarAxes>) {
-  // Origin at (100,300); P1 r=10,θ=0° at (400,300); P2 r=20 (θ unused) at
-  // (700,300) -- all three pixels share one horizontal line through the
-  // origin, so θ=0 everywhere along it and r grows linearly with pixel
-  // distance from the origin.
+  // Origin at (100,300); P1 r=10,θ=0° at (400,300); P2 r=20 at (700,300) -- all
+  // three pixels share one horizontal line through the origin, so θ=0
+  // everywhere along it and r grows linearly with pixel distance from the
+  // origin. This is the CIRCULAR walk, which is the default and what every WPD
+  // project carries: P2 is asked for its radius alone.
   expect(session.handleCalibrationClick(100, 300)).toBe('point-placed'); // origin: no value prompt
   expect(session.handleCalibrationClick(400, 300)).toBe('awaiting-value');
   expect(session.confirmCalibrationValues(['10', '0'])).toBe(true); // r1, θ1
   expect(session.handleCalibrationClick(700, 300)).toBe('awaiting-value');
-  expect(session.confirmCalibrationValues(['20', '0'])).toBe(true); // r2, θ2 (unused)
+  expect(session.confirmCalibrationValues(['20'])).toBe(true); // r2
 }
 
 describe('CalibrationSession (Polar axes)', () => {
@@ -1258,7 +1287,10 @@ describe('CalibrationSession (Polar axes)', () => {
     expect(session.getCurrentStep()?.key).toBe('p2');
 
     expect(session.handleCalibrationClick(700, 300)).toBe('awaiting-value');
-    expect(session.confirmCalibrationValues(['20', '0'])).toBe(true);
+    // ⚑ ONE field here since 2026-09-10: a circular figure is not asked for an
+    // angle at P2, because nothing would read it.
+    expect(session.getCurrentStep()?.valueFields).toHaveLength(1);
+    expect(session.confirmCalibrationValues(['20'])).toBe(true);
     expect(session.getCurrentStep()).toBeNull();
   });
 
@@ -1274,7 +1306,7 @@ describe('CalibrationSession (Polar axes)', () => {
     expect(points[0]!.data![1]).toBeCloseTo(0, 10); // θ
   });
 
-  it('re-calibrates live when the P2 handle is dragged (its unused θ2 value plays no part)', () => {
+  it('re-calibrates live when the P2 handle is dragged', () => {
     const session = new CalibrationSession(POLAR_AXES_CONFIG);
     calibrateStandardPolar(session);
     session.runCalibration();
@@ -2532,22 +2564,39 @@ describe('checkValues - the refusals a LOADED file must meet too (CCR / Polar / 
      * refuse - the calibration under test is the one a LOADED FILE would also
      * present, and that door has never gone through `confirmCalibrationValues`.
      */
-    function polarReadyToCalibrate(r1 = '6', theta1 = '0', r2 = '12', theta2 = '') {
+    /**
+     * ⚑⚑ THE WALK DEPENDS ON THE DECLARED SHAPE (2026-09-10). A CIRCULAR polar
+     * figure is fully described by the origin and two radii on one spoke, so
+     * that walk asks for no angle at P2 and no value at the origin - upstream's
+     * dead θ field is simply not offered. Pass `circular: false` to get the
+     * distorted walk, which asks for both and requires them.
+     */
+    function polarReadyToCalibrate(
+      r1 = '6',
+      theta1 = '0',
+      r2 = '12',
+      theta2 = '',
+      { circular = true, p2 = [600, 400] as [number, number] } = {}
+    ) {
       const session = new CalibrationSession(POLAR_AXES_CONFIG);
-      expect(session.handleCalibrationClick(400, 400)).toBe('point-placed'); // origin
+      session.setOption('isCircular', String(circular));
+      const originValues = circular ? [] : ['0'];
+      const p2Values = circular ? [r2] : [r2, theta2];
+      expect(session.handleCalibrationClick(400, 400)).toBe(circular ? 'point-placed' : 'awaiting-value');
+      if (!circular) expect(session.confirmCalibrationValues(originValues)).toBe(true);
       expect(session.handleCalibrationClick(500, 400)).toBe('awaiting-value'); // P1
       expect(session.confirmCalibrationValues([r1, theta1])).toBe(true);
-      expect(session.handleCalibrationClick(600, 400)).toBe('awaiting-value'); // P2
-      if (!session.confirmCalibrationValues([r2, theta2])) {
+      expect(session.handleCalibrationClick(p2[0], p2[1])).toBe('awaiting-value'); // P2
+      if (!session.confirmCalibrationValues(p2Values)) {
         // Refused at the click - the walk itself already caught it. Load the
         // same calibration the file door would, so the message can be asserted.
         session.adoptCalibration({
           placed: {
-            origin: { px: 400, py: 400, values: [] },
+            origin: { px: 400, py: 400, values: originValues },
             p1: { px: 500, py: 400, values: [r1, theta1] },
-            p2: { px: 600, py: 400, values: [r2, theta2] },
+            p2: { px: p2[0], py: p2[1], values: p2Values },
           },
-          optionValues: {},
+          optionValues: { isCircular: String(circular) },
           globalValues: {},
         });
       }
@@ -2602,26 +2651,32 @@ describe('checkValues - the refusals a LOADED file must meet too (CCR / Polar / 
       expect(session.getCalibrationError()).toMatch(/P2.*r value/);
     });
 
-    it('⚑ accepts a BLANK θ2 - it is optional, and blank reads the figure as a circle', () => {
-      // ⚑ The absence of a refusal, which no other test would notice: blank is
-      // what every WPD project carries and what a figure with a single labelled
-      // radial axis can support, so a guard here would reject files the app
-      // itself produces.
-      const session = polarReadyToCalibrate('6', '0', '12', '');
+    it('⚑⚑ a CIRCULAR figure is never asked for θ2 at all', () => {
+      // ⚠️ THIS CASE HAS BEEN REWRITTEN TWICE IN ONE DAY, and the second time is
+      // the one that settled it. It began as *"does NOT refuse a junk θ2 - it is
+      // optional and the class never reads it"*, which was WPD's dead field
+      // faithfully preserved. It briefly became *"refuses a junk θ2, because the
+      // class reads it now"* - true, but it meant the walk asked a question
+      // whose necessity depended on where the user's next click landed.
+      // ▶ The toggle removed the question instead of arbitrating it: a circular
+      // figure is not asked, so there is no junk value to refuse.
+      const p2 = polarReadyToCalibrate().getSteps().find((st) => st.key === 'p2')!;
+      expect(p2.valueFields.map((f) => f.key)).toEqual(['r2']);
+      const session = polarReadyToCalibrate('6', '0', '12');
       expect(session.runCalibration()).toBe(true);
       expect(session.getCalibrationError()).toBeNull();
     });
 
-    it('⚑⚑ REFUSES a junk θ2, because the class reads it now', () => {
-      // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and its reason - "the class
-      // never reads it" - stopped being true on 2026-09-10, when θ2 became the
-      // value that lets the figure's frame be MEASURED rather than assumed
-      // circular. Unchecked, a typo would fall silently back to the circular
-      // reading: the user would type an angle, see no complaint, and get the
-      // answer they were trying to improve on.
-      const session = polarReadyToCalibrate('6', '0', '12', 'total rubbish');
+    it('⚑⚑ a DISTORTED figure REFUSES a junk θ2 - there it is load-bearing', () => {
+      // The shape that reads the angle is the shape that insists on it: falling
+      // back to the circular maths would be reading the figure the way the user
+      // has just said it is not drawn.
+      const session = polarReadyToCalibrate('6', '0', '12', 'total rubbish', {
+        circular: false,
+        p2: [400, 300],
+      });
       expect(session.runCalibration()).toBe(false);
-      expect(session.getCalibrationError()).toMatch(/θ must be a number, or blank/i);
+      expect(session.getCalibrationError()).toMatch(/θ must be a number/i);
     });
   });
 });

@@ -53,8 +53,12 @@ export class PolarAxes {
   /** The measured frame, or null when the two clicks cannot describe one and
    *  the circular reading stands. See `buildFrame`. */
   private frame: PolarFrame | null = null;
+  /** What the user says the DRAWING is: a true circle, or a distorted one whose
+   *  shape has to be measured. Declared, because the circular walk holds no
+   *  information about shape at all - see `isCircularPlot`. */
+  private isCircular = true;
 
-  private processCalibration(cal: Calibration, is_degrees: boolean, is_clockwise: boolean, is_log_r: boolean): boolean {
+  private processCalibration(cal: Calibration, is_degrees: boolean, is_clockwise: boolean, is_log_r: boolean, is_circular: boolean): boolean {
     // v2.0 pre-launch audit: guard the count before indexing (see
     // map.ts/ternary.ts's identical fix for the full reasoning).
     // ⚑ A re-calibration must not inherit the last one's frame: the same object
@@ -62,6 +66,7 @@ export class PolarAxes {
     // P1's ray has to fall back to the circular reading rather than keep a frame
     // the clicks no longer support.
     this.frame = null;
+    this.isCircular = is_circular;
     if (cal.getCount() < 3) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
@@ -141,7 +146,21 @@ export class PolarAxes {
     // ⚑⚑ EVERYTHING ABOVE IS UNCHANGED, AND STAYS THE ANSWER WHEN THE CLICKS
     // CANNOT DO BETTER. The frame below is an UPGRADE attempted afterwards, so a
     // calibration that cannot support it reads exactly as it always did.
-    this.frame = this.buildFrame(cp0, theta1, theta2r, x2, y2);
+    // ⚑⚑ THE SHAPE IS DECLARED, NOT SNIFFED (2026-09-10, David). An earlier
+    // draft built the frame whenever the two angles happened to differ, which
+    // made the model in force depend on where the user's second click landed -
+    // a hidden mode, and then a line of text to explain it. The toggle IS the
+    // explanation, and it changes WHAT WE ASK FOR (`stepsForOptions`) exactly as
+    // Log X or Horizontal bars do, so the question is answered before the walk
+    // rather than inferred after it.
+    if (!is_circular) {
+      this.frame = this.buildFrame(cp0, theta1, theta2r, x2, y2);
+      // A distorted figure whose clicks cannot describe a frame has no reading
+      // to fall back on: the circular maths is the thing the user just said is
+      // wrong. Refusing is the honest answer, and the walk asks for exactly what
+      // the frame needs, so this is reachable only from a file or a drag.
+      if (this.frame === null) return false;
+    }
 
     return true;
   }
@@ -229,27 +248,28 @@ export class PolarAxes {
     return { a, b, c, d, det, rho0, sense };
   }
 
-  /**
-   * Is the reading coming from the figure's MEASURED frame, or from the circular
-   * assumption?
-   *
-   * ⚑ Public because two other places need the same answer and must not compute
-   * it a second time: `POLAR_AXES_CONFIG`'s radial guard, whose question does not
-   * apply to a measured frame, and the card that tells the user which of the two
-   * readings their clicks bought.
-   */
-  usesMeasuredFrame(): boolean {
-    return this.frame !== null;
-  }
-
   isCalibrated(): boolean {
     return this._isCalibrated;
   }
 
-  calibrate(calib: Calibration, is_degrees: boolean, is_clockwise: boolean, is_log_r: boolean): boolean {
+  calibrate(
+    calib: Calibration,
+    is_degrees: boolean,
+    is_clockwise: boolean,
+    is_log_r: boolean,
+    /** ⚑ Defaults to TRUE so every existing caller - and every project file
+     *  written before the option existed - keeps the circular reading it had. */
+    is_circular = true
+  ): boolean {
     this.calibration = calib;
-    this._isCalibrated = this.processCalibration(calib, is_degrees, is_clockwise, is_log_r);
+    this._isCalibrated = this.processCalibration(calib, is_degrees, is_clockwise, is_log_r, is_circular);
     return this._isCalibrated;
+  }
+
+  /** What the user declared the drawing to be. Round-trips through the project
+   *  file like the other three flags. */
+  isCircularPlot(): boolean {
+    return this.isCircular;
   }
 
   isThetaDegrees(): boolean {
