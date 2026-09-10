@@ -212,6 +212,7 @@ import {
   labelsForCells,
   cellKeysInRect,
   heatmapAxisMovedKind,
+  labelOrderReversed,
   heatmapAxisSpans,
   heatmapAxisStamp,
   heatmapGridToParams,
@@ -2147,6 +2148,23 @@ export function Workspace() {
    * shape that the v2.1 audit found four times in one day. A stamp has one
    * entrance and survives save, load and undo for free.
    */
+  /**
+   * ⚑ WHICH WAY THE MATRIX READS, measured off the axes in force.
+   *
+   * ⚠️ The panel hard-coded `{ x: false, y: true }` - the exact constant
+   * `labelOrderReversed` exists to refuse - and that function had no caller in
+   * `ui/` at all. On the ordinary categorical walk row 0 is the TOP row, so the
+   * matrix printed upside down against the figure it came from.
+   */
+  const heatmapMatrixOrder = useMemo(() => {
+    const grid = heatmapShownGrid;
+    const axesNow = sessionRef.current.getAxes();
+    if (!grid || !axesNow) return undefined;
+    return labelOrderReversed(grid, axesNow);
+    // `version` is how React learns the ref-held session mutated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heatmapShownGrid, version]);
+
   const heatmapAxisHasMoved = useMemo(() => {
     if (!heatmapActive || heatmapGridParams === null) return null;
     return heatmapAxisMovedKind(
@@ -9553,6 +9571,7 @@ export function Workspace() {
             )}
             <HeatmapCellsTable
               cells={heatmapCells}
+              orderReversed={heatmapMatrixOrder}
               noCellsHint={noPointsHint}
               renderXName={renderHeatmapXName}
               renderYName={renderHeatmapYName}

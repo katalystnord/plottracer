@@ -43,6 +43,14 @@ import { ScrollNoticer } from './ScrollNoticer.js';
 
 export interface HeatmapCellsTableProps {
   cells: HeatmapRow[];
+  /**
+   * ⚑⚑ WHICH WAY EACH AXIS RUNS ON THE PAGE, measured off the axes by
+   * `labelOrderReversed` - never assumed. The matrix has to read the way the
+   * figure is drawn, and "row 0 is the bottom" is one of two cases: on the
+   * ordinary categorical walk the FIRST row is the TOP one, and assuming
+   * otherwise printed the matrix upside down against its own figure.
+   */
+  orderReversed?: { x: boolean; y: boolean };
   /** Shown when there are no cells yet - the heatmap's own "no points" hint. */
   noCellsHint: string;
   /**
@@ -225,6 +233,7 @@ type ViewProps = Pick<
   | 'renderValue'
   | 'onCellContextMenu'
   | 'dragTint'
+  | 'orderReversed'
 >;
 
 /** The pick, as an OUTLINE. Same purple and same mechanism the canvas draws, so
@@ -392,10 +401,23 @@ function valueCell(cell: HeatmapRow, renderValue: HeatmapCellsTableProps['render
 /**
  * The figure's own shape: one cell per cell, names down the edges.
  *
- * ⚑⚑ ROWS RUN TOP-DOWN, which is the whole point of this view. Cell row 0 is
- * `yMin` - the BOTTOM of the plot - so rendering rows in index order would print
- * the matrix upside down against the figure it came from, and "which category
- * belongs where" would be exactly as unanswerable as it was in the long form.
+ * ⚑⚑ ROWS RUN TOP-DOWN AND COLUMNS LEFT-TO-RIGHT AS THE FIGURE DRAWS THEM,
+ * which is the whole point of this view: "which category belongs where" has to
+ * be answerable by looking, and a matrix mirrored against its own figure is
+ * exactly as unanswerable as the long form was.
+ *
+ * ⚠️ THIS USED TO SAY *"Cell row 0 is `yMin` - the BOTTOM of the plot"* and sort
+ * accordingly. That is not a fact, it is one of two cases, and the engine
+ * already refused to hard-code it: `labelOrderReversed` exists because the
+ * answer is *"MEASURED FROM THE AXES, NEVER ASSUMED - which is the whole reason
+ * this is a function and not the constant `{ x: false, y: true }`"*. The panel
+ * then hard-coded that very constant, and the engine's function had no caller in
+ * `ui/` at all.
+ *
+ * ▶ AND THE FLIPPED CASE IS THE ORDINARY CATEGORICAL WALK, not an exotic one.
+ * The steps ask for "FIRST column x FIRST row" and "FIRST column x LAST row",
+ * and on a gene x sample heatmap the FIRST row is the TOP one - so row 0 sits at
+ * the top and the matrix printed upside down against the figure it came from.
  */
 function MatrixView({
   cells,
@@ -405,13 +427,19 @@ function MatrixView({
   onPickCells,
   onCellContextMenu,
   dragTint,
+  orderReversed,
 }: ViewProps) {
   // ⚑ THE MODEL'S OWN KEY FORMAT, not a fourth copy of it. A pick, a user's
   // reading and this table must all name a cell the same way or they silently
   // stop referring to the same cell.
   const picked = (col: number, row: number) => selectedCells?.has(cellKey(col, row)) === true;
-  const columns = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
-  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => b - a);
+  // ⚑ MEASURED, not assumed - and for BOTH axes, because a figure whose columns
+  // run right-to-left is the same defect turned ninety degrees.
+  const order = orderReversed ?? { x: false, y: true };
+  const ascending = (a: number, b: number): number => a - b;
+  const descending = (a: number, b: number): number => b - a;
+  const columns = [...new Set(cells.map((c) => c.col))].sort(order.x ? descending : ascending);
+  const rows = [...new Set(cells.map((c) => c.row))].sort(order.y ? descending : ascending);
   const byKey = new Map(cells.map((c) => [cellKey(c.col, c.row), c]));
   return (
     <ScrollNoticer maxHeight={320} testId="heatmap-scroll-notice">
