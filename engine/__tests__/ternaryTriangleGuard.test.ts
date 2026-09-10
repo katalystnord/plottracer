@@ -18,7 +18,7 @@
  * BOTH doors consult.
  */
 import { describe, expect, it } from 'vitest';
-import { CalibrationSession, TERNARY_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, TERNARY_AXES_CONFIG, POLAR_AXES_CONFIG } from '../calibrationSession.js';
 
 const REFUSAL =
   'The three corners are on one line - a ternary diagram needs a triangle with area, or no pixel has a composition.';
@@ -77,5 +77,54 @@ describe('a ternary diagram needs a triangle', () => {
     expect(a).toBeCloseTo(0, 9);
     expect(b).toBeCloseTo(0, 9);
     expect(c).toBeCloseTo(100, 9);
+  });
+});
+
+/**
+ * ⚑⚑ A GUARD MUST NOT REFUSE THE THING IT PROTECTS.
+ *
+ * ⚠️ MEASURED, 2026-09-10: polar's `radialDistinctGuard` refused a perfectly
+ * good calibration of a SQUASHED figure. Its question - "are P1 and P2 the same
+ * distance from the origin" - exists because the CIRCULAR reading divides by
+ * that difference. A figure read through its measured frame has no such scale,
+ * and on a 2:1 ellipse r=50 at 0° and r=100 at 90° are both exactly 100px out.
+ * The guard now asks the MODEL whether its question applies.
+ */
+describe('the polar radial guard asks only where its question applies', () => {
+  const O = { x: 300, y: 300 };
+
+  function polarWalk(p1: [number, number], v1: string[], p2: [number, number], v2: string[]) {
+    const session = new CalibrationSession(POLAR_AXES_CONFIG);
+    const s = session as unknown as {
+      handleCalibrationClick(x: number, y: number): void;
+      confirmCalibrationValues(v: string[]): void;
+    };
+    s.handleCalibrationClick(O.x, O.y);
+    s.confirmCalibrationValues([]);
+    s.handleCalibrationClick(p1[0], p1[1]);
+    s.confirmCalibrationValues(v1);
+    s.handleCalibrationClick(p2[0], p2[1]);
+    s.confirmCalibrationValues(v2);
+    return session;
+  }
+
+  it('⚑⚑ accepts equal pixel distances when the FRAME is measured, and reads them right', () => {
+    // A 2:1 squash: r=50 at 0° lands 100px east, r=100 at 90° lands 100px south.
+    const session = polarWalk([O.x + 100, O.y], ['50', '0'], [O.x, O.y + 100], ['100', '90']);
+    expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
+    const axes = session.getAxes()!;
+    expect(axes.pixelToData(O.x + 100, O.y)[0]).toBeCloseTo(50, 8);
+    expect(axes.pixelToData(O.x, O.y + 100)[0]).toBeCloseTo(100, 8);
+    // The point the circular reading would have called r=50 is not r=50: it is
+    // half a squashed radius, and the frame knows the difference.
+    expect(axes.pixelToData(O.x + 50, O.y)[0]).toBeCloseTo(25, 8);
+  });
+
+  it('⚠️ still refuses equal distances when the reading IS circular - the guard must not go quiet', () => {
+    // Same pixels, but θ for P2 left blank, which is what every WPD project
+    // carries: no frame, so the radial scale really would be zero.
+    const session = polarWalk([O.x + 100, O.y], ['50', '0'], [O.x, O.y + 100], ['100', '']);
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toMatch(/same distance from the origin/i);
   });
 });

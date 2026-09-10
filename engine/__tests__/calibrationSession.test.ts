@@ -2602,13 +2602,26 @@ describe('checkValues - the refusals a LOADED file must meet too (CCR / Polar / 
       expect(session.getCalibrationError()).toMatch(/P2.*r value/);
     });
 
-    it('⚑ does NOT refuse a junk θ2 - it is optional and the class never reads it', () => {
-      // The config comment says theta2 is deliberately unchecked. A guard added
-      // there would reject a file the app itself can produce (θ2 blank), so this
-      // asserts the ABSENCE of a refusal, which no other test would notice.
-      const session = polarReadyToCalibrate('6', '0', '12', 'total rubbish');
+    it('⚑ accepts a BLANK θ2 - it is optional, and blank reads the figure as a circle', () => {
+      // ⚑ The absence of a refusal, which no other test would notice: blank is
+      // what every WPD project carries and what a figure with a single labelled
+      // radial axis can support, so a guard here would reject files the app
+      // itself produces.
+      const session = polarReadyToCalibrate('6', '0', '12', '');
       expect(session.runCalibration()).toBe(true);
       expect(session.getCalibrationError()).toBeNull();
+    });
+
+    it('⚑⚑ REFUSES a junk θ2, because the class reads it now', () => {
+      // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and its reason - "the class
+      // never reads it" - stopped being true on 2026-09-10, when θ2 became the
+      // value that lets the figure's frame be MEASURED rather than assumed
+      // circular. Unchecked, a typo would fall silently back to the circular
+      // reading: the user would type an angle, see no complaint, and get the
+      // answer they were trying to improve on.
+      const session = polarReadyToCalibrate('6', '0', '12', 'total rubbish');
+      expect(session.runCalibration()).toBe(false);
+      expect(session.getCalibrationError()).toMatch(/θ must be a number, or blank/i);
     });
   });
 });

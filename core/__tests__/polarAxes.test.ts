@@ -235,3 +235,139 @@ describe('a log radial scale needs positive radii', () => {
     expect(new PolarAxes().calibrate(calib, true, false, false)).toBe(true);
   });
 });
+
+/**
+ * ⚑⚑ THE FIGURE'S OWN SHAPE, MEASURED - polar's half of the ternary correction
+ * (2026-09-10).
+ *
+ * ⚠️ INHERITED WHOLE FROM WPD, and the two halves are one defect. Upstream asks
+ * for P2's θ and never reads it (`_theta2r`, *"a dead computation"*), and its
+ * reading is Euclidean distance from the origin with the raw pixel angle - i.e.
+ * the drawing is ASSUMED to be a circle. A polar plot that is tilted, squashed
+ * by a two-column layout, or photographed is an ELLIPSE, and every radius and
+ * angle then reads wrong with nothing on screen amiss.
+ *
+ * ⚑⚑ THE IGNORED VALUE IS EXACTLY THE MISSING INFORMATION. An affine map about a
+ * known origin has four unknowns; the origin fixes translation, and P1 and P2
+ * supply two equations each. So origin + P1 + P2 determine the frame EXACTLY -
+ * no fitting, no extra clicks - the moment their angles differ. Measured on a
+ * deliberately sheared frame: recovery to machine precision, while the circular
+ * model read r=176.5 where the truth was 75.
+ *
+ * ⚑ TWO POINTS ON ONE RAY CANNOT SEE THE PERPENDICULAR DIRECTION, so the
+ * circular reading is not a preference there - it is what the clicks support.
+ * That is also what keeps WPD projects readable: upstream's own prompt puts P2
+ * on P1's ray, so every imported polar file takes that path unchanged (tenet 6).
+ */
+describe('a polar figure is read through the frame its clicks describe', () => {
+  const O = { x: 400, y: 400 };
+  /** A sheared, squashed frame: the figure's circles are drawn as tilted
+   *  ellipses. [[a,b],[c,d]] applied to the canonical (r·cosθ, r·sinθ). */
+  const M = { a: 3.0, b: 0.8, c: -0.5, d: 1.6 };
+  const place = (r: number, degrees: number) => {
+    const t = (degrees * Math.PI) / 180;
+    const u = r * Math.cos(t);
+    const v = r * Math.sin(t);
+    return { x: O.x + M.a * u + M.b * v, y: O.y + M.c * u + M.d * v };
+  };
+
+  function distorted({ clockwise = false } = {}): PolarAxes {
+    const cal = new Calibration(2);
+    cal.addPoint(O.x, O.y, '0', '0');
+    const p1 = place(50, 0);
+    const p2 = place(100, 90);
+    cal.addPoint(p1.x, p1.y, '50', '0');
+    cal.addPoint(p2.x, p2.y, '100', '90');
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, clockwise, false), 'calibration should succeed').toBe(true);
+    return axes;
+  }
+
+  it('⚑⚑ reads a SQUASHED, TILTED polar plot exactly, where a circle reads 176 for 75', () => {
+    const axes = distorted();
+    for (const [r, deg] of [[75, 37], [120, 210], [10, 300], [50, 0], [100, 90]] as const) {
+      const p = place(r, deg);
+      const [gotR, gotTheta] = axes.pixelToData(p.x, p.y);
+      expect(gotR, `r at ${r}/${deg}`).toBeCloseTo(r, 8);
+      expect(gotTheta, `θ at ${r}/${deg}`).toBeCloseTo(deg, 8);
+    }
+  });
+
+  it('reproduces its own two calibration points, as any calibration must', () => {
+    const axes = distorted();
+    const p1 = place(50, 0);
+    const p2 = place(100, 90);
+    expect(axes.pixelToData(p1.x, p1.y)[0]).toBeCloseTo(50, 9);
+    expect(axes.pixelToData(p1.x, p1.y)[1]).toBeCloseTo(0, 9);
+    expect(axes.pixelToData(p2.x, p2.y)[0]).toBeCloseTo(100, 9);
+    expect(axes.pixelToData(p2.x, p2.y)[1]).toBeCloseTo(90, 9);
+  });
+
+  it('⚑ measures the DIRECTION, so the clockwise flag cannot contradict the figure', () => {
+    // With two angles the sense of rotation is in the clicks: a frame that puts
+    // θ=90 where the figure does is the same frame whichever way the user says
+    // the chart runs. The flag stops being a thing to get wrong.
+    const anti = distorted({ clockwise: false });
+    const clock = distorted({ clockwise: true });
+    const p = place(75, 37);
+    expect(clock.pixelToData(p.x, p.y)[0]).toBeCloseTo(anti.pixelToData(p.x, p.y)[0]!, 9);
+    expect(clock.pixelToData(p.x, p.y)[1]).toBeCloseTo(anti.pixelToData(p.x, p.y)[1]!, 9);
+  });
+
+  it('⚑ takes the CENTRE\'s radial value from the origin point, for a plot with a hole', () => {
+    // A polar plot whose centre reads 20 rather than 0. The frame needs to know,
+    // because two clicks can determine the shape OR the offset, not both - and
+    // the number is printed at the centre of the figure, so it is transcribed
+    // like any other axis value rather than guessed.
+    const cal = new Calibration(2);
+    cal.addPoint(O.x, O.y, '20', '0');
+    const p1 = place(30, 0); // 30 canonical units out = r 50 on a centre-20 axis
+    const p2 = place(80, 90);
+    cal.addPoint(p1.x, p1.y, '50', '0');
+    cal.addPoint(p2.x, p2.y, '100', '90');
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, false, false)).toBe(true);
+    expect(axes.pixelToData(O.x, O.y)[0]).toBeCloseTo(20, 8);
+    expect(axes.pixelToData(p1.x, p1.y)[0]).toBeCloseTo(50, 8);
+    expect(axes.pixelToData(p2.x, p2.y)[0]).toBeCloseTo(100, 8);
+  });
+
+  it('⚠️ TWO POINTS ON ONE RAY still read exactly as they always did', () => {
+    // ⚑⚑ THE INTEROP CASE, and the reason the circular path is not deleted:
+    // WPD's own prompt puts P2 at the same θ as P1, so every polar project that
+    // tool ever wrote takes this path. The numbers below are the fixture at the
+    // top of this file, unchanged.
+    const [r, theta] = polar().pixelToData(200, 100);
+    expect(r).toBeCloseTo(10, 10);
+    expect(theta).toBeCloseTo(0, 10);
+    expect(polar().pixelToData(300, 100)[0]).toBeCloseTo(20, 10);
+    // A quarter turn is still a quarter turn.
+    expect(polar().pixelToData(100, 0)[1]).toBeCloseTo(90, 10);
+  });
+
+  it('⚠️ a blank θ for P2 keeps the circular reading - it is what upstream writes', () => {
+    const cal = new Calibration(2);
+    cal.addPoint(100, 100, '0', '0');
+    cal.addPoint(200, 100, '10', '0');
+    cal.addPoint(300, 100, '20', '');
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, false, false)).toBe(true);
+    expect(axes.pixelToData(300, 100)[0]).toBeCloseTo(20, 10);
+  });
+
+  it('reads a LOG radial axis through the measured frame too', () => {
+    const cal = new Calibration(2);
+    cal.addPoint(O.x, O.y, '1', '0'); // the centre is r=1, so log10 = 0
+    const p1 = place(1, 0); // one decade out
+    const p2 = place(2, 90); // two decades out
+    cal.addPoint(p1.x, p1.y, '10', '0');
+    cal.addPoint(p2.x, p2.y, '100', '90');
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, false, true)).toBe(true);
+    expect(axes.pixelToData(p1.x, p1.y)[0]).toBeCloseTo(10, 6);
+    expect(axes.pixelToData(p2.x, p2.y)[0]).toBeCloseTo(100, 6);
+    // Halfway between the decades in GEOMETRY is a decade and a half in value.
+    const mid = place(1.5, 0);
+    expect(axes.pixelToData(mid.x, mid.y)[0]).toBeCloseTo(Math.pow(10, 1.5), 6);
+  });
+});

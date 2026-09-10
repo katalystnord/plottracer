@@ -17,6 +17,19 @@ import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 import { logPositiveEndpointsUsable } from './logScale.js';
 
+/** The affine frame a polar figure is drawn in: `[[a,b],[c,d]]` maps a canonical
+ *  (ρ·cosθ, ρ·sinθ) to a screen offset from the origin. `sense` is the angular
+ *  convention that was folded in, so the reading can undo it. */
+interface PolarFrame {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  det: number;
+  rho0: number;
+  sense: number;
+}
+
 export class PolarAxes {
   calibration: Calibration | null = null;
   name = 'Polar';
@@ -37,10 +50,18 @@ export class PolarAxes {
   private dist10 = 0;
   private dist12 = 0;
   private alpha0 = 0;
+  /** The measured frame, or null when the two clicks cannot describe one and
+   *  the circular reading stands. See `buildFrame`. */
+  private frame: PolarFrame | null = null;
 
   private processCalibration(cal: Calibration, is_degrees: boolean, is_clockwise: boolean, is_log_r: boolean): boolean {
     // v2.0 pre-launch audit: guard the count before indexing (see
     // map.ts/ternary.ts's identical fix for the full reasoning).
+    // ⚑ A re-calibration must not inherit the last one's frame: the same object
+    // is calibrated again on every handle drag, and a drag that puts P2 back on
+    // P1's ray has to fall back to the circular reading rather than keep a frame
+    // the clicks no longer support.
+    this.frame = null;
     if (cal.getCount() < 3) return false;
     const cp0 = cal.getPoint(0)!;
     const cp1 = cal.getPoint(1)!;
@@ -73,25 +94,24 @@ export class PolarAxes {
     this.r1 = r1Parsed;
     this.theta1 = theta1Parsed;
     this.r2 = r2Parsed;
-    // theta2 is NOT gated like the three values above: POLAR_AXES_CONFIG's own
-    // config declares it optional and defaults a blank one to '0', because it
-    // is a dead computation (see _theta2r below) that no reading ever uses --
-    // refusing calibration over an invalid-but-inert value would be
-    // interpretation this field was never meant to carry. `Number()` (not
-    // InputParser) matches upstream faithfully for exactly this one field.
-    const theta2 = Number(cp2.dy);
+    // ⚑⚑ θ2 IS NO LONGER DEAD (2026-09-10). Upstream assigns it and never reads
+    // it; it is exactly the information that lets the FRAME be measured instead
+    // of a circle being assumed - see `buildFrame` below. Still ungated, and now
+    // for a reason rather than by inheritance: BLANK is the ordinary case (every
+    // WPD project, and our own prompt until today), and it selects the circular
+    // reading rather than refusing anything. `Number()` on a non-empty string
+    // matches upstream faithfully.
+    const theta2Raw = String(cp2.dy ?? '').trim();
+    const theta2 = theta2Raw === '' ? Number.NaN : Number(theta2Raw);
 
     this.isDegrees = is_degrees;
     this.isClockwise = is_clockwise;
 
     let theta1 = this.theta1;
-    // _theta2r mirrors the original's dead computation faithfully (point 2
-    // only ever contributes r2 to calibration, never its angle) -- see this
-    // file's header comment on faithful-port scope.
-    let _theta2r = theta2;
+    let theta2r = theta2;
     if (this.isDegrees === true) {
       theta1 = (Math.PI / 180.0) * this.theta1;
-      _theta2r = (Math.PI / 180.0) * theta2;
+      theta2r = (Math.PI / 180.0) * theta2;
     }
     this.theta1 = theta1;
 
@@ -118,7 +138,108 @@ export class PolarAxes {
 
     this.alpha0 = this.isClockwise ? phi0 + this.theta1 : phi0 - this.theta1;
 
+    // ⚑⚑ EVERYTHING ABOVE IS UNCHANGED, AND STAYS THE ANSWER WHEN THE CLICKS
+    // CANNOT DO BETTER. The frame below is an UPGRADE attempted afterwards, so a
+    // calibration that cannot support it reads exactly as it always did.
+    this.frame = this.buildFrame(cp0, theta1, theta2r, x2, y2);
+
     return true;
+  }
+
+  /**
+   * ⚑⚑ THE FIGURE'S OWN FRAME, MEASURED FROM THE TWO CLICKS - or null when they
+   * cannot describe one.
+   *
+   * A polar drawing is an AFFINE image of the polar plane: the concentric
+   * circles are ellipses whenever the figure is tilted, squashed into a column,
+   * or photographed, and the raw pixel angle is then not the plotted angle
+   * either. An affine map about a known origin has FOUR unknowns, the origin
+   * fixes translation, and P1 and P2 supply two equations each - so the frame is
+   * EXACTLY determined, with no fitting and no extra clicks, the moment the two
+   * angles differ. Measured on a sheared frame: recovery to machine precision,
+   * where the circular reading gave r=176.5 for a true 75.
+   *
+   * ⚑ TWO POINTS ON ONE RAY SEE NOTHING PERPENDICULAR TO IT, so `u1 × u2 == 0`
+   * is not a failure - it is the honest boundary of what was clicked, and the
+   * circular reading takes over. That is also what keeps every WPD polar project
+   * readable: upstream's prompt puts P2 at P1's own angle (tenet 6).
+   *
+   * ⚑ THE CENTRE'S RADIAL VALUE comes from the origin point's own slot, blank
+   * meaning 0. Two clicks can determine the SHAPE or the radial OFFSET, not
+   * both - the counting is 5 unknowns against 4 equations - so the offset is
+   * transcribed from the number printed at the middle of the figure, like any
+   * other axis value. The circular path keeps inferring it from P1 and P2, as it
+   * always has.
+   */
+  private buildFrame(
+    cp0: { dx: string | number | null },
+    theta1r: number,
+    theta2r: number,
+    x2: number,
+    y2: number
+  ): PolarFrame | null {
+    if (!Number.isFinite(theta2r)) return null;
+
+    const centreRaw = String(cp0.dx ?? '').trim();
+    const centreValue = centreRaw === '' ? 0 : Number(centreRaw);
+    if (!Number.isFinite(centreValue)) return null;
+    // On a log radial axis the centre carries a radius like any other point, so
+    // it has the same no-zero, no-negative rule the endpoints already meet.
+    if (this.isLog && !(centreValue > 0)) return null;
+    const rho0 = this.isLog ? Math.log(centreValue) / Math.log(10) : centreValue;
+    if (!Number.isFinite(rho0)) return null;
+
+    // `this.r1`/`this.r2` are already in the radial COORDINATE (log-scaled when
+    // the axis is), which is the space the frame is linear in.
+    const rho1 = this.r1 - rho0;
+    const rho2 = this.r2 - rho0;
+    // A calibration point AT the centre gives the frame no direction.
+    if (rho1 === 0 || rho2 === 0) return null;
+
+    // ⚑ The clockwise flag is applied HERE, to the canonical vectors, and is
+    // then absorbed by the frame - which is the point: with two angles the sense
+    // of rotation is in the clicks, so the figure cannot be contradicted by a
+    // checkbox. The reading below undoes the same sign, so the flag still
+    // round-trips through save and reopen.
+    const sense = this.isClockwise ? -1 : 1;
+    const u1x = rho1 * Math.cos(sense * theta1r);
+    const u1y = rho1 * Math.sin(sense * theta1r);
+    const u2x = rho2 * Math.cos(sense * theta2r);
+    const u2y = rho2 * Math.sin(sense * theta2r);
+    const cross = u1x * u2y - u1y * u2x;
+    if (!Number.isFinite(cross) || cross === 0) return null;
+
+    // Screen deltas of the two clicks. `M` maps canonical -> screen, so it
+    // absorbs the y-axis flip along with the shear; nothing here needs to know
+    // which way the image's y runs.
+    const w1x = this.x1 - this.x0;
+    const w1y = this.y1 - this.y0;
+    const w2x = x2 - this.x0;
+    const w2y = y2 - this.y0;
+
+    const a = (w1x * u2y - w2x * u1y) / cross;
+    const b = (w2x * u1x - w1x * u2x) / cross;
+    const c = (w1y * u2y - w2y * u1y) / cross;
+    const d = (w2y * u1x - w1y * u2x) / cross;
+    const det = a * d - b * c;
+    // A frame with no area maps the whole figure onto a line: every reading
+    // would be non-finite while `calibrate()` reported success.
+    if (!Number.isFinite(det) || det === 0) return null;
+
+    return { a, b, c, d, det, rho0, sense };
+  }
+
+  /**
+   * Is the reading coming from the figure's MEASURED frame, or from the circular
+   * assumption?
+   *
+   * ⚑ Public because two other places need the same answer and must not compute
+   * it a second time: `POLAR_AXES_CONFIG`'s radial guard, whose question does not
+   * apply to a measured frame, and the card that tells the user which of the two
+   * readings their clicks bought.
+   */
+  usesMeasuredFrame(): boolean {
+    return this.frame !== null;
   }
 
   isCalibrated(): boolean {
@@ -146,6 +267,23 @@ export class PolarAxes {
   pixelToData(pxi: number, pyi: number): number[] {
     const xp = parseFloat(String(pxi));
     const yp = parseFloat(String(pyi));
+
+    const frame = this.frame;
+    if (frame) {
+      // ⚑ Undo the frame, then read r and θ in the undistorted plane. `hypot`
+      // and `atan2` are the polar coordinates the figure was drawn FROM, which
+      // is exactly what the circular reading assumes the screen already shows.
+      const wx = xp - this.x0;
+      const wy = yp - this.y0;
+      const u = (frame.d * wx - frame.b * wy) / frame.det;
+      const v = (-frame.c * wx + frame.a * wy) / frame.det;
+      let rho = Math.hypot(u, v) + frame.rho0;
+      if (this.isLog) rho = Math.pow(10, rho);
+      let th = frame.sense * Math.atan2(v, u);
+      if (th < 0) th = th + 2 * Math.PI;
+      if (this.isDegrees === true) th = (180.0 * th) / Math.PI;
+      return [rho, th];
+    }
 
     let rp =
       ((this.r2 - this.r1) / this.dist12) *

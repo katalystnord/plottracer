@@ -356,6 +356,22 @@ export interface ParallelAxisGuard {
  */
 export interface RadialDistinctGuard {
   /**
+   * When the type's own model does NOT depend on the two radii differing.
+   *
+   * ⚠️⚑⚑ WITHOUT THIS THE GUARD REFUSES THE CALIBRATION IT WAS MEANT TO PROTECT
+   * (2026-09-10). The question is "would the radial SCALE be zero" - which for
+   * polar's circular reading is exactly `dist(P2) - dist(P1) === 0`. But a polar
+   * figure read through its MEASURED frame has no such scale, and on a squashed
+   * figure two perfectly good clicks land at equal pixel distance all the time:
+   * r=50 at 0° and r=100 at 90° on a 2:1 ellipse are both 100px out. Measured -
+   * the session refused it.
+   *
+   * ⚑ It takes the calibration rather than a flag so the answer comes from the
+   * MODEL itself (`PolarAxes.usesMeasuredFrame`), not from a second copy of the
+   * rule that decides which reading is in force.
+   */
+  skipWhen?(cal: Calibration, options: Readonly<Record<string, string>>): boolean;
+  /**
    * Where the radii are measured FROM: a step the user clicks, or - when the
    * type derives its centre instead of asking for one - the three steps whose
    * circle is fitted.
@@ -501,7 +517,7 @@ export function checkGuards(
     };
     const d1 = distTo(rdg.p1);
     const d2 = distTo(rdg.p2);
-    if (d1 != null && d2 != null && Math.abs(d2 - d1) < 1e-6) {
+    if (d1 != null && d2 != null && Math.abs(d2 - d1) < 1e-6 && !rdg.skipWhen?.(cal, options)) {
       return `The ${rdg.label} calibration points are the same distance from the origin - they must be at different radii, or the calibration has no radial scale.`;
     }
   }
@@ -3087,7 +3103,26 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
   // All three must be distinct: P1 on the origin means r1 = 0 at r = 0.
   distinctPixelSteps: [['origin', 'p1', 'p2']],
   // P1 and P2 equidistant from the origin -> zero radial scale -> non-finite r.
-  radialDistinctGuard: { origin: 'origin', p1: 'p1', p2: 'p2', label: 'radial' },
+  radialDistinctGuard: {
+    origin: 'origin',
+    p1: 'p1',
+    p2: 'p2',
+    label: 'radial',
+    // ⚑ A measured frame has no radial SCALE to collapse - it reads r as a
+    // length in the undistorted plane - so equal pixel distances are ordinary
+    // there. Asked of the MODEL rather than re-derived, so the two cannot
+    // disagree about which reading is in force.
+    skipWhen(cal, options) {
+      const probe = new PolarAxes();
+      probe.calibrate(
+        cal,
+        optionBool(options, 'isDegrees'),
+        optionBool(options, 'isClockwise'),
+        optionBool(options, 'isLogR')
+      );
+      return probe.usesMeasuredFrame();
+    },
+  },
   // WPD: polar-axes-angular-units / -orientation / -scale.
   options: [
     { key: 'isDegrees', label: 'Angle', kind: 'choice', default: 'true',
@@ -3112,21 +3147,30 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       key: 'p2',
       label: 'P2',
       color: '#5fb4e0',
-      prompt: 'Click a second point with a known r value, at the same θ as P1',
+      // ⚑⚑ THE PROMPT NOW OFFERS THE BETTER CLICK (2026-09-10). It used to say
+      // "at the same θ as P1", which is WPD's own instruction and the reason its
+      // θ field could never be used: two points on one ray see nothing
+      // perpendicular to that ray, so the drawing has to be ASSUMED circular.
+      // Give the second point a different angle and the figure's own frame is
+      // measured instead - ellipse, tilt and rotation direction included.
+      prompt: 'Click a second point with a known r - and give its θ, at a different angle from P1, to have the figure’s shape measured rather than assumed',
       valueFields: [
         { key: 'r2', label: 'r', field: 'dx' },
-        // Collected to match WPD's own calibration form, but never read by
-        // core/axes/polar.ts's calibration math (see its `_theta2r` comment) --
-        // so it's OPTIONAL: leaving it blank must not block Confirm (a field
-        // labelled unused that you're nonetheless forced to fill is a trap).
+        // ⚑ STILL OPTIONAL, and now for a reason rather than by inheritance:
+        // blank selects the circular reading, which is what every WPD project
+        // carries and what a figure with only one labelled radial axis can
+        // support. Forcing it would make those calibrations impossible.
         { key: 'theta2', label: 'θ (optional)', field: 'dy', optional: true },
       ],
     },
   ],
   // ⚑ Declared, not performed in buildAxes -- so a LOADED file meets the same
   // refusal a click does (v2.0 pre-launch audit; same reasoning as Bar/CCR's
-  // own checkValues). theta2 is deliberately NOT checked -- it's optional and
-  // core/axes/polar.ts never reads it (see the class's own _theta2r comment).
+  // own checkValues).
+  // ⚑⚑ θ2 IS CHECKED NOW, because it is read now. It stays OPTIONAL - blank is
+  // the ordinary case and selects the circular reading - but a NON-EMPTY value
+  // that is not a number would otherwise fall silently back to that same
+  // reading, so a typo would cost the user the measured frame and say nothing.
   checkValues(cal) {
     const ip = new InputParser();
     const r1 = ip.parse(cal.getPoint(1)?.dx ?? null);
@@ -3140,6 +3184,10 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
     const r2 = ip.parse(cal.getPoint(2)?.dx ?? null);
     if (!ip.isValid || ip.isDate || typeof r2 !== 'number') {
       return 'P2’s r value must be a number.';
+    }
+    const theta2Raw = String(cal.getPoint(2)?.dy ?? '').trim();
+    if (theta2Raw !== '' && !Number.isFinite(Number(theta2Raw))) {
+      return 'P2’s θ must be a number, or blank to read the figure as a circle.';
     }
     return null;
   },
