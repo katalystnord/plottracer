@@ -1896,7 +1896,7 @@ describe('Workspace: Polar axes', () => {
     await clickAt(400, 300); // P1
     await confirmValues(['10', '0']);
     await clickAt(700, 300); // P2
-    await confirmValues(['20', '0']); // θ2 collected but never read
+    await confirmValues(['20']); // r only: a circular figure is asked for no angle here
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
@@ -1913,7 +1913,7 @@ describe('Workspace: Polar axes', () => {
     expect(await textOf('tips-bar')).toMatch(/3\/3 - P2/);
 
     await clickAt(700, 300);
-    await confirmValues(['20', '0']);
+    await confirmValues(['20']);
     await page.getByTestId('run-calibration').click();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
@@ -1926,7 +1926,45 @@ describe('Workspace: Polar axes', () => {
     await expectRow([5, 0]);
   });
 
-  it('dragging the P2 handle re-calibrates live (its unused θ2 value plays no part)', async () => {
+  /**
+   * ⚑⚑ THE TILTED WALK, DRIVEN THE WAY A USER MEETS IT (gate 4: this test may
+   * only click what a prompt on screen tells it to click).
+   *
+   * The figure: centre (300,300), and a 2.5:1 squash - r=6 at θ=0 is 100px east,
+   * r=12 at θ=90 is 150px north. Every step below is taken because the card asks
+   * for it: the origin gains a value box the moment Shape says the plot is not
+   * circular, and P2 gains an angle.
+   */
+  it('⚑⚑ a TILTED polar figure is read from its own shape, once the card is told', async () => {
+    await resetWorkspace('polar');
+    await page.getByTestId('calib-choice-isCircular-false').check();
+
+    // The origin now asks for the radial value AT THE CENTRE - a click alone no
+    // longer completes it, which is the walk changing with the declaration.
+    await clickAt(300, 300);
+    await confirmValues(['0']);
+    await clickAt(400, 300); // r=6 at θ=0, 100px east
+    await confirmValues(['6', '0']);
+    await clickAt(300, 150); // r=12 at θ=90, 150px north
+    await confirmValues(['12', '90']);
+    await page.getByTestId('run-calibration').click();
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
+
+    // (350,300) is half of P1's own offset, so it is r=3 at θ=0 in the figure's
+    // own frame. Read as a CIRCLE it would be 0: dist12 is 150-100=50, giving
+    // ((12-6)/50)*(50-100)+6 = 0. The whole point of the toggle, in one row.
+    await clickAt(350, 300);
+    await expectRow([3, 0]);
+  });
+
+  it('⚑ Direction is not offered for a tilted figure - the frame measures it', async () => {
+    await resetWorkspace('polar');
+    expect(await page.getByTestId('calib-option-isClockwise').count()).toBe(1);
+    await page.getByTestId('calib-choice-isCircular-false').check();
+    expect(await page.getByTestId('calib-option-isClockwise').count()).toBe(0);
+  });
+
+  it('dragging the P2 handle re-calibrates live', async () => {
     await resetWorkspace('polar');
     await calibratePolarStandard();
 
@@ -7206,7 +7244,15 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       // added hasBaseline/baselineValue to BAR_AXES_CONFIG.options, and
       // nothing here had caught it because Box Plot was never in this list.
       boxplot: ['isLog', 'isRotated'],
-      polar: ['isDegrees', 'isClockwise', 'isLogR'],
+      // ⚑⚑ v2.5 ASKS WHAT SHAPE THE DRAWING IS, and the answer changes the walk
+      // (`stepsForOptions`) - a circular figure is not asked for P2's angle,
+      // a tilted one is, and is asked for the centre's radial value too.
+      // ⚑ `Shape` sits FIRST because it decides what the rest of the card means,
+      // and `Direction` follows it because it is `onlyWhen: 'isCircular'`: with
+      // two angles the sense of rotation is measured, so on a distorted figure
+      // that control decides nothing and is not shown. This list is the card as
+      // a user meets it on the DEFAULT (circular) setting.
+      polar: ['isDegrees', 'isCircular', 'isClockwise', 'isLogR'],
       ternary: ['isRange100', 'isNormal'],
       map: ['origin', 'units'],
       ccr: ['rotationTime', 'rotationDirection'],
