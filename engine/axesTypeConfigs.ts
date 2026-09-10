@@ -20,6 +20,9 @@
 
 import { Calibration } from '../core/calibration.js';
 import { InputParser } from '../core/inputParser.js';
+// ⚑ The SAME fit the axes class uses for its own centre, so the guard and the
+// model cannot disagree about where the middle of the chart is.
+import { getCircleFrom3Pts } from '../core/mathFunctions.js';
 
 import { XYAxes } from '../core/axes/xy.js';
 import { BarAxes } from '../core/axes/bar.js';
@@ -352,7 +355,21 @@ export interface ParallelAxisGuard {
  * equal radii, so a determinant-style check is what surfaces this.
  */
 export interface RadialDistinctGuard {
-  origin: string;
+  /**
+   * Where the radii are measured FROM: a step the user clicks, or - when the
+   * type derives its centre instead of asking for one - the three steps whose
+   * circle is fitted.
+   *
+   * ⚑⚑ THE FITTED FORM EXISTS BECAUSE CCR IS POLAR WITH A DERIVED ORIGIN
+   * (found 2026-09-10, R3). A circular chart recorder's radial scale is
+   * `dist(chartCentre, T0R0) .. dist(chartCentre, T0R2)`, and its centre comes
+   * from `getCircleFrom3Pts` rather than from a reticle - so the guard could
+   * not name it, and the type went unguarded while the rule it needed was
+   * already written here. Extending the DECLARATION keeps one implementation
+   * and one sentence for both; a per-type check would have given the user a
+   * second wording for the same mistake.
+   */
+  origin: string | { readonly fitFrom: readonly [string, string, string] };
   p1: string;
   p2: string;
   /** How the radial axis is named to the user, e.g. "radial". */
@@ -460,15 +477,30 @@ export function checkGuards(
   // distinctPixelSteps only catches coincident pixels, not equal radii).
   const rdg = config.radialDistinctGuard;
   if (rdg) {
-    const distFrom = (originKey: string, ptKey: string): number | null => {
-      const oi = steps.findIndex((st) => st.key === originKey);
-      const pi = steps.findIndex((st) => st.key === ptKey);
-      const o = cal.getPoint(oi);
-      const p = cal.getPoint(pi);
+    const pixelOf = (key: string) => cal.getPoint(steps.findIndex((st) => st.key === key));
+    // ⚑ A CLICKED origin, or the centre of the circle three clicks FIT - the
+    // same question either way, and CCR only has the second kind.
+    const originPixel = (): { px: number; py: number } | null => {
+      if (typeof rdg.origin === 'string') return pixelOf(rdg.origin);
+      const pts = rdg.origin.fitFrom.map(pixelOf);
+      if (pts.some((p) => !p)) return null;
+      const circle = getCircleFrom3Pts(
+        pts.map((p) => [p!.px, p!.py]) as [[number, number], [number, number], [number, number]]
+      );
+      // Three collinear clicks describe no circle. That is the axes class's own
+      // refusal (`circularChartRecorder.ts`), and answering it here as well
+      // would give the same mistake two different sentences.
+      return Number.isFinite(circle.x0) && Number.isFinite(circle.y0)
+        ? { px: circle.x0, py: circle.y0 }
+        : null;
+    };
+    const o = originPixel();
+    const distTo = (ptKey: string): number | null => {
+      const p = pixelOf(ptKey);
       return o && p ? Math.hypot(p.px - o.px, p.py - o.py) : null;
     };
-    const d1 = distFrom(rdg.origin, rdg.p1);
-    const d2 = distFrom(rdg.origin, rdg.p2);
+    const d1 = distTo(rdg.p1);
+    const d2 = distTo(rdg.p2);
     if (d1 != null && d2 != null && Math.abs(d2 - d1) < 1e-6) {
       return `The ${rdg.label} calibration points are the same distance from the origin - they must be at different radii, or the calibration has no radial scale.`;
     }
@@ -3255,6 +3287,19 @@ export const CIRCULAR_CHART_RECORDER_AXES_CONFIG: AxesTypeConfig<CircularChartRe
   // points are placed. See this file's header comment for the full shape.
   globalFields: [{ key: 'startTime', label: 'Chart Start Time' }],
   distinctPixelSteps: [['t0r0', 't0r1', 't0r2', 't1r2', 't2r2']],
+  // ⚑⚑ THE RADIAL SCALE IS `dist(chartCentre, T0R0) .. dist(chartCentre, T0R2)`
+  // and the centre is FITTED from the three (_,R2) clicks - so two radial
+  // clicks the same distance from it leave `pixelToData` dividing by nothing.
+  // Measured: the readings come back 4.2e16 and 7.0e15, a column that looks
+  // like data, with `calibrate()` reporting success. Polar carried this guard
+  // from the day it was written; CCR is the same figure with the origin derived
+  // instead of clicked, which is the only reason it was not declared here too.
+  radialDistinctGuard: {
+    origin: { fitFrom: ['t0r2', 't1r2', 't2r2'] },
+    p1: 't0r0',
+    p2: 't0r2',
+    label: 'radial',
+  },
   // WPD: ccr-rotation-time / ccr-direction. NOTE the period default --
   // WPD's <select> lists "1 Week (7 days)" FIRST (templates/_sidebars.html:487)
   // and its own deserializer falls back to 'week' (core/plotData.js:384), so

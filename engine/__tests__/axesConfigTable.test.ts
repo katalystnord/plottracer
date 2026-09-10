@@ -299,7 +299,17 @@ describe('the config table - cross-cutting invariants', () => {
       }
       const rdg = c.radialDistinctGuard;
       if (rdg) {
-        for (const key of [rdg.origin, rdg.p1, rdg.p2]) {
+        // ⚑ The origin is a clicked step OR the three steps whose circle is
+        // fitted (CCR derives its centre). Both forms name real steps, and a
+        // fitted origin needs exactly three or `getCircleFrom3Pts` has nothing
+        // to fit - checked here, because a guard that silently resolves to no
+        // origin is a guard that never fires.
+        const originKeys = typeof rdg.origin === 'string' ? [rdg.origin] : [...rdg.origin.fitFrom];
+        if (typeof rdg.origin !== 'string') {
+          expect(originKeys.length, `${c.id}: a fitted radial origin needs three steps`).toBe(3);
+          expect(new Set(originKeys).size, `${c.id}: a fitted radial origin names a step twice`).toBe(3);
+        }
+        for (const key of [...originKeys, rdg.p1, rdg.p2]) {
           expect(known, `${c.id}: radialDistinctGuard names unknown step "${key}"`).toContain(key);
         }
         expect(rdg.label).not.toBe('');
