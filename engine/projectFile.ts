@@ -48,6 +48,7 @@ import type { Dataset } from '../core/dataset.js';
 import { BarAxes } from '../core/axes/bar.js';
 import { barSeating } from '../core/barInterval.js';
 import { GRAPH_TYPE_METADATA_KEY, CANDLESTICK_SLOTS, BOX_PLOT_SLOTS } from './calibrationSession.js';
+import { ALL_AXES_TYPE_CONFIGS } from './axesTypeConfigs.js';
 import type { CalibratedAxes, CalibrationSession } from './calibrationSession.js';
 
 /** A recorded Measure result, flattened for JSON. Additive to the project file
@@ -532,7 +533,35 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
   // upstream WPD or the old wpd-core app, which never write it -- loading
   // exactly as it did, as a plain XY chart.
   const graphType = axesEntry?.metadata?.[GRAPH_TYPE_METADATA_KEY];
-  const configId = typeof graphType === 'string' && graphType.length > 0 ? graphType : baseConfigId;
+  // ⚑⚑ THE DECLARED TYPE HAS TO BE BACKED BY THE AXES THE FILE ACTUALLY HOLDS.
+  //
+  // ⚠️ Any string here replaced the class-derived id, with nothing checking that
+  // the two agreed. The next thing every door does is `loadCalibrated`, which
+  // asks the config for `extractOptions`/`extractGlobalValues` - methods the
+  // loaded axes does not have - so the open handler died on an uncaught
+  // TypeError: `axes.isLog is not a function`, `axes.getSpokes is not a
+  // function`, ten of fourteen combinations measured.
+  //
+  // ⚑ AND THE TWO THAT DID NOT THROW WERE THE WORSE HALF: an XY or Bar axes
+  // declaring `pie` opened SILENTLY, calibration error null, as a Pie session
+  // sitting on the wrong axes.
+  //
+  // ⚑ `axesKind` IS the class identity - every config declares which axes it is
+  // built on - so the check is one comparison and needs no second table to fall
+  // out of step with the first.
+  const kindOf = (id: string): string | undefined =>
+    ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)?.axesKind;
+  const declared = typeof graphType === 'string' && graphType.length > 0 ? graphType : undefined;
+  const declaredFits = declared !== undefined && kindOf(declared) === kindOf(baseConfigId);
+  const configId = declaredFits ? declared : baseConfigId;
+  // ⚑ SURFACED, NOT REFUSED - this module's standing posture. The calibration
+  // and every reading are intact and belong to the axes class the file names, so
+  // opening as that class keeps all of it; refusing would strand a file whose
+  // measurements are perfectly good.
+  const typeMismatchNotice =
+    declared !== undefined && !declaredFits
+      ? `This file says it is a ${declared} chart, but the calibration it carries is ${axesType}, which that type is not built on. It has been opened as ${baseConfigId} - the type its own calibration describes. Every reading in the file is intact.`
+      : null;
 
   const plotData = new PlotData();
   const result = plotData.deserialize(data.plotData);
@@ -587,9 +616,13 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     heldBack > 0
       ? `This file holds more than one set of calibrated axes. ${heldBack === 1 ? 'One series is' : `${heldBack} series are`} measured against a different one and ${heldBack === 1 ? 'has' : 'have'} not been opened - reading ${heldBack === 1 ? 'it' : 'them'} against these axes would report numbers the file does not contain. Nothing in the file has been changed.`
       : null;
-  const notices = [relabel?.notice, extraAxesNotice, slotNotice, orphanNotice].filter(
-    (n): n is string => n != null
-  );
+  const notices = [
+    typeMismatchNotice,
+    relabel?.notice,
+    extraAxesNotice,
+    slotNotice,
+    orphanNotice,
+  ].filter((n): n is string => n != null);
 
   return {
     configId: finalConfigId,
