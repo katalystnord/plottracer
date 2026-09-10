@@ -5112,6 +5112,21 @@ export function Workspace() {
    * multi-figure counterpart of loadCalibratedFigure's session install. */
   const buildFigureRecordFromDeserialized = useCallback(
     (f: DeserializedFigure, sharedSource: { bytes: Uint8Array; name?: string } | null): FigureRecord => {
+      // ⚑⚑ THE RECORD SAYS WHAT WAS ACTUALLY USED. This fell back to XY for an
+      // id it did not recognise and then stored `f.configId` beside it, so the
+      // session and the record disagreed about what the figure IS - and a
+      // subsequent Save writes the session's id, quietly rewriting what the file
+      // declared. Whatever the fallback decides, both halves say the same thing.
+      //
+      // ⚑ The single-figure door REFUSES an unknown id outright, and the two
+      // being different was the "model has more than one entrance" shape. They
+      // still differ deliberately: refusing a whole archive because one figure of
+      // twelve is odd would strand eleven good figures, so this one opens the
+      // figure as what its calibration supports and says so through `axesTypeId`.
+      //
+      // ⚑ Belt and braces since `deserializeProject` began checking the declared
+      // type against the axes class it carries: an unrecognised id can no longer
+      // reach here from that door. This is what happens if one ever does.
       const config = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
@@ -5120,7 +5135,7 @@ export function Workspace() {
         id: ++figureIdRef.current,
         name: f.name,
         session: s,
-        axesTypeId: f.configId,
+        axesTypeId: config.id,
         imageDataURL: f.imageDataURL,
         imageFileName: f.imageFileName,
         measurements: toRecordedMeasurements(f.measurements),
