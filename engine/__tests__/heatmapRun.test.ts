@@ -1316,6 +1316,11 @@ describe('the grid sits ON the calibration, not IN it', () => {
     // Unchanged on the axis nobody touched.
     expect(after.yDividers).toEqual(grid.yDividers);
     // And the STORE is byte-identical - that is the property that matters.
+    // ⚠️ THIS ALONE IS NOT THE CLAIM, and reading it as one hid a defect for a
+    // day: the two converters are inverses of each other in ANY metric, so the
+    // store is unchanged even when the grid has walked off the ink. The frame
+    // here carries no axes at all. The claim - the boundaries stay on the same
+    // PIXELS - is asserted on a log axis in `heatmapGridOnLogAxis.test.ts`.
     expect(heatmapGridToParams(after, retyped)).toEqual(params);
   });
 
@@ -1356,7 +1361,10 @@ describe('the grid sits ON the calibration, not IN it', () => {
     const axes = {
       pixelToData: (px: number, py: number) => [(px - 100) / 5, (500 - py) / 8],
     };
-    expect(heatmapAxisSpans(placed, axes)).toEqual(spans);
+    expect(heatmapAxisSpans(placed, axes)).toEqual({ ...spans, axes });
+    // ⚑⚑ THE AXES ARE PART OF THE FRAME, not a convenience: they are the METRIC
+    // between the two values, and on a log axis the middle of the data span is
+    // nowhere near the middle of the figure. See `heatmapGridOnLogAxis.test.ts`.
 
     // Half a walk has no span to measure against - and must say so rather than
     // producing a frame out of NaN.

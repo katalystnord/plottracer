@@ -50,7 +50,11 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
-import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, isPositionOnKey, moveDivider, removeDivider } from '../core/heatmapGrid.js';
+import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, isPositionOnKey, moveDivider, removeDivider, type SpanMap } from '../core/heatmapGrid.js';
+// ⚑ `paramAtPoint`/`pointAtParam` are the projection onto a two-point axis the
+// category work already owns - `axisPositionMap` measures along the ink with
+// them rather than writing the dot product out again.
+import { paramAtPoint, pointAtParam } from '../core/bandedAxis.js';
 import type { CategoryOverlayInput } from './categoryTickOverlay.js';
 import { labelAt, reindexLabels } from '../core/heatmapLabels.js';
 import type { PlacedCalibPoint } from './calibrationSession.js';
@@ -498,6 +502,73 @@ export interface HeatmapGridParams {
  */
 export interface DataProjector {
   pixelToData(px: number, py: number): readonly (number | undefined)[];
+  /**
+   * ⚑⚑ THE WAY OUT ONTO THE FIGURE, when the axes have one - and the app's
+   * always do. It is what lets a divider be stored as a POSITION along the axis
+   * rather than as a fraction of the data span, which is the same thing only on
+   * a linear axis. See `axisPositionMap`.
+   *
+   * ⚑ Optional so the synthetic projectors in the suite, and any caller that
+   * only needs to ask what a pixel is worth, stay valid: without it the frame
+   * says so and interpolates in data, as it always did.
+   */
+  dataToPixel?(x: number, y: number): { x: number; y: number };
+}
+
+/**
+ * ⚑⚑ ONE CONVERSION BETWEEN A POSITION ALONG AN AXIS AND A DATA COORDINATE -
+ * 0 at `lo`, 1 at `hi`, measured on the ink.
+ *
+ * Both seams of the heatmap grid need it, in opposite directions, and both had
+ * their own arithmetic instead: `detectGrid` turned a detected FRACTION of the
+ * plot box into data with `lo + f * (hi - lo)` (fixed 2026-09-10), and
+ * `heatmapGridToParams` turned a data coordinate into a stored fraction with
+ * `(d - lo) / (hi - lo)` (this). The second survived the first because they are
+ * the same mistake wearing different variable names - which is the reuse rule's
+ * own argument: a parallel mechanism forks every decision downstream of it.
+ *
+ * ⚑ THE ISO-LINE IS WHAT MAKES IT EXACT IN BOTH DIRECTIONS. Both ends are
+ * projected at the SAME `other` coordinate, so the segment between them is a
+ * line of constant `other` and a divider's own pixel lies exactly on it -
+ * `paramAtPoint` then measures along it and `pointAtParam` walks back, for any
+ * axis the projector can express, rotated or logarithmic or both.
+ *
+ * Returns undefined when the axes cannot do the round trip, and the callers then
+ * say out loud that they are assuming a straight line between the two values.
+ */
+export function axisPositionMap(
+  axes: AxisProjector | null | undefined,
+  axis: 'x' | 'y',
+  lo: number,
+  hi: number,
+  other: number
+): SpanMap | undefined {
+  const project = axes?.dataToPixel?.bind(axes);
+  const invert = axes?.pixelToData?.bind(axes);
+  if (!project || !invert) return undefined;
+  const dim = axis === 'x' ? 0 : 1;
+  const at = (v: number) => {
+    const p = axis === 'x' ? project(v, other) : project(other, v);
+    return { x: p.x, y: p.y };
+  };
+  const edges = [at(lo), at(hi)] as const;
+  if (!edges.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return undefined;
+  return {
+    toParam: (v) => paramAtPoint(edges, at(v)),
+    toValue: (t) => {
+      const p = pointAtParam(edges, t);
+      const back = invert(p.x, p.y)[dim];
+      return back === undefined ? Number.NaN : back;
+    },
+  };
+}
+
+/** What `axisPositionMap` needs, which is less than either projector interface
+ * promises: `PixelProjector` (detection) makes `dataToPixel` required and
+ * `pixelToData` optional, `DataProjector` (the frame) the other way round. */
+interface AxisProjector {
+  dataToPixel?(x: number, y: number): { x: number; y: number };
+  pixelToData?(px: number, py: number): readonly (number | undefined)[];
 }
 
 /** Where an axis's two calibration points SAT, in image pixels. */
@@ -633,6 +704,25 @@ export function heatmapAxisMovedKind(
 }
 
 /**
+ * The frame a parameter is measured in: the two calibration VALUES bounding each
+ * axis, and the axes that gave them.
+ *
+ * ⚑⚑ THE AXES ARE PART OF THE FRAME, not a convenience. 0 and 1 sit at the two
+ * calibration values either way - what the axes decide is the METRIC BETWEEN
+ * THEM, and on a log axis the middle of the data span is nowhere near the middle
+ * of the figure. Carrying them means the two converters below cannot be called
+ * with the frame in one hand and the metric in the other.
+ */
+export interface HeatmapAxisFrame {
+  x: [number, number];
+  y: [number, number];
+  /** Absent when the axes cannot place a data coordinate back on the figure -
+   * the two converters then interpolate in data, as they always did, and the
+   * only callers that reach it are synthetic. */
+  axes?: DataProjector;
+}
+
+/**
  * The two calibration VALUES bounding each axis - the frame a parameter is
  * measured in.
  *
@@ -643,7 +733,7 @@ export function heatmapAxisMovedKind(
 export function heatmapAxisSpans(
   placed: Record<string, { px: number; py: number } | undefined>,
   axes: DataProjector | null
-): { x: [number, number]; y: [number, number] } | null {
+): HeatmapAxisFrame | null {
   if (!axes) return null;
   const p = (k: string) => placed[k];
   const [x1, x2, y1, y2] = [p('x1'), p('x2'), p('y1'), p('y2')];
@@ -660,17 +750,30 @@ export function heatmapAxisSpans(
     y: [at(y1, 1), at(y2, 1)] as [number, number],
   };
   const ok = (s: [number, number]) => Number.isFinite(s[0]) && Number.isFinite(s[1]) && s[0] !== s[1];
-  return ok(spans.x) && ok(spans.y) ? spans : null;
+  return ok(spans.x) && ok(spans.y) ? { ...spans, axes } : null;
+}
+
+/**
+ * The frame's metric on one axis - the position map when the axes can build one.
+ *
+ * ⚑ The OTHER axis's first calibration value is the iso-line the ends are
+ * projected at, so both directions measure along the same line. Which value it
+ * is does not matter and it is not stored: any line of constant `other` gives
+ * the same parameter, because that is what a calibrated axis means.
+ */
+function frameMap(frame: HeatmapAxisFrame, axis: 'x' | 'y'): SpanMap | undefined {
+  const [lo, hi] = frame[axis];
+  return axisPositionMap(frame.axes, axis, lo, hi, axis === 'x' ? frame.y[0] : frame.x[0]);
 }
 
 /** Params → the data coordinates every geometry consumer already takes. Derived
  * on each read, never stored. */
 export function resolveHeatmapGrid(
   params: HeatmapGridParams,
-  spans: { x: [number, number]; y: [number, number] }
+  frame: HeatmapAxisFrame
 ): HeatmapState | null {
-  const xs = dividersFromParams(params.x, spans.x[0], spans.x[1]);
-  const ys = dividersFromParams(params.y, spans.y[0], spans.y[1]);
+  const xs = dividersFromParams(params.x, frame.x[0], frame.x[1], frameMap(frame, 'x'));
+  const ys = dividersFromParams(params.y, frame.y[0], frame.y[1], frameMap(frame, 'y'));
   if (xs === null || ys === null) return null;
   const cx = checkDividers(xs);
   const cy = checkDividers(ys);
@@ -682,10 +785,10 @@ export function resolveHeatmapGrid(
  * reads the ink, and a dragged handle lands on a pixel. */
 export function heatmapGridToParams(
   grid: HeatmapState,
-  spans: { x: [number, number]; y: [number, number] }
+  frame: HeatmapAxisFrame
 ): HeatmapGridParams | null {
-  const x = gridParamsFrom(grid.xDividers, spans.x[0], spans.x[1]);
-  const y = gridParamsFrom(grid.yDividers, spans.y[0], spans.y[1]);
+  const x = gridParamsFrom(grid.xDividers, frame.x[0], frame.x[1], frameMap(frame, 'x'));
+  const y = gridParamsFrom(grid.yDividers, frame.y[0], frame.y[1], frameMap(frame, 'y'));
   return x === null || y === null ? null : { x, y };
 }
 
@@ -1382,20 +1485,21 @@ export function detectGrid(
   // the ink it was measured from, the cells then sampled in the wrong pixels,
   // the exported `x min`/`x max` wrong. And the report still said "matching the
   // 2 boundaries found", so the one signal the user has claimed agreement.
-  const invert = axes.pixelToData?.bind(axes);
+  //
+  // ⚑ THE SAME CONVERSION THE STORE USES, and it is shared rather than spelled
+  // twice: `axisPositionMap` is exactly "a position along this axis, in data",
+  // which is what a detected fraction and a stored parameter both are. Keeping
+  // two copies is what let the store go on interpolating in data for a day after
+  // this line stopped.
   const toData = (fractions: readonly number[], lo: number, hi: number, axis: 'x' | 'y'): number[] => {
+    const map = axisPositionMap(axes, axis, lo, hi, axis === 'x' ? yMin : xMin);
     // ⚑ Without an inverse a projector can only be taken as linear - which the
     // synthetic projectors in the tests are. The app's axes always invert.
-    if (!invert) return fractions.map((f) => lo + f * (hi - lo));
-    const at = axis === 'x' ? axes.dataToPixel(lo, yMin) : axes.dataToPixel(xMin, lo);
-    const far = axis === 'x' ? axes.dataToPixel(hi, yMin) : axes.dataToPixel(xMin, hi);
     return fractions.map((f) => {
-      const px = at.x + f * (far.x - at.x);
-      const py = at.y + f * (far.y - at.y);
-      const back = invert(px, py)[axis === 'x' ? 0 : 1];
+      const v = map?.toValue(f);
       // A projector that cannot answer for a pixel inside its own box has
       // nothing better to offer than the straight line between the ends.
-      return back === undefined || !Number.isFinite(back) ? lo + f * (hi - lo) : back;
+      return v === undefined || !Number.isFinite(v) ? lo + f * (hi - lo) : v;
     });
   };
 

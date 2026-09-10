@@ -261,6 +261,11 @@ export function cellIndexAt(
  *   · retype a calibration VALUE → the parameters do not move, so the grid stays
  *     on the ink it was measured from and its data coordinates change, which is
  *     right: those pixels are now worth different numbers.
+ *     ⚑ ENFORCED, on the axis where it is not free:
+ *     `engine/__tests__/heatmapGridOnLogAxis.test.ts` asserts the boundaries
+ *     keep their PIXELS when the far tick is retyped from 1000 to 10000. This
+ *     line was here, and true only of a linear axis, for a release - the
+ *     parameter was a fraction of the DATA span. See `SpanMap` below.
  *   · move a calibration POSITION → the axis moved, so the grid moves with it.
  *     If that takes it off the ink, the app SAYS SO and offers a new detection.
  *     ⚑⚑ David: *"not make abstract models around it."* There is deliberately no
@@ -273,11 +278,12 @@ export function cellIndexAt(
 export function gridParamsFrom(
   dividers: readonly number[],
   v1: number,
-  v2: number
+  v2: number,
+  map?: SpanMap
 ): number[] | null {
   if (!usableSpan(v1, v2)) return null;
   if (dividers.some((d) => !Number.isFinite(d))) return null;
-  return dividers.map((d) => paramOfSpan(d, v1, v2));
+  return finiteOrNull(dividers.map((d) => (map ? map.toParam(d) : paramOfSpan(d, v1, v2))));
 }
 
 /** The inverse: what those parameters are worth under the calibration in force
@@ -285,11 +291,50 @@ export function gridParamsFrom(
 export function dividersFromParams(
   params: readonly number[],
   v1: number,
-  v2: number
+  v2: number,
+  map?: SpanMap
 ): number[] | null {
   if (!usableSpan(v1, v2)) return null;
   if (params.some((t) => !Number.isFinite(t))) return null;
-  return params.map((t) => valueOfSpan(t, v1, v2));
+  return finiteOrNull(params.map((t) => (map ? map.toValue(t) : valueOfSpan(t, v1, v2))));
+}
+
+/**
+ * ⚑⚑ THE METRIC THE PARAMETER IS MEASURED IN - the AXIS, when the caller can
+ * offer one.
+ *
+ * ⚠️ FOUND BY AUDIT, 2026-09-10. The two functions above interpolated in DATA,
+ * and the header on this file promises something else in as many words:
+ * *"retype a calibration VALUE → the parameters do not move, so the grid stays
+ * on the ink it was measured from."* A data fraction IS a position on the figure
+ * on a linear axis and on no other, and a heatmap axis may be logarithmic
+ * (`HEATMAP_AXES_CONFIG` ships `isLogX`/`isLogY`). Measured on a log X
+ * calibrated 1..1000 with three equal-width columns: correcting the far tick to
+ * 10000 walked the middle boundary 47px off the rule it was measured from,
+ * while every data-space assertion stayed green.
+ *
+ * ⚑ INJECTED RATHER THAN COMPUTED HERE, because `core/` never sees a projector.
+ * `engine/heatmapRun.ts`'s `axisPositionMap` builds it from the axes in force,
+ * and it is the SAME conversion `detectGrid` already does in the other
+ * direction - one helper, used both ways.
+ *
+ * ⚠️ THE TWO DIRECTIONS FALL BACK TOGETHER OR NOT AT ALL. A `toParam` measured
+ * along the ink against a `toValue` interpolated in data are not inverses, and
+ * the store would drift a little on every save. Hence one object carrying both.
+ */
+export interface SpanMap {
+  /** A data coordinate as a position along the axis: 0 at `v1`, 1 at `v2`. */
+  toParam(v: number): number;
+  /** The data coordinate at a position. */
+  toValue(t: number): number;
+}
+
+/** ⚑ A map can answer with NaN where the arithmetic could not - `log` of a
+ * divider at or below zero, or a projector that cannot place a point. A grid of
+ * NaN dividers draws nothing and reads every cell as null; refusing says which
+ * of the two happened. */
+function finiteOrNull(values: number[]): number[] | null {
+  return values.every((v) => Number.isFinite(v)) ? values : null;
 }
 
 /**
