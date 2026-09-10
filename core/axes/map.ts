@@ -109,11 +109,6 @@ export class MapAxes {
     return { x: 0, y: 0 };
   }
 
-  pixelToLiveString(pxi: number, pyi: number): string {
-    const dataVal = this.pixelToData(pxi, pyi);
-    return dataVal[0]!.toExponential(4) + ', ' + dataVal[1]!.toExponential(4);
-  }
-
   getScaleLength(): number {
     return this.scaleLength;
   }

@@ -317,16 +317,6 @@ describe('Circular Chart Recorder axes survive a save and reopen', () => {
     expect(ccr('week', 'anticlockwise').getStartTime()).toBe('2024/01/01 00:00');
   });
 
-  it('still REFUSES the live readout it cannot honestly format', () => {
-    // ⚑ Deliberately unchanged, and checked rather than assumed: this looks like
-    // the same defect as the round-trip above and is not. `timeMax`/`tEnd` come
-    // from Date arithmetic, so a rotation spans 604,800,000 units whether or not
-    // the axis was entered as dates -- meaning a numeric CCR's time reading is a
-    // bare millisecond count, NOT the scale the user typed. Printing it would
-    // state a time the figure never showed. Pinned here so the round-trip fix
-    // cannot later be "completed" by making this print a number.
-    expect(numericCcr().pixelToLiveString(0, 250)).toBe('calibration error!');
-  });
 });
 
 describe('Spider axes survive a save and reopen', () => {

@@ -54,19 +54,6 @@ describe('the mapping is the identity, in both directions', () => {
   });
 });
 
-describe('the live readout', () => {
-  it('shows both coordinates to two decimals, comma-separated', () => {
-    // ⚑ A mutant that dropped the ", " separator survived - so "12.30, 45.60" and
-    // "12.3045.60" were indistinguishable to the suite. The separator is the whole
-    // readability of the readout.
-    expect(new ImageAxes().pixelToLiveString(12.3, 45.6)).toBe('12.30, 45.60');
-  });
-
-  it('rounds rather than truncates, and keeps trailing zeros', () => {
-    expect(new ImageAxes().pixelToLiveString(0.005, 100)).toBe('0.01, 100.00');
-  });
-});
-
 describe('metadata is COPIED, not aliased', () => {
   it('does not hand out a reference a caller can mutate', () => {
     // Both directions go through JSON round-trips on purpose; a mutant that returned

@@ -192,11 +192,6 @@ export class BarAxes {
     };
   }
 
-  pixelToLiveString(pxi: number, pyi: number): string {
-    const dataVal = this.pixelToData(pxi, pyi);
-    return dataVal[0]!.toExponential(4);
-  }
-
   isLog(): boolean {
     return this.isLogScale;
   }

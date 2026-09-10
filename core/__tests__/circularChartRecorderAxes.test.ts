@@ -293,15 +293,6 @@ describe('CircularChartRecorderAxes - the contract it exposes', () => {
     expect(calibratedWithDate().dataToPixel(0, 0)).toEqual({ x: 0, y: 0 });
   });
 
-  it('says so plainly when asked for a live readout it cannot format', () => {
-    // pixelToLiveString's own refusal branch: with no date format there is no
-    // honest way to render the time half, and it says "calibration error!"
-    // rather than printing a bare millisecond count as if it were a time.
-    const { axes } = calibrateCcr('0', '100', '0');
-    expect(axes.pixelToLiveString(150, 150)).toBe('calibration error!');
-    // ...and with a real date it returns both halves, comma-separated.
-    expect(calibratedWithDate().pixelToLiveString(150, 160)).toContain(',');
-  });
 });
 
 /**

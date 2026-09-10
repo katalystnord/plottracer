@@ -256,14 +256,6 @@ describe('the declared baseline (v2.0) - a setting, not a calibration value', ()
   });
 });
 
-describe('the other method nothing had ever asserted', () => {
-  it('the live readout is exponential to four places', () => {
-    // A mutant altered the format and nothing noticed. This is the string under the
-    // cursor while a user places bars.
-    expect(bar([100, 300], [100, 100]).pixelToLiveString(100, 200)).toBe('5.0000e+1');
-  });
-});
-
 describe('what it declares itself to be', () => {
   it('needs two calibration points and is two-dimensional', () => {
     const axes = new BarAxes();

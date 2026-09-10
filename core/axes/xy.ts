@@ -6,7 +6,6 @@
 
 import { mat, type Mat2x2, type Vec2 } from '../mathFunctions.js';
 import { InputParser } from '../inputParser.js';
-import * as dateConverter from '../dateConversion.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 import { logEndpointsUsable } from './logScale.js';
@@ -219,19 +218,6 @@ export class XYAxes {
     const rtnPix = mat.mult2x2Vec(this.a_inv_mat, dat_vec);
 
     return { x: rtnPix[0], y: rtnPix[1] };
-  }
-
-  pixelToLiveString(pxi: number, pyi: number): string {
-    const dataVal = this.pixelToData(pxi, pyi);
-    let rtnString = '';
-    rtnString += this.isXDate
-      ? dateConverter.formatDateNumber(dataVal[0]!, this.initialFormattingX!)
-      : dataVal[0]!.toExponential(4);
-    rtnString += ', ';
-    rtnString += this.isYDate
-      ? dateConverter.formatDateNumber(dataVal[1]!, this.initialFormattingY!)
-      : dataVal[1]!.toExponential(4);
-    return rtnString;
   }
 
   isDate(varIndex: number): boolean {

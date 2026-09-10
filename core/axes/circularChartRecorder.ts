@@ -16,7 +16,6 @@
 
 import { taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts } from '../mathFunctions.js';
 import { InputParser } from '../inputParser.js';
-import * as dateConverter from '../dateConversion.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 
@@ -212,23 +211,6 @@ export class CircularChartRecorderAxes {
 
   dataToPixel(_t: number, _r: number): { x: number; y: number } {
     return { x: 0, y: 0 };
-  }
-
-  pixelToLiveString(pxi: number, pyi: number): string {
-    const dataVal = this.pixelToData(pxi, pyi);
-    // ⚑ THE REFUSAL HERE IS DELIBERATE, AND IT IS NOT THE SAME BUG AS
-    // getStartTime's -- checked, because the two look identical from a distance.
-    // `timeMax`/`tEnd` are derived with Date arithmetic (`setDate(+7)`), so a
-    // rotation always spans 604,800,000 "units" whether or not the time axis was
-    // entered as dates. With a format, that number renders as the date it is.
-    // WITHOUT one, it is a bare millisecond count and NOT the numeric scale the
-    // user typed -- so printing it would state a time the figure never showed.
-    // Refusing is right; only the round-trip in getStartTime was broken.
-    if (this.timeFormat == null) {
-      return 'calibration error!';
-    }
-    const timeStr = dateConverter.formatDateNumber(dataVal[0]!, this.timeFormat);
-    return timeStr + ', ' + dataVal[1]!.toExponential(4);
   }
 
   /**

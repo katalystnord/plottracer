@@ -13,7 +13,6 @@ export interface Axes {
   calibration: Calibration | null;
   isCalibrated(): boolean;
   pixelToData(px: number, py: number): number[];
-  pixelToLiveString(px: number, py: number): string;
   getMetadata(): AxesMetadata;
   setMetadata(obj: AxesMetadata): void;
   name: string;

@@ -78,7 +78,7 @@ const TWO_PI = Math.PI * 2;
  * float-ulps off exact - 100.00000000000003 rather than 100 - so a boundary at
  * precisely 0° computes atan2(-1e-16, r), a hair BELOW zero, and wraps to 359.9999…°
  * instead. Sector values never noticed, because the difference is normalised too, but
- * a live readout would flicker between 0.0° and 360.0° at the top of every pie, and
+ * a reading would flicker between 0.0° and 360.0° at the top of every pie, and
  * the first boundary of a pie is drawn at twelve o'clock more often than anywhere
  * else. The epsilon is far below any angle a click can resolve (1e-9 rad is 6e-8 of a
  * degree) and far above the float noise it exists to absorb.
@@ -360,16 +360,12 @@ export class PieAxes {
 
   /**
    * One pixel carries no value on a pie - a sector needs two boundaries - so this
-   * reports the pixel's ANGLE in degrees, which is what the live readout can honestly
-   * show while a boundary is being placed. The sector's value is derived from the pair
+   * reports the pixel's ANGLE in degrees, which is what can honestly be shown
+   * while a boundary is being placed. The sector's value is derived from the pair
    * once the tuple is complete, exactly as a histogram bin's is from its two corners.
    */
   pixelToData(px: number, py: number): number[] {
     return [(this.angleAt(px, py) * 180) / Math.PI];
-  }
-
-  pixelToLiveString(px: number, py: number): string {
-    return `${this.pixelToData(px, py)[0]!.toFixed(1)}°`;
   }
 
   /**

@@ -215,15 +215,22 @@ describe('SpiderAxes.nearestSpoke and pixelToData', () => {
     expect(axes.pixelToData(100, 50)[0]).toBeCloseTo(50, 10);
   });
 
-  it('names the axis in the live string, so the readout says WHICH spoke', () => {
+  it('names the axis a pixel belongs to, so a reading can say WHICH spoke', () => {
+    // ⚑ RE-POINTED at the live API when `pixelToLiveString` was deleted
+    // (2026-09-10, R2): the assertion used to read the spoke's name out of that
+    // string, which nothing in the app ever called. `nearestSpoke` +
+    // `getSpokeLabel` are what `slotsFromAxes` and the session really use, and
+    // they carry the same fact.
     const axes = threeSpokes();
-    expect(axes.pixelToLiveString(100, 50)).toContain('Strength');
+    expect(axes.getSpokeLabel(axes.nearestSpoke(100, 50)!.index)).toBe('Strength');
   });
 
   it('reads NaN rather than throwing when it was never calibrated', () => {
     const axes = new SpiderAxes();
     expect(axes.pixelToData(10, 10)[0]).toBeNaN();
-    expect(axes.pixelToLiveString(10, 10)).toBe('');
+    // ⚑ The source of that NaN, asserted directly rather than through the
+    // deleted readout string: with no spokes there is no nearest one.
+    expect(axes.nearestSpoke(10, 10)).toBeNull();
   });
 });
 

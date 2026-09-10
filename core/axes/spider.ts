@@ -266,14 +266,6 @@ export class SpiderAxes {
     return { x: this.x0 + alongPx * spoke.ux, y: this.y0 + alongPx * spoke.uy };
   }
 
-  pixelToLiveString(px: number, py: number): string {
-    const projection = this.nearestSpoke(px, py);
-    if (projection == null) return '';
-    const spoke = this.spokes[projection.index]!;
-    const label = spoke.name !== '' ? spoke.name : `Axis ${projection.index + 1}`;
-    return `${label}: ${projection.value.toExponential(4)}`;
-  }
-
   /** The scale along one spoke, evaluated at a pixel distance from the origin. */
   private valueAtDistance(spoke: Spoke, alongPx: number): number {
     const fraction = alongPx / spoke.lengthPx;

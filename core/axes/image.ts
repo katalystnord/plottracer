@@ -28,11 +28,6 @@ export class ImageAxes {
     return { x, y };
   }
 
-  pixelToLiveString(pxi: number, pyi: number): string {
-    const dataVal = this.pixelToData(pxi, pyi);
-    return dataVal[0]!.toFixed(2) + ', ' + dataVal[1]!.toFixed(2);
-  }
-
   getMetadata(): AxesMetadata {
     return JSON.parse(JSON.stringify(this.metadata));
   }
