@@ -65,7 +65,18 @@ export interface ValueColumnConfig<A extends CalibratedAxes> {
   /** This type reads ONE number per datum, under this heading. */
   derivedTupleValue?: {
     label: string;
-    compute(points: (DataPointView | null)[], axes: A, ctx: { apex: null }): number | null;
+    /**
+     * ⚠️ `ctx.apex` WAS TYPED `null` HERE, and that narrowing WAS the defect in
+     * type form: this module declared, in its own signature, that it never
+     * passes an apex - so a pie slice read through `valueCells` measured about
+     * the pie's centre while the same row's `derived` measured about the
+     * slice's own, and the two disagreed by 25% on an exploded slice.
+     */
+    compute(
+      points: (DataPointView | null)[],
+      axes: A,
+      ctx: { apex: { x: number; y: number } | null }
+    ): number | null;
     interval?(points: (DataPointView | null)[], axes: A): { min: number; max: number } | null;
     /** The names when the FIGURE changes the answer - see the declaration. */
     namesFor?(axes: A): readonly string[];
@@ -126,7 +137,22 @@ export function valueCells<A extends CalibratedAxes>(
    * reported its first corner where its measured value belongs - measured, 0
    * instead of 5. Optional so an uninterested caller reads unchanged.
    */
-  slotNames?: readonly string[]
+  slotNames?: readonly string[],
+  /**
+   * ⚑⚑ WHERE THIS DATUM IS MEASURED FROM, when the type measures about a point
+   * of its own. A pie's `compute` takes it because *"an exploded slice measures
+   * about its own"* apex, not about the pie's centre.
+   *
+   * ⚠️ IT WAS HARD-CODED `null` HERE, so `cells` and `derived` - two readings of
+   * the SAME slice, from the same row - disagreed by 25% on an exploded one:
+   * measured, `derived 25` against `cells [18.7]`. This module's own header says
+   * it exists so the panel, the editor and the exporter *"cannot drift into
+   * three answers"*; the drift was inside the module.
+   *
+   * ⚑ Optional, and null is the right answer for every type that measures about
+   * nothing - which is all of them but pie.
+   */
+  apex?: { x: number; y: number } | null
 ): (number | null)[] {
   if (slotNames && isReshaped(config, slotNames)) {
     return points.map((p) => p?.data?.[0] ?? null);
@@ -138,7 +164,7 @@ export function valueCells<A extends CalibratedAxes>(
   if (config.derivedTupleValue) {
     const derive = config.derivedTupleValue;
     if (derive.cellsFor) return derive.cellsFor(points, axes);
-    return [derive.compute(points, axes, { apex: null }) ?? null];
+    return [derive.compute(points, axes, { apex: apex ?? null }) ?? null];
   }
   return points.map((p) => p?.data?.[0] ?? null);
 }

@@ -5036,7 +5036,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // fifteen lines below records having fixed in the stacking argument,
         // one property up. This entrance is invisible from the app: it opens
         // only when the series being exported is NOT the series being looked at.
-        cells: this.axes ? valueCells(this.config, points, this.axes, this.ownSlots(dataset)) : [],
+        // ⚑ THE APEX TRAVELS WITH THE ROW. `derived` below is computed with it
+        // and `cells` was computed without, so the same slice read two ways
+        // disagreed by 25% on an exploded pie.
+        cells: this.axes
+          ? valueCells(
+              this.config,
+              points,
+              this.axes,
+              this.ownSlots(dataset),
+              this.getSectorApex(tupleIndex, datasetIndex)
+            )
+          : [],
         // The arithmetic stays in the CONFIG, where that type's model lives; the
         // session only supplies what no config can reach on its own -- the axes, the
         // tuple's own apex, and the whole the values are read against.
@@ -5317,7 +5328,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
           const p = dataset.getPixel(pixelIndex);
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
-        cells.push(valueCells(this.config, points, axes, ownSlotsForCells));
+        cells.push(
+          valueCells(this.config, points, axes, ownSlotsForCells, this.getSectorApex(tupleIndex, seriesIndex))
+        );
         // ⚑ Asked of the POINT each column names, through the same map the
         // editor moves - so the mark and the edit cannot disagree about which
         // corner a cell is.
