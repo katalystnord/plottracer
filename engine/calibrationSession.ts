@@ -3124,8 +3124,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // whole point was "fix the guard CLASSES, not two more instances", and 77
     // reproduced it in brand-new code hours after reading 72. The class is
     // "guards belong in the model, and the model has more than one entrance."
-    // Both doors are now guarded; there is no third (`axes` is only assigned
-    // here and in runCalibration).
+    // ⚠️ THERE IS A THIRD, AND THIS LINE USED TO DENY IT. It read *"there is no
+    // third (`axes` is only assigned here and in runCalibration)"*, and `axes`
+    // is assigned in FOUR places: here, `runCalibration`, `reset` (to null) and
+    // `restoreState`. The undo snapshot is the third door, and it deliberately
+    // does NOT run checkGuards - which is sound only because the refusal travels
+    // INSIDE the snapshot, `calibrationError` being captured and restored beside
+    // the axes it belongs to. If it did not, one undo would launder a refused
+    // calibration into a clean one: the same null readings with the on-screen
+    // reason gone, which is worse than the file that was refused.
+    // ⚑ ENFORCED, not asserted: `loadGuards.test.ts`'s *"keeps the refusal
+    // through an undo round-trip - the snapshot is the THIRD door"*. A count in
+    // a comment goes stale the day someone adds an entrance; a named test does
+    // not (gate 3, and this line is the case study).
     //
     // Surfaced, NOT refused -- and that is deliberate. The dedupe below sets the
     // precedent: "refusing it would strand data the previous version wrote."
@@ -6058,7 +6069,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * means the axis it was recorded against, and silently renaming would make the
    * table assert a pairing nobody measured - the exact failure the error-bar
    * record is parked on. In that case the recorded data keeps the names it was
-   * captured under, and the mismatch stays visible rather than being papered over.
+   * captured under.
+   *
+   * ⚑ ENFORCED by `spiderSlotMismatch.test.ts`, which also pins WHY THE FILE IS
+   * THE ONLY DOOR: `addRepeat` refuses once a calibration is live and `reset`
+   * takes every series with it, so the click path cannot put a 3-slot series
+   * beside a 5-spoke axes. A project written before the names existed, one whose
+   * series was added without them, a hand-edited file or a foreign import can.
+   *
+   * ⚠️ THIS USED TO END *"and the mismatch stays visible rather than being
+   * papered over"*, which claims more than the code does (R5, gate 3). What the
+   * user actually sees is a series showing THREE columns with their own names
+   * next to a calibration card showing FIVE axes: the disagreement is on screen,
+   * and nothing names it as one. Whether it should be announced - and in whose
+   * words - is a live question, not a settled behaviour this comment may assert.
    */
   private applyAxesDerivedSlots(): void {
     const derive = this.config.slotsFromAxes;
