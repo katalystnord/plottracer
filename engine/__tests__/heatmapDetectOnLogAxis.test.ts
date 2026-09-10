@@ -120,4 +120,31 @@ describe('grid detection on a log axis', () => {
     expect(px[1]).toBeCloseTo(199.5, 1);
     expect(px[2]).toBeCloseTo(299.5, 1);
   });
+
+  it('⚑⚑ a projector that cannot invert is taken as LINEAR, and says so by behaving so', () => {
+    // ⚠️ Mutation testing found this path untested: `axes.pixelToData?.bind` and
+    // the `if (!invert)` fallback could both be mutated with the suite green,
+    // because every projector in the tests could invert. `readHeatmap` needs
+    // only `dataToPixel`, so a projector without the inverse is a real caller -
+    // and what it gets is the straight-line reading, which is exactly right for
+    // a linear axis and is the documented limit of what it can be given.
+    // ⚠️ NOT STARTING AT ZERO, and that is my second degenerate anchor tonight:
+    // with `lo = 0`, `lo + f * (hi - lo)` and `lo + f * (hi + lo)` are the same
+    // expression, so the arithmetic mutant survived. Spanning 2..11 makes them
+    // differ. (The first was a log axis anchored at 1, where `log(1) = 0`.)
+    const linearNoInverse: PixelProjector = {
+      dataToPixel: (x, y) => ({
+        x: BOX_LEFT + ((x - 2) / 9) * (BOX_RIGHT - BOX_LEFT),
+        y: BOX_BOTTOM - (y / 8) * (BOX_BOTTOM - BOX_TOP),
+      }),
+    };
+    const result = detectGrid(threeColumns(), linearNoInverse, {
+      xDividers: [2, 11],
+      yDividers: [0, 8],
+    }, { columns: 3 });
+    expect(result.grid, result.message).not.toBeNull();
+    const px = result.grid!.xDividers.map((d) => linearNoInverse.dataToPixel(d, 0).x);
+    expect(px[1]).toBeCloseTo(199.5, 1);
+    expect(px[2]).toBeCloseTo(299.5, 1);
+  });
 });

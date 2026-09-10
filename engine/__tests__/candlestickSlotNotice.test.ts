@@ -29,6 +29,7 @@ import {
   CalibrationSession,
   CANDLESTICK_AXES_CONFIG,
   BOX_PLOT_AXES_CONFIG,
+  PIE_AXES_CONFIG,
   type CalibratedAxes,
 } from '../calibrationSession.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
@@ -181,7 +182,13 @@ describe('marks the file holds that nothing claims', () => {
     raw.plotData.datasetColl[0]!.groupNames = raw.plotData.datasetColl[0]!.groupNames.slice(0, 3);
     const back = deserializeProject(raw as unknown as Record<string, unknown>);
     if ('error' in back) throw new Error(back.error);
-    expect(back.notice, 'two unreachable readings passed in silence').toMatch(/2 measured marks/);
+    // ⚑⚑ ANCHORED, because `/2 measured marks/` also matches "-2 measured
+    // marks" - and mutation testing proved it: flipping `orphaned +=` to `-=`
+    // SURVIVED this assertion. A count that can go negative is a count nobody
+    // is really checking.
+    expect(back.notice, 'two unreachable readings passed in silence').toMatch(
+      /(^|\s)2 measured marks/
+    );
     // ⚑ It counts, it does not repair: which value an orphaned mark belongs to
     // is exactly what the file failed to say.
     expect(back.notice).toMatch(/Nothing has been changed or discarded/i);
@@ -190,6 +197,40 @@ describe('marks the file holds that nothing claims', () => {
   it('⚑ says nothing when every mark is filed - the companion assertion', () => {
     const ds = seriesWith(['Min', 'Q1', 'Median']);
     expect(orphanedMarksNotice([ds])).toBeNull();
+  });
+
+  it('⚑ counts ONE mark in the singular, and never a negative number', () => {
+    // Mutation testing found both of these unguarded: the plural choice and the
+    // sign of the sum could each be flipped with the suite still green.
+    const raw = boxPlotFile() as { plotData: { datasetColl: { groupNames: string[] }[] } };
+    raw.plotData.datasetColl[0]!.groupNames = raw.plotData.datasetColl[0]!.groupNames.slice(0, 4);
+    const back = deserializeProject(raw as unknown as Record<string, unknown>);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.notice).toMatch(/(^|\s)1 measured mark(?!s)/);
+    expect(back.notice, 'a negative count reached the user').not.toMatch(/-[0-9]+ measured/);
+  });
+
+  it('⚑ a PIE, whose sectors chain, is not accused of losing marks', () => {
+    // ⚠️⚑ I ADDED THIS BELIEVING A PIE FILES MORE MARKS THAN IT HOLDS - the
+    // sectors chain, so I assumed one pixel INDEX was filed into two tuples and
+    // that the `held > filed` guard was defending against a negative count.
+    // Measured, and it is not so: `held 7, filed 7, tuples [[0,1],[2,3],[4,5],
+    // [6,null]]`. The chaining adds ANOTHER pixel rather than re-filing the same
+    // index, so `filed` never exceeds `held` and that guard's mutants are
+    // EQUIVALENT - they differ only in a case the model cannot produce.
+    // ▶ The test earns its place anyway, as the assertion that the commonest
+    // chained-tuple type raises no false alarm. The claim it was written on was
+    // simply wrong, and saying so is cheaper than leaving a comment that lies.
+    const s = new CalibrationSession<CalibratedAxes>(PIE_AXES_CONFIG as never);
+    s.handleCalibrationClick(420, 200);
+    s.handleCalibrationClick(300, 320);
+    s.handleCalibrationClick(180, 200);
+    expect(s.runCalibration(), s.getCalibrationError() ?? 'no error').toBe(true);
+    // Three boundaries, two slices - the middle pixel belongs to both.
+    s.addDataPoint(420, 200);
+    s.addDataPoint(300, 320);
+    s.addDataPoint(180, 200);
+    expect(orphanedMarksNotice([s.getDataset()]), 'a pie was told it lost marks').toBeNull();
   });
 
   it('⚑ and ignores a series with no slots at all, which is most of them', () => {

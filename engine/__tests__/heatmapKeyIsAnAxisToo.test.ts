@@ -93,6 +93,23 @@ describe('the colour key moving is the axis moving', () => {
     expect(heatmapAxisMoved(old, placed())).toBe(false);
   });
 
+  it('⚑ a key stamped once and then UNPLACED is not a move either', () => {
+    // The other half of "nothing to compare", and mutation testing found it
+    // unguarded: `now.key !== undefined` could be replaced with `true` and
+    // nothing noticed. A calibration whose key clicks have been cleared has no
+    // key to compare against, which is not the same as a key that moved.
+    const before = heatmapAxisStamp(placed())!;
+    const withoutKey: Placed = {
+      x1: { px: 100, py: 400 },
+      x2: { px: 400, py: 400 },
+      y1: { px: 100, py: 400 },
+      y2: { px: 100, py: 100 },
+    };
+    expect(heatmapAxisStamp(withoutKey)!.key, 'no key should stamp none').toBeUndefined();
+    expect(heatmapAxisMoved(before, withoutKey)).toBe(false);
+    expect(heatmapAxisMovedKind(before, withoutKey)).toBeNull();
+  });
+
   it('⚑ and the spatial axes still answer for themselves', () => {
     const before = heatmapAxisStamp(placed())!;
     expect(heatmapAxisMoved(before, placed({ x2: { px: 430, py: 400 } }))).toBe(true);
