@@ -101,6 +101,36 @@ measured against the shared centre instead, a 27% slice reads about 23% - and th
 figure still adds up to 100, so the error is invisible. The button arms **one**
 slice; the next sector goes back to the pie's centre.
 
+**Polar charts** are calibrated from the centre and two known points, and the card
+asks one question about the figure first: **Shape - Circular, or Tilted or
+squashed.**
+
+Leave it on **Circular** for an ordinary polar plot. Click the centre, then two
+points along one spoke whose radii you know, and give each its value. That is the
+whole walk.
+
+Choose **Tilted or squashed** when the figure's rings are ellipses rather than
+circles - a chart rescaled to fit a column, printed from a squashed layout, or
+photographed off a page. The walk then asks for two more things, because those are
+what the shape costs: P2's **angle** as well as its radius, placed at a *different*
+angle from P1, and the **radial value at the centre** (usually 0, and printed on
+most figures). Two points at different angles are exactly enough to measure the
+frame the figure was drawn in, so radii and angles are then read through the
+figure's own shape rather than through an assumed circle. On a test figure
+squashed to 60% of its height with a shear, readings came back within about 1% of
+the true values; read as a circle, the same figure is wrong everywhere at once,
+and nothing on screen says so.
+
+The **Direction** setting is offered only for a circular figure. On a tilted one
+the two angles tell PlotTracer which way the chart runs, so it is measured rather
+than declared - and a setting that cannot change anything is not shown.
+
+**Ternary diagrams** take all three corners, and all three are used. The reading is
+the composition of the pixel within the triangle you clicked, so a diagram drawn as
+a right-angled triangle - an ordinary convention - reads correctly rather than
+being read as though it were equilateral. Three corners in a line are refused: a
+triangle with no area has no interior for a composition to sit in.
+
 ## 3. Capture the figure
 
 Press **Capture figure** on the calibration card. This freezes the framed figure
