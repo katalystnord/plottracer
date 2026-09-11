@@ -9297,7 +9297,19 @@ export function Workspace() {
             data-testid="eyedropper-hint"
             style={{
               position: 'absolute',
-              top: 10,
+              // ⚑⚑ THE BOTTOM, NOT THE TOP (David, 2026-09-11, having met it in
+              // the app). This sat at `top: 10` while the calibration card sits
+              // at `top: 8`, both centred - so the card, which has the higher
+              // z-index, covered the banner's own words and left only its Cancel
+              // sticking out from behind.
+              // ⚑ Moved rather than re-stacked, because the top strip is
+              // CONTESTED - it carries the calibration card and the figure
+              // jumper - and because David has already ruled on where a hint
+              // belongs: *"Hint should be in the hint bar, not in other places,"*
+              // full stop (the Pie slice labels). This floats just above the tips
+              // bar, which is that hint bar, and keeps its Cancel visible because
+              // the way out of an armed mode has to be on screen.
+              bottom: 10,
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 3,

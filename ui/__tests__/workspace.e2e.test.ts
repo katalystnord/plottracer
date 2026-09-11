@@ -4722,6 +4722,45 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
   // always-live in By-colour -- the gate excludes the armed eyedropper, so its
   // click is consumed as a colour sample, not swallowed by a region drag. (Also
   // the first e2e coverage of the trace eyedropper.)
+  /**
+   * ⚑⚑ THE ARMED-PIPETTE BANNER MUST NOT SIT UNDER THE CALIBRATION CARD.
+   *
+   * ⚠️ FOUND BY DAVID DRIVING THE APP, 2026-09-11, on the first figure he opened
+   * with it: both were anchored top-centre of the canvas (`top: 8` and `top: 10`,
+   * `left: 50%`), and the card has the higher z-index - so the banner's own words
+   * were hidden behind it and only its Cancel stuck out. Neither instrument in
+   * this repo could see that: the unit board does not lay anything out, and the
+   * e2e asserted the banner's TEXT, which is present and readable to a query
+   * whether or not a card is drawn on top of it.
+   *
+   * ⚑ The remedy is where David put it: the bottom, with his own ruling behind it
+   * (*"Hint should be in the hint bar, not in other places"*). This case asserts
+   * the GEOMETRY rather than the position, so it stays true if either element
+   * moves again.
+   */
+  it('⚑⚑ the armed-pipette banner does not overlap the calibration card', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+
+    const hint = await page.getByTestId('eyedropper-hint').boundingBox();
+    const card = await page.getByTestId('calibration-bar').boundingBox();
+    expect(hint, 'the banner must be on screen').not.toBeNull();
+    expect(card, 'the calibration card must be on screen').not.toBeNull();
+    const overlaps =
+      hint!.x < card!.x + card!.width &&
+      hint!.x + hint!.width > card!.x &&
+      hint!.y < card!.y + card!.height &&
+      hint!.y + hint!.height > card!.y;
+    expect(
+      overlaps,
+      `banner ${JSON.stringify(hint)} overlaps card ${JSON.stringify(card)}`
+    ).toBe(false);
+  });
+
   it('By colour: the eyedropper still samples with the region marquee always live', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
