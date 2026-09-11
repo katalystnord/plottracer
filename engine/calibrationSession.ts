@@ -5703,6 +5703,45 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * ⚑ Still overridable by argument, which is what the tests that exercise the
    * ranking itself pass; absent, the figure answers for itself.
    */
+  /**
+   * How wide a strip to sample for a candle's body colour, in pixels.
+   *
+   * Measured from the figure's OWN spacing - the median gap between neighbouring
+   * candle centres - because that is the only thing that knows how much room a
+   * body has. Half the pitch keeps the strip inside a body on any ordinary chart
+   * (libraries draw bodies at roughly 60-80% of the pitch) while staying wide
+   * enough to out-vote a wick running through the middle.
+   *
+   * The glyph's own half-width remains the CEILING, so a roomy figure samples
+   * exactly what it always did and this cannot trade one silent misread for
+   * another. A single candle has no spacing to measure, so it falls back to that
+   * ceiling, which is the honest answer rather than a guess.
+   */
+  private candleSampleWidth(dataset: Dataset, tuples: readonly (number | null)[][]): number {
+    const ceiling = CANDLE_BODY_HALF * 2;
+    const centres: number[] = [];
+    for (const tuple of tuples) {
+      const openI = tuple[1];
+      const closeI = tuple[2];
+      if (openI == null || closeI == null) continue;
+      centres.push((dataset.getPixel(openI).x + dataset.getPixel(closeI).x) / 2);
+    }
+    if (centres.length < 2) return ceiling;
+    centres.sort((a, b) => a - b);
+    const gaps: number[] = [];
+    for (let i = 1; i < centres.length; i++) {
+      const gap = centres[i]! - centres[i - 1]!;
+      if (gap > 0) gaps.push(gap);
+    }
+    if (gaps.length === 0) return ceiling;
+    gaps.sort((a, b) => a - b);
+    const mid = Math.floor(gaps.length / 2);
+    const pitch = gaps.length % 2 === 1 ? gaps[mid]! : (gaps[mid - 1]! + gaps[mid]!) / 2;
+    // At least one pixel: a strip narrower than that has nothing to sample, and
+    // `sampleCandleBody` would refuse the candle entirely.
+    return Math.max(1, Math.min(ceiling, pitch / 2));
+  }
+
   readCandleDirections(
     src: Uint8ClampedArray,
     width: number,
@@ -5718,18 +5757,27 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const tuples = dataset.getAllTuples();
     const complete: number[] = [];
     const bodies: RGB[] = [];
+    // ⚑⚑ THE WINDOW IS MEASURED OFF THIS FIGURE, and the glyph's constant is only
+    // its CEILING. It used to BE the window, so the sampler read the same 25px
+    // strip whatever the chart looked like - and on any figure whose candles are
+    // narrower than that, the strip's medoid is the PAPER. Every candle then
+    // returns the same colour, the clusterer finds one appearance, and every
+    // candle is filed rising. That is not a label: `setCandleRising` swaps two
+    // slots, so Open and Close are exchanged on every falling candle, silently,
+    // and "every period rose" is a legitimate reading of a legitimate figure so
+    // nothing looks wrong. Drawing width and measuring width being one constant
+    // is the "are we asserting what we did not measure" pattern.
+    const bodyWindow = this.candleSampleWidth(dataset, tuples);
     for (let t = 0; t < tuples.length; t++) {
       const [, openI, closeI] = tuples[t]!;
       if (openI == null || closeI == null) continue;
-      // ⚑ The body's half-width is the glyph's own, so the sample sits inside
-      // the rectangle the user can SEE rather than inside a second guess at it.
       const rgb = sampleCandleBody(
         src,
         width,
         height,
         dataset.getPixel(openI),
         dataset.getPixel(closeI),
-        CANDLE_BODY_HALF * 2
+        bodyWindow
       );
       if (rgb === null) continue;
       complete.push(t);
