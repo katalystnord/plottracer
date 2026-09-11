@@ -1,5 +1,5 @@
 /**
- * TypeScript port of wpd-core's core/axes/polar.js.
+ * Originally ported from wpd-core's core/axes/polar.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
@@ -104,8 +104,9 @@ export class PolarAxes {
     // of a circle being assumed - see `buildFrame` below. Still ungated, and now
     // for a reason rather than by inheritance: BLANK is the ordinary case (every
     // WPD project, and our own prompt until today), and it selects the circular
-    // reading rather than refusing anything. `Number()` on a non-empty string
-    // matches upstream faithfully.
+    // reading rather than refusing anything. A non-empty string is read with
+    // `Number()` rather than `InputParser` because an angle here is a plain
+    // number, never a date.
     const theta2Raw = String(cp2.dy ?? '').trim();
     const theta2 = theta2Raw === '' ? Number.NaN : Number(theta2Raw);
 

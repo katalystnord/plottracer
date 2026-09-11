@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of the pure functions from
+ * Originally ported from the pure functions of
  * ui-patches/engauge-algos.js's Segment Fill section (built 2026-07,
  * clean-room reimplementation of the flood-fill curve-tracing concept -
  * see that file's header for the original provenance note). Ported here
@@ -191,7 +191,7 @@ export function pointsFromColumnRuns(
  * Sorting by x cannot fix that -- for a curve that doubles back, x is not a key.
  * Only walking the curve is.
  *
- * A faithful port of WPD's own connectivity sort
+ * Originally ported from WPD's own connectivity sort
  * (`javascript/widgets/dataTable.js:238-269`, the `isConnectivity` branch),
  * which `core/dataProviders.ts:240` already advertises as `allowConnectivity`
  * with **no implementation behind it** -- the contract was ported at checkpoint

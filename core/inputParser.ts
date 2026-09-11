@@ -1,5 +1,5 @@
 /**
- * TypeScript port of wpd-core's core/inputParser.js.
+ * Originally ported from wpd-core's core/inputParser.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See core/mathFunctions.ts for porting-provenance notes.
  *

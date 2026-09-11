@@ -1,7 +1,7 @@
 /**
  * The exported VALUE contract - what actually goes in each column.
  *
- * Faithful port of `wpd-core/javascript/services/dataExport.js`'s
+ * Originally ported from `wpd-core/javascript/services/dataExport.js`'s
  * `getValueAtPixel` (:27-47) and the header rule inside `generateCSV` (:74,:101).
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See core/mathFunctions.ts for porting-provenance notes.

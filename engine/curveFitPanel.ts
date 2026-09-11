@@ -5,7 +5,7 @@
  * without a full Electron+Playwright launch, same reasoning as
  * engine/segmentFillRun.ts.
  *
- * Faithful port of the policy in ui-patches/engauge-algos.js's
+ * Originally ported from the policy in ui-patches/engauge-algos.js's
  * wpd.runCurveFit (the current, still-running app's own Curve Fit popup,
  * Phase 2.6): gather fit points (already slot-aware via
  * getFitPoints -- only the primary group, so Error Bar Groups datasets

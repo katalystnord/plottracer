@@ -1378,8 +1378,11 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // calibration reports success while every X (or Y) reads back null, and
     // getBounds() even looks plausible (Math.pow(10, -Infinity) === 0) -- the
     // silently-wrong-output failure this project cares most about. Checkpoint
-    // 68 made log axes reachable, which made this live; checked here rather
-    // than in core/ so the port stays faithful (see CLAUDE.md Step 1).
+    // 68 made log axes reachable, which made this live.
+    // ⚑ It belongs HERE for a reason of our own, not to keep a port intact: a
+    // guard declared on the config runs in `checkGuards`, which BOTH doors
+    // consult - the click walk and a loaded file - where one inside the axes
+    // class would be reachable only through whichever entrance calls it.
     const axes = new XYAxes();
     const ok = axes.calibrate(cal, isLogX, isLogY, optionBool(ctx.options, 'skipRotation'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
@@ -3317,9 +3320,11 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
     return { axes };
   },
   extractOptions(axes) {
-    // NOTE: isNormalOrientation is a *function reference* on TernaryAxes, not
-    // a getter -- core/plotData.ts documents the same upstream quirk it
-    // faithfully preserves when serializing. Call it.
+    // ⚠️ `isNormalOrientation` is a FUNCTION REFERENCE on TernaryAxes, not a
+    // getter, so it must be CALLED. Serializing the reference instead is a real
+    // defect with its own history: `JSON.stringify` drops the key, the flag
+    // reads back false, and a Normal ternary reopens Reverse - permuting every
+    // datum. Pinned by `plotDataAxesRoundTrip.test.ts`.
     return { isRange100: String(axes.isRange100()), isNormal: String(axes.isNormalOrientation()) };
   },
 };

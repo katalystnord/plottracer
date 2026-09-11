@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of wpd-core's core/axes/image.js.
+ * Originally ported from wpd-core's core/axes/image.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  */

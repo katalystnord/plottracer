@@ -8,8 +8,8 @@
  * shares one scale and every adjacent pair of axes is equally spaced. Neither
  * assumption is made here - see `calibrate` below.
  *
- * ⚑ WHY THIS IS NOT PolarAxes. `core/axes/polar.ts` is a faithful WPD port with ONE
- * radial scale and a *continuously measured* angle: a datum there is (r, θ), and θ is
+ * ⚑ WHY THIS IS NOT PolarAxes. `core/axes/polar.ts` has ONE radial scale and a
+ * *continuously measured* angle: a datum there is (r, θ), and θ is
  * a value the figure is claiming. A spider chart has no continuous angle. Each spoke
  * is a SEPARATE 1-D axis with its own scale, and the angle between spokes is a
  * rendering convention the figure chose, never a number anyone measured. Recording an

@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of the pure functions from
+ * Originally ported from the pure functions of
  * ui-patches/engauge-algos.js's Geometry & Statistics section (built
  * 2026-07 - see that file's header for the original provenance note:
  * arc length/area follow Engauge's own approach, curvature is an

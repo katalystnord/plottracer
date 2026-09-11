@@ -1,7 +1,7 @@
 /**
  * Pure geometry for the box-and-whisker glyph (checkpoint 22, see
  * CLAUDE.md), deferred from checkpoint 21's Point Groups interaction
- * model. Faithful port of the current app's drawBoxGlyph
+ * model. Originally ported from the current app's drawBoxGlyph
  * (ui-patches/overrides.js, commit c0b6021) from wpd's own image-space
  * canvas drawing calls into pure, framework-agnostic segment math --
  * the render layer (ui/'s ImageCanvas.tsx) converts each segment's

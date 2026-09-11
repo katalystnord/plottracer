@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of the pure functions from
+ * Originally ported from the pure functions of
  * ui-patches/engauge-algos.js's Grid Line Removal section (Phase 2.3 -
  * see that file's header for the original provenance note). Ported per
  * CLAUDE.md's Step 1 scope.

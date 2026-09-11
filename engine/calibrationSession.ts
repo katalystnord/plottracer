@@ -112,7 +112,7 @@
  * Checkpoint 21 was the interaction-model half of Box Plot support only.
  *
  * Checkpoint 22 adds the box-and-whisker glyph deferred from checkpoint
- * 21, a faithful port of the current app's drawBoxGlyph (commit
+ * 21, originally ported from the current app's drawBoxGlyph (commit
  * c0b6021): getBoxPlotGlyphs() recognizes a dataset whose slots
  * are exactly ['min','q1','median','q3','max'] (case-insensitive -- the
  * shape applyBoxPlotGroups creates) on a calibrated Bar-axes session,

@@ -413,7 +413,8 @@ import { HelpOverlay } from './HelpOverlay.js';
  * auto-detector's stored background color when available, but
  * AutoDetectionData was explicitly out of Step 1's port scope (see
  * core/plotData.ts's header comment), so there's no smarter color to read
- * yet; white is that function's own fallback path, faithfully preserved.
+ * yet; white is that function's own fallback path, and it is kept because a
+ * fallback has to be SOME colour and nothing here measures a better one.
  * ImageCanvas's new applyImageTransform (see its own header comment)
  * replaces the loaded image in place, preserving the current zoom/pan.
  *

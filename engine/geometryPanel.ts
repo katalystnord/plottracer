@@ -4,7 +4,7 @@
  * computeGeometry/getGeometryPoints, same extraction reasoning as
  * engine/curveFitPanel.ts and engine/segmentFillRun.ts.
  *
- * Faithful port of the policy in ui-patches/engauge-algos.js's
+ * Originally ported from the policy in ui-patches/engauge-algos.js's
  * wpd.runGeometry/wpd.showGeometryPopup (Phase 2.6, part 2): reject a
  * dataset with slots configured (Box Plot / Error Bar Groups are
  * tuples of independent measurements, not a single traced curve -- arc

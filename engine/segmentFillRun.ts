@@ -6,7 +6,7 @@
  * canvas/DOM needed) rather than only reachable through a full
  * Electron+Playwright launch.
  *
- * Faithful port of the policy in ui-patches/engauge-algos.js's
+ * Originally ported from the policy in ui-patches/engauge-algos.js's
  * SegmentFillTool.onMouseClick (the current, still-running app's own
  * Segment Fill tool, Phase 2.4): clamp the seed to image bounds, flood
  * fill, reject a too-small fill (< MIN_FILLED_PIXELS, same threshold and

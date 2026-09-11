@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of the pure functions from
+ * Originally ported from the pure functions of
  * ui-patches/engauge-algos.js's Curve Fitting section (built 2026-07,
  * clean-room reimplementation of the same "naive" normal-equations
  * approach Engauge itself uses - see that file's header for the original

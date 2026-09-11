@@ -1,5 +1,5 @@
 /**
- * Faithful TypeScript port of wpd-core's core/mathFunctions.js.
+ * Originally ported from wpd-core's core/mathFunctions.js.
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * Ported 2026-07 as part of PlotTracer's Product #1 rebuild (see
  * CLAUDE.md "Current scoped task - Step 1: extract core/"). Behavior is
