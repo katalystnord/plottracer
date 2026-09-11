@@ -55,4 +55,26 @@ describe('one rule for replacing a heatmap grid', () => {
     const body = workspace.slice(at, at + 2500);
     expect(body).toContain('reindexCellReadings');
   });
+
+  it('⚑⚑ and it WRITES the reindexed readings to the record, not only to the screen', () => {
+    // ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT. The reindex ran and its result went to
+    // `setHeatmapCellReadings` alone - React state - while `layer.readings` kept
+    // the OLD `col,row` keys beside the NEW grid. The table was right and the
+    // record was wrong, so a save, or an undo and redo, filed a person's typed
+    // number against a cell they never looked at, with `source = user` on it.
+    // In the one type where colour IS the value and there is no eye-check.
+    //
+    // ⚠️⚠️ THIS IS A SOURCE-SHAPE ASSERTION, WHICH IS A WEAK INSTRUMENT, and it
+    // is the same kind that let the defect through: the case above proves only
+    // that the string `reindexCellReadings` appears in the body. It is what this
+    // seam offers - the glue lives in a React callback with no unit entrance -
+    // so it is used deliberately and labelled, not mistaken for proof. The real
+    // check is the e2e walk: edit a cell, change the grid, undo, redo.
+    const at = workspace.indexOf('const applyHeatmapGridEdit');
+    const body = workspace.slice(at, at + 2500);
+    expect(
+      body,
+      'the remapped readings never reach patchHeatmapLayer, so the record keeps the old keys'
+    ).toContain('patchHeatmapLayer({ readings');
+  });
 });

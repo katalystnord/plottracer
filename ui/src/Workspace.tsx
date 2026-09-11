@@ -2457,7 +2457,19 @@ export function Workspace() {
         ? reindexCellReadings(heatmapCellReadings, heatmapShownGrid, next)
         : { readings: heatmapCellReadings, dropped: 0 };
       applyHeatmapGrid(next);
-      if (remapped.readings !== heatmapCellReadings) setHeatmapCellReadings(remapped.readings);
+      if (remapped.readings !== heatmapCellReadings) {
+        setHeatmapCellReadings(remapped.readings);
+        // ⚑⚑ AND INTO THE RECORD, not only onto the screen. Without this line
+        // the reindex reached React state alone while `layer.readings` kept the
+        // OLD `col,row` keys beside the NEW grid - so the table was right and
+        // the file was wrong, and a save, or an undo and redo, filed a person's
+        // typed number against a cell they never looked at, still marked as
+        // theirs. It also resurrected the readings this remap deliberately
+        // DROPPED and told the user it had dropped.
+        // ⚠️ Found by the v2.5 pre-tag audit. The comment above already said a
+        // reading must follow its own patch of figure; the write was missing.
+        patchHeatmapLayer({ readings: { ...remapped.readings } });
+      }
       // ⚑ THE SAME CALL THE UNDO PATH MAKES. These two were separate bodies and
       // they drifted - this one re-read, the other emptied the table - so the
       // symmetry is now structural rather than a thing to remember.
@@ -2483,6 +2495,7 @@ export function Workspace() {
       heatmapCells.length,
       heatmapCellReadings,
       heatmapShownGrid,
+      patchHeatmapLayer,
       readCellsFor,
     ]
   );
