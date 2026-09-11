@@ -222,7 +222,9 @@ describe('every error group is known to the cap machinery', () => {
     // it does not by itself prove the defect is gone. The case above is the one
     // that was red. This states the property that matters downstream -
     // `nearestDatumPixel` excludes a pixel exactly when `getCapPixelRoles` marks
-    // it - so that a future change which breaks it has something to fail.
+    // it. ⚠️ Its own claim that "a future change which breaks it has something
+    // to fail" was ALSO false until the `.index` fix below: nothing could make
+    // it fail.
     const session = spanWithCapsOnBothEnds();
     const tuple = session.getDatasets()[0]!.getAllTuples()[0]!;
     const pixels = session.getDatasets()[0]!.getAllPixels();
@@ -230,8 +232,13 @@ describe('every error group is known to the cap machinery', () => {
       const capIndex = tuple[slot];
       if (capIndex == null) continue;
       const cap = pixels[capIndex]!;
-      const nearest = session.nearestDatumPixel(0, { x: cap.x, y: cap.y }, 500);
-      expect(nearest, `the cap in slot ${slot} was offered as a datum`).not.toBe(capIndex);
+        const nearest = session.nearestDatumPixel(0, { x: cap.x, y: cap.y }, 500);
+      // ⚠️ `.index`, NOT the object. This read `expect(nearest)` against a
+      // NUMBER, and `nearestDatumPixel` returns `{ index, point } | null` - an
+      // object is never `===` a number, so the assertion held under every
+      // possible behaviour including a full regression. Found by the audit of
+      // this very fix, which is the second vacuous companion test in two days.
+      expect(nearest?.index, `the cap in slot ${slot} was offered as a datum`).not.toBe(capIndex);
     }
   });
 });
