@@ -416,3 +416,42 @@ describe('a file whose calibration the model could not read says so', () => {
     expect(session.getCalibrationError()).toBeNull();
   });
 });
+
+/**
+ * ⚑⚑ A FOREIGN IMPORT COMES THROUGH THE SAME DOOR, AND THE OVERNIGHT AUDIT
+ * DISPUTED THAT - so it is pinned here rather than argued about again.
+ *
+ * The importers do not run `checkGuards` themselves. They build a `Calibration`,
+ * ask the axes class to calibrate it, and hand the instance over - and an axes
+ * class reports success on degenerate input, which is the whole premise of this
+ * file. Read in isolation that looks like an unguarded entrance: a
+ * StarryDigitizer file whose X and Y axes are parallel (a user who clicked both
+ * Y points along the bottom axis) calibrates `true` and reads `NaN`.
+ *
+ * It is not an entrance. Every imported figure reaches the app through
+ * `loadCalibrated`, which is the model's door and guards it - so the refusal is
+ * on screen, by name, exactly as it is for a project of our own.
+ *
+ * ⚑ WHAT THIS TEST IS FOR is the thing that WOULD break it: an import path that
+ * installs an axes some other way. The guarantee is not "the importers are
+ * careful", it is "there is one door", and that is worth a named case because
+ * the next importer will be written by someone reading the importers.
+ */
+describe('a foreign import is guarded by the same door as our own files', () => {
+  it('⚑ a parallel-axes import arrives with the refusal on screen, not silently NaN', () => {
+    // Built the way an importer builds one: a Calibration straight to
+    // `calibrate()`, never touching the click walk.
+    const axes = loadedXY([
+      [100, 500, '0', '0'],
+      [600, 500, '10', '0'],
+      [100, 500, '0', '0'],
+      [600, 500, '0', '1'], // the second Y point on the X axis: parallel
+    ]);
+    expect(axes.isCalibrated(), 'the axes class reports success, as it always does').toBe(true);
+    expect(Number.isNaN(axes.pixelToData(350, 300)[0]!), 'and reads NaN').toBe(true);
+
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    session.loadCalibrated(axes, [new Dataset(2)]);
+    expect(session.getCalibrationError()).toMatch(/parallel/i);
+  });
+});
