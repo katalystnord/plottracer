@@ -247,3 +247,71 @@ describe('⚑⚑ an imported bar chart can still be given a category axis', () =
     expect(s.isCalibrated()).toBe(true);
   });
 });
+
+/**
+ * ⚑⚑ A WPD PROJECT OUR OWN MODEL REFUSES IS NOT IMPORTED.
+ *
+ * ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT. `plotData.deserialize` calls
+ * `axes.calibrate(...)` and DISCARDS its verdict - it pushes the instance if the
+ * object is non-null - and `importWpdFigure` handed the caller whatever came
+ * back. An uncalibrated `XYAxes` has an all-zero transform, so `pixelToData`
+ * answers `[0, 0]`: finite, so the non-finite sanitiser in `exportValues` never
+ * fires, and the user gets a full CSV of zeros with nothing on screen wrong.
+ *
+ * ⚑⚑ IT IS REACHABLE FROM REAL UPSTREAM FILES BECAUSE OUR PORT DELIBERATELY
+ * DIVERGED. WPD's own `processCalibration` always returned true (the
+ * checkpoint-81 defect class), so that tool happily saves projects whose two X
+ * ticks carry the same value, or whose log axis passes through zero - both of
+ * which `core/axes/xy.ts` now refuses by name.
+ *
+ * ⚑ `digImport` and `starryImport` already take this posture: they check what
+ * `calibrate()` answered and refuse with a sentence. This is the same rule at
+ * the third importer.
+ */
+describe('an unusable WPD calibration is refused rather than imported as zeros', () => {
+  function wpdWithEqualXTicks(): Record<string, unknown> {
+    const raw = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/wpd/wpd4.json', import.meta.url), 'utf8')
+    ) as { axesColl: { type: string; calibrationPoints: { dx: string }[] }[] };
+    const xy = raw.axesColl.find((a) => a.type === 'XYAxes')!;
+    // Two X ticks carrying the same value: the axis has no range, so every
+    // pixel reads that one constant. WPD writes this; we refuse it.
+    xy.calibrationPoints[0]!.dx = '5';
+    xy.calibrationPoints[1]!.dx = '5';
+    return raw as unknown as Record<string, unknown>;
+  }
+
+  it('⚑⚑ refuses by name instead of handing back an axes that reads 0 everywhere', () => {
+    const raw = wpdWithEqualXTicks();
+    const listed = listWpdFigures(raw);
+    expect('figures' in listed, 'the project should still LIST').toBe(true);
+    const { plotData, figures } = listed as { plotData: Parameters<typeof importWpdFigure>[0]; figures: Parameters<typeof importWpdFigure>[1] };
+    const xy = figures.find((f) => f.configId === 'xy')!;
+    const got = importWpdFigure(plotData, figures, xy.index);
+    expect('error' in got, 'an uncalibrated figure was handed over as if it were usable').toBe(true);
+    expect((got as { error: string }).error).toMatch(/could not be calibrated/i);
+  });
+
+  it('⚠️ names the MEASUREMENT the refusal replaces - every point would read zero', () => {
+    // Kept so the refusal is never traded away as over-strict: this is what the
+    // user got before it, and it is indistinguishable from real data.
+    const raw = wpdWithEqualXTicks();
+    const { plotData } = listWpdFigures(raw) as { plotData: { getAxesColl(): unknown[] } };
+    const axes = plotData.getAxesColl()[0] as unknown as {
+      isCalibrated(): boolean;
+      pixelToData(x: number, y: number): number[];
+    };
+    expect(axes.isCalibrated()).toBe(false);
+    expect(axes.pixelToData(300, 300)).toEqual([0, 0]);
+  });
+
+  it('⚑ a healthy project still imports - the guard must not over-reach', () => {
+    const raw = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/wpd/wpd4.json', import.meta.url), 'utf8')
+    ) as Record<string, unknown>;
+    const listed = listWpdFigures(raw) as { plotData: Parameters<typeof importWpdFigure>[0]; figures: Parameters<typeof importWpdFigure>[1] };
+    const xy = listed.figures.find((f) => f.configId === 'xy')!;
+    const got = importWpdFigure(listed.plotData, listed.figures, xy.index);
+    expect('error' in got, 'a healthy WPD figure was refused').toBe(false);
+  });
+});

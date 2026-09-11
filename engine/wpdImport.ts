@@ -216,5 +216,30 @@ export function importWpdFigure(
   }
   const axes = plotData.getAxesColl()[index];
   if (!axes) return { error: `This project has no figure ${index}.` };
+  // ⚑⚑ ASK THE AXES WHETHER IT ACTUALLY CALIBRATED, because `plotData`
+  // deliberately does not: `deserialize` calls `calibrate(...)` and pushes the
+  // instance if the OBJECT is non-null, never if it answered true.
+  //
+  // ⚠️ An uncalibrated `XYAxes` has an all-zero transform, so `pixelToData`
+  // returns `[0, 0]` - FINITE, so the non-finite sanitiser in `exportValues`
+  // never fires and the user gets a full sheet of zeros with nothing on screen
+  // wrong. Measured before this guard: `isCalibrated=false`, `pixelToData(300,
+  // 300) = [0, 0]`, no error anywhere.
+  //
+  // ⚑⚑ REACHABLE FROM REAL UPSTREAM FILES PRECISELY BECAUSE OUR PORT DIVERGED.
+  // WPD's own `processCalibration` always returned true (the checkpoint-81
+  // class), so it happily saves projects whose two X ticks carry the same value,
+  // or whose log axis passes through zero - both of which `core/axes/xy.ts` now
+  // refuses by name. Their files are valid to them and unusable to us, and that
+  // is worth saying rather than silently reading as zeros.
+  //
+  // ⚑ The same posture `digImport` and `starryImport` already take, which is why
+  // this is a missing check rather than a new policy.
+  const selfCheck = axes as unknown as { isCalibrated?: () => boolean };
+  if (selfCheck.isCalibrated?.() === false) {
+    return {
+      error: `Can't open "${figure.name}" - its axes could not be calibrated here. WebPlotDigitizer accepts some calibrations this tool refuses, such as two axis ticks carrying the same value, or a log axis through zero.`,
+    };
+  }
   return { configId: figure.configId, axes, datasets: datasetsForAxes(plotData, axes) };
 }
