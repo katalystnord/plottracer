@@ -27,6 +27,17 @@ interface PolarFrame {
   det: number;
   rho0: number;
   sense: number;
+  /**
+   * ⚑⚑ WHICH WAY THE RADIAL AXIS RUNS: +1 outward-increasing, -1 decreasing.
+   *
+   * Factored out of `M` rather than left inside it, because the reading recovers
+   * the radius with `hypot`, which is UNSIGNED. With the sign inside the frame,
+   * a figure whose declared radii sit below the centre value read back reflected
+   * about the centre with its angle 180 degrees out, and said it had calibrated.
+   * A sky chart (elevation 90 at the centre, 0 at the rim) is an ordinary
+   * example; so is a mistyped centre.
+   */
+  radialSign: number;
 }
 
 export class PolarAxes {
@@ -160,6 +171,24 @@ export class PolarAxes {
       // wrong. Refusing is the honest answer, and the walk asks for exactly what
       // the frame needs, so this is reachable only from a file or a drag.
       if (this.frame === null) return false;
+      // ⚑⚑⚑ THE MODEL READS ITS OWN CALIBRATION POINTS BACK, AND REFUSES IF IT
+      // CANNOT.
+      //
+      // Not belt-and-braces: it is the cheapest complete statement of what a
+      // calibration IS, and it catches a CLASS rather than an instance. An
+      // unsigned `hypot` once reflected every radius about the centre and
+      // reported success, and the only thing that would have noticed is this
+      // question - which the test file next door already names ("reproduces its
+      // own two calibration points, as any calibration must") and had never run
+      // on a figure whose radial axis decreases outward.
+      //
+      // Frame path only. The circular reading is a two-point fit that does not
+      // use P2's angle at all, so it cannot be asked to reproduce one.
+      if (!this.reproduces(this.x1, this.y1, this.r1, theta1) ||
+          !this.reproduces(x2, y2, this.r2, theta2r)) {
+        this.frame = null;
+        return false;
+      }
     }
 
     return true;
@@ -213,6 +242,19 @@ export class PolarAxes {
     const rho2 = this.r2 - rho0;
     // A calibration point AT the centre gives the frame no direction.
     if (rho1 === 0 || rho2 === 0) return null;
+    // ⚑⚑ THE TWO CLICKS MUST AGREE ON WHICH WAY THE AXIS RUNS. They disagree
+    // only when the centre value falls BETWEEN the declared radii, which is
+    // contradictory rather than merely awkward: the axis would have to increase
+    // towards one click and decrease towards the other. Refusing is the honest
+    // answer, and it is the case worth refusing loudest - half such a figure
+    // used to read correctly and half reflected, so it looks right wherever you
+    // happen to check it.
+    if (Math.sign(rho1) !== Math.sign(rho2)) return null;
+    // With the direction agreed it comes OUT of the frame and is applied by the
+    // reading, which is the only place that knows it lost the sign to `hypot`.
+    const radialSign = Math.sign(rho1);
+    const mag1 = Math.abs(rho1);
+    const mag2 = Math.abs(rho2);
 
     // ⚑ The clockwise flag is applied HERE, to the canonical vectors, and is
     // then absorbed by the frame - which is the point: with two angles the sense
@@ -220,10 +262,10 @@ export class PolarAxes {
     // checkbox. The reading below undoes the same sign, so the flag still
     // round-trips through save and reopen.
     const sense = this.isClockwise ? -1 : 1;
-    const u1x = rho1 * Math.cos(sense * theta1r);
-    const u1y = rho1 * Math.sin(sense * theta1r);
-    const u2x = rho2 * Math.cos(sense * theta2r);
-    const u2y = rho2 * Math.sin(sense * theta2r);
+    const u1x = mag1 * Math.cos(sense * theta1r);
+    const u1y = mag1 * Math.sin(sense * theta1r);
+    const u2x = mag2 * Math.cos(sense * theta2r);
+    const u2y = mag2 * Math.sin(sense * theta2r);
     const cross = u1x * u2y - u1y * u2x;
     if (!Number.isFinite(cross) || cross === 0) return null;
 
@@ -244,7 +286,34 @@ export class PolarAxes {
     // would be non-finite while `calibrate()` reported success.
     if (!Number.isFinite(det) || det === 0) return null;
 
-    return { a, b, c, d, det, rho0, sense };
+    return { a, b, c, d, det, rho0, sense, radialSign };
+  }
+
+  /**
+   * Does reading `(px, py)` give back the radial coordinate and angle that were
+   * DECLARED there? Compared in the model's own working units - the radial
+   * COORDINATE (log-scaled when the axis is) and radians - so the check does not
+   * depend on the display units, and with a tolerance loose enough that ordinary
+   * floating-point drift never refuses a good calibration.
+   */
+  private reproduces(px: number, py: number, rhoDeclared: number, thetaDeclared: number): boolean {
+    const reading = this.pixelToData(px, py);
+    const rRead = reading[0];
+    const thRead = reading[1];
+    if (rRead === undefined || thRead === undefined) return false;
+    if (!Number.isFinite(rRead) || !Number.isFinite(thRead)) return false;
+    const rhoRead = this.isLog ? Math.log(rRead) / Math.log(10) : rRead;
+    if (!Number.isFinite(rhoRead)) return false;
+    // Scale the radial tolerance to the figure's own span, so a figure measured
+    // in millions is not held to a tolerance meant for one measured in tens.
+    const span = Math.max(Math.abs(this.r1 - this.r2), Math.abs(rhoDeclared), 1);
+    if (Math.abs(rhoRead - rhoDeclared) > 1e-6 * span) return false;
+    // Angles compare modulo a full turn: the reading normalises into [0, 2pi)
+    // and a declared angle need not be.
+    const thReadR = this.isDegrees ? (thRead * Math.PI) / 180 : thRead;
+    const TWO_PI = 2 * Math.PI;
+    const diff = Math.abs(((thReadR - thetaDeclared) % TWO_PI + TWO_PI + Math.PI) % TWO_PI - Math.PI);
+    return diff <= 1e-6;
   }
 
   isCalibrated(): boolean {
@@ -296,7 +365,9 @@ export class PolarAxes {
       const wy = yp - this.y0;
       const u = (frame.d * wx - frame.b * wy) / frame.det;
       const v = (-frame.c * wx + frame.a * wy) / frame.det;
-      let rho = Math.hypot(u, v) + frame.rho0;
+      // `hypot` is unsigned; `radialSign` is the direction the calibration
+      // agreed on, taken back out of the frame so it can be applied here.
+      let rho = frame.radialSign * Math.hypot(u, v) + frame.rho0;
       if (this.isLog) rho = Math.pow(10, rho);
       let th = frame.sense * Math.atan2(v, u);
       if (th < 0) th = th + 2 * Math.PI;
