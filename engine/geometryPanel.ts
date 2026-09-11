@@ -13,8 +13,8 @@
  * restriction as Curve Fit, enforced by ui/'s Workspace.tsx rather than
  * here (see curveFitPanel.ts's header comment for why).
  *
- * v1.1: geometry became a SAVED, series-bound output (like Curve Fit) instead of
- * WPD's throwaway popup -- getGeometryState/setGeometryState persist the request
+ * v1.1: geometry became a SAVED, series-bound output (like Curve Fit) rather
+ * than a popup that forgets - getGeometryState/setGeometryState persist the request
  * (the `closed` flag) on the dataset. The RESULT itself is not stored: ui/ derives
  * it live from the current points via runGeometry, so it recomputes-on-edit for
  * free and can never go silently stale. (The earlier "deliberately no state" note

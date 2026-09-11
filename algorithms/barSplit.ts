@@ -8,13 +8,13 @@
  * it is not image analysis at all: the user declares where the categories divide,
  * and a run is cut there.
  *
- * ⚑ WHAT MAKES THIS DIFFERENT FROM WPD'S OWN SPLITTER. Upstream already separates
- * touching bars (`barExtraction.js`: group columns while |Δx| ≤ 30px and both ends
- * are within ΔVal = 10px). That is a BLIND tolerance - it has no idea how many
- * bars should be there, so it returns whatever the threshold yields, and it keys
- * the split on the very quantity being measured, which fails exactly when
- * neighbouring bars are similar heights. Declared dividers know nothing about
- * heights, so they do not care.
+ * ⚑⚑ WHY A DECLARED DIVIDER AND NOT A TOLERANCE. The obvious way to separate
+ * touching bars is to group pixel columns while their heights stay within some
+ * threshold - and that keys the split on the VERY QUANTITY BEING MEASURED, so it
+ * fails exactly where it matters most: two neighbouring bars of similar height.
+ * It also has no idea how many bars there should be, so it returns whatever the
+ * threshold happens to yield. A declared divider knows nothing about heights,
+ * which is precisely why heights cannot mislead it.
  *
  * ⚑⚑ THE DISCIPLINE, or this becomes approach C again. Approach C won on the
  * metric (+3.9) and was reverted because it ERASED SHORT BARS - a visible failure

@@ -142,15 +142,18 @@ const DEFAULT_RUN_GAP = 1;
  * mistake is this repo's recurring one: a **capture convenience** ("scan the
  * columns, take the middle") promoted to a **data model**.
  *
- * **We were below both references, not copying either.** WPD scans each column
- * for *blobs* and emits one point per blob
- * (`core/curve_detection/averagingWindowCore.js:52-83`), then merges only by
- * proximity in **both** x and y (`:105`), so two branches never collapse into
- * one another. Engauge keeps multiple runs per column too
- * (`src/Segment/SegmentFactory.cpp`, read for the concept only - GPL-2.0).
- * This ports WPD's model, simplified: a flood-filled segment is connected by
- * construction, so contiguity is the natural run boundary and needs no
- * equivalent of WPD's `yStep` averaging-window height.
+ * ⚑⚑ A COLUMN CAN HOLD MORE THAN ONE RUN, and collapsing them to one point is
+ * what loses a doubling-back curve. Each contiguous run of filled pixels in a
+ * column is its own reading, and runs merge only by proximity in BOTH x and y,
+ * so two branches of a curve passing through the same column never collapse into
+ * each other.
+ *
+ * ⚑ A flood-filled segment is connected by construction, so contiguity IS the
+ * run boundary and no averaging-window height is needed to find one.
+ *
+ * ⚑ Engauge's `src/Segment/SegmentFactory.cpp` keeps multiple runs per column
+ * too. Read for the CONCEPT ONLY and never ported: it is GPL-2.0, and this
+ * project keeps reading and implementing strictly separated.
  *
  * Output is in column order, which is NOT curve order for a doubling-back
  * curve -- see orderByNearestNeighbour, which is the other half of the fix.
@@ -200,12 +203,13 @@ export function pointsFromColumnRuns(
  * scale (MAX_FILL_PX caps the mask, and a trace is subsampled to 500 before
  * export).
  *
- * Distances are in pixel space, where x and y are the same unit. Upstream
- * compares in *data* space via `connectivityFieldIndices`; pixels are isotropic
- * and the axes may not be, so this is the sounder metric for tracing.
+ * ⚑ Distances are measured in PIXEL space, where x and y are the same unit.
+ * Comparing in data space would weigh the two axes by whatever the calibration
+ * happens to make them worth, so a tall thin chart and a short wide one would
+ * trace differently from identical ink. Pixels are isotropic; the axes are not.
  *
- * Starts from `points[0]` -- the leftmost column's first run -- matching
- * upstream, which starts from row 0 of whatever order it was handed.
+ * Starts from `points[0]`, the leftmost column's first run - a defined starting
+ * point, rather than whatever order the caller happened to hand over.
  */
 export function orderByNearestNeighbour(points: readonly Point2D[]): Point2D[] {
   return nearestNeighbourOrder(points).map((i) => ({ x: points[i]!.x, y: points[i]!.y }));

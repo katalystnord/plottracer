@@ -13,23 +13,20 @@
  * invisible.** A calibration is a claim about the figure's geometry; showing the
  * claim is what lets a human refute it.
  *
- * **Ported from WPD's own drawAxes** (`tools/axesCalibrationTools.js:179-245`)
- * plus its `CircularChartRecorderAlignmentRepainter` (`:280-299`), with three
- * deliberate divergences, each earning itself:
+ * Three rules it follows:
  *
- * 1. **Progressive, not all-or-nothing.** WPD gates on
- *    `getCount() === 4` - nothing appears until the last click. Each pair here
- *    draws as soon as *its own* two points exist, so you see the X axis you
- *    implied before you start on Y. Strictly more useful, and free: the pairs
- *    are independent by construction.
- * 2. **Coloured by the step, not by convention.** WPD hardcodes red for X and
- *    green for Y. Our steps already carry the colours their on-canvas reticles
- *    use (`x1` amber, `y1` blue), so a line is drawn in its own axis's colour and
- *    reads as belonging to those handles rather than as a third thing.
- * 3. **Polar and Map get a preview; upstream gives them none.** Both are just a
- *    line between two placed points (the radius vector, the scale bar), so the
- *    cost is zero and leaving two of seven types blind would be an odd place to
- *    stop (tenet 8: break with the stack when the solution wants it).
+ * 1. **Progressive, not all-or-nothing.** Each pair draws as soon as ITS OWN two
+ *    points exist, so you see the X axis you implied before you start on Y.
+ *    Waiting for the last click of four would hide a mistake until it is
+ *    expensive to undo, and the pairs are independent by construction, so there
+ *    is nothing to wait for.
+ * 2. **Coloured by the step, not by convention.** The steps already carry the
+ *    colours their on-canvas reticles use (`x1` amber, `y1` blue), so a line is
+ *    drawn in its own axis's colour and reads as belonging to those handles
+ *    rather than as a third thing on the figure.
+ * 3. **Polar and Map get a preview too.** Each is a line between two placed
+ *    points - the radius vector, the scale bar - so the cost is nothing, and
+ *    leaving two of seven types blind would be an odd place to stop.
  *
  * Pure: geometry in, geometry out, image-pixel space. No DOM, no Konva. The
  * caller converts to screen space like every other overlay.

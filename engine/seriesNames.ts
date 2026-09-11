@@ -3,18 +3,15 @@
  *
  * **Why this exists now.** Series names are about to stop being cosmetic. The
  * error-capture model agreed 2026-07-16 (see docs/error-bars-design.md) relates
- * one series to another *by name* - mirroring how WPD binds a dataset to its
- * axes (`axesName: axes.name`) - so a duplicate name stops being an untidy CSV
- * header and becomes an ambiguous relationship. David: *"we need to move to
+ * one series to another *by name* - the same way a dataset is bound to its axes
+ * (`axesName: axes.name`) - so a duplicate name stops being an untidy CSV header
+ * and becomes an ambiguous relationship. David: *"we need to move to
  * unique series names… under this way of looking at things, that is a must."*
  *
- * **Ported from WPD's controller layer, which is where its refusals live.**
- * `controllers/datasetManagement.js:23-30` is `datasetWithNameExists`, checked
- * on rename (`:72-76`) and on add (`:109-115`); `:53-56` bumps the default
- * name's suffix until it's free. `core/` never carried any of it - the same
- * shape as checkpoint 69's finding that `core/` holds the math while
- * `controllers/` holds the guards, so a faithful `core/` port silently drops
- * every refusal.
+ * **The refusals live here, not in `core/`.** This is checkpoint 69's lesson: a
+ * layer holding the MATH while another holds the GUARDS loses every refusal the
+ * moment only one of the two is carried across. Both belong where the model can
+ * see them.
  *
  * **Verified by execution before writing this** - all four paths were
  * unguarded, and one is a live bug with nothing to do with error bars: rename
@@ -23,17 +20,14 @@
  * counter's own comment claimed names "stay unique", which held for
  * add/remove but not for rename.
  *
- * Comparison is **exact after trimming**, matching WPD's own `indexOf(name)`
- * against trimmed input. Deliberately not case-insensitive: "SD" and "sd" are
- * distinct column headers, upstream allows both, and diverging here would be a
- * silent behaviour change for no stated need.
+ * Comparison is **exact after trimming**, and deliberately NOT
+ * case-insensitive: "SD" and "sd" are distinct column headers, and a user who
+ * typed both meant both.
  *
  * Pure and headless per CLAUDE.md's leg (c): no DOM, no session imports.
  */
 
-/** Empty names are OUR rule, not WPD's - recorded as a decision, not parity.
- * `datasetManagement.js` only ever calls `.trim()`; it has no empty check
- * anywhere. We refuse blanks because a series name is a CSV column header, and
+/** Blank names are refused because a series name is a CSV column header, and
  * a blank header is unreadable output rather than merely untidy state. */
 const EMPTY_NAME_ERROR = 'A series needs a name.';
 
@@ -57,9 +51,9 @@ export function datasetNameError(name: string, otherNames: readonly string[]): s
  *
  * For names the user did not choose: the auto-namer, and de-duplicating a
  * loaded project that predates this guard. A name the user *typed* gets
- * refused instead (see datasetNameError) - silently substituting a different
- * name for one they asked for would ignore their intent, which is why WPD
- * refuses a typed duplicate but bumps its own default. Same split here.
+ * refused instead (see datasetNameError): silently substituting a different name
+ * for one they asked for would ignore what they meant. A name nobody typed can
+ * be bumped freely, because there is no intent to override.
  */
 export function uniqueDatasetName(desired: string, otherNames: readonly string[]): string {
   const base = desired.trim() || 'Series';

@@ -68,9 +68,9 @@ function isErrorRole(value: unknown): value is ErrorRole {
  * its own cap and reports an error of **exactly zero**: fabricated certainty,
  * which is the precise inverse of what this feature exists to prevent, and
  * invisible because a zero-length whisker draws nothing. This is checkpoint
- * 69's lesson exactly (`core/` holds the math, `controllers/` holds the guards,
- * so a faithful port silently drops every refusal) -- caught by execution
- * against new code rather than inherited. Verified 2026-07-16.
+ * 69's lesson exactly: a layer that holds the MATH while another layer holds the
+ * GUARDS will lose every refusal the moment only one of them is carried across.
+ * Caught by execution. Verified 2026-07-16.
  */
 export function getErrorRelation(dataset: Dataset): ErrorRelation | null {
   const raw = dataset.getMetadata()[ERROR_RELATION_METADATA_KEY];

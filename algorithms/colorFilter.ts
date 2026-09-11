@@ -27,7 +27,7 @@
 export type RGB = readonly [number, number, number];
 
 /**
- * Which pixels to keep (WPD's two modes):
+ * Which pixels to keep, two modes:
  * - `foreground`: pixels NEAR the target colour -- "the curve IS this colour".
  * - `background`: pixels FAR from the target -- "the curve is anything but the
  *   paper/background colour". Useful when the series colours vary but the
@@ -37,7 +37,7 @@ export type ColorFilterMode = 'foreground' | 'background';
 
 /** An optional rectangle to restrict the filter to (e.g. the plot box, so a
  * legend swatch or axis label of the same colour is not selected). Clamped to the
- * image; omitted => the whole image (WPD's empty mask). */
+ * image; omitted => the whole image. */
 export interface FilterRegion {
   x: number;
   y: number;

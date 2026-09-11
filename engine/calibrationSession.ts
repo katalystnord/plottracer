@@ -2441,9 +2441,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * and shows only the value dimensions -- it drops the pixel columns and, for
    * Bar, the leading `Category` (the category lives in metadata, not a value
    * column, and the table renders it as its own column via showCategoryColumn).
-   * WPD's own contract always puts that category first (`dataProviders.js` ->
-   * `['Label','Value']`, whose word we used until v1.3), so the value dimensions
-   * are the trailing `dataDim` entries: Bar `['Category','Y']` -> `['Y']`, and
+   * The category always comes first, so the value dimensions are the trailing
+   * `dataDim` entries: Bar `['Category','Y']` -> `['Y']`, and
    * every other type's labels already equal its `dataDim`, so the slice is a
    * no-op there.
    *
@@ -2477,8 +2476,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
       .slice(-this.config.dataDim);
   }
 
-  /** One export row per point of a dataset, values per WPD's own contract
-   * (core/exportValues.ts): Bar carries its Label, CCR's time is formatted
+  /** One export row per point of a dataset, values per the export contract in
+   * `core/exportValues.ts`: Bar carries its Label, CCR's time is formatted
    * rather than emitted as a julian float, and a date-calibrated XY column is
    * formatted. Pixels ride along for the flat export, which reports them.
    *
@@ -2925,13 +2924,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * renaming a series onto a number it hasn't reached yet used to collide
    * ("Series 1" -> "Series 2", Add -> a second "Series 2"). Verified by
    * execution 2026-07-16; the counter's own comment claimed uniqueness it
-   * couldn't hold. Same walk as WPD's own default-name loop
-   * (`datasetManagement.js:53-56`).
+   * couldn't hold.
    *
    * A caller-supplied name is disambiguated rather than refused, because
    * addDataset's callers pass names the *user* did not type (the load path,
-   * tests). A name the user typed goes through renameDataset, which refuses --
-   * matching WPD's own split between bumping its default and rejecting yours. */
+   * tests). A name the user TYPED goes through renameDataset, which refuses
+   * instead: silently changing what someone wrote is worse than telling them it
+   * is taken. */
   private freeDatasetName(requested?: string): string {
     const existing = this.datasetEntries.map((e) => e.dataset.name);
     if (requested !== undefined) return uniqueDatasetName(requested, existing);
@@ -3356,8 +3355,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * configured (Box Plot etc.), the new pixel is also filed into a tuple at
    * that dataset's own cursor position, which then advances -- see
    * nextSlot and this file's header comment. Starting a new tuple
-   * auto-labels it (see autoLabelTuple), matching real WPD's own
-   * ManualSelectionTool.onMouseClick behavior for Bar axes datasets. */
+   * auto-labels it (see autoLabelTuple), so a tuple is never nameless while it is
+   * being filled. */
   addDataPoint(px: number, py: number): DataPointClickResult {
     if (!this.axes) return 'ignored';
     // ⚑⚑ NO CAPTURE UNTIL THE CATEGORY AXIS IS PLACED - see

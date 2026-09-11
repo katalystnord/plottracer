@@ -130,7 +130,8 @@ export function detectBlobs(
 
       const diameter = 2 * Math.sqrt(area / Math.PI);
       if (diameter >= minDia && diameter <= maxDia) {
-        // +0.5 shifts to the pixel centre, matching WPD. The bbox's max is
+        // +0.5 shifts to the pixel CENTRE: a pixel's index names its corner,
+        // and a blob's centroid is a position on the figure. The bbox's max is
         // +1 past the last matched pixel INDEX, so it spans the blob's true
         // visual extent (a pixel at column x covers [x, x+1)), not the
         // narrower box you'd get from the raw index range.

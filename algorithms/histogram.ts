@@ -14,15 +14,11 @@
  * keeping each bin independent, so a misclick spoils one bin rather than
  * a whole contiguous walk.
  *
- * Notably this is *more* than upstream WPD extracts. WPD's "histogram" is
- * its BarExtractionAlgo run against XY axes (relabelled in the dropdown;
- * XYAxes.getOrientation() exists solely to serve it), and it emits one
- * point per bar at the bar's *centre* - bin edges are never recorded, so
- * widths can only be inferred from centre spacing and only when bins are
- * uniform. Keeping true edges is the point of this module. When that
- * algorithm is ported for the auto-extraction work (CLAUDE.md's v0.3
- * theme), its per-bar pixel-column groups already know their own min/max
- * x, so it can produce real edges and feed HistogramBin directly.
+ * ⚑⚑ TRUE EDGES ARE THE POINT OF THIS MODULE. A histogram read as one point
+ * per bar, at the bar's centre, cannot say how wide a bin is: the width has to
+ * be inferred from the spacing between centres, which is only right when every
+ * bin is the same width. A record of centres cannot regenerate the figure it
+ * came from. So a bin carries its own two edges, measured.
  *
  * Pure and headless per CLAUDE.md's leg (c): no DOM, no engine imports -
  * ui/ and any future batch pipeline are both thin adapters over this.
