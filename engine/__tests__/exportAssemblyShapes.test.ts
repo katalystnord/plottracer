@@ -312,3 +312,66 @@ describe('a grouped Bar chart exports all of its series', () => {
     expect(sections[0]!.title).toBeUndefined();
   });
 });
+
+/**
+ * ⚑⚑ A DOCUMENT WHOSE SERIES DO NOT ALL HAVE THE SAME SHAPE.
+ *
+ * The rows a tuple export writes are asked for PER SERIES; the names beside
+ * them were asked for ONCE, from whichever series happened to be selected. On a
+ * file holding a box plot and a plain bar that put the numbers and the words in
+ * different series, and the JSON branch did not merely mislabel: a five-slot
+ * reading arrived under a one-column name list and FOUR OF THE FIVE MEASURED
+ * VALUES WERE DROPPED FROM THE FILE, with the fifth replaced by a derived
+ * number nobody measured. Which of the two series lost its data depended on
+ * what was selected when Export was pressed.
+ *
+ * ⚠️ The sections path immediately below the JSON branch already asks per
+ * series, under a comment recording this exact defect being fixed THERE. The
+ * JSON sibling kept the hoist, under a comment asserting the hoist was safe.
+ * One bug, two siblings, fixed in one of them - which is why the case is
+ * asserted for BOTH formats here rather than only the one that was broken.
+ *
+ * Reachable through the load door: a reshaped series is a legitimate record
+ * (`boxPlotSlotNotice` says so deliberately), so a saved file carries it back.
+ */
+describe('a file whose series have DIFFERENT shapes', () => {
+  /** A Bar-axes session holding a five-slot series and a plain one-slot bar. */
+  function mixedSession(): CalibrationSession<CalibratedAxes> {
+    const s = barSession();
+    // Series 1 reshaped to a box plot's five named values, measured 1/3/5/7/9.
+    s.getDataset().setSlotNames(['Min', 'Q1', 'Median', 'Q3', 'Max']);
+    for (const v of [1, 3, 5, 7, 9]) s.addDataPoint(150, 500 - v * 40);
+    s.setTupleLabel(0, 'Spread');
+    // Series 2 keeps the bar shape, one bar worth 5.
+    s.addDataset('Bars');
+    captureBar(s, 250, 300, 'Plain');
+    return s;
+  }
+
+  it('⚑⚑ keeps every measured value when the ACTIVE series has fewer slots (JSON)', () => {
+    const s = mixedSession();
+    // Select the ONE-SLOT bar series (index 1), then export everything. That is
+    // the half that lost data: the five-slot series read through one name.
+    s.setActiveDataset(1);
+    const doc = JSON.parse(buildExportJson(inputFor(s, 'bar', { scope: 'all' })));
+    const spread = doc.series.find((x: { name: string }) => x.name === 'Series 1');
+    expect(spread, 'the reshaped series is in the file').toBeTruthy();
+    // The five it measured, under its OWN names - not one column named by a
+    // neighbour that happens to be selected.
+    const tuple = spread.tuples[0];
+    for (const [name, value] of [['Min', 1], ['Q1', 3], ['Median', 5], ['Q3', 7], ['Max', 9]] as const) {
+      expect(Number(tuple[name]), `${name} survives the export`).toBeCloseTo(value, 6);
+    }
+  });
+
+  it('⚑ and the sections path answers identically, so the two formats cannot drift', () => {
+    const s = mixedSession();
+    s.setActiveDataset(1);
+    const sections = buildExportSections(inputFor(s, 'bar', { scope: 'all' }));
+    const spread = sections.find((x) => x.title === 'Series 1');
+    expect(spread, 'the reshaped series has its own block').toBeTruthy();
+    for (const name of ['Min', 'Q1', 'Median', 'Q3', 'Max']) {
+      expect(spread!.header, `${name} is a column`).toContain(name);
+    }
+  });
+});

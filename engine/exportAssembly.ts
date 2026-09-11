@@ -217,14 +217,20 @@ export function buildExportJson(input: ExportAssemblyInput): string {
         ? infos.map((info) => ({
             name: info.name,
             rows: session.getTupleRows(info.index),
+            // ⚠️ ITS OWN NAMES, beside its own rows. See the matching note on
+            // the sections path below: the rows were per series from the start
+            // and the words were not, so a five-slot series read through a
+            // one-column list lost four measured values from the file.
+            slots: session.getSlotNames(info.index),
+            valueColumns: session.getValueColumns(info.index),
             ...errorColumnsByTuple(session, info.index, input.precision),
           }))
         : [{ name: activeName, rows: session.getTupleRows(), ...errorColumnsByTuple(session, activeIndex, input.precision) }];
     return buildTupleSeriesJSON(
       tupleSeries,
-      // ⚑ THE ACTIVE SERIES' NAMES, and that is right HERE only because this
-      // builder takes one name list for the document. Where a block is written
-      // per series - the sections path below - each block asks for its own.
+      // The fallback for the single-series branch above. Every series in the
+      // `scope: 'all'` branch carries its own `slots`/`valueColumns` and never
+      // reaches these two arguments.
       session.getSlotNames(),
       rounder,
       session.getConfig().derivedTupleValue?.label,

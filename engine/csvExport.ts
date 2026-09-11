@@ -1400,7 +1400,30 @@ export function buildHistogramJSON(
  * `dataToPixel`, which most non-invertible axes -- pie included -- don't
  * have). */
 export function buildTupleSeriesJSON(
-  series: readonly { name: string; rows: readonly TupleRow[]; error?: SeriesErrorColumns }[],
+  /**
+   * ⚑⚑ EACH SERIES CARRIES ITS OWN NAMES. `slots` and `valueColumns` per entry
+   * override the document-level pair below, and they exist because a document's
+   * series need not all have the same shape: a reshaped series (a box plot's
+   * five named values beside a plain bar's one) is a legitimate record that the
+   * load door restores deliberately. Asked once from the ACTIVE series, a
+   * five-slot reading arrived under a one-column name list and four of the five
+   * measured values were DROPPED FROM THE FILE - and which series lost them
+   * depended on what happened to be selected when Export was pressed. The rows
+   * were already per series; only the words were not.
+   *
+   * ⚠️ `tupleDataSection` had the identical defect and was fixed there alone,
+   * so this builder sat beside a corrected sibling for a release. When you
+   * change one of the two, change both - a reader who switches format must meet
+   * the same model.
+   */
+  series: readonly {
+    name: string;
+    rows: readonly TupleRow[];
+    error?: SeriesErrorColumns;
+    slots?: readonly string[];
+    valueColumns?: readonly string[];
+  }[],
+  /** The fallback names, for a caller with one shape for the whole document. */
   pointGroupNames: readonly string[],
   rounder: ValueRounder,
   derivedLabel: string | undefined,
@@ -1417,8 +1440,12 @@ export function buildTupleSeriesJSON(
   valueColumns?: readonly string[]
 ): string {
   const doc: Record<string, unknown> = {
-    series: series.map(({ name, rows: tupleRows, error }) => (
-      {
+    series: series.map(({ name, rows: tupleRows, error, slots, valueColumns: ownValueColumns }) => {
+      // This series' own words, falling back to the document's where a caller
+      // has only one shape to report.
+      const names = slots ?? pointGroupNames;
+      const columns = ownValueColumns ?? valueColumns;
+      return {
         name,
         tuples: tupleRows.map((row, i) => {
           const entry: Record<string, unknown> = {
@@ -1441,27 +1468,27 @@ export function buildTupleSeriesJSON(
             // ⚑ THE SAME TWO CORRECTIONS AS THE TABLE, so the formats cannot
             // drift apart: an interval answers first (`intervalSlots` below),
             // and a cell reaches the file through the rounder.
-            ...(intervalSlots === undefined && valueColumns && valueColumns.length > 1
+            ...(intervalSlots === undefined && columns && columns.length > 1
               ? Object.fromEntries(
-                  valueColumns.map((label, i) => [
+                  columns.map((label, i) => [
                     label,
                     row.cells[i] == null ? null : rounder.at([row.cells[i] as number], 0),
                   ])
                 )
               : {}),
             ...Object.fromEntries(
-              (intervalSlots === undefined && valueColumns && valueColumns.length > 1
+              (intervalSlots === undefined && columns && columns.length > 1
                 ? []
-                : intervalSlots ?? (measuredFromFigureOrigin ? [] : pointGroupNames)
+                : intervalSlots ?? (measuredFromFigureOrigin ? [] : names)
               ).map((label, slot) => [
                 label,
-                memberValues(row, pointGroupNames.length, rounder, intervalSlots !== undefined)[slot] ??
+                memberValues(row, names.length, rounder, intervalSlots !== undefined)[slot] ??
                   null,
               ])
             ),
           };
           if (
-            !(intervalSlots === undefined && valueColumns && valueColumns.length > 1) &&
+            !(intervalSlots === undefined && columns && columns.length > 1) &&
             derivedLabel != null &&
             row.derived != null
           ) {
@@ -1483,8 +1510,8 @@ export function buildTupleSeriesJSON(
           }
           return entry;
         }),
-      }
-    )),
+      };
+    }),
   };
   if (measurements.length > 0) {
     doc.measurements = measurementsJson(measurements);
