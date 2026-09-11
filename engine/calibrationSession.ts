@@ -3103,6 +3103,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "the model has more than one entrance" class as the guards below, reached by
     // a different route - there, a file skipped a refusal; here, a file's own
     // shape is overwritten by a default.
+    this.globalValues = this.config.extractGlobalValues?.(axes) ?? {};
+    // Options come back from the axes instance itself, so a reopened project
+    // keeps the settings it was calibrated with (its log scales, orientation,
+    // units) instead of silently reverting to defaults and changing every
+    // value on screen. Falls back to defaults for a config with no options.
+    //
+    // ⚑⚑ IT MUST PRECEDE THE `placed` REBUILD BELOW, NOT MERELY `checkGuards`.
+    // `getSteps()` is option-dependent - `stepsForOptions` reshapes the walk for
+    // polar and heatmap - so reading the options after filling the card rebuilt
+    // the card against the DEFAULT shape and read each step's boxes out of the
+    // wrong value slots. A tilted polar lost `r at centre` and P2's angle to a
+    // step that no longer asked for them, leaving no box on screen to retype
+    // them into and every later handle nudge refusing over values the user
+    // could not see; a 7-column categorical heatmap came back showing its
+    // index-frame coordinate in the box labelled Columns. Nothing MEASURED was
+    // wrong either time, because the axes instance came from the file, which is
+    // exactly why it was silent.
+    this.optionValues =
+      this.config.extractOptions?.(axes) ??
+      defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>);
     if (cal && this.config.repeatingStep) {
       this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.fixedSteps.length);
     }
@@ -3132,16 +3152,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.pendingExplodedTuple = null;
     this.pendingApex = null;
 
-    this.globalValues = this.config.extractGlobalValues?.(axes) ?? {};
-    // Options come back from the axes instance itself, so a reopened project
-    // keeps the settings it was calibrated with (its log scales, orientation,
-    // units) instead of silently reverting to defaults and changing every
-    // value on screen. Falls back to defaults for a config with no options.
-    // MUST precede checkGuards below: the log-scale guards are conditional on
-    // these very options.
-    this.optionValues =
-      this.config.extractOptions?.(axes) ??
-      defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>);
     // ⚑ THE SECOND DOOR (finding A3, 2026-07-17). checkGuards used to run in
     // runCalibration ONLY -- so every refusal was click-path-only, and opening a
     // *file* bypassed all of them. `plotData.deserialize` calls `axes.calibrate`
