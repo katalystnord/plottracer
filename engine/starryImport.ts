@@ -117,6 +117,34 @@ function findImage(files: Record<string, Uint8Array>): { bytes: Uint8Array; mime
   return null;
 }
 
+/**
+ * ⚑⚑ ONE FIGURE OF SEVERAL, LISTED BEFORE ANYTHING IS OPENED.
+ *
+ * A StarryDigitizer project holds an `axisSets` array, and each entry is its own
+ * calibrated figure with its own datasets - exactly the multiplicity every other
+ * project format has. This used to open the ACTIVE one and name the rest in a
+ * note, which is a decision taken on the user's behalf about which of their
+ * figures matters.
+ *
+ * ⚑ The shape mirrors the other importers deliberately, so no format is the one
+ * the app is really built around and the picker can be written once.
+ */
+export interface StarryFigure {
+  index: number;
+  name: string;
+  /** Our graph type, or null when we cannot open it. */
+  configId: string | null;
+  unsupportedReason: string | null;
+  datasetNames: string[];
+}
+
+/** A read project, held so a figure can be opened without parsing twice. */
+export interface StarryProject {
+  json: StarryProjectJson;
+  files: Record<string, Uint8Array>;
+  figures: StarryFigure[];
+}
+
 /** A StarryDigitizer project turned into our own model. */
 export interface ImportedStarryFigure {
   configId: string;
@@ -143,7 +171,7 @@ function axisPoint(a: StarryAxis | undefined): { px: number; py: number; value: 
  * missing a calibration point, or one whose points cannot fix a scale, is an
  * error the UI shows - not a figure whose numbers are quietly wrong.
  */
-export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedStarryFigure> {
+export function listStarryFigures(bytes: Uint8Array): StarryResult<StarryProject> {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipBounded(bytes);
@@ -165,16 +193,75 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
   const axisSets = Array.isArray(json.axisSets) ? json.axisSets : [];
   if (axisSets.length === 0) return { error: 'This StarryDigitizer project has no calibrated axes.' };
 
-  const notes: string[] = [];
-  // A project can hold several axis sets, each its own calibrated figure. We
-  // render one at a time, so the ACTIVE one is opened and the rest are named
-  // rather than dropped in silence.
-  const active = axisSets.find((a) => a.id === json.activeAxisSetId) ?? axisSets[0]!;
-  if (axisSets.length > 1) {
-    notes.push(
-      `This project held ${axisSets.length} axis sets; "${active.name ?? 'the active one'}" was opened and the others were not imported.`
+  const all = Array.isArray(json.datasets) ? json.datasets : [];
+  const figures: StarryFigure[] = axisSets.map((a, index) => {
+    const complete = !!axisPoint(a.x1) && !!axisPoint(a.x2) && !!axisPoint(a.y1) && !!axisPoint(a.y2);
+    const mine = all.filter((d) => d.axisSetId === a.id);
+    return {
+      index,
+      name: typeof a.name === 'string' && a.name.length > 0 ? a.name : `Axis set ${index + 1}`,
+      // Every StarryDigitizer figure is an XY chart; the format has no other kind.
+      configId: complete ? 'xy' : null,
+      unsupportedReason: complete
+        ? null
+        : 'its axes are incomplete - all four calibration points are needed',
+      datasetNames: (mine.length > 0 ? mine : all.filter((d) => d.axisSetId == null)).map((d) =>
+        typeof d.name === 'string' && d.name.length > 0 ? d.name : 'Data'
+      ),
+    };
+  });
+  return { json, files, figures };
+}
+
+/**
+ * Read a project and open a single figure - the convenience path for a file that
+ * holds one, and for callers that do not present a choice.
+ *
+ * ⚑ It opens the figure the file marks ACTIVE, which is a reasonable default for
+ * one figure and is NOT a judgement about which of several matters. Anything
+ * showing the user a choice lists first (`listStarryFigures`) and opens the index
+ * they picked.
+ */
+export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedStarryFigure> {
+  const listed = listStarryFigures(bytes);
+  if ('error' in listed) return listed;
+  const axisSets = Array.isArray(listed.json.axisSets) ? listed.json.axisSets : [];
+  const activeIndex = Math.max(
+    0,
+    axisSets.findIndex((a) => a.id === listed.json.activeAxisSetId)
+  );
+  const opened = importStarryFigureAt(listed, activeIndex);
+  // ⚑ THE FUNCTION THAT DECIDES IS THE ONE THAT EXPLAINS. `importStarryFigureAt`
+  // says nothing about the others because it was told which to open; this path
+  // chose, so it says so.
+  if (!('error' in opened) && listed.figures.length > 1) {
+    opened.notes.push(
+      `This project holds ${listed.figures.length} figures; "${listed.figures[activeIndex]!.name}" was opened.`
     );
   }
+  return opened;
+}
+
+/**
+ * Open ONE figure of a listed StarryDigitizer project.
+ *
+ * ⚑ Takes the index the user chose rather than deciding for them. The file's own
+ * `activeAxisSetId` is a note about where that tool's cursor was, not a statement
+ * about which figure is worth reading.
+ */
+export function importStarryFigureAt(
+  project: StarryProject,
+  index: number
+): StarryResult<ImportedStarryFigure> {
+  const { json, files } = project;
+  const axisSets = Array.isArray(json.axisSets) ? json.axisSets : [];
+  const active = axisSets[index];
+  const listed = project.figures[index];
+  if (!active || !listed) return { error: `This project has no figure ${index}.` };
+  if (listed.configId === null) {
+    return { error: `Can't open "${listed.name}" - ${listed.unsupportedReason}.` };
+  }
+  const notes: string[] = [];
 
   const x1 = axisPoint(active.x1);
   const x2 = axisPoint(active.x2);
@@ -213,9 +300,9 @@ export function importStarryProject(bytes: Uint8Array): StarryResult<ImportedSta
 
   // Only the datasets bound to the axis set we opened; carrying the others would
   // place points against a calibration that is not theirs.
-  const all = Array.isArray(json.datasets) ? json.datasets : [];
-  const mine = all.filter((d) => d.axisSetId === active.id);
-  const source = mine.length > 0 ? mine : all.filter((d) => d.axisSetId == null);
+  const everyDataset = Array.isArray(json.datasets) ? json.datasets : [];
+  const mine = everyDataset.filter((d) => d.axisSetId === active.id);
+  const source = mine.length > 0 ? mine : everyDataset.filter((d) => d.axisSetId == null);
   const datasets: Dataset[] = [];
   for (const d of source) {
     const ds = new Dataset();

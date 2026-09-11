@@ -12,7 +12,12 @@ import {
   importDialogExtensions,
   IMPORT_FORMATS,
 } from '../importRegistry.js';
-import { isStarryProject, importStarryProject } from '../starryImport.js';
+import {
+  isStarryProject,
+  importStarryProject,
+  listStarryFigures,
+  importStarryFigureAt,
+} from '../starryImport.js';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -184,6 +189,64 @@ describe('importStarryProject', () => {
     expect(r.datasets[0]!.name).toBe('Dataset 1');
   });
 
+  /**
+   * ⚑⚑ EVERY FIGURE IN THE FILE IS REACHABLE, not just the one that tool had open.
+   *
+   * David, 2026-09-11: *"You are still making WPD a one, and only one, status
+   * above all other digitizer softwares... Add the ability to import projects
+   * from StarryDigitizer right now, and you make them equal in every technically
+   * conceivable way."*
+   *
+   * He is right, and the inequality was in the code rather than in anyone's
+   * attitude: a WPD project was enumerated so the user could choose a figure, and
+   * a StarryDigitizer project - whose `axisSets` array is the same multiplicity -
+   * opened whichever one that tool happened to have active and named the rest in
+   * a note. Deciding which of someone's figures matters is not ours to do.
+   */
+  it('⚑⚑ lists EVERY figure a StarryDigitizer project holds, and opens the one asked for', () => {
+    const bytes = makeStarry({
+      axisSets: [starryAxisSet(1, 'First'), starryAxisSet(2, 'Second')],
+      activeAxisSetId: 2,
+      datasets: [
+        { id: 1, name: 'On first', axisSetId: 1, points: [{ id: 1, xPx: 350, yPx: 300 }] },
+        { id: 2, name: 'On second', axisSetId: 2, points: [{ id: 2, xPx: 350, yPx: 300 }] },
+      ],
+    });
+    const listed = listStarryFigures(bytes);
+    if ('error' in listed) throw new Error(listed.error);
+
+    expect(listed.figures.map((f) => f.name)).toEqual(['First', 'Second']);
+    expect(listed.figures.map((f) => f.configId)).toEqual(['xy', 'xy']);
+    expect(listed.figures.map((f) => f.datasetNames)).toEqual([['On first'], ['On second']]);
+
+    // The one the file did NOT have active is openable, and brings its own data.
+    const first = importStarryFigureAt(listed, 0);
+    if ('error' in first) throw new Error(first.error);
+    expect(first.datasets.map((d) => d.name)).toEqual(['On first']);
+
+    const second = importStarryFigureAt(listed, 1);
+    if ('error' in second) throw new Error(second.error);
+    expect(second.datasets.map((d) => d.name)).toEqual(['On second']);
+  });
+
+  it('⚑ names a figure it cannot open rather than hiding it from the list', () => {
+    const broken = starryAxisSet(1, 'Half-calibrated') as Record<string, unknown>;
+    delete broken['y2'];
+    const bytes = makeStarry({
+      axisSets: [broken, starryAxisSet(2, 'Whole')],
+      activeAxisSetId: 2,
+      datasets: [],
+    });
+    const listed = listStarryFigures(bytes);
+    if ('error' in listed) throw new Error(listed.error);
+    expect(listed.figures[0]!.configId).toBeNull();
+    expect(listed.figures[0]!.unsupportedReason).toMatch(/four calibration points/i);
+    expect(listed.figures[1]!.configId).toBe('xy');
+    // And asking for it refuses by name rather than opening something wrong.
+    const r = importStarryFigureAt(listed, 0);
+    expect('error' in r && r.error).toMatch(/Half-calibrated/);
+  });
+
   it('opens the ACTIVE axis set and says the others were left behind', () => {
     const bytes = makeStarry({
       axisSets: [starryAxisSet(1, 'First'), starryAxisSet(2, 'Second')],
@@ -198,7 +261,7 @@ describe('importStarryProject', () => {
     // Only the active set's datasets come across - points belonging to another
     // calibration must not be placed against this one.
     expect(r.datasets.map((d) => d.name)).toEqual(['On second']);
-    expect(r.notes.join(' ')).toMatch(/2 axis sets/i);
+    expect(r.notes.join(' ')).toMatch(/2 figures/i);
     expect(r.notes.join(' ')).toMatch(/Second/);
   });
 
