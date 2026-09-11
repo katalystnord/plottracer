@@ -167,3 +167,71 @@ describe('a span carries error on each end', () => {
     expect(maxUpper as number).toBeGreaterThan(minUpper as number);
   });
 });
+
+/**
+ * ⚑⚑ BOTH ENDS' CAPS ARE CAPS, to everything that asks.
+ *
+ * ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT. `getCapPixelRoles` called
+ * `slotForRole(role, slots)` without a `valueIndex`, so it defaulted to 0 and
+ * only the FIRST error group's four slots were ever marked. Every other call
+ * site in `calibrationSession.ts` threads the index; this one was missed.
+ *
+ * Two things read that answer, and the first is the dangerous one:
+ * · `nearestDatumPixel` skips a pixel only when `caps[i] != null`, so the high
+ *   end's caps were offered as drag TARGETS for an error link. That re-opens the
+ *   defect its own comment records fixing on 2026-08-29: pressing a cap armed a
+ *   link drag AND Konva's marker drag, and `roleFromDrag` names the slot from
+ *   drag DIRECTION - so dragging the lower cap inward resolved to "upper" and
+ *   wrote the real upper cap to the drop point, "a measured 113 replaced by 50,
+ *   silently".
+ * · `readingOrdinals` counts a non-cap pixel as a reading, so the high end's two
+ *   caps were drawn and numbered as data points, shifting every later number.
+ */
+describe('every error group is known to the cap machinery', () => {
+  function spanWithCapsOnBothEnds() {
+    const { session, low, high } = spanWithOneBar();
+    session.captureErrorCap({
+      targetIndex: 0,
+      datumPixel: { x: low.px, y: low.py },
+      capPixel: { x: low.px, y: low.py + 20 },
+      baseName: 'SD',
+    });
+    session.captureErrorCap({
+      targetIndex: 0,
+      datumPixel: { x: high.px, y: high.py },
+      capPixel: { x: high.px, y: high.py - 20 },
+      baseName: 'SD',
+    });
+    return session;
+  }
+
+  it('⚑⚑ marks the caps of the SECOND end, not only the first', () => {
+    const session = spanWithCapsOnBothEnds();
+    const roles = session.getCapPixelRoles(0);
+    const tuple = session.getDatasets()[0]!.getAllTuples()[0]!;
+    const capPixels = tuple.filter((p, slot) => p != null && slot >= 2) as number[];
+    expect(capPixels.length, 'the fixture must carry four caps').toBe(4);
+    for (const pixel of capPixels) {
+      expect(roles[pixel], `pixel ${pixel} is a cap and must be reported as one`).not.toBeNull();
+    }
+  });
+
+  it('⚑ so a cap is never offered as a datum to link from', () => {
+    // ⚠️ A COMPANION ASSERTION, NOT THE DISCRIMINATOR, and saying so rather than
+    // implying otherwise: this case passed BEFORE the fix as well as after, so
+    // it does not by itself prove the defect is gone. The case above is the one
+    // that was red. This states the property that matters downstream -
+    // `nearestDatumPixel` excludes a pixel exactly when `getCapPixelRoles` marks
+    // it - so that a future change which breaks it has something to fail.
+    const session = spanWithCapsOnBothEnds();
+    const tuple = session.getDatasets()[0]!.getAllTuples()[0]!;
+    const pixels = session.getDatasets()[0]!.getAllPixels();
+    for (let slot = 2; slot < tuple.length; slot += 1) {
+      const capIndex = tuple[slot];
+      if (capIndex == null) continue;
+      const cap = pixels[capIndex]!;
+      const nearest = session.nearestDatumPixel(0, { x: cap.x, y: cap.y }, 500);
+      expect(nearest, `the cap in slot ${slot} was offered as a datum`).not.toBe(capIndex);
+    }
+  });
+});

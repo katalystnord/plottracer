@@ -1449,9 +1449,22 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const slots = entry.dataset.getSlotNames();
     const caps: (CapHandle | null)[] = new Array(entry.dataset.getCount()).fill(null);
     if (!hasErrorSlots(slots)) return caps;
+    // ⚑⚑ EVERY ERROR GROUP, not just the first. This read
+    // `slotForRole(role, slots)` with the `valueIndex` defaulted to 0, so on a
+    // SPAN - which carries a group per end - the high end's caps were reported
+    // as ordinary data points. Every other call site in this file threads the
+    // index; this one was missed, and it is the one the RENDERER and
+    // `nearestDatumPixel` both read.
+    // ⚠️ Its cost was not cosmetic: `nearestDatumPixel` skips a pixel only when
+    // it is marked here, so an unmarked cap was offered as a link-drag target -
+    // re-opening the defect recorded at that method, where the drag DIRECTION
+    // names the slot and dragging the lower cap inward overwrote the real upper
+    // cap, "a measured 113 replaced by 50, silently".
+    const groups = errorGroupCount(slots);
     for (const tuple of entry.dataset.getAllTuples()) {
+      for (let valueIndex = 0; valueIndex < groups; valueIndex += 1) {
       for (const role of ERROR_ROLES) {
-        const pixelIndex = tuple[slotForRole(role, slots)];
+        const pixelIndex = tuple[slotForRole(role, slots, valueIndex)];
         if (pixelIndex == null) continue;
         // ⚑⚑ THE SAME LINE THE MODEL WILL CONSTRAIN TO, not one derived from the
         // drawing. `updateDataPointPixel` runs the drag through
@@ -1467,6 +1480,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // ccr, whose `dataToPixel` is still a stub) - there the cap is
         // unconstrained, which is the documented default, and the drag is free.
         caps[pixelIndex] = { role, line: this.errorCapDragLine(index, pixelIndex) };
+      }
       }
     }
     return caps;
