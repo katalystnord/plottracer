@@ -221,7 +221,7 @@ function readPoints(curveNode: unknown): { x: number; y: number }[] {
  * Parse a `.dig` into its parts. Refuses - with a reason naming what it found -
  * rather than returning a half-read project.
  */
-export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
+export function readEngaugeProject(bytes: Uint8Array, systemIndex = 0): DigResult<DigProject> {
   if (looksBinary(bytes)) {
     return {
       error:
@@ -298,10 +298,15 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
   // five systems and imported only the 68. Verified against all 47 .dig files
   // there (and Engauge writes CoordSystem, singular, as repeated siblings).
   const systems = asArray(root['CoordSystem'] as unknown) as Record<string, unknown>[];
-  const coordSystem = systems[0] ?? (root['Coords'] ? root : undefined);
-  if (!coordSystem) return { error: 'This Engauge project has no coordinate system to read.' };
-  // A document holding several coordinate systems is several figures; we open
-  // the first and SAY SO rather than dropping the rest silently.
+  // ⚑⚑ WHICH system, because a document holding several holds SEVERAL FIGURES
+  // and choosing for the user is not ours to do. The fallback covers Engauge 6.3,
+  // which writes a flat `<Coords/>` with no wrapper at all - one figure, index 0.
+  const coordSystem = systems[systemIndex] ?? (systemIndex === 0 && root['Coords'] ? root : undefined);
+  if (!coordSystem) {
+    return systems.length > 0
+      ? { error: `This Engauge project has no figure ${systemIndex}.` }
+      : { error: 'This Engauge project has no coordinate system to read.' };
+  }
   const extraSystems = Math.max(0, systems.length - 1);
 
   const coords = coordSystem['Coords'];
@@ -388,6 +393,22 @@ export function readEngaugeProject(bytes: Uint8Array): DigResult<DigProject> {
     curves,
     extraCoordSystems: extraSystems,
   };
+}
+
+/**
+ * ⚑⚑ HOW MANY FIGURES THIS DOCUMENT HOLDS, without committing to any of them.
+ *
+ * An Engauge document writes `<CoordSystem>` as repeated siblings, each its own
+ * calibrated figure with its own curves. Reading the first and counting the rest
+ * is a decision taken on the user's behalf about which of their figures matters.
+ *
+ * ⚑ Cheap by construction: the count comes from the same parse the reader does,
+ * and nothing is calibrated until a figure is asked for.
+ */
+export function countEngaugeFigures(bytes: Uint8Array): DigResult<number> {
+  const first = readEngaugeProject(bytes, 0);
+  if ('error' in first) return first;
+  return first.extraCoordSystems + 1;
 }
 
 /** A `.dig` turned into our own model, ready to open. */
@@ -623,11 +644,14 @@ function buildPolarCalibration(pts: DigAxisPoint[]): Calibration | null {
  */
 export function importEngaugeFigure(project: DigProject): DigResult<ImportedDigFigure> {
   const notes: string[] = [];
-  if (project.extraCoordSystems > 0) {
-    notes.push(
-      `This project held ${project.extraCoordSystems + 1} coordinate systems; the first was opened and the rest were not imported.`
-    );
-  }
+  // ⚑⚑ NO "the rest were not imported" NOTE ANY MORE, and its removal is the
+  // point rather than a tidy-up. That sentence was the COMPENSATION for having
+  // no way to choose: the reader opened the first system and apologised for the
+  // others. Now every system is listed at the door and the user picks one, so
+  // the sentence is a claim this code cannot back - it says "the first was
+  // opened", which is false the moment anyone picks the second. `countEngaugeFigures`
+  // is what the listing uses; `extraCoordSystems` stays because it is the
+  // MEASUREMENT the count is built from, and a measurement is not a message.
   if (project.thetaNote) notes.push(project.thetaNote);
   if (!project.imageDataURL) {
     notes.push("This project's image could not be read, so the figure opens without it.");

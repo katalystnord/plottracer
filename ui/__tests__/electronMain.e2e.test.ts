@@ -22,6 +22,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { zipSync, strToU8 } from 'fflate';
 
 import { ozoneArgs } from './e2eContainment.js';
 
@@ -367,12 +368,12 @@ describe('ui/electron-main.cjs - a foreign digitizer\'s .tar, imported through O
       await page.keyboard.press('Control+Shift+O');
 
       // wpd4.json is six figures; the picker lists them (Image axes disabled).
-      await page.getByTestId('wpd-picker').waitFor({ state: 'visible', timeout: 15000 });
-      expect(await page.locator('[data-testid^="wpd-figure-"]').count()).toBe(6);
+      await page.getByTestId('figure-picker').waitFor({ state: 'visible', timeout: 15000 });
+      expect(await page.locator('[data-testid^="foreign-figure-"]').count()).toBe(6);
 
       // Import the first (XY) figure.
-      await page.getByTestId('wpd-figure-0').click();
-      await page.getByTestId('wpd-picker').waitFor({ state: 'detached', timeout: 10000 });
+      await page.getByTestId('foreign-figure-0').click();
+      await page.getByTestId('figure-picker').waitFor({ state: 'detached', timeout: 10000 });
 
       // It arrives CALIBRATED -- the whole point: no re-clicking axis points.
       await expect
@@ -381,6 +382,89 @@ describe('ui/electron-main.cjs - a foreign digitizer\'s .tar, imported through O
       // ...as an XY chart, and with its data series present.
       expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('XY');
       expect(await page.locator('[data-testid^="series-option-"]').count()).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+    }
+  }, 40000);
+});
+
+describe("ui/electron-main.cjs - a DIFFERENT digitizer's project, through the SAME door", () => {
+  // ⚑⚑ THE EQUALITY GATE, AT THE DOOR THE USER ACTUALLY USES.
+  //
+  // The test above drives a .tar. This one drives a StarryDigitizer archive
+  // through the identical gesture, and asserts the identical picker - because
+  // until v2.5 only one vendor's projects raised one. Every other format was
+  // read "straight through to one figure", so a project holding two axis sets
+  // opened whichever the writing tool had left active and discarded the other
+  // without a word on screen.
+  //
+  // Two formats, one assertion each, is the minimum that can show equality: a
+  // single format cannot demonstrate that nothing is privileged.
+  function buildStarryZip(): string {
+    const axisSet = (id: number, name: string) => ({
+      id,
+      name,
+      x1: { name: 'x1', value: 0, coord: { xPx: 100, yPx: 500 } },
+      x2: { name: 'x2', value: 10, coord: { xPx: 600, yPx: 500 } },
+      y1: { name: 'y1', value: 0, coord: { xPx: 100, yPx: 500 } },
+      y2: { name: 'y2', value: 1, coord: { xPx: 100, yPx: 100 } },
+      xIsLogScale: false,
+      yIsLogScale: false,
+      considerGraphTilt: false,
+    });
+    const json = {
+      version: '1.11.2',
+      timestamp: '2026-09-11T00:00:00.000Z',
+      axisSets: [axisSet(1, 'Panel A'), axisSet(2, 'Panel B')],
+      activeAxisSetId: 1,
+      datasets: [
+        { id: 1, name: 'Left curve', axisSetId: 1, points: [{ id: 1, xPx: 350, yPx: 300 }] },
+        { id: 2, name: 'Right curve', axisSetId: 2, points: [{ id: 2, xPx: 400, yPx: 250 }] },
+      ],
+      activeDatasetId: 1,
+      canvasHandler: { scale: 1, manualMode: 'add' },
+    };
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-starrye2e-'));
+    const out = path.join(dir, 'panels.zip');
+    fs.writeFileSync(
+      out,
+      zipSync({
+        'project.json': strToU8(JSON.stringify(json)),
+        'image.png': new Uint8Array(fs.readFileSync(SAMPLE_IMAGE)),
+      })
+    );
+    return out;
+  }
+
+  it('raises the same figure picker, and imports the figure chosen', async () => {
+    const zipPath = buildStarryZip();
+    const { app, page } = await launchProductionApp();
+    try {
+      await page.getByTestId('open-image-button').waitFor({ state: 'visible', timeout: 15000 });
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, zipPath);
+      await page.keyboard.press('Control+Shift+O');
+
+      // Two axis sets -> two entries. Not "the active one, silently".
+      await page.getByTestId('figure-picker').waitFor({ state: 'visible', timeout: 15000 });
+      expect(await page.locator('[data-testid^="foreign-figure-"]').count()).toBe(2);
+
+      // Choose the one the writing tool did NOT have active, which is the whole
+      // point: before the picker, this figure was unreachable.
+      await page.getByTestId('foreign-figure-1').click();
+      await page.getByTestId('figure-picker').waitFor({ state: 'detached', timeout: 10000 });
+
+      await expect
+        .poll(async () => page.getByTestId('calibrated-status').textContent(), { timeout: 10000 })
+        .toContain('Calibrated');
+      expect(await page.getByTestId('axes-type-trigger').textContent()).toContain('XY');
+      // ⚑ NAMED, not counted. Both panels carry exactly one series, so a count
+      // cannot tell "opened the figure asked for" from "opened the active one
+      // as before" - the series NAME is the only thing that separates them.
+      expect(await page.locator('[data-testid^="series-option-"]').allTextContents()).toEqual([
+        'Right curve (1)',
+      ]);
     } finally {
       await app.close();
     }

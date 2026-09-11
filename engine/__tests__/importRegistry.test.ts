@@ -89,6 +89,29 @@ function makeOurs(): Uint8Array {
   return zipSync({ 'project.json': strToU8(JSON.stringify(json)), 'image.png': PNG });
 }
 
+/** An Engauge document holding `systems` sibling coordinate systems, each
+ *  calibrated by the ordinary "L" of three axis points. */
+function makeEngauge(systems: number): Uint8Array {
+  const axes =
+    `<Curve CurveName="Axes"><CurvePoints>` +
+    `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="500"/><PositionGraph X="0" Y="0"/></Point>` +
+    `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="600" Y="500"/><PositionGraph X="10" Y="0"/></Point>` +
+    `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="100"/><PositionGraph X="0" Y="1"/></Point>` +
+    `</CurvePoints></Curve>`;
+  const body =
+    `<Coords TypeString="Cartesian" ScaleXThetaString="Linear" ScaleYRadiusString="Linear" UnitsThetaString="Degrees (DDD.DDDDD)"/>` +
+    axes +
+    `<CurvesGraphs><Curve CurveName="C1"><CurvePoints>` +
+    `<Point><PositionScreen X="350" Y="300"/></Point>` +
+    `</CurvePoints></Curve></CurvesGraphs>`;
+  const xml =
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n` +
+    `<Document VersionNumber="11.0">` +
+    Array.from({ length: systems }, () => `<CoordSystem>${body}</CoordSystem>`).join('') +
+    `</Document>`;
+  return enc(xml);
+}
+
 describe('identifyProject', () => {
   it('claims our own project archive as ours', () => {
     expect(identifyProject(makeOurs())?.id).toBe('plottracer');
@@ -562,5 +585,65 @@ describe('StarryDigitizer: finding the image', () => {
     const b64 = r.imageDataURL!.split(',')[1]!;
     const decoded = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     expect(decoded).toEqual(big);
+  });
+});
+
+/**
+ * ⚑⚑ NO FORMAT IS A FIRST-CLASS CITIZEN.
+ *
+ * These are the equality gates. Until v2.5 one foreign format answered "what
+ * figures are in this file" and the others did not, so that one got a picker
+ * and every other project silently opened whichever figure the writing tool
+ * had left active - the rest of the file discarded without a word. That is not
+ * a missing feature in the others; it is the SAME capability granted to one
+ * vendor, which is exactly what tenet 5 refuses.
+ *
+ * Written as tests rather than a convention because a convention is what let
+ * it stand for five releases: `list` being optional per-format reads as a
+ * reasonable interface until someone asks WHICH format declines it.
+ */
+describe('every foreign format is read the same way', () => {
+  const foreign = IMPORT_FORMATS.filter((f) => f.id !== 'plottracer');
+
+  it('⚑⚑ every format but OURS answers what figures are inside it', () => {
+    expect(foreign.length).toBeGreaterThan(1); // a single format cannot show equality
+    for (const f of foreign) {
+      expect(f.list, `${f.displayName} must list its figures`).not.toBeNull();
+    }
+  });
+
+  it('⚑ ours is the ONLY one that declines, and for a stated reason', () => {
+    // Not an exemption: our own projects restore measurements, provenance, a
+    // source document and several figures at once, so the caller owns that
+    // flow. Pinned so "the one that is different" can never quietly become a
+    // foreign format again.
+    expect(IMPORT_FORMATS.filter((f) => f.list === null).map((f) => f.id)).toEqual(['plottracer']);
+  });
+
+  it('⚑⚑ lists EVERY figure, whichever tool wrote the project', () => {
+    // Three figures in each file, three figures offered in each listing. The
+    // failure this fences is silent: before the registry listed them, two of
+    // the three simply never reached the user.
+    const cases: Array<[string, Uint8Array, number]> = [
+      ['starry', makeStarry({
+        axisSets: [starryAxisSet(1, 'A'), starryAxisSet(2, 'B'), starryAxisSet(3, 'C')],
+        activeAxisSetId: 2,
+      }), 3],
+      ['engauge', makeEngauge(3), 3],
+    ];
+    for (const [id, bytes, count] of cases) {
+      const format = identifyProject(bytes);
+      expect(format?.id, `sniffed ${id}`).toBe(id);
+      const listed = format!.list!(bytes);
+      expect('error' in listed ? listed.error : '', `listing ${id}`).toBe('');
+      if ('error' in listed) continue;
+      expect(listed.figures.map((f) => f.index), `figures in ${id}`).toEqual([0, 1, 2].slice(0, count));
+      // And the listing is not decoration: every figure it offers opens.
+      for (const fig of listed.figures) {
+        if (fig.configId === null) continue;
+        const opened = listed.open(fig.index) as { error?: string };
+        expect(opened.error ?? '', `opening ${id} figure ${fig.index}`).toBe('');
+      }
+    }
   });
 });

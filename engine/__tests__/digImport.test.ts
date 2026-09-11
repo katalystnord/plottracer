@@ -7,7 +7,12 @@
  * __tests__/fixtures/PROVENANCE.md.
  */
 import { describe, it, expect } from 'vitest';
-import { isEngaugeDocument, readEngaugeProject, importEngaugeFigure } from '../digImport.js';
+import {
+  isEngaugeDocument,
+  readEngaugeProject,
+  importEngaugeFigure,
+  countEngaugeFigures,
+} from '../digImport.js';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -793,19 +798,51 @@ describe('a document holding several coordinate systems (v1.5 gate blocker)', ()
   // multi-system document was reduced to its first, silently. Measured on the real
   // corpus: version7.1_1.dig holds [68,43,35,30,17] points across five systems and
   // imported 65 of them with `notes: []`.
+  /**
+   * ⚑⚑ EVERY SYSTEM IS REACHABLE, not just the first.
+   *
+   * David, 2026-09-11, on why this matters beyond Engauge: a WPD project was
+   * enumerated so the user could choose a figure, while this format's several
+   * figures were counted and mentioned. Naming the others in a note is better
+   * than silence and is still a decision about which of someone's figures is
+   * worth reading.
+   */
+  it('⚑⚑ reads any of its coordinate systems, not only the first', () => {
+    const bytes = makeDig({ systems: 3 });
+    expect(countEngaugeFigures(bytes)).toBe(3);
+    for (let i = 0; i < 3; i += 1) {
+      const parsed = readEngaugeProject(bytes, i);
+      if ('error' in parsed) throw new Error(`system ${i}: ${parsed.error}`);
+      const imported = importEngaugeFigure(parsed);
+      if ('error' in imported) throw new Error(`system ${i}: ${imported.error}`);
+      expect(imported.configId, `system ${i} must open`).toBeTruthy();
+    }
+  });
+
+  it('⚑ refuses a system the document does not have, by number', () => {
+    const r = readEngaugeProject(makeDig({ systems: 2 }), 5);
+    expect('error' in r && r.error).toMatch(/no figure 5/i);
+  });
+
   it('counts the sibling systems it did not open', () => {
     const parsed = readEngaugeProject(makeDig({ systems: 3 }));
     if ('error' in parsed) throw new Error(parsed.error);
     expect(parsed.extraCoordSystems).toBe(2);
   });
 
-  it('SAYS SO on import rather than dropping the rest quietly', () => {
-    const parsed = readEngaugeProject(makeDig({ systems: 3 }));
+  it('⚑⚑ does NOT apologise for the systems it did not open - the door offers them', () => {
+    // This assertion was the other way round until the import door listed every
+    // figure. The note read "the first was opened and the rest were not
+    // imported", which was honest while the reader had no way to be told WHICH
+    // system to open, and became untrue the moment a user could pick the
+    // second. A note that can contradict what the user just did is worse than
+    // no note; the listing already shows all three.
+    const parsed = readEngaugeProject(makeDig({ systems: 3 }), 1);
     if ('error' in parsed) throw new Error(parsed.error);
     const imported = importEngaugeFigure(parsed);
     if ('error' in imported) throw new Error(imported.error);
-    expect(imported.notes.join(' ')).toMatch(/3 coordinate systems/);
-    expect(imported.notes.join(' ')).toMatch(/not imported/);
+    expect(imported.notes.join(' ')).not.toMatch(/coordinate system/i);
+    expect(imported.notes.join(' ')).not.toMatch(/not imported/i);
   });
 
   it('says nothing at all about an ordinary single-system document', () => {

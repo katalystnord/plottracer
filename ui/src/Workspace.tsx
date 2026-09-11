@@ -166,9 +166,13 @@ import {
   base64ToBytes,
   bytesToBase64,
 } from '../../engine/projectContainer.js';
-import { readWpdArchive, listWpdFigures, importWpdFigure, type WpdFigure } from '../../engine/wpdImport.js';
-import { identifyProject, unsupportedFileMessage } from '../../engine/importRegistry.js';
-import type { PlotData } from '../../core/plotData.js';
+import {
+  identifyProject,
+  unsupportedFileMessage,
+  type ForeignFigure,
+  type ImportFormat,
+  type ListedProject,
+} from '../../engine/importRegistry.js';
 import type { Dataset } from '../../core/dataset.js';
 import type { CategoryAxis } from '../../core/categoryAxis.js';
 import { buildExportJson, buildExportSections, errorColumnsByTuple } from '../../engine/exportAssembly.js';
@@ -4830,12 +4834,13 @@ export function Workspace() {
 
   /**
    * Load a calibrated figure into a fresh session and reset the document around
-   * it - the shared core of opening our own project (JSON) and importing a WPD
+   * it - the shared core of opening our own project (JSON) and importing a foreign
    * figure (.tar). Extracted at checkpoint 88 so the two are one path, not a
    * parallel one (the exact smell the tenet audit warns about): they differ only
    * in where the axes/datasets/image come from, not in how they land.
    *
-   * `measurements` is empty for a WPD import - WPD has no measurement concept.
+   * `measurements` is empty for a foreign import - no other digitizer has a
+   * measurement concept.
    */
   const loadCalibratedFigure = useCallback(
     (fig: {
@@ -4856,7 +4861,7 @@ export function Workspace() {
         setProjectError(`Unsupported axes type: ${fig.configId}`);
         return false;
       }
-      clearFiguresToSingle(); // a single-figure project / WPD import is one figure
+      clearFiguresToSingle(); // a single-figure project / foreign import is one figure
       const newSession = new CalibrationSession(nextConfig);
       newSession.setImageHeight(imageHeightRef.current);
       newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer);
@@ -5167,90 +5172,86 @@ export function Workspace() {
 
 
 
-  // --- Import a foreign digitizer's project archive (.tar) - checkpoint 88 ------
-  // The migration route off the old app (tenet 6: interop happens at the file
-  // level). The engine was ported at checkpoint 74 (engine/wpdImport.ts) with
-  // zero callers; this is the wiring. A `.tar` holds N figures on one image, so
-  // a single supported figure opens directly and several raise a picker.
-  const [wpdFigures, setWpdFigures] = useState<WpdFigure[] | null>(null); // non-null => picker open
-  const wpdHeldRef = useRef<{ plotData: PlotData; figures: WpdFigure[]; imageDataURL: string } | null>(null);
+  // --- Import another digitizer's project ---------------------------------
+  // The migration route into this app, and the only level at which interop
+  // happens (tenet 6). Every foreign format reaches here through the registry,
+  // which answers the same two questions of all of them: what figures are in
+  // this file, and open the one chosen. A project holding one figure opens
+  // directly; several raise a picker.
+  const [foreignFigures, setForeignFigures] = useState<ForeignFigure[] | null>(null); // non-null => picker open
+  // ⚑⚑ THE PROJECT BEING CHOSEN FROM, WHATEVER WROTE IT. This used to be
+  // `wpdHeldRef`, typed to one vendor's parser, beside an `importTarProject`
+  // hardcoded to the same one - so a project holding several figures got a
+  // picker if it came from that tool and silently lost all but one otherwise. The
+  // registry now answers the same two questions for every foreign format, and
+  // nothing here knows whose file it is.
+  const foreignHeldRef = useRef<ListedProject | null>(null);
 
-  const importWpdFigureAt = useCallback(
+  const importForeignFigureAt = useCallback(
     (index: number) => {
-      const held = wpdHeldRef.current;
+      const held = foreignHeldRef.current;
       if (!held) return;
-      const imported = importWpdFigure(held.plotData, held.figures, index);
+      const imported = held.open(index);
       if ('error' in imported) {
         setProjectError(imported.error);
         return;
       }
-      setWpdFigures(null); // close the picker if it was open
+      setProjectError(null);
+      setForeignFigures(null); // close the picker if it was open
       loadCalibratedFigure({
         configId: imported.configId,
         axes: imported.axes as CalibratedAxes,
         datasets: imported.datasets as Dataset[],
-        imageDataURL: held.imageDataURL,
+        imageDataURL: imported.imageDataURL ?? '',
         imageFileName: held.figures[index]?.name,
-        // WPD has no measurement concept -- nothing to carry.
+        // No foreign format here carries a measurement concept.
       });
+      if (imported.notes.length > 0) setProjectNotice(imported.notes.join(' '));
     },
-    // ⚑ `setWpdFigures` is a useState setter and therefore stable, so listing it
+    // ⚑ `setForeignFigures` is a useState setter and therefore stable, so listing it
     // changes nothing at runtime -- but the React Compiler infers it as a
     // dependency, and a manual array that disagrees with the inferred one makes
     // it skip optimizing the WHOLE component. Both errors were latent: the
     // compiler stops at its first bailout, and an earlier one was masking these
     // until the guidance-tip extraction removed it.
-    [loadCalibratedFigure, setWpdFigures]
+    [loadCalibratedFigure, setForeignFigures, setProjectNotice]
   );
 
-  /** Import a foreign digitizer's `.tar` archive, once Open Project has sniffed it
-   * out of the bytes. Takes the bytes rather than owning a dialog of its own:
-   * there is ONE Open Project, and the FILE says which format it is. */
-  const importTarProject = useCallback(async (bytes: Uint8Array) => {
-    const archive = readWpdArchive(bytes);
-    if ('error' in archive) {
-      setProjectError(archive.error);
-      return;
-    }
-    const listed = listWpdFigures(archive.wpdJson);
-    if ('error' in listed) {
-      setProjectError(listed.error);
-      return;
-    }
-    if (archive.images.length === 0) {
-      setProjectError('This project bundles no image.');
-      return;
-    }
-    const img = archive.images[0]!;
-    // PDF-bundled projects wait on the PDF loader (roadmap v0.4) -- Chromium's
-    // <img> cannot decode a PDF, so surface it rather than fail blank (ckpt 65).
-    if (img.mime === 'application/pdf') {
-      setProjectError("This project's image is a PDF, which PlotTracer can't open yet.");
-      return;
-    }
-    const imageDataURL = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(new Blob([img.bytes as BlobPart], { type: img.mime }));
-    });
-
-    const { plotData, figures } = listed;
-    wpdHeldRef.current = { plotData, figures, imageDataURL };
-    const supported = figures.filter((f) => f.configId !== null);
-    if (supported.length === 0) {
-      setProjectError('No figure in this project can be opened yet.');
-      return;
-    }
-    // One openable figure -> open it. Several -> let the user choose, showing the
-    // unopenable ones disabled-with-reason rather than hiding what's there.
-    if (supported.length === 1 && figures.length === 1) {
-      importWpdFigureAt(supported[0]!.index);
-    } else {
-      setProjectError(null);
-      setWpdFigures(figures);
-    }
-  }, [importWpdFigureAt, setWpdFigures]);
+  /**
+   * Open a foreign project once the registry has sniffed it out of the bytes.
+   *
+   * ⚑⚑ ONE FLOW FOR EVERY FORMAT. This was `importTarProject`, hardcoded to one
+   * vendor's archive - so that vendor's projects got a figure picker and every
+   * other format silently opened whichever figure the writing tool had active.
+   * The registry now lists figures for all of them, so this asks the same two
+   * questions of whatever arrived: what is in here, and open the one chosen.
+   */
+  const importForeignProject = useCallback(
+    (list: NonNullable<ImportFormat['list']>, bytes: Uint8Array) => {
+      const listed = list(bytes);
+      if ('error' in listed) {
+        setProjectError(listed.error);
+        return;
+      }
+      foreignHeldRef.current = listed;
+      const { figures } = listed;
+      const supported = figures.filter((f) => f.configId !== null);
+      if (supported.length === 0) {
+        setProjectError('No figure in this project can be opened yet.');
+        return;
+      }
+      // One openable figure -> open it. Several -> let the user choose, showing
+      // the unopenable ones disabled-with-reason rather than hiding what is
+      // there.
+      if (supported.length === 1 && figures.length === 1) {
+        importForeignFigureAt(supported[0]!.index);
+      } else {
+        setProjectError(null);
+        setForeignFigures(figures);
+      }
+    },
+    [importForeignFigureAt, setForeignFigures]
+  );
 
   const openProject = useCallback(async () => {
     if (!window.electronAPI) {
@@ -5280,40 +5281,18 @@ export function Workspace() {
       setProjectError(unsupportedFileMessage());
       return;
     }
-    if (format.open) {
-      // A format that reads straight through to one calibrated figure.
-      const imported = format.open(bytes);
-      if ('error' in imported) {
-        setProjectError(imported.error);
-        return;
-      }
-      setProjectError(null);
-      loadCalibratedFigure({
-        configId: imported.configId,
-        axes: imported.axes as CalibratedAxes,
-        datasets: imported.datasets as Dataset[],
-        imageDataURL: imported.imageDataURL ?? '',
-        // These formats carry no measurement concept -- nothing to bring across.
-      });
-      // ⚑⚑ AFTER THE LOAD, because this notice belongs to the figure that just
-      // ARRIVED - "this project held 2 coordinate systems; 1 was not imported" -
-      // and installing a figure clears the notice about the one being left
-      // (`resetPerFigureUI`). Set before the load, it was wiped in the same
-      // batch and never reached the eye. ⚠️ Caught by the e2e that exists for
-      // exactly this half - v1.5 added it because the notice had no coverage
-      // that it ever appears - and it is the second time the ordering has
-      // mattered: the first was the notice OUTLIVING its figure.
-      setProjectNotice(imported.notes.length > 0 ? imported.notes.join(' ') : null);
+    if (format.list) {
+      // ⚑⚑ EVERY FOREIGN FORMAT GOES THROUGH THE SAME FLOW. What is in this
+      // file, and open the one the user chose - asked identically whoever wrote
+      // it. This used to be two branches: one format got a figure picker by
+      // name, and the rest were read "straight through to one calibrated
+      // figure", which silently dropped whatever else a project held.
+      importForeignProject(format.list, bytes);
       return;
     }
-    // The two formats that need a flow of their own: an archive that can hold
-    // several figures on one image (the user chooses), and our own projects
-    // (which restore far more than a single figure -- measurements, provenance,
-    // a bundled source document, multiple figures).
-    if (format.id === 'wpd') {
-      await importTarProject(bytes);
-      return;
-    }
+    // Our own projects are what is left, and they restore far more than a single
+    // figure -- measurements, provenance, a bundled source document, several
+    // figures - so the caller owns that flow (see `list` in the registry).
     let result;
     if (isZipContainer(bytes)) {
       // Multi-figure project (checkpoint 115): load every figure into figuresRef
@@ -5411,7 +5390,7 @@ export function Workspace() {
     setSourcePdf(result.sourceDocument
       ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
       : null);
-  }, [confirmDiscardIfDirty, loadCalibratedFigure, setSourcePdf, buildFigureRecordFromDeserialized, restoreFigure, closePdf]);
+  }, [confirmDiscardIfDirty, loadCalibratedFigure, setSourcePdf, buildFigureRecordFromDeserialized, restoreFigure, closePdf, importForeignProject]);
 
 
   const exportData = useCallback(
@@ -7897,7 +7876,7 @@ export function Workspace() {
               {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
                 // ⚑ NOT `!axes`: a figure can arrive CALIBRATED with steps
-                // nobody placed (a WPD import, a pre-v2.3 project), and the chip
+                // nobody placed (a foreign import, a pre-v2.3 project), and the chip
                 // it is asking for has to light up like any other. A finished
                 // walk has no such step, so nothing changes for it.
                 const active = i === session.getStepIndex() && currentStep !== null;
@@ -10084,10 +10063,10 @@ export function Workspace() {
           </span>
         </span>
       </BottomBar>
-      {wpdFigures && (
+      {foreignFigures && (
         <div
-          data-testid="wpd-picker"
-          onClick={() => setWpdFigures(null)}
+          data-testid="figure-picker"
+          onClick={() => setForeignFigures(null)}
           style={{
             position: 'fixed',
             inset: 0,
@@ -10115,18 +10094,22 @@ export function Workspace() {
           >
             <strong style={{ fontSize: theme.font.size.regular, fontWeight: 700 }}>Choose a figure to import</strong>
             <p style={{ fontSize: theme.font.size.small, color: theme.color.text.legend, margin: '6px 0 12px' }}>
-              This project holds {wpdFigures.length} calibrated figures on one image. Import one - you
-              can open the project again to import another.
+              This project holds {foreignFigures.length} figures. Import one - you can open the
+              project again to import another.
             </p>
-            {wpdFigures.map((fig) => {
+            {foreignFigures.map((fig) => {
               const openable = fig.configId !== null;
+              // The graph type in OUR words, from our own config list - the file's
+              // own name for it is the foreign tool's vocabulary, and the picker
+              // is telling the user what PlotTracer will make of it.
+              const typeLabel = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === fig.configId)?.label ?? null;
               return (
                 <button
                   key={fig.index}
                   type="button"
-                  data-testid={`wpd-figure-${fig.index}`}
+                  data-testid={`foreign-figure-${fig.index}`}
                   disabled={!openable}
-                  onClick={() => importWpdFigureAt(fig.index)}
+                  onClick={() => importForeignFigureAt(fig.index)}
                   title={openable ? `Import "${fig.name}"` : (fig.unsupportedReason ?? undefined)}
                   style={{
                     display: 'block',
@@ -10143,7 +10126,10 @@ export function Workspace() {
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>
-                    {fig.name} <span style={{ color: theme.color.text.legend, fontWeight: 400 }}>· {fig.axesType}</span>
+                    {fig.name}
+                    {typeLabel ? (
+                      <span style={{ color: theme.color.text.legend, fontWeight: 400 }}> · {typeLabel}</span>
+                    ) : null}
                   </div>
                   <div style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
                     {openable
@@ -10157,8 +10143,8 @@ export function Workspace() {
             })}
             <button
               type="button"
-              data-testid="wpd-picker-cancel"
-              onClick={() => setWpdFigures(null)}
+              data-testid="figure-picker-cancel"
+              onClick={() => setForeignFigures(null)}
               style={{ marginTop: 6, fontSize: theme.font.size.small }}
             >
               Cancel

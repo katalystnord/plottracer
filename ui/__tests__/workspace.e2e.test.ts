@@ -2254,14 +2254,24 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
   }
 
   // ⚑ v1.5: the import NOTICE had no coverage that it ever reaches the eye, and it
-  // was cleared only at the top of openProject -- so "this project held N
-  // coordinate systems" outlived the figure it described, and read as though the
-  // CURRENT figure had lost content. Both halves asserted here: it appears, and it
-  // goes when the figure it describes does.
-  it('shows what an import did NOT bring, and drops the notice with that figure (v1.5)', async () => {
-    // A .dig holding two coordinate systems: Engauge writes them as repeated
-    // SIBLINGS under <Document> (there is no <CoordSystems> wrapper).
-    const system =
+  // was cleared only at the top of openProject -- so a note about what an import
+  // left behind outlived the figure it described, and read as though the CURRENT
+  // figure had lost content. Both halves asserted here: it appears, and it goes
+  // when the figure it describes does.
+  //
+  // ⚑⚑ v2.5: this used to drive a TWO-system `.dig` and assert "the rest were not
+  // imported". That note is gone, deliberately - every figure in a foreign
+  // project is now listed at the door, so a sentence claiming "the first was
+  // opened" could contradict the figure the user just picked. The notice
+  // SURFACE still matters and still has the ordering bug in its history, so the
+  // test now drives a note the app can still honestly make: a document whose
+  // image it could not read.
+  it('shows what an import could not bring, and drops the notice with that figure (v1.5)', async () => {
+    // One coordinate system, so it opens straight through with no picker, and
+    // no <Image> element, which is the note under test.
+    const dig =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n' +
+      '<Document VersionNumber="11.0"><CoordSystem>' +
       '<Coords Type="0" TypeString="Cartesian" ScaleXThetaString="Linear" ScaleYRadiusString="Linear" UnitsThetaString="Degrees (DDD.DDDDD)"/>' +
       '<Curve CurveName="Axes"><CurvePoints>' +
       '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="500"/><PositionGraph X="0" Y="0"/></Point>' +
@@ -2270,10 +2280,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       '</CurvePoints></Curve>' +
       '<CurvesGraphs><Curve CurveName="Curve1"><CurvePoints>' +
       '<Point><PositionScreen X="350" Y="300"/></Point>' +
-      '</CurvePoints></Curve></CurvesGraphs>';
-    const dig =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n' +
-      `<Document VersionNumber="11.0"><CoordSystem>${system}</CoordSystem><CoordSystem>${system}</CoordSystem></Document>`;
+      '</CurvePoints></Curve></CurvesGraphs>' +
+      '</CoordSystem></Document>';
     const digPath = path.join(os.tmpdir(), `plottracer-e2e-${Date.now()}.dig`);
     fs.writeFileSync(digPath, dig, 'utf8');
 
@@ -2282,8 +2290,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       await page.getByTestId('open-project').click();
       await expect
         .poll(async () => (await page.getByTestId('project-notice').textContent().catch(() => null)) ?? '')
-        .toMatch(/2 coordinate systems/);
-      expect(await textOf('project-notice')).toMatch(/not imported/);
+        .toMatch(/image could not be read/);
+      expect(await textOf('project-notice')).toMatch(/opens without it/);
     } finally {
       await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
@@ -2296,6 +2304,71 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await waitForImageFitted();
     expect(await page.getByTestId('project-notice').count()).toBe(0);
   });
+
+  // ⚑⚑ AND THE OTHER HALF OF THE SAME DOOR: a foreign project holding SEVERAL
+  // figures no longer apologises, it ASKS. This is the behaviour that replaced
+  // the note above, so it is asserted in the same place rather than somewhere a
+  // later reader would not think to look.
+  it('a .dig holding several coordinate systems offers them all rather than opening one (v2.5)', async () => {
+    // A 1x1 PNG, framed the way Engauge writes its embedded image (a four-byte
+    // length prefix inside the CDATA), so the figure arrives with something to
+    // calibrate against.
+    const imagePayload = () => {
+      const png = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89,
+      ];
+      return Buffer.from([0x00, 0x00, 0x00, 0x01, ...png]).toString('base64');
+    };
+    // ⚑ The two systems carry DIFFERENTLY NAMED curves. Two identical systems
+    // could not tell "opened the one asked for" from "opened the first, as
+    // before" - which is the whole behaviour under test.
+    const system = (curveName: string) =>
+      '<Coords Type="0" TypeString="Cartesian" ScaleXThetaString="Linear" ScaleYRadiusString="Linear" UnitsThetaString="Degrees (DDD.DDDDD)"/>' +
+      '<Curve CurveName="Axes"><CurvePoints>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="500"/><PositionGraph X="0" Y="0"/></Point>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="600" Y="500"/><PositionGraph X="10" Y="0"/></Point>' +
+      '<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="100"/><PositionGraph X="0" Y="1"/></Point>' +
+      '</CurvePoints></Curve>' +
+      `<CurvesGraphs><Curve CurveName="${curveName}"><CurvePoints>` +
+      '<Point><PositionScreen X="350" Y="300"/></Point>' +
+      '</CurvePoints></Curve></CurvesGraphs>';
+    const dig =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n' +
+      '<Document VersionNumber="11.0">' +
+      `<Image Width="640" Height="480"><![CDATA[${imagePayload()}]]></Image>` +
+      `<CoordSystem>${system('Upper panel')}</CoordSystem>` +
+      `<CoordSystem>${system('Lower panel')}</CoordSystem>` +
+      '</Document>';
+    const digPath = path.join(os.tmpdir(), `plottracer-e2e-${Date.now()}-multi.dig`);
+    fs.writeFileSync(digPath, dig, 'utf8');
+
+    try {
+      await stubOpenProjectDialog(digPath);
+      await page.getByTestId('open-project').click();
+      await page.getByTestId('figure-picker').waitFor({ state: 'visible', timeout: 15000 });
+      // Both systems offered. The old behaviour opened the first and said sorry.
+      expect(await page.locator('[data-testid^="foreign-figure-"]').count()).toBe(2);
+      // ⚑ And the picker is the SAME one every other format raises - the test ids
+      // carry no vendor's name, which is the assertion that keeps it that way.
+      await page.getByTestId('foreign-figure-1').click();
+      await page.getByTestId('figure-picker').waitFor({ state: 'detached', timeout: 10000 });
+      await expect
+        .poll(async () => (await page.locator('[data-testid^="series-option-"]').allTextContents()).join('|'), {
+          timeout: 10000,
+        })
+        .toMatch(/Lower panel/);
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+      fs.unlinkSync(digPath);
+    }
+
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+  }, 30000);
 
   async function stubOpenProjectDialog(targetPath: string) {
     await app.evaluate(({ dialog }, p) => {

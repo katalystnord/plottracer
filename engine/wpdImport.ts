@@ -29,6 +29,7 @@
 
 import { PlotData, type AnyAxes } from '../core/plotData.js';
 import type { Dataset } from '../core/dataset.js';
+import { bytesToBase64 } from './base64.js';
 import { readTar, entryText, type TarEntry } from './tarRead.js';
 
 export type WpdResult<T> = T | { error: string };
@@ -188,6 +189,61 @@ export function listWpdFigures(wpdJson: unknown): WpdResult<{ plotData: PlotData
  * multi-figure project's datasets must be filtered, not taken wholesale. */
 export function datasetsForAxes(plotData: PlotData, axes: AnyAxes): Dataset[] {
   return plotData.getDatasets().filter((ds) => plotData.getAxesForDataset(ds) === axes);
+}
+
+/**
+ * ⚑⚑ A WHOLE PROJECT, LISTED AND OPENABLE - the same two questions every other
+ * format answers: what figures are in here, and open the one I choose.
+ *
+ * ⚑ The image and the PDF refusal live HERE rather than in the UI, because they
+ * are facts about the file, and leaving them in a caller is what made this the
+ * only format with a flow of its own.
+ */
+export interface ListedWpdProject {
+  figures: WpdFigure[];
+  open(index: number): WpdResult<ImportedFigureLike>;
+}
+
+/** What a listed figure resolves to. Matches the registry's `ImportedFigure`
+ *  without importing it, so `engine/importRegistry.ts` stays the only place that
+ *  knows about every format at once. */
+export interface ImportedFigureLike {
+  configId: string;
+  axes: AnyAxes;
+  datasets: Dataset[];
+  imageDataURL: string | null;
+  notes: string[];
+}
+
+/** Read a WPD `.tar` and list what is inside it. */
+export function listWpdProject(bytes: Uint8Array): WpdResult<ListedWpdProject> {
+  const archive = readWpdArchive(bytes);
+  if ('error' in archive) return archive;
+  const listed = listWpdFigures(archive.wpdJson);
+  if ('error' in listed) return listed;
+  if (archive.images.length === 0) return { error: 'This project bundles no image.' };
+  const img = archive.images[0]!;
+  // A PDF-bundled project is refused rather than opened blank: an <img> cannot
+  // decode a PDF, so the figure would arrive with nothing behind it.
+  if (img.mime === 'application/pdf') {
+    return { error: "This project's image is a PDF, which PlotTracer can't open yet." };
+  }
+  const imageDataURL = `data:${img.mime};base64,${bytesToBase64(img.bytes)}`;
+  const { plotData, figures } = listed;
+  return {
+    figures,
+    open(index: number) {
+      const figure = importWpdFigure(plotData, figures, index);
+      if ('error' in figure) return figure;
+      return {
+        configId: figure.configId,
+        axes: figure.axes,
+        datasets: figure.datasets,
+        imageDataURL,
+        notes: [],
+      };
+    },
+  };
 }
 
 /** One figure, ready to open. */

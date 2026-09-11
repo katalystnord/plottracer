@@ -31,8 +31,18 @@
 import { Dataset } from '../core/dataset.js';
 import type { AnyAxes } from '../core/plotData.js';
 import { isZipContainer, isTarArchive } from './projectContainer.js';
-import { isEngaugeDocument, readEngaugeProject, importEngaugeFigure } from './digImport.js';
-import { isStarryProject, importStarryProject } from './starryImport.js';
+import { listWpdProject } from './wpdImport.js';
+import {
+  isEngaugeDocument,
+  readEngaugeProject,
+  importEngaugeFigure,
+  countEngaugeFigures,
+} from './digImport.js';
+import {
+  isStarryProject,
+  listStarryFigures,
+  importStarryFigureAt,
+} from './starryImport.js';
 
 /** One calibrated figure, however it arrived. The common currency of every
  * importer that does not need a flow of its own. */
@@ -49,6 +59,39 @@ export interface ImportedFigure {
 
 export type ImportResult<T> = T | { error: string };
 
+/**
+ * ⚑⚑ ONE FIGURE OF A FOREIGN PROJECT, BEFORE ANY OF IT IS OPENED.
+ *
+ * ⚠️ THIS EXISTS BECAUSE ONE FORMAT USED TO BE SPECIAL. Every format here can
+ * hold several figures - WPD's `axesColl`, StarryDigitizer's `axisSets`,
+ * Engauge's repeated `<CoordSystem>` - and only WPD was enumerated so the user
+ * could choose. The others opened whichever one the writing tool happened to
+ * have active and named the rest in a note. David, 2026-09-11: *"You are still
+ * making WPD a one, and only one, status above all other digitizer softwares."*
+ * He was right, and it was in the code rather than in anyone's vocabulary: this
+ * interface had an `open` that was allowed to be `null` for "a format that needs
+ * a flow of its own", and that escape hatch was the privilege.
+ *
+ * ▶ Deciding which of someone's figures matters is not ours to do.
+ */
+export interface ForeignFigure {
+  index: number;
+  /** What to show in the picker. */
+  name: string;
+  /** Our graph type, or null when this figure cannot be opened. */
+  configId: string | null;
+  /** Why not, in plain words, so the picker can show it disabled rather than
+   *  hiding what is in the file. */
+  unsupportedReason: string | null;
+  datasetNames: string[];
+}
+
+/** A foreign project, read once: what is inside it, and a way to open one. */
+export interface ListedProject {
+  figures: ForeignFigure[];
+  open(index: number): ImportResult<ImportedFigure>;
+}
+
 export type ImportFormatId = 'plottracer' | 'wpd' | 'engauge' | 'starry';
 
 export interface ImportFormat {
@@ -61,16 +104,15 @@ export interface ImportFormat {
   /** Does this file belong to this format? Must not throw. */
   sniff(bytes: Uint8Array): boolean;
   /**
-   * Read it into one calibrated figure.
+   * List the figures inside it, and offer a way to open any one of them.
    *
-   * `null` marks a format that needs a flow of its own rather than a one-shot
-   * read: OUR OWN projects (which restore measurements, provenance, multiple
-   * figures and a bundled source document - far more than an ImportedFigure
-   * carries), and the archive format that can hold several figures on one image
-   * and therefore has to ask the user which. Those two stay with the caller by
-   * necessity, not by oversight.
+   * `null` marks OUR OWN projects only, and for a reason no foreign format has:
+   * restoring one brings back measurements, provenance, several figures and a
+   * bundled source document - far more than an `ImportedFigure` carries - so the
+   * caller owns that flow. Every FOREIGN format answers this, and the picker
+   * therefore never needs to know whose file it is.
    */
-  open: ((bytes: Uint8Array) => ImportResult<ImportedFigure>) | null;
+  list: ((bytes: Uint8Array) => ImportResult<ListedProject>) | null;
 }
 
 /** Every format Open Project accepts. Ours first - see the header. */
@@ -82,24 +124,45 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     // A zip is ours unless another format claims it (checked in order below);
     // a bare JSON project is the legacy single-file form.
     sniff: (bytes) => isZipContainer(bytes) || looksLikeJsonObject(bytes),
-    open: null, // restored by the caller - see the note on `open`
+    list: null, // restored by the caller - see the note on `list`
   },
   {
     id: 'wpd',
     displayName: 'WebPlotDigitizer projects',
     extensions: ['tar'],
     sniff: isTarArchive,
-    open: null, // may hold several figures on one image; the user chooses
+    list: listWpdProject,
   },
   {
     id: 'engauge',
     displayName: 'Engauge Digitizer projects',
     extensions: ['dig'],
     sniff: isEngaugeDocument,
-    open: (bytes) => {
-      const parsed = readEngaugeProject(bytes);
-      if ('error' in parsed) return parsed;
-      return importEngaugeFigure(parsed);
+    list: (bytes) => {
+      const count = countEngaugeFigures(bytes);
+      if (typeof count !== 'number') return count;
+      // ⚑ A document names its curves per coordinate system, so each figure is
+      // read far enough to name itself and no further.
+      const figures: ForeignFigure[] = [];
+      for (let index = 0; index < count; index += 1) {
+        const parsed = readEngaugeProject(bytes, index);
+        const usable = !('error' in parsed);
+        figures.push({
+          index,
+          name: count === 1 ? 'The figure' : `Coordinate system ${index + 1}`,
+          configId: usable ? (parsed.coordsType === 'Polar' ? 'polar' : 'xy') : null,
+          unsupportedReason: usable ? null : parsed.error,
+          datasetNames: usable ? parsed.curves.map((c) => c.name) : [],
+        });
+      }
+      return {
+        figures,
+        open(index: number) {
+          const parsed = readEngaugeProject(bytes, index);
+          if ('error' in parsed) return parsed;
+          return importEngaugeFigure(parsed);
+        },
+      };
     },
   },
   {
@@ -107,7 +170,14 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     displayName: 'StarryDigitizer projects',
     extensions: ['zip'],
     sniff: isStarryProject,
-    open: importStarryProject,
+    list: (bytes) => {
+      const listed = listStarryFigures(bytes);
+      if ('error' in listed) return listed;
+      return {
+        figures: listed.figures,
+        open: (index: number) => importStarryFigureAt(listed, index),
+      };
+    },
   },
 ];
 
