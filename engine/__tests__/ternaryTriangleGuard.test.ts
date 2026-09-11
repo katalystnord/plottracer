@@ -43,19 +43,21 @@ describe('a ternary diagram needs a triangle', () => {
     expect(session.getCalibrationError()).toBe(REFUSAL);
   });
 
-  it('⚠️ the refusal arrives at CALIBRATE, because a valueless walk is never checked', () => {
-    // ⚠️⚑⚑ A GAP, PINNED HONESTLY RATHER THAN ASSERTED AS RIGHT (found
-    // 2026-09-10). `confirmCalibrationValues` asks `problemWith` the moment the
-    // walk completes - its own comment argues at length that this is the
-    // earliest honest point, because David met a colour-key refusal eight steps
-    // after the click that caused it. But a step with NOTHING TO TYPE never
-    // reaches that path: `completeValuelessStep` places the pixel and advances,
-    // with no check at all. A ternary's three corners are all valueless, so the
-    // whole walk is guard-free until the button is pressed.
-    // ▶ That is pattern 5 of the v2.2 list ("do refusals fire AT the gesture?")
-    // and it is not ternary's to fix - it belongs to every type with a valueless
-    // step. Recorded for David; this case will go red when it is fixed, which is
-    // the right moment to delete it.
+  it('⚑ the refusal arrives when Calibrate is pressed, which is the right moment', () => {
+    // ⚑⚑ NOT A GAP, and this case said it was until David asked what I was on
+    // about: *"We (the user) mark the points, and then presses calibrate. There
+    // is nothing more to it than that, no?"*
+    //
+    // `confirmCalibrationValues` asks `problemWith` the moment a walk completes,
+    // and a step with NOTHING TO TYPE never reaches that path. That difference
+    // between the two code paths costs the user nothing here. The mid-walk check
+    // exists for TYPED values - it was added because a colour-key value typed as
+    // 0 was refused eight steps after the click that caused it - and a valueless
+    // step has nothing typed. What can be wrong is where the pixels sit RELATIVE
+    // TO EACH OTHER, which cannot be known until they are all placed; and once
+    // they are, the walk is over and the next action is pressing Calibrate.
+    // ▶ So "check when the walk completes" and "check at Calibrate" are the same
+    // moment, one button press apart.
     const session = walk([[100, 400], [400, 400], [250, 400]]);
     expect(session.getCalibrationError()).toBeNull();
     expect(session.runCalibration()).toBe(false);
