@@ -7,7 +7,7 @@
  * golden-value tests and a cross-check against the live wpd-core.
  */
 
-/** Inverse tan with range [0, 2π), matching wpd.taninverse exactly. */
+/** Inverse tan with range [0, 2π). */
 export function taninverse(y: number, x: number): number {
   let invAns: number;
   if (y > 0) {
@@ -72,7 +72,8 @@ export interface Circle {
   radius: number;
 }
 
-/** Circumscribed circle through 3 points - matches wpd.getCircleFrom3Pts exactly. */
+/** The circle through 3 points. Non-finite when they are collinear, which the
+ *  callers check rather than nudging. */
 export function getCircleFrom3Pts(pts: [Vec2, Vec2, Vec2]): Circle {
   const Ax = pts[0][0], Bx = pts[1][0], Cx = pts[2][0];
   const Ay = pts[0][1], By = pts[1][1], Cy = pts[2][1];
@@ -279,7 +280,7 @@ export function circleFitResidual(pts: readonly Vec2[], circle: Circle): number 
   return Math.sqrt(acc / pts.length);
 }
 
-/** Normalize an angle in degrees to [0, 360) - matches wpd.normalizeAngleDeg exactly. */
+/** Normalize an angle in degrees to [0, 360). */
 export function normalizeAngleDeg(angleDeg: number): number {
   let normDeg = angleDeg % 360;
   if (normDeg < 0) {

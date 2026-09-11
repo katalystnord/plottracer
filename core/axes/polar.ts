@@ -3,12 +3,11 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL -- one deliberate divergence, found by the v2.0
- * pre-launch code review. Upstream reads r1/theta1/r2/theta2 with a bare
- * `Number()` and processCalibration always returns true -- the checkpoint-81
- * defect class, never ported here. `"abc"` for a radius gave `NaN`, baked
- * into every subsequent reading, with calibrate() reporting success and
- * nothing on screen wrong.
+ * ⚑ `calibrate()` VALIDATES ITS VALUES AND CAN ANSWER FALSE. A radius or angle
+ * that is not a number is refused rather than parsed loosely: `"abc"` read
+ * permissively becomes `NaN`, which is then baked into every later reading while
+ * the calibration reports success and nothing on screen looks wrong. A
+ * calibration that cannot fail is not a check.
  */
 
 import { taninverse } from '../mathFunctions.js';
@@ -181,8 +180,7 @@ export class PolarAxes {
    *
    * ⚑ TWO POINTS ON ONE RAY SEE NOTHING PERPENDICULAR TO IT, so `u1 × u2 == 0`
    * is not a failure - it is the honest boundary of what was clicked, and the
-   * circular reading takes over. That is also what keeps every WPD polar project
-   * readable: upstream's prompt puts P2 at P1's own angle (tenet 6).
+   * circular reading takes over.
    *
    * ⚑ THE CENTRE'S RADIAL VALUE comes from the origin point's own slot, blank
    * meaning 0. Two clicks can determine the SHAPE or the radial OFFSET, not

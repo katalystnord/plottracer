@@ -3,15 +3,14 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL -- one deliberate divergence, found by the v2.0
- * pre-launch code review. Upstream reads R0/R2 with a bare `Number()`, never
- * checks `InputParser.isValid` for the time fields, and ends with an
- * unconditional `return true` -- the same checkpoint-81 defect class already
- * fixed on XY/Bar/Ternary/Map, just never ported to this class. `"abc"` for
- * R0 gave `NaN`, and a blank Chart Start Time silently became the Unix epoch
- * via `new Date(null)`, both with calibrate() reporting success and nothing
- * on screen wrong. `isCalibrated()` was also hardcoded `return false` always,
- * independent of whether calibrate() had even been called.
+ * ⚑ `calibrate()` VALIDATES EVERY VALUE AND CAN ANSWER FALSE, and
+ * `isCalibrated()` reports what actually happened.
+ *
+ * Both matter here because the failures are silent: a radius that is not a
+ * number becomes `NaN` and is baked into every later reading, and a blank Chart
+ * Start Time read permissively becomes the Unix epoch, so every timestamp is
+ * plausible and wrong. A calibration that cannot fail is not a check, and an
+ * `isCalibrated()` that answers without looking is not an answer.
  */
 
 import { taninverse, dist2d, normalizeAngleDeg, getCircleFrom3Pts } from '../mathFunctions.js';

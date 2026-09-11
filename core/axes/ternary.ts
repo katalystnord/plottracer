@@ -3,12 +3,9 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
- * ⚑⚑ NO LONGER FAITHFUL, AND DELIBERATELY SO (2026-09-10). Upstream collects
- * THREE corner clicks and reads TWO. Its `processCalibration` assigns
- * `x2 = cp2.px; y2 = cp2.py;` and never mentions those variables again; the
- * reading is then `ap = 1 - xx - yy/root3` and friends, which is the barycentric
- * coordinate of a triangle assumed EQUILATERAL. The third click - the one the
- * user was asked for - is stored and ignored.
+ * ⚑⚑ ALL THREE CORNERS ARE READ (2026-09-10). Until then the third click was
+ * collected from the user, stored, and never used: the reading assumed the
+ * triangle was EQUILATERAL however the figure actually drew it.
  *
  * ⚠️ MEASURED, on a RIGHT-ANGLED ternary A(100,300) B(100,100) C(300,300) - a
  * real convention, and the shape three fixtures in this repo already used: the

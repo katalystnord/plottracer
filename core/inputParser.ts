@@ -3,12 +3,10 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See core/mathFunctions.ts for porting-provenance notes.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL - one deliberate divergence, checkpoint 81. See
- * parseWholeNumber below. Upstream prefix-parses with `parseFloat`, so any
- * trailing garbage is silently discarded and the user is told nothing. Under
- * tenet 1 ("graph in → RELIABLE data out") that is the worst failure we can
- * ship, and under tenet 5 ("no allegiance to that stack at the code level")
- * being byte-faithful is not a defence for it. Tenet 8 is the permission.
+ * ⚑⚑ A NUMBER IS THE WHOLE STRING OR IT IS NOTHING. See `parseWholeNumber`
+ * below. Prefix parsing - taking `12` from `12abc` and discarding the rest -
+ * accepts a typo as a measurement and tells the user nothing, which under tenet
+ * 1 ("graph in, RELIABLE data out") is the worst failure this tool can ship.
  */
 
 import * as dateConverter from './dateConversion.js';

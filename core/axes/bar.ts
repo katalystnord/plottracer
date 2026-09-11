@@ -3,14 +3,10 @@
  * Original: WebPlotDigitizer, Copyright (C) 2025 Ankit Rohatgi, AGPL-3.0.
  * See ../mathFunctions.ts for porting-provenance notes.
  *
- * ⚑ NO LONGER BYTE-FAITHFUL - two deliberate divergences from upstream.
+ * ⚑ `calibrate()` VALIDATES ITS VALUES AND CAN ANSWER FALSE. A calibration that
+ * cannot fail is not a check; see the comment at that guard.
  *
- * checkpoint 81: calibrate() validates its values and can now return false.
- * See the comment at the divergence. Upstream reports success on input
- * XYAxes refuses.
- *
- * v2.0 groundwork: dataToPixel() is now REAL, not upstream's unimplemented
- * stub (`return {x:0,y:0}`) - the exact algebraic inverse of pixelToData's
+ * ⚑ `dataToPixel()` IS REAL - the exact algebraic inverse of pixelToData's
  * projection onto the calibrated line, restricted to that line (a 1-D axes
  * has nowhere else to invert to). Follows spider.ts's precedent exactly:
  * returns {NaN, NaN}, never {0,0}, wherever no pixel exists (uncalibrated,
