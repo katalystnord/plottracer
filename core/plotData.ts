@@ -81,6 +81,9 @@ export interface SerializedAxesData {
   isLogY?: boolean;
   noRotation?: boolean;
   isLog?: boolean;
+  /** Polar only: the declared SHAPE of the drawing. Absent means circular, which
+   * is every file written before v2.5 and every imported foreign project. */
+  isCircular?: boolean;
   isRotated?: boolean;
   /** Bar's declared baseline (v2.0). ⚑ Without these two the file loses the
    * ONE number the whole bar model exists to produce: a reopened project fell
@@ -660,7 +663,16 @@ export class PlotData {
           axes.setCandlesFlipped(Boolean(axData.candlesFlipped));
         } else if (axData.type === 'PolarAxes') {
           axes = new PolarAxes();
-          axes.calibrate(calibration!, Boolean(axData.isDegrees), Boolean(axData.isClockwise), Boolean(axData.isLog));
+          // ⚑ ABSENT MEANS CIRCULAR, which is what every file written before
+          // v2.5 is, and what every imported foreign project is: those tools
+          // have no concept of a distorted polar frame.
+          axes.calibrate(
+            calibration!,
+            Boolean(axData.isDegrees),
+            Boolean(axData.isClockwise),
+            Boolean(axData.isLog),
+            axData.isCircular === undefined ? true : Boolean(axData.isCircular)
+          );
         } else if (axData.type === 'TernaryAxes') {
           axes = new TernaryAxes();
           axes.calibrate(calibration!, Boolean(axData.isRange100), Boolean(axData.isNormalOrientation));
@@ -1014,6 +1026,13 @@ export class PlotData {
         axData.isDegrees = axes.isThetaDegrees();
         axData.isClockwise = axes.isThetaClockwise();
         axData.isLog = axes.isRadialLog();
+        // ⚑⚑ THE SHAPE IS THE FOURTH FLAG, and leaving it out was a silent wrong
+        // number: a tilted figure reopened as a circle, read plausible values
+        // through the wrong maths, and the card AGREED, because `loadCalibrated`
+        // re-derives its options from the axes instance it is handed.
+        // ⚠️ Found by the v2.5 pre-tag audit, one layer below the
+        // `extractOptions` comment that says it exists to prevent exactly this.
+        axData.isCircular = axes.isCircularPlot();
       } else if (axes instanceof TernaryAxes) {
         axData.type = 'TernaryAxes';
         axData.isRange100 = axes.isRange100();

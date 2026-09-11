@@ -140,6 +140,47 @@ describe('Polar axes survive a save and reopen', () => {
     }).axes;
   }
 
+  it('⚑⚑ keeps the SHAPE, or a tilted figure silently reopens as a circle', () => {
+    // ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT. `isCircular` was added to PolarAxes and
+    // to the config's `extractOptions` - whose comment says it is there so *"the
+    // reopened project would [not] read a distorted figure as a circle"* - and
+    // was never written by `PlotData.serialize`. The deserialiser then called
+    // `calibrate` with four arguments, so the fifth took its `= true` default,
+    // and `loadCalibrated` re-derives the card's options FROM the axes, so the
+    // CARD AGREED: Shape read Circular and the numbers were plausible.
+    // ⚑⚑ THE TEST THAT SHOULD HAVE CAUGHT IT IS THE NEXT ONE DOWN, titled
+    // "keeps all THREE flags independently". A fourth flag was added without a
+    // fourth case, and A COUNT IN A TEST NAME goes stale exactly as a count in a
+    // comment does.
+    const O = { x: 500, y: 500 };
+    const place = (r: number, deg: number) => {
+      const t = (deg * Math.PI) / 180;
+      const u = r * Math.cos(t);
+      const v = r * Math.sin(t);
+      return { x: O.x + u + 0.5 * v, y: O.y + 0.3 * u - v };
+    };
+    const p1 = place(100, 0);
+    const p2 = place(200, 60);
+    const probe = place(150, 30);
+
+    const axes = reopen<PolarAxes>((plot) => {
+      const cal = new Calibration(2);
+      cal.addPoint(O.x, O.y, '0', '0');
+      cal.addPoint(p1.x, p1.y, '100', '0');
+      cal.addPoint(p2.x, p2.y, '200', '60');
+      const a = new PolarAxes();
+      a.name = 'Polar';
+      expect(a.calibrate(cal, true, false, false, false), 'the tilted calibration must build').toBe(true);
+      expect(a.isCircularPlot()).toBe(false);
+      expect(a.pixelToData(probe.x, probe.y)[0]).toBeCloseTo(150, 6);
+      plot.addAxes(a);
+    }).axes;
+
+    expect(axes.isCircularPlot(), 'the shape must survive the round trip').toBe(false);
+    expect(axes.pixelToData(probe.x, probe.y)[0]).toBeCloseTo(150, 6);
+    expect(axes.pixelToData(probe.x, probe.y)[1]).toBeCloseTo(30, 6);
+  });
+
   it('keeps all THREE flags independently', () => {
     // Three booleans is where a reader most easily crosses wires; each is
     // asserted against a fixture where the others differ.
