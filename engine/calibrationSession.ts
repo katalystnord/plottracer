@@ -21,10 +21,22 @@
  * `valueFields: readonly CalibValueField[]` -- zero entries for a step
  * needing no typed value at all (Polar's origin: click, place, advance,
  * no value prompt shown), one entry for the XY/Bar case, two for Polar's
- * r+theta points. Polar's third value (theta2, on its second calibration
- * point) is collected to match WPD's own form but never actually read by
- * core/axes/polar.ts's calibration math -- see that file's `_theta2r`
- * comment; preserved here for the same faithful-port reason, not a bug.
+ * r+theta points.
+ *
+ * ⚠️⚠️ THIS PARAGRAPH USED TO SAY THAT POLAR'S THETA2 IS "collected to match
+ * WPD's own form but never actually read... preserved here for the same
+ * faithful-port reason, NOT A BUG". It was a bug, and so was its twin below.
+ * Both were fixed on 2026-09-10/11: theta2 is exactly the value that lets a
+ * polar figure's SHAPE be measured instead of assumed circular, and it is read
+ * now whenever the user declares the figure tilted.
+ * ⚑⚑ THE LESSON IS ABOUT THIS COMMENT, NOT ABOUT THE CODE. Written to reassure,
+ * it licensed the inheritance and told every later reader there was nothing to
+ * find - which is what a gate-3 comment does, one level up: it ended enquiry.
+ * David: *"as long as we do not stay homaged to anything that is in the past.
+ * Especially anything that is not correct."*
+ * ▶ RECORD PROVENANCE, NEVER FIDELITY AS A REASON. "This came from upstream" is
+ * a fact worth keeping. "...so it is correct" does not follow, and writing it
+ * down makes the next person believe it.
  *
  * core/axes/ternary.ts fits the zero-value-step shape Polar's origin
  * already introduced, taken further: all 3 corner clicks (A, B, C) are
@@ -32,11 +44,16 @@
  * calibration.setDataAt() at all, only two global toggles (0-100 vs 0-1
  * scale, normal vs reverse orientation) feed calibrate(), both hardcoded
  * here per the same "no UI yet for this option" precedent XY/Bar/Polar
- * already established for their own analogous options. Corner C's pixel
- * is collected to match WPD's own 3-click UI but never read by
- * ternary.ts's math (corner A as origin + corner B's distance/angle fully
- * determine an equilateral triangle) -- another faithfully-preserved dead
- * value, same category as Polar's theta2.
+ * already established for their own analogous options.
+ *
+ * ⚠️⚠️ AND THE SECOND HALF OF THE SAME MISTAKE. This used to end: corner C "is
+ * collected to match WPD's own 3-click UI but never read by ternary.ts's math
+ * (corner A as origin + corner B's distance/angle fully determine an EQUILATERAL
+ * triangle) -- another faithfully-preserved dead value". The parenthesis is the
+ * tell: it states the assumption that was wrong. A ternary drawn as a
+ * right-angled triangle is an ordinary convention, and on one the tool read its
+ * own clicked corner C as `157.7, 57.7, -115.5`. Fixed `f005183`: a reading is
+ * the pixel's composition within the triangle that was CLICKED.
  *
  * core/axes/map.ts's MapAxes.calibrate() takes scale_length as a
  * standalone parameter, not read from any Calibration point's dx/dy by
