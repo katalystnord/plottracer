@@ -9310,6 +9310,15 @@ export function Workspace() {
               // bar, which is that hint bar, and keeps its Cancel visible because
               // the way out of an armed mode has to be on screen.
               bottom: 10,
+              // ⚑⚑ CLICK-THROUGH, because the banner sits over the figure and is
+              // asking for a click ON the figure. Opaque, it swallowed presses on
+              // the bottom-centre of the plot - the one gesture it exists to
+              // request. `ExplodedSliceControl` records the same trap and calls
+              // itself the THIRD occurrence; this was the fourth, introduced by
+              // the fix that moved this banner off the calibration card.
+              // ▶ An overlay added over the canvas is click-through until proven
+              // otherwise; the Cancel button below opts back in.
+              pointerEvents: 'none',
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 3,
@@ -9333,7 +9342,9 @@ export function Workspace() {
               type="button"
               data-testid="eyedropper-cancel"
               onClick={() => setEyedropper(null)}
-              style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)', borderRadius: 4, cursor: 'pointer' }}
+              // ⚑ The one part that takes a press: the way out of an armed mode
+              // has to be reachable, so it opts back in to pointer events.
+              style={{ pointerEvents: 'auto', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)', borderRadius: 4, cursor: 'pointer' }}
             >
               Cancel
             </button>

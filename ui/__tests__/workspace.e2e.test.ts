@@ -4738,6 +4738,53 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
    * the GEOMETRY rather than the position, so it stays true if either element
    * moves again.
    */
+  /**
+   * ⚑⚑ THE BANNER MUST NOT SWALLOW A CLICK ON THE FIGURE.
+   *
+   * ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT, IN THE FIX MADE EARLIER THE SAME DAY.
+   * Moving the banner out from under the calibration card put it over the
+   * bottom-centre of the plot with no `pointerEvents: 'none'` - so while the
+   * pipette is armed, the one gesture the banner asks for is blocked by the
+   * banner itself over a strip of the figure.
+   *
+   * ⚑ THE CODEBASE ALREADY NAMED THIS TRAP THREE TIMES. `ExplodedSliceControl`
+   * says of its own fix: *"Opaque to pointer events it swallowed presses in the
+   * bottom-right of the canvas... Every rail fold-out card is click-through for
+   * precisely this reason. Same trap, third occurrence."* This was the fourth,
+   * and a FIX introduced it.
+   * ▶ An overlay added over the canvas is click-through until proven otherwise.
+   */
+  it('⚑⚑ a click lands on the FIGURE through the armed-pipette banner', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+
+    const banner = (await page.getByTestId('eyedropper-hint').boundingBox())!;
+    await refreshCanvasBox();
+    await page.mouse.click(banner.x + banner.width / 2, banner.y + banner.height / 2);
+    await page.waitForTimeout(150);
+
+    expect(
+      await page.getByTestId('eyedropper-hint').count(),
+      'the click was swallowed by the banner instead of reaching the figure'
+    ).toBe(0);
+  });
+
+  it('⚑ the Cancel button still takes the press - the way out stays clickable', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+    await page.getByTestId('eyedropper-cancel').click();
+    await page.waitForTimeout(120);
+    expect(await page.getByTestId('eyedropper-hint').count()).toBe(0);
+  });
+
   it('⚑⚑ the armed-pipette banner does not overlap the calibration card', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
