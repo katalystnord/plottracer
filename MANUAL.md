@@ -194,9 +194,10 @@ by value rather than by which corner you pressed first.
 because which body edge is the open depends on whether the period rose or fell,
 and that is not something a click can say. PlotTracer reads it off the figure
 instead, by sampling each body's colour and grouping the candles into the two
-appearances the figure draws. If it has them the wrong way round, tick **This
-figure's rising candles are the other colour** under the table and every candle
-swaps at once. A figure drawn in a single colour has no direction to read, so
+appearances the figure draws, and says what it found on a card at the bottom of
+the canvas - *"Read from the figure: 5 rising, 3 falling"*. If it has them the
+wrong way round, tick **Swap which colour rises** on that card and every candle
+changes at once. A figure drawn in a single colour has no direction to read, so
 every candle is reported rising.
 
 **Spider charts trace along their own axes.** Auto-extract ▸ **By colour** is the

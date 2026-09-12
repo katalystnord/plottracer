@@ -9442,6 +9442,29 @@ export function Workspace() {
               gap: 8,
             }}
           >
+            {/* ⚑⚑ SAY WHAT WE READ BEFORE OFFERING TO CHANGE IT. Bare, the
+                checkbox reads as a SETTING - something you configure - when it
+                is a CORRECTION to a measurement, and there was nothing on the
+                card to check the measurement against. The count is that
+                something: eight candles drawn as five up and three down is
+                verifiable at a glance.
+                ⚑ A figure read as ALL ONE DIRECTION is called out, because that
+                is the shape a failed colour read takes. "Every period rose" is a
+                legitimate reading of a legitimate figure, so it cannot be
+                refused - but it is worth saying out loud, since it is also what
+                sampling the paper instead of the bodies looks like. */}
+            <span>
+              {(() => {
+                const rising = candlestickGlyphs.filter((g) => g.rising).length;
+                const falling = candlestickGlyphs.length - rising;
+                const word = rising === 0 ? 'falling' : 'rising';
+                if (candlestickGlyphs.length === 1) return `This candle reads as ${word}`;
+                if (rising === 0 || falling === 0) {
+                  return `All ${candlestickGlyphs.length} read as ${word} - one body colour in this figure`;
+                }
+                return `Read from the figure: ${rising} rising, ${falling} falling`;
+              })()}
+            </span>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -9454,7 +9477,7 @@ export function Workspace() {
                 data-testid="candle-flip"
                 style={{ pointerEvents: 'auto', cursor: 'pointer' }}
               />
-              This figure&rsquo;s rising candles are the other colour
+              Swap which colour rises
             </label>
           </div>
         )}
