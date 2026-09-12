@@ -105,6 +105,17 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
   for (const word of words) {
     const clean = word.text.trim();
     if (clean === '') continue;
+    // ⚑⚑ A TICK MARK IS NOT A WORD. A band dragged a few pixels below the axis
+    // catches the row of ticks, and the reader returns each one as a `-`; joined
+    // in reading order, every category came back named `- 2021-01-01`. Measured
+    // on a real figure.
+    // ⚑ Dropped here rather than asked of the user: a band has to be allowed to
+    // touch the axis, since a rotated label's top corner sits right under it,
+    // and "start your box clear of the ticks" is tribal knowledge.
+    // ⚑ The test is "no letter and no digit", not a list of characters to
+    // strip - a name may legitimately contain punctuation (`pH 7.4`, `t-test`,
+    // `n=12`), and only a word made ENTIRELY of it carries nothing.
+    if (!/[\p{L}\p{N}]/u.test(clean)) continue;
     // ⚑ The word's four corners in FIGURE pixels: the rotation means an
     // axis-aligned box in the straightened frame is a tilted one out here.
     const corners = [

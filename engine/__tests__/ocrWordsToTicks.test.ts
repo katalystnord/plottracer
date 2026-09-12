@@ -187,3 +187,60 @@ describe('a label just outside the span', () => {
     expect(out).toEqual([]);
   });
 });
+
+/**
+ * ⚑⚑ A TICK MARK IS NOT A WORD.
+ *
+ * Measured on a real figure: a band dragged a few pixels below the axis catches
+ * the row of tick marks, and the reader returns each one as a `-`. Joined in
+ * reading order, every category came back named `- 2021-01-01`.
+ *
+ * ⚑ The band has to be allowed to touch the axis - asking the user to start it
+ * clear of the ticks is tribal knowledge, and a rotated label's top corner sits
+ * right under the axis anyway. So the reading drops what cannot be a name rather
+ * than the user avoiding it.
+ *
+ * ⚑ The rule is "no letter and no digit", not a list of characters to strip: a
+ * name may legitimately contain punctuation (`pH 7.4`, `t-test`, `n=12`), and it
+ * is only a word made ENTIRELY of punctuation that carries nothing.
+ */
+describe('punctuation the band caught', () => {
+  it('⚑⚑ drops a tick mark read as a dash, and keeps the label it sat under', () => {
+    const out = wordsToTicks({
+      // The tick at the band centre, and the label just below it.
+      words: [word('-', 45, 55, 202, 208), word('2021-01-01', 20, 80)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 0, text: '2021-01-01', confidence: 90 }]);
+  });
+
+  it('⚑ keeps punctuation that is part of a name', () => {
+    const out = wordsToTicks({
+      words: [word('pH', 20, 50), word('7.4', 55, 80), word('n=12', 120, 180)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([
+      { categoryIndex: 0, text: 'pH 7.4', confidence: 90 },
+      { categoryIndex: 1, text: 'n=12', confidence: 90 },
+    ]);
+  });
+
+  it('⚑ a category whose ONLY reading was punctuation gets no entry at all', () => {
+    // Not an empty name: an empty reading and an unread category must stay
+    // indistinguishable downstream, which is what lets the card leave it alone.
+    const out = wordsToTicks({
+      words: [word('-', 45, 55, 202, 208)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([]);
+  });
+});
