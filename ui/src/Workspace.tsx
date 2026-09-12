@@ -1421,7 +1421,17 @@ export function Workspace() {
   const toolReason = (toolMode: string, own: string | undefined) =>
     marksHiddenIn(toolMode) ? MARKS_HIDDEN_REASON : own;
   const [editingCell, setEditingCell] = useState<
-    { index: number; axis: number; value: string; seed: string } | null
+    | {
+        index: number;
+        axis: number;
+        value: string;
+        seed: string;
+        /** ⚑ Which SEGMENT is being edited, on a stacked chart. Its value is a
+         *  HEIGHT measured from the segment below, so the commit cannot go
+         *  through the generic "move this point to this axis value" path. */
+        stacked?: { seriesIndex: number; tupleIndex: number };
+      }
+    | null
   >(null);
   /**
    * Reading category names off the figure (v2.4).
@@ -4336,6 +4346,24 @@ export function Workspace() {
     const cell = editingCell;
     if (!cell) return;
     setEditingCell(null);
+    // ⚑⚑ A STACKED SEGMENT'S VALUE IS A HEIGHT, NOT A POSITION - which is the
+    // whole differentiator of the type, so it cannot go through the generic
+    // path. Typing 7 there means "this segment is 7 tall", and the top moves to
+    // base + 7 with every segment above riding up, keeping its own value.
+    // ⚠️ Through the generic path it meant the ABSOLUTE 7: on a segment based at
+    // 2 that recorded 5, and then marked the 5 as the user's own reading. That
+    // defect is why the type exists.
+    if (config.id === 'stacked' && cell.stacked) {
+      if (cell.value !== cell.seed) {
+        const parsed = Number(cell.value);
+        if (cell.value.trim() !== '' && Number.isFinite(parsed)) {
+          if (session.setStackedHeight(cell.stacked.seriesIndex, cell.stacked.tupleIndex, parsed)) {
+            commit();
+          }
+        }
+      }
+      return;
+    }
     // ⚑ AN EDITOR THAT WAS OPENED AND CLOSED IS NOT A READING - the heatmap's
     // rule, word for word, because it is one rule. Committing an untouched seed
     // moves the point (through the axes' inverse, so it lands on the rounded
@@ -7000,7 +7028,18 @@ export function Workspace() {
         width={64}
         align="right"
         onStartEdit={() =>
-          setEditingCell({ index: pointIndex, axis: 0, value: editSeed(value), seed: editSeed(value) })
+          setEditingCell({
+            index: pointIndex,
+            axis: 0,
+            value: editSeed(value),
+            seed: editSeed(value),
+            // ⚑ Only the VALUE column of a stacked chart is a height. `Base` is
+            // derived from the chain and is not editable at all - there is
+            // nothing there to move that is not the segment below's top.
+            ...(config.id === 'stacked' && columnIndex === 1
+              ? { stacked: { seriesIndex, tupleIndex } }
+              : {}),
+          })
         }
         onChange={(v) => setEditingCell((c) => (c ? { ...c, value: v } : c))}
         onCommit={commitDataPointEdit}

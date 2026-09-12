@@ -271,7 +271,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'categorical' | 'boxplot' | 'candlestick' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'stacked' | 'categorical' | 'boxplot' | 'candlestick' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -11346,5 +11346,59 @@ describe('Workspace: Span chart capture (v2.5)', () => {
   }, 45000);
 });
 
+/**
+ * ⚑⚑⚑ A STACKED CHART'S VALUE IS A HEIGHT, AND THE SEGMENTS ARE CONNECTED.
+ *
+ * David met the alternative driving a stacked figure: typing 7 into a segment's
+ * `Value` recorded 5.02, because the editor moved the far corner to the ABSOLUTE
+ * 7 while the column showed a height, and then marked the 5.02 as his own
+ * reading. That is the defect this type exists to remove.
+ *
+ * ⚑ Driven through the real table rather than the model, because the model half
+ * is covered in engine/__tests__/stackedChart.test.ts and what only an e2e can
+ * show is that the CELL a user double-clicks reaches `setStackedHeight` and not
+ * the generic "move this point to this axis value" path.
+ */
+describe('Workspace: a stacked bar chart', () => {
+  it('⚑⚑ typing a height records that height, and the segment above keeps its value', async () => {
+    await resetWorkspace('stacked');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('2');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
 
+    // 30px per unit: y=400 is 0, y=100 is 10.
+    const yFor = (v: number) => 400 - v * 30;
+    // Series 1, standing on the baseline, two tall.
+    await clickAt(150, yFor(0));
+    await clickAt(150, yFor(2));
+    // Series 2, on top of it, three tall.
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(120);
+    await clickAt(150, yFor(2));
+    await clickAt(150, yFor(5));
 
+    // ⚑ Two value columns, so the ids are `...-C` for Base and `...-C-max` for
+    // Value - the same pair a Span's two ends use.
+    expect(await textOf('bar-cell-1-0'), 'the base is derived from the segment below').toMatch(/2/);
+    expect(await textOf('bar-cell-1-0-max'), 'and the height is three').toMatch(/3/);
+
+    // Type a HEIGHT of 6 into series 2's Value - column 1, the second slot.
+    await page.getByTestId('bar-value-1-0-1').dblclick();
+    await page.getByTestId('bar-edit-1-0-1').fill('6');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+
+    // ⚑ SIX, not eight. Through the old path this recorded base + typed as an
+    // absolute, so a segment based at 2 reported 4.
+    await expect.poll(() => textOf('bar-cell-1-0-max'), { timeout: 8000 }).toMatch(/6/);
+    // And the one below is untouched.
+    expect(await textOf('bar-cell-0-0-max')).toMatch(/2/);
+  });
+});
