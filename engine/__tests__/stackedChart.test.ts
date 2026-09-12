@@ -186,3 +186,108 @@ describe('the link: you cannot change one without the other', () => {
     expect(heights(s, 1)[0]).toBeCloseTo(7, 6);
   });
 });
+
+/**
+ * ⚑⚑ THE LINK HAS MORE THAN ONE ENTRANCE, and until 2026-09-12 only one of them
+ * honoured it. David, dragging a segment's top on the figure and watching the
+ * segments above stay put while their heights changed underneath him: *"This was
+ * not supose to be ble to happen?"*
+ *
+ * Typing a height went through `setStackedHeight`, which carries the stack. A
+ * DRAG went through `updateDataPointPixel`, which moved one pixel and left the
+ * rest where they were - so the boundary moved, every base above it moved with
+ * it (bases are derived), and the segments above silently grew or shrank. The
+ * record then said the figure showed heights it never drew.
+ *
+ * ▶ The rule this file states as the model - *you cannot change one without the
+ * other* - is a property of the MODEL, so it is enforced where drag, arrow-nudge
+ * and value-edit converge, not in whichever handler was written first.
+ */
+describe('the link holds however the segment is moved', () => {
+  function threeStack(): CalibrationSession<CalibratedAxes> {
+    const s = stackedSession();
+    const add = (n: string) => (s as unknown as { addDataset(x: string): unknown }).addDataset(n);
+    captureSegment(s, 150, 0, 2);
+    add('middle');
+    captureSegment(s, 150, 2, 5);
+    add('top');
+    captureSegment(s, 150, 5, 9);
+    return s;
+  }
+
+  /** The index, in the active dataset, of the point sitting at `value`. */
+  function pointAt(s: CalibrationSession<CalibratedAxes>, value: number): number {
+    const pts = (s as unknown as { getDataPoints(): { py: number }[] }).getDataPoints();
+    const i = pts.findIndex((p) => Math.abs(p.py - yFor(value)) < 0.5);
+    expect(i, `no point at ${value}`).toBeGreaterThanOrEqual(0);
+    return i;
+  }
+
+  it('⚑⚑ dragging a middle segment\'s TOP carries the stack above it, values unchanged', () => {
+    const s = threeStack();
+    const any = s as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+    };
+    any.setActiveDataset(1);
+    any.updateDataPointPixel(pointAt(s, 5), 150, yFor(8)); // 2 -> 8: height 3 -> 6
+
+    expect(heights(s, 0)[0], 'the one below is untouched').toBeCloseTo(2, 6);
+    expect(heights(s, 1)[0], 'the dragged one is what was dragged to').toBeCloseTo(6, 6);
+    expect(heights(s, 2)[0], 'the one above RIDES, keeping its value').toBeCloseTo(4, 6);
+  });
+
+  it('⚑ a drag and a typed height leave the column in the same state', () => {
+    const dragged = threeStack();
+    const typed = threeStack();
+    const anyDrag = dragged as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+    };
+    anyDrag.setActiveDataset(1);
+    anyDrag.updateDataPointPixel(pointAt(dragged, 5), 150, yFor(8));
+    (typed as unknown as {
+      setStackedHeight(a: number, b: number, c: number): boolean;
+    }).setStackedHeight(1, 0, 6);
+
+    for (const series of [0, 1, 2]) {
+      expect(heights(dragged, series)[0], `series ${series}`).toBeCloseTo(
+        heights(typed, series)[0]!,
+        6
+      );
+    }
+  });
+
+  it('⚑ dragging the BASE corner leaves the stack alone - that corner measures the width, not the boundary', () => {
+    const s = threeStack();
+    const any = s as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+    };
+    any.setActiveDataset(1);
+    any.updateDataPointPixel(pointAt(s, 2), 150, yFor(2.4)); // sloppy hand on the lower corner
+
+    expect(heights(s, 0)[0]).toBeCloseTo(2, 6);
+    expect(heights(s, 1)[0], 'the base is the chain\'s, so the height is unchanged').toBeCloseTo(3, 6);
+    expect(heights(s, 2)[0]).toBeCloseTo(4, 6);
+  });
+
+  it('⚑⚑ a negative stack rides DOWNWARD by the same rule', () => {
+    const s = stackedSession();
+    const add = (n: string) => (s as unknown as { addDataset(x: string): unknown }).addDataset(n);
+    captureSegment(s, 150, 0, -2);
+    add('lower still');
+    captureSegment(s, 150, -2, -5);
+    const any = s as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+    };
+    any.setActiveDataset(0);
+    const pts = (s as unknown as { getDataPoints(): { py: number }[] }).getDataPoints();
+    const top = pts.findIndex((p) => Math.abs(p.py - yFor(-2)) < 0.5);
+    any.updateDataPointPixel(top, 150, yFor(-4)); // -2 -> -4
+
+    expect(heights(s, 0)[0]).toBeCloseTo(-4, 6);
+    expect(heights(s, 1)[0], 'the one further out keeps its own magnitude').toBeCloseTo(-3, 6);
+  });
+});

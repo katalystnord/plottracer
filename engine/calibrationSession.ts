@@ -6000,21 +6000,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (top === null) return false;
     // The pixel carrying the far end is the one to move; the other corner is the
     // box's own bottom, whose value the chain replaces.
-    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
-    let farIndex: number | null = null;
-    let farDist = -Infinity;
-    for (const pixelIndex of tuple) {
-      if (pixelIndex == null) continue;
-      const p = dataset.getPixel(pixelIndex);
-      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
-        .pixelToData(p.x, p.y)[0];
-      if (read === undefined || !Number.isFinite(read)) continue;
-      const d = Math.abs(read - baseline);
-      if (d > farDist) {
-        farDist = d;
-        farIndex = pixelIndex;
-      }
-    }
+    const farIndex = this.stackedFarCornerOf(tupleIndex, datasetIndex);
     if (farIndex === null) return false;
 
     // ⚑⚑ NOT THROUGH `setDataPointValue`, which writes to the ACTIVE dataset
@@ -6051,11 +6037,90 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ Shifted by the same PIXEL delta, not recomputed, so a log axis moves
     // each segment by its own distance rather than by a value difference that
     // means something different further up the scale.
-    const dx = moved.x - wasX;
-    const dy = moved.y - wasY;
+    this.rideStackAbove(tupleIndex, datasetIndex, top, moved.x - wasX, moved.y - wasY);
+    return true;
+  }
+
+  /**
+   * The pixel in this tuple that carries the segment's FAR end - its top, the
+   * one whose position is the reading. The other corner is the box's own bottom,
+   * whose value the chain replaces.
+   *
+   * ⚑ ONE DEFINITION, because a drag and a typed height must agree about which
+   * corner they are moving. They did not while this loop was written out inside
+   * `setStackedHeight` alone.
+   */
+  private stackedFarCornerOf(tupleIndex: number, datasetIndex: number): number | null {
+    const dataset = this.datasetEntries[datasetIndex]?.dataset;
+    const tuple = dataset?.getAllTuples()[tupleIndex];
+    if (!dataset || !tuple || !this.axes) return null;
+    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
+    let farIndex: number | null = null;
+    let farDist = -Infinity;
+    for (const pixelIndex of tuple) {
+      if (pixelIndex == null) continue;
+      const p = dataset.getPixel(pixelIndex);
+      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
+        .pixelToData(p.x, p.y)[0];
+      if (read === undefined || !Number.isFinite(read)) continue;
+      const d = Math.abs(read - baseline);
+      if (d > farDist) {
+        farDist = d;
+        farIndex = pixelIndex;
+      }
+    }
+    return farIndex;
+  }
+
+  /**
+   * ⚑⚑ EVERYTHING ABOVE RIDES UP, KEEPING ITS OWN VALUE. This is the LINK doing
+   * its work: their bases are this segment's top, so when the top moves they
+   * must move with it or their heights would silently change instead. David:
+   * *"you cannot change one without the other."*
+   *
+   * ⚑ Shifted by the same PIXEL delta, not recomputed, so a log axis moves each
+   * segment by its own distance rather than by a value difference that means
+   * something different further up the scale.
+   *
+   * `wasTop` is the moved segment's top BEFORE the move - that is what says
+   * which of the other segments were above it.
+   */
+  /**
+   * Is this point the TOP of a stacked segment, and if so what does the stack
+   * above it need in order to ride with it?
+   *
+   * ⚑ Read BEFORE the move: `getPixel` hands back the live object, so a position
+   * read afterwards is the new one and every delta computed from it is zero -
+   * the same trap that once turned `setStackedHeight`'s ride-up into a no-op.
+   */
+  private stackedRideContext(
+    index: number
+  ): { tupleIndex: number; wasTop: number; wasX: number; wasY: number } | null {
+    if (this.config.id !== 'stacked' || !this.axes) return null;
+    const dataset = this.activeEntry.dataset;
+    const tupleIndex = dataset.getAllTuples().findIndex((t) => t.some((i) => i === index));
+    if (tupleIndex < 0) return null;
+    if (this.stackedFarCornerOf(tupleIndex, this.activeDatasetIndex) !== index) return null;
+    const wasTop = this.stackedTopOf(tupleIndex, this.activeDatasetIndex);
+    if (wasTop === null) return null;
+    const p = dataset.getPixel(index);
+    return { tupleIndex, wasTop, wasX: p.x, wasY: p.y };
+  }
+
+  private rideStackAbove(
+    tupleIndex: number,
+    datasetIndex: number,
+    wasTop: number,
+    dx: number,
+    dy: number
+  ): void {
+    if (!this.axes) return;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    if (dx === 0 && dy === 0) return;
+    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
     const sideOf = (v: number) => Math.sign(v - baseline);
-    const mySide = sideOf(top);
-    const myDist = Math.abs(top - baseline);
+    const mySide = sideOf(wasTop);
+    const myDist = Math.abs(wasTop - baseline);
     for (let i = 0; i < this.datasetEntries.length; i += 1) {
       if (i === datasetIndex) continue;
       const other = this.datasetEntries[i]!.dataset;
@@ -6071,7 +6136,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
         other.setPixelAt(pixelIndex, p.x + dx, p.y + dy);
       }
     }
-    return true;
   }
 
   getCandlestickGlyphs(): CandlestickGlyph[] {
@@ -6985,7 +7049,24 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const capLine = this.errorCapDragLine(this.activeDatasetIndex, index);
     const onBar = capLine ? constrainCap(capLine.origin, { x: px, y: py }, capLine.direction) : { x: px, y: py };
     const snapped = this.snapToSpoke(onBar.x, onBar.y, this.spokeIndexOfPoint(index));
+    // ⚑⚑ A STACKED SEGMENT'S TOP CARRIES THE STACK ABOVE IT, HOWEVER IT IS
+    // MOVED. David, 2026-09-12, having dragged one on the figure: *"This was not
+    // supose to be ble to happen?"* - the typed height linked the chain, and the
+    // DRAG did not, so the segments above silently changed height instead of
+    // riding. The guard belongs here for the same reason the spider snap and the
+    // error-cap lock already do: this is where drag, arrow-nudge and value-edit
+    // converge, and the model has more than one entrance.
+    const ride = this.stackedRideContext(index);
     dataset.setPixelAt(index, snapped.x, snapped.y);
+    if (ride) {
+      this.rideStackAbove(
+        ride.tupleIndex,
+        this.activeDatasetIndex,
+        ride.wasTop,
+        snapped.x - ride.wasX,
+        snapped.y - ride.wasY
+      );
+    }
     // ⚑⚑ A MOVE RE-MEASURES EVERY ONE OF THIS POINT'S VALUES, so whatever the
     // user once typed here is no longer what the record holds (A4). Drag,
     // arrow-nudge and a cap adjustment all converge on this method, which is
