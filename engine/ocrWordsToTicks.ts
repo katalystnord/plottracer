@@ -145,7 +145,8 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
 
   const out: TickReading[] = [];
   for (const [categoryIndex, list] of [...perCategory.entries()].sort((a, b) => a[0] - b[0])) {
-    const sorted = [...list].sort((a, b) => a.order - b.order);
+    const sorted = keptWords(list).sort((a, b) => a.order - b.order);
+    if (sorted.length === 0) continue;
     out.push({
       categoryIndex,
       text: sorted.map((w) => w.text).join(' '),
@@ -156,4 +157,53 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
     });
   }
   return out;
+}
+
+/**
+ * ⚑⚑ ONE JUNK WORD RUINED A LABEL THAT WAS READ PERFECTLY WELL.
+ *
+ * David, 2026-09-12, on a stacked figure whose category names came back as
+ * `Q1 EEE`, `Q2 EEEENEEED 0`, `Q3 EERE 0`, `Qa EEE` at confidences 3, 0, 15 and
+ * 21. He dragged the box round the labels generously, as anyone would, and it
+ * reached up into the bars.
+ *
+ * ⚑ MEASURED ON THAT FIGURE rather than reasoned about. The same band read with
+ * the shipped reader returns NINE words: the four real labels at 74, 92, 85 and
+ * 76, and five pieces of bar ink and axis rule read as `EE`, `EE`, `A` and two
+ * dashes at 16, 5, 10, 0 and 0. The reading was never wrong - the right answer
+ * was in there all along, joined to rubbish by the code below, and then reported
+ * at the rubbish's confidence.
+ *
+ * ⚑ SO THE RULE IS WITHIN A CATEGORY, NOT A GLOBAL FLOOR. A word that reads far
+ * worse than its own neighbours is the odd one out; the same confidence in a
+ * band where EVERYTHING reads weakly is simply a poor scan, and dropping words
+ * there would hide the only evidence the user has. Hence the second condition:
+ * we only call a word an outlier when something in its own category was read
+ * well enough to be an authority.
+ *
+ * ⚑ AND IT LEAVES MULTI-LINE LABELS ALONE, which a "keep the dominant text row"
+ * rule would not: the two lines of a real label read about as well as each
+ * other, so neither is ever the outlier.
+ *
+ * ⚑ Nothing is invented and nothing is corrected - a word is either recorded or
+ * it is not, and what survives is reported at its own confidence for the user
+ * to check, exactly as before.
+ */
+const STRONG_ENOUGH = 50;
+/**
+ * ⚑ THE FRACTION IS BOUNDED BY TWO MEASURED CASES, not chosen for roundness.
+ * Below it must fall the junk: the worst of the bar-ink words reads 16 against
+ * its category's 74, a ratio of 0.22. Above it must stay a genuine second line:
+ * `Sea / isiand` reads 41 against 96, a ratio of 0.43 - a real label whose
+ * weaker line this must never throw away. Anything between 0.22 and 0.43
+ * separates them; 0.3 sits between with room on both sides.
+ */
+const OUTLIER_FRACTION = 0.3;
+
+function keptWords(
+  list: readonly { text: string; conf: number; order: number }[]
+): { text: string; conf: number; order: number }[] {
+  const best = Math.max(...list.map((w) => w.conf));
+  if (best < STRONG_ENOUGH) return [...list];
+  return list.filter((w) => w.conf >= best * OUTLIER_FRACTION);
 }

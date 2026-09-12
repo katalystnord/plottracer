@@ -244,3 +244,91 @@ describe('punctuation the band caught', () => {
     expect(out).toEqual([]);
   });
 });
+
+/**
+ * ⚑⚑ THE BAND REACHED UP INTO THE BARS - David's stacked figure, 2026-09-12.
+ *
+ * The names came back `Q1 EEE`, `Q2 EEEENEEED 0`, `Q3 EERE 0`, `Qa EEE` at
+ * confidences 3, 0, 15 and 21. Reading the same band with the shipped reader
+ * showed the four labels had been read PERFECTLY - 74, 92, 85, 76 - alongside
+ * five pieces of bar ink and axis rule at 16, 5, 10, 0 and 0. The numbers below
+ * are those measurements.
+ */
+describe('junk the band caught above the labels', () => {
+  it('⚑⚑ drops a word that reads far worse than its own neighbours, and keeps the label', () => {
+    const out = wordsToTicks({
+      words: [
+        word('EE', 10, 60, 180, 200, 16), // bar ink, above the text row
+        word('Q1', 40, 60, 210, 225, 74),
+        word('EE', 110, 150, 180, 200, 5),
+        word('Q2', 140, 160, 210, 225, 92),
+      ],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([
+      { categoryIndex: 0, text: 'Q1', confidence: 74 },
+      { categoryIndex: 1, text: 'Q2', confidence: 92 },
+    ]);
+  });
+
+  it('⚑⚑ a band where EVERYTHING reads weakly is left alone - that is a poor scan, not an outlier', () => {
+    // Nothing here is an authority, so nothing may rule anything else out. The
+    // reading is reported weak, which is the only honest thing to say about it.
+    const out = wordsToTicks({
+      words: [word('Kenaf', 20, 60, 210, 225, 30), word('rn', 62, 80, 210, 225, 12)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 0, text: 'Kenaf rn', confidence: 12 }]);
+  });
+
+  it('⚑⚑ a MULTI-LINE label survives, because its two lines read about as well as each other', () => {
+    const out = wordsToTicks({
+      words: [
+        word('Kenaf', 20, 80, 205, 218, 88),
+        word('fibre', 20, 80, 220, 233, 81),
+      ],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 0, text: 'Kenaf fibre', confidence: 81 }]);
+  });
+
+  it('⚑⚑ a category holding ONLY junk still reports it, at its own confidence', () => {
+    // ⚑ The authority is the category's own, deliberately. A word here has
+    // nothing better beside it to be an outlier of, and reporting `EE` at 4 in a
+    // card that shows every confidence tells the user more than an empty row,
+    // which the card reads as "leave this name alone".
+    const out = wordsToTicks({
+      words: [word('Kenaf', 20, 80, 210, 225, 90), word('EE', 120, 180, 180, 200, 4)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([
+      { categoryIndex: 0, text: 'Kenaf', confidence: 90 },
+      { categoryIndex: 1, text: 'EE', confidence: 4 },
+    ]);
+  });
+
+  it('⚑⚑ a genuine second line that reads a good deal worse is KEPT - the bound the fraction has to respect', () => {
+    // `Sea / isiand` at 96 and 41. This is the case that says the fraction
+    // cannot be 0.5: the ratio here is 0.43 and the junk's is 0.22.
+    const out = wordsToTicks({
+      words: [word('Sea', 20, 60, 210, 225, 96), word('isiand', 20, 80, 230, 245, 41)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 0, text: 'Sea isiand', confidence: 41 }]);
+  });
+});
