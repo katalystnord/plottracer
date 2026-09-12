@@ -39,6 +39,12 @@ const ONLY = process.env['SHOT_ONLY'] ?? '';
 const ANCHOR_KEY: Record<string, string> = {
   cat1: 'c1',
   catn: 'c2',
+  // ⚑ A spider's first step is labelled for the person clicking it ("Centre"),
+  // and its truth file names the same point for what it is in the model.
+  centre: 'origin',
+  // ⚑ And its repeating step is labelled "Axis N" for the reader, while the
+  // truth file stores the point the axis is defined BY - its outer spoke end.
+  axis: 'spoke',
   // ⚑ A heatmap's step LABELS name the corner a user clicks ("where the FIRST
   // column meets the FIRST row"), while the truth files key their anchors by the
   // step's own key. The labels are the better thing to show a person and the
@@ -381,11 +387,28 @@ async function walkCalibration(
     // early. The tips bar prints "<label>: <prompt>" for whatever the step
     // actually needs, which is the sentence a user reads too.
     const tip = await d.text('tips-bar');
+    if (process.env['SHOT_DEBUG'] === '1') {
+      console.log('TIP:', tip);
+      await page.screenshot({ path: `/home/david/icoprobe/shots/debug-${guard}.png` });
+    }
     const m = /Calibration step \d+\/\d+ - ([^:]{1,12}):/.exec(tip);
     const label = m ? m[1]!.trim() : null;
     if (!label) break;
     const key = anchorKeyFor(label);
-    const a = anchors[key];
+    // ⚑ A NUMBERED STEP READS THE NUMBERED ANCHOR. Pie asks for "Outline 1",
+    // "Outline 2" and so on - one click per point the ellipse is fitted
+    // through - and the truth file stores exactly that, as an ARRAY under the
+    // step's own name. Without this the harness went looking for an anchor
+    // called `outline1` and refused the whole card, which is how the gallery
+    // lost its pie and spider frames.
+    const numbered = /^([a-z]+)(\d+)$/.exec(key);
+    const stem = numbered ? (ANCHOR_KEY[numbered[1]!] ?? numbered[1]!) : '';
+    const list = numbered ? (anchors as Record<string, unknown>)[stem] : undefined;
+    const a = numbered
+      ? Array.isArray(list)
+        ? (list[Number(numbered[2]) - 1] as { px: number; py: number; value?: unknown } | undefined)
+        : anchors[`${stem}${numbered[2]}`]
+      : anchors[key];
     if (!a) throw new Error(`step "${label}" (key ${key}) has no anchor; have ${Object.keys(anchors).join(',')}`);
     // ⚑ A step whose pixel is ALREADY PLACED (a reused corner) must not be
     // clicked again - the prompt says so in its own words, and clicking would
@@ -401,6 +424,27 @@ async function walkCalibration(
     const vals = extra[key] ?? (a.value !== undefined ? [String(a.value)] : ['']);
     await confirmValues(vals);
     answered.push(label);
+    // ⚑⚑ A CLICK THAT CHANGED NOTHING IS THE FINDING, SO SAY WHAT IT WAS.
+    // The walk used to run its guard out and die on a timeout thirty seconds
+    // later, which reads as "the harness is broken". It is not: a step that
+    // asks for a click, is clicked, and still asks for the same click means the
+    // press never reached the figure - and the thing in the way is named here,
+    // with the coordinate, so the diagnosis arrives with the failure.
+    if (!reused && !dragTo && (await d.text('tips-bar')).includes(`- ${label}:`)) {
+      const [lx, ly] = await d.at(a.px, a.py);
+      const b = await page.locator('canvas').first().boundingBox();
+      const card = await page.getByTestId('calibration-bar').boundingBox();
+      const x = (b?.x ?? 0) + lx;
+      const y = (b?.y ?? 0) + ly;
+      const under =
+        card && x >= card.x && x <= card.x + card.width && y >= card.y && y <= card.y + card.height;
+      throw new Error(
+        `step "${label}" did not advance after clicking its own anchor at image (${a.px}, ${a.py})` +
+          (under
+            ? ` - that point is UNDER the calibration card (${JSON.stringify(card)}), so the press never reached the figure`
+            : ` - screen (${Math.round(x)}, ${Math.round(y)}), card ${JSON.stringify(card)}`)
+      );
+    }
   }
   return answered;
 }
