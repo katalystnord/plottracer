@@ -3893,7 +3893,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
