@@ -7074,27 +7074,42 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     // instead of its middle.
     const cbox = (await page.getByTestId('base-canvas').boundingBox())!;
     const at = (fx: number, fy: number) => ({ x: cbox.x + cbox.width * fx, y: cbox.y + cbox.height * fy });
-    const readAt = (fx: number, fy: number) =>
+    // ⚑⚑ SAMPLED ON A GRID, NOT AT THREE POINTS. Three fixed fractions passed
+    // in isolation and failed on the full board, where the window and the fit
+    // differ enough that all three landed on blank paper - the check would then
+    // have been satisfied by an area with nothing in it, which is the one thing
+    // it exists to rule out.
+    const grid = (fx0: number, fy0: number, fx1: number, fy1: number) =>
       page.getByTestId('base-canvas').evaluate((el, f) => {
         const c = el as HTMLCanvasElement;
-        const d = c
-          .getContext('2d')!
-          .getImageData(Math.round(f.fx * c.width), Math.round(f.fy * c.height), 1, 1).data;
-        return [d[0], d[1], d[2]];
-      }, { fx, fy });
+        const ctx = c.getContext('2d')!;
+        const out: string[] = [];
+        for (let i = 1; i <= 5; i += 1) {
+          for (let j = 1; j <= 5; j += 1) {
+            const x = Math.round((f.fx0 + ((f.fx1 - f.fx0) * i) / 6) * c.width);
+            const y = Math.round((f.fy0 + ((f.fy1 - f.fy0) * j) / 6) * c.height);
+            const d = ctx.getImageData(x, y, 1, 1).data;
+            out.push(`${d[0]},${d[1]},${d[2]}`);
+          }
+        }
+        return out;
+      }, { fx0, fy0, fx1, fy1 });
+
+    // The rectangle, in fractions of the canvas: right of the folded-out card.
+    const RECT = [0.55, 0.15, 0.85, 0.55] as const;
 
     // ⚑ The instrument first: this area must actually HOLD ink, or "it is all
     // one colour afterwards" would be true before the mask was applied and the
     // case would prove nothing.
-    const before = [await readAt(0.6, 0.2), await readAt(0.8, 0.5), await readAt(0.7, 0.35)];
+    const before = await grid(...RECT);
     expect(
-      new Set(before.map((c) => c.join(','))).size,
+      new Set(before).size,
       'the area to be masked must not already be blank'
     ).toBeGreaterThan(1);
 
     const sizeBefore = await textOf('view-state');
-    const from = at(0.55, 0.15);
-    const to = at(0.85, 0.55);
+    const from = at(RECT[0], RECT[1]);
+    const to = at(RECT[2], RECT[3]);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 8 });
@@ -7107,9 +7122,8 @@ describe('Workspace: image editing (checkpoint 62)', () => {
 
     // ⚑ The masked area is now one flat colour - whatever ink was there is gone,
     // so nothing downstream can read it as data.
-    const corners = [await readAt(0.6, 0.2), await readAt(0.8, 0.5), await readAt(0.7, 0.35)];
-    expect(corners[1], 'the masked area is uniform').toEqual(corners[0]);
-    expect(corners[2], 'and its middle is the same colour').toEqual(corners[0]);
+    const after = await grid(...RECT);
+    expect(new Set(after).size, 'every sample inside the mask is the same colour').toBe(1);
 
     // ⚑⚑ Masking removes EVIDENCE, not geometry: the image is the same size, the
     // point still reads (5, 5), and nothing claims the figure was cropped.
