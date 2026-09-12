@@ -208,8 +208,15 @@ export class PolarAxes {
    * where the circular reading gave r=176.5 for a true 75.
    *
    * ⚑ TWO POINTS ON ONE RAY SEE NOTHING PERPENDICULAR TO IT, so `u1 × u2 == 0`
-   * is not a failure - it is the honest boundary of what was clicked, and the
-   * circular reading takes over.
+   * describes clicks that cannot fix a frame, and this returns null.
+   *
+   * ⚠️ That used to end "and the circular reading takes over", which is not what
+   * happens and never was: `buildFrame` is only reached from the `!is_circular`
+   * branch, where a null frame makes `calibrate()` answer false. The repo's own
+   * test - "a figure DECLARED distorted refuses clicks that cannot describe a
+   * frame" - enforces the opposite of what the sentence promised. Falling back
+   * would be the wrong behaviour anyway: the circular maths is the thing the
+   * user just said is wrong about this figure.
    *
    * ⚑ THE CENTRE'S RADIAL VALUE comes from the origin point's own slot, blank
    * meaning 0. Two clicks can determine the SHAPE or the radial OFFSET, not

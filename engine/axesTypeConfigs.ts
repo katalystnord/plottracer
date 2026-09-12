@@ -45,18 +45,28 @@ import { CONVENTION_LABELS } from './categoryTickOverlay.js';
 export interface CalibratedAxes {
   pixelToData(px: number, py: number): number[];
   /** The axes' own export column headers. Declared here (checkpoint 76) because
-   * all 7 classes have always implemented it (core/axes/types.ts:25) - it was
+   * every axes class has always implemented it (core/axes/types.ts) - it was
    * just never named as a requirement, which is how `AxesTypeConfig.valueLabels`
    * grew beside it and diverged. See core/exportValues.ts. */
   getAxesLabels(): string[];
   /**
    * Project a value back to a pixel. Declared here (checkpoint 79) on the same
-   * grounds as getAxesLabels: all 7 classes have always implemented it, it was
-   * simply never named.
+   * grounds as getAxesLabels: every axes class implements it, it was simply
+   * never named.
    *
-   * **Implemented for real only on XY and Image - the other 5 are stubs
-   * returning `{x: 0, y: 0}`** (`core/axes/bar.ts:93` and friends, "not
-   * implemented yet - matches the original exactly"). Declaring it does not
+   * ⚠️ **It does not always INVERT.** NINE axes classes; `dataToPixel` inverts for real on FOUR of them - XY,
+   * Image, Bar and Spider - and is a stub returning `{x: 0, y: 0}` on the other
+   * five (CCR, Map, Pie, Polar, Ternary). The real ones are
+   * covered per class (`core/__tests__/barAxes.test.ts`'s inversion block,
+   * `spider.ts`'s own "Real, not a stub"), and four of the five stubs are pinned
+   * by a named test each; Pie's is not.
+   *
+   * ⚠️ This paragraph said "real only on XY and Image, the other 5 are stubs"
+   * and cited a line number that has since moved onto an unrelated comment. It
+   * was wrong about the class count and about Bar and Spider, and the same
+   * census appears in five other files - two of which contradicted each other
+   * two modules apart. A census repeated in six comments and enforced in none
+   * drifts, and this one did. Declaring it does not
    * change that; callers must not assume it inverts. `algorithms/errorCapture.ts`
    * measures whether it does rather than trusting it, and degrades to "no
    * constraint" where it does not.
@@ -90,9 +100,17 @@ export interface CalibValueField {
    * uses it for the axis's NAME - a string rather than a coordinate, which is why
    * it is worth saying plainly here: `dz` is a slot, not a Z axis. */
   field: 'dx' | 'dy' | 'dz';
-  /** When true, the field may be left blank. For a value the calibration collects
-   * but never reads - e.g. Polar P2's θ, which mirrors WebPlotDigitizer's form but
-   * is ignored by the math. */
+  /** When true, the field may be left blank, because the model has a defined
+   * answer for "not given" - Spider's `Name`, where a blank spoke name is a
+   * spoke the user has not named yet rather than a missing measurement. It is
+   * the only `optional` field in this file.
+   *
+   * ⚠️ It used to be documented with Polar P2's θ as the example, "collected but
+   * ignored by the math". That is false twice over now: a tilted figure READS
+   * θ2 and refuses a bad one, and the circular walk no longer collects it at
+   * all (`stepsForOptions` adds it back, required, for the measured walk). A
+   * flag's only documentation describing a case that no longer exists is worse
+   * than none. */
   optional?: boolean;
   /** Prefilled into the input when the step becomes active, so the user walks
    * past it and can change it rather than typing it from scratch (v1.4: Spider's
@@ -366,9 +384,17 @@ export interface RadialDistinctGuard {
    * r=50 at 0° and r=100 at 90° on a 2:1 ellipse are both 100px out. Measured -
    * the session refused it.
    *
-   * ⚑ It takes the calibration rather than a flag so the answer comes from the
-   * MODEL itself (`PolarAxes.usesMeasuredFrame`), not from a second copy of the
-   * rule that decides which reading is in force.
+   * ⚑ It takes the calibration AND the options, and the only implementation
+   * today answers from the options - the `isCircular` declaration, which is the
+   * same record `buildAxes` hands to `calibrate`, so there is one copy of the
+   * rule rather than two. The calibration is there for a guard that needs to
+   * look at the clicks themselves.
+   *
+   * ⚠️ This paragraph used to say the answer came from the model, via
+   * `PolarAxes.usesMeasuredFrame`. No such method has ever existed; a grep found
+   * the comment and nothing else. A reader auditing whether the guard can drift
+   * out of step with the model read that, concluded it could not, and never
+   * looked at the implementation.
    */
   skipWhen?(cal: Calibration, options: Readonly<Record<string, string>>): boolean;
   /**
@@ -3308,9 +3334,16 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
   fixedSteps: [
     { key: 'a', label: 'A', color: '#e0a458', prompt: 'Click corner A of the ternary diagram', valueFields: [] },
     { key: 'b', label: 'B', color: '#5fb4e0', prompt: 'Click corner B of the ternary diagram', valueFields: [] },
-    // Collected to match WPD's own 3-corner-click UI, but never read by
-    // core/axes/ternary.ts's calibration math -- see this file's header
-    // comment for why C is geometrically redundant here.
+    // ⚑⚑ ALL THREE CORNERS ARE READ. C is not a courtesy click: with the
+    // barycentric rewrite it is half the frame - `processCalibration` builds its
+    // determinant from it and every reading divides by that.
+    //
+    // ⚠️ This comment said the opposite for a year ("collected but never read by
+    // the calibration math"), which is precisely the defect the rewrite existed
+    // to fix: a right-angled ternary read its own clicked corner C as
+    // 157.7 / 57.7 / -115.5. Anyone who wondered whether the third click was
+    // worth collecting checked here and stopped. Three separate agents found
+    // this line independently on one night.
     { key: 'c', label: 'C', color: '#7fcf7f', prompt: 'Click corner C of the ternary diagram', valueFields: [] },
   ],
   buildAxes(cal, ctx) {

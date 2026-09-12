@@ -192,8 +192,8 @@ export interface SerializedCategoryGeometry {
   /**
    * Whether the user actually DECLARED a category count.
    *
-   * ⚑ STORED, NEVER INFERRED. This is the flag `categoriesFollowBands()` gates
-   * on - declared, and a bar's category is derived from the band it falls in;
+   * ⚑ STORED, NEVER INFERRED. This is the flag `CategoryAxis.hasDeclaredCount()`
+   * answers - declared, and a bar's category is derived from the band it falls in;
    * not declared, and it is read from the index stored at capture. The load
    * door used to guess it back as `getCategoryCount() > 0`, which is a
    * different fact: categories also come into existence one at a time on the

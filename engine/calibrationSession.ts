@@ -279,7 +279,10 @@ import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../c
 import { valueColumnNames, valueCells, isReshaped } from './valueColumns.js';
 
 // ⚑ The axes-type configuration system lives in its own module since v2.0 - the
-// eleven graph-type declarations plus the shape they satisfy. RE-EXPORTED here
+// graph-type declarations plus the shape they satisfy. (It said "eleven" until
+// the v2.5 audit; there are fourteen, and a count in a comment goes stale the
+// day someone adds a type. `ALL_AXES_TYPE_CONFIGS.length` is the one that
+// cannot.) RE-EXPORTED here
 // so every existing import of a config or a config type keeps working
 // unchanged; a move that also churned call sites could not be verified by the
 // existing tests alone. The dependency runs ONE WAY: that module must never
@@ -1298,8 +1301,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * a few pixels from its datum, so this is also the resolution the cap itself
    * would give.
    * ⚑ Read from the PIXEL, never from the data value. `resolutionAtData` would
-   * have to map back through `dataToPixel`, which is a stub on five of the seven
-   * axes classes - and error bars are offered on every type.
+   * have to map back through `dataToPixel`, which is a stub on five of the nine
+   * axes classes (see `CalibratedAxes.dataToPixel` for the census) - and error
+   * bars are offered on every type.
    *
    * ⚑ The DIMENSION comes from what the axes actually returned rather than from
    * the type: a 1-D axes (Bar and its family) has one, so a role that names a
@@ -2561,7 +2565,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     //
     // ⚑ The ordinal survives as the FALLBACK for a session with no axis marked,
     // where it is a faithful view of one series' own pixels and the honest
-    // answer when nobody has said where the categories are. `categoriesFollowBands`
+    // answer when nobody has said where the categories are. `categoryFrameFor`
     // is the one place that chooses, exactly as it does for a bar.
     if (this.config.id === 'categorical') {
       // Must stay index-aligned with getExportFields() -- same condition, so the
@@ -4174,7 +4178,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * them along the category axis is a reading rather than an artefact of where
    * two separate clicks landed - a Box Plot's five clicks are five values on one
    * category, and the spread between them says nothing about the box's width.
-   * `categoriesFollowBands` is the axis saying it has a frame to measure in.
+   * The second is the axis saying it has a frame to measure in, which is
+   * `categoryFrameFor(dataset)` returning one.
+   *
+   * ⚠️ This line named `categoriesFollowBands` as the gate until the v2.5 audit.
+   * No such method exists anywhere in the tree, and more to the point this
+   * function was deliberately changed NOT to demand a declared count - the
+   * reason is six lines down in the body. A doc stating a precondition the code
+   * was changed to drop tells a reader an unmarked bar chart reports no span,
+   * which is the bug that change fixed.
    *
    * ⚑ Projected through the SAME dividers the band index uses, so a bar's span
    * can never straddle a category its own `position` denies.

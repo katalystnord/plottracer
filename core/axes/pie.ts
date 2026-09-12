@@ -369,8 +369,9 @@ export class PieAxes {
   }
 
   /**
-   * Not implemented, matching bar/polar/ternary/map/ccr/spider - only XY and Image
-   * genuinely invert. A pie could not invert usefully anyway: a VALUE names a sector's
+   * Not implemented, matching polar/ternary/map/ccr - the classes that do invert
+   * for real are XY, Image, Bar and Spider (see `CalibratedAxes.dataToPixel` for
+   * the census). A pie could not invert usefully anyway: a VALUE names a sector's
    * angular width, which is a whole arc rather than a point, so there is no single
    * pixel to return. Declared because `CalibratedAxes` requires it; callers must not
    * assume it inverts (algorithms/errorCapture.ts measures rather than trusting).

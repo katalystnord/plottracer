@@ -68,7 +68,8 @@ export interface SpreadsheetSeries {
    * 2026-08-23: `makeRounder` had exactly one non-test caller in the tree.
    * ⚑ Computed AT EACH POINT'S OWN PIXEL, which is the route `core/exportValues.ts`
    * takes - exact on every axes class, where `dataToPixel` is a stub on five of
-   * seven. Two fields rather than one rounding applied in place, because the
+   * the nine (see `CalibratedAxes.dataToPixel` for the census, which is kept in
+   * one place now because six copies of it had drifted apart). Two fields rather than one rounding applied in place, because the
    * editor and the display need different numbers and a single field would have
    * to be one or the other.
    *

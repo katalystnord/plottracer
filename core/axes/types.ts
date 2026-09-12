@@ -3,7 +3,7 @@ import type { Calibration } from '../calibration.js';
 export type AxesMetadata = Record<string, unknown>;
 
 /**
- * Common shape shared by all 7 axes types. `calibrate`/`dataToPixel`
+ * Common shape shared by every axes class (there are nine). `calibrate`/`dataToPixel`
  * signatures vary per concrete type (see each axes/*.ts file) - this is
  * intentionally loose rather than forcing an exact shared signature, because
  * the types genuinely differ: a bar inverts onto one line, XY onto a plane,

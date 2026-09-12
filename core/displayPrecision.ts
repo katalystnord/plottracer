@@ -36,10 +36,11 @@
  * py)`), which is exact on every axes class. A tuple or bin holds only VALUES,
  * so it goes through `makeRounder`, which maps data back to a pixel first - the
  * route `engine/exportAssembly.ts` already uses for those shapes.
- * ⚠️ Prefer `atPixel` wherever the pixel is in hand: `dataToPixel` is real only
- * on XY and Image and a stub returning `{0,0}` on the other five, so the data
- * route is sound for the LINEAR bar family (constant resolution, which is why
- * the export can use it) and would be wrong for a spider, whose spokes each
+ * ⚠️ Prefer `atPixel` wherever the pixel is in hand: `dataToPixel` is a stub
+ * returning `{0,0}` on five of the nine axes classes (see
+ * `CalibratedAxes.dataToPixel` for the census). The data route is sound for the
+ * LINEAR bar family - constant resolution, and Bar's inversion is real, which is
+ * why the export can use it - and would be wrong for a spider, whose spokes each
  * carry their own scale.
  */
 
