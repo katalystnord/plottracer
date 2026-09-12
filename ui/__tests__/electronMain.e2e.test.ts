@@ -470,3 +470,40 @@ describe("ui/electron-main.cjs - a DIFFERENT digitizer's project, through the SA
     }
   }, 40000);
 });
+
+describe('ui/electron-main.cjs - the first button on a clean open', () => {
+  /**
+   * ⚑⚑ AN EMPTY APP HAS NOTHING TO REFUSE.
+   *
+   * ⚠️ David, on a clean open: press the big `Open Image…` button in the middle
+   * of the canvas and the sidebar answers in red *"Capture the figure first -
+   * frame the whole figure in the window, then press Capture figure"*, while the
+   * status line says "no image loaded" in the same breath. It is the first
+   * button a new user presses and the app replies by telling them to do
+   * something impossible.
+   *
+   * Two faults met there: the button's press BUBBLED to the canvas underneath
+   * (the overlay is click-through by design so drags reach the drop target, and
+   * the button opts back in - but opting in does not stop the bubble), and the
+   * click router had one answer for "not captured" whether or not there was
+   * anything to capture.
+   *
+   * Driven through the PRODUCTION entry point, with the dialog cancelled, so
+   * what is asserted is the press itself and not what opening an image does.
+   */
+  it('⚑⚑ pressing Open Image on an empty canvas says nothing in red', async () => {
+    const { app, page } = await launchProductionApp();
+    try {
+      await app.evaluate(({ dialog }) => {
+        dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+      });
+      await page.getByTestId('empty-state-open').click({ timeout: 10000 });
+      await page.waitForTimeout(600);
+      expect(await page.getByTestId('project-error').count(), 'no error on a clean open').toBe(0);
+      // And the empty state is still standing, because nothing was opened.
+      expect(await page.getByTestId('empty-state').count()).toBe(1);
+    } finally {
+      await app.close();
+    }
+  }, 30000);
+});

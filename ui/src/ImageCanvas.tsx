@@ -1757,6 +1757,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
               // Let drags/clicks fall through to the canvas container beneath
               // (its onDragOver drives the drop hint); only the button opts back in.
               pointerEvents: 'none',
+              // ⚑⚑ ABOVE THE KONVA STAGE, which is rendered AFTER this block and
+              // so wins on DOM order alone. The stage is transparent with no
+              // image, so the button was plainly visible and completely
+              // unclickable: every press went through it into the stage, which
+              // routed it as a canvas click and answered "Capture the figure
+              // first" on an app with nothing open. David met it as the first
+              // thing he pressed.
+              // ⚑ Raising only THIS block is safe because it is click-through
+              // itself - drags still reach the stage and the drop target, and
+              // the button alone opts back in.
+              zIndex: 2,
             }}
           >
             <span style={{ fontSize: 16, fontWeight: 600, color: theme.color.text.primary }}>
@@ -1767,7 +1778,16 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
               data-testid="empty-state-open"
               // ⚑ audit F6: a read that throws in main rejects the IPC, and an
               // unhandled rejection here left the empty state simply sitting there.
-              onClick={reporting('Could not open the image', openImage, setOpenError)}
+              // ⚑⚑ AND IT MUST NOT REACH THE CANVAS BENEATH IT. The overlay is
+              // click-through so drags land on the drop target, and this button
+              // opts back in - but the press still BUBBLED, so the canvas saw it
+              // too and answered in red "Capture the figure first", on a clean
+              // open, about a figure that did not exist. David met it as the
+              // first thing he pressed.
+              onClick={(e) => {
+                e.stopPropagation();
+                void reporting('Could not open the image', openImage, setOpenError)();
+              }}
               style={{
                 pointerEvents: 'auto',
                 cursor: 'pointer',

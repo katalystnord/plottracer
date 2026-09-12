@@ -193,3 +193,50 @@ describe('a type whose record is a MATRIX', () => {
     ).toEqual({ kind: 'add-point' });
   });
 });
+
+/**
+ * ⚑⚑ AN EMPTY APP HAS NOTHING TO REFUSE.
+ *
+ * ⚠️ David, on a clean open: press the big `Open Image…` button in the middle of
+ * the canvas and the sidebar answers in red *"Capture the figure first - frame
+ * the whole figure in the window, then press Capture figure."* Nothing is
+ * loaded; the status line says so in the same breath. It is the first button a
+ * new user presses and the app replies by telling them to do something
+ * impossible.
+ *
+ * Two faults met there. The button's click bubbled to the canvas beneath it
+ * (fixed in ImageCanvas), and this router had only one answer for "not
+ * captured" whether or not there was anything TO capture.
+ *
+ * ⚑ The rail already draws this distinction, in these words: `canvasHasImage ?
+ * 'Capture the figure first' : 'Open an image first'`. Two answers to one
+ * question in two places is how they drift, so the router gets the same input.
+ *
+ * ⚑ And with no image the answer is IGNORE, not a gentler error. There is
+ * nothing to refuse: the empty state on the canvas already says what to do, and
+ * a red line about a step that does not apply yet is noise at the one moment a
+ * first-time user is least able to tell noise from instruction.
+ */
+describe('a click before there is an image', () => {
+  it('⚑⚑ is ignored, not refused with a message about capturing', () => {
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'calibrate', figureCaptured: false, hasImage: false })
+    ).toEqual({ kind: 'ignore' });
+  });
+
+  it('⚑ still asks for the capture once an image IS open', () => {
+    const route = routeCanvasClick({
+      eyedropper: null,
+      mode: 'calibrate',
+      figureCaptured: false,
+      hasImage: true,
+    });
+    expect(route.kind).toBe('capture-first');
+  });
+
+  it('⚑ and an image that HAS been captured calibrates as before', () => {
+    expect(
+      routeCanvasClick({ eyedropper: null, mode: 'calibrate', figureCaptured: true, hasImage: true })
+    ).toEqual({ kind: 'calibrate' });
+  });
+});

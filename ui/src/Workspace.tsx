@@ -3754,7 +3754,16 @@ export function Workspace() {
       // turning it into an axis edge. The two ends are calibration steps now, so
       // they arrive through the walk's own click handling like every other
       // calibration point, and this special case is deleted rather than guarded.
-      const route = routeCanvasClick({ eyedropper, mode, figureCaptured, readsCellsFromAGrid: heatmapActive });
+      // ⚑ `canvasHasImage` so an EMPTY app has nothing to refuse - see the
+      // router. Without it, a click on a blank canvas answered "Capture the
+      // figure first" about a figure that did not exist.
+      const route = routeCanvasClick({
+        eyedropper,
+        mode,
+        figureCaptured,
+        readsCellsFromAGrid: heatmapActive,
+        hasImage: canvasHasImage,
+      });
       switch (route.kind) {
         case 'sample-colour': {
           // px/py are native image-pixel coords (same space Segment Fill uses),

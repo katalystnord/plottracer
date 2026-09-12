@@ -51,6 +51,18 @@ export interface CanvasClickInput {
   mode: ToolMode;
   /** The figure-of-record has been frozen. */
   figureCaptured: boolean;
+  /**
+   * Is there an image at all?
+   *
+   * ⚑ Distinct from `figureCaptured`, and the rail already draws the same line
+   * in the same words: `canvasHasImage ? 'Capture the figure first' : 'Open an
+   * image first'`. Two answers to one question in two places drift apart, so
+   * this router is given the input rather than assuming the answer.
+   *
+   * Optional so existing callers keep their behaviour; absent means "assume
+   * there is one", which is what every caller before this meant.
+   */
+  hasImage?: boolean;
   /** This graph type's record is a MATRIX read from a grid, so a click on the
    * figure identifies a cell rather than adding anything. */
   readsCellsFromAGrid?: boolean;
@@ -69,6 +81,7 @@ export function routeCanvasClick({
   mode,
   figureCaptured,
   readsCellsFromAGrid,
+  hasImage,
 }: CanvasClickInput): CanvasClickRoute {
   // Eyedropper intercepts the click before any tool action.
   if (eyedropper) return { kind: 'sample-colour', target: eyedropper };
@@ -108,6 +121,12 @@ export function routeCanvasClick({
     // You cannot place an axis point until the figure-of-record is established,
     // so autosave always has a stable figure and it cannot shift mid-work
     // (David). The Capture button is on the calibration card.
+    // ⚑⚑ AN EMPTY APP HAS NOTHING TO REFUSE. David met the alternative on a
+    // clean open: the big `Open Image…` button in the middle of the canvas
+    // answered in red with "Capture the figure first", about a figure that did
+    // not exist, at the one moment a first-time user is least able to tell noise
+    // from instruction. The empty state on the canvas already says what to do.
+    if (hasImage === false) return { kind: 'ignore' };
     if (!figureCaptured) {
       return {
         kind: 'capture-first',
