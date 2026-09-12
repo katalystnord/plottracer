@@ -4375,7 +4375,7 @@ export function Workspace() {
     // slot inside the model. Everywhere else the table column IS the dimension.
     const dim = config.axesKind === 'spider' ? 0 : cell.axis;
     if (session.setDataPointValue(cell.index, dim, parsed)) commit();
-  }, [editingCell, session, config.axesKind, commit]);
+  }, [editingCell, session, config.axesKind, config.id, commit]);
 
   const setTupleLabel = useCallback(
     (tupleIndex: number, label: string) => {
