@@ -41,6 +41,28 @@ describe('this version has release notes, before it is tagged', () => {
     expect(text.length, 'the notes are empty').toBeGreaterThan(200);
   });
 
+  it('⚑⚑ and does not describe itself as unfinished - this file IS the release page', () => {
+    // `body_path` hands this file to the release action verbatim, so whatever it
+    // says is what a reader meets on the GitHub release. Tagging with the
+    // in-progress banner still at the top publishes a page whose first sentence
+    // says the release is not tagged yet.
+    //
+    // ⚑ WHY THIS IS A TEST RATHER THAN A CHECKLIST LINE. The two cases above
+    // exist because the page shipped BARE twice, and a third way to ship a bad
+    // page is a page that is written but not finished. The banner is correct and
+    // useful while the notes are being written - it just must not survive the
+    // tag, and the tag is exactly when nobody is reading the top of the file.
+    const text = readFileSync(notes, 'utf8');
+    const unfinished = /in progress|not tagged yet|\bTODO\b|\bTBD\b|coming soon/i.exec(text);
+    expect(
+      unfinished?.[0] ?? null,
+      unfinished
+        ? `release-notes/v${version}.md still says "${unfinished[0]}", and this file is published ` +
+          'verbatim as the release body. Take the banner out as part of tagging.'
+        : ''
+    ).toBeNull();
+  });
+
   it('⚑ the workflow still reads the path this test guards', () => {
     // A guard keyed on a path the job no longer uses is a guard that has stopped
     // guarding while still reading as deliberate - the shape this repo keeps
