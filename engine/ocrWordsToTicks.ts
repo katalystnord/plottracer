@@ -58,6 +58,39 @@ export interface TickReading {
  * empty reading and an unread category look identical downstream, and the review
  * card already treats "no reading" as "leave the name alone".
  */
+/**
+ * Which band `at` belongs to, reaching HALF A BAND past each end.
+ *
+ * ⚑⚑ THE OUTERMOST LABELS OVERHANG, and a strict "inside a band or nowhere"
+ * test dropped them: the first and last labels of a row routinely sit a little
+ * outside the axis span, because a rotated one leans past the end and a wide one
+ * is centred on a tick that is itself only half a band in. The outermost
+ * category then came back unnamed while every other one read fine.
+ *
+ * ⚑ The rule is the one this codebase already settled for the same dividers.
+ * `bandIndexForParam`'s doc: *"the outermost bands are UNBOUNDED - anything left
+ * of the first divider is category 0"*, because a datum just outside the
+ * declared span still belongs to the category it is nearest. Two answers to one
+ * question about one axis is how they drift apart.
+ *
+ * ⚠️ BOUNDED, THOUGH, AND DELIBERATELY. A bar is known to belong to the figure;
+ * a WORD might be the axis title, a legend entry or a stray number the drawn box
+ * happened to catch, and forcing junk into category 0 is worse than dropping it.
+ * Half a band is measured against the figure's own geometry rather than guessed
+ * in pixels, and it covers an overhanging label and nothing else.
+ */
+function bandForAnchor(at: number, bands: readonly { from: number; to: number }[]): number | null {
+  const inside = bands.findIndex((b) => at >= b.from && at <= b.to);
+  if (inside !== -1) return inside;
+  const first = bands[0];
+  const last = bands[bands.length - 1];
+  if (!first || !last) return null;
+  if (at < first.from) {
+    return first.from - at <= (first.to - first.from) / 2 ? 0 : null;
+  }
+  return at - last.to <= (last.to - last.from) / 2 ? bands.length - 1 : null;
+}
+
 export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
   const { words, toSource, dividers, along, axisAt } = input;
   if (dividers.length < 2) return [];
@@ -91,8 +124,8 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
       }
     }
     const at = along === 'x' ? anchor.x : anchor.y;
-    const index = bands.findIndex((b) => at >= b.from && at <= b.to);
-    if (index === -1) continue;
+    const index = bandForAnchor(at, bands);
+    if (index === null) continue;
     const list = perCategory.get(index) ?? [];
     // ⚑ Reading order within a category: down the lines first, then across.
     list.push({ text: clean, conf: word.confidence, order: anchor.y * 100000 + anchor.x });

@@ -127,3 +127,63 @@ describe('relating one whole-band read to the ticks', () => {
     expect(out).toEqual([{ categoryIndex: 0, text: 'Kenaf', confidence: 90 }]);
   });
 });
+
+/**
+ * ⚑⚑ A LABEL THAT OVERHANGS THE AXIS END STILL BELONGS TO ITS CATEGORY.
+ *
+ * The first and last labels of a row routinely sit a little outside the axis
+ * span - a rotated one leans past the end, and a wide one is centred on a tick
+ * that is itself only half a band in. Filed by a strict "inside a band or
+ * nowhere" test, those were DROPPED, so the outermost category came back
+ * unnamed while every other one read fine.
+ *
+ * ⚑ The codebase already settled this rule for the same dividers: the doc on
+ * `bandIndexForParam` says *"the outermost bands are UNBOUNDED - anything left
+ * of the first divider is category 0"*, because a bar just outside the declared
+ * span still belongs to the category it is nearest. A word is the same claim
+ * about the same axis, and having two answers to one question is how they drift.
+ *
+ * ⚠️ NOT unbounded, though, and that is the one difference worth keeping. A BAR
+ * is known to belong to the figure; a WORD might be the axis title, a legend
+ * entry or a stray number the box happened to catch, and forcing junk into
+ * category 0 would be worse than dropping it. So the reach is HALF A BAND past
+ * each end - measured against the figure's own geometry rather than a pixel
+ * guess - which covers an overhanging label and nothing else.
+ */
+describe('a label just outside the span', () => {
+  it('⚑⚑ files an overhanging FIRST label into category 0 rather than dropping it', () => {
+    const out = wordsToTicks({
+      // Anchored 20px left of the axis start: a rotated label leaning past it.
+      words: [word('2021-01-01', -40, -20)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 0, text: '2021-01-01', confidence: 90 }]);
+  });
+
+  it('⚑⚑ files an overhanging LAST label into the last category', () => {
+    const out = wordsToTicks({
+      words: [word('2021-01-08', 420, 440)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([{ categoryIndex: 3, text: '2021-01-08', confidence: 90 }]);
+  });
+
+  it('⚠️ still drops a word FAR outside - that is junk the box caught, not a label', () => {
+    // Beyond half a band (50px here) past the end. An axis title or a legend
+    // entry must not be forced into category 0.
+    const out = wordsToTicks({
+      words: [word('Date', -200, -160), word('Price', 600, 660)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out).toEqual([]);
+  });
+});
