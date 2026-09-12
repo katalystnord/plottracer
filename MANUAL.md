@@ -164,15 +164,40 @@ trust the result.
 **Bars are captured as a drag-box.** With **Add points** (`3`) on a Bar chart you
 press at one corner of a bar and release at the opposite one: a bar's value is its
 *extent*, not a point on it, so those two corners **are** the measurement. Plain,
-grouped, stacked and floating bars all work this way, and a bar below the baseline
-reads negative. A plain click places one corner and leaves the bar half-captured -
+grouped and stacked bars all work this way, and a bar below the baseline reads
+negative. A bar that floats clear of the axis belongs on a **Span chart**
+instead: Bar means measured from a baseline, so a bar that never reaches one
+reports a note rather than a plain reading. A plain click places one corner and leaves the bar half-captured -
 its row shows a dash until you place the other.
 
-**Auto-extract ▸ By colour also works on Bar and Histogram**, for the same reason:
-a bar blob's own *bounding box* is its two ends, so nothing is averaged or
-centroided away. It is still greyed out for **Box plot**, **Line** and **Pie / Donut** (categorical
-X)** - a box's five letter-values and a categorical point are not a bounding box -
-so those two are placed by hand with the loupe.
+**Auto-extract ▸ By colour also works on Bar, Histogram and Span chart**, for the
+same reason: the blob's own *bounding box* is its two ends, so nothing is
+averaged or centroided away. It is greyed out for **Box plot**, **Candlestick**,
+**Heatmap**, **Line** (categorical X) and **Pie / Donut** - a box's five
+letter-values, a candle's four, a matrix and a categorical point are none of them
+a bounding box - so those are placed by hand with the loupe.
+
+**A box plot and a candle are walked mark by mark, from the bottom up.** These
+two name more than one value per category, so there is no single extent to drag:
+you click each mark in turn.
+
+- **Box plot** - five marks: the minimum, the lower quartile, the median, the
+  upper quartile and the maximum.
+- **Candlestick** - four: the low, the lower body edge, the upper body edge, the
+  high.
+
+A **Span chart** is not one of these. Its two ends are opposite corners, so it is
+captured with the same drag-box as a bar, and the lower and upper ends are sorted
+by value rather than by which corner you pressed first.
+
+⚠️ The candlestick prompts name PLACES rather than *open* and *close* on purpose,
+because which body edge is the open depends on whether the period rose or fell,
+and that is not something a click can say. PlotTracer reads it off the figure
+instead, by sampling each body's colour and grouping the candles into the two
+appearances the figure draws. If it has them the wrong way round, tick **This
+figure's rising candles are the other colour** under the table and every candle
+swaps at once. A figure drawn in a single colour has no direction to read, so
+every candle is reported rising.
 
 **Spider charts trace along their own axes.** Auto-extract ▸ **By colour** is the
 only mechanism offered there, and it does a different job: it walks each calibrated
@@ -193,9 +218,11 @@ next. A reading you placed by hand is never overwritten.
   `Del` removes the selection; the arrow keys nudge selected points (Shift = coarse);
   `Esc` clears. It never selects calibration handles.
 - Drag any point to reposition it; drag a calibration handle to re-calibrate live.
-- Edit a value directly in the right-panel table - **XY** and **Spider / Radar**.
-  Typing a number moves the point to match it: on a spider it slides along that
-  axis's own ray, so the marker and the number can never disagree.
+- Edit a value directly in the right-panel table, on **every** graph type.
+  Typing a number MOVES the datum to match it rather than overwriting the
+  reading: on a spider it slides along that axis's own ray, on a heatmap it moves
+  along the colour key, so the marker and the number can never disagree. A value
+  you typed reads in `[square brackets]` wherever it appears.
 - **Erase one reading** with the eraser (rail) or right-click ▸ Delete point. On a
   spider that removes exactly that axis's reading and leaves the rest of the
   profile standing - the other five axes are separate measurements, not parts of
@@ -664,6 +691,12 @@ WebPlotDigitizer `.tar` archives, Engauge Digitizer `.dig` files, and StarryDigi
 recognised from the file's own bytes, never its name, so you open a project the same
 way whatever wrote it, and a file no filter recognises is refused with the list of
 the ones that do work.
+
+A project written by another tool can hold several figures on one image - several
+coordinate systems, several axis sets. PlotTracer lists all of them and asks
+which to open, whichever tool wrote the file, and shows the ones it cannot open
+yet greyed out with the reason rather than hiding them. Opening one figure at a
+time is deliberate: open the project again to take another.
 
 This is a **one-way** road. PlotTracer reads those formats but does not write them -
 a third of what it records (spider spokes and their per-axis scales, point roles,
