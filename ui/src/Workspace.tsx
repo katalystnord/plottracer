@@ -9356,6 +9356,108 @@ export function Workspace() {
             </button>
           </div>
         )}
+        {/* ⚑⚑ AN ARMED MODE HAS TO SAY SO, AND HAVE A WAY OUT.
+            ⚠️ David met this in the app: armed, the card folded, and every click
+            on the figure swallowed by a mode whose only control was hidden
+            behind the fold. Nothing on screen said what was happening and there
+            was no way back short of unfolding the calibration card and pressing
+            the same button again.
+            ⚑ The SAME card the pipette uses, for the same reason: both are armed
+            modes asking for a gesture ON the figure, so they look and behave
+            alike rather than being two things to learn. Click-through, with only
+            the Cancel taking a press. */}
+        {ocrArmed && (
+          <div
+            data-testid="ocr-armed-hint"
+            style={{
+              position: 'absolute',
+              bottom: eyedropper !== null ? 52 : 10,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 3,
+              pointerEvents: 'none',
+              padding: '6px 12px',
+              borderRadius: 6,
+              background: theme.color.primary.main,
+              color: '#fff',
+              fontSize: theme.font.size.small,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            Reading labels - drag a box round the row of category labels
+            <button
+              type="button"
+              data-testid="ocr-armed-cancel"
+              onClick={() => setOcrArmed(false)}
+              style={{ pointerEvents: 'auto', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)', borderRadius: 4, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {/* ⚑⚑ THE FIGURE'S COLOUR CONVENTION, ON THE CANVAS WHERE YOU JUDGE IT.
+            This was a checkbox under the table in the sidebar. You decide it by
+            LOOKING at the candles - a candle drawn filled against a hollow one
+            in the figure is the disagreement - so the control belongs where your
+            eyes already are, and a first-time user has no reason to hunt for it
+            under a table.
+            ⚑ The SAME card as the pipette banner above, deliberately: same
+            place, same shape, same click-through rule. Reused rather than
+            invented so it reads as the same kind of thing (David's mirror rule)
+            instead of a second mechanism to learn.
+            ⚑ Neutral rather than the banner's primary colour, because that
+            colour means an ARMED MODE and this is a standing statement about the
+            figure. Mirroring the mechanism, not miscommunicating the state.
+            ⚑ It CORRECTS a reading, never enables one: the direction is measured
+            from each body's colour, and so is the default. */}
+        {config.id === 'candlestick' && axes && candlestickGlyphs.length > 0 && (
+          <div
+            data-testid="candle-flip-card"
+            style={{
+              position: 'absolute',
+              // ⚑ Clear of the pipette banner when that is armed, rather than
+              // under it. Two overlays fighting for one strip is the defect this
+              // file already records four times.
+              bottom: 10 + 42 * ((eyedropper !== null ? 1 : 0) + (ocrArmed ? 1 : 0)),
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 3,
+              // ⚑⚑ CLICK-THROUGH. An overlay added over the canvas is
+              // click-through until proven otherwise - the trap recorded on the
+              // banner above, which has now bitten four times. The checkbox opts
+              // back in.
+              pointerEvents: 'none',
+              padding: '6px 12px',
+              borderRadius: 6,
+              background: theme.color.background.primary,
+              border: `1px solid ${theme.color.border.regular}`,
+              color: theme.color.text.secondary,
+              fontSize: theme.font.size.small,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={session.candlesFlipped()}
+                onChange={(e) => {
+                  session.setCandlesFlipped(e.target.checked);
+                  setCandleFlip(e.target.checked);
+                  bump();
+                }}
+                data-testid="candle-flip"
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+              />
+              This figure&rsquo;s rising candles are the other colour
+            </label>
+          </div>
+        )}
       </CanvasRegion>
 
       <RightSidebar>
@@ -9671,41 +9773,12 @@ export function Workspace() {
             />
           ) : config.outputPanel === 'bar' && axes ? (
             <>
-            {/* ⚑⚑ THE FIGURE'S COLOUR CONVENTION, and the ONLY thing a
-                candlestick can need told. Direction is measured from each
-                body's colour, and the default is measured too (hollow rises;
-                otherwise the greener of the figure's two appearances) - so this
-                is here to CORRECT a reading, never to enable one.
-                ⚑ It is visible rather than inferred because the overlay is what
-                shows a wrong reading: a candle drawn filled against a hollow one
-                in the figure is the disagreement, and this is what answers it.
-                ⚑ It rides on BarAxes and the project file, exactly as
-                `isRotated` and `isStacked` do - a declaration about the figure,
-                so it survives a save and belongs to this figure alone. */}
-            {config.id === 'candlestick' && (
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginBottom: 8,
-                  fontSize: 12,
-                  color: theme.color.text.secondary,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={session.candlesFlipped()}
-                  onChange={(e) => {
-                    session.setCandlesFlipped(e.target.checked);
-                    setCandleFlip(e.target.checked);
-                    bump();
-                  }}
-                  data-testid="candle-flip"
-                />
-                This figure&rsquo;s rising candles are the other colour
-              </label>
-            )}
+            {/* ⚑ The candlestick colour-convention control MOVED TO THE CANVAS
+                (2026-09-12, David). You judge the direction by looking at the
+                candles, so the control belongs where your eyes are; under this
+                table a first-time user had no reason to know it existed. It
+                reuses the pipette banner's card - see `candle-flip-card` in the
+                canvas region above. */}
             <BarTable
               table={barTable}
               display={displayRounder}
@@ -9943,7 +10016,7 @@ export function Workspace() {
                 tells it to click, so arming the band read has to say what to
                 drag and where. A refusal replaces it in the same place, because
                 a refusal is about the gesture just made. */}
-            {ocrError ?? (ocrArmed ? 'Drag a box round the row of category labels on the figure' : guidanceTip)}
+            {ocrError ?? guidanceTip}
           </span>
         </span>
         {/* ⚑ THE KEY-TIPS' OWN AFFORDANCE (v1.6). Badges that appear on Alt are only

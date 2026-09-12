@@ -113,6 +113,23 @@ describe('OCR: reading category names off the figure', () => {
     await page.getByTestId('ocr-read-labels').click();
     await page.waitForTimeout(200);
 
+    // ⚑⚑ ARMED MODES SAY SO, AND HAVE A WAY OUT.
+    // ⚠️ David met the alternative in the app: armed, the calibration card
+    // folded, and every click on the figure swallowed by a mode whose only
+    // control was hidden behind the fold. Nothing said what was happening and
+    // there was no way back. The banner is the same one the pipette uses, on the
+    // canvas rather than in a panel that can be collapsed out of reach.
+    await page.getByTestId('ocr-armed-hint').waitFor({ state: 'visible', timeout: 10000 });
+    await page.getByTestId('ocr-armed-cancel').click();
+    await expect
+      .poll(() => page.getByTestId('ocr-armed-hint').count(), { timeout: 10000 })
+      .toBe(0);
+    // Re-arm and carry on: cancelling must leave the button working, not the
+    // mode half-off.
+    await page.getByTestId('ocr-read-labels').click();
+    await page.getByTestId('ocr-armed-hint').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(200);
+
     // The row of labels, under the axis - what the tips bar just asked for.
     await refresh();
     const [x0, y0] = at(87.45, 664);
