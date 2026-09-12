@@ -272,6 +272,30 @@ describe('the link holds however the segment is moved', () => {
     expect(heights(s, 2)[0]).toBeCloseTo(4, 6);
   });
 
+  /**
+   * ⚑ A MULTI-POINT NUDGE RIDES ONCE, NOT TWICE - the "a fix can BE the defect"
+   * check on the fix above. Selecting a whole segment and pressing an arrow
+   * calls the move for each of its corners in turn; only the TOP carries the
+   * stack, and the stack it carries is in OTHER datasets, which the selection
+   * never touches. So nothing is moved twice.
+   */
+  it('⚑ nudging BOTH corners of a segment moves it and rides the stack exactly once', () => {
+    const s = threeStack();
+    const any = s as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+      getDataPoints(): { px: number; py: number }[];
+    };
+    any.setActiveDataset(1);
+    // The whole middle segment up by one unit: both corners, one gesture.
+    const pts = any.getDataPoints().map((p) => ({ ...p }));
+    pts.forEach((p, i) => any.updateDataPointPixel(i, p.px, p.py - 40));
+
+    expect(heights(s, 0)[0], 'the one below is untouched').toBeCloseTo(2, 6);
+    expect(heights(s, 1)[0], 'the segment kept its height, and its base is still the chain\'s').toBeCloseTo(4, 6);
+    expect(heights(s, 2)[0], 'the one above rode once, not twice').toBeCloseTo(4, 6);
+  });
+
   it('⚑⚑ a negative stack rides DOWNWARD by the same rule', () => {
     const s = stackedSession();
     const add = (n: string) => (s as unknown as { addDataset(x: string): unknown }).addDataset(n);
