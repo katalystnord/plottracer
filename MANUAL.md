@@ -23,14 +23,15 @@ fit the view with `Ctrl+0`.
 Pick the graph type from the **card picker** in the top bar - each type shows its
 own icon, so a bar chart and a histogram are told apart by their shape rather than
 by reading two similar names. The types are **XY** (linear/log/date),
-**Bar**, **Span chart**, **Polar**, **Spider / Radar**, **Pie / Donut**,
-**Heatmap**, **Ternary**, **Map**, **Circular chart recorder**, **Histogram**,
-**Box plot**, **Candlestick**, or **Line** (categorical X).
+**Bar**, **Span chart**, **Stacked bar**, **Polar**, **Spider / Radar**,
+**Pie / Donut**, **Heatmap**, **Ternary**, **Map**, **Circular chart recorder**,
+**Histogram**, **Box plot**, **Candlestick**, or **Line** (categorical X).
 
 The picker is grouped by what the data **is**, not by what the chart looks like:
-a pie sits beside a bar because both record a category and one magnitude, while a
-histogram sits with the box plot and the candlestick because all three describe a
-distribution.
+Bar, Span chart and Stacked bar share a row because all three measure an extent
+against a baseline, while the box plot and the candlestick sit under them because
+both name several values at one category. A histogram sits with them because it
+describes a distribution rather than a set of separate magnitudes.
 
 Error bars are not a graph type - they are **rail tool 6**, captured on top of
 whichever series they belong to.
@@ -163,9 +164,8 @@ trust the result.
 
 **Bars are captured as a drag-box.** With **Add points** (`3`) on a Bar chart you
 press at one corner of a bar and release at the opposite one: a bar's value is its
-*extent*, not a point on it, so those two corners **are** the measurement. Plain,
-grouped and stacked bars all work this way, and a bar below the baseline reads
-negative. A bar that floats clear of the axis belongs on a **Span chart**
+*extent*, not a point on it, so those two corners **are** the measurement. Plain
+and grouped bars work this way, and a bar below the baseline reads negative. A bar that floats clear of the axis belongs on a **Span chart**
 instead: Bar means measured from a baseline, so a bar that never reaches one
 reports a note rather than a plain reading. A plain click places one corner and leaves the bar half-captured -
 its row shows a dash until you place the other.
@@ -176,6 +176,27 @@ averaged or centroided away. It is greyed out for **Box plot**, **Candlestick**,
 **Heatmap**, **Line** (categorical X) and **Pie / Donut** - a box's five
 letter-values, a candle's four, a matrix and a categorical point are none of them
 a bounding box - so those are placed by hand with the loupe.
+
+**A stacked bar chart is its own type**, because its segments are connected. You
+capture it a series at a time, with the same drag-box - but a segment's bottom is
+never a number of its own: it *is* the top of the segment below, and the lowest
+segment sits on the baseline. The edge the figure drew once is measured once.
+
+That makes the reported `Value` a **height**, not a position on the axis, which
+is the difference from a Bar. A segment running from 2 to 5 reads **3**, and its
+`Base` of 2 is shown beside it, derived from the segment underneath. Type a
+number into `Value` and it means *this segment is that tall*: the segments above
+move up and keep their own values, because their bases moved with it. `Base` is
+not editable, because there is nothing there to change that is not the segment
+below's top.
+
+Order comes from the figure, not from the panel: the segment nearest the baseline
+is the first, and each one after it is the next edge outward. So a stack drawn
+downward from zero, or one with segments on both sides, needs nothing switched
+on.
+
+⚠️ A stacked chart **connects to the baseline**. A column floating clear of it is
+a different figure that PlotTracer does not read yet.
 
 **A box plot and a candle are walked mark by mark, from the bottom up.** These
 two name more than one value per category, so there is no single extent to drag:

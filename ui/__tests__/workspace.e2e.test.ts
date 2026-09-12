@@ -1037,17 +1037,25 @@ describe('Workspace: Bar axes', () => {
   // measured answer was almost nothing, because its only consumer tested it for
   // non-empty and nothing anywhere read the string. *"THIS is where we should
   // ask if the bars are stacked!"*
-  it('⚑⚑ "Stacked bars" is a question about the FIGURE, beside "Horizontal bars"', async () => {
-    // The keystone rule: it must be visible without knowing it is there. It sits
-    // beside `Horizontal bars`, which is the same KIND of question - one fact
-    // about how this figure draws its bars, asked once while you are already
-    // answering questions about them.
+  it('⚑⚑ "Stacked bars" is a TYPE now, not a question on Bar', async () => {
+    // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and its reason was good at the
+    // time: the checkbox sat beside `Horizontal bars` because it was the same
+    // KIND of question - one fact about how this figure draws its bars, asked
+    // once while you are already answering questions about them.
+    //
+    // What changed is what the answer DOES. A stacked chart reports a different
+    // quantity from the same clicks: a magnitude measured from the segment
+    // below, where a Bar reports a position measured from the baseline. That is
+    // a type, not a rendering option - the same line v2.5 drew taking floating
+    // bars out of Bar. David, after meeting the old behaviour in the app: *"we
+    // need to take a whole step back, and actively make stacked bar charts its
+    // own major chart type."*
     await resetWorkspace('bar');
-    const stacked = page.getByTestId('calib-option-isStacked');
-    await expect.poll(() => stacked.isVisible()).toBe(true);
-    expect(await stacked.isChecked()).toBe(false); // the ordinary bar chart
     const options = await page.getByTestId('axes-options').textContent();
-    expect(options).toMatch(/Stacked bars/);
+    expect(await page.getByTestId('calib-option-isStacked').count()).toBe(0);
+    expect(options).not.toMatch(/Stacked bars/);
+    // The question of the same kind that REMAINS is the one that really is a
+    // rendering fact: which way the bars run.
     expect(options).toMatch(/Horizontal bars/);
     // ⚑⚑ AND NOTHING AT ALL ABOUT THE ORIGIN (v2.5). The tick box went first - a
     // bar chart whose bars do not share an origin is a Span chart - and then the
@@ -1067,18 +1075,13 @@ describe('Workspace: Bar axes', () => {
     expect(await page.getByTestId('series-stack-group').count()).toBe(0);
   });
 
-  it('a stacked segment reads as its own span, not as a distance from the baseline', async () => {
-    await resetWorkspace('bar');
+  it('⚑ a stacked segment reads its own height, on the type that owns it', async () => {
+    // ⚑ The engine tests cover the chain; this is the on-screen check that the
+    // type is reachable from the picker and reports a height once calibrated.
+    await resetWorkspace('stacked');
     await calibrateBarStandard();
-    // The card auto-folds on calibrate; the options live inside it, which is the
-    // mechanism every other calibration option already uses.
-    await page.getByTestId('calib-fold').click();
-    await page.getByTestId('calib-option-isStacked').check();
-    await page.waitForTimeout(200);
-
-    // Baseline (value 0) to value 5, on a figure declared stacked -- reads as the
-    // segment's own SPAN, the same wiring the engine tests cover with a
-    // non-coincidental case; this is the on-screen discoverability check.
+    // Baseline (value 0) to value 5: nothing below it, so its base is its own
+    // near corner, which is on the baseline - and the height is five.
     await dragMarker(300, 400, 300, 250);
     const derived0 = Number((await textOf('tuple-derived-0')).replace(/[^0-9.eE+-]/g, ''));
     expect(derived0).toBeCloseTo(5, 1);
@@ -7410,7 +7413,11 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       // value axis says what it is worth. David: *"We set the calibration on the
       // value axis (y-axis), and THEN! we also set the x-axis with a value.
       // baseline value == x axis position."*
-      bar: ['isLog', 'isRotated', 'isStacked'],
+      // ⚑ `isStacked` left on 2026-09-12: a stacked chart reports a magnitude
+      // where a Bar reports a position, which is a TYPE rather than a rendering
+      // option. Bar now carries nothing that changes what its value means.
+      bar: ['isLog', 'isRotated'],
+      stacked: ['isLog', 'isRotated'],
       // v2.0 Phase 6: pinned so Box Plot's options can never again silently
       // inherit Bar's by reference -- it did, briefly, right after Phase 2
       // added hasBaseline/baselineValue to BAR_AXES_CONFIG.options, and
