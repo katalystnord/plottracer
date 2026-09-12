@@ -187,7 +187,7 @@ import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../eng
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
-import { runColorTrace, calibrationBoxRegion, tracingADifferentColour } from '../../engine/colorTraceRun.js';
+import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
@@ -3789,6 +3789,16 @@ export function Workspace() {
             } else if (route.target === 'trace') {
               setColorTraceColor(rgbToHex(rgb)); // the curve colour to auto-trace (ckpt 118)
               setColorTraceInfo(null);
+              // ⚑ THE SWATCH ANSWERS "WHICH SERIES AM I FILLING" AT THE GESTURE
+              // THAT DECIDES IT (David, 2026-09-12). A trace adopts its ink
+              // afterwards; until then an empty series wears its creation-order
+              // colour and contradicts the mask painted over the figure. Only
+              // while it is empty - see `pickedColourAdopts`, which is what
+              // keeps the different-colour offer able to fire.
+              if (pickedColourAdopts(session.getDataPoints().length)) {
+                session.setDatasetColor(session.getActiveDatasetIndex(), rgb);
+                commit();
+              }
             } else {
               // Session directly, and the active index read FROM the session (the
               // memo'd activeDatasetIndex is defined later -> TDZ if used in this

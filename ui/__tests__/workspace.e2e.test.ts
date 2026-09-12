@@ -1507,6 +1507,64 @@ describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
     await page.getByTestId('series-color-button').click();
     expect(await page.getByTestId('series-color').inputValue()).toBe('#1f4e79');
   }, 30000);
+
+  /**
+   * ⚑⚑ THE SWATCH ANSWERS "WHICH SERIES AM I FILLING" AT THE GESTURE THAT
+   * DECIDES IT. David, 2026-09-12, after hand-recolouring four series on a
+   * stacked figure: *"When we read a color for a series, we should change the
+   * series color to that color."* The trace already adopted its ink, but only
+   * AFTER the trace - so between pipette and Trace the swatch beside the series
+   * name disagreed with the mask painted over the figure.
+   */
+  it('picking a colour puts it on an empty series straight away, before any trace', async () => {
+    await openBarTruthProject();
+    await selectAutoExtract('colour');
+    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+
+    await refreshCanvasBox();
+    await clickAt(600, 320);
+    await page.waitForTimeout(150);
+
+    const picked = (await page.getByTestId('color-trace-color').inputValue()).toLowerCase();
+    await page.getByTestId('series-color-button').click();
+    expect(
+      (await page.getByTestId('series-color').inputValue()).toLowerCase(),
+      'the swatch should already wear the colour the pipette read'
+    ).toBe(picked);
+  }, 30000);
+
+  /**
+   * ⚑⚑ AND IT STOPS AT A SERIES THAT ALREADY HOLDS READINGS, which is not a
+   * hedge: `tracingADifferentColour` measures "is this a different curve" FROM
+   * the series' own swatch. Adopting a picked colour over readings taken from
+   * another one would answer the question by overwriting the evidence, and the
+   * offer that saves a grouped bar chart from being ruined would never fire
+   * again.
+   */
+  it('leaves the swatch alone once the series holds readings, so the new-colour offer still fires', async () => {
+    await openBarTruthProject();
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('60');
+    await page.getByTestId('color-trace-min-blob').fill('30');
+    await page.getByTestId('color-trace-run').click();
+    await page.waitForTimeout(300);
+    expect(await textOf('color-trace-info')).toMatch(/Placed [1-9]/);
+
+    await page.getByTestId('color-trace-eyedropper').click();
+    await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
+    await refreshCanvasBox();
+    await clickAt(600, 320);
+    await page.waitForTimeout(150);
+
+    await page.getByTestId('series-color-button').click();
+    expect(
+      (await page.getByTestId('series-color').inputValue()).toLowerCase(),
+      'the swatch must still name the colour these readings came from'
+    ).toBe('#1f4e79');
+  }, 30000);
 });
 
 describe('Workspace: Candlestick', () => {

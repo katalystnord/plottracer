@@ -116,3 +116,27 @@ export function tracingADifferentColour(
     Math.abs(seriesColour[2] - target[2]);
   return apart > NEW_COLOUR_DISTANCE;
 }
+
+/**
+ * Should picking a colour off the figure set the ACTIVE SERIES' colour there and
+ * then, before anything is traced?
+ *
+ * ⚑ DAVID, 2026-09-12: *"When we read a color for a series, we should change the
+ * series color to that color."* A trace already adopts the ink it was traced
+ * from, but that lands after the fact - so between the pipette and the Trace
+ * button the series sits in its creation-order colour, and the swatch beside its
+ * name disagrees with the mask painted over the figure. The answer to "which
+ * series am I about to fill" should be visible at the gesture that decides it.
+ *
+ * ⚑⚑ AND ONLY WHILE THE SERIES IS EMPTY, which is not a hedge - it is what keeps
+ * `tracingADifferentColour` able to fire at all. That guard measures the
+ * question "do this series' readings come from a different colour than the one
+ * about to be traced" from the series' OWN swatch. Adopting a picked colour onto
+ * a series that already holds readings would answer the question by overwriting
+ * the evidence: every pick would silently make itself look like the same colour,
+ * and the offer that saves a grouped bar chart from being ruined would never
+ * appear again.
+ */
+export function pickedColourAdopts(pointCount: number): boolean {
+  return pointCount === 0;
+}

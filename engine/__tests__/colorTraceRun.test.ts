@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runColorTrace, calibrationBoxRegion } from '../colorTraceRun.js';
+import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../colorTraceRun.js';
 
 function makeImage(width: number, height: number, bg: [number, number, number]): Uint8ClampedArray {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -78,5 +78,24 @@ describe('calibrationBoxRegion', () => {
     expect(calibrationBoxRegion({})).toBeNull();
     expect(calibrationBoxRegion({ a: { px: 10, py: 10 } })).toBeNull();
     expect(calibrationBoxRegion({ a: { px: 10, py: 10 }, b: { px: 10, py: 10 } })).toBeNull();
+  });
+});
+
+describe('a picked colour on the series swatch', () => {
+  it('an empty series takes the colour the pipette just read', () => {
+    expect(pickedColourAdopts(0)).toBe(true);
+  });
+
+  it('a series that already holds readings keeps its own colour', () => {
+    expect(pickedColourAdopts(7)).toBe(false);
+  });
+
+  it('so picking a new colour still leaves the different-colour offer able to fire', () => {
+    // The offer measures from the series swatch. If a pick had overwritten it,
+    // this would read as "same colour" and the offer would be gone for good.
+    const seriesColour = [31, 119, 180] as const;
+    const picked = [214, 39, 40] as const;
+    expect(pickedColourAdopts(12)).toBe(false);
+    expect(tracingADifferentColour(seriesColour, picked, 12)).toBe(true);
   });
 });
