@@ -7074,38 +7074,80 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     // instead of its middle.
     const cbox = (await page.getByTestId('base-canvas').boundingBox())!;
     const at = (fx: number, fy: number) => ({ x: cbox.x + cbox.width * fx, y: cbox.y + cbox.height * fy });
-    // ⚑⚑ SAMPLED ON A GRID, NOT AT THREE POINTS. Three fixed fractions passed
-    // in isolation and failed on the full board, where the window and the fit
-    // differ enough that all three landed on blank paper - the check would then
-    // have been satisfied by an area with nothing in it, which is the one thing
-    // it exists to rule out.
-    const grid = (fx0: number, fy0: number, fx1: number, fy1: number) =>
-      page.getByTestId('base-canvas').evaluate((el, f) => {
+    // ⚑⚑ THE RECTANGLE IS FOUND, AND THE CLAIM IS COUNTED. Fractions of the
+    // canvas failed on the full board, because the canvas is the CONTAINER and
+    // the fitted image sits centred inside it - a fraction holding ink in one
+    // run is blank margin in another. And "every sample inside is one colour"
+    // is the wrong question anyway on a figure that is mostly white paper: a
+    // grid of 25 points can miss a curve and read uniform while the ink is
+    // still there. So the ink locates itself, and what is asserted is the
+    // number of ink pixels inside the rectangle: some before, none after.
+    const inkIn = (box?: { x0: number; y0: number; x1: number; y1: number }) =>
+      page.getByTestId('base-canvas').evaluate((el, b) => {
         const c = el as HTMLCanvasElement;
-        const ctx = c.getContext('2d')!;
-        const out: string[] = [];
-        for (let i = 1; i <= 5; i += 1) {
-          for (let j = 1; j <= 5; j += 1) {
-            const x = Math.round((f.fx0 + ((f.fx1 - f.fx0) * i) / 6) * c.width);
-            const y = Math.round((f.fy0 + ((f.fy1 - f.fy0) * j) / 6) * c.height);
-            const d = ctx.getImageData(x, y, 1, 1).data;
-            out.push(`${d[0]},${d[1]},${d[2]}`);
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+        // ⚠️ The paper is the commonest colour the IMAGE draws, not the pixel at
+        // the canvas corner: the canvas is the container, and outside the fitted
+        // image it is cleared, so a corner reference made every white pixel in
+        // the figure count as ink.
+        const tally = new Map<string, number>();
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] === 0) continue;
+          const k = `${d[i]},${d[i + 1]},${d[i + 2]}`;
+          tally.set(k, (tally.get(k) ?? 0) + 1);
+        }
+        let paper = '255,255,255';
+        let most = 0;
+        for (const [k, n] of tally) {
+          if (n > most) {
+            most = n;
+            paper = k;
           }
         }
-        return out;
-      }, { fx0, fy0, fx1, fy1 });
+        const x0 = b ? b.x0 : 0;
+        const y0 = b ? b.y0 : 0;
+        const x1 = b ? b.x1 : c.width - 1;
+        const y1 = b ? b.y1 : c.height - 1;
+        let count = 0;
+        let minX = c.width;
+        let minY = c.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let y = y0; y <= y1; y += 1) {
+          for (let x = x0; x <= x1; x += 1) {
+            const i = (y * c.width + x) * 4;
+            if (d[i + 3] === 0) continue;
+            if (`${d[i]},${d[i + 1]},${d[i + 2]}` === paper) continue;
+            count += 1;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+        return { count, minX, minY, maxX, maxY, width: c.width, height: c.height };
+      }, box ?? null);
 
-    // The rectangle, in fractions of the canvas: right of the folded-out card.
-    const RECT = [0.55, 0.15, 0.85, 0.55] as const;
+    const ink = await inkIn();
+    expect(ink.count, 'the figure must be on the canvas at all').toBeGreaterThan(0);
+    // The ink's own extent, pulled in a tenth so the mask has paper around it to
+    // take its colour from.
+    const inset = (a: number, b: number) => Math.round(a + (b - a) * 0.1);
+    const RECT_PX = {
+      x0: inset(ink.minX, ink.maxX),
+      y0: inset(ink.minY, ink.maxY),
+      x1: inset(ink.maxX, ink.minX),
+      y1: inset(ink.maxY, ink.minY),
+    };
+    const before = await inkIn(RECT_PX);
+    expect(before.count, 'the area to be masked must not already be blank').toBeGreaterThan(0);
 
-    // ⚑ The instrument first: this area must actually HOLD ink, or "it is all
-    // one colour afterwards" would be true before the mask was applied and the
-    // case would prove nothing.
-    const before = await grid(...RECT);
-    expect(
-      new Set(before).size,
-      'the area to be masked must not already be blank'
-    ).toBeGreaterThan(1);
+    const RECT = [
+      RECT_PX.x0 / ink.width,
+      RECT_PX.y0 / ink.height,
+      RECT_PX.x1 / ink.width,
+      RECT_PX.y1 / ink.height,
+    ] as const;
 
     const sizeBefore = await textOf('view-state');
     const from = at(RECT[0], RECT[1]);
@@ -7122,8 +7164,18 @@ describe('Workspace: image editing (checkpoint 62)', () => {
 
     // ⚑ The masked area is now one flat colour - whatever ink was there is gone,
     // so nothing downstream can read it as data.
-    const after = await grid(...RECT);
-    expect(new Set(after).size, 'every sample inside the mask is the same colour').toBe(1);
+    // ⚑ Counted three pixels inside the mask's own edge. The visible canvas
+    // draws the image SCALED, so the boundary between masked and unmasked is
+    // interpolated and leaves a thread of in-between pixels - a property of the
+    // view, not of the edit, and asserting zero right up to the edge would be
+    // asserting that the renderer does not resample.
+    const after = await inkIn({
+      x0: RECT_PX.x0 + 3,
+      y0: RECT_PX.y0 + 3,
+      x1: RECT_PX.x1 - 3,
+      y1: RECT_PX.y1 - 3,
+    });
+    expect(after.count, 'not one ink pixel is left inside the mask').toBe(0);
 
     // ⚑⚑ Masking removes EVIDENCE, not geometry: the image is the same size, the
     // point still reads (5, 5), and nothing claims the figure was cropped.
