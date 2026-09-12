@@ -218,6 +218,47 @@ function readPoints(curveNode: unknown): { x: number; y: number }[] {
 }
 
 /**
+ * Decode and parse a `.dig`, and find its `<Document>`.
+ *
+ * Split out so that COUNTING the figures inside a document costs nothing but a
+ * parse: a count that has to read a figure inherits that figure's refusals, and
+ * one unreadable system then hides every readable one beside it.
+ */
+function parseDigDocument(bytes: Uint8Array): DigResult<{ root: Record<string, unknown> }> {
+  if (looksBinary(bytes)) {
+    return {
+      error:
+        'This is an Engauge Digitizer project saved in the old binary format (before Engauge 6.3), which PlotTracer cannot read. Re-save it with a current version of Engauge to get an XML .dig file.',
+    };
+  }
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@',
+    parseAttributeValue: false,
+    parseTagValue: false,
+    cdataPropName: '#cdata',
+    trimValues: true,
+  });
+  let doc: Record<string, unknown>;
+  try {
+    doc = parser.parse(text) as Record<string, unknown>;
+  } catch (e) {
+    return { error: `Could not read this Engauge project - ${e instanceof Error ? e.message : String(e)}` };
+  }
+  // The Document is normally the root, but Engauge also writes it wrapped in an
+  // <ErrorReport> (a crash report carries the whole project inside it). Those
+  // hold a complete, readable project, so we unwrap rather than refuse.
+  const root =
+    (doc['Document'] as Record<string, unknown> | undefined) ??
+    ((doc['ErrorReport'] as Record<string, unknown> | undefined)?.['Document'] as
+      | Record<string, unknown>
+      | undefined);
+  if (!root) return { error: "This file isn't an Engauge Digitizer project (no Document element)." };
+  return { root };
+}
+
+/**
  * Parse a `.dig` into its parts. Refuses - with a reason naming what it found -
  * rather than returning a half-read project.
  */
@@ -406,9 +447,28 @@ export function readEngaugeProject(bytes: Uint8Array, systemIndex = 0): DigResul
  * and nothing is calibrated until a figure is asked for.
  */
 export function countEngaugeFigures(bytes: Uint8Array): DigResult<number> {
-  const first = readEngaugeProject(bytes, 0);
-  if ('error' in first) return first;
-  return first.extraCoordSystems + 1;
+  // ⚑⚑ COUNTED FROM THE DOCUMENT, NOT BY READING A FIGURE.
+  //
+  // This used to be `readEngaugeProject(bytes, 0).extraCoordSystems + 1`, which
+  // made the WHOLE document unlistable whenever the FIRST system was one we
+  // cannot read - and listable when the very same two systems appeared in the
+  // other order. A file holding a readable Cartesian figure beside a LogPolar
+  // one was refused outright, with none of it offered, purely because of which
+  // came first.
+  //
+  // That is the asymmetry the multi-format import door exists to remove,
+  // surviving inside the lister: StarryDigitizer lists every figure and greys
+  // out the ones it cannot open, with the reason. Now Engauge does too, because
+  // counting siblings needs no calibration at all.
+  const parsed = parseDigDocument(bytes);
+  if ('error' in parsed) return parsed;
+  const systems = asArray(parsed.root['CoordSystem'] as unknown) as Record<string, unknown>[];
+  // The flat Engauge 6.3 shape has no wrapper: one figure, and `Coords` on the
+  // Document itself is how it says so.
+  if (systems.length === 0) {
+    return parsed.root['Coords'] ? 1 : { error: 'This Engauge project has no coordinate system to read.' };
+  }
+  return systems.length;
 }
 
 /** A `.dig` turned into our own model, ready to open. */

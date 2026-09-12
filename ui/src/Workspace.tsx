@@ -5237,7 +5237,20 @@ export function Workspace() {
       const { figures } = listed;
       const supported = figures.filter((f) => f.configId !== null);
       if (supported.length === 0) {
-        setProjectError('No figure in this project can be opened yet.');
+        // ⚑ THE FILE'S OWN REASON, not a shrug. Each listed figure carries the
+        // sentence explaining why it cannot be opened; saying only "no figure in
+        // this project can be opened yet" throws that away and leaves the user
+        // nothing to act on. With one figure the reason IS the message; with
+        // several, the picker is the right surface because its whole job is
+        // disabled rows with reasons beside them.
+        if (figures.length === 1) {
+          setProjectError(
+            figures[0]?.unsupportedReason ?? 'This project holds no figure PlotTracer can open yet.'
+          );
+          return;
+        }
+        setProjectError(null);
+        setForeignFigures(figures);
         return;
       }
       // One openable figure -> open it. Several -> let the user choose, showing

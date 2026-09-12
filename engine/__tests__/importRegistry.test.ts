@@ -647,3 +647,60 @@ describe('every foreign format is read the same way', () => {
     }
   });
 });
+
+/**
+ * ⚑⚑ A DOCUMENT IS LISTED BY WHAT IT HOLDS, NOT BY WHETHER ITS FIRST FIGURE
+ * HAPPENS TO BE READABLE.
+ *
+ * The Engauge lister counted figures by READING figure 0, so it inherited that
+ * figure's refusals: a document holding a readable Cartesian figure beside one
+ * we cannot read yet was refused outright when the unreadable one came FIRST,
+ * and listed fine when the same two appeared in the other order. None of the
+ * readable figure was offered, and nothing said why.
+ *
+ * That is the asymmetry the one-door import exists to remove, surviving inside
+ * the new lister: Starry has always listed every figure and greyed out the ones
+ * it cannot open, with the reason. Counting siblings needs no calibration, so
+ * order cannot matter.
+ */
+describe('a project is listed whichever of its figures is first', () => {
+  /** An Engauge document of `kinds` coordinate systems, in the given order.
+   *  'ok' is an ordinary Cartesian figure; 'bad' uses a projection we refuse. */
+  function mixedEngauge(kinds: Array<'ok' | 'bad'>): Uint8Array {
+    const axes =
+      `<Curve CurveName="Axes"><CurvePoints>` +
+      `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="500"/><PositionGraph X="0" Y="0"/></Point>` +
+      `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="600" Y="500"/><PositionGraph X="10" Y="0"/></Point>` +
+      `<Point IsAxisPoint="True" IsXOnly="False"><PositionScreen X="100" Y="100"/><PositionGraph X="0" Y="1"/></Point>` +
+      `</CurvePoints></Curve>`;
+    const body = (kind: 'ok' | 'bad') =>
+      `<Coords TypeString="${kind === 'ok' ? 'Cartesian' : 'LogPolar'}" ScaleXThetaString="Linear" ` +
+      `ScaleYRadiusString="Linear" UnitsThetaString="Degrees (DDD.DDDDD)"/>` +
+      axes +
+      `<CurvesGraphs><Curve CurveName="C1"><CurvePoints>` +
+      `<Point><PositionScreen X="350" Y="300"/></Point></CurvePoints></Curve></CurvesGraphs>`;
+    return enc(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE engauge>\n<Document VersionNumber="11.0">` +
+        kinds.map((k) => `<CoordSystem>${body(k)}</CoordSystem>`).join('') +
+        `</Document>`
+    );
+  }
+
+  for (const order of [['ok', 'bad'], ['bad', 'ok']] as Array<Array<'ok' | 'bad'>>) {
+    it(`⚑⚑ offers both figures with ${order.join(' then ')}`, () => {
+      const bytes = mixedEngauge(order);
+      const format = identifyProject(bytes);
+      expect(format?.id).toBe('engauge');
+      const listed = format!.list!(bytes);
+      expect('error' in listed ? listed.error : '', 'the document lists').toBe('');
+      if ('error' in listed) return;
+      expect(listed.figures).toHaveLength(2);
+      // The readable one opens, and the other is offered with its reason rather
+      // than hidden or taken as grounds to refuse the whole file.
+      const openable = listed.figures.filter((f) => f.configId !== null);
+      expect(openable, 'the readable figure is offered').toHaveLength(1);
+      const refused = listed.figures.find((f) => f.configId === null)!;
+      expect(refused.unsupportedReason, 'and the other says why').toBeTruthy();
+    });
+  }
+});
