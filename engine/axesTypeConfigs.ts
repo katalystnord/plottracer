@@ -1069,6 +1069,33 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    * a label over an unchanged column.
    */
   intervalSlots?: readonly [string, string];
+  /**
+   * ⚑⚑ THE SLOT NAMES ARE HANDED OUT IN ASCENDING VALUE ORDER, not in the order
+   * the marks were clicked.
+   *
+   * For a type whose slots are ORDERED BY DEFINITION - a box plot's five
+   * letter-values, a candle's low and high. The walk still asks for the marks in
+   * one direction (a prompt has to name a PLACE: on a falling candle "Open" is
+   * the top edge, so the word would point the hand at the wrong mark half the
+   * time), and this decides only what each mark is CALLED once its value is
+   * known.
+   *
+   * ⚠️ Without it the names followed screen position, so on a value axis that
+   * increases DOWNWARD - depth, pressure, astronomical magnitude, all ordinary
+   * figures - a box plot recorded `Min 190, Max 40` and a candlestick put High
+   * below Low while reporting itself rising. The numbers were right and the
+   * labels on them were reversed.
+   *
+   * ⚑ Span and bar never had the defect because span orders its ends BY VALUE
+   * already; this is that mechanism given to the two types that lacked it.
+   *
+   * ⚑ It does NOT touch a candle's Open/Close. Those are the inner pair, and
+   * which is which is the DIRECTION, read from the body colour - no ordering can
+   * know it, and sorting all four would erase the thing the colour is read to
+   * find out. Ascending order fills them as rising, and the colour read swaps
+   * that pair exactly as it always has.
+   */
+  slotsOrderedByValue?: boolean;
 
   /* ⚑ THREE QUESTIONS THAT LOOK ALIKE AND ARE NOT, since confusing two of them is
    * what cost this release its audit findings:
@@ -2707,6 +2734,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
+  slotsOrderedByValue: true,
   defaultSlots: BOX_PLOT_SLOTS,
   /**
    * ⚑⚑ A BOX ALREADY REPORTS ITS OWN SPREAD, and that is why this refusal is
@@ -2868,6 +2896,7 @@ export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   dataDim: 1,
   valueLabels: ['value'],
   globalFields: [],
+  slotsOrderedByValue: true,
   defaultSlots: CANDLESTICK_SLOTS,
   /**
    * ⚑⚑ WHAT TO CLICK, SAID IN TERMS OF WHAT IS ON SCREEN.

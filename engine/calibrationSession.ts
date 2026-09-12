@@ -4976,9 +4976,56 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
   }
 
+  /**
+   * Put a tuple's marks in ascending VALUE order, so slot `i` carries the
+   * i-th smallest reading rather than the i-th click.
+   *
+   * Runs for a type that declares `slotsOrderedByValue`, once its own slots are
+   * all filled - there is nothing to order until then, and ordering a half-built
+   * tuple would rename marks under the user's hand mid-walk.
+   *
+   * ⚑ A selection sort through `swapTupleSlots`, which is the move the candle
+   * direction already makes, so the pixel-to-slot bookkeeping has one
+   * implementation rather than two.
+   */
+  private orderTupleSlotsByValue(datasetIndex: number, tupleIndex: number): void {
+    if (!this.config.slotsOrderedByValue || !this.axes) return;
+    const dataset = this.datasetEntries[datasetIndex]?.dataset;
+    if (!dataset) return;
+    const width = this.ownSlots(dataset).length;
+    if (width < 2) return;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return;
+    const own = tuple.slice(0, width);
+    // Nothing to order until every mark is in: a partly captured tuple would
+    // have its names shuffled between clicks.
+    if (own.some((p) => p == null)) return;
+    const valueAt = (pixelIndex: number): number => {
+      const px = dataset.getPixel(pixelIndex);
+      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
+        .pixelToData(px.x, px.y);
+      return read[0] ?? 0;
+    };
+    for (let i = 0; i < width - 1; i += 1) {
+      let smallest = i;
+      for (let j = i + 1; j < width; j += 1) {
+        const current = dataset.getAllTuples()[tupleIndex]![j];
+        const best = dataset.getAllTuples()[tupleIndex]![smallest];
+        if (current == null || best == null) continue;
+        if (valueAt(current) < valueAt(best)) smallest = j;
+      }
+      if (smallest !== i) dataset.swapTupleSlots(tupleIndex, i, smallest);
+    }
+  }
+
   nextSlot(): void {
     const cursor = this.activeEntry.slotCursor;
     if (cursor.tupleIndex === null) return;
+    // ⚑ Name by value as soon as the tuple is whole. Done here rather than at
+    // each click because a half-filled tuple has nothing to order, and done
+    // before the cursor moves on so the record is right the instant it is
+    // complete rather than at display time.
+    this.orderTupleSlotsByValue(this.activeDatasetIndex, cursor.tupleIndex);
     const tuples = this.activeEntry.dataset.getAllTuples();
     // ⚑⚑ THE SAME BOUND AS computeSlotCursorFor, AND THE SECOND ENTRANCE.
     // That one is the LOAD path; this one advances the cursor as you capture,
@@ -5653,17 +5700,28 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return true;
   }
 
-  /** Does the close sit further along the VALUE axis than the open? ⚑ Shares the
-   *  glyph's own rule rather than restating it: on a vertical chart the value
-   *  runs up the figure while pixel-y runs down it. */
+  /**
+   * Does the close sit further along the VALUE axis than the open?
+   *
+   * ⚑⚑ ASKED OF THE VALUES, not of the pixels. It used to compare `close.y <
+   * open.y`, which assumes the value runs up the figure - true of most charts
+   * and false of any axis calibrated to increase downward. On one of those the
+   * colour read said rising and this said falling, about the same candle.
+   *
+   * ⚑ Reading through the axes costs nothing here and removes the assumption
+   * entirely: whichever way the axis runs, a larger number is a larger number.
+   */
   private isCandleRising(openIndex: number, closeIndex: number): boolean {
     const dataset = this.activeEntry.dataset;
+    const axes = this.axes as unknown as { pixelToData(x: number, y: number): number[] } | null;
     const open = dataset.getPixel(openIndex);
     const close = dataset.getPixel(closeIndex);
-    const vertical =
-      (this.axes as unknown as { calculateOrientation(): { axes: 'X' | 'Y' } } | null)?.calculateOrientation()
-        .axes === 'Y';
-    return vertical ? close.y < open.y : close.x > open.x;
+    if (!axes) return false;
+    const openValue = axes.pixelToData(open.x, open.y)[0];
+    const closeValue = axes.pixelToData(close.x, close.y)[0];
+    if (openValue === undefined || closeValue === undefined) return false;
+    if (!Number.isFinite(openValue) || !Number.isFinite(closeValue)) return false;
+    return closeValue > openValue;
   }
 
   /**
