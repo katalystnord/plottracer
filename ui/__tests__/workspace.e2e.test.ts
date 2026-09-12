@@ -1989,22 +1989,35 @@ describe('Workspace: Ternary axes', () => {
   // corner C at (300,300) -- same fixture as
   // engine/__tests__/calibrationSession.test.ts's Ternary describe block.
   async function calibrateTernaryStandard() {
-    await clickAt(100, 300); // A -- no value prompt
-    await clickAt(100, 100); // B -- no value prompt
-    await clickAt(300, 300); // C -- no value prompt, geometrically unused
+    // ⚑ Each corner takes the figure's own NAME after the click (optional, left
+    // blank here), the way a spider spoke does - so a corner awaits a value
+    // rather than completing on the click alone.
+    await clickAt(100, 300);
+    await confirmValue('');
+    await clickAt(100, 100);
+    await confirmValue('');
+    await clickAt(300, 300);
+    await confirmValue('');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
   }
 
-  it('walks a 3-step calibration where every corner needs no typed value, then reads back a, b, c', async () => {
+  it('walks a 3-step calibration naming each corner as the figure does, then reads back a, b, c', async () => {
+    // ⚑ This case used to be "every corner needs no typed value". Since
+    // 2026-09-12 each corner carries the figure's own word for it - Sand, Silt,
+    // Clay - because "A" identifies nothing on a real diagram. The name is
+    // optional; the step still awaits a confirm.
     await resetWorkspace('ternary');
-    expect(await textOf('tips-bar')).toMatch(/1\/3 - A/);
+    expect(await textOf('tips-bar')).toMatch(/1\/3 - 1/);
 
-    await clickAt(100, 300); // A: click alone advances the step
-    expect(await textOf('tips-bar')).toMatch(/2\/3 - B/);
-    await clickAt(100, 100); // B
-    expect(await textOf('tips-bar')).toMatch(/3\/3 - C/);
-    await clickAt(300, 300); // C
+    await clickAt(100, 300);
+    await confirmValue('Sand');
+    expect(await textOf('tips-bar')).toMatch(/2\/3 - 2/);
+    await clickAt(100, 100);
+    await confirmValue('Silt');
+    expect(await textOf('tips-bar')).toMatch(/3\/3 - 3/);
+    await clickAt(300, 300);
+    await confirmValue('Clay');
     await page.getByTestId('run-calibration').click();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
@@ -2013,7 +2026,7 @@ describe('Workspace: Ternary axes', () => {
     await expectRow([50, 50, 0]);
   });
 
-  it('dragging the B handle re-calibrates live', async () => {
+  it('dragging the second corner re-calibrates live', async () => {
     await resetWorkspace('ternary');
     await calibrateTernaryStandard();
 
@@ -7412,7 +7425,12 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
       // that control decides nothing and is not shown. This list is the card as
       // a user meets it on the DEFAULT (circular) setting.
       polar: ['isDegrees', 'isCircular', 'isClockwise', 'isLogR'],
-      ternary: ['isRange100', 'isNormal'],
+      // ⚑ `isNormal` (Orientation: Normal / Reverse) was removed 2026-09-12.
+      // Measured: it did exactly what clicking the corners one place round
+      // already does, so it turned a correct reading into a different correct
+      // reading with nothing on screen to say which was wanted. The corners
+      // carry NAMES instead.
+      ternary: ['isRange100'],
       map: ['origin', 'units'],
       ccr: ['rotationTime', 'rotationDirection'],
       // ⚑ ADDED 2026-08-14. The heatmap was never in this list - the same gap
