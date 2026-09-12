@@ -31,7 +31,9 @@ function walk(corners: Array<[number, number]>): CalibrationSession<never> {
   };
   for (const [px, py] of corners) {
     s.handleCalibrationClick(px, py);
-    s.confirmCalibrationValues([]);
+    // ⚑ A corner now carries the figure's own NAME, optional, so the step is
+    // confirmed like a spider spoke's rather than being a bare click.
+    s.confirmCalibrationValues(['']);
   }
   return session;
 }
@@ -43,23 +45,22 @@ describe('a ternary diagram needs a triangle', () => {
     expect(session.getCalibrationError()).toBe(REFUSAL);
   });
 
-  it('⚑ the refusal arrives when Calibrate is pressed, which is the right moment', () => {
-    // ⚑⚑ NOT A GAP, and this case said it was until David asked what I was on
-    // about: *"We (the user) mark the points, and then presses calibrate. There
-    // is nothing more to it than that, no?"*
+  it('⚑⚑ the refusal arrives at the LAST CLICK now, not one button later', () => {
+    // ⚑⚑ THIS CASE CHANGED, AND IT IMPROVED. It used to assert the opposite:
+    // that a collinear triangle was accepted through the whole walk and only
+    // refused when Calibrate was pressed. That was defensible then - David:
+    // *"We (the user) mark the points, and then presses calibrate. There is
+    // nothing more to it than that, no?"* - because `confirmCalibrationValues`
+    // asks `problemWith` when a walk completes, and a step with NOTHING TO TYPE
+    // never reached that path. The two moments were one button press apart.
     //
-    // `confirmCalibrationValues` asks `problemWith` the moment a walk completes,
-    // and a step with NOTHING TO TYPE never reaches that path. That difference
-    // between the two code paths costs the user nothing here. The mid-walk check
-    // exists for TYPED values - it was added because a colour-key value typed as
-    // 0 was refused eight steps after the click that caused it - and a valueless
-    // step has nothing typed. What can be wrong is where the pixels sit RELATIVE
-    // TO EACH OTHER, which cannot be known until they are all placed; and once
-    // they are, the walk is over and the next action is pressing Calibrate.
-    // ▶ So "check when the walk completes" and "check at Calibrate" are the same
-    // moment, one button press apart.
+    // Giving each corner the figure's own NAME (2026-09-12) put a field on the
+    // step, so the walk now completes through that path and the refusal lands on
+    // the gesture that caused it. That is gate 5 - *do refusals fire AT the
+    // gesture?* - arriving as a side effect of a change made for another reason,
+    // which is worth pinning so nobody "fixes" it back.
     const session = walk([[100, 400], [400, 400], [250, 400]]);
-    expect(session.getCalibrationError()).toBeNull();
+    expect(session.getCalibrationError()).toBe(REFUSAL);
     expect(session.runCalibration()).toBe(false);
     expect(session.getCalibrationError()).toBe(REFUSAL);
   });

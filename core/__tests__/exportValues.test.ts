@@ -84,7 +84,10 @@ describe('exportLabelsFor - headers come from the axes, not a hardcoded list', (
     // across the table, the export and the Box Plot tuple field.
     expect(exportLabelsFor(barAxes())).toEqual(['Category', 'Y']);
     expect(exportLabelsFor(new CircularChartRecorderAxes())).toEqual(['Time', 'Magnitude']);
-    expect(exportLabelsFor(new TernaryAxes())).toEqual(['a', 'b', 'c']);
+    // ⚑ An UNCALIBRATED ternary has no corners to have been named, so it reports
+    // the fallback. A calibrated one reports the figure's own words - see
+    // core/__tests__/ternaryCornersAreNamed.test.ts.
+    expect(exportLabelsFor(new TernaryAxes())).toEqual(['A', 'B', 'C']);
     expect(exportLabelsFor(xyAxes())).toEqual(['X', 'Y']);
   });
 });

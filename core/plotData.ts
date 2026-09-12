@@ -107,6 +107,11 @@ export interface SerializedAxesData {
   isDegrees?: boolean;
   isClockwise?: boolean;
   isRange100?: boolean;
+  /** ⚠️ WRITTEN BY VERSIONS UP TO v2.5 AND NO LONGER READ. Ternary's Orientation
+   *  setting was removed once it was measured to do exactly what clicking the
+   *  corners one place round already does; the corners carry their own NAMES
+   *  now, which is what tells the components apart. Kept in the type so an old
+   *  file still parses rather than being refused over a field nobody reads. */
   isNormalOrientation?: boolean;
   scaleLength?: number;
   unitString?: string | undefined;
@@ -552,7 +557,7 @@ export class PlotData {
       axes.calibrate(calibration!, Boolean(params.isDegrees), Boolean(params.isClockwise), false);
     } else if (data.axesType === 'TernaryAxes') {
       axes = new TernaryAxes();
-      axes.calibrate(calibration!, Boolean(params.isRange100), Boolean(params.isNormalOrientation));
+      axes.calibrate(calibration!, Boolean(params.isRange100));
     } else if (data.axesType === 'MapAxes') {
       axes = new MapAxes();
       axes.calibrate(calibration!, params.scaleLength as number, params.unitString as string, 'top-left', 0);
@@ -675,7 +680,7 @@ export class PlotData {
           );
         } else if (axData.type === 'TernaryAxes') {
           axes = new TernaryAxes();
-          axes.calibrate(calibration!, Boolean(axData.isRange100), Boolean(axData.isNormalOrientation));
+          axes.calibrate(calibration!, Boolean(axData.isRange100));
         } else if (axData.type === 'MapAxes') {
           axes = new MapAxes();
           const originLocation = axData.originLocation != null ? axData.originLocation : 'top-left';
@@ -1036,13 +1041,11 @@ export class PlotData {
       } else if (axes instanceof TernaryAxes) {
         axData.type = 'TernaryAxes';
         axData.isRange100 = axes.isRange100();
-        // Serialize the CALL, not the method reference. Upstream WPD writes the
-        // function reference here; JSON.stringify (our persistence path) drops
-        // function-valued keys, so on reload isNormalOrientation reads undefined
-        // -> Boolean(undefined) -> false, flipping a default Normal ternary to
-        // Reverse and permuting every [a,b,c] datum. Deliberate divergence from
-        // the port (Tenet 8): reliable data out (Tenet 1) over faithfulness.
-        axData.isNormalOrientation = axes.isNormalOrientation();
+        // ⚑ No orientation flag any more. It was measured to permute a correct
+        // reading into a different correct reading - exactly what clicking the
+        // corners one place round does - with nothing on screen to say which was
+        // wanted. The corner NAMES ride with the calibration points instead, in
+        // `dz`, the same slot a spider spoke's name uses.
       } else if (axes instanceof MapAxes) {
         axData.type = 'MapAxes';
         axData.scaleLength = axes.getScaleLength();

@@ -53,17 +53,18 @@ describe('getTableValueLabels - table headers match the file', () => {
     expect(s.getTableValueLabels()).not.toContain('value');
   });
 
-  it('for Ternary, matches the file (a/b/c), not A/B/C', () => {
-    // Ternary steps carry no value fields -> each click is 'point-placed'.
+  it('for Ternary, matches the file - each corner name, or A/B/C where unnamed', () => {
+    // ⚑ Each corner carries the figure's own name, so a click awaits it.
     const s = new CalibrationSession(TERNARY_AXES_CONFIG);
-    expect(s.handleCalibrationClick(100, 300)).toBe('point-placed');
-    expect(s.handleCalibrationClick(100, 100)).toBe('point-placed');
-    expect(s.handleCalibrationClick(300, 300)).toBe('point-placed');
+    for (const [x, y, name] of [[100, 300, 'Sand'], [100, 100, 'Silt'], [300, 300, 'Clay']] as const) {
+      expect(s.handleCalibrationClick(x, y)).toBe('awaiting-value');
+      s.confirmCalibrationValues([name]);
+    }
     expect(s.runCalibration()).toBe(true);
 
+    // The point of this case: the table and the file say the same words.
     expect(s.getTableValueLabels()).toEqual(s.getExportFields());
-    // config.valueLabels was ['A','B','C']; the file (and now the table) is lower.
-    expect(s.getTableValueLabels()).toEqual(['a', 'b', 'c']);
+    expect(s.getTableValueLabels()).toEqual(['Sand', 'Silt', 'Clay']);
   });
 
   it('for Bar, is the last dataDim of the labels - drops the leading Category', () => {

@@ -124,7 +124,10 @@ describe('TernaryAxes', () => {
     const axes = new TernaryAxes();
     expect(axes.numCalibrationPointsRequired()).toBe(3);
     expect(axes.getDimensions()).toBe(3);
-    expect(axes.getAxesLabels()).toEqual(['a', 'b', 'c']);
+    // ⚑ A/B/C is the FALLBACK now: a corner reports the figure's own word where
+    // the user gave one (`getCornerNames`), and a readable heading rather than a
+    // blank where they did not.
+    expect(axes.getAxesLabels()).toEqual(['A', 'B', 'C']);
   });
 
   it('produces a valid a+b+c decomposition at an arbitrary point', () => {
@@ -136,7 +139,7 @@ describe('TernaryAxes', () => {
     // only because the third click was ignored.
     cal.addPoint(50, 100 - 100 * Math.sin(Math.PI / 3), '0', '0');
     const axes = new TernaryAxes();
-    axes.calibrate(cal, true, true);
+    axes.calibrate(cal, true);
     const [a, b, c] = axes.pixelToData(50, 50);
     // Range-0-to-100 mode: a+b+c should sum to 100 regardless of position.
     expect(a! + b! + c!).toBeCloseTo(100, 6);

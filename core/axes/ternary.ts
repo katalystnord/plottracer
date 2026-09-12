@@ -54,9 +54,11 @@ export class TernaryAxes {
   /** Twice the signed area. Zero exactly when the triangle has none. */
   private det = 0;
   private isRange0to100 = false;
-  private isOrientationNormal = true;
+  /** The figure's own word for each corner, in the order they were clicked.
+   *  Blank where the user did not name one. */
+  private cornerNames: string[] = [];
 
-  private processCalibration(cal: Calibration, range100: boolean, is_normal: boolean): boolean {
+  private processCalibration(cal: Calibration, range100: boolean): boolean {
     // ⚑ THREE, not two, and `numCalibrationPointsRequired()` has always said so.
     // The old count guard was `< 2` because two was all the maths dereferenced -
     // a guard measured against the implementation rather than against the type.
@@ -81,7 +83,10 @@ export class TernaryAxes {
     if (!Number.isFinite(this.det) || this.det === 0) return false;
 
     this.isRange0to100 = range100;
-    this.isOrientationNormal = is_normal;
+    // ⚑ The figure's own words, collected with the clicks exactly as a spider
+    // spoke's name is. They are what tells the three components apart; "A" means
+    // nothing against a diagram whose corners read Sand, Silt and Clay.
+    this.cornerNames = [0, 1, 2].map((i) => String(cal.getPoint(i)?.dz ?? '').trim());
 
     return true;
   }
@@ -90,9 +95,9 @@ export class TernaryAxes {
     return this._isCalibrated;
   }
 
-  calibrate(calib: Calibration, range100: boolean, is_normal: boolean): boolean {
+  calibrate(calib: Calibration, range100: boolean): boolean {
     this.calibration = calib;
-    this._isCalibrated = this.processCalibration(calib, range100, is_normal);
+    this._isCalibrated = this.processCalibration(calib, range100);
     return this._isCalibrated;
   }
 
@@ -100,8 +105,11 @@ export class TernaryAxes {
     return this.isRange0to100;
   }
 
-  isNormalOrientation(): boolean {
-    return this.isOrientationNormal;
+  /** The figure's word for each corner, falling back to A/B/C where the user did
+   *  not name one - a blank column header is unreadable output. */
+  getCornerNames(): string[] {
+    const fallback = ['A', 'B', 'C'];
+    return fallback.map((f, i) => (this.cornerNames[i] ?? '') || f);
   }
 
   pixelToData(pxi: number, pyi: number): number[] {
@@ -117,13 +125,6 @@ export class TernaryAxes {
     let bp = (wx * this.acy - wy * this.acx) / this.det;
     let cp = (this.abx * wy - this.aby * wx) / this.det;
     let ap = 1.0 - bp - cp;
-
-    if (this.isOrientationNormal === false) {
-      const bpt = bp;
-      bp = ap;
-      ap = cp;
-      cp = bpt;
-    }
 
     if (this.isRange0to100 === true) {
       ap = ap * 100;
@@ -161,6 +162,6 @@ export class TernaryAxes {
   }
 
   getAxesLabels(): string[] {
-    return ['a', 'b', 'c'];
+    return this.getCornerNames();
   }
 }

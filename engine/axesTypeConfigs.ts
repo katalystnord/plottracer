@@ -3354,15 +3354,34 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
   options: [
     { key: 'isRange100', label: 'Range', kind: 'choice', default: 'true',
       choices: [{ value: 'true', label: '0 to 100' }, { value: 'false', label: '0 to 1' }] },
-    { key: 'isNormal', label: 'Orientation', kind: 'choice', default: 'true',
-      choices: [{ value: 'true', label: 'Normal' }, { value: 'false', label: 'Reverse' }] },
   ],
+  // ⚑ THREE, because a corner's NAME rides in `dz` beside its pixel - the same
+  // slot a spider spoke's name uses. Caught by the config table's own
+  // cross-cutting case, "a type storing a value in dz declares 3 calibration
+  // dimensions", the moment the name field was added.
+  calibrationDimensions: 3,
   dataDim: 3,
+  // The fallback headings. The corners' own names win where the user gave them
+  // (`TernaryAxes.getAxesLabels`); these are what a figure read without names
+  // reports, because a blank column header is unreadable output.
   valueLabels: ['A', 'B', 'C'],
   globalFields: [],
   fixedSteps: [
-    { key: 'a', label: 'A', color: '#e0a458', prompt: 'Click corner A of the ternary diagram', valueFields: [] },
-    { key: 'b', label: 'B', color: '#5fb4e0', prompt: 'Click corner B of the ternary diagram', valueFields: [] },
+    // ⚑⚑ NUMBERED, AND NAMED FROM THE FIGURE. A ternary's corners cannot be
+    // named in general - "A" means nothing against a diagram whose corners read
+    // Sand, Silt and Clay - so the walk asks for the figure's own word with each
+    // click, exactly as a spider spoke does, and slot `i` is whatever corner was
+    // clicked `i`-th.
+    //
+    // ⚑⚑ MEASURED: all SIX click orders read correctly, and the handedness makes
+    // no difference because the determinant's sign cancels. So there is nothing
+    // for an order rule to enforce and nothing for an orientation setting to
+    // correct - the `Orientation: Normal / Reverse` option that used to sit here
+    // did exactly what clicking the corners one place round does, turning a
+    // correct answer into a different correct answer with nothing on screen to
+    // say which was wanted. The names are what tell the components apart.
+    { key: 'a', label: '1', color: '#e0a458', prompt: 'Click a corner of the ternary diagram, and name it as the figure does', valueFields: [{ key: 'name', label: 'Name (optional)', field: 'dz', optional: true, blankValue: '' }] },
+    { key: 'b', label: '2', color: '#5fb4e0', prompt: 'Click the next corner, going round the triangle', valueFields: [{ key: 'name', label: 'Name (optional)', field: 'dz', optional: true, blankValue: '' }] },
     // ⚑⚑ ALL THREE CORNERS ARE READ. C is not a courtesy click: with the
     // barycentric rewrite it is half the frame - `processCalibration` builds its
     // determinant from it and every reading divides by that.
@@ -3373,21 +3392,16 @@ export const TERNARY_AXES_CONFIG: AxesTypeConfig<TernaryAxes> = {
     // 157.7 / 57.7 / -115.5. Anyone who wondered whether the third click was
     // worth collecting checked here and stopped. Three separate agents found
     // this line independently on one night.
-    { key: 'c', label: 'C', color: '#7fcf7f', prompt: 'Click corner C of the ternary diagram', valueFields: [] },
+    { key: 'c', label: '3', color: '#7fcf7f', prompt: 'Click the third corner', valueFields: [{ key: 'name', label: 'Name (optional)', field: 'dz', optional: true, blankValue: '' }] },
   ],
   buildAxes(cal, ctx) {
     const axes = new TernaryAxes();
-    const ok = axes.calibrate(cal, optionBool(ctx.options, 'isRange100'), optionBool(ctx.options, 'isNormal'));
+    const ok = axes.calibrate(cal, optionBool(ctx.options, 'isRange100'));
     if (!ok) return { error: 'Calibration failed - check the entered data values are valid numbers.' };
     return { axes };
   },
   extractOptions(axes) {
-    // ⚠️ `isNormalOrientation` is a FUNCTION REFERENCE on TernaryAxes, not a
-    // getter, so it must be CALLED. Serializing the reference instead is a real
-    // defect with its own history: `JSON.stringify` drops the key, the flag
-    // reads back false, and a Normal ternary reopens Reverse - permuting every
-    // datum. Pinned by `plotDataAxesRoundTrip.test.ts`.
-    return { isRange100: String(axes.isRange100()), isNormal: String(axes.isNormalOrientation()) };
+    return { isRange100: String(axes.isRange100()) };
   },
 };
 

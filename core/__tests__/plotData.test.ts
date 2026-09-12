@@ -109,7 +109,7 @@ describe('PlotData', () => {
     cal.addPoint(500, 500, '0', '1', '0'); // B vertex
     cal.addPoint(300, 100, '0', '0', '1'); // C vertex
     const axes = new TernaryAxes();
-    axes.calibrate(cal, false, true); // range 0..1, Normal orientation
+    axes.calibrate(cal, false); // range 0..1
     axes.name = 'Ternary';
     pd.addAxes(axes);
 
@@ -130,7 +130,6 @@ describe('PlotData', () => {
     const ds2 = pd2.getDatasets()[0]!;
     const axes2 = pd2.getAxesForDataset(ds2)! as TernaryAxes;
 
-    expect(axes2.isNormalOrientation()).toBe(true);
     const after = axes2.pixelToData(300, 400);
     expect(after[0]).toBeCloseTo(before[0]!, 10);
     expect(after[1]).toBeCloseTo(before[1]!, 10);

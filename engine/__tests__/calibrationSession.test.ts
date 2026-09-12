@@ -1335,25 +1335,36 @@ describe('CalibrationSession (Polar axes)', () => {
 });
 
 function calibrateStandardTernary(session: CalibrationSession<TernaryAxes>) {
-  // Corner A at (100,300), corner B at (100,100) directly above A (so
-  // L=200, phi0=90 deg); corner C is a click-only, geometrically unused
-  // third corner (see calibrationSession.ts's header comment).
-  expect(session.handleCalibrationClick(100, 300)).toBe('point-placed'); // A
-  expect(session.handleCalibrationClick(100, 100)).toBe('point-placed'); // B
-  expect(session.handleCalibrationClick(300, 300)).toBe('point-placed'); // C
+  // Three corners of a real triangle. ⚑ Each one now takes the figure's own name
+  // after the click - optional, left blank here - so a corner click awaits a
+  // value rather than completing on its own.
+  expect(session.handleCalibrationClick(100, 300)).toBe('awaiting-value');
+  session.confirmCalibrationValues(['']);
+  expect(session.handleCalibrationClick(100, 100)).toBe('awaiting-value');
+  session.confirmCalibrationValues(['']);
+  expect(session.handleCalibrationClick(300, 300)).toBe('awaiting-value');
+  session.confirmCalibrationValues(['']);
 }
 
 describe('CalibrationSession (Ternary axes)', () => {
-  it('walks a 3-step calibration where every step needs no typed value', () => {
+  it('walks a 3-step calibration where each corner carries the figure\'s own name', () => {
+    // ⚑ This case used to be "every step needs no typed value". Since 2026-09-12
+    // each corner collects the figure's word for it - Sand, Silt, Clay - the way
+    // a spider spoke does, because "A" identifies nothing on a real diagram. The
+    // field is optional; the step still awaits a confirm.
     const session = new CalibrationSession(TERNARY_AXES_CONFIG);
     expect(session.getCurrentStep()?.key).toBe('a');
-    expect(session.getCurrentStep()?.valueFields).toHaveLength(0);
+    expect(session.getCurrentStep()?.valueFields).toHaveLength(1);
+    expect(session.getCurrentStep()?.valueFields[0]?.optional).toBe(true);
 
-    expect(session.handleCalibrationClick(100, 300)).toBe('point-placed');
+    expect(session.handleCalibrationClick(100, 300)).toBe('awaiting-value');
+    session.confirmCalibrationValues(['Sand']);
     expect(session.getCurrentStep()?.key).toBe('b');
-    expect(session.handleCalibrationClick(100, 100)).toBe('point-placed');
+    expect(session.handleCalibrationClick(100, 100)).toBe('awaiting-value');
+    session.confirmCalibrationValues(['Silt']);
     expect(session.getCurrentStep()?.key).toBe('c');
-    expect(session.handleCalibrationClick(300, 300)).toBe('point-placed');
+    expect(session.handleCalibrationClick(300, 300)).toBe('awaiting-value');
+    session.confirmCalibrationValues(['Clay']);
     expect(session.getCurrentStep()).toBeNull();
   });
 
@@ -1923,7 +1934,8 @@ describe('CalibrationSession - guard classes (checkpoint 72)', () => {
 
   it('never offers reuse across TERNARY corners - the case the old heuristic missed', () => {
     const session = new CalibrationSession(TERNARY_AXES_CONFIG);
-    session.handleCalibrationClick(100, 300); // A placed; now at B
+    session.handleCalibrationClick(100, 300); // corner 1 placed
+    session.confirmCalibrationValues(['']); // its name, left blank
     expect(session.getCurrentStep()?.key).toBe('b');
     expect(session.getReusableSteps().map((s) => s.key)).toEqual([]);
   });

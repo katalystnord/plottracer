@@ -33,19 +33,19 @@ import { Calibration } from '../calibration.js';
 
 const EQUILATERAL_APEX_Y = 200 - 200 * Math.sin(Math.PI / 3);
 
-function ternary({ range100 = false, normal = true } = {}): TernaryAxes {
-  return ternaryOn([[0, 200], [200, 200], [100, EQUILATERAL_APEX_Y]], { range100, normal });
+function ternary({ range100 = false } = {}): TernaryAxes {
+  return ternaryOn([[0, 200], [200, 200], [100, EQUILATERAL_APEX_Y]], { range100 });
 }
 
 /** A ternary calibrated on ANY triangle - which is the point of the change. */
 function ternaryOn(
   corners: [[number, number], [number, number], [number, number]],
-  { range100 = false, normal = true } = {}
+  { range100 = false } = {}
 ): TernaryAxes {
   const calib = new Calibration(3);
   for (const [px, py] of corners) calib.addPoint(px, py, '', '');
   const axes = new TernaryAxes();
-  expect(axes.calibrate(calib, range100, normal), 'calibration should succeed').toBe(true);
+  expect(axes.calibrate(calib, range100), 'calibration should succeed').toBe(true);
   return axes;
 }
 
@@ -125,20 +125,13 @@ describe('TernaryAxes - the corners', () => {
   });
 });
 
-describe('TernaryAxes - orientation', () => {
-  it('ROTATES which component is which, without disturbing the sum', () => {
-    // Inverted orientation is a relabelling of the same geometry: (a,b,c)
-    // becomes (c,a,b). Asserted as the relationship between the two readings
-    // rather than as three magic numbers, so it stays true if the fixture moves.
-    const normal = ternary({ normal: true }).pixelToData(50, 150);
-    const inverted = ternary({ normal: false }).pixelToData(50, 150);
-
-    expect(inverted[0]).toBeCloseTo(normal[2]!, 10);
-    expect(inverted[1]).toBeCloseTo(normal[0]!, 10);
-    expect(inverted[2]).toBeCloseTo(normal[1]!, 10);
-    expect(inverted[0]! + inverted[1]! + inverted[2]!).toBeCloseTo(1, 10);
-  });
-});
+// ⚑ The `Orientation: Normal / Reverse` cases lived here until 2026-09-12.
+// Measured, the setting did exactly what clicking the corners one place round
+// already does - all six click orders read correctly and the handedness cancels
+// - so it permuted a correct answer into a different correct answer with nothing
+// on screen to say which was wanted. Removed with the setting. What identifies a
+// component now is the figure's own word for its corner: see
+// core/__tests__/ternaryCornersAreNamed.test.ts.
 
 describe('TernaryAxes - what it does NOT provide', () => {
   it('ships the unimplemented dataToPixel stub', () => {
@@ -151,13 +144,13 @@ describe('TernaryAxes.calibrate refuses too few calibration points (v2.0 audit)'
     const calib = new Calibration(3);
     calib.addPoint(0, 200, '', '');
     const axes = new TernaryAxes();
-    expect(axes.calibrate(calib, false, true)).toBe(false);
+    expect(axes.calibrate(calib, false)).toBe(false);
     expect(axes.isCalibrated()).toBe(false);
   });
 
   it('refuses zero points too', () => {
     const axes = new TernaryAxes();
-    expect(axes.calibrate(new Calibration(3), false, true)).toBe(false);
+    expect(axes.calibrate(new Calibration(3), false)).toBe(false);
   });
 });
 
@@ -181,7 +174,7 @@ describe('a ternary diagram with no area is refused', () => {
     const cal = new Calibration(3);
     for (const [px, py] of corners) cal.addPoint(px, py, '0', '0');
     const axes = new TernaryAxes();
-    return { ok: axes.calibrate(cal, true, true), axes };
+    return { ok: axes.calibrate(cal, true), axes };
   }
 
   it('refuses corners A and B on the same pixel', () => {

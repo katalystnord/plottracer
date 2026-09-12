@@ -498,10 +498,13 @@ describe('the config table - the per-type defaults, pinned', () => {
     expect(optionDefault(POLAR_AXES_CONFIG, 'isLogR')).toBe(false);
   });
 
-  it('Ternary defaults to a 0-100 range in Normal orientation', () => {
-    // The orientation whose serialization bug once permuted every datum.
+  it('Ternary defaults to a 0-100 range, and has no orientation setting', () => {
     expect(optionDefault(TERNARY_AXES_CONFIG, 'isRange100')).toBe('true');
-    expect(optionDefault(TERNARY_AXES_CONFIG, 'isNormal')).toBe('true');
+    // ⚑ `Orientation: Normal / Reverse` was removed 2026-09-12. Measured: it did
+    // exactly what clicking the corners one place round already does, so it
+    // permuted a correct reading into a different correct reading with nothing
+    // on screen to say which was wanted. The corners carry NAMES instead.
+    expect(TERNARY_AXES_CONFIG.options?.some((o) => o.key === 'isNormal')).toBeFalsy();
   });
 
   it('Pie defaults to a total of 100 and a full 360-degree sweep, untilted', () => {

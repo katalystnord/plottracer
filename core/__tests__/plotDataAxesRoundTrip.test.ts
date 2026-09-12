@@ -204,51 +204,55 @@ describe('Polar axes survive a save and reopen', () => {
 });
 
 describe('Ternary axes survive a save and reopen', () => {
-  function ternaryAxes(range100: boolean, isNormal: boolean) {
+  function ternaryAxes(range100: boolean, names: [string, string, string] = ['', '', '']) {
     return reopen<TernaryAxes>((plot) => {
       const cal = new Calibration(3);
-      cal.addPoint(0, 200, '', '');
-      cal.addPoint(200, 200, '', '');
+      cal.addPoint(0, 200, '', '', names[0]);
+      cal.addPoint(200, 200, '', '', names[1]);
       // ⚑ THE THIRD CORNER IS REQUIRED NOW (2026-09-10). This fixture had two,
       // which calibrated only because the maths ignored the third click; the
       // reading is the barycentric coordinate of the clicked triangle, so a
       // triangle is what it takes. Placed at the equilateral apex, so the
       // numbers these cases assert are the ones they always asserted.
-      cal.addPoint(100, 200 - 200 * Math.sin(Math.PI / 3), '', '');
+      cal.addPoint(100, 200 - 200 * Math.sin(Math.PI / 3), '', '', names[2]);
       const a = new TernaryAxes();
       a.name = 'Ternary';
-      expect(a.calibrate(cal, range100, isNormal)).toBe(true);
+      expect(a.calibrate(cal, range100)).toBe(true);
       plot.addAxes(a);
     }).axes;
   }
 
-  it('⚑ keeps the ORIENTATION - the flag that once reopened as a dropped function reference', () => {
-    // The documented regression: serializing the METHOD instead of calling it
-    // meant JSON.stringify dropped the key, Boolean(undefined) read false, and
-    // a Normal ternary silently reopened Reverse - permuting every datum. The
-    // round trip below goes through real JSON precisely so that failure mode
-    // is reachable here.
-    expect(ternaryAxes(false, true).isNormalOrientation()).toBe(true);
-    expect(ternaryAxes(false, false).isNormalOrientation()).toBe(false);
+  it('⚑⚑ carries the CORNER NAMES, which replaced the orientation flag', () => {
+    // History worth keeping: this used to assert an `Orientation` flag survived
+    // the round trip, after a regression where serializing the METHOD instead of
+    // calling it meant JSON.stringify dropped the key, Boolean(undefined) read
+    // false, and a Normal ternary silently reopened Reverse, permuting every
+    // datum.
+    //
+    // The flag is gone. Measured, all six click orders read correctly and the
+    // handedness cancels, so orientation was permuting a correct answer into a
+    // different correct answer with nothing on screen to say which was wanted.
+    // What identifies a component now is the figure's own word for its corner,
+    // and THAT is what has to survive a round trip.
+    expect(ternaryAxes(true, ['Sand', 'Silt', 'Clay']).getAxesLabels()).toEqual([
+      'Sand',
+      'Silt',
+      'Clay',
+    ]);
+    // And an unnamed figure still reports readable headings rather than blanks.
+    expect(ternaryAxes(true).getAxesLabels()).toEqual(['A', 'B', 'C']);
   });
 
   it('keeps the 0-100 range flag, and the components still sum to the range', () => {
-    expect(ternaryAxes(true, true).isRange100()).toBe(true);
-    expect(ternaryAxes(false, true).isRange100()).toBe(false);
+    expect(ternaryAxes(true).isRange100()).toBe(true);
+    expect(ternaryAxes(false).isRange100()).toBe(false);
 
-    const asPercent = ternaryAxes(true, true).pixelToData(100, 150);
+    const asPercent = ternaryAxes(true).pixelToData(100, 150);
     expect(asPercent[0]! + asPercent[1]! + asPercent[2]!).toBeCloseTo(100, 6);
-    const asFraction = ternaryAxes(false, true).pixelToData(100, 150);
+    const asFraction = ternaryAxes(false).pixelToData(100, 150);
     expect(asFraction[0]! + asFraction[1]! + asFraction[2]!).toBeCloseTo(1, 6);
   });
 
-  it('reads the SAME point differently under the two orientations, after reopening', () => {
-    // Proves the flag is not merely stored but actually reaches the maths.
-    const normal = ternaryAxes(false, true).pixelToData(50, 150);
-    const reversed = ternaryAxes(false, false).pixelToData(50, 150);
-    expect(reversed[0]).toBeCloseTo(normal[2]!, 9);
-    expect(reversed[1]).toBeCloseTo(normal[0]!, 9);
-  });
 });
 
 describe('Map axes survive a save and reopen', () => {
