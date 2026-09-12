@@ -5155,7 +5155,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
               points,
               this.axes,
               this.ownSlots(dataset),
-              this.getSectorApex(tupleIndex, datasetIndex)
+              this.getSectorApex(tupleIndex, datasetIndex),
+              // ⚑ The same chain `derived` below is given, so the panel and the
+              // derived value cannot read one row from two premises.
+              this.config.id === 'stacked'
+                ? this.stackBaseFor(tupleIndex, datasetIndex ?? this.activeDatasetIndex)
+                : undefined
             )
           : [],
         // The arithmetic stays in the CONFIG, where that type's model lives; the
@@ -5165,6 +5170,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
           derive && this.axes
             ? derive.compute(points, this.axes, {
                 apex: this.getSectorApex(tupleIndex, datasetIndex),
+                // ⚑⚑ WHAT THIS SEGMENT STANDS ON, for a stacked chart. The
+                // answer is not in this tuple - it is the top of the segment
+                // below, which belongs to ANOTHER SERIES - so only the session
+                // can supply it. Undefined for every other type, where the
+                // config falls back to the baseline.
+                ...(this.config.id === 'stacked'
+                  ? { stackBase: this.stackBaseFor(tupleIndex, datasetIndex ?? this.activeDatasetIndex) }
+                  : {}),
                 // ⚑⚑ STACKING IS NO LONGER THREADED THROUGH HERE, and that
                 // closes a whole defect shape. It used to arrive as the SERIES'
                 // stack group, read off `this.activeDatasetIndex` while `apex`
@@ -5439,7 +5452,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
           return { px: p.x, py: p.y, data: axes.pixelToData(p.x, p.y) };
         });
         cells.push(
-          valueCells(this.config, points, axes, ownSlotsForCells, this.getSectorApex(tupleIndex, seriesIndex))
+          valueCells(
+            this.config,
+            points,
+            axes,
+            ownSlotsForCells,
+            this.getSectorApex(tupleIndex, seriesIndex),
+            this.config.id === 'stacked' ? this.stackBaseFor(tupleIndex, seriesIndex) : undefined
+          )
         );
         // ⚑ Asked of the POINT each column names, through the same map the
         // editor moves - so the mark and the edit cannot disagree about which
@@ -5861,6 +5881,197 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (this.setCandleRising(complete[i]!, directions[i]!)) changed++;
     }
     return changed;
+  }
+
+  /**
+   * ⚑⚑ WHAT A STACKED SEGMENT STANDS ON: the top of the segment below it in the
+   * same category, or the baseline where there is nothing below.
+   *
+   * The order is READ FROM THE PIXELS, outward from the baseline, not taken from
+   * the panel - so the series order is presentation, and a NEGATIVE stack needs
+   * no rule of its own: a segment chains onto the nearest edge between it and
+   * the baseline ON ITS OWN SIDE. A diverging column is then not a special case,
+   * because each side chains away from zero independently.
+   *
+   * ⚑ Series 1's base IS the baseline. Not measured, not optional: a column
+   * whose lowest segment does not reach it is a FLOATING stacked bar chart,
+   * which is a different type we have not built.
+   */
+  private stackBaseFor(tupleIndex: number, datasetIndex: number): number {
+    const baseline = this.axes ? (this.axes as unknown as BarAxes).getBaselineValue() : 0;
+    const mine = this.stackedTopOf(tupleIndex, datasetIndex);
+    if (mine === null) return baseline;
+    // ⚑⚑ THE FALLBACK IS THIS SEGMENT'S OWN NEAR CORNER, NOT THE BASELINE, and
+    // that distinction is measured rather than assumed.
+    //
+    // Where a segment IS below, it wins: the shared edge is one number, read
+    // once, which is the whole link. Where none is - the lowest segment, or a
+    // figure traced one series at a time with the lower ones not yet captured -
+    // we already HAVE a reading of where this segment starts, because the
+    // drag-box took both corners. Assuming the baseline there reported a segment
+    // standing on 3 and reaching 5 as five tall.
+    //
+    // ⚑ It keeps David's rule true rather than replacing it: series 1 is drawn
+    // ON the baseline, so its near corner reads the baseline to click accuracy.
+    // The rule is a property of the figure, not an assumption we impose on it.
+    const ownNear = this.stackedNearOf(tupleIndex, datasetIndex);
+    const side = Math.sign(mine - baseline);
+    let base = baseline;
+    let found = false;
+    for (let i = 0; i < this.datasetEntries.length; i += 1) {
+      if (i === datasetIndex) continue;
+      const other = this.stackedTopOf(tupleIndex, i);
+      if (other === null) continue;
+      // Same side of the baseline, and strictly between it and me.
+      if (Math.sign(other - baseline) !== side) continue;
+      if (Math.abs(other - baseline) >= Math.abs(mine - baseline)) continue;
+      if (Math.abs(other - baseline) > Math.abs(base - baseline)) base = other;
+      found = true;
+    }
+    return found ? base : (ownNear ?? baseline);
+  }
+
+  /** The near end of one series' segment in one category - the corner of its
+   *  drag-box closest to the baseline. */
+  private stackedNearOf(tupleIndex: number, datasetIndex: number): number | null {
+    const dataset = this.datasetEntries[datasetIndex]?.dataset;
+    if (!dataset || !this.axes) return null;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return null;
+    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
+    let near: number | null = null;
+    for (const pixelIndex of tuple) {
+      if (pixelIndex == null) continue;
+      const p = dataset.getPixel(pixelIndex);
+      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
+        .pixelToData(p.x, p.y)[0];
+      if (read === undefined || !Number.isFinite(read)) continue;
+      if (near === null || Math.abs(read - baseline) < Math.abs(near - baseline)) near = read;
+    }
+    return near;
+  }
+
+  /** The far end of one series' segment in one category, in data units, or null
+   *  where that series drew nothing there. */
+  private stackedTopOf(tupleIndex: number, datasetIndex: number): number | null {
+    const dataset = this.datasetEntries[datasetIndex]?.dataset;
+    if (!dataset || !this.axes) return null;
+    const tuple = dataset.getAllTuples()[tupleIndex];
+    if (!tuple) return null;
+    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
+    let top: number | null = null;
+    for (const pixelIndex of tuple) {
+      if (pixelIndex == null) continue;
+      const p = dataset.getPixel(pixelIndex);
+      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
+        .pixelToData(p.x, p.y)[0];
+      if (read === undefined || !Number.isFinite(read)) continue;
+      if (top === null || Math.abs(read - baseline) > Math.abs(top - baseline)) top = read;
+    }
+    return top;
+  }
+
+  /**
+   * ⚑⚑ SET A STACKED SEGMENT'S HEIGHT - the type's whole meaning as one method.
+   *
+   * It sets a HEIGHT, not a position, which is the major differentiator from a
+   * Bar: a stacked chart's datum is a magnitude, and the absolute top is an
+   * artefact of what is stacked underneath. The top moves to `base + height`,
+   * where the base is the chain's.
+   *
+   * ⚠️ The defect this replaces: as a checkbox on Bar, typing 7 into a segment
+   * based at 2 recorded 5, because the editor moved the far corner to the
+   * ABSOLUTE 7 while the column showed a height - and then marked the 5 as the
+   * user's own reading.
+   *
+   * ⚑ Only the far corner moves. Everything above keeps its own height and
+   * simply rides up, because their bases are this segment's new top. That is the
+   * LINK: one number changed, and the others moved without their values
+   * changing.
+   */
+  setStackedHeight(datasetIndex: number, tupleIndex: number, height: number): boolean {
+    if (this.config.id !== 'stacked' || !this.axes) return false;
+    if (!Number.isFinite(height)) return false;
+    const dataset = this.datasetEntries[datasetIndex]?.dataset;
+    const tuple = dataset?.getAllTuples()[tupleIndex];
+    if (!dataset || !tuple) return false;
+    const base = this.stackBaseFor(tupleIndex, datasetIndex);
+    const top = this.stackedTopOf(tupleIndex, datasetIndex);
+    if (top === null) return false;
+    // The pixel carrying the far end is the one to move; the other corner is the
+    // box's own bottom, whose value the chain replaces.
+    const baseline = (this.axes as unknown as BarAxes).getBaselineValue();
+    let farIndex: number | null = null;
+    let farDist = -Infinity;
+    for (const pixelIndex of tuple) {
+      if (pixelIndex == null) continue;
+      const p = dataset.getPixel(pixelIndex);
+      const read = (this.axes as unknown as { pixelToData(x: number, y: number): number[] })
+        .pixelToData(p.x, p.y)[0];
+      if (read === undefined || !Number.isFinite(read)) continue;
+      const d = Math.abs(read - baseline);
+      if (d > farDist) {
+        farDist = d;
+        farIndex = pixelIndex;
+      }
+    }
+    if (farIndex === null) return false;
+
+    // ⚑⚑ NOT THROUGH `setDataPointValue`, which writes to the ACTIVE dataset
+    // only. The segment being edited belongs to whichever series the table cell
+    // sits in, and on a stacked chart that is routinely not the selected one -
+    // the same "a reader that only knows the active series" shape this file has
+    // been bitten by twice. The move itself is the bar rule: convert the target
+    // VALUE to a pixel offset and apply it, so a log or rotated axis is right.
+    const point = dataset.getPixel(farIndex);
+    const target = base + height;
+    const toPixel = (v: number) =>
+      (this.axes as unknown as { dataToPixel(v: number, u?: number): { x: number; y: number } }).dataToPixel(v);
+    const from = toPixel(top);
+    const to = toPixel(target);
+    if (!Number.isFinite(from.x) || !Number.isFinite(from.y)) return false;
+    // ⚠️ COPIED BEFORE THE MOVE. `getPixel` hands back the LIVE object, so
+    // reading `point.x/y` after `setPixelAt` gives the NEW position and every
+    // delta computed from it is zero - which silently turned the ride-up below
+    // into a no-op. Same live-reference trap the CCR fixture hit in the v2.5
+    // audit, in the opposite direction.
+    const wasX = point.x;
+    const wasY = point.y;
+    const moved = { x: wasX + (to.x - from.x), y: wasY + (to.y - from.y) };
+    if (!Number.isFinite(moved.x) || !Number.isFinite(moved.y)) return false;
+    dataset.setPixelAt(farIndex, moved.x, moved.y);
+    // The reading is the user's now, exactly as a typed value is anywhere else.
+    const before = this.suppliedDimsAt(dataset, farIndex);
+    this.setSuppliedDims(dataset, farIndex, [...new Set([...before, 0])].sort((a, b) => a - b));
+
+    // ⚑⚑ EVERYTHING ABOVE RIDES UP, KEEPING ITS OWN VALUE. This is the LINK
+    // doing its work: their bases are this segment's top, so when the top moves
+    // they must move with it or their heights would silently change instead.
+    // David: *"you cannot change one without the other."*
+    // ⚑ Shifted by the same PIXEL delta, not recomputed, so a log axis moves
+    // each segment by its own distance rather than by a value difference that
+    // means something different further up the scale.
+    const dx = moved.x - wasX;
+    const dy = moved.y - wasY;
+    const sideOf = (v: number) => Math.sign(v - baseline);
+    const mySide = sideOf(top);
+    const myDist = Math.abs(top - baseline);
+    for (let i = 0; i < this.datasetEntries.length; i += 1) {
+      if (i === datasetIndex) continue;
+      const other = this.datasetEntries[i]!.dataset;
+      const otherTuple = other.getAllTuples()[tupleIndex];
+      if (!otherTuple) continue;
+      const otherTop = this.stackedTopOf(tupleIndex, i);
+      if (otherTop === null) continue;
+      if (sideOf(otherTop) !== mySide) continue;
+      if (Math.abs(otherTop - baseline) <= myDist) continue; // at or below me
+      for (const pixelIndex of otherTuple) {
+        if (pixelIndex == null) continue;
+        const p = other.getPixel(pixelIndex);
+        other.setPixelAt(pixelIndex, p.x + dx, p.y + dy);
+      }
+    }
+    return true;
   }
 
   getCandlestickGlyphs(): CandlestickGlyph[] {

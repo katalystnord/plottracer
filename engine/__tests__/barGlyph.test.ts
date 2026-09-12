@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { computeBarGlyph } from '../barGlyph.js';
-import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+
+/** The same figure on the STACKED type. ⚑ `isStacked` was a checkbox on Bar
+ *  until 2026-09-12; a stacked chart is its own type now, calibrated identically
+ *  to a Bar - which is the point of it. */
+function calibratedStacked(options: Record<string, string> = {}): CalibrationSession<BarAxes> {
+  const s = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
+  for (const [key, value] of Object.entries(options)) s.setOption(key, value);
+  s.handleCalibrationClick(300, 500);
+  s.confirmCalibrationValues(['0']);
+  s.handleCalibrationClick(300, 100);
+  s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
+  expect(s.runCalibration()).toBe(true);
+  return s;
+}
 
 /**
  * ⚑⚑ THE BAR'S MARK STANDS ON THE FIGURE'S COMMON ORIGIN (v2.5).
@@ -73,7 +89,7 @@ describe('when the session offers it', () => {
     // ⚠️ A leg dropped to the origin would be a straight lie there: a stacked
     // segment's value is its own height, measured from neither the origin nor
     // anything the user declared.
-    const s = calibratedBar({ isStacked: 'true' });
+    const s = calibratedStacked();
     s.addDataPoint(150, 400);
     s.addDataPoint(210, 300);
     expect(s.getTupleGlyphs()).toEqual([]);

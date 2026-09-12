@@ -842,6 +842,19 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
        * other thing the figure declares about itself. */
       ctx: {
         apex: { x: number; y: number } | null;
+        /**
+         * ⚑⚑ WHAT THIS SEGMENT STANDS ON, for a type whose datum is a MAGNITUDE
+         * rather than a position - a stacked chart.
+         *
+         * Supplied by the session, because the answer is not in this tuple: it
+         * is the top of the segment below it, which belongs to another SERIES.
+         * The baseline where there is nothing below.
+         *
+         * ⚑ It is here rather than in a hook of its own because it is the same
+         * measurement `apex` is: a piece of context the tuple cannot see, which
+         * changes what its own points mean. Absent for every other type.
+         */
+        stackBase?: number;
       }
     ): number | null;
     /**
@@ -888,7 +901,13 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
      * beside it for the reason the whole module exists: the names and the
      * readings have to be one answer, not two.
      */
-    cellsFor?(points: (DataPointView | null)[], axes: A): (number | null)[];
+    cellsFor?(
+      points: (DataPointView | null)[],
+      axes: A,
+      /** The same context `compute` takes, so the panel and the derived value
+       *  cannot read one row from two premises. */
+      ctx?: { apex: { x: number; y: number } | null; stackBase?: number }
+    ): (number | null)[];
   };
   /**
    * What auto-extract MEANS on this graph type - a declared capability, because
@@ -2266,7 +2285,6 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // *"THIS is where we should ask if the bars are stacked!"* One fact about
     // how the whole figure draws its bars, asked once, beside the two questions
     // of exactly the same kind that were already here.
-    { key: 'isStacked', label: 'Stacked bars', kind: 'checkbox', default: false },
   ],
   /**
    * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.3). The value axis is
@@ -2593,14 +2611,18 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // category axis. The stored number stays 0 as the fallback for a
     // calibration that has no category axis - a file older than the walk.
     axes.setBaseline(true, 0);
-    axes.setStacked(optionBool(ctx.options, 'isStacked'));
+    // ⚑⚑ NEVER STACKED (2026-09-12). `Stacked bars` was a checkbox here that
+    // silently changed what the columns meant, what an edit did and what the
+    // record was - the last mode hidden inside Bar, after floating bars left for
+    // Span in v2.5. It is its own type now, and Bar means what its name says
+    // with no option that changes the answer.
+    axes.setStacked(false);
     return { axes };
   },
   extractOptions(axes) {
     return {
       isLog: String(axes.isLog()),
       isRotated: String(axes.isRotated()),
-      isStacked: String(axes.isStacked()),
     };
   },
 };
@@ -3010,6 +3032,127 @@ export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
  * *"Span Chart, also known as Range Bar/Column Graph, Floating Bar Graph"*), so
  * it is recognised rather than coined.
  */
+/**
+ * ⚑⚑⚑ STACKED BAR CHART - a chain from the baseline, not N independent bars.
+ *
+ * David, 2026-09-12, after driving a stacked figure: *"we need to take a whole
+ * step back, and actively make stacked bar charts its own major chart type, with
+ * its own set of rules, where boundaries are connected. I.e. you cannot change
+ * one without the other."*
+ *
+ * ⚑⚑ THE TWO MECHANICS, and they are the whole type:
+ *
+ * **LINKED.** A segment's base is not a number of its own - it IS the top of the
+ * segment below it, and series 1's base IS the baseline. One number, two owners,
+ * so it cannot drift and cannot be edited into disagreement.
+ *
+ * **DERIVED.** The reported value is the segment's HEIGHT, computed as
+ * `top - base`. That is the major differentiator from a Bar, whose datum is a
+ * POSITION on the axis. A stacked chart's datum is a magnitude; the absolute top
+ * is an artefact of what is stacked underneath it.
+ *
+ * ⚠️ WHY IT COULD NOT STAY A CHECKBOX ON BAR. It is not a different rendering of
+ * one record - the two types report different quantities from the same clicks.
+ * As `isStacked`, each segment measured its own base, so every shared edge was
+ * captured TWICE: measured on David's own figure, the two copies of one edge
+ * disagreed by 0.08, 0.08 and 0.03. The figure draws that edge once, and a
+ * record carrying two numbers for it cannot state that the segments touch - so a
+ * generator handed it draws a stack with a hairline gap the original never had.
+ * Editing was worse: typing 7 into a segment based at 2 recorded 5, because the
+ * editor moved the far corner to the absolute 7 while the column showed a
+ * height.
+ *
+ * ⚑ THE ORDER IS READ FROM THE PIXELS, outward from the baseline, so the panel
+ * order is presentation and a NEGATIVE stack needs no rule of its own: a
+ * segment's base is the nearest edge between it and the baseline ON ITS OWN
+ * SIDE. A diverging column is then not a special case - each side chains away
+ * from zero independently.
+ *
+ * ⚑ SCOPE, drawn deliberately rather than left as a gap: a stacked bar chart
+ * CONNECTS to the baseline. A column that floats clear of it is a floating
+ * stacked bar chart, a type we have not built, and it does not get an option on
+ * this one. David: *"I have never seen a stacked bar chart that did not connect
+ * with the baseline."* That is the same line v2.5 drew taking floating bars out
+ * of Bar.
+ *
+ * ⚑ Calibration, capture and naming are Bar's, unchanged. The drag-box still
+ * takes BOTH corners, because the box is what measures the bar's WIDTH along the
+ * category axis; only the bottom corner's VALUE is unused, since the base is the
+ * chain.
+ */
+export const STACKED_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
+  ...BAR_AXES_CONFIG,
+  id: 'stacked',
+  label: 'Stacked bar',
+  tupleNoun: 'segment',
+  // ⚑ No `isStacked`: Bar's checkbox is gone, and this type IS the answer it
+  // used to give. Everything else Bar offers - log, rotated - still applies.
+  fixedSteps: BAR_AXES_CONFIG.fixedSteps,
+  /** Bar's build, plus the one declaration that says what this is. The flag now
+   *  comes from the TYPE rather than a checkbox, so it cannot be half-on. */
+  buildAxes(cal, ctx) {
+    const built = BAR_AXES_CONFIG.buildAxes(cal, ctx);
+    if ('error' in built) return built;
+    built.axes.setStacked(true);
+    // ⚑⚑ STAMPED, like Histogram's, because BarAxes alone cannot say which type
+    // drew the figure - Bar, Span, Box Plot, Candlestick and Stacked all share
+    // it. Without this the file reopens as a plain Bar and every segment is
+    // valued from the baseline instead of from the one below it.
+    built.axes.setMetadata({
+      ...built.axes.getMetadata(),
+      [GRAPH_TYPE_METADATA_KEY]: 'stacked',
+    });
+    return built;
+  },
+  /**
+   * The segment's HEIGHT, measured from what it stands on.
+   *
+   * ⚑⚑ `ctx.stackBase` is supplied by the session, because the answer is not in
+   * this tuple - it is the top of the segment below, which belongs to another
+   * SERIES. Absent (a lone segment, or a caller that does not chain) it falls
+   * back to the baseline, which is what series 1 stands on anyway.
+   *
+   * ⚑ SIGNED. The magnitude is how tall the segment is; the sign says which side
+   * of the origin the figure drew it on, which is what lets a generator redraw
+   * it. `barmode='stack'` takes the signed number and draws the direction from
+   * it, so an unsigned record could not regenerate the figure.
+   */
+  derivedTupleValue: {
+    label: 'Value',
+    compute(points, axes, ctx) {
+      const [start, end] = points;
+      if (!start?.data || !end?.data) return null; // a half-dragged segment
+      const base = ctx.stackBase ?? axes.getBaselineValue();
+      const v1 = start.data[0]!;
+      const v2 = end.data[0]!;
+      // The TOP is the end further from the base; the other corner is the box's
+      // own bottom, whose value the chain replaces.
+      const top = Math.abs(v1 - base) >= Math.abs(v2 - base) ? v1 : v2;
+      const height = top - base;
+      return Number.isFinite(height) ? height : null;
+    },
+    /**
+     * ⚑⚑ BOTH, and the base is DERIVED rather than measured.
+     *
+     * `bar(x, height, bottom)` names both, so a generator handed this record
+     * needs the bottom as well as the height - which is why the columns are
+     * `Base` and `Value` rather than one number. The difference from the old
+     * checkbox is not that `Base` disappears; it is WHERE IT COMES FROM. It used
+     * to be this segment's own near corner, measured a second time on an edge
+     * the figure drew once. It is now the top of the segment below, so the two
+     * cannot drift apart.
+     */
+    namesFor() {
+      return ['Base', 'Value'];
+    },
+    cellsFor(points, axes, ctx) {
+      const base = ctx?.stackBase ?? axes.getBaselineValue();
+      const height = this.compute(points, axes, ctx ?? { apex: null });
+      return [Number.isFinite(base) ? base : null, height];
+    },
+  },
+};
+
 export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   id: 'span',
   label: 'Span chart',
@@ -3988,10 +4131,24 @@ export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = 
   // himself on 2026-09-03, left to right and top to bottom:
   //
   //   XY          Line            Histogram
-  //   Bar         Span chart      Pie / donut
-  //   Box Plot    Candlestick     Spider
-  //   Heatmap     Map             Ternary
-  //   Polar       Chart recorder
+  //   Bar         Span chart      Stacked bar
+  //   Box Plot    Candlestick     Pie / Donut
+  //   Heatmap     Map             Spider / Radar
+  //   Polar       Ternary         Circular Chart Recorder
+  //
+  // ⚑⚑ RESHUFFLED 2026-09-12 when Stacked bar arrived, and David approved this
+  // grid. The top row becomes EXTENTS AGAINST A BASELINE - Bar reports a
+  // position, Span two ends, Stacked a chain of magnitudes - and the row under
+  // it stays N NAMED VALUES AT A CATEGORY. That reads better down the columns
+  // than the old 2x2 block did, and fifteen types fill the 3-wide grid exactly,
+  // with no ragged last row.
+  //
+  // ⚠️ THE COST, and it is a real one: PIE MOVES AWAY FROM BAR. The old layout
+  // put them side by side with a stated reason - they carry the same record, a
+  // category and one magnitude, and round is a rendering choice. That reason
+  // did not stop being true; Pie is simply no longer adjacent. It now sits with
+  // Box Plot and Candlestick, which it does NOT share a record with, so the
+  // third row is the one place this grid does not encode the rule.
   //
   // ⚑⚑ THE RULE IS: GROUP BY THE DATA, NOT BY THE PICTURE. David, correcting a
   // shape-first argument that had stood in this file since v1.6: *"Just because
@@ -4030,13 +4187,14 @@ export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = 
   HISTOGRAM_AXES_CONFIG,
   BAR_AXES_CONFIG,
   SPAN_AXES_CONFIG,
-  PIE_AXES_CONFIG,
+  STACKED_AXES_CONFIG,
   BOX_PLOT_AXES_CONFIG,
   CANDLESTICK_AXES_CONFIG,
-  SPIDER_AXES_CONFIG,
+  PIE_AXES_CONFIG,
   HEATMAP_AXES_CONFIG,
   MAP_AXES_CONFIG,
-  TERNARY_AXES_CONFIG,
+  SPIDER_AXES_CONFIG,
   POLAR_AXES_CONFIG,
+  TERNARY_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
 ];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG, STACKED_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { buildExportSections, buildExportJson } from '../exportAssembly.js';
 import type { ExportAssemblyInput } from '../exportAssembly.js';
@@ -28,8 +28,10 @@ import { walkCategoryAxis } from './helpers/categoryWalk.js';
  * `Value` rather than two corners in click order.
  */
 function stackedFigure() {
-  const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-  s.setOption('isStacked', 'true');
+  // ⚑ ITS OWN TYPE SINCE 2026-09-12. `isStacked` was a checkbox on Bar that
+  // silently changed what the columns meant and what an edit did; it is a type
+  // now, and Bar carries no option that changes the answer.
+  const s = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
   s.handleCalibrationClick(300, 500);
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(300, 100);

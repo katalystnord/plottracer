@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+
+/** The same figure on the STACKED type. ⚑ `isStacked` was a checkbox on Bar
+ *  until 2026-09-12; a stacked chart is its own type now, calibrated identically
+ *  to a Bar - which is the point of it. */
+function calibratedStacked(options: Record<string, string> = {}): CalibrationSession<BarAxes> {
+  const s = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
+  for (const [key, value] of Object.entries(options)) s.setOption(key, value);
+  s.handleCalibrationClick(300, 500);
+  s.confirmCalibrationValues(['0']);
+  s.handleCalibrationClick(300, 100);
+  s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
+  expect(s.runCalibration()).toBe(true);
+  return s;
+}
 
 /**
  * ⚑⚑ EDITING A BAR'S VALUE MOVES A CORNER - IT NEVER OVERWRITES A NUMBER (v2.5).
@@ -64,7 +80,7 @@ describe('a Bar', () => {
 
 describe('a STACKED figure names two points, and each column moves its own', () => {
   it('⚑⚑ `Base` moves the near corner, `Value` the far one', () => {
-    const s = calibratedBar({ isStacked: 'true' });
+    const s = calibratedStacked();
     s.addDataPoint(150, 420); // stands on 2
     s.addDataPoint(190, 300); // reaches 5: a contribution of 3
     expect(s.getBarCategoryTable().valueColumns).toEqual(['Base', 'Value']);

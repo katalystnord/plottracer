@@ -81,7 +81,11 @@ export interface ValueColumnConfig<A extends CalibratedAxes> {
     /** The names when the FIGURE changes the answer - see the declaration. */
     namesFor?(axes: A): readonly string[];
     /** The readings for those names, aligned. */
-    cellsFor?(points: (DataPointView | null)[], axes: A): (number | null)[];
+    cellsFor?(
+      points: (DataPointView | null)[],
+      axes: A,
+      ctx?: { apex: { x: number; y: number } | null; stackBase?: number }
+    ): (number | null)[];
   };
 }
 
@@ -152,7 +156,18 @@ export function valueCells<A extends CalibratedAxes>(
    * ⚑ Optional, and null is the right answer for every type that measures about
    * nothing - which is all of them but pie.
    */
-  apex?: { x: number; y: number } | null
+  apex?: { x: number; y: number } | null,
+  /**
+   * ⚑⚑ WHAT A STACKED SEGMENT STANDS ON - the top of the one below it, which
+   * belongs to another SERIES, so only the session can supply it.
+   *
+   * ⚠️ Threaded for the same reason `apex` above had to be, and that note is the
+   * warning: hard-coded here, `cells` and `derived` became two readings of the
+   * same row that disagreed - measured at 25% on an exploded pie. A stacked
+   * segment would disagree the same way, reporting its height from the baseline
+   * in the panel and from its true base everywhere else.
+   */
+  stackBase?: number
 ): (number | null)[] {
   if (slotNames && isReshaped(config, slotNames)) {
     return points.map((p) => p?.data?.[0] ?? null);
@@ -163,8 +178,9 @@ export function valueCells<A extends CalibratedAxes>(
   }
   if (config.derivedTupleValue) {
     const derive = config.derivedTupleValue;
-    if (derive.cellsFor) return derive.cellsFor(points, axes);
-    return [derive.compute(points, axes, { apex: apex ?? null }) ?? null];
+    const ctx = { apex: apex ?? null, ...(stackBase === undefined ? {} : { stackBase }) };
+    if (derive.cellsFor) return derive.cellsFor(points, axes, ctx);
+    return [derive.compute(points, axes, ctx) ?? null];
   }
   return points.map((p) => p?.data?.[0] ?? null);
 }

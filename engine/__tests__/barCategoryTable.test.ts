@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 import { calibratedHealthy } from './fixtures/anyType.js';
@@ -233,8 +234,8 @@ describe('getBarCategoryTable: multiple series sharing the category axis', () =>
     // silently drift apart without a direct check. Since v2.3 stacking is one
     // declaration on the AXES rather than a per-series tag, which is what
     // removed the drift this test was originally written to catch.
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    session.setOption('isStacked', 'true');
+    // ⚑ Its own type since 2026-09-12; `isStacked` was a checkbox on Bar.
+    const session = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
     calibratedBar(session);
     session.addDataPoint(150, 420); // value 2
     session.addDataPoint(150, 300); // value 5 -- unsigned span 3, not baseline-relative

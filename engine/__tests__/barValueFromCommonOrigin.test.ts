@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
@@ -137,8 +138,9 @@ describe('a bar that does not reach the origin is REPORTED, not refused', () => 
   });
 
   it('⚑ a STACKED segment is SUPPOSED to sit clear of it, so the observation carries nothing', () => {
-    const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    calibratedBar(s, 2, { isStacked: 'true' });
+    // ⚑ Its own type since 2026-09-12; `isStacked` was a checkbox on Bar.
+    const s = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
+    calibratedBar(s, 2);
     floatingBar(s);
     const table = s.getBarCategoryTable();
     // ⚑ Two named values on a stacked figure: `Base` then `Value`.

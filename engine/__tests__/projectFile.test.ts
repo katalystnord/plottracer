@@ -6,7 +6,8 @@ import {
   serializeMultiFigureProject,
   deserializeMultiFigureProject,
 } from '../projectFile.js';
-import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG, CIRCULAR_CHART_RECORDER_AXES_CONFIG, CANDLESTICK_AXES_CONFIG } from '../calibrationSession.js';
+import { CalibrationSession, XY_AXES_CONFIG, BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, CIRCULAR_CHART_RECORDER_AXES_CONFIG, CANDLESTICK_AXES_CONFIG } from '../calibrationSession.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import type { CircularChartRecorderAxes } from '../../core/axes/circularChartRecorder.js';
@@ -893,8 +894,10 @@ describe('a file whose points claim to be derived from anchors that are not ther
  * test that only names the one that broke would not notice the next one.
  */
 describe('a bar figure keeps what it declares about itself across a save', () => {
-  function stackedBarProject(options: Record<string, string>) {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+  function stackedBarProject(options: Record<string, string>, typeId: 'bar' | 'stacked' = 'bar') {
+    const session = new CalibrationSession<BarAxes>(
+      typeId === 'stacked' ? STACKED_AXES_CONFIG : BAR_AXES_CONFIG
+    );
     for (const [k, v] of Object.entries(options)) session.setOption(k, v);
     calibrateStandardBar(session);
     walkCategoryAxis(session, { count: 2 });
@@ -925,11 +928,17 @@ describe('a bar figure keeps what it declares about itself across a save', () =>
   }
 
   it('⚑ a STACKED chart reopens stacked, so its segments still report their own height', () => {
-    expect(stackedBarProject({ isStacked: 'true' }).isStacked()).toBe(true);
+    // ⚑ The declaration moved from an OPTION to the TYPE on 2026-09-12, and what
+    // has to survive the save moved with it: the graph type is STAMPED on the
+    // axes, because BarAxes alone cannot say which of Bar, Span, Box Plot,
+    // Candlestick or Stacked drew the figure. Without the stamp the file reopens
+    // as a plain Bar and every segment is valued from the baseline instead of
+    // from the one below it.
+    expect(stackedBarProject({}, 'stacked').isStacked()).toBe(true);
   });
 
   it('and an ordinary chart reopens unstacked - the companion assertion', () => {
-    expect(stackedBarProject({ isStacked: 'false' }).isStacked()).toBe(false);
+    expect(stackedBarProject({}).isStacked()).toBe(false);
   });
 
   it('⚑⚑ a CANDLESTICK keeps its colour convention, so Open and Close do not exchange on reopen', () => {

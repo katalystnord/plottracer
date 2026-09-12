@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
@@ -18,8 +19,15 @@ import { walkCategoryAxis } from './helpers/categoryWalk.js';
  */
 
 /** Value axis 0 at py 500, 10 at py 100, two categories. */
-function barProject(options: Record<string, string>, bars: [number, number, number][]) {
-  const s = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
+function barProject(
+  options: Record<string, string>,
+  bars: [number, number, number][],
+  /** Which type drew it. Stacked is its own since 2026-09-12. */
+  typeId: 'bar' | 'stacked' = 'bar'
+) {
+  const s = new CalibrationSession<BarAxes>(
+    typeId === 'stacked' ? STACKED_AXES_CONFIG : BAR_AXES_CONFIG
+  );
   for (const [k, v] of Object.entries(options)) s.setOption(k, v);
   s.handleCalibrationClick(300, 500);
   s.confirmCalibrationValues(['0']);
@@ -77,8 +85,14 @@ describe('what must NOT be relabelled', () => {
   it('⚑ a STACKED figure, whose segments miss the baseline by construction', () => {
     // ⚠️ This is the case that makes the exclusion load-bearing rather than
     // tidy: without it EVERY stacked bar chart would be relabelled on open.
-    const opened = barProject({ isStacked: 'true' }, [FLOATING, ALSO_FLOATING]);
-    expect(opened.configId).toBe('bar');
+    //
+    // ⚑ The declaration moved from an OPTION to the TYPE on 2026-09-12, so the
+    // file says `stacked` where it used to say bar-with-a-checkbox. The
+    // exclusion itself is unchanged and still load-bearing: a stacked figure's
+    // upper segments do not reach the baseline and never will, so the
+    // float-detector must not read that as a Span.
+    const opened = barProject({}, [FLOATING, ALSO_FLOATING], 'stacked');
+    expect(opened.configId).toBe('stacked');
   });
 
   it('a figure with nothing captured yet - there is no arrangement to read', () => {

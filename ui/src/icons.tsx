@@ -150,6 +150,7 @@ import graphPieSvg from '../../icons/custom/graph-pie.svg?raw';
 // donut row was otherwise visually identical to every other pie example
 // (David: "for variety").
 import graphDonutSvg from '../../icons/custom/graph-donut.svg?raw';
+import graphStackedSvg from '../../icons/custom/graph-stacked.svg?raw';
 import graphTernarySvg from '../../icons/custom/graph-ternary.svg?raw';
 import graphMapSvg from '../../icons/custom/graph-map.svg?raw';
 import graphCcrSvg from '../../icons/custom/graph-ccr.svg?raw';
@@ -221,6 +222,9 @@ export const GraphBarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphB
 export const GraphCategoricalLineIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphCategoricalLineSvg} size={size} />;
 export const GraphBoxPlotIcon = ({ size }: GraphIconProps = {}) => <Icon svg={boxPlotSvg} size={size} />;
 export const GraphSpanIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphSpanSvg} size={size} />;
+// ⚑ The segments share an edge and differ only in fill, because that IS the
+// type: one column cut at measured boundaries, not bars side by side.
+export const GraphStackedIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphStackedSvg} size={size} />;
 export const GraphCandlestickIcon = ({ size }: GraphIconProps = {}) => (
   <Icon svg={graphCandlestickSvg} size={size} />
 );
@@ -249,6 +253,7 @@ export const GRAPH_TYPE_ICONS: Record<string, (props?: GraphIconProps) => React.
   boxplot: GraphBoxPlotIcon,
   candlestick: GraphCandlestickIcon,
   span: GraphSpanIcon,
+  stacked: GraphStackedIcon,
   polar: GraphPolarIcon,
   spider: GraphSpiderIcon,
   pie: GraphPieIcon,

@@ -104,7 +104,7 @@ describe('the config table - cross-cutting invariants', () => {
     // inconsistency in the family: it fell to the generic tuple table and listed
     // its boxes in CLICK ORDER while its neighbours listed theirs by category.
     const EXPECTED: Record<string, string[]> = {
-      bar: ['bar', 'boxplot', 'candlestick', 'span'],
+      bar: ['bar', 'boxplot', 'candlestick', 'span', 'stacked'],
       bins: ['histogram'],
       heatmap: ['heatmap'],
       spider: ['spider'],
@@ -147,7 +147,7 @@ describe('the config table - cross-cutting invariants', () => {
     // ⚑ Not vacuous: four of them today - Bar, Span, Box Plot and Candlestick.
     // The last of those arrived in v2.5 and needed nothing here but its own
     // config, which is what this invariant is for.
-    expect(barPanel).toHaveLength(4);
+    expect(barPanel).toHaveLength(5);
   });
 
   it('⚑⚑ ...and it is the type that STANDS on its origin which offers a baseline', () => {
@@ -157,8 +157,14 @@ describe('the config table - cross-cutting invariants', () => {
     // SEVERED by the rule at zero. A type without it is the mirror image: it
     // floats, so the swatch test has nothing to discriminate, and it straddles
     // the rule, so it needs the join. See `algorithms/ruleJoin.ts`.
+    // ⚑ STACKED IS ANCHORED TOO, and for the same reason rather than by
+    // inheritance: a stacked column STANDS on the baseline - series 1's base IS
+    // the origin, by definition - so the whole column is fixed to it exactly as
+    // a bar is. Only the segments ABOVE the first are measured from something
+    // else, and what they are measured from is another segment of the same
+    // anchored column.
     const anchored = ALL.filter((c) => c.measuredFromFigureOrigin).map((c) => c.id);
-    expect(anchored).toEqual(['bar']);
+    expect(anchored.sort()).toEqual(['bar', 'stacked']);
     // The span is captured the same way and declares the opposite.
     expect(ALL.find((c) => c.id === 'span')?.measuredFromFigureOrigin).toBeUndefined();
   });
@@ -559,6 +565,8 @@ describe('the config table - how many clicks each type asks for', () => {
       heatmap: 8,
       // Shares Bar's fixedSteps by reference, so it asks the same four.
       span: 4,
+      // Identical to Bar, which is the point of the type.
+      stacked: 4,
       // Same again: a candlestick's WALK is a box plot's, and only the number
       // of marks per datum differs (four, not five). The calibration is a bar
       // chart's either way.

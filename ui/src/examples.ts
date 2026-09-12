@@ -133,7 +133,11 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   // Stacked: each segment its own drag-box (v2.0's capture model), not a
   // shared-baseline reading -- the case stackGroup/derivedTupleValue's
   // SPAN-not-cumulative rule exists for.
-  { id: 'bar-stacked', name: 'Quarterly cost breakdown', src: barStackedSample, axes: 'bar' },
+  // ⚑⚑ MOVED TO STACKED (2026-09-12), for the same reason the floating figure
+  // moved to Span: this is the figure the type exists for. Every column is one
+  // column cut at measured boundaries, and Bar now means what its name says with
+  // no mode-changing checkbox left on it at all.
+  { id: 'bar-stacked', name: 'Quarterly cost breakdown', src: barStackedSample, axes: 'stacked' },
   // Floating: neither end is the chart's baseline, and several bars cross
   // zero -- the case the two-corner drag-box exists for (no baseline to
   // assume, unlike an ordinary bar).

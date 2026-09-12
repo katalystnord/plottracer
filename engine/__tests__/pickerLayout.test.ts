@@ -36,27 +36,38 @@ describe('the graph-type picker lays out as agreed', () => {
   it('puts every type where David placed it', () => {
     expect(rows()).toEqual([
       ['XY', 'Line', 'Histogram'],
-      ['Bar', 'Span chart', 'Pie / Donut'],
-      ['Box Plot', 'Candlestick', 'Spider / Radar'],
-      ['Heatmap', 'Map', 'Ternary'],
-      ['Polar', 'Circular Chart Recorder'],
+      ['Bar', 'Span chart', 'Stacked bar'],
+      ['Box Plot', 'Candlestick', 'Pie / Donut'],
+      ['Heatmap', 'Map', 'Spider / Radar'],
+      ['Polar', 'Ternary', 'Circular Chart Recorder'],
     ]);
   });
 
-  it('⚑ keeps the bar family a 2x2 BLOCK, which is what a single row could not do', () => {
+  it('⚑ keeps the bar family a BLOCK, which is what a single row could not do', () => {
     // One measured value vs N named ones reads DOWN the columns; simple vs
-    // compound reads ACROSS. Bar sits above Box Plot, Span above Candlestick.
+    // compound reads ACROSS. Widened to 3x2 in 2026-09-12 when Stacked bar
+    // arrived: the top row is EXTENTS AGAINST A BASELINE - Bar reports a
+    // position, Span two ends, Stacked a chain of magnitudes - and the row under
+    // it stays N NAMED VALUES AT A CATEGORY.
     const grid = rows();
-    expect([grid[1]![0], grid[1]![1]]).toEqual(['Bar', 'Span chart']);
+    expect(grid[1]).toEqual(['Bar', 'Span chart', 'Stacked bar']);
     expect([grid[2]![0], grid[2]![1]]).toEqual(['Box Plot', 'Candlestick']);
   });
 
-  it('⚑ keeps Pie beside Bar, because they carry the same record', () => {
-    // A category and one magnitude, either way it is drawn. Round is a rendering
-    // choice, not a family - which is the shape-first argument this replaced.
-    const barRow = rows()[1]!;
-    expect(barRow).toContain('Bar');
-    expect(barRow).toContain('Pie / Donut');
+  it('⚠️ Pie is NO LONGER beside Bar, and that is a cost taken knowingly', () => {
+    // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, with a stated reason: Pie and Bar
+    // carry the same record - a category and one magnitude - and round is a
+    // rendering choice, not a family. That reason did not stop being true. Pie
+    // is simply no longer ADJACENT, because Stacked bar joined the family row
+    // and pushed it down.
+    //
+    // ⚑ It is pinned as a cost rather than edited to match the grid, because a
+    // silently updated assertion would leave the next reader believing the
+    // layout still encodes a rule it no longer does on this row. David approved
+    // the grid knowing this.
+    const grid = rows();
+    expect(grid[1], 'the family row is extents against a baseline').not.toContain('Pie / Donut');
+    expect(grid[2], 'Pie sits with the N-named-value row instead').toContain('Pie / Donut');
   });
 
   it('is not vacuous - every registered type appears exactly once', () => {

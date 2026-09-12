@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG,
   CATEGORICAL_LINE_CONFIG,
   BOX_PLOT_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
@@ -9,6 +10,21 @@ import {
 import { Calibration } from '../../core/calibration.js';
 import { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
+
+/** The same figure on the STACKED type. ⚑ `isStacked` was a checkbox on Bar
+ *  until 2026-09-12; a stacked chart is its own type now, calibrated identically
+ *  to a Bar - which is the point of it. */
+function calibratedStacked(options: Record<string, string> = {}): CalibrationSession<BarAxes> {
+  const s = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
+  for (const [key, value] of Object.entries(options)) s.setOption(key, value);
+  s.handleCalibrationClick(300, 500);
+  s.confirmCalibrationValues(['0']);
+  s.handleCalibrationClick(300, 100);
+  s.confirmCalibrationValues(['10']);
+  walkCategoryAxis(s);
+  expect(s.runCalibration()).toBe(true);
+  return s;
+}
 
 /**
  * A bar's VALUE - the sign convention - and the file-load door that refuses a
@@ -226,7 +242,7 @@ describe("a bar's value - the sign convention", () => {
     // contribution to a stack is never negative.
     // ⚑ Declared on the AXES since v2.3 (`Stacked bars`, beside `Horizontal
     // bars` on the calibration card), not as a per-series free-text tag.
-    const s = calibratedBar({ isStacked: 'true' });
+    const s = calibratedStacked();
     expect(barValue(s, 150, 400, 200)).toBeCloseTo(5, 6);
     expect(barValue(s, 200, 200, 400)).toBeCloseTo(5, 6); // same span, drag reversed
   });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
+import { BAR_AXES_CONFIG,
+  STACKED_AXES_CONFIG, SPAN_AXES_CONFIG, CalibrationSession } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
@@ -234,29 +235,40 @@ describe('a span has no single VALUE - its record IS the interval', () => {
   });
 });
 
-describe('a stacked-bar segment (declared on the AXES since v2.3)', () => {
-  /** A calibrated bar session that declares the figure draws stacked bars. */
+describe('a stacked-bar segment (its own TYPE since 2026-09-12)', () => {
+  /** A calibrated session on the Stacked type. */
   function stackedBar(baselineValue = '0'): CalibrationSession<BarAxes> {
-    const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
-    session.setOption('isStacked', 'true');
+    const session = new CalibrationSession<BarAxes>(STACKED_AXES_CONFIG);
     session.setOption('baselineValue', baselineValue);
     calibratedBar(session);
     return session;
   }
 
-  it('⚑⚑ the declaration is asked ONCE, on the calibration card, not per series', () => {
-    // It replaces `Stack group`, a per-series free-text field whose NAME was
-    // never read: its only consumer tested it for non-empty, so any two strings
-    // behaved identically. David: *"THIS is where we should ask if the bars are
-    // stacked!"* - beside the two questions of the same kind already there.
-    const keys = BAR_AXES_CONFIG.options?.map((o) => o.key) ?? [];
-    expect(keys).toContain('isStacked');
-    expect(keys).toContain('isRotated');
+  it('⚑⚑ it is a TYPE now, not a checkbox on Bar', () => {
+    // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and its reason was good at the
+    // time: `isStacked` replaced `Stack group`, a per-series free-text field
+    // whose name was never read, and David put it on the card - *"THIS is where
+    // we should ask if the bars are stacked!"* - beside the two questions of the
+    // same kind already there.
+    //
+    // What changed is not where the question is asked but WHAT THE ANSWER DOES.
+    // A stacked chart reports a different quantity from the same clicks: a
+    // magnitude measured from the segment below, where a Bar reports a position
+    // measured from the baseline. That is a type, not a rendering option - the
+    // same line v2.5 drew taking floating bars out of Bar.
+    const barKeys = BAR_AXES_CONFIG.options?.map((o) => o.key) ?? [];
+    expect(barKeys, 'Bar carries no option that changes what its value means').not.toContain(
+      'isStacked'
+    );
+    expect(barKeys).toContain('isRotated');
     // ⚑ And NOT the origin, which is measured off the category axis (v2.5).
-    expect(keys).not.toContain('baselineValue');
+    expect(barKeys).not.toContain('baselineValue');
+    // The declaration rides on the axes, set by the type rather than a checkbox,
+    // so it cannot be half-on.
+    expect(stackedBar().getAxes()!.isStacked()).toBe(true);
   });
 
-  it('defaults to not stacked, which is the ordinary bar chart', () => {
+  it('a Bar is never stacked, whatever its options say', () => {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
     expect(session.getAxes()!.isStacked()).toBe(false);

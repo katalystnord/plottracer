@@ -224,7 +224,7 @@ describe('⚑⚑ EVERY REGISTERED TYPE gets a coherent card - a thirteenth canno
     // ⚑ Candlestick joined in v2.5 with the rest of Box Plot's walk: it marks
     // the same category axis, in the same stage, and got it by sharing the
     // declaration rather than by growing one of its own.
-    expect(withStage).toEqual(['bar', 'boxplot', 'candlestick', 'categorical', 'heatmap', 'span']);
+    expect(withStage).toEqual(['bar', 'boxplot', 'candlestick', 'categorical', 'heatmap', 'span', 'stacked']);
   });
 
   it('⚑ every type that marks CATEGORY TICKS declares the stage that marks them', () => {
