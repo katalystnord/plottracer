@@ -1716,7 +1716,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           if (file) loadImageFile(file);
         }}
       >
-        <canvas ref={canvasRef} style={{ display: 'block', ...previewCss }} />
+        <canvas data-testid="base-canvas" ref={canvasRef} style={{ display: 'block', ...previewCss }} />
         {dragOver && (
           <div
             data-testid="drop-hint"

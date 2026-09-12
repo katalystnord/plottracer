@@ -135,6 +135,10 @@ export interface ImageEditCardProps {
    * true from the Crop click until Apply/Cancel; once the user has dragged a
    * rectangle, `cropPending` holds its pixel size and the Apply button enables. */
   onStartCrop?: () => void;
+  /** Mask (2026-09-12): the same drag-rectangle, ending in paint rather than a
+   *  crop. `cropIntent` says which ending the armed rectangle is headed for. */
+  onStartMask?: () => void;
+  cropIntent?: 'crop' | 'mask';
   cropArmed?: boolean;
   cropPending?: { width: number; height: number } | null;
   onApplyCrop?: () => void;
@@ -158,6 +162,8 @@ export function ImageEditCard({
   onEdit,
   disabled = false,
   onStartCrop,
+  onStartMask,
+  cropIntent = 'crop',
   cropArmed = false,
   cropPending = null,
   onApplyCrop,
@@ -190,17 +196,32 @@ export function ImageEditCard({
               </ToolButton>
             ))}
           </ToolRow>
-          <WideButton type="button" data-testid="image-edit-crop" active={cropArmed} onClick={onStartCrop} disabled={disabled}>
+          <WideButton type="button" data-testid="image-edit-crop" active={cropArmed && cropIntent === 'crop'} onClick={onStartCrop} disabled={disabled}>
             Crop…
+          </WideButton>
+          {/* ⚑⚑ MASK AN AREA. A legend drawn inside the plot box wears the
+              series' own ink at the series' own size, so no colour filter, size
+              test or plot-box gate can tell it from the data it describes - the
+              person looking at the figure is the only instrument that can, and
+              this is where they say it. It paints the area out with the paper
+              colour measured around it, so the trace, the bar detect, the blob
+              detect and the OCR band all stop seeing it at once. */}
+          <WideButton type="button" data-testid="image-edit-mask" active={cropArmed && cropIntent === 'mask'} onClick={onStartMask} disabled={disabled}>
+            Mask an area…
           </WideButton>
           {cropArmed ? (
             <CropBar data-testid="crop-bar">
               {cropPending ? (
                 <span>
-                  Crop to <b>{Math.round(cropPending.width)}×{Math.round(cropPending.height)}</b> px
+                  {cropIntent === 'mask' ? 'Mask ' : 'Crop to '}
+                  <b>{Math.round(cropPending.width)}×{Math.round(cropPending.height)}</b> px
                 </span>
               ) : (
-                <span>Drag a rectangle over the area to keep.</span>
+                <span>
+                  {cropIntent === 'mask'
+                    ? 'Drag a rectangle over the area to paint out, such as a legend.'
+                    : 'Drag a rectangle over the area to keep.'}
+                </span>
               )}
               <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
                 <button type="button" data-testid="crop-apply" onClick={onApplyCrop} disabled={!cropPending} style={{ fontSize: 11, padding: '0 6px' }}>
@@ -212,7 +233,7 @@ export function ImageEditCard({
               </span>
             </CropBar>
           ) : (
-            <Hint>Rotate, flip, or crop the image. Calibration and points move with it.</Hint>
+            <Hint>Rotate, flip, crop, or mask part of the image. Calibration and points move with it.</Hint>
           )}
           <div style={{ height: 1, background: theme.color.border.regular, margin: '2px 0' }} />
           <StraightenRow>

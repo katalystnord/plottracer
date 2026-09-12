@@ -7042,6 +7042,86 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     expect(await page.getByTestId('crop-bar').count()).toBe(0);
   });
 
+  /**
+   * ⚑⚑ MASK AN AREA - the legend that no measurement can refuse.
+   *
+   * David, 2026-09-12, after an inset legend was traced as data again and again:
+   * *"the legend on the graph still keeps on causing issues. Can it be masked?"*
+   * A legend inside the plot box draws the series' own ink at roughly the
+   * series' own size, so colour, size and a plot-box gate all fail to separate
+   * it from the bars it describes. The person looking at the figure can, and
+   * this is the gesture: the SAME drag-rectangle the crop already uses, ending
+   * in paint instead of a crop.
+   *
+   * ⚑ GATE 4: the walk clicks only what the card's own prompt asks for - "Drag a
+   * rectangle over the area to paint out, such as a legend" - and then Apply.
+   */
+  it('⚑⚑ masks a dragged rectangle out of the figure, leaving the image and the data where they are', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175); // a data point reading (5, 5)
+
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-mask').click();
+    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/paint out/i);
+    expect(await page.getByTestId('crop-apply').isDisabled()).toBe(true);
+
+    // A patch of the figure's own ink, well right of the folded-out card.
+    // ⚠️ Measured against the CANVAS ELEMENT's own box, not the container's: the
+    // fitted image is centred inside the container with an offset, so a
+    // coordinate taken from one frame and read back in the other is shifted by
+    // it - which is how this test first failed, sampling the edge of the mask
+    // instead of its middle.
+    const cbox = (await page.getByTestId('base-canvas').boundingBox())!;
+    const at = (fx: number, fy: number) => ({ x: cbox.x + cbox.width * fx, y: cbox.y + cbox.height * fy });
+    const readAt = (fx: number, fy: number) =>
+      page.getByTestId('base-canvas').evaluate((el, f) => {
+        const c = el as HTMLCanvasElement;
+        const d = c
+          .getContext('2d')!
+          .getImageData(Math.round(f.fx * c.width), Math.round(f.fy * c.height), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      }, { fx, fy });
+
+    // ⚑ The instrument first: this area must actually HOLD ink, or "it is all
+    // one colour afterwards" would be true before the mask was applied and the
+    // case would prove nothing.
+    const before = [await readAt(0.6, 0.2), await readAt(0.8, 0.5), await readAt(0.7, 0.35)];
+    expect(
+      new Set(before.map((c) => c.join(','))).size,
+      'the area to be masked must not already be blank'
+    ).toBeGreaterThan(1);
+
+    const sizeBefore = await textOf('view-state');
+    const from = at(0.55, 0.15);
+    const to = at(0.85, 0.55);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/Mask/);
+
+    await page.getByTestId('crop-apply').click();
+    await page.waitForTimeout(400);
+
+    // ⚑ The masked area is now one flat colour - whatever ink was there is gone,
+    // so nothing downstream can read it as data.
+    const corners = [await readAt(0.6, 0.2), await readAt(0.8, 0.5), await readAt(0.7, 0.35)];
+    expect(corners[1], 'the masked area is uniform').toEqual(corners[0]);
+    expect(corners[2], 'and its middle is the same colour').toEqual(corners[0]);
+
+    // ⚑⚑ Masking removes EVIDENCE, not geometry: the image is the same size, the
+    // point still reads (5, 5), and nothing claims the figure was cropped.
+    expect(await textOf('view-state'), 'the view did not refit - no crop happened').toBe(sizeBefore);
+    const cells = await page.locator('[data-testid^="point-row-"]').first().locator('td').allInnerTexts();
+    const vals = cells.slice(1).map((c) => c.trim()).filter(Boolean).map(Number);
+    expect(vals[0]).toBeCloseTo(5, 1);
+    expect(vals[1]).toBeCloseTo(5, 1);
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
+    expect(await page.getByTestId('provenance').count(), 'a mask is not a crop').toBe(0);
+  });
+
   it('a crop drag can START under the fold-out card (v1.0 audit fix)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

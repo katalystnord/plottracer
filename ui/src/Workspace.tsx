@@ -128,6 +128,7 @@ import { useTraceChallenge, type TraceChallengeHost } from './games/useTraceChal
 import {
   applyImageEditOp,
   cropImage,
+  maskRegion,
   clampCropRect,
   rotateImageByAngle,
   straightenAngleFromPoints,
@@ -958,6 +959,18 @@ export function Workspace() {
   // into pixels only on Apply.
   const [previewAngle, setPreviewAngle] = useState(0);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
+  /**
+   * What the armed drag-rectangle is FOR: cropping the figure, or masking part
+   * of it out.
+   *
+   * ⚑ ONE MARQUEE, TWO ENDINGS (David, 2026-09-12: *"the legend on the graph
+   * still keeps on causing issues. Can it be masked?"*). Drawing a rectangle
+   * over the image is a gesture this card already has, drawn, hinted and
+   * escapable - so masking gets the SAME one rather than a second rectangle
+   * tool that looks different and means nearly the same thing. Mirror, don't
+   * merely match.
+   */
+  const [cropIntent, setCropIntent] = useState<'crop' | 'mask'>('crop');
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
   // adjusts this width (fed to the shell grid as a CSS variable), clamped so it
   // can't swallow the canvas or shrink below the controls' minimum.
@@ -1904,6 +1917,12 @@ export function Workspace() {
   const startCrop = useCallback(() => {
     setCropMode(true);
     setCropRect(null);
+    setCropIntent('crop');
+  }, []);
+  const startMask = useCallback(() => {
+    setCropMode(true);
+    setCropRect(null);
+    setCropIntent('mask');
   }, []);
   const cancelCrop = useCallback(() => {
     setCropMode(false);
@@ -1917,6 +1936,19 @@ export function Workspace() {
     // returns null for a degenerate rect; guard on the same clamp so a no-op
     // drag records nothing. Append after the transform so a failed crop can't
     // leave a phantom entry.
+    // ⚑⚑ MASKING IS NOT A CROP AND RECORDS NO PROVENANCE. A crop says "the
+    // figure of record is this part of what I was given", which a reader needs
+    // to know. A mask says "this area held no data", which changes no
+    // coordinate and moves no point - the image keeps its size and its
+    // geometry, and the only thing that leaves is evidence the user told us was
+    // not evidence. It rides the same undo as every other image edit.
+    if (cropIntent === 'mask') {
+      const masked = maskRegion(img.data, img.width, img.height, cropRect);
+      setCropMode(false);
+      setCropRect(null);
+      if (masked) applyPixelTransform(masked, false);
+      return;
+    }
     const clamped = clampCropRect(cropRect, img.width, img.height);
     const result = cropImage(img.data, img.width, img.height, cropRect);
     setCropMode(false);
@@ -1930,7 +1962,7 @@ export function Workspace() {
       applyProvenance({ ...provenanceRef.current, crops: [...(provenanceRef.current.crops ?? []), entry] });
       applyPixelTransform(result, true);
     }
-  }, [cropRect, applyPixelTransform, applyProvenance]);
+  }, [cropRect, cropIntent, applyPixelTransform, applyProvenance]);
 
   // Capture figure (checkpoint 102) -- the first step of the calibration
   // pipeline, and the design's keystone. The
@@ -8976,6 +9008,8 @@ export function Workspace() {
               onEdit={applyImageEdit}
               disabled={!canvasHasImage}
               onStartCrop={startCrop}
+              onStartMask={startMask}
+              cropIntent={cropIntent}
               cropArmed={cropMode}
               cropPending={cropRect ? { width: cropRect.width, height: cropRect.height } : null}
               onApplyCrop={applyCrop}

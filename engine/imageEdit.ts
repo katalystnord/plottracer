@@ -207,3 +207,96 @@ export function applyImageEditOp(op: ImageEditOp, src: Uint8ClampedArray, w: num
 
   return { data: dst, width: nw, height: nh, mapPoint };
 }
+
+/**
+ * The colour the figure's paper is, measured on the ring of pixels immediately
+ * OUTSIDE a rectangle.
+ *
+ * ⚑ MEASURED, NOT ASSUMED (tenet 9). "Figures are white" is an assumption that
+ * is wrong on every journal that tints its panels, on a grey-backed plot area
+ * and on a screenshot taken from a slide. The pixels next to the thing being
+ * masked already say what the paper under it is, so we read them instead of
+ * declaring it. Modal rather than mean: a mean of white paper and a black frame
+ * line is grey, a colour neither present nor plausible, and a trace would then
+ * find a grey rectangle where the legend used to be.
+ */
+export function paperColourAround(
+  src: Uint8ClampedArray,
+  w: number,
+  h: number,
+  rect: CropRect,
+  ring = 3
+): [number, number, number] {
+  const c = clampCropRect(rect, w, h);
+  const counts = new Map<number, number>();
+  if (c) {
+    const x0 = Math.max(0, c.x - ring);
+    const y0 = Math.max(0, c.y - ring);
+    const x1 = Math.min(w, c.x + c.width + ring);
+    const y1 = Math.min(h, c.y + c.height + ring);
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        const inside = x >= c.x && x < c.x + c.width && y >= c.y && y < c.y + c.height;
+        if (inside) continue;
+        const s = (y * w + x) * 4;
+        const key = (src[s]! << 16) | (src[s + 1]! << 8) | src[s + 2]!;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  let best = -1;
+  let bestCount = 0;
+  for (const [key, n] of counts) {
+    if (n > bestCount) {
+      bestCount = n;
+      best = key;
+    }
+  }
+  // Nothing to read (the rectangle covers the whole image, or it is degenerate):
+  // white is the only answer left, and it is the one a reader would guess.
+  if (best < 0) return [255, 255, 255];
+  return [(best >> 16) & 255, (best >> 8) & 255, best & 255];
+}
+
+/**
+ * ⚑⚑ MASK AN AREA OF THE FIGURE - paint it out with the paper colour around it.
+ *
+ * David, 2026-09-12, after a legend drawn INSIDE the plot box kept being read as
+ * data by trace after trace: *"the legend on the graph still keeps on causing
+ * issues. Can it be masked?"* A legend's swatches are the series' own ink, at
+ * the series' own size, inside the plot area - so no colour filter, no size
+ * test and no plot-box gate can tell them from the bars they describe. The only
+ * thing that can is the person looking at the figure, and this is how they say
+ * it.
+ *
+ * ⚑ AN IMAGE EDIT, NOT A SETTING ON ONE MECHANISM. The legend is not in the way
+ * of the colour trace in particular: it is in the way of the colour trace, the
+ * bar detect, the blob detect, the flood fill and the OCR band, each of which
+ * reads raw pixels through a door of its own. Masking the pixels once means
+ * every one of them honours it without being taught to, and it rides the same
+ * undo, the same snapshot and the same save as a crop. Tenet 10.
+ *
+ * ⚑ The image keeps its size and every point stays where it is (identity
+ * mapPoint), unlike a crop - masking removes EVIDENCE, not geometry.
+ */
+export function maskRegion(
+  src: Uint8ClampedArray,
+  w: number,
+  h: number,
+  rect: CropRect
+): ImageEditResult | null {
+  const c = clampCropRect(rect, w, h);
+  if (!c) return null;
+  const [r, g, b] = paperColourAround(src, w, h, c);
+  const dst = new Uint8ClampedArray(src);
+  for (let y = c.y; y < c.y + c.height; y += 1) {
+    for (let x = c.x; x < c.x + c.width; x += 1) {
+      const d = (y * w + x) * 4;
+      dst[d] = r;
+      dst[d + 1] = g;
+      dst[d + 2] = b;
+      dst[d + 3] = 255;
+    }
+  }
+  return { data: dst, width: w, height: h, mapPoint: (px, py) => ({ x: px, y: py }) };
+}
