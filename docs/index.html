@@ -428,64 +428,55 @@
   </div>
 </section>
 
-<!-- ===================== WHAT'S NEW IN 2.4 ===================== -->
+<!-- ===================== WHAT'S NEW IN 2.5 ===================== -->
 <section class="whatsnew">
   <div class="wrap">
     <div class="wn-head">
-      <span class="eyebrow">New in 2.4</span>
-      <h2>The release that stopped making you type.</h2>
-      <p>Category names are read off the figure. Bars filled with a hatch come back as
-        bars rather than stripes. A bar is measured to the outside of its own outline.
-        And the download got smaller while all of that was added to it.</p>
+      <span class="eyebrow">New in 2.5</span>
+      <h2>The release that learned what a band is.</h2>
+      <p>Span charts, candlesticks, and stacked bars rebuilt as their own connected type.
+        A legend drawn inside the plot can be painted out. Labels are read off a heatmap's
+        own columns and rows. And a heatmap axis now says what kind it is, which decides
+        where its cell boundaries come from.</p>
     </div>
     <div class="wn-grid">
 
       <div class="wn">
-        <h3>Read the category names off the figure</h3>
-        <p>Drag one box round the row of labels under the axis and every name comes back at
-          once. The band is cut at the category boundaries you already marked, so each label
-          is read on its own rather than the whole axis being read as one strip - which does
-          not work, and was measured not working.</p>
+        <h3>A stacked bar is its own chart type</h3>
+        <p>Its segments are connected: a segment's base <b>is</b> the top of the one below,
+          so the edge the figure drew once is measured once. The value reported is a
+          height rather than a position on the axis, and moving a boundary carries the
+          stack above it, whether you drag it or type it.</p>
       </div>
 
       <div class="wn">
-        <h3>Nothing is written until you say so</h3>
-        <p>The readings arrive in an offer window, one row per category, and
-          <b>each row shows the pixels it was read from</b> beside the name made of them.
-          Correct anything wrong, then apply. A row left empty is left alone: an empty
-          reading means nothing was read, never erase this name.</p>
+        <h3>Span charts and candlesticks</h3>
+        <p>A span is captured by its two ends, because a range is what the figure drew.
+          A candlestick reads which way the period went from the figure's own colours,
+          and says what it read before offering to change it.</p>
       </div>
 
       <div class="wn">
-        <h3>Labels printed sideways are handled</h3>
-        <p>Every region is read at all four quarter turns, and the <em>axis</em> decides which
-          way its labels run rather than each label deciding for itself. Any row can still be
-          turned by hand, and its picture turns with it, so you can see what the reader is
-          looking at.</p>
+        <h3>Mask the legend out of the way</h3>
+        <p>A legend drawn inside the plot box wears the series' own ink at the series'
+          own size, so no colour filter and no plot-area rule can tell it from the bars
+          it describes. Drag a box over it and it is painted out with the paper colour
+          measured around it - once, for every mechanism that reads pixels.</p>
       </div>
 
       <div class="wn">
-        <h3>A hatched bar is one bar</h3>
-        <p>A hatch cuts a bar into stripes, and colour alone hands back the stripes.
-          PlotTracer joins them, using the category boundaries you marked as the evidence that
-          a pile of pieces is a single bar - so patterned and print-ready figures read like
-          any other.</p>
+        <h3>Heatmap names, read off the figure</h3>
+        <p>The label reader now serves a heatmap's own columns and rows, the same drag
+          and the same review card as any other category chart. A piece of bar ink caught
+          in the label band no longer rides into the name it was read beside.</p>
       </div>
 
       <div class="wn">
-        <h3>A bar is measured to the outside of its outline</h3>
-        <p>A figure that strokes its bars draws that stroke in a colour the trace does not
-          match, so every outlined bar used to read low by about a pixel - the kind of bias a
-          person cannot see and cannot correct. The stroke is now measured and crossed. A
-          figure that draws no outline is untouched.</p>
-      </div>
-
-      <div class="wn">
-        <h3>A smaller download, with OCR added</h3>
-        <p>The Linux <span class="data">.deb</span> went from
-          <span class="data">106.3 MB</span> to <span class="data">93.2 MB</span> while
-          gaining an OCR engine and its language data. Every release until now packaged about
-          107 MB of library code nothing in the app could reach.</p>
+        <h3>A measured axis is asked different questions</h3>
+        <p>A named heatmap axis derives its bands from a declared count, so it is asked
+          whether the figure's marks sit between the bands or under them. A measured axis
+          is asked neither: its boundaries are in the ink, its clicks are the extent, and
+          its cells are identified by their coordinates.</p>
       </div>
 
     </div>
@@ -919,7 +910,13 @@
         <b>Linux</b><span class="data">.AppImage · .deb</span>
       </a>
     </div>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v2.4.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="lede" style="margin:18px auto 0;">
+      The <a href="manual.pdf"><b>User Guide</b></a> is a 34-page PDF covering every chart
+      type and every workflow in the app - calibration walk by walk, the automatic and
+      manual extraction routes, reading labels off a figure, and what each type records
+      and why. Free to read without installing anything.
+    </p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v2.5.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
