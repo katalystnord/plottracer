@@ -370,6 +370,26 @@
     </div>
       <article class="rel">
         <div class="rel-head">
+          <span class="rel-ver data">2.5.0</span>
+          <span class="rel-when">2026-09</span>
+        </div>
+        <div class="rel-body">
+          <h2>The release that learned what a band is</h2>
+          <p class="rel-lede">Three chart types join the picker and a fourth is rebuilt, a legend drawn inside the plot can be painted out, and the difference between a coordinate and a category stopped being a detail.</p>
+          <ul>
+        <li>Span charts capture a range by its two ends, and candlesticks read which way the day went from the figure's own colours rather than asking you.</li>
+        <li>Stacked bar is its own chart type, because its segments are connected. A segment's base is the top of the one below, read once; the value reported is a height rather than a position on the axis; and moving a boundary carries the stack above it, whether you drag it or type it.</li>
+        <li>Mask an area paints part of the figure out with the paper colour measured around it. It is the answer to a legend drawn inside the plot box: its swatches are the series' own ink at the series' own size, so no colour filter or plot-area rule can tell them from the bars they describe.</li>
+        <li>Reading labels off the figure reaches a heatmap's own columns and rows, and a piece of bar ink caught in the label band no longer rides into the name it was read beside.</li>
+        <li>A heatmap axis says what kind it is, and that decides what it is asked. A named axis derives its bands from a declared count, so it is asked whether the figure's marks sit between the bands or under them. A measured axis is asked neither: its boundaries are in the ink, its clicks are the extent, and its cells are identified by their coordinates.</li>
+        <li>Polar and ternary read the frame and the triangle your own clicks describe, and a model that cannot read back its own calibration points refuses rather than reporting numbers from it.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.5.0">Full release notes for 2.5.0</a></p>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-head">
           <span class="rel-ver data">2.4.0</span>
           <span class="rel-when">2026-09</span>
         </div>
