@@ -388,6 +388,20 @@ async function confirmValues(values: readonly string[]) {
  * silently skipped. Returns the labels it answered, so a caller can say what
  * the figure actually asked.
  */
+/** Is this figure point behind the calibration card, where a click lands on the
+ *  card instead? The card's rectangle is read live, so this follows it if it
+ *  ever moves. */
+async function underTheCard(d: Driver, at: { px: number; py: number }): Promise<boolean> {
+  const card = await page.getByTestId('calibration-bar').boundingBox();
+  if (!card) return false;
+  const box = await page.locator('canvas').first().boundingBox();
+  if (!box) return false;
+  const [lx, ly] = await d.at(at.px, at.py);
+  const x = box.x + lx;
+  const y = box.y + ly;
+  return x >= card.x && x <= card.x + card.width && y >= card.y && y <= card.y + card.height;
+}
+
 async function walkCalibration(
   d: Driver,
   anchors: Record<string, { px: number; py: number; value?: unknown }>,
@@ -397,6 +411,7 @@ async function walkCalibration(
   drags: Record<string, string> = {}
 ) {
   const answered: string[] = [];
+  const answeredAnchors = new Set<unknown>();
   for (let guard = 0; guard < 14; guard += 1) {
     // ⚑⚑ THE TIPS BAR, NOT THE STEP MATRIX. The matrix marks the live step with
     // "click image", which is only true while a CLICK is what is wanted - a
@@ -406,8 +421,9 @@ async function walkCalibration(
     // actually needs, which is the sentence a user reads too.
     const tip = await d.text('tips-bar');
     if (process.env['SHOT_DEBUG'] === '1') {
+      // eslint-disable-next-line no-console
       console.log('TIP:', tip);
-      await page.screenshot({ path: `/home/david/icoprobe/shots/debug-${guard}.png` });
+      await page.screenshot({ path: path.join(OUT, `debug-${guard}.png`) });
     }
     const m = /Calibration step \d+\/\d+ - ([^:]{1,12}):/.exec(tip);
     const label = m ? m[1]!.trim() : null;
@@ -422,11 +438,27 @@ async function walkCalibration(
     const numbered = /^([a-z]+)(\d+)$/.exec(key);
     const stem = numbered ? (ANCHOR_KEY[numbered[1]!] ?? numbered[1]!) : '';
     const list = numbered ? (anchors as Record<string, unknown>)[stem] : undefined;
-    const a = numbered
+    let a = numbered
       ? Array.isArray(list)
         ? (list[Number(numbered[2]) - 1] as { px: number; py: number; value?: unknown } | undefined)
         : anchors[`${stem}${numbered[2]}`]
       : anchors[key];
+    // ⚑⚑ A PERSON PICKS ANOTHER POINT ON THE RIM; SO DOES THIS. The calibration
+    // card sits over the top strip of the canvas, so a pie's topmost outline
+    // anchor is behind it and a click there reaches the card, not the figure.
+    // That is not a defect: the step asks for "three or more, spread around it"
+    // and there are plenty left, exactly as a user would see. What WAS wrong was
+    // this harness insisting on the truth file's anchors in the file's order -
+    // the probe being rigid where a person is not. Only a repeating step has
+    // spares to choose from; a named step names one point and keeps it.
+    if (Array.isArray(list) && a && (answeredAnchors.has(a) || (await underTheCard(d, a)))) {
+      for (const other of list as { px: number; py: number; value?: unknown }[]) {
+        if (answeredAnchors.has(other) || (await underTheCard(d, other))) continue;
+        a = other;
+        break;
+      }
+    }
+    if (a) answeredAnchors.add(a);
     if (!a) throw new Error(`step "${label}" (key ${key}) has no anchor; have ${Object.keys(anchors).join(',')}`);
     // ⚑ A step whose pixel is ALREADY PLACED (a reused corner) must not be
     // clicked again - the prompt says so in its own words, and clicking would
@@ -499,6 +531,15 @@ describe.runIf(RUN)('website gallery shots', () => {
         }
         await page.getByTestId('run-calibration').click();
         await page.waitForTimeout(700);
+        // ⚑⚑ THE GALLERY IS AN INSTRUMENT, SO IT MUST NOT PHOTOGRAPH A FAILURE
+        // AND CALL IT A FRAME. The pie card came back with "the outline points
+        // must lie on a circle" printed in red beside the figure and this test
+        // reported a pass, because nothing asked whether the walk had worked -
+        // the exact shape of defect the shots exist to catch.
+        const failure = await page.getByTestId('calibration-error').count();
+        if (failure > 0) {
+          throw new Error(`${card.name}: calibration refused - ${await page.getByTestId('calibration-error').innerText()}`);
+        }
 
         if (card.after) await card.after(d);
         {
