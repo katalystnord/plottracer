@@ -58,12 +58,12 @@ export interface HeatmapCardProps {
   canRemoveBoundary: boolean;
   /** What the figure PRINTS along each axis, comma separated, as typed. Blank
    * means the axis is a value axis and its coordinates are the numbers. */
-  xLabels: string;
-  yLabels: string;
-  onLabelsChange: (xLabels: string, yLabels: string) => void;
+  /** Arm the label reader for one of the two axes. */
+  onReadNames?: (axis: 'x' | 'y') => void;
+  /** Which axis the armed reader is waiting for, or null. */
+  readingNames?: 'x' | 'y' | null;
   /** Blur handler: a text edit becomes one undo entry when it ENDS, never one
    * per keystroke - the same rule every other text field here follows. */
-  onCommitPendingEdit: () => void;
   /** "3 of 5 named", or a warning that there are more names than cells. Empty
    * before anything has been typed. */
   xLabelCoverage: string;
@@ -102,10 +102,8 @@ export function HeatmapCard({
   selectedBoundary,
   onRemoveBoundary,
   canRemoveBoundary,
-  xLabels,
-  yLabels,
-  onLabelsChange,
-  onCommitPendingEdit,
+  onReadNames,
+  readingNames = null,
   xLabelCoverage,
   yLabelCoverage,
   regenerateWarning,
@@ -229,28 +227,49 @@ export function HeatmapCard({
                 box holding a COUNT, and two fields with the same word in one
                 panel is a question the user has to answer by experiment. Found
                 by reading a screenshot of the finished card. */}
-            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ minWidth: 84 }}>Column names</span>
-              <input
-                data-testid="heatmap-x-labels"
-                value={xLabels}
-                onChange={(e) => onLabelsChange(e.target.value, yLabels)}
-                onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated - left → right"
-                style={{ flex: 1, minWidth: 0 }}
-              />
-            </label>
-            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ minWidth: 84 }}>Row names</span>
-              <input
-                data-testid="heatmap-y-labels"
-                value={yLabels}
-                onChange={(e) => onLabelsChange(xLabels, e.target.value)}
-                onBlur={onCommitPendingEdit}
-                placeholder="names, comma separated - top → bottom"
-                style={{ flex: 1, minWidth: 0 }}
-              />
-            </label>
+            {/* ⚑⚑ READ THEM, OR TYPE THEM WHERE THEY ARE SHOWN - the same two
+                ways every other category type offers. David, 2026-09-13:
+                *"asking for an order name list and NOT offering an OCR
+                functionality is wrong"*, and *"the order list input should go
+                completely... we do not use it for the other category graphs"*.
+
+                ⚑⚑ THE COMMA LIST WAS A PARALLEL MECHANISM, which is why the
+                reader never reached it. A bar chart's names live on its category
+                axis, are read off the figure by the reader, and are corrected
+                one at a time in the table. The heatmap had a second way of doing
+                the same job - two strings with their own parser, formatter and
+                coverage readout - so the reader, which lands names on
+                CATEGORIES, had nothing to land on. Removing it is the reuse
+                rule, not a simplification: the per-name half already existed in
+                `HeatmapCellsTable`, whose own comment calls it "the same gesture
+                the bar chart's table uses".
+
+                ⚑ One button per axis, because a figure names its columns and
+                its rows in two different places and a single box could not say
+                which one it was about to read. */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                data-testid="heatmap-read-x-names"
+                onClick={() => onReadNames?.('x')}
+                disabled={!onReadNames}
+                style={{ flex: 1 }}
+              >
+                {readingNames === 'x' ? 'Drag a box round the column labels...' : 'Read column names'}
+              </button>
+              <button
+                type="button"
+                data-testid="heatmap-read-y-names"
+                onClick={() => onReadNames?.('y')}
+                disabled={!onReadNames}
+                style={{ flex: 1 }}
+              >
+                {readingNames === 'y' ? 'Drag a box round the row labels...' : 'Read row names'}
+              </button>
+            </div>
+            <span style={{ color: theme.color.text.secondary }}>
+              Or click a name in the Cells table to type it.
+            </span>
             {(xLabelCoverage || yLabelCoverage) && (
               <span data-testid="heatmap-label-coverage" style={{ color: theme.color.text.secondary }}>
                 {[xLabelCoverage && `Columns: ${xLabelCoverage}`, yLabelCoverage && `Rows: ${yLabelCoverage}`]

@@ -556,6 +556,35 @@ async function selectAutoExtract(mech: 'flood' | 'colour' | 'guide') {
   await page.locator(`[data-testid="auto-extract-${mech}"][aria-pressed="true"]`).waitFor({ state: 'visible' });
 }
 
+/**
+ * Name one heatmap band the way a user does now: double-click its name in the
+ * Cells table, type, Enter.
+ *
+ * ⚑ THE BULK COMMA BOXES ARE GONE (2026-09-13). David: *"the order list input
+ * should go completely... we do not use it for the other category graphs"* - a
+ * bar chart's names are read off the figure or corrected one at a time, and the
+ * heatmap's second way of doing the same job is what kept the reader away from
+ * it. So the tests name bands the same way the user does.
+ */
+async function nameHeatmapBand(axis: 'x' | 'y', band: number, name: string): Promise<void> {
+  const rows = await page.getByTestId('heatmap-row').count();
+  // Any row showing this band will do; the name belongs to the whole band.
+  for (let i = 0; i < rows; i += 1) {
+    const row = page.getByTestId('heatmap-row').nth(i);
+    const cell = row.getByTestId(`heatmap-${axis}-name-${band}`);
+    if ((await cell.count()) === 0) continue;
+    await cell.first().scrollIntoViewIfNeeded();
+    await cell.first().dblclick();
+    await page.waitForTimeout(120);
+    const editor = row.locator(`input[data-testid="heatmap-${axis}-name-${band}"]`);
+    await editor.fill(name);
+    await editor.press('Enter');
+    await page.waitForTimeout(150);
+    return;
+  }
+  throw new Error(`no ${axis} band ${band} on screen to name`);
+}
+
 describe('Workspace: XY axes', () => {
   it('completes a full 4-point calibration and reads back an exact data point', async () => {
     await resetWorkspace('xy');
@@ -9955,6 +9984,33 @@ describe('heatmap capture (v2.2)', () => {
     await openHeatmapGrid();
   }
 
+  /**
+   * Both axes NAMED - gene x sample, the commonest published heatmap there is,
+   * and the only shape on which both a column and a row can carry a name.
+   *
+   * ⚑ A named axis types a COUNT and no coordinate, on both ends of both axes,
+   * so the walk is three clicks and two numbers.
+   */
+  async function calibrateHeatmapBothCategorical() {
+    await page.getByTestId('calib-choice-xIsCategory-true').check();
+    await page.getByTestId('calib-choice-yIsCategory-true').check();
+    await page.waitForTimeout(150);
+    await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
+    await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y);
+    await confirmValue(String(truth.grid.x.length - 1));
+    await clickImagePixel(truth.frame.y2.x, truth.frame.y2.y);
+    await confirmValue('4');
+    await clickImagePixel(truth.key.from.x, truth.key.from.y);
+    await clickImagePixel(truth.key.to.x, truth.key.to.y);
+    for (const tick of truth.key.ticks) {
+      await clickImagePixel(tick.x, tick.y);
+      await confirmValue(String(tick.value));
+    }
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(250);
+    await openHeatmapGrid();
+  }
+
   /** The walk, declaring the given band counts rather than the figure's own. */
   async function calibrateHeatmapDeclaring(columns: string, rows: string) {
     const bands: Record<string, string> = { x2: columns, y2: rows };
@@ -10574,14 +10630,84 @@ describe('heatmap capture (v2.2)', () => {
     expect(await remove.isDisabled()).toBe(false);
   });
 
+  /**
+   * ⚑⚑ THE READER REACHES A HEATMAP'S OWN BANDS.
+   *
+   * David, 2026-09-13: *"asking for an order name list and NOT offering an OCR
+   * functionality is wrong"*, and *"the order list input should go completely -
+   * we do not use it for the other category graphs"*. A bar chart's names are
+   * read off the figure; the heatmap asked you to type them into a comma box,
+   * and the reason the reader never reached it is that the box WAS a second
+   * naming mechanism, so there were no categories for names to land on.
+   *
+   * ⚑ The geometry is the grid's own: its boundaries are the dividers the words
+   * are filed against, so `wordsToTicks` is reused unchanged. This walk proves
+   * the wiring end to end - armed, dragged, one row per column, applied onto
+   * the bands - rather than what any particular figure's text says.
+   */
+  it('⚑⚑ reads a heatmap\'s column names off the figure, onto its columns', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmapBothCategorical();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(300);
+
+    await page.getByTestId('heatmap-read-x-names').click();
+    await page.waitForTimeout(150);
+    expect(
+      await page.getByTestId('heatmap-read-x-names').innerText(),
+      'the button says what it is waiting for'
+    ).toMatch(/Drag a box/i);
+
+    // The row of labels under the plot, in image pixels through the live view.
+    // ⚑ Started well BELOW the axis line: the grid's own boundary handles sit
+    // on it, and a Konva handle takes the press before the stage's marquee ever
+    // sees it - which is why the first version of this walk read nothing at all.
+    const from = await imageToLocal(truth.frame.x1.x - 10, truth.frame.x1.y + 22);
+    const to = await imageToLocal(truth.frame.x2.x + 10, truth.frame.x1.y + 52);
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + from.lx, canvasBox.y + from.ly);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + to.lx, canvasBox.y + to.ly, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(2500);
+
+    await page.getByTestId('ocr-review-card').waitFor({ state: 'visible', timeout: 20000 });
+    const rows = await page.locator('[data-testid^="ocr-row-"]').count();
+    expect(rows, 'a row per column the box covered').toBeGreaterThan(0);
+
+    // ⚑ Corrected by hand, which is what the card is for. Whichever band the
+    // reader filed its first word under is the band this name belongs to - the
+    // walk is about the wiring, not about what this figure's text happens to
+    // say, so it follows the card rather than asserting an index.
+    const firstField = page.locator('[data-testid^="ocr-text-"]').first();
+    const band = (await firstField.getAttribute('data-testid'))!.split('-').pop()!;
+    await firstField.fill('BRCA1');
+    await page.getByTestId('ocr-apply').click();
+    await page.waitForTimeout(400);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    await showHeatmapTable();
+    const names = await page.locator('[data-testid="heatmap-row"] td:nth-child(3)').allTextContents();
+    expect(names, `the name landed on column ${Number(band) + 1}`).toContain('BRCA1');
+  }, 60000);
+
   it('NAMES the columns, and the names travel into the export beside the bounds', async () => {
     // ⚑⚑ "The label is the coordinate." The most common published heatmap is
     // category × category - gene × sample, confusion matrix, correlation matrix
     // - and an export reading `1, 2, 3` where the figure prints `BRCA1` cannot
     // be rejoined to anything the reader has. Driven through the card and out to
     // a real file, because that file is the product.
+    //
+    // ⚑⚑ A CATEGORICAL calibration now, and that is the point rather than a
+    // convenience. This used to name the bands of a value × value figure
+    // through the bulk comma boxes, which were the only way to do it - the
+    // table has always gated its per-band name editor on the band being a
+    // CATEGORY. With the boxes gone (2026-09-13) that gate is the whole rule,
+    // and it is the right one: on a named axis the printed name is what
+    // identifies the cell, while on a continuous one the coordinate already
+    // does and a name would be invented rather than read.
     await resetWorkspace('heatmap');
-    await calibrateHeatmap();
+    await calibrateHeatmapBothCategorical();
     await page.getByTestId('heatmap-detect').click();
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(400);
@@ -10592,9 +10718,17 @@ describe('heatmap capture (v2.2)', () => {
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
 
-    await page.getByTestId('heatmap-x-labels').fill('BRCA1, TP53, "EGFR, mut", KRAS');
-    await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
-    await page.waitForTimeout(300);
+    // ⚑ Named one band at a time, the way the card now offers - see
+    // `nameHeatmapBand`. Columns left to right are bands 0..n; rows are bands
+    // counted from the BOTTOM, which is what the order case below turns on.
+    await nameHeatmapBand('x', 0, 'BRCA1');
+    await nameHeatmapBand('x', 1, 'TP53');
+    await nameHeatmapBand('x', 2, 'EGFR, mut');
+    await nameHeatmapBand('x', 3, 'KRAS');
+    await nameHeatmapBand('y', 3, 'top');
+    await nameHeatmapBand('y', 2, 'upper');
+    await nameHeatmapBand('y', 1, 'lower');
+    await nameHeatmapBand('y', 0, 'bottom');
     // The card counts rather than refuses - four names on a five-column figure
     // is someone part-way through, not an error.
     expect(await textOf('heatmap-label-coverage')).toMatch(/Columns: 4 of 5 named/);
@@ -10614,13 +10748,12 @@ describe('heatmap capture (v2.2)', () => {
     expect(first[3]).toBe('bottom');
     const lastRow = await page.getByTestId('heatmap-row').nth(rowCount - 1).locator('td').allTextContents();
     expect(lastRow[3]).toBe('top');
-    // ⚑ And the convention is still stated on screen - but IN the field it
-    // governs rather than as a sentence beneath it (v2.3, E6). A placeholder
-    // reading "left → right" is read at the moment of typing; a line of prose
-    // under two boxes is read never, and it was one of four such lines on this
-    // card. The fact survived; the paragraph did not.
-    expect(await page.getByTestId('heatmap-x-labels').getAttribute('placeholder')).toMatch(/left → right/);
-    expect(await page.getByTestId('heatmap-y-labels').getAttribute('placeholder')).toMatch(/top → bottom/);
+    // ⚑⚑ And the OTHER way in is offered, per axis. The bulk boxes carried the
+    // reading-order convention in their placeholders; naming a band in the
+    // table needs no convention at all, because you name the one you are
+    // looking at.
+    expect(await page.getByTestId('heatmap-read-x-names').isVisible()).toBe(true);
+    expect(await page.getByTestId('heatmap-read-y-names').isVisible()).toBe(true);
 
     const csvPath = heatmapTempFile('csv');
     await stubHeatmapSaveDialog(csvPath);
@@ -10633,7 +10766,16 @@ describe('heatmap capture (v2.2)', () => {
 
     // ⚑ The name is BESIDE the measured bounds, never instead of them: the
     // bounds are read off the pixels and stay true whatever the axis is called.
-    expect(csv).toMatch(/x label,y label,x min,x max,y min,y max,x centre,y centre,x width,y height,value/);
+    // ⚑ A named axis exports no centre or width for its bands - there is no
+    // coordinate to take a midpoint of - so the header is asserted on the part
+    // that both kinds share: identity, then the names, then the measured
+    // bounds.
+    // ⚑ A NAMED axis says so in its own column headings - "x min (category
+    // index)" - because a band index is not a millimetre and a reader joining
+    // this file to anything needs to know which it has.
+    expect(csv).toMatch(
+      /x label,y label,x min[^,]*,x max[^,]*,y min[^,]*,y max[^,]*,x centre[^,]*,y centre[^,]*,x width[^,]*,y height[^,]*,value/
+    );
     // ⚑ The first cell is col 0 / row 0 - the figure's BOTTOM-left - so it
     // carries the LAST row name typed. The order survives into the file.
     // ⚑ IDENTITY LEADS THE EXPORTED ROW TOO, unconditionally - David: *"whatever
@@ -10753,8 +10895,10 @@ describe('heatmap capture (v2.2)', () => {
     await openHeatmapGrid();
 
     // Name the rows top-down, then correct the TOP one from the table.
-    await page.getByTestId('heatmap-y-labels').fill('top, upper, lower, bottom');
-    await page.waitForTimeout(300);
+    await nameHeatmapBand('y', 3, 'top');
+    await nameHeatmapBand('y', 2, 'upper');
+    await nameHeatmapBand('y', 1, 'lower');
+    await nameHeatmapBand('y', 0, 'bottom');
     const rows = await page.getByTestId('heatmap-row').count();
     // The LAST table row is the top of the figure - that is where "top" went.
     const last = page.getByTestId('heatmap-row').nth(rows - 1);
@@ -10793,10 +10937,13 @@ describe('heatmap capture (v2.2)', () => {
 
     // It landed on the band that was clicked…
     expect((await page.getByTestId('heatmap-row').nth(rows - 1).locator('td').allTextContents())[3]).toBe('RENAMED');
-    // …and the typed list reads back in the SAME order, with only that one
-    // changed - proof the edit went through the reading-order mapping and not
-    // around it.
-    expect(await page.getByTestId('heatmap-y-labels').inputValue()).toBe('RENAMED, upper, lower, bottom');
+    // …and the rows BELOW it are untouched, which is the proof the edit went
+    // through the reading-order mapping rather than around it: a cell index
+    // written straight into the stored list would have moved a different row.
+    // The long form lists one row per CELL, so the bands repeat; the first and
+    // last rows are the two ends of the figure and are what the order turns on.
+    const firstRowName = (await page.getByTestId('heatmap-row').first().locator('td').allTextContents())[3];
+    expect(firstRowName, 'the bottom band is untouched').toBe('bottom');
   });
 
   it('links the picked CELL between the figure and the results, both ways', async () => {

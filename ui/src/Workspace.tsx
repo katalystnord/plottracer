@@ -1456,6 +1456,20 @@ export function Workspace() {
    * and approved by a person (David, 2026-08-30), so there is nothing to mark.
    */
   const [ocrArmed, setOcrArmed] = useState(false);
+  /**
+   * WHOSE names the armed reader is about to read.
+   *
+   * ⚑⚑ A HEATMAP'S COLUMNS AND ROWS ARE CATEGORIES TOO, and until now the
+   * reader could not reach them. David, 2026-09-13: *"asking for an order name
+   * list and NOT offering an OCR functionality is wrong"* - and the reason it
+   * was never offered is that the heatmap invented its own naming mechanism
+   * (two comma-separated strings with their own parser) instead of using the
+   * one every other category type shares, so the reader, which lands names on
+   * CATEGORIES, had nothing to land on. One flag is what the reader needed:
+   * the geometry it works from is dividers plus an axis line, and a heatmap's
+   * grid already holds both.
+   */
+  const [ocrTarget, setOcrTarget] = useState<'category' | 'x' | 'y'>('category');
   /** What the last look for the figure's own tick marks found. Per figure. */
   const [tickDetectNotice, setTickDetectNotice] = useState<string | null>(null);
   const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
@@ -2137,17 +2151,6 @@ export function Workspace() {
     [heatmapXLabels, heatmapYLabels]
   );
 
-  /**
-   * The band counts the CALIBRATION declared, per axis.
-   *
-   * ⚑ David: *"Why do I have to FIRST tell it that there are 5 rows in the
-   * calibration, and then 5 again? That should carry over."* It does - the walk
-   * asks once, for BOTH axis kinds, and this is the only reader.
-   *
-   * ⚑⚑ IT NO LONGER RETURNS NULL FOR A VALUE AXIS. That null is what the grid
-   * panel's own Columns/Rows boxes existed to fill, which made two places to
-   * answer one question - and only one of them was reachable on a numeric axis.
-   */
   const heatmapCounts = useCallback((): { columns: number; rows: number } => {
     const axes = sessionRef.current.getAxes();
     if (!axes) return { columns: NaN, rows: NaN };
@@ -2338,6 +2341,44 @@ export function Workspace() {
    * ⚑ Takes the readings as an ARGUMENT rather than off state, because the undo
    * path installs them in the same tick and React has not applied them yet.
    */
+  /**
+   * Write SEVERAL of one axis's names at once - what a read of the whole band
+   * produces.
+   *
+   * ⚑ One conversion, one write, one undo step. The single-name editor below is
+   * this with one entry; keeping them as one function is what stops the cell/
+   * reading-order conversion being written out twice and drifting.
+   */
+  const setHeatmapCategoryNames = useCallback(
+    (axis: 'x' | 'y', edits: readonly { bandIndex: number; name: string }[]) => {
+      const axesNow = sessionRef.current.getAxes();
+      if (!axesNow || !heatmapShownGrid || edits.length === 0) return;
+      const cellOrdered = labelsForCells(heatmapLabels, heatmapShownGrid, axesNow);
+      const next = [...(axis === 'x' ? cellOrdered.x : cellOrdered.y)];
+      for (const { bandIndex, name } of edits) {
+        while (next.length <= bandIndex) next.push('');
+        next[bandIndex] = name;
+      }
+      const edited = axis === 'x' ? { x: next, y: cellOrdered.y } : { x: cellOrdered.x, y: next };
+      const typed = labelsForCells(edited, heatmapShownGrid, axesNow);
+      applyHeatmapLabels(formatLabelList(typed.x), formatLabelList(typed.y));
+    },
+    [applyHeatmapLabels, heatmapLabels, heatmapShownGrid]
+  );
+
+
+  /**
+   * The band counts the CALIBRATION declared, per axis.
+   *
+   * ⚑ David: *"Why do I have to FIRST tell it that there are 5 rows in the
+   * calibration, and then 5 again? That should carry over."* It does - the walk
+   * asks once, for BOTH axis kinds, and this is the only reader.
+   *
+   * ⚑⚑ IT NO LONGER RETURNS NULL FOR A VALUE AXIS. That null is what the grid
+   * panel's own Columns/Rows boxes existed to fill, which made two places to
+   * answer one question - and only one of them was reachable on a numeric axis.
+   */
+
   const readCellsFor = useCallback(
     (grid: HeatmapState, readings: HeatmapCellReadings) => {
       const axesNow = sessionRef.current.getAxes();
@@ -2982,17 +3023,6 @@ export function Workspace() {
   const cancelPendingEdit = useCallback(() => {
     pendingEditRef.current = false;
   }, []);
-  /** Mark a text edit in progress from a handler declared ABOVE the ref.
-   *
-   * ⚑ The React Compiler refuses a ref mutation that appears earlier in the
-   * component than the `useRef` it belongs to - and it reports the refusal at
-   * every OTHER mutation site, eight of them, in code that had not changed.
-   * Same unmasking trap the v2.1 split hit: the compiler stops at its first
-   * bailout, so one new one makes a pile of latent ones visible at once. */
-  const markPendingEdit = useCallback(() => {
-    pendingEditRef.current = true;
-  }, []);
-
   // Re-sync React-held UI state to a session that was just replaced wholesale
   // by an undo/redo restore -- the same shape of resync openProject does after
   // a load. Transient errors and the derived geometry result are cleared;
@@ -4476,21 +4506,76 @@ export function Workspace() {
    * declared count) and the band the half only they can give. That did not
    * change; only what happens between them did.
    */
+  /**
+   * The band geometry a label read needs, for one of a heatmap's own axes.
+   *
+   * ⚑ THE SAME THREE THINGS the category path supplies - dividers in FIGURE
+   * pixels, which way the bands run, and where the axis line sits - so
+   * `readBandAtAngle` and `wordsToTicks` are reused unchanged rather than
+   * copied. The grid holds its dividers in DATA space, which is what lets them
+   * survive a recalibration, so they are converted here at the moment of the
+   * read.
+   *
+   * ⚑ The axis line is the grid's outermost edge on the side the labels are
+   * on: the BOTTOM for columns, the LEFT for rows, measured in pixels rather
+   * than assumed from the data, so a figure with y running downward or an axis
+   * marked right-to-left is handled without a rule of its own.
+   */
+  const heatmapBandFrame = useCallback(
+    (axis: 'x' | 'y') => {
+      const axesNow = sessionRef.current.getAxes() as unknown as
+        | { dataToPixel(x: number, y: number): { x: number; y: number } }
+        | null;
+      const grid = heatmapShownGrid;
+      if (!axesNow || !grid) return null;
+      const xs = grid.xDividers;
+      const ys = grid.yDividers;
+      if (xs.length < 2 || ys.length < 2) return null;
+      const corners = [
+        axesNow.dataToPixel(xs[0]!, ys[0]!),
+        axesNow.dataToPixel(xs[0]!, ys[ys.length - 1]!),
+        axesNow.dataToPixel(xs[xs.length - 1]!, ys[0]!),
+      ];
+      if (corners.some((c) => !Number.isFinite(c.x) || !Number.isFinite(c.y))) return null;
+      if (axis === 'x') {
+        // Columns: the labels sit under the LOWEST edge on screen.
+        const bottom = ys.reduce((lo, v) =>
+          axesNow.dataToPixel(xs[0]!, v).y > axesNow.dataToPixel(xs[0]!, lo).y ? v : lo
+        );
+        const dividers = xs.map((v) => axesNow.dataToPixel(v, bottom));
+        return { dividers, along: 'x' as const, axisAt: dividers[0]!.y };
+      }
+      const left = xs.reduce((lo, v) =>
+        axesNow.dataToPixel(v, ys[0]!).x < axesNow.dataToPixel(lo, ys[0]!).x ? v : lo
+      );
+      const dividers = ys.map((v) => axesNow.dataToPixel(left, v));
+      return { dividers, along: 'y' as const, axisAt: dividers[0]!.x };
+    },
+    [heatmapShownGrid]
+  );
+
   const readCategoryLabels = useCallback(
     async (band: { x: number; y: number; width: number; height: number }) => {
       setOcrArmed(false);
       setOcrError(null);
       const image = imageCanvasRef.current?.getImageData();
-      const edges = session.getCategoryAxis().getAxisEdges();
-      if (!image || !edges) {
+      // ⚑ A heatmap's columns and rows are bands like any other, so the read is
+      // the same read - only where the dividers come from differs.
+      const heat = ocrTarget === 'category' ? null : heatmapBandFrame(ocrTarget);
+      if (ocrTarget !== 'category' && (!image || !heat)) {
+        setOcrError('Place the grid first - its boundaries are what split the box you drew.');
+        return;
+      }
+      const edges = heat ? null : session.getCategoryAxis().getAxisEdges();
+      if (!image || (!heat && !edges)) {
         setOcrError('Mark the category axis first - its dividers are what split the box you drew.');
         return;
       }
-      const dividers = session.getCategoryAxis().getDividerPoints();
-      const along = axisRunsAlong(edges[0], edges[1]);
+      const dividers = heat ? heat.dividers : session.getCategoryAxis().getDividerPoints();
+      const along = heat ? heat.along : axisRunsAlong(edges![0], edges![1]);
       // ⚑ Where the axis LINE runs: a rotated label trails AWAY from its tick,
       // so a word is filed by the end of it nearest this, not by its centre.
-      const axisAt = along === 'x' ? edges[0].y : edges[0].x;
+      const axisAt = heat ? heat.axisAt : along === 'x' ? edges![0].y : edges![0].x;
       const answer = await readBandAtAngle(image, band, dividers, along, axisAt);
       if (isOcrFailure(answer)) {
         setOcrError(answer.error);
@@ -4507,7 +4592,7 @@ export function Workspace() {
       setOcrAngleNotice(null);
       setOcrProposals(answer.proposals);
     },
-    [session]
+    [session, ocrTarget, heatmapBandFrame]
   );
 
   /**
@@ -4604,15 +4689,32 @@ export function Workspace() {
   const applyOcrNames = useCallback(() => {
     const rows = ocrProposals ?? [];
     let wrote = false;
-    for (const row of rows) {
-      const name = row.text.trim();
-      if (name === '') continue;
-      if (session.renameCategory(row.categoryIndex, name)) wrote = true;
+    // ⚑⚑ A HEATMAP'S NAMES GO IN AS ONE WRITE, not one per row. Each name is
+    // stored in the axis's own list, and the per-name editor rebuilds that list
+    // from React state - so applying six names one at a time would write six
+    // times from the same stale copy and keep only the last. The band index the
+    // reader returns IS the cell index, because the dividers it was given are
+    // the grid's own, in the grid's order.
+    if (ocrTarget !== 'category') {
+      const named = rows.filter((row) => row.text.trim() !== '');
+      if (named.length > 0) {
+        setHeatmapCategoryNames(
+          ocrTarget,
+          named.map((row) => ({ bandIndex: row.categoryIndex, name: row.text.trim() }))
+        );
+        wrote = true;
+      }
+    } else {
+      for (const row of rows) {
+        const name = row.text.trim();
+        if (name === '') continue;
+        if (session.renameCategory(row.categoryIndex, name)) wrote = true;
+      }
     }
     setOcrProposals(null);
     setOcrError(null);
     if (wrote) commit();
-  }, [ocrProposals, session, commit]);
+  }, [ocrProposals, session, commit, ocrTarget, setHeatmapCategoryNames]);
 
   // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
   // categorical-line counterpart of setTupleLabel above, and it commits the same
@@ -7396,17 +7498,9 @@ export function Workspace() {
    */
   const setHeatmapCategoryName = useCallback(
     (axis: 'x' | 'y', bandIndex: number, name: string) => {
-      const axesNow = sessionRef.current.getAxes();
-      if (!axesNow || !heatmapShownGrid) return;
-      const cellOrdered = labelsForCells(heatmapLabels, heatmapShownGrid, axesNow);
-      const next = [...(axis === 'x' ? cellOrdered.x : cellOrdered.y)];
-      while (next.length <= bandIndex) next.push('');
-      next[bandIndex] = name;
-      const edited = axis === 'x' ? { x: next, y: cellOrdered.y } : { x: cellOrdered.x, y: next };
-      const typed = labelsForCells(edited, heatmapShownGrid, axesNow);
-      applyHeatmapLabels(formatLabelList(typed.x), formatLabelList(typed.y));
+      setHeatmapCategoryNames(axis, [{ bandIndex, name }]);
     },
-    [applyHeatmapLabels, heatmapLabels, heatmapShownGrid]
+    [setHeatmapCategoryNames]
   );
 
   /**
@@ -8337,6 +8431,9 @@ export function Workspace() {
                   detectNotice={tickDetectNotice}
                   onReadLabels={() => {
                     setOcrError(null);
+                    // ⚑ The reader serves more than one axis now, so arming it
+                    // says whose names it is about to read.
+                    setOcrTarget('category');
                     setOcrArmed((armed) => !armed);
                   }}
                   readingArmed={ocrArmed}
@@ -8582,17 +8679,12 @@ export function Workspace() {
                   heatmapShownGrid !== null &&
                   (selectedBoundary.axis === 'x' ? heatmapShownGrid.xDividers : heatmapShownGrid.yDividers).length > 2
                 }
-                xLabels={heatmapXLabels}
-                yLabels={heatmapYLabels}
-                onLabelsChange={(x, y) => {
-                  // ⚑ A text edit: marked pending here and committed on blur, the same
-                  // rule every other text field follows. Without it the names were in
-                  // no snapshot at all, and an undo of an unrelated action discarded
-                  // everything typed, with no redo to get it back.
-                  markPendingEdit();
-                  applyHeatmapLabels(x, y);
+                onReadNames={(axis) => {
+                  setOcrError(null);
+                  setOcrTarget(axis);
+                  setOcrArmed((armed) => !(armed && ocrTarget === axis));
                 }}
-                onCommitPendingEdit={commitPendingEdit}
+                readingNames={ocrArmed && ocrTarget !== 'category' ? ocrTarget : null}
                 regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid)}
                 declared={heatmapCounts()}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}

@@ -233,7 +233,25 @@ const CARDS: Card[] = [
       // ⚑ NAME THE ROWS, because the caption claims each one is named and the
       // matrix otherwise reads R1..R5. The names are the figure's own printed
       // treatments, top to bottom, which is the order the field asks for.
-      await d.testId('heatmap-y-labels').fill('Combination, High dose, Mid dose, Low dose, Vehicle');
+      // ⚑ The bulk name boxes are gone (2026-09-13); a band is named where it is
+      // shown, the same gesture every other category type uses. Named
+      // bottom-up, because band 0 is the bottom row of the figure.
+      for (const [band, name] of [
+        [4, 'Combination'],
+        [3, 'High dose'],
+        [2, 'Mid dose'],
+        [1, 'Low dose'],
+        [0, 'Vehicle'],
+      ] as const) {
+        const cell = page.getByTestId(`heatmap-y-name-${band}`).first();
+        if ((await cell.count()) === 0) continue;
+        await cell.dblclick();
+        await page.waitForTimeout(120);
+        const editor = page.locator(`input[data-testid="heatmap-y-name-${band}"]`).first();
+        await editor.fill(name);
+        await editor.press('Enter');
+        await page.waitForTimeout(120);
+      }
       await d.wait(300);
       await d.testId('heatmap-read').click();
       await d.wait(1200);
