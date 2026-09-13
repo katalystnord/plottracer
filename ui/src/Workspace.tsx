@@ -4696,11 +4696,24 @@ export function Workspace() {
       // is not, because the question it answered no longer exists.
       const fieldsBefore = JSON.stringify(session.getCurrentStep()?.valueFields.map((f) => f.label));
       session.setOption(key, value);
+      // ⚑⚑ TURNING A QUESTION OFF CLEARS THE ANSWER IT GOVERNED. An option
+      // declared `activeWhen: key` greys out when `key` goes false, and a greyed
+      // control still showing "Centres" while the model reads Boundaries is the
+      // hidden state this whole mechanism exists to avoid. Declarative, from
+      // `activeWhen` itself, so a future pair inherits it without being taught.
+      // David, on switching an axis back to Values: *"it needs to either revert
+      // to a boundary state, or not be read for a value axis"* - it does both,
+      // here and in the model, because the model has more than one entrance.
+      if (value === 'false') {
+        for (const dependent of config.options ?? []) {
+          if (dependent.activeWhen === key) session.setOption(dependent.key, String(dependent.default ?? false));
+        }
+      }
       const fieldsAfter = JSON.stringify(session.getCurrentStep()?.valueFields.map((f) => f.label));
       if (fieldsBefore !== fieldsAfter) setDataValueInputs([]);
       commit();
     },
-    [session, commit]
+    [session, commit, config]
   );
 
   const clearPoints = useCallback(() => {
@@ -7113,6 +7126,12 @@ export function Workspace() {
    * text field, and this is it.
    */
   function renderOptions(opts: readonly AxesOption[]) {
+    // ⚑⚑ GREYED, NOT GONE. An option declared `activeWhen` is a real question
+    // about the figure that THIS axis is not being asked - a heatmap's tick
+    // convention on an axis set to Values. Hiding it would take a live value off
+    // screen; disabling it leaves the question legible and its state visible.
+    const off = (opt: AxesOption) =>
+      opt.activeWhen !== undefined && axesOptions[opt.activeWhen] !== 'true';
     return opts.map((opt) =>
                 opt.kind === 'checkbox' ? (
                   <label key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
@@ -7120,6 +7139,7 @@ export function Workspace() {
                       type="checkbox"
                       data-testid={`calib-option-${opt.key}`}
                       checked={axesOptions[opt.key] === 'true'}
+                      disabled={off(opt)}
                       onChange={(e) => setAxesOption(opt.key, String(e.target.checked))}
                     />
                     {opt.label}
@@ -7144,7 +7164,15 @@ export function Workspace() {
                      what keeps X and Y independent: an axis is Values OR
                      Categories, but BOTH axes may be Categories - that is the
                      commonest heatmap there is. */
-                  <span key={opt.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    key={opt.key}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      ...(off(opt) ? { color: theme.color.text.legend } : {}),
+                    }}
+                  >
                     <span>{opt.label}</span>
                     {/* ⚑ THE GROUP keeps `calib-option-<key>`, because that is how
                         every option kind is identified and how the
@@ -7165,6 +7193,7 @@ export function Workspace() {
                             name={`calib-option-${opt.key}`}
                             data-testid={`calib-choice-${opt.key}-${c.value}`}
                             checked={(axesOptions[opt.key] ?? opt.default) === c.value}
+                            disabled={off(opt)}
                             onChange={() => setAxesOption(opt.key, c.value)}
                           />
                           <span style={{ whiteSpace: 'nowrap' }}>{c.label}</span>
@@ -7180,6 +7209,7 @@ export function Workspace() {
                       data-testid={`calib-option-${opt.key}`}
                       value={axesOptions[opt.key] ?? ''}
                       placeholder={opt.placeholder}
+                      disabled={off(opt)}
                       onChange={(e) => setAxesOption(opt.key, e.target.value)}
                       style={{ fontSize: 12, width: 70 }}
                     />

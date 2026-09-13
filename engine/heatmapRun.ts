@@ -337,21 +337,32 @@ export function heatmapBounds(
   const meta = axes.getMetadata();
   const counts = heatmapBandCounts(axes);
   /**
-   * ⚑⚑ THE CLICKS ARE NOT THE PLOT BOX unless the figure marks boundaries, and
-   * that is true of BOTH axis kinds. A centred tick sits half a band inside the
-   * edge, so the grid has to reach half a band further out than what was
-   * clicked; reading the clicked values as the extent drops half a band off each
-   * end and shifts every boundary between them.
+   * ⚑⚑ THE CLICKS ARE NOT THE PLOT BOX when the figure marks band CENTRES - and
+   * only a CATEGORY axis can say that. A centred tick sits half a band inside
+   * the edge, so the grid reaches half a band further out than what was clicked.
    *
-   * ⚑ The two kinds differ only in what the numbers ARE. A category axis was
-   * given an ordinal frame by `buildAxes`, so its clicks land at 0.5…N-0.5 and
-   * the grid is simply 0…N. A value axis keeps the coordinates the user typed,
-   * so the half-band is computed from them - and the CALIBRATION is untouched
-   * either way: x=0 is still at that pixel, only the grid's extent moves.
+   * ⚑⚑ A VALUE AXIS TAKES ITS CLICKS AS THE EXTENT, EXACTLY AS TYPED. David,
+   * 2026-09-13: *"offering centred on a value axis is then categorically
+   * wrong?"* It is, in the literal sense - the question presupposes that a tick
+   * belongs to a band, and on a continuous axis it belongs to nothing but the
+   * axis. His weld figure prints 0, 2 … 14 mm while its columns fall at 0, 2.8,
+   * 5.2, 6, 9, 14: a tick there is neither a boundary nor a centre, and 3.7 mm
+   * is a real place whether or not a cell starts at it. Stretching the grid by
+   * a half band computed from such ticks is drawing what we did not measure,
+   * and it moved every boundary between them too.
    *
-   * ⚑ This used to run for category axes ONLY, which is the same wrong branch
-   * that gave a measured axis no grid at all (case A1). A value axis has bands,
-   * so it has a convention.
+   * ⚑ The line between the kinds is one question: does a number BETWEEN two
+   * printed marks mean anything? On millimetres it does, and the cell
+   * boundaries are in the ink to be measured. On `imshow`'s 0, 1, 2, 3, 4
+   * "column index" it does not - 1.5 is not a column - and that figure is a
+   * CATEGORY axis whose names happen to be numbers, where the convention is the
+   * only source of the boundaries there is.
+   *
+   * ⚠️ THE OPPOSITE WAS ARGUED HERE THROUGH v2.2 - "a value axis has bands, so
+   * it has a convention" - and the bands are real while the question is not.
+   * The claim was convincing enough to be defended in conversation before it was
+   * read; it is corrected rather than deleted so the next reader meets the
+   * reasoning instead of the conclusion.
    */
   const spanOf = (
     lo: number,
@@ -360,21 +371,17 @@ export function heatmapBounds(
     tickKey: string,
     count: number
   ): [number, number] | null => {
-    const centred = meta[tickKey] === 'centred';
-    if (meta[kindKey] === 'category') {
+    const category = meta[kindKey] === 'category';
+    const centred = category && meta[tickKey] === 'centred';
+    if (category) {
       const width = Math.abs(hi - lo);
       const bands = centred ? Math.round(width) + 1 : Math.round(width);
       return [0, Math.max(1, bands)];
     }
-    const min = Math.min(lo, hi);
-    const max = Math.max(lo, hi);
-    if (!centred) return [min, max];
-    // ⚑ REFUSED rather than divided by zero: two centres need two bands, and
-    // `checkValues` says so in words before the walk ever gets here. Returning
-    // an infinite plot box would be a calibration that cannot fail.
-    if (!Number.isInteger(count) || count < 2) return null;
-    const halfBand = (max - min) / (count - 1) / 2;
-    return [min - halfBand, max + halfBand];
+    // A value axis: the two coordinates the user typed, and nothing inferred
+    // from them. `count` is unused here on purpose.
+    void count;
+    return [Math.min(lo, hi), Math.max(lo, hi)];
   };
   const xSpan = spanOf(x1, x2, 'heatmapXKind', 'heatmapXTicks', counts.columns);
   const ySpan = spanOf(y1, y2, 'heatmapYKind', 'heatmapYTicks', counts.rows);

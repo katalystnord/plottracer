@@ -184,17 +184,31 @@ describe('B4 - a MEASURED axis says where its clicks landed too', () => {
    * ⚑ THE CALIBRATION IS UNTOUCHED EITHER WAY - x=0 is still at that pixel.
    * Only the GRID extent changes, which is the two-layer model doing its job.
    */
-  it('extends the grid half a band past clicks that marked CENTRES', () => {
+  it('⚑⚑ takes a VALUE axis\'s clicks as the extent, whatever the convention says', () => {
     const s = walk(
       { xTicksCentred: 'true' },
       { x1: ['0'], x2: ['12', '7'], y1: ['0'], y2: ['6', '5'] }
     );
     const { x } = dividersOf(s);
-    // Seven columns whose FIRST and LAST centres are 0 and 12: six gaps, so a
-    // band is 2 wide and the plot box runs −1 … 13.
+    // Seven columns between the two clicked coordinates. NOT -1 … 13: that was
+    // half a band of stretch on the strength of an assumption the figure never
+    // made, and it moved every boundary between them too.
     expect(x).toHaveLength(8);
-    expect(x[0]).toBeCloseTo(-1, 9);
-    expect(x[7]).toBeCloseTo(13, 9);
+    expect(x[0]).toBeCloseTo(0, 9);
+    expect(x[7]).toBeCloseTo(12, 9);
+  });
+
+  it('⚑⚑ a CATEGORY axis still extends half a band past clicks that marked CENTRES', () => {
+    const s = walk(
+      { xIsCategory: 'true', xTicksCentred: 'true' },
+      { x1: [], x2: ['7'], y1: ['0'], y2: ['6', '5'] }
+    );
+    const { x } = dividersOf(s);
+    // Seven named bands, clicked at the first and last CENTRE: the figure's own
+    // edges are half a band outside them, and nothing measurable says where.
+    expect(x).toHaveLength(8);
+    expect(x[0]).toBeCloseTo(0, 9);
+    expect(x[7]).toBeCloseTo(7, 9);
   });
 
   it('takes the clicks as the boundaries under the other convention', () => {
@@ -204,28 +218,79 @@ describe('B4 - a MEASURED axis says where its clicks landed too', () => {
     expect(x[7]).toBeCloseTo(12, 9);
   });
 
-  it('offers the choice on a measured axis at all', () => {
-    // The control was hidden behind `onlyWhen: 'xIsCategory'`, so the question
-    // could not be answered on the axis kind that now needs it most.
+  /**
+   * ⚑⚑ THE CONVENTION IS A CATEGORY AXIS'S QUESTION, AND ONLY ITS QUESTION.
+   *
+   * David, 2026-09-13, after working out what the marks on his own figure are:
+   * *"offering centred on a value axis is then categorically wrong?"* It is,
+   * in the literal sense. The question presupposes that a tick belongs to a
+   * band. On a continuous axis it does not belong to anything but the axis: his
+   * weld figure prints 0, 2 … 14 mm while its columns fall at 0, 2.8, 5.2, 6,
+   * 9, 14, so a tick there is neither a boundary nor a centre, and 3.7 mm is a
+   * real place whether or not a cell starts at it.
+   *
+   * ⚑ The test that separates the two kinds is one question: does a number
+   * BETWEEN two printed marks mean anything? On millimetres it does. On
+   * `imshow`'s 0, 1, 2, 3, 4 "column index" it does not - 1.5 is not a column -
+   * and that figure is a category axis whose names happen to be numbers, which
+   * is where the convention belongs and is needed.
+   *
+   * ⚠️ This replaces the opposite claim, which this file and three comment
+   * blocks argued for through v2.2: that "a value axis has bands too, so it has
+   * the same question". The bands are real; the QUESTION is not, because a
+   * value axis's boundaries are in the ink and get measured, while a category
+   * axis's are derived from a count and can only be declared.
+   *
+   * ⚑ THE ROW STAYS ON SCREEN, DISABLED, rather than disappearing. A control
+   * that vanishes takes its value with it, unseen - the invisible-precondition
+   * failure. Greyed, you can see the question exists and see it does not apply.
+   */
+  it('⚑⚑ the convention is offered ACTIVE only while the axis is Categories', () => {
     const ticks = (HEATMAP_AXES_CONFIG.options ?? []).find((o) => o.key === 'xTicksCentred')!;
-    expect((ticks as { onlyWhen?: string }).onlyWhen).toBeUndefined();
-    // …and its label no longer says "category", because the question never was.
-    expect(ticks.label).not.toMatch(/categor/i);
+    expect((ticks as { onlyWhen?: string }).onlyWhen, 'greyed, not hidden').toBeUndefined();
+    expect((ticks as { activeWhen?: string }).activeWhen).toBe('xIsCategory');
+    const yTicks = (HEATMAP_AXES_CONFIG.options ?? []).find((o) => o.key === 'yTicksCentred')!;
+    expect((yTicks as { activeWhen?: string }).activeWhen, 'each axis answers for itself').toBe(
+      'yIsCategory'
+    );
   });
 
-  it('REFUSES centred clicks on a single band, which mark nothing', () => {
-    // One band has one centre, so two clicks at different coordinates cannot
-    // both be it. Half a band of a band that has no width is not a number.
+  it('⚑⚑ a file declaring a value axis with a centred convention opens as boundaries', () => {
+    // ⚑ The guard is in the MODEL because the option has more than one
+    // entrance: a project file carries the convention next to the kind, and a
+    // card that only greys the control would never see this one.
     const s = walk(
       { xTicksCentred: 'true' },
       { x1: ['0'], x2: ['12', '7'], y1: ['0'], y2: ['6', '5'] }
     );
+    expect(s.runCalibration()).toBe(true);
+    const reopened = HEATMAP_AXES_CONFIG.extractOptions!(s.getAxes()!);
+    expect(reopened['xTicksCentred']).toBe('false');
+  });
+
+  it('REFUSES centred clicks on a single CATEGORY band, which mark nothing', () => {
+    // One band has one centre, so two clicks at different coordinates cannot
+    // both be it. Half a band of a band that has no width is not a number.
+    const s = walk(
+      { xIsCategory: 'true', xTicksCentred: 'true' },
+      { x1: [], x2: ['7'], y1: ['0'], y2: ['6', '5'] }
+    );
     const bad = walk(
-      { xTicksCentred: 'true' },
-      { x1: ['0'], x2: ['12', '1'], y1: ['0'], y2: ['6', '5'] }
+      { xIsCategory: 'true', xTicksCentred: 'true' },
+      { x1: [], x2: ['1'], y1: ['0'], y2: ['6', '5'] }
     );
     expect(s.runCalibration()).toBe(true);
     expect(bad.runCalibration()).toBe(false);
+  });
+
+  it('⚑ …and has nothing to refuse on a VALUE axis, which never asked', () => {
+    // The same single column on a continuous axis calibrates: its clicks are
+    // its extent, so there is no half band to divide by a band count of zero.
+    const s = walk(
+      { xTicksCentred: 'true' },
+      { x1: ['0'], x2: ['12', '1'], y1: ['0'], y2: ['6', '5'] }
+    );
+    expect(s.runCalibration(), s.getCalibrationError() ?? 'no error').toBe(true);
   });
 });
 

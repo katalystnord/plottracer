@@ -253,6 +253,17 @@ export interface AxesOptionVisibility {
   /** Shown only while this other option's checkbox is on. */
   onlyWhen?: string;
   /**
+   * Shown ALWAYS, but disabled unless this other option is on.
+   *
+   * ⚑⚑ THE DIFFERENCE FROM `onlyWhen` IS WHETHER THE QUESTION STILL EXISTS.
+   * A control that disappears takes its value with it, unseen, and the user
+   * cannot tell whether the question was answered, defaulted or never asked -
+   * the invisible-precondition failure. Use `onlyWhen` for a control that is
+   * meaningless in the other state, and this for one that is a real question
+   * about the figure which THIS axis happens not to be asked.
+   */
+  activeWhen?: string;
+  /**
    * Which row this option belongs on, as a heading the user reads.
    *
    * ⚑⚑ DECLARED BY THE TYPE, because which options belong together is a fact
@@ -1737,9 +1748,19 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // categories`), so one question had two vocabularies and nothing said they
     // were the same question. Importing the constant is what stops them drifting
     // apart a second time.
+    // ⚑⚑ ACTIVE ONLY WHILE THAT AXIS IS CATEGORIES, and GREYED rather than
+    // hidden when it is not. The question presupposes a tick belongs to a band,
+    // which is true of a named axis and false of a continuous one - see
+    // `heatmapBounds` for the reasoning and the figure it came from. Greying
+    // keeps the question legible and keeps its state visible; hiding it would
+    // take a live value off screen, which is the invisible-precondition failure
+    // this project has a rule against. Each axis answers for itself, so a mixed
+    // figure keeps the row live on the half that needs it.
     { key: 'xTicksCentred', label: 'ticks at', group: 'X axis', newRow: true, kind: 'choice', default: 'false',
+      activeWhen: 'xIsCategory',
       choices: [{ value: 'false', label: CONVENTION_LABELS.edge }, { value: 'true', label: CONVENTION_LABELS.centred }] },
     { key: 'yTicksCentred', label: 'ticks at', group: 'Y axis', newRow: true, kind: 'choice', default: 'false',
+      activeWhen: 'yIsCategory',
       choices: [{ value: 'false', label: CONVENTION_LABELS.edge }, { value: 'true', label: CONVENTION_LABELS.centred }] },
     // ⚑⚑ THE THIRD AXIS GETS ITS OWN ROW, with the word COLOUR on it - David:
     // *"that also captures the word colour on that row, which was what I was
@@ -2008,10 +2029,13 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     // two bands. With one band the two clicks are the same centre, so the half-
     // band the grid extends by is (hi - lo) / 0 - an infinite plot box reported
     // as a successful calibration.
-    for (const [index, noun, option] of [
-      [1, 'columns', 'xTicksCentred'],
-      [3, 'rows', 'yTicksCentred'],
+    for (const [index, noun, option, kindOption] of [
+      [1, 'columns', 'xTicksCentred', 'xIsCategory'],
+      [3, 'rows', 'yTicksCentred', 'yIsCategory'],
     ] as const) {
+      // ⚑ A value axis has no convention to refuse over - its clicks are the
+      // extent - so the refusal follows the same rule the grid does.
+      if (!optionBool(options, kindOption)) continue;
       if (!optionBool(options, option)) continue;
       const raw = String((cal.getPoint(index) as { dz?: unknown } | null)?.dz ?? '');
       if (raw.trim() === '') continue;
@@ -2124,8 +2148,14 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       isLogValue: String(meta['heatmapLogValue'] ?? 'false'),
       xIsCategory: String(meta['heatmapXKind'] === 'category'),
       yIsCategory: String(meta['heatmapYKind'] === 'category'),
-      xTicksCentred: String(meta['heatmapXTicks'] === 'centred'),
-      yTicksCentred: String(meta['heatmapYTicks'] === 'centred'),
+      // ⚑⚑ ONLY A CATEGORY AXIS CARRIES A CONVENTION BACK. A file can hold
+      // `heatmapXTicks: 'centred'` beside a VALUE kind - written before this
+      // rule, or by hand - and reopening it with the flag set would put a
+      // disabled control into a state nothing on screen explains. The card
+      // greys the row; this is the other entrance, and the model has to answer
+      // the same way at both.
+      xTicksCentred: String(meta['heatmapXKind'] === 'category' && meta['heatmapXTicks'] === 'centred'),
+      yTicksCentred: String(meta['heatmapYKind'] === 'category' && meta['heatmapYTicks'] === 'centred'),
     };
   },
 };
