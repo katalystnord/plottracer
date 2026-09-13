@@ -10691,6 +10691,36 @@ describe('heatmap capture (v2.2)', () => {
     expect(names, `the name landed on column ${Number(band) + 1}`).toContain('BRCA1');
   }, 60000);
 
+  /**
+   * ⚑⚑ THE CARD SAYS ONE THING: A MEASURED AXIS IS IDENTIFIED BY ITS
+   * COORDINATES.
+   *
+   * David, shown a mixed figure whose columns had no name editor while the
+   * button to read column names sat there live: *"this has to be the only
+   * option, no?"* It is. If a band's identity is its measured coordinate, then
+   * offering to read a name for it is offering to record something the figure
+   * did not use to identify it, and the reader would have nowhere to put what
+   * it read - a control whose outcome is already decided, which is the shape
+   * the tick convention row was in until this morning.
+   */
+  it('⚑⚑ offers the reader only for the axis that can hold names', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmapCategorical(); // Y named, X measured
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    await showHeatmapTable();
+    await openHeatmapGrid();
+
+    expect(await page.getByTestId('heatmap-read-y-names').isDisabled()).toBe(false);
+    expect(
+      await page.getByTestId('heatmap-read-x-names').isDisabled(),
+      'the X axis is measured, so its columns take no names'
+    ).toBe(true);
+    // …and the table agrees: rows can be named, columns show their coordinate.
+    expect(await page.locator('[data-testid^="heatmap-y-name-"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('[data-testid^="heatmap-x-name-"]').count()).toBe(0);
+  }, 60000);
+
   it('NAMES the columns, and the names travel into the export beside the bounds', async () => {
     // ⚑⚑ "The label is the coordinate." The most common published heatmap is
     // category × category - gene × sample, confusion matrix, correlation matrix

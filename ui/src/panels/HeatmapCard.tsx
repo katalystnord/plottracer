@@ -62,6 +62,20 @@ export interface HeatmapCardProps {
   onReadNames?: (axis: 'x' | 'y') => void;
   /** Which axis the armed reader is waiting for, or null. */
   readingNames?: 'x' | 'y' | null;
+  /**
+   * Which axes can hold names at all.
+   *
+   * ⚑⚑ ONLY A NAMED AXIS TAKES NAMES, and the reader has to say so where it is
+   * offered. David, 2026-09-13, on being shown a mixed figure whose columns
+   * had no name editor while the button to read column names sat there anyway:
+   * *"this has to be the only option, no?"* It is - a band on a value axis is
+   * identified by its measured coordinate, so reading a name for it would
+   * record something the figure did not use to identify it, and the button
+   * would have nowhere to put what it read. Greyed rather than hidden, exactly
+   * as the tick convention row is, so the card says one thing consistently.
+   */
+  xIsNamed?: boolean;
+  yIsNamed?: boolean;
   /** Blur handler: a text edit becomes one undo entry when it ENDS, never one
    * per keystroke - the same rule every other text field here follows. */
   /** "3 of 5 named", or a warning that there are more names than cells. Empty
@@ -104,6 +118,8 @@ export function HeatmapCard({
   canRemoveBoundary,
   onReadNames,
   readingNames = null,
+  xIsNamed = false,
+  yIsNamed = false,
   xLabelCoverage,
   yLabelCoverage,
   regenerateWarning,
@@ -252,7 +268,8 @@ export function HeatmapCard({
                 type="button"
                 data-testid="heatmap-read-x-names"
                 onClick={() => onReadNames?.('x')}
-                disabled={!onReadNames}
+                disabled={!onReadNames || !xIsNamed}
+                title={xIsNamed ? undefined : 'The X axis is a value axis - its columns are identified by their coordinates'}
                 style={{ flex: 1 }}
               >
                 {readingNames === 'x' ? 'Drag a box round the column labels...' : 'Read column names'}
@@ -261,14 +278,17 @@ export function HeatmapCard({
                 type="button"
                 data-testid="heatmap-read-y-names"
                 onClick={() => onReadNames?.('y')}
-                disabled={!onReadNames}
+                disabled={!onReadNames || !yIsNamed}
+                title={yIsNamed ? undefined : 'The Y axis is a value axis - its rows are identified by their coordinates'}
                 style={{ flex: 1 }}
               >
                 {readingNames === 'y' ? 'Drag a box round the row labels...' : 'Read row names'}
               </button>
             </div>
             <span style={{ color: theme.color.text.secondary }}>
-              Or click a name in the Cells table to type it.
+              {xIsNamed || yIsNamed
+                ? 'Or click a name in the Cells table to type it.'
+                : 'Both axes are value axes, so their cells are identified by their coordinates.'}
             </span>
             {(xLabelCoverage || yLabelCoverage) && (
               <span data-testid="heatmap-label-coverage" style={{ color: theme.color.text.secondary }}>

@@ -2421,7 +2421,19 @@ export function Workspace() {
     // ⚑ And the names, for the same reason: a reopened heatmap whose columns
     // lost their names would export the index numbers this whole feature exists
     // to replace, silently.
-    const stored = layer?.labels ?? { x: [], y: [] };
+    // ⚑⚑ A VALUE AXIS'S NAMES DO NOT COME BACK, because there is nowhere on
+    // screen for them to be. Names are a category axis's business - a band on a
+    // measured axis is identified by its coordinate - and the table has always
+    // gated its name editor on that. A file written before that rule (or by
+    // hand) can pair names with a value kind, and restoring them gave the worst
+    // of the three states: exported to CSV, invisible in the table, and not
+    // editable. What is in the file is now what is on screen.
+    const kinds = heatmapKinds();
+    const storedRaw = layer?.labels ?? { x: [], y: [] };
+    const stored = {
+      x: kinds.x === 'category' ? storedRaw.x : [],
+      y: kinds.y === 'category' ? storedRaw.y : [],
+    };
     // ⚑ The file holds PARAMETERS; the label and read helpers want the resolved
     // data coordinates. Resolving here, once, keeps the single conversion point.
     const restoreSpans = heatmapAxisSpans(sessionRef.current.getPlacedPoints(), sessionRef.current.getAxes());
@@ -8685,6 +8697,8 @@ export function Workspace() {
                   setOcrArmed((armed) => !(armed && ocrTarget === axis));
                 }}
                 readingNames={ocrArmed && ocrTarget !== 'category' ? ocrTarget : null}
+                xIsNamed={heatmapKinds().x === 'category'}
+                yIsNamed={heatmapKinds().y === 'category'}
                 regenerateWarning={heatmapRegenerateWarning(heatmapShownGrid)}
                 declared={heatmapCounts()}
                 xLabelCoverage={labelCoverage(heatmapLabels.x, Math.max(0, (heatmapShownGrid?.xDividers.length ?? 1) - 1))}
