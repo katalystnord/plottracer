@@ -190,6 +190,12 @@ move up and keep their own values, because their bases moved with it. `Base` is
 not editable, because there is nothing there to change that is not the segment
 below's top.
 
+Dragging a segment's top on the figure does the same thing: the stack above it
+rides with it and keeps its own heights, and it rides straight up or down the
+value axis however your hand moved, so a column's corners stay in one line. The
+other corner of the box is there to measure the bar's width, so moving it changes
+no value.
+
 Order comes from the figure, not from the panel: the segment nearest the baseline
 is the first, and each one after it is the next edge outward. So a stack drawn
 downward from zero, or one with segments on both sides, needs nothing switched
@@ -326,6 +332,14 @@ next. A reading you placed by hand is never overwritten.
   example draws its rings a lighter grey than its rays. That separation belongs to
   the *figure*, not to the tool - plenty of radar charts draw both in one grey, and
   there the rays go too. Check the rays survived before you trace, and undo if not.
+- **Mask an area** (image tool `2` ▸ Image card) paints a dragged rectangle out
+  with the paper colour measured around it. It is the answer to a **legend drawn
+  inside the plot box**: a legend's swatches are the series' own ink at roughly
+  the series' own size, so no colour filter and no plot-area rule can tell them
+  from the bars they describe, and a trace picks them up as data every time.
+  Masking removes them once for every mechanism at once - the colour trace, the
+  bar detect, the scatter detect, the flood fill and the label reader all stop
+  seeing them together. Unlike a crop the image keeps its size and nothing moves.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
 ## 6. Multiple series and figures
@@ -497,6 +511,19 @@ you **type** at them.
 Both axes are asked independently, so a category × value figure gets a prompt
 with one clause of each kind.
 
+The kind decides two more things, and both are about where the cell boundaries
+come from.
+
+- **A category axis is also asked where the figure's marks sit** - between the
+  bands, or under them. It has to be asked, because nothing numeric is printed:
+  the band positions come from your count plus your two clicks, so answering
+  wrongly moves every boundary by half a band.
+- **A value axis is asked neither.** Its marks are coordinates that fall where
+  they fall, its boundaries are in the ink where Detect grid can read them, and
+  your two clicks are taken as the extent exactly as you typed them. The
+  convention row greys out there, so you can see the question exists and see
+  that this axis is not being asked it.
+
 ### The colour key
 
 Four more clicks. Two say **where the coloured strip is** - click where it
@@ -535,11 +562,22 @@ unequal width.
 
 ### Names
 
-If the figure prints names rather than numbers, type them into **Column names**
-and **Row names**, comma separated, in reading order - the first name is the
-figure's top-left cell. Put a name containing a comma in "quotes". The card
-tells you how many of each axis are named; naming only some is fine, and the
-unnamed cells keep their measured coordinates.
+Only an axis you declared as **Categories** takes names. A value axis's cells
+are identified by their measured coordinates, so its half of this is greyed out
+and says why.
+
+Two ways in, and they are the two every other category chart offers:
+
+- **Read column names** / **Read row names** on the Grid card arms the reader.
+  Drag a box round the row of labels beside that axis and every name comes back
+  at once, one row per band, with the pixels it was read from. Nothing reaches
+  your bands until you press Apply, and a row you clear is left alone.
+- **Double-click a name in the Cells table** to type one directly. A name
+  belongs to the whole band, so editing it in any cell of that column or row
+  edits all of them.
+
+The card tells you how many of each axis are named; naming only some is fine,
+and the unnamed bands keep their measured coordinates.
 
 ### Reading the cells
 
