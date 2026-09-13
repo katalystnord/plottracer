@@ -2457,7 +2457,7 @@ export function Workspace() {
     setHeatmapSummary(reread?.summary ?? '');
     setHeatmapGridNote(null);
     setHeatmapError(null);
-  }, [readCellsFor]);
+  }, [readCellsFor, heatmapKinds]);
 
   /**
    * Re-read the cells once a new picture has actually decoded.
