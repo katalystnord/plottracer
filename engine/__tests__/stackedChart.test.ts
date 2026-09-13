@@ -273,6 +273,44 @@ describe('the link holds however the segment is moved', () => {
   });
 
   /**
+   * ⚑⚑ A BOUNDARY MOVES ALONG THE VALUE AXIS, AND ONLY ALONG IT.
+   *
+   * David, dragging a segment's top on the figure, 2026-09-13: the corner went
+   * sideways as well as down - as a hand does - and every segment above slid
+   * sideways with it, because the ride was the corner's raw pixel delta. The
+   * bars above lost their width and their place on the category axis, which is
+   * the one thing the two-corner drag-box exists to measure.
+   *
+   * ▶ What the link says is "your base is my top". A top is a VALUE. So what
+   * rides is the change in that value, expressed as the pixel vector the axes
+   * themselves give for it - which is also what keeps a rotated or log axis
+   * right, and is exactly what the typed edit has always done.
+   */
+  it('⚑⚑ dragging a top SIDEWAYS as well as up does not move the stack above sideways', () => {
+    const s = threeStack();
+    const any = s as unknown as {
+      setActiveDataset(i: number): void;
+      updateDataPointPixel(index: number, px: number, py: number): void;
+      getDataPoints(): { px: number; py: number }[];
+    };
+    any.setActiveDataset(2);
+    const topBefore = any.getDataPoints().map((p) => ({ ...p }));
+
+    any.setActiveDataset(1);
+    const pts = any.getDataPoints();
+    const i = pts.findIndex((p) => Math.abs(p.py - yFor(5)) < 0.5);
+    any.updateDataPointPixel(i, pts[i]!.px + 25, yFor(8)); // 25px to the right, and up
+
+    any.setActiveDataset(2);
+    const topAfter = any.getDataPoints();
+    topAfter.forEach((p, k) => {
+      expect(p.px, `segment above, corner ${k}: x must not move`).toBeCloseTo(topBefore[k]!.px, 6);
+    });
+    expect(heights(s, 2)[0], 'and it still keeps its own height').toBeCloseTo(4, 6);
+    expect(heights(s, 1)[0], 'while the dragged one is what was dragged to').toBeCloseTo(6, 6);
+  });
+
+  /**
    * ⚑ A MULTI-POINT NUDGE RIDES ONCE, NOT TWICE - the "a fix can BE the defect"
    * check on the fix above. Selecting a whole segment and pressing an arrow
    * calls the move for each of its corners in turn; only the TOP carries the

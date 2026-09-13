@@ -7059,13 +7059,32 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const ride = this.stackedRideContext(index);
     dataset.setPixelAt(index, snapped.x, snapped.y);
     if (ride) {
-      this.rideStackAbove(
-        ride.tupleIndex,
-        this.activeDatasetIndex,
-        ride.wasTop,
-        snapped.x - ride.wasX,
-        snapped.y - ride.wasY
-      );
+      // ⚑⚑ WHAT RIDES IS THE CHANGE IN VALUE, NOT THE MOVEMENT OF THE HAND.
+      // David, 2026-09-13, having dragged a top down and slightly right: *"They
+      // cannot be out of alignment like this."* The corner's raw pixel delta
+      // carries a sideways component - a hand always does - and shifting the
+      // segments above by it slid them off the column, losing the width and the
+      // category position the two-corner drag-box exists to measure.
+      //
+      // ⚑ The link says "your base is my top", and a top is a VALUE. So the
+      // ride is the vector the AXES give for that value change, which is along
+      // the value axis by construction: correct on a rotated chart, correct on
+      // a log one, and the same thing the typed edit has always done.
+      const now = this.stackedTopOf(ride.tupleIndex, this.activeDatasetIndex);
+      if (now !== null) {
+        const toPixel = (v: number) =>
+          (this.axes as unknown as { dataToPixel(v: number, u?: number): { x: number; y: number } })
+            .dataToPixel(v);
+        const from = toPixel(ride.wasTop);
+        const to = toPixel(now);
+        this.rideStackAbove(
+          ride.tupleIndex,
+          this.activeDatasetIndex,
+          ride.wasTop,
+          to.x - from.x,
+          to.y - from.y
+        );
+      }
     }
     // ⚑⚑ A MOVE RE-MEASURES EVERY ONE OF THIS POINT'S VALUES, so whatever the
     // user once typed here is no longer what the record holds (A4). Drag,
