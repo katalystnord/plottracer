@@ -3125,9 +3125,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // index-frame coordinate in the box labelled Columns. Nothing MEASURED was
     // wrong either time, because the axes instance came from the file, which is
     // exactly why it was silent.
-    this.optionValues =
-      this.config.extractOptions?.(axes) ??
-      defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>);
+    // ⚑⚑ THE DEFAULTS UNDERNEATH, WHAT THE FILE SAID ON TOP. `extractOptions`
+    // answers for the options the AXES can be asked about, and an axes cannot be
+    // asked about an option it has no home for: the heatmap's colour-key kind is
+    // refused before a calibration can carry one, so `buildAxes` writes nothing
+    // down and nothing reads it back. Replacing the record wholesale left that
+    // key `undefined`, and a `choice` renders as radios each `checked` when the
+    // value equals its own - so the reopened card drew the Colour key row with
+    // NEITHER radio selected, a state no click can produce.
+    this.optionValues = {
+      ...defaultOptionValues(this.config as unknown as AxesTypeConfig<CalibratedAxes>),
+      ...this.config.extractOptions?.(axes),
+    };
     if (cal && this.config.repeatingStep) {
       this.repeatCount = Math.max(this.config.repeatingStep.min, cal.getCount() - this.config.fixedSteps.length);
     }

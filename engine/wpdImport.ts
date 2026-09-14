@@ -30,6 +30,7 @@
 import { PlotData, type AnyAxes } from '../core/plotData.js';
 import type { Dataset } from '../core/dataset.js';
 import { bytesToBase64 } from './base64.js';
+import { IMAGE_IS_A_PDF_NOTE, IMAGE_UNREADABLE_NOTE } from './importNotes.js';
 import { readTar, entryText, type TarEntry } from './tarRead.js';
 
 export type WpdResult<T> = T | { error: string };
@@ -221,14 +222,30 @@ export function listWpdProject(bytes: Uint8Array): WpdResult<ListedWpdProject> {
   if ('error' in archive) return archive;
   const listed = listWpdFigures(archive.wpdJson);
   if ('error' in listed) return listed;
-  if (archive.images.length === 0) return { error: 'This project bundles no image.' };
-  const img = archive.images[0]!;
-  // A PDF-bundled project is refused rather than opened blank: an <img> cannot
-  // decode a PDF, so the figure would arrive with nothing behind it.
-  if (img.mime === 'application/pdf') {
-    return { error: "This project's image is a PDF, which PlotTracer can't open yet." };
-  }
-  const imageDataURL = `data:${img.mime};base64,${bytesToBase64(img.bytes)}`;
+  /**
+   * ⚑⚑ THE PICTURE IS NOT WHAT WAS MEASURED, so it cannot decide whether the
+   * project may be opened.
+   *
+   * ⚠️ Both of these were REFUSALS returned from the lister, before a single
+   * figure had been named - so an archive bundling no image, or bundling a PDF,
+   * put its calibration, its six figures and every curve in them out of reach
+   * over something nobody reads a value off. The other two foreign formats have
+   * always opened the figure and said why (`starryImport`, `digImport`), which
+   * made this the one vendor held to a rule the others were not: the asymmetry
+   * tenet 5 refuses, and c9ac07b's shape one level up - a project is listed by
+   * what it HOLDS, not by whether something it references happens to read.
+   *
+   * ⚑ The note rides with the FIGURE, because that is where it is true: the
+   * figure opens, and it opens without a picture.
+   */
+  const img = archive.images[0];
+  const imageDataURL =
+    img && img.mime !== 'application/pdf'
+      ? `data:${img.mime};base64,${bytesToBase64(img.bytes)}`
+      : null;
+  const notes = imageDataURL
+    ? []
+    : [img?.mime === 'application/pdf' ? IMAGE_IS_A_PDF_NOTE : IMAGE_UNREADABLE_NOTE];
   const { plotData, figures } = listed;
   return {
     figures,
@@ -240,7 +257,7 @@ export function listWpdProject(bytes: Uint8Array): WpdResult<ListedWpdProject> {
         axes: figure.axes,
         datasets: figure.datasets,
         imageDataURL,
-        notes: [],
+        notes: [...notes],
       };
     },
   };

@@ -50,6 +50,7 @@ import {
   type PlotBox,
 } from '../algorithms/gridDetect.js';
 import { readHeatmap, type HeatmapCellReading, type PixelProjector } from '../algorithms/heatmapRead.js';
+import type { SerializedAxisStamp } from '../core/plotData.js';
 import { checkDividers, dividersFromParams, equalDividers, gridParamsFrom, insertDivider, isPositionOnKey, moveDivider, removeDivider, type SpanMap } from '../core/heatmapGrid.js';
 // ⚑ `paramAtPoint`/`pointAtParam` are the projection onto a two-point axis the
 // category work already owns - `axisPositionMap` measures along the ink with
@@ -578,39 +579,37 @@ interface AxisProjector {
   pixelToData?(px: number, py: number): readonly (number | undefined)[];
 }
 
-/** Where an axis's two calibration points SAT, in image pixels. */
-export interface HeatmapAxisStamp {
-  x: [{ px: number; py: number }, { px: number; py: number }];
-  y: [{ px: number; py: number }, { px: number; py: number }];
-  /**
-   * ⚑⚑ THE COLOUR KEY IS THE THIRD AXIS, SO IT IS STAMPED LIKE THE OTHER TWO.
-   *
-   * ⚠️ It was not, and that is pattern 1 of v2.2's five - *does this belong to
-   * the TYPE, or to an AXIS? If an axis, EVERY axis gets it* - applied to the
-   * exact case the stamp was written to close. Moving a key corner, or a
-   * labelled tick, or retyping a tick's VALUE, or ticking Log, changes every
-   * cell's number; the stamp saw none of it, so `heatmapAxisMoved` returned
-   * false and the table, the project file and every export kept numbers read
-   * through a key that no longer exists. Measured on the viridis fixture:
-   * retyping the second key tick from 100 to 120 moved cell 0 from -30.84 to
-   * -32.64, and the stamp was byte-identical.
-   *
-   * ⚑ IT CARRIES MORE THAN PIXELS, because the key can move without one. The
-   * two labelled ticks have TYPED NUMBERS, and Log rescales the whole key
-   * without touching anything on screen - so a stamp of positions alone would
-   * have closed half the hole and looked finished.
-   *
-   * ⚑ Optional: a grid recorded before this existed has no key stamp, and a
-   * missing stamp means "nothing to compare", never "it moved".
-   */
-  key?: {
-    /** k1, k2, kv1, kv2 - the strip's corners and its two labelled ticks. */
-    at: { px: number; py: number }[];
-    /** What the user typed at kv1 and kv2. */
-    values: string[];
-    log: boolean;
-  };
-}
+/**
+ * Where an axis's two calibration points SAT, in image pixels.
+ *
+ * ⚑⚑ THE COLOUR KEY IS THE THIRD AXIS, SO IT IS STAMPED LIKE THE OTHER TWO.
+ *
+ * ⚠️ It was not, and that is pattern 1 of v2.2's five - *does this belong to
+ * the TYPE, or to an AXIS? If an axis, EVERY axis gets it* - applied to the
+ * exact case the stamp was written to close. Moving a key corner, or a labelled
+ * tick, or retyping a tick's VALUE, or ticking Log, changes every cell's
+ * number; the stamp saw none of it, so `heatmapAxisMoved` returned false and
+ * the table, the project file and every export kept numbers read through a key
+ * that no longer exists. Measured on the viridis fixture: retyping the second
+ * key tick from 100 to 120 moved cell 0 from -30.84 to -32.64, and the stamp
+ * was byte-identical.
+ *
+ * ⚑ IT CARRIES MORE THAN PIXELS, because the key can move without one. The two
+ * labelled ticks have TYPED NUMBERS, and Log rescales the whole key without
+ * touching anything on screen - so a stamp of positions alone would have closed
+ * half the hole and looked finished.
+ *
+ * ⚑ The key half is optional: a grid recorded before it existed has none, and a
+ * missing stamp means "nothing to compare", never "it moved".
+ *
+ * ⚑⚑ THE SERIALIZED DECLARATION IS THE ONLY DECLARATION. This used to be a
+ * second copy of the same record beside `core/plotData.ts`'s, and the two
+ * disagreed: the runtime stamp carried the colour key's half and the file's
+ * type did not mention it, which is how the load door came to spread it through
+ * unchecked. Aliasing means the stamp the app compares and the stamp the file
+ * validates cannot describe different things.
+ */
+export type HeatmapAxisStamp = SerializedAxisStamp;
 
 /** How far a calibration point may sit from where it was and still count as
  * not having moved. Sub-pixel is float noise, not a gesture anybody made. */

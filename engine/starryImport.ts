@@ -45,6 +45,7 @@ import { Calibration } from '../core/calibration.js';
 import { Dataset } from '../core/dataset.js';
 import { XYAxes } from '../core/axes/xy.js';
 import type { AnyAxes } from '../core/plotData.js';
+import { IMAGE_UNREADABLE_NOTE } from './importNotes.js';
 import { bytesToBase64 } from './base64.js';
 
 export type StarryResult<T> = T | { error: string };
@@ -321,7 +322,7 @@ export function importStarryFigureAt(
   }
 
   const img = findImage(files);
-  if (!img) notes.push("This project's image could not be read, so the figure opens without it.");
+  if (!img) notes.push(IMAGE_UNREADABLE_NOTE);
 
   return {
     configId: 'xy',

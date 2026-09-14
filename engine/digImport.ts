@@ -70,6 +70,7 @@ import { Dataset } from '../core/dataset.js';
 import { XYAxes } from '../core/axes/xy.js';
 import { PolarAxes } from '../core/axes/polar.js';
 import type { AnyAxes } from '../core/plotData.js';
+import { IMAGE_UNREADABLE_NOTE } from './importNotes.js';
 import { base64ToBytes, bytesToBase64 } from './base64.js';
 
 export type DigResult<T> = T | { error: string };
@@ -713,9 +714,7 @@ export function importEngaugeFigure(project: DigProject): DigResult<ImportedDigF
   // is what the listing uses; `extraCoordSystems` stays because it is the
   // MEASUREMENT the count is built from, and a measurement is not a message.
   if (project.thetaNote) notes.push(project.thetaNote);
-  if (!project.imageDataURL) {
-    notes.push("This project's image could not be read, so the figure opens without it.");
-  }
+  if (!project.imageDataURL) notes.push(IMAGE_UNREADABLE_NOTE);
 
   let axes: AnyAxes;
   let configId: string;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CalibrationSession, HEATMAP_AXES_CONFIG, GRAPH_TYPE_METADATA_KEY } from '../calibrationSession.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
-import { resolveHeatmapGrid } from '../heatmapRun.js';
+import { heatmapAxisMovedKind, resolveHeatmapGrid } from '../heatmapRun.js';
 
 /**
  * A heatmap has to SURVIVE A SAVE (v2.2) - the grid, the colour key, and which
@@ -245,6 +245,95 @@ describe('⚑⚑ the heatmap RECORD is a LAYER, not part of the calibration', ()
     before.setHeatmapLayer({ grid: { x: [0, 'x' as unknown as number, 1], y: [0, 1] } });
     const { session: after } = roundTrip(before);
     expect(after.getHeatmapLayer()?.grid).toBeUndefined();
+  });
+
+  /**
+   * ⚑⚑ THE STAMP IS THE PART OF THE GRID THAT ANSWERS "HAS THE AXIS MOVED
+   * UNDER IT?", and it was the one part of the layer nothing checked.
+   *
+   * `heatmapLayerFrom` spread a file's `axisAt` through whatever shape it had,
+   * inside a function whose own header says a malformed layer is dropped whole
+   * rather than half-read. `heatmapAxisMovedKind` then indexes `stamp.x[0]`, so
+   * a hand-edited or truncated file made the moved-check THROW; and a position
+   * that came back as `null` - what NaN and Infinity both become through JSON -
+   * compared as 0 and reported a move nobody made, which is the
+   * warning-with-nothing-behind-it that teaches a user to ignore the next one.
+   *
+   * ⚑ THE STAMP GOES, THE GRID STAYS. A divider is a measured position; the
+   * stamp is only where the axes SAT when it was recorded, and its own field
+   * already says an absent one means "nothing to compare" - which is the honest
+   * reading of a stamp that cannot be trusted.
+   */
+  const REAL_STAMP = {
+    x: [
+      { px: 100, py: 300 },
+      { px: 400, py: 300 },
+    ],
+    y: [
+      { px: 100, py: 300 },
+      { px: 100, py: 100 },
+    ],
+    key: {
+      at: [
+        { px: 120, py: 420 },
+        { px: 380, py: 420 },
+        { px: 150, py: 420 },
+        { px: 350, py: 420 },
+      ],
+      values: ['5', '95'],
+      log: false,
+    },
+  };
+
+  const reopenedStampFor = (axisAt: unknown) => {
+    const before = calibratedSession();
+    before.setHeatmapLayer({ grid: { x: [0, 0.5, 1], y: [0, 1], axisAt: axisAt as never } });
+    const { session: after } = roundTrip(before);
+    return after.getHeatmapLayer()?.grid;
+  };
+
+  it('⚑⚑ a stamp that is not a stamp is dropped, and the moved-check answers null instead of throwing', () => {
+    const grid = reopenedStampFor({ nonsense: true });
+    expect(grid?.x, 'the dividers are measured, so they stay').toEqual([0, 0.5, 1]);
+    expect(grid?.axisAt, 'the stamp is not measured, and it cannot be read').toBeUndefined();
+    expect(heatmapAxisMovedKind(grid?.axisAt, calibratedSession().getPlacedPoints())).toBeNull();
+  });
+
+  it('⚑ a stamp missing one of its two axes is dropped - it can answer for neither', () => {
+    expect(reopenedStampFor({ x: REAL_STAMP.x })?.axisAt).toBeUndefined();
+    expect(reopenedStampFor({ ...REAL_STAMP, y: [{ px: 1, py: 2 }] })?.axisAt).toBeUndefined();
+  });
+
+  it('⚑⚑ a stamp carrying a position that is not a position is dropped, not read as a move', () => {
+    // `null` is what NaN and Infinity become through JSON, and `null - 100` is a
+    // hundred: the axis reads as having moved a hundred pixels nobody moved.
+    const grid = reopenedStampFor({ ...REAL_STAMP, x: [{ px: null, py: 300 }, REAL_STAMP.x[1]] });
+    expect(grid?.axisAt).toBeUndefined();
+    expect(heatmapAxisMovedKind(grid?.axisAt, calibratedSession().getPlacedPoints())).toBeNull();
+  });
+
+  it('⚑ a colour-key half that is not a stamp takes the whole stamp with it', () => {
+    // The key is the third axis, stamped like the other two. A stamp half of
+    // which cannot be read is not a stamp, and there is no measurement in it to
+    // save by keeping the other half.
+    expect(reopenedStampFor({ ...REAL_STAMP, key: { at: 'somewhere' } })?.axisAt).toBeUndefined();
+    expect(
+      reopenedStampFor({ ...REAL_STAMP, key: { at: REAL_STAMP.key.at, values: [1, 2], log: false } })
+        ?.axisAt
+    ).toBeUndefined();
+  });
+
+  it('⚑ a real stamp survives whole, colour key included - the guard must not over-reach', () => {
+    const grid = reopenedStampFor(REAL_STAMP);
+    expect(grid?.axisAt).toEqual(REAL_STAMP);
+    // And it answers the question it exists for: this figure's axes and key are
+    // calibrated at these very clicks, so nothing has moved.
+    expect(heatmapAxisMovedKind(grid?.axisAt, calibratedSession().getPlacedPoints())).toBeNull();
+  });
+
+  it('⚑ an absent stamp is not a malformed one - a grid recorded before it existed is untouched', () => {
+    expect(reopenedStampFor(undefined)?.x).toEqual([0, 0.5, 1]);
+    expect(reopenedStampFor(undefined)?.axisAt).toBeUndefined();
   });
 
   it('keeps a reading only under the model\u2019s own key format', () => {

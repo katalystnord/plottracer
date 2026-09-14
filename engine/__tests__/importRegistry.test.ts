@@ -5,6 +5,10 @@
  * project files are copied into this tree.
  */
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { zipSync, unzipSync, strToU8 } from 'fflate';
 import {
   identifyProject,
@@ -110,6 +114,31 @@ function makeEngauge(systems: number): Uint8Array {
     Array.from({ length: systems }, () => `<CoordSystem>${body}</CoordSystem>`).join('') +
     `</Document>`;
   return enc(xml);
+}
+
+
+/**
+ * A WebPlotDigitizer `.tar` holding upstream's own six-figure project, bundling
+ * whichever image file is named - or none at all, which is what a truncated or
+ * hand-assembled archive arrives as.
+ */
+function makeWpdTar(bundle: 'png' | 'pdf' | 'none'): Uint8Array {
+  const repo = path.resolve(__dirname, '../..');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-wpdimg-'));
+  const proj = path.join(dir, 'project');
+  fs.mkdirSync(proj);
+  fs.copyFileSync(path.join(repo, 'engine/__tests__/fixtures/wpd/wpd4.json'), path.join(proj, 'wpd.json'));
+  const images = bundle === 'none' ? [] : bundle === 'pdf' ? ['figure.pdf'] : ['figure.png'];
+  fs.writeFileSync(
+    path.join(proj, 'info.json'),
+    JSON.stringify({ version: [4, 0], json: 'wpd.json', images })
+  );
+  if (bundle === 'png') {
+    fs.copyFileSync(path.join(repo, 'samples/errorbar-tensile-cure.png'), path.join(proj, 'figure.png'));
+  }
+  if (bundle === 'pdf') fs.writeFileSync(path.join(proj, 'figure.pdf'), '%PDF-1.4\n');
+  execFileSync('tar', ['-cf', 'p.tar', 'project/'], { cwd: dir });
+  return new Uint8Array(fs.readFileSync(path.join(dir, 'p.tar')));
 }
 
 describe('identifyProject', () => {
@@ -703,4 +732,87 @@ describe('a project is listed whichever of its figures is first', () => {
       expect(refused.unsupportedReason, 'and the other says why').toBeTruthy();
     });
   }
+});
+
+/**
+ * ⚑⚑ A PROJECT IS OPENED FOR WHAT IT MEASURED, NOT FOR THE PICTURE IT
+ * BUNDLES.
+ *
+ * Of the three foreign formats, ONE refused a whole project when its image was
+ * missing or unreadable: WPD's lister answered `{error: "This project bundles
+ * no image."}` before a single figure was named, so the calibration, every
+ * curve and every reading in the file were unreachable over a picture. The
+ * other two open the figure and SAY SO, in the same sentence - Starry since it
+ * was written, Engauge because a `.dig` routinely carries no image at all.
+ *
+ * ⚑ It is c9ac07b's shape one level up: *a document is listed by what it holds,
+ * not by whether something it references happens to read.* That was fixed
+ * WITHIN one format; this is the same asymmetry BETWEEN them, and singling out
+ * one vendor - in either direction - is what tenet 5 refuses.
+ *
+ * ⚑ Not a silent degradation: the figure arrives with no image and the reason
+ * on screen, which is a true statement about the file. Refusing it strands
+ * measurements that are perfectly good.
+ */
+describe('a foreign project opens for what it measured, whatever its image turned out to be', () => {
+  const NO_IMAGE = /image could not be read, so the figure opens without it/i;
+
+  it('⚑⚑ a WPD project with no bundled image lists its figures and opens one', () => {
+    const bytes = makeWpdTar('none');
+    const format = identifyProject(bytes);
+    expect(format?.id).toBe('wpd');
+    const listed = format!.list!(bytes);
+    expect('error' in listed ? listed.error : '', 'the project lists').toBe('');
+    if ('error' in listed) return;
+    expect(listed.figures.length, 'all six figures are offered').toBe(6);
+    const opened = listed.open(0);
+    expect('error' in opened ? opened.error : '', 'and the first one opens').toBe('');
+    if ('error' in opened) return;
+    expect(opened.imageDataURL, 'with no picture behind it').toBeNull();
+    expect(opened.notes.join(' '), 'and the reason said out loud').toMatch(NO_IMAGE);
+  });
+
+  it('⚑ a WPD project bundling a PDF opens too, naming what it found', () => {
+    // An <img> cannot decode a PDF, so the picture is genuinely unavailable -
+    // which is a fact about the image, not grounds to withhold the readings.
+    const bytes = makeWpdTar('pdf');
+    const listed = identifyProject(bytes)!.list!(bytes);
+    expect('error' in listed ? listed.error : '', 'the project lists').toBe('');
+    if ('error' in listed) return;
+    const opened = listed.open(0);
+    expect('error' in opened ? opened.error : '', 'and the figure opens').toBe('');
+    if ('error' in opened) return;
+    expect(opened.imageDataURL).toBeNull();
+    expect(opened.notes.join(' ')).toMatch(/PDF/);
+  });
+
+  it('⚑ a WPD project WITH its image still carries it - the change must not lose the picture', () => {
+    const bytes = makeWpdTar('png');
+    const listed = identifyProject(bytes)!.list!(bytes);
+    if ('error' in listed) throw new Error(listed.error);
+    const opened = listed.open(0);
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.imageDataURL?.startsWith('data:image/png;base64,')).toBe(true);
+    expect(opened.notes.join(' ')).not.toMatch(NO_IMAGE);
+  });
+
+  it('⚑⚑ and every format says it the SAME way - one sentence, not three vocabularies', () => {
+    const cases: Array<[string, Uint8Array]> = [
+      ['wpd', makeWpdTar('none')],
+      ['starry', makeStarry({ withImage: false })],
+      ['engauge', makeEngauge(1)], // a .dig with no <Image> element
+    ];
+    for (const [id, bytes] of cases) {
+      const format = identifyProject(bytes);
+      expect(format?.id, `sniffed ${id}`).toBe(id);
+      const listed = format!.list!(bytes);
+      expect('error' in listed ? listed.error : '', `listing ${id}`).toBe('');
+      if ('error' in listed) continue;
+      const opened = listed.open(0);
+      expect('error' in opened ? opened.error : '', `opening ${id}`).toBe('');
+      if ('error' in opened) continue;
+      expect(opened.imageDataURL, `${id} opens with no picture`).toBeNull();
+      expect(opened.notes.join(' '), `${id} says why`).toMatch(NO_IMAGE);
+    }
+  });
 });
