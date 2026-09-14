@@ -186,6 +186,7 @@ import {
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
+import { layeredProjectOffer, layeredSeriesGroups, layeredGroupName, typeForSlots } from '../../engine/layeredSeries.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
@@ -5566,6 +5567,71 @@ export function Workspace() {
     }
     if ('error' in result) {
       setProjectError(result.error);
+      return;
+    }
+    /**
+     * ⚑⚑ A PROJECT HOLDING SERIES OF DIFFERENT KINDS IS OFFERED THE SPLIT.
+     *
+     * David, 2026-09-14, in his own words, which are the dialog's: *"This graph
+     * project contains series of different kinds based on the same graph figure,
+     * which PlotTracer does not support yet. For now, plottracer can offer to
+     * split the project in to a multifigure project, with one copy of the graph
+     * image per series type."*
+     *
+     * ⚑ OFFERED, NOT DONE. Declining opens the project exactly as it is, every
+     * series read under its OWN columns (`getBarCategoryTable`), so No costs the
+     * user nothing and loses no reading.
+     *
+     * ⚑ BEFORE `loadCalibratedFigure`, because the split installs FIGURES
+     * instead of one session - and it reuses `buildFigureRecordFromDeserialized`
+     * and `figuresForOpenedProject`, the same two the multi-figure door above
+     * takes, so a split project and an opened multi-figure project are the same
+     * thing by construction rather than by resemblance.
+     */
+    const offer = layeredProjectOffer(
+      result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames() }))
+    );
+    if (offer && window.confirm(offer)) {
+      closePdf();
+      const groups = layeredSeriesGroups(
+        result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames(), dataset: d }))
+      );
+      const currentType =
+        ALL_AXES_TYPE_CONFIGS.find((c) => c.id === result.configId) ?? XY_AXES_CONFIG;
+      const records = groups.map((g) =>
+        buildFigureRecordFromDeserialized(
+          {
+            ...result,
+            name: layeredGroupName(g.members),
+            /**
+             * ⚑⚑ EACH FIGURE DECLARES THE TYPE ITS SERIES ACTUALLY IS.
+             *
+             * ⚠️ Found by David's hands on the built app: the split moved the
+             * DATA and left both figures declared as the document's type, so a
+             * figure holding `Min, Q1, Median, Q3, Max` sat under a toolbar
+             * reading "Bar" and drew a BAR's advisory. See `typeForSlots` for
+             * why it changes nothing unless the slots name exactly one type of
+             * the same axes kind.
+             */
+            configId: typeForSlots(g.slots, ALL_AXES_TYPE_CONFIGS, currentType),
+            // ⚑ ONE COPY OF THE GRAPH IMAGE PER SERIES TYPE, which is what the
+            // offer promises and what the container format already does:
+            // `serializeMultiFigureZip` writes every figure its own image entry.
+            datasets: g.members.map((m) => m.dataset),
+          },
+          result.sourceDocument
+            ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
+            : null
+        )
+      );
+      const install = figuresForOpenedProject(records, 0);
+      figuresRef.current = install.figures;
+      setActiveFigureIndex(install.active);
+      setProjectError(null);
+      if (install.restore) restoreFigure(install.restore, true);
+      setSourcePdf(result.sourceDocument
+        ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
+        : null);
       return;
     }
     loadCalibratedFigure({

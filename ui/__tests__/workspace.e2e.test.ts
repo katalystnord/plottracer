@@ -35,7 +35,7 @@ import os from 'node:os';
 import { CalibrationSession, XY_AXES_CONFIG, SPIDER_AXES_CONFIG, PIE_AXES_CONFIG, BAR_AXES_CONFIG } from '../../engine/calibrationSession.js';
 import { serializeProject } from '../../engine/projectFile.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../../engine/axesTypeConfigs.js';
-import { unzipSync, strFromU8 } from 'fflate';
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 
 import { ozoneArgs } from './e2eContainment.js';
 import { freshProfile } from './e2eProfile.js';
@@ -2526,6 +2526,99 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       expect(await textOf('axes-type-trigger')).toMatch(/Span/);
       // The reading the relabel exists for: both ends, as Min and Max.
       expect(await textOf('bar-cell-0-0')).toMatch(/1\.6|1\.7/);
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+      fs.unlinkSync(savePath);
+    }
+  }, 40000);
+
+  /**
+   * ⚑⚑ A PROJECT OF SERIES OF DIFFERENT KINDS IS OFFERED THE SPLIT (v2.5.1).
+   *
+   * The engine half is unit tested (`layeredFileIsNotSupported.test.ts`). What
+   * only an e2e can show is that the OFFER reaches the eye and that saying yes
+   * leaves the user looking at two figures.
+   *
+   * ⚑ THE FIXTURE IS MADE THE WAY THE CASE ACTUALLY ARRIVES: the app cannot
+   * build a layered project (checkpoint 109 retired the hidden Box Plot Groups
+   * toggle), so the file is saved normally and then EDITED on disk - which is
+   * one of the three real routes, beside a WPD import with per-dataset point
+   * groups and an older project.
+   *
+   * ⚠️ The dialog is accepted by the suite-wide handler, so this walk answers
+   * YES. `dialogMessages` is what the user would have read before pressing it.
+   */
+  it('a project whose series are of different kinds offers to split it, one figure per kind', async () => {
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    // ⚠️ FROM THE BASELINE (y=400 reads 0), or the fixture measures something
+    // else: bars clear of the baseline make the app relabel the whole document a
+    // Span chart on open, and figure 1 then reports Span rather than Bar. A real
+    // relabel, tested elsewhere, and noise over THIS case.
+    await dragMarker(150, 400, 150, 250);
+    await page.getByTestId('add-series').click();
+    await dragMarker(350, 400, 350, 230);
+
+    const savePath = tempFilePath('zip');
+    await stubSaveDialog(savePath);
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(300);
+
+    try {
+      // Give the SECOND series a box plot's slot names, leaving the first with
+      // the bar's two corners: two kinds of series on one figure.
+      const entries = unzipSync(fs.readFileSync(savePath));
+      const written = JSON.parse(strFromU8(entries['project.json']!));
+      expect(written.plotData.datasetColl).toHaveLength(2);
+      written.plotData.datasetColl[1].groupNames = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
+      entries['project.json'] = strToU8(JSON.stringify(written));
+      fs.writeFileSync(savePath, Buffer.from(zipSync(entries)));
+
+      await stubOpenProjectDialog(savePath);
+      await page.getByTestId('open-project').click();
+
+      // What the user reads before answering: the two static sentences, and the
+      // generated list naming which series are of which kind.
+      await expect
+        .poll(() => dialogMessages.join(' | '), { timeout: 8000 })
+        .toMatch(/series of different kinds based on the same graph figure/);
+      expect(dialogMessages.join(' | ')).toMatch(/one copy of the graph image per series type/);
+      expect(dialogMessages.join(' | ')).toMatch(/Min, Q1, Median, Q3, Max/);
+
+      // And yes leaves them looking at two figures, not at a warning.
+      await page.getByTestId('figure-jumper-status').waitFor({ state: 'visible', timeout: 8000 });
+      expect(await textOf('figure-jumper-status')).toMatch(/of 2/);
+      // ⚑ NAMED BY WHAT IS IN IT, not `Figure 1`/`Figure 2`: after a split the
+      // jumper is the only thing saying which figure is which, and a positional
+      // name would make the user open both to find out.
+      expect(await page.getByTestId('figure-name').inputValue()).toBe('Series 1');
+
+      /**
+       * ⚑⚑ AND EACH FIGURE DECLARES THE TYPE ITS SERIES ACTUALLY IS.
+       *
+       * ⚠️ FOUND BY DAVID'S HANDS, not by this test, which asserted the COUNT
+       * and the NAME and stopped. The split moved the data and left both figures
+       * declared as the document's Bar, so figure 2 held `Min, Q1, Median, Q3,
+       * Max` under a toolbar reading "Bar" and drew a BAR's advisory about bars
+       * short of the baseline. *"One figure per series type"* was a conclusion
+       * in my head and never an observable outcome (gate 1).
+       */
+      expect(await textOf('axes-type-trigger')).toMatch(/Bar/);
+      await page.getByTestId('figure-next').click();
+      await page.waitForTimeout(250);
+      expect(await page.getByTestId('figure-name').inputValue()).toBe('Series 2');
+      expect(await textOf('axes-type-trigger')).toMatch(/Box Plot/);
     } finally {
       await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
